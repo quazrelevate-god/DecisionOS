@@ -1,0 +1,40 @@
+{
+  "summary": "Iteration 7 (Contacts CRM + Multilingual Voice) fully verified. Backend: 58 tests total pass (20 new in test_iteration7.py + 38 regression in backend_test.py). New tests cover: (a) demo seed contacts Kapoor Retail, Threads Boutique, Gujarat Cotton Mills, PackWell Industries all present with assigned_name enriched; (b) filters ?type=customer|vendor and ?q=kapoor work; (c) POST/PATCH/DELETE /api/contacts allow owner+sales but return 403 for finance and production; finance CAN read (GET); (d) seeded sales_dispatch + purchase_payment demo workflows have non-null contact_id; (e) POST /api/workflows with contact_id copies contact.company (fallback name) into counterparty; (f) GET /api/brain/search?q=kapoor returns a 'contacts' array with Kapoor match; (g) POST /api/ask 'Give me the phone number and status of Kapoor Retail' answers from contact data mentioning Kapoor + digit/status; (h) Tanglish text-directive 'Priya kitta sollu... Finance team packaging invoice Friday kulla clear pannanum' processes to status=done, extracts a decision with tasks whose assignee_role intersects {sales, finance} and English task titles; (i) Tamil-script (ta) text-directive processes to done with English output; (j) English (en) still works. Frontend E2E 1920x1080: (1) /contacts (nav-contacts) loads, owner sees add-contact-button + 4 seeded cards + New Buyer card, filters contact-search-input/contact-type-filter/contact-status-filter present; add dialog exposes contact-type-select, contact-status-select, contact-name-input, contact-company-input, contact-phone-input, contact-email-input, contact-save-button. (2) Finance login: add-contact-button HIDDEN, no edit-contact-* or delete-contact-* buttons rendered, but 4 seeded contacts still listed (read-only). (3) Workflows new-workflow-button dialog: wf-contact-select on sales_dispatch tab lists ONLY customers (Kapoor, Threads, New Buyer) with NO vendors; on purchase_payment tab lists ONLY vendors (PackWell, Gujarat) with NO customers; selecting Kapoor auto-fills wf-counterparty-input='Kapoor Retail Pvt Ltd'. (4) /inbox language-selector visible with all 4 buttons (lang-auto/lang-en/lang-ta/lang-tanglish); selecting Tanglish + submit-text-directive posts /api/voice-notes/text with language='tanglish' — 'Directive submitted — structuring…' toast fires and the Tanglish text appears in processing feed with status STRUCTURING. (5) Mobile 390x844: bottom nav renders all 5 (bottomnav-dashboard/inbox/workflows/tasks/ask) with scrollWidth==innerWidth==390 (no horizontal overflow). Regression 38/38: auth, dashboard, decision approve/reject flows, tasks CRUD, workflows next-stage guard (skip-stage 400, backward 400, owner-gate 403), voice owner-gate (sales/production/finance 403), brain search, Ask AI, digest mocked.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Contacts add-contact dialog (contact-assigned-select)", "issues": ["React hydration warning: '<span> cannot be a child of <option>' — Contacts.js line 75 renders user.name inside <option> wrapped by a visual-editor <span data-ve-dynamic='true'>. Purely a devtools console warning, no functional impact; will disappear if the assigned-user <option> is rendered as a plain expression without the ve-dynamic wrapper (or with suppressHydrationWarning)."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration7.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/iteration7.xml",
+    "/app/test_reports/pytest/iteration7_regression.xml"
+  ],
+  "action_items": [
+    "(cosmetic) Silence the `<span> inside <option>` hydration warning on the contact-assigned-select — either bypass the visual-editor wrapper on that option, wrap with suppressHydrationWarning, or map user names into a plain string child. Non-blocking."
+  ],
+  "critical_code_review_comments": [
+    "server.py:508-520 list_contacts is tenant-scoped and applies type/status/q filters cleanly; q builds an $or regex across name/company/email/phone (case-insensitive) — correct.",
+    "server.py:523,542,558 write endpoints (POST/PATCH/DELETE /contacts) use require_role('owner','sales') — matches spec; finance & production correctly 403 (verified).",
+    "server.py:497-505 enrich_contacts batches assigned_id lookups into a single users.find; efficient and populates assigned_name — verified in seed listing.",
+    "server.py:769-778 create_workflow: if contact_id resolves, counterparty is overwritten to contact.company or contact.name; contact_id persisted on the workflow doc — verified.",
+    "server.py:819,824 brain_search /brain/search returns 'contacts' matched on name/company/email/phone/notes — verified with q=kapoor.",
+    "server.py:838-854 ask_ai context includes up to 100 contacts (name, company, type, status, phone, email) so the LLM can answer contact lookups — verified end-to-end.",
+    "server.py:306-317 transcribe_audio maps en/ta explicitly and passes 'auto' + Tanglish prompt hint for tanglish — clean.",
+    "server.py:288 ai_extract prompt now says 'transcript may be English/Tamil/Tanglish… output English' — verified Tanglish and Tamil-script inputs both produced English task titles.",
+    "server.py:1090-1139 fixup_demo_tenant idempotently seeds 4 contacts and links matching sales/purchase workflows via contact_id — verified: contacts.count>0 short-circuits reseed; linked workflows retain contact_id + counterparty.",
+    "Frontend Contacts.js/Workflows.js/Inbox.js/Layout.js data-testids all present as spec'd; nav-contacts drawer item visible on both desktop sidebar and mobile drawer.",
+    "Minor cosmetic: Contacts.js line 75 emits a hydration warning about <span> in <option> due to visual-editor injected wrapper — no functional impact."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration7.py (new)"],
+  "success_rate": {"backend": "100% (58/58: 20 new iter7 + 38 regression)", "frontend": "100% (all 5 primary flows + mobile shell verified)"},
+  "test_credentials": "owner@sharma.com / demo1234; sales@sharma.com / demo1234; production@sharma.com / demo1234; finance@sharma.com / demo1234",
+  "seed_data_creation": "Ephemeral TEST_C_* contacts created and immediately deleted in role-gate tests (all cleanup done). Ephemeral TEST_link_kapoor workflow left in demo tenant (per prior test agents' guidance to ignore TEST_* workflows). No mutation to seeded 4 contacts or Sharma users.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 7 adds full CRM (/contacts + /api/contacts with owner+sales writes, any-authenticated GET) and multilingual voice (language field on /api/voice-notes and /api/voice-notes/text with values auto|en|ta|tanglish; ai_extract prompt outputs English regardless of input). Seed data: 4 contacts (Kapoor Retail customer, Threads Boutique customer, Gujarat Cotton Mills vendor, PackWell Industries vendor) — all assigned to Priya Nair or Amit Verma. Demo sales_dispatch workflows for Kapoor/Threads and purchase_payment workflows for Gujarat/PackWell now carry contact_id. Test file /app/backend/tests/test_iteration7.py has 20 tests, all pass in ~28s. Only known minor: React hydration warning on contact-assigned-select <option> — non-functional. TestDecisionApproval regression flakiness noted in iter6 has NOT resurfaced in this run (parallel execution passed cleanly)."
+}

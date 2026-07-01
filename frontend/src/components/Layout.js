@@ -18,6 +18,7 @@ import {
   Kanban,
   CheckSquare,
   UsersThree,
+  AddressBook,
   SignOut,
   EnvelopeSimple,
   List as ListIcon,
@@ -27,6 +28,7 @@ const NAV = [
   { to: "/", label: "Daily Brief", icon: Gauge, testid: "nav-dashboard" },
   { to: "/inbox", label: "Owner Inbox", icon: Microphone, testid: "nav-inbox" },
   { to: "/workflows", label: "Workflows", icon: Kanban, testid: "nav-workflows" },
+  { to: "/contacts", label: "Contacts", icon: AddressBook, testid: "nav-contacts" },
   { to: "/tasks", label: "Tasks", icon: CheckSquare, testid: "nav-tasks" },
   { to: "/brain", label: "Company Brain", icon: BrainIcon, testid: "nav-brain" },
   { to: "/ask", label: "Ask AI", icon: ChatCircleText, testid: "nav-ask" },
@@ -34,7 +36,7 @@ const NAV = [
 ];
 
 // Primary items for the mobile bottom tab bar
-const BOTTOM_NAV = [NAV[0], NAV[1], NAV[2], NAV[3], NAV[5]];
+const BOTTOM_NAV = [NAV[0], NAV[1], NAV[2], NAV[4], NAV[6]];
 
 const Logo = () => (
   <div className="flex items-center gap-2">

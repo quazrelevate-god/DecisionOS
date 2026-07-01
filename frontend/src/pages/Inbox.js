@@ -24,6 +24,9 @@ export default function Inbox() {
   const [recording, setRecording] = useState(false);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [language, setLanguage] = useState("auto");
+  const languageRef = useRef("auto");
+  languageRef.current = language;
   const mediaRef = useRef(null);
   const chunksRef = useRef([]);
   const elapsed = useElapsed(recording);
@@ -52,6 +55,7 @@ export default function Inbox() {
         const blob = new Blob(chunksRef.current, { type: "audio/webm" });
         const fd = new FormData();
         fd.append("file", blob, "note.webm");
+        fd.append("language", languageRef.current);
         setBusy(true);
         try {
           await api.post("/voice-notes", fd, { headers: { "Content-Type": "multipart/form-data" } });
@@ -80,7 +84,7 @@ export default function Inbox() {
     if (!text.trim()) return;
     setBusy(true);
     try {
-      await api.post("/voice-notes/text", { text });
+      await api.post("/voice-notes/text", { text, language });
       setText("");
       toast.success("Directive submitted — structuring…");
       refresh();
@@ -106,6 +110,31 @@ export default function Inbox() {
   return (
     <div>
       <PageHeader eyebrow="Voice-first capture" title="Owner Inbox" />
+
+      {user?.role === "owner" && (
+        <div className="flex items-center gap-3 mb-6 flex-wrap" data-testid="language-selector">
+          <span className="label-mono text-muted-foreground">Language</span>
+          <div className="flex border border-black">
+            {[
+              { key: "auto", label: "Auto" },
+              { key: "en", label: "English" },
+              { key: "ta", label: "தமிழ்" },
+              { key: "tanglish", label: "Tanglish" },
+            ].map((l) => (
+              <button
+                key={l.key}
+                onClick={() => setLanguage(l.key)}
+                data-testid={`lang-${l.key}`}
+                className={`px-4 py-2 text-sm font-semibold border-r border-black last:border-r-0 transition-colors ${
+                  language === l.key ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"
+                }`}
+              >
+                {l.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid lg:grid-cols-2 gap-6 mb-10">
         {user?.role !== "owner" && (

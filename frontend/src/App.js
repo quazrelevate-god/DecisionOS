@@ -12,6 +12,7 @@ import Tasks from "./pages/Tasks";
 import Brain from "./pages/Brain";
 import AskAI from "./pages/AskAI";
 import Team from "./pages/Team";
+import Contacts from "./pages/Contacts";
 
 function Protected({ children }) {
   const { user, loading } = useAuth();
@@ -35,6 +36,7 @@ function App() {
             <Route path="/" element={<Protected><Dashboard /></Protected>} />
             <Route path="/inbox" element={<Protected><Inbox /></Protected>} />
             <Route path="/workflows" element={<Protected><Workflows /></Protected>} />
+            <Route path="/contacts" element={<Protected><Contacts /></Protected>} />
             <Route path="/tasks" element={<Protected><Tasks /></Protected>} />
             <Route path="/brain" element={<Protected><Brain /></Protected>} />
             <Route path="/ask" element={<Protected><AskAI /></Protected>} />

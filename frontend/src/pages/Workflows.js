@@ -18,14 +18,25 @@ const STAGE_LABEL = (s) => s.replace(/_/g, " ");
 
 function NewWorkflowDialog({ type, onCreated }) {
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ title: "", detail: "", amount: "", counterparty: "" });
+  const [form, setForm] = useState({ title: "", detail: "", amount: "", counterparty: "", contact_id: "" });
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const contactType = type === "sales_dispatch" ? "customer" : "vendor";
+  const { data: contacts } = useQuery({
+    queryKey: ["contacts", contactType, "", ""],
+    queryFn: () => api.get(`/contacts?type=${contactType}`).then((r) => r.data),
+    enabled: open,
+  });
+  const pickContact = (e) => {
+    const id = e.target.value;
+    const c = (contacts || []).find((x) => x.id === id);
+    setForm({ ...form, contact_id: id, counterparty: c ? (c.company || c.name) : form.counterparty });
+  };
   const create = async () => {
     if (!form.title.trim()) return;
     try {
-      await api.post("/workflows", { type, title: form.title, detail: form.detail, counterparty: form.counterparty, amount: form.amount ? Number(form.amount) : null });
+      await api.post("/workflows", { type, title: form.title, detail: form.detail, counterparty: form.counterparty, contact_id: form.contact_id || null, amount: form.amount ? Number(form.amount) : null });
       toast.success("Workflow created");
-      setForm({ title: "", detail: "", amount: "", counterparty: "" });
+      setForm({ title: "", detail: "", amount: "", counterparty: "", contact_id: "" });
       setOpen(false);
       onCreated();
     } catch (e) {
@@ -44,8 +55,15 @@ function NewWorkflowDialog({ type, onCreated }) {
         <DialogHeader><DialogTitle className="font-heading uppercase tracking-tight">New {TABS.find(t=>t.key===type).label}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <input data-testid="wf-title-input" className={inp} placeholder="Title (e.g. Order #4823 — Retailer)" value={form.title} onChange={set("title")} />
-          <input className={inp} placeholder="Counterparty" value={form.counterparty} onChange={set("counterparty")} />
-          <input className={inp} type="number" placeholder="Amount (₹)" value={form.amount} onChange={set("amount")} />
+          <div>
+            <label className="label-mono text-muted-foreground">{contactType === "customer" ? "Customer" : "Vendor"}</label>
+            <select data-testid="wf-contact-select" className={`${inp} mt-1`} value={form.contact_id} onChange={pickContact}>
+              <option value="">Select {contactType}… (or type below)</option>
+              {(contacts || []).map((c) => <option key={c.id} value={c.id}>{c.company || c.name}</option>)}
+            </select>
+          </div>
+          <input data-testid="wf-counterparty-input" className={inp} placeholder="Counterparty name" value={form.counterparty} onChange={set("counterparty")} />
+          <input className={inp} type="number" placeholder="Amount" value={form.amount} onChange={set("amount")} />
           <textarea className={inp} rows={2} placeholder="Detail" value={form.detail} onChange={set("detail")} />
         </div>
         <DialogFooter>

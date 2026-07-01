@@ -162,6 +162,7 @@ class UserCreateInput(BaseModel):
 class TextNoteInput(BaseModel):
     text: str
     title: Optional[str] = None
+    language: Optional[str] = "auto"
 
 
 class TaskCreateInput(BaseModel):
@@ -186,6 +187,7 @@ class WorkflowCreateInput(BaseModel):
     detail: Optional[str] = ""
     amount: Optional[float] = None
     counterparty: Optional[str] = None
+    contact_id: Optional[str] = None
 
 
 class WorkflowAdvanceInput(BaseModel):
@@ -195,6 +197,38 @@ class WorkflowAdvanceInput(BaseModel):
 
 class AskInput(BaseModel):
     question: str
+
+
+CONTACT_TYPES = ("customer", "vendor")
+CONTACT_STATUS = ("lead", "active", "inactive")
+
+
+class ContactInput(BaseModel):
+    type: str = "customer"
+    name: str
+    company: Optional[str] = ""
+    phone: Optional[str] = ""
+    email: Optional[str] = ""
+    address: Optional[str] = ""
+    tax_id: Optional[str] = ""
+    tags: Optional[List[str]] = None
+    status: Optional[str] = "lead"
+    assigned_id: Optional[str] = None
+    notes: Optional[str] = ""
+
+
+class ContactUpdateInput(BaseModel):
+    type: Optional[str] = None
+    name: Optional[str] = None
+    company: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    address: Optional[str] = None
+    tax_id: Optional[str] = None
+    tags: Optional[List[str]] = None
+    status: Optional[str] = None
+    assigned_id: Optional[str] = None
+    notes: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -250,6 +284,8 @@ async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[l
         "\"tasks\": [{\"title\": string, \"description\": string, \"assignee_role\": one of [" + roles_str + "], "
         "\"priority\": one of [low,medium,high], \"due_in_days\": integer or null}], "
         "\"workflow_events\": [{\"type\": one of [sales_dispatch,purchase_payment], \"action\": string, \"detail\": string}]}. "
+        "The transcript may be in English, Tamil, or Tanglish (casual Tamil-English code-mix). Fully understand it regardless "
+        "of language, and produce ALL output field values in clear English. "
         "Pick assignee_role ONLY from the provided role list. Infer sensible owners and due dates. If nothing applies, use empty arrays."
     )
     prompt = f"Founder directive transcript:\n\"\"\"\n{transcript}\n\"\"\"\nExtract the structured JSON now."
@@ -267,10 +303,19 @@ async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[l
     return data
 
 
-async def transcribe_audio(path: str) -> str:
+async def transcribe_audio(path: str, language: str = "auto") -> str:
     stt = OpenAISpeechToText(api_key=EMERGENT_LLM_KEY)
+    kwargs = {"model": "whisper-1", "response_format": "json"}
+    if language == "en":
+        kwargs["language"] = "en"
+    elif language == "ta":
+        kwargs["language"] = "ta"
+    elif language == "tanglish":
+        # Code-mixed Tamil-English: let Whisper auto-detect, bias with a prompt
+        kwargs["prompt"] = ("This is Tanglish — casual code-mixed Tamil and English speech from an Indian "
+                            "small-business owner. Keep English words in English.")
     with open(path, "rb") as f:
-        resp = await stt.transcribe(file=f, model="whisper-1", response_format="json")
+        resp = await stt.transcribe(file=f, **kwargs)
     return resp.text
 
 
@@ -286,7 +331,7 @@ async def process_voice_note(note_id: str):
         await db.voice_notes.update_one({"id": note_id}, {"$set": {"status": "transcribing"}})
         transcript = note.get("transcript")
         if not transcript and note.get("audio_path"):
-            transcript = await transcribe_audio(note["audio_path"])
+            transcript = await transcribe_audio(note["audio_path"], note.get("language", "auto"))
             await db.voice_notes.update_one({"id": note_id}, {"$set": {"transcript": transcript}})
 
         await db.voice_notes.update_one({"id": note_id}, {"$set": {"status": "structuring"}})
@@ -447,6 +492,78 @@ async def create_user(inp: UserCreateInput, user: dict = Depends(require_role("o
 
 
 # ---------------------------------------------------------------------------
+# Contacts (customers & vendors)
+# ---------------------------------------------------------------------------
+async def enrich_contacts(contacts: list) -> list:
+    ids = list({c.get("assigned_id") for c in contacts if c.get("assigned_id")})
+    umap = {}
+    if ids:
+        for u in await db.users.find({"id": {"$in": ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(500):
+            umap[u["id"]] = u["name"]
+    for c in contacts:
+        c["assigned_name"] = umap.get(c.get("assigned_id"))
+    return contacts
+
+
+@api.get("/contacts")
+async def list_contacts(type: Optional[str] = None, status: Optional[str] = None, q: Optional[str] = None,
+                        user: dict = Depends(get_current_user)):
+    query = {"tenant_id": user["tenant_id"]}
+    if type:
+        query["type"] = type
+    if status:
+        query["status"] = status
+    if q:
+        rx = {"$regex": q, "$options": "i"}
+        query["$or"] = [{"name": rx}, {"company": rx}, {"email": rx}, {"phone": rx}]
+    contacts = await db.contacts.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return await enrich_contacts(contacts)
+
+
+@api.post("/contacts")
+async def create_contact(inp: ContactInput, user: dict = Depends(require_role("owner", "sales"))):
+    if inp.type not in CONTACT_TYPES:
+        raise HTTPException(status_code=400, detail="Invalid contact type")
+    status = inp.status if inp.status in CONTACT_STATUS else "lead"
+    cid = new_id()
+    doc = {
+        "id": cid, "tenant_id": user["tenant_id"], "type": inp.type, "name": inp.name,
+        "company": inp.company or "", "phone": inp.phone or "", "email": inp.email or "",
+        "address": inp.address or "", "tax_id": inp.tax_id or "", "tags": inp.tags or [],
+        "status": status, "assigned_id": inp.assigned_id, "notes": inp.notes or "",
+        "created_by": user["id"], "created_at": now_iso(),
+    }
+    await db.contacts.insert_one(doc)
+    await log_activity(user["tenant_id"], user["id"], "contact_added", f"Added {inp.type} '{inp.name}'", "contact", cid)
+    doc.pop("_id", None)
+    return (await enrich_contacts([doc]))[0]
+
+
+@api.patch("/contacts/{contact_id}")
+async def update_contact(contact_id: str, inp: ContactUpdateInput, user: dict = Depends(require_role("owner", "sales"))):
+    c = await db.contacts.find_one({"id": contact_id, "tenant_id": user["tenant_id"]})
+    if not c:
+        raise HTTPException(status_code=404, detail="Not found")
+    updates = {k: v for k, v in inp.model_dump().items() if v is not None}
+    if "type" in updates and updates["type"] not in CONTACT_TYPES:
+        updates.pop("type")
+    if "status" in updates and updates["status"] not in CONTACT_STATUS:
+        updates.pop("status")
+    if updates:
+        await db.contacts.update_one({"id": contact_id}, {"$set": updates})
+    c = await db.contacts.find_one({"id": contact_id}, {"_id": 0})
+    return (await enrich_contacts([c]))[0]
+
+
+@api.delete("/contacts/{contact_id}")
+async def delete_contact(contact_id: str, user: dict = Depends(require_role("owner", "sales"))):
+    res = await db.contacts.delete_one({"id": contact_id, "tenant_id": user["tenant_id"]})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Not found")
+    return {"deleted": True}
+
+
+# ---------------------------------------------------------------------------
 # Voice notes / ingestion
 # ---------------------------------------------------------------------------
 UPLOAD_DIR = ROOT_DIR / "uploads"
@@ -454,7 +571,7 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 
 
 @api.post("/voice-notes")
-async def create_voice_note(background: BackgroundTasks, file: UploadFile = File(...), user: dict = Depends(require_role("owner"))):
+async def create_voice_note(background: BackgroundTasks, file: UploadFile = File(...), language: str = Form("auto"), user: dict = Depends(require_role("owner"))):
     note_id = new_id()
     ext = (file.filename or "audio.webm").split(".")[-1]
     path = UPLOAD_DIR / f"{note_id}.{ext}"
@@ -463,7 +580,7 @@ async def create_voice_note(background: BackgroundTasks, file: UploadFile = File
         f.write(content)
     await db.voice_notes.insert_one({
         "id": note_id, "tenant_id": user["tenant_id"], "created_by": user["id"],
-        "kind": "audio", "audio_path": str(path), "transcript": None,
+        "kind": "audio", "audio_path": str(path), "transcript": None, "language": language,
         "status": "queued", "created_at": now_iso(),
     })
     background.add_task(process_voice_note, note_id)
@@ -475,7 +592,7 @@ async def create_text_note(inp: TextNoteInput, background: BackgroundTasks, user
     note_id = new_id()
     await db.voice_notes.insert_one({
         "id": note_id, "tenant_id": user["tenant_id"], "created_by": user["id"],
-        "kind": "text", "audio_path": None, "transcript": inp.text,
+        "kind": "text", "audio_path": None, "transcript": inp.text, "language": inp.language or "auto",
         "status": "queued", "created_at": now_iso(),
     })
     background.add_task(process_voice_note, note_id)
@@ -648,9 +765,17 @@ async def create_workflow(inp: WorkflowCreateInput, user: dict = Depends(get_cur
         raise HTTPException(status_code=400, detail="Invalid workflow type")
     wid = new_id()
     stages = WORKFLOW_STAGES[inp.type]
+    counterparty = inp.counterparty or ""
+    contact_id = inp.contact_id
+    if contact_id:
+        contact = await db.contacts.find_one({"id": contact_id, "tenant_id": user["tenant_id"]}, {"_id": 0, "name": 1, "company": 1})
+        if contact:
+            counterparty = counterparty or contact.get("company") or contact.get("name")
+        else:
+            contact_id = None
     wf = {
         "id": wid, "tenant_id": user["tenant_id"], "type": inp.type, "title": inp.title,
-        "detail": inp.detail or "", "amount": inp.amount, "counterparty": inp.counterparty,
+        "detail": inp.detail or "", "amount": inp.amount, "counterparty": counterparty, "contact_id": contact_id,
         "stage": stages[0], "stages": stages,
         "history": [{"stage": stages[0], "note": "Created", "by": user["id"], "at": now_iso()}],
         "created_by": user["id"], "created_at": now_iso(),
@@ -690,11 +815,13 @@ async def brain_search(q: str = "", user: dict = Depends(get_current_user)):
     rx = {"$regex": q, "$options": "i"} if q else {"$exists": True}
     decisions = await db.decisions.find({"tenant_id": tid, "$or": [{"title": rx}, {"summary": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
     tasks = await db.tasks.find({"tenant_id": tid, "$or": [{"title": rx}, {"description": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
-    workflows = await db.workflows.find({"tenant_id": tid, "$or": [{"title": rx}, {"detail": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    workflows = await db.workflows.find({"tenant_id": tid, "$or": [{"title": rx}, {"detail": rx}, {"counterparty": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    contacts = await db.contacts.find({"tenant_id": tid, "$or": [{"name": rx}, {"company": rx}, {"email": rx}, {"phone": rx}, {"notes": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
     return {
         "decisions": await enrich_decisions(decisions),
         "tasks": await enrich_tasks(tasks),
         "workflows": workflows,
+        "contacts": await enrich_contacts(contacts),
     }
 
 
@@ -706,8 +833,9 @@ async def ask_ai(inp: AskInput, user: dict = Depends(get_current_user)):
     tid = user["tenant_id"]
     decisions = await db.decisions.find({"tenant_id": tid}, {"_id": 0, "title": 1, "summary": 1, "status": 1}).sort("created_at", -1).to_list(60)
     tasks = await db.tasks.find({"tenant_id": tid}, {"_id": 0, "title": 1, "status": 1, "assignee_role": 1, "due_date": 1}).sort("created_at", -1).to_list(120)
-    workflows = await db.workflows.find({"tenant_id": tid}, {"_id": 0, "title": 1, "type": 1, "stage": 1, "amount": 1}).sort("created_at", -1).to_list(60)
+    workflows = await db.workflows.find({"tenant_id": tid}, {"_id": 0, "title": 1, "type": 1, "stage": 1, "amount": 1, "counterparty": 1}).sort("created_at", -1).to_list(60)
     users = await db.users.find({"tenant_id": tid}, {"_id": 0, "name": 1, "role": 1}).to_list(60)
+    contacts = await db.contacts.find({"tenant_id": tid}, {"_id": 0, "name": 1, "company": 1, "type": 1, "status": 1, "phone": 1, "email": 1}).sort("created_at", -1).to_list(100)
 
     def slim_d(d):
         return {"title": d["title"], "summary": d.get("summary"), "status": d.get("status")}
@@ -716,13 +844,14 @@ async def ask_ai(inp: AskInput, user: dict = Depends(get_current_user)):
         return {"title": t["title"], "status": t.get("status"), "role": t.get("assignee_role"), "due": t.get("due_date")}
 
     def slim_w(w):
-        return {"title": w["title"], "type": w["type"], "stage": w.get("stage"), "amount": w.get("amount")}
+        return {"title": w["title"], "type": w["type"], "stage": w.get("stage"), "amount": w.get("amount"), "counterparty": w.get("counterparty")}
 
     context = {
         "decisions": [slim_d(d) for d in decisions],
         "tasks": [slim_t(t) for t in tasks],
         "workflows": [slim_w(w) for w in workflows],
         "team": users,
+        "contacts": contacts,
     }
     system = (
         "You are the Ask AI assistant of DecisionOS. Answer questions ONLY using the provided company context JSON. "
@@ -861,30 +990,51 @@ async def seed_demo():
         "workflow_events": [], "status": "pending_approval", "created_by": owner_id, "created_at": now_iso(), "task_ids": [t3],
     })
 
+    # Contacts (customers & vendors)
+    c_kapoor, c_threads, c_gujarat, c_packwell = new_id(), new_id(), new_id(), new_id()
+    await db.contacts.insert_many([
+        {"id": c_kapoor, "tenant_id": tid, "type": "customer", "name": "Kapoor Retail", "company": "Kapoor Retail Pvt Ltd",
+         "phone": "+91 98100 11223", "email": "orders@kapoorretail.in", "address": "Karol Bagh, New Delhi", "tax_id": "07AABCK1234M1Z5",
+         "tags": ["wholesale", "festive"], "status": "active", "assigned_id": sales_id, "notes": "Largest festive-season buyer; prefers net-30 terms.",
+         "created_by": owner_id, "created_at": now_iso()},
+        {"id": c_threads, "tenant_id": tid, "type": "customer", "name": "Threads Boutique", "company": "Threads Boutique",
+         "phone": "+91 98200 44556", "email": "hello@threadsboutique.in", "address": "Bandra, Mumbai", "tax_id": "27AAECT5678P1Z2",
+         "tags": ["boutique", "premium"], "status": "active", "assigned_id": sales_id, "notes": "Small premium orders, quick payer.",
+         "created_by": owner_id, "created_at": now_iso()},
+        {"id": c_gujarat, "tenant_id": tid, "type": "vendor", "name": "Gujarat Cotton Mills", "company": "Gujarat Cotton Mills Ltd",
+         "phone": "+91 79000 77889", "email": "sales@gujaratcotton.in", "address": "Ahmedabad, Gujarat", "tax_id": "24AAACG9012Q1Z8",
+         "tags": ["raw-material", "cotton"], "status": "active", "assigned_id": prod_id, "notes": "Primary yarn supplier.",
+         "created_by": owner_id, "created_at": now_iso()},
+        {"id": c_packwell, "tenant_id": tid, "type": "vendor", "name": "PackWell Industries", "company": "PackWell Industries",
+         "phone": "+91 22000 33445", "email": "accounts@packwell.in", "address": "Vasai, Maharashtra", "tax_id": "27AAFCP3456R1Z1",
+         "tags": ["packaging"], "status": "active", "assigned_id": prod_id, "notes": "Branded boxes & packaging.",
+         "created_by": owner_id, "created_at": now_iso()},
+    ])
+
     # Workflows
     sd_stages = WORKFLOW_STAGES["sales_dispatch"]
     pp_stages = WORKFLOW_STAGES["purchase_payment"]
     await db.workflows.insert_many([
         {"id": new_id(), "tenant_id": tid, "type": "sales_dispatch", "title": "Order #4821 — Delhi Retailer (500 units)",
-         "detail": "Cotton kurta sets, festive collection", "amount": 385000, "counterparty": "Kapoor Retail, Delhi",
+         "detail": "Cotton kurta sets, festive collection", "amount": 385000, "counterparty": "Kapoor Retail Pvt Ltd", "contact_id": c_kapoor,
          "stage": "in_production", "stages": sd_stages,
          "history": [{"stage": "order_received", "note": "PO received", "by": sales_id, "at": now_iso()},
                      {"stage": "confirmed", "note": "Advance paid", "by": sales_id, "at": now_iso()},
                      {"stage": "in_production", "note": "Batch started", "by": prod_id, "at": now_iso()}],
          "created_by": sales_id, "created_at": now_iso()},
         {"id": new_id(), "tenant_id": tid, "type": "sales_dispatch", "title": "Order #4822 — Mumbai Boutique (120 units)",
-         "detail": "Silk dupattas", "amount": 96000, "counterparty": "Threads Boutique, Mumbai",
+         "detail": "Silk dupattas", "amount": 96000, "counterparty": "Threads Boutique", "contact_id": c_threads,
          "stage": "dispatched", "stages": sd_stages,
          "history": [{"stage": "order_received", "note": "", "by": sales_id, "at": now_iso()},
                      {"stage": "dispatched", "note": "Shipped via BlueDart", "by": sales_id, "at": now_iso()}],
          "created_by": sales_id, "created_at": now_iso()},
         {"id": new_id(), "tenant_id": tid, "type": "purchase_payment", "title": "PO #221 — Cotton yarn (2 tonnes)",
-         "detail": "Q3 raw material stock", "amount": 240000, "counterparty": "Gujarat Cotton Mills",
+         "detail": "Q3 raw material stock", "amount": 240000, "counterparty": "Gujarat Cotton Mills Ltd", "contact_id": c_gujarat,
          "stage": "requested", "stages": pp_stages,
          "history": [{"stage": "requested", "note": "Awaiting owner approval", "by": prod_id, "at": now_iso()}],
          "created_by": prod_id, "created_at": now_iso()},
         {"id": new_id(), "tenant_id": tid, "type": "purchase_payment", "title": "PO #219 — Packaging boxes",
-         "detail": "5000 branded boxes", "amount": 45000, "counterparty": "PackWell Industries",
+         "detail": "5000 branded boxes", "amount": 45000, "counterparty": "PackWell Industries", "contact_id": c_packwell,
          "stage": "payment_pending", "stages": pp_stages,
          "history": [{"stage": "requested", "note": "", "by": prod_id, "at": now_iso()},
                      {"stage": "approved", "note": "Approved by owner", "by": owner_id, "at": now_iso()},
@@ -937,11 +1087,12 @@ async def migrate_tenants():
 
 
 async def fixup_demo_tenant():
-    """Ensure the seeded Sharma demo reflects its industry-aware profile (idempotent)."""
-    owner = await db.users.find_one({"email": DEMO_EMAIL}, {"_id": 0, "tenant_id": 1})
+    """Ensure the seeded Sharma demo reflects its industry-aware profile + has contacts (idempotent)."""
+    owner = await db.users.find_one({"email": DEMO_EMAIL}, {"_id": 0, "id": 1, "tenant_id": 1})
     if not owner:
         return
-    await db.tenants.update_one({"id": owner["tenant_id"]}, {"$set": {
+    tid = owner["tenant_id"]
+    await db.tenants.update_one({"id": tid}, {"$set": {
         "industry": "Textile Manufacturing", "company_size": "11-50", "region": "India", "currency": "INR",
         "roles": [{"key": "sales", "label": "Sales"}, {"key": "production", "label": "Production"},
                   {"key": "finance", "label": "Finance"}],
@@ -949,6 +1100,43 @@ async def fixup_demo_tenant():
                      {"name": "Silk dupattas", "description": "Premium woven accessories"},
                      {"name": "Bulk fabric rolls", "description": "Wholesale cotton & silk"}],
     }})
+    if await db.contacts.count_documents({"tenant_id": tid}) > 0:
+        return
+    sales = await db.users.find_one({"email": "sales@sharma.com"}, {"_id": 0, "id": 1})
+    prod = await db.users.find_one({"email": "production@sharma.com"}, {"_id": 0, "id": 1})
+    sales_id = sales["id"] if sales else owner["id"]
+    prod_id = prod["id"] if prod else owner["id"]
+    c_kapoor, c_threads, c_gujarat, c_packwell = new_id(), new_id(), new_id(), new_id()
+    await db.contacts.insert_many([
+        {"id": c_kapoor, "tenant_id": tid, "type": "customer", "name": "Kapoor Retail", "company": "Kapoor Retail Pvt Ltd",
+         "phone": "+91 98100 11223", "email": "orders@kapoorretail.in", "address": "Karol Bagh, New Delhi", "tax_id": "07AABCK1234M1Z5",
+         "tags": ["wholesale", "festive"], "status": "active", "assigned_id": sales_id, "notes": "Largest festive-season buyer; prefers net-30 terms.",
+         "created_by": owner["id"], "created_at": now_iso()},
+        {"id": c_threads, "tenant_id": tid, "type": "customer", "name": "Threads Boutique", "company": "Threads Boutique",
+         "phone": "+91 98200 44556", "email": "hello@threadsboutique.in", "address": "Bandra, Mumbai", "tax_id": "27AAECT5678P1Z2",
+         "tags": ["boutique", "premium"], "status": "active", "assigned_id": sales_id, "notes": "Small premium orders, quick payer.",
+         "created_by": owner["id"], "created_at": now_iso()},
+        {"id": c_gujarat, "tenant_id": tid, "type": "vendor", "name": "Gujarat Cotton Mills", "company": "Gujarat Cotton Mills Ltd",
+         "phone": "+91 79000 77889", "email": "sales@gujaratcotton.in", "address": "Ahmedabad, Gujarat", "tax_id": "24AAACG9012Q1Z8",
+         "tags": ["raw-material", "cotton"], "status": "active", "assigned_id": prod_id, "notes": "Primary yarn supplier.",
+         "created_by": owner["id"], "created_at": now_iso()},
+        {"id": c_packwell, "tenant_id": tid, "type": "vendor", "name": "PackWell Industries", "company": "PackWell Industries",
+         "phone": "+91 22000 33445", "email": "accounts@packwell.in", "address": "Vasai, Maharashtra", "tax_id": "27AAFCP3456R1Z1",
+         "tags": ["packaging"], "status": "active", "assigned_id": prod_id, "notes": "Branded boxes & packaging.",
+         "created_by": owner["id"], "created_at": now_iso()},
+    ])
+    links = {
+        "Order #4821": (c_kapoor, "Kapoor Retail Pvt Ltd"),
+        "Order #4822": (c_threads, "Threads Boutique"),
+        "PO #221": (c_gujarat, "Gujarat Cotton Mills Ltd"),
+        "PO #219": (c_packwell, "PackWell Industries"),
+    }
+    for prefix, (cid, name) in links.items():
+        await db.workflows.update_one(
+            {"tenant_id": tid, "title": {"$regex": f"^{prefix}"}},
+            {"$set": {"contact_id": cid, "counterparty": name}},
+        )
+    logger.info("Demo contacts seeded & linked.")
 
 
 @app.on_event("startup")

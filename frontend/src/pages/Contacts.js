@@ -1,0 +1,191 @@
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import api from "../lib/api";
+import { useAuth } from "../context/AuthContext";
+import { PageHeader, Chip, EmptyState } from "../components/common";
+import { toast } from "sonner";
+import { Plus, MagnifyingGlass, PencilSimple, Trash, Phone, EnvelopeSimple, MapPin } from "@phosphor-icons/react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../components/ui/dialog";
+
+const TYPES = ["customer", "vendor"];
+const STATUSES = ["lead", "active", "inactive"];
+const inp = "w-full border border-black px-3 py-2 text-sm font-mono focus:outline-none focus:shadow-brutal-sm";
+
+function ContactDialog({ trigger, initial, onSaved, users }) {
+  const [open, setOpen] = useState(false);
+  const blank = { type: "customer", name: "", company: "", phone: "", email: "", address: "", tax_id: "", tags: "", status: "lead", assigned_id: "", notes: "" };
+  const [form, setForm] = useState(blank);
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+
+  const openChange = (o) => {
+    setOpen(o);
+    if (o) {
+      setForm(initial
+        ? { ...initial, tags: (initial.tags || []).join(", "), assigned_id: initial.assigned_id || "", company: initial.company || "", phone: initial.phone || "", email: initial.email || "", address: initial.address || "", tax_id: initial.tax_id || "", notes: initial.notes || "" }
+        : blank);
+    }
+  };
+
+  const save = async () => {
+    if (!form.name.trim()) return toast.error("Name is required");
+    const payload = {
+      type: form.type, name: form.name, company: form.company, phone: form.phone, email: form.email,
+      address: form.address, tax_id: form.tax_id, status: form.status,
+      assigned_id: form.assigned_id || null, notes: form.notes,
+      tags: form.tags ? form.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
+    };
+    try {
+      if (initial) await api.patch(`/contacts/${initial.id}`, payload);
+      else await api.post("/contacts", payload);
+      toast.success(initial ? "Contact updated" : "Contact added");
+      setOpen(false);
+      onSaved();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Save failed");
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={openChange}>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      <DialogContent className="border border-black rounded-none max-h-[90vh] overflow-y-auto">
+        <DialogHeader><DialogTitle className="font-heading uppercase tracking-tight">{initial ? "Edit contact" : "New contact"}</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <select data-testid="contact-type-select" className={inp} value={form.type} onChange={set("type")}>
+              {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <select data-testid="contact-status-select" className={inp} value={form.status} onChange={set("status")}>
+              {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <input data-testid="contact-name-input" className={inp} placeholder="Contact name *" value={form.name} onChange={set("name")} />
+          <input data-testid="contact-company-input" className={inp} placeholder="Company" value={form.company} onChange={set("company")} />
+          <div className="grid grid-cols-2 gap-3">
+            <input data-testid="contact-phone-input" className={inp} placeholder="Phone" value={form.phone} onChange={set("phone")} />
+            <input data-testid="contact-email-input" className={inp} placeholder="Email" value={form.email} onChange={set("email")} />
+          </div>
+          <input className={inp} placeholder="Address" value={form.address} onChange={set("address")} />
+          <div className="grid grid-cols-2 gap-3">
+            <input className={inp} placeholder="GST / Tax ID" value={form.tax_id} onChange={set("tax_id")} />
+            <input className={inp} placeholder="Tags (comma separated)" value={form.tags} onChange={set("tags")} />
+          </div>
+          <select data-testid="contact-assigned-select" className={inp} value={form.assigned_id} onChange={set("assigned_id")}>
+            <option value="">Assign owner…</option>
+            {(users || []).map((u) => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
+          </select>
+          <textarea className={inp} rows={2} placeholder="Notes" value={form.notes} onChange={set("notes")} />
+        </div>
+        <DialogFooter>
+          <button data-testid="contact-save-button" onClick={save} className="bg-brand-red text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">
+            {initial ? "Save changes" : "Add contact"}
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export default function Contacts() {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const [type, setType] = useState("");
+  const [status, setStatus] = useState("");
+  const [q, setQ] = useState("");
+  const canManage = user?.role === "owner" || user?.role === "sales";
+
+  const { data } = useQuery({
+    queryKey: ["contacts", type, status, q],
+    queryFn: () => api.get(`/contacts?type=${type}&status=${status}&q=${encodeURIComponent(q)}`).then((r) => r.data),
+  });
+  const { data: users } = useQuery({ queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data) });
+
+  const refresh = () => qc.invalidateQueries({ queryKey: ["contacts"] });
+
+  const remove = async (id) => {
+    try {
+      await api.delete(`/contacts/${id}`);
+      toast.success("Contact deleted");
+      refresh();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Delete failed");
+    }
+  };
+
+  const selectCls = "border border-black bg-white px-3 py-2 text-sm font-mono focus:outline-none";
+
+  return (
+    <div>
+      <PageHeader eyebrow="Customers & vendors" title="Contacts">
+        {canManage && (
+          <ContactDialog
+            users={users}
+            onSaved={refresh}
+            trigger={
+              <button data-testid="add-contact-button" className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
+                <Plus size={16} weight="bold" /> Add Contact
+              </button>
+            }
+          />
+        )}
+      </PageHeader>
+
+      {/* Filters */}
+      <div className="flex flex-wrap gap-2 mb-6">
+        <div className="flex items-center border border-black bg-white px-3 flex-1 min-w-[200px]">
+          <MagnifyingGlass size={16} weight="bold" className="text-muted-foreground" />
+          <input data-testid="contact-search-input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, company, phone, email…" className="flex-1 py-2 px-2 text-sm font-mono focus:outline-none" />
+        </div>
+        <select data-testid="contact-type-filter" value={type} onChange={(e) => setType(e.target.value)} className={selectCls}>
+          <option value="">All types</option>
+          {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <select data-testid="contact-status-filter" value={status} onChange={(e) => setStatus(e.target.value)} className={selectCls}>
+          <option value="">All statuses</option>
+          {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+      </div>
+
+      {(data || []).length === 0 && <EmptyState title="No contacts yet" hint={canManage ? "Add your first customer or vendor." : "No contacts match your filters."} />}
+
+      <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {(data || []).map((c) => (
+          <div key={c.id} data-testid={`contact-card-${c.id}`} className="card-brutal p-5 shadow-hover">
+            <div className="flex items-start justify-between gap-2 mb-2">
+              <div className="flex items-center gap-2">
+                <Chip value={c.type} className={c.type === "customer" ? "bg-brand-blue text-white" : "bg-brand-yellow text-black"} />
+                <Chip value={c.status} className={c.status === "active" ? "bg-brand-ink text-white" : c.status === "lead" ? "bg-brand-yellow text-black" : "bg-black/10 text-black"} />
+              </div>
+              {canManage && (
+                <div className="flex gap-1">
+                  <ContactDialog
+                    users={users} initial={c} onSaved={refresh}
+                    trigger={<button data-testid={`edit-contact-${c.id}`} className="w-8 h-8 flex items-center justify-center border border-black hover:bg-brand-ink hover:text-white transition-colors"><PencilSimple size={14} weight="bold" /></button>}
+                  />
+                  <button data-testid={`delete-contact-${c.id}`} onClick={() => remove(c.id)} className="w-8 h-8 flex items-center justify-center border border-black hover:bg-brand-red hover:text-white transition-colors"><Trash size={14} weight="bold" /></button>
+                </div>
+              )}
+            </div>
+            <p className="font-heading font-bold text-lg leading-tight">{c.name}</p>
+            {c.company && <p className="text-sm text-muted-foreground">{c.company}</p>}
+            <div className="mt-3 space-y-1 text-sm">
+              {c.phone && <p className="flex items-center gap-2"><Phone size={14} weight="bold" className="text-muted-foreground" /> {c.phone}</p>}
+              {c.email && <p className="flex items-center gap-2 break-all"><EnvelopeSimple size={14} weight="bold" className="text-muted-foreground" /> {c.email}</p>}
+              {c.address && <p className="flex items-center gap-2"><MapPin size={14} weight="bold" className="text-muted-foreground" /> {c.address}</p>}
+            </div>
+            {(c.tags || []).length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-3">
+                {c.tags.map((t) => <span key={t} className="text-[10px] uppercase tracking-wider border border-black/30 px-1.5 py-0.5">{t}</span>)}
+              </div>
+            )}
+            <div className="flex items-center justify-between mt-4 pt-3 border-t border-black/10 text-xs text-muted-foreground">
+              <span>{c.assigned_name ? `Owner: ${c.assigned_name}` : "Unassigned"}</span>
+              {c.tax_id && <span className="font-mono">{c.tax_id}</span>}
+            </div>
+            {c.notes && <p className="text-xs text-muted-foreground mt-2 italic">{c.notes}</p>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

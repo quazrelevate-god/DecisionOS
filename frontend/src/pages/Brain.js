@@ -19,7 +19,7 @@ export default function Brain() {
     }
   };
 
-  const total = res ? res.decisions.length + res.tasks.length + res.workflows.length : 0;
+  const total = res ? res.decisions.length + res.tasks.length + res.workflows.length + (res.contacts?.length || 0) : 0;
 
   return (
     <div>
@@ -46,7 +46,7 @@ export default function Brain() {
       {res && !loading && (
         <>
           <p className="label-mono text-muted-foreground mb-6">{total} linked record(s)</p>
-          <div className="grid lg:grid-cols-3 gap-6">
+          <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-6">
             {/* Decisions */}
             <section>
               <h3 className="font-heading font-extrabold uppercase tracking-tight text-lg mb-3">Decisions ({res.decisions.length})</h3>
@@ -93,6 +93,24 @@ export default function Brain() {
                   </div>
                 ))}
                 {res.workflows.length === 0 && <p className="text-xs text-muted-foreground">No matches</p>}
+              </div>
+            </section>
+            {/* Contacts */}
+            <section>
+              <h3 className="font-heading font-extrabold uppercase tracking-tight text-lg mb-3">Contacts ({res.contacts?.length || 0})</h3>
+              <div className="space-y-3">
+                {(res.contacts || []).map((c) => (
+                  <div key={c.id} data-testid={`brain-contact-${c.id}`} className="card-brutal p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <Chip value={c.type} className={c.type === "customer" ? "bg-brand-blue text-white" : "bg-brand-yellow text-black"} />
+                      <Chip value={c.status} />
+                    </div>
+                    <p className="font-semibold text-sm">{c.name}</p>
+                    {c.company && <p className="text-xs text-muted-foreground mt-1">{c.company}</p>}
+                    {c.phone && <p className="text-xs text-muted-foreground">{c.phone}</p>}
+                  </div>
+                ))}
+                {(res.contacts || []).length === 0 && <p className="text-xs text-muted-foreground">No matches</p>}
               </div>
             </section>
           </div>

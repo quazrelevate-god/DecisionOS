@@ -8,6 +8,7 @@ import {
   SheetContent,
   SheetTrigger,
   SheetTitle,
+  SheetDescription,
 } from "./ui/sheet";
 import {
   Gauge,
@@ -149,6 +150,7 @@ export default function Layout({ children }) {
             </SheetTrigger>
             <SheetContent side="left" className="w-72 p-0 border-r border-black rounded-none bg-white flex flex-col" data-testid="mobile-drawer">
               <SheetTitle className="sr-only">Navigation</SheetTitle>
+              <SheetDescription className="sr-only">Main navigation menu</SheetDescription>
               <div className="px-6 py-5 border-b border-black">
                 <Logo />
                 <p className="mt-2 label-mono text-muted-foreground truncate">{tenant?.name}</p>
@@ -188,7 +190,7 @@ export default function Layout({ children }) {
       </div>
 
       {/* Mobile bottom tab bar */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 border-t border-black bg-white flex z-20" data-testid="mobile-bottom-nav">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 border-t border-black bg-white flex z-[10000]" data-testid="mobile-bottom-nav">
         {BOTTOM_NAV.map(({ to, label, icon: Icon }) => {
           const active = to === "/" ? location.pathname === "/" : location.pathname.startsWith(to);
           return (

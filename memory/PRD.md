@@ -19,15 +19,12 @@ Multi-tenant isolation, role-based access, voice+text capture, AI structuring wi
 
 ## Implemented (2026-07-01)
 - JWT email/password auth; register creates tenant+owner; demo Sharma workspace auto-seeded (owner/sales/production/finance @sharma.com / demo1234).
-- Owner Inbox: in-browser mic recording (MediaRecorder→whisper) + text fallback; async job status feed; owner-only posting.
-- AI extraction: transcript → Decision (pending_approval) + linked blocked Tasks; owner approve unblocks tasks, reject cancels.
-- Tasks board (blocked/todo/in_progress/done), manual create, mine filter.
-- Workflows kanban: Sales→Dispatch & Purchase→Payment, next-stage-only advance, owner-gated purchase approval.
-- Company Brain search across decisions/tasks/workflows with linked context.
-- Ask AI command-line UI grounded in tenant data.
-- Daily Brief dashboard (stats, pending approvals, overdue, activity) + mocked Resend digest.
-- Team management (owner adds members).
-- Tested: backend 100% (27 pytest), frontend 100% (15 flows). No product bugs.
+- **Industry-aware onboarding**: 3-step registration wizard captures industry, company size, region, currency; AI (`/api/onboarding/suggest`) proposes team roles + products/services (editable). Roles are now **dynamic per tenant** (validated via `tenant_role_keys`); Owner implicit. Company profile shown on Team page; currency-aware amount formatting; workflows relabeled generically (Order Fulfilment / Procurement).
+- Owner Inbox: in-browser mic recording (whisper) + text fallback; async job feed; owner-only posting.
+- AI extraction: transcript → Decision (pending_approval) + linked blocked Tasks (assignee_role constrained to tenant roles); owner approve unblocks, reject cancels.
+- Tasks board, Workflows kanban (next-stage-only, owner-gated purchase approval), Company Brain search, Ask AI, Daily Brief dashboard, mocked Resend digest, Team management.
+- Fully responsive mobile app-style shell (top bar + drawer + bottom tab nav).
+- Tested: backend 43/43 pytest, frontend 100% across 5 iterations. No product bugs.
 
 ## Backlog / Next
 - **P1**: Real Resend send (plug RESEND_API_KEY); scheduled/cron daily digest.

@@ -108,6 +108,12 @@ export default function Inbox() {
       <PageHeader eyebrow="Voice-first capture" title="Owner Inbox" />
 
       <div className="grid lg:grid-cols-2 gap-6 mb-10">
+        {user?.role !== "owner" && (
+          <div className="lg:col-span-2 border border-black bg-brand-yellow/40 p-4 text-sm" data-testid="owner-only-notice">
+            Only the <strong>owner</strong> can record or type directives. You can review extracted decisions and their tasks below.
+          </div>
+        )}
+        {user?.role === "owner" && (<>
         {/* Recorder */}
         <div className="card-brutal p-8 flex flex-col items-center justify-center text-center">
           <button
@@ -148,6 +154,7 @@ export default function Inbox() {
             <PaperPlaneTilt size={16} weight="bold" /> Structure it
           </button>
         </div>
+        </>)}
       </div>
 
       {/* Processing feed */}

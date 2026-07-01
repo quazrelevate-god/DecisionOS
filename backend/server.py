@@ -361,7 +361,7 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 
 
 @api.post("/voice-notes")
-async def create_voice_note(background: BackgroundTasks, file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+async def create_voice_note(background: BackgroundTasks, file: UploadFile = File(...), user: dict = Depends(require_role("owner"))):
     note_id = new_id()
     ext = (file.filename or "audio.webm").split(".")[-1]
     path = UPLOAD_DIR / f"{note_id}.{ext}"
@@ -378,7 +378,7 @@ async def create_voice_note(background: BackgroundTasks, file: UploadFile = File
 
 
 @api.post("/voice-notes/text")
-async def create_text_note(inp: TextNoteInput, background: BackgroundTasks, user: dict = Depends(get_current_user)):
+async def create_text_note(inp: TextNoteInput, background: BackgroundTasks, user: dict = Depends(require_role("owner"))):
     note_id = new_id()
     await db.voice_notes.insert_one({
         "id": note_id, "tenant_id": user["tenant_id"], "created_by": user["id"],
@@ -545,6 +545,10 @@ async def advance_workflow(workflow_id: str, inp: WorkflowAdvanceInput, user: di
         raise HTTPException(status_code=404, detail="Not found")
     if inp.stage not in wf["stages"]:
         raise HTTPException(status_code=400, detail="Invalid stage")
+    cur_idx = wf["stages"].index(wf["stage"])
+    tgt_idx = wf["stages"].index(inp.stage)
+    if tgt_idx != cur_idx + 1:
+        raise HTTPException(status_code=400, detail="Can only advance to the next stage")
     # purchase approval gate: only owner may move to 'approved'
     if wf["type"] == "purchase_payment" and inp.stage == "approved" and user["role"] != "owner":
         raise HTTPException(status_code=403, detail="Only the owner can approve purchases")

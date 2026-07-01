@@ -1,0 +1,40 @@
+{
+  "summary": "Full backend + frontend testing of DecisionOS MVP. 27/27 pytest cases pass (auth, dashboard, voice-note text ingestion + AI extraction, decision approve/reject with role gate, tasks CRUD, workflows CRUD + purchase-approve owner gate, brain search, Ask AI, mocked digest, team). All 15 UI flows pass (login, sidebar nav across 7 pages, text-directive submission + AI extraction, workflow tabs, tasks create, brain search, Ask AI with suggestion buttons, team owner-only add-user visibility, sales role restrictions on team).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Owner Inbox (sales role)", "issues": ["Sales/production/finance users can still see the 'TYPE A DIRECTIVE' input on Owner Inbox and submit directives — page is titled 'Owner Inbox' but has no role-based visibility guard; POST /api/voice-notes/text is not restricted to owners either. Consider gating either the page or the input to owner only for consistency with the 'Owner Inbox' branding."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Optional (design consistency): Restrict Owner Inbox text-directive input to owner role (frontend guard + backend require_role('owner') on POST /api/voice-notes and /api/voice-notes/text). Currently any authenticated user in the tenant can post directives."
+  ],
+  "critical_code_review_comments": [
+    "server.py (~820 lines) is a single monolith — split into auth.py / voice_notes.py / decisions.py / workflows.py / brain.py / ask.py routers for maintainability. Threshold >700 lines exceeded.",
+    "process_voice_note stores AI errors in DB but there is no retry mechanism. On transient 'Budget exceeded' from the LLM proxy the note stays 'failed' forever unless the user resubmits. Consider a small backoff-retry (1-2 attempts) inside process_voice_note.",
+    "ai_extract() silently falls back to empty decisions/tasks on JSON parse failure with only a log line — surface a warning field so UI can indicate degraded extraction.",
+    "advance_workflow allows moving to ANY stage in the workflow's stage list — no ordering enforcement. A user could jump 'requested' -> 'paid' directly. Consider validating the target stage is one of the allowed next stages.",
+    "brain/search with empty q returns all decisions/tasks/workflows via {'$exists': True} on title/summary regex — this may be intentional as 'browse all' but leaks the API to become an unfiltered dump; consider requiring a min q length or returning a short preview.",
+    "CORS is set from env with default '*' AND allow_credentials=True — with '*' most browsers reject credentialed requests. In prod, CORS_ORIGINS must be an explicit origin list. Currently backend/.env has '*', so credentialed CORS is technically misconfigured (browsers will block); works today only because frontend uses Bearer header, not cookies.",
+    "No password strength validation beyond min_length=6; consider adding basic complexity or rate-limiting login attempts (no brute-force protection present)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py (new pytest suite for 10 feature areas)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "owner@sharma.com / demo1234 (+ sales/production/finance@sharma.com — all demo1234). Auto-seeded on backend startup. Present in /app/memory/test_credentials.md",
+  "seed_data_creation": "None additional. Backend auto-seeds Sharma Textiles workspace on startup (decisions d1/d2, tasks, 4 workflows). Tests create disposable TEST_* prefixed rows (kept — no cleanup performed to keep testing deterministic across iterations; can be dropped by deleting collections or filtering title~=TEST_).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Pytest suite at /app/backend/tests/backend_test.py — run via `pytest backend/tests/backend_test.py -v --junitxml=/app/test_reports/pytest/pytest_results.xml`. Tests run in parallel (xdist) so avoid ordering assumptions. For Ask-AI UI testing, prefer clicking [data-testid^=ask-suggestion] buttons instead of relying on click on [data-testid=ask-submit] with force=True — the latter can miss the form submit; the suggestion buttons call ask() directly. AI assistant messages use testid pattern 'chat-msg-ai-{i}' (NOT 'chat-msg-assistant-{i}'). Voice-note AI extraction ~3-8s; allow 40s max with a retry-once for transient LLM 'Budget exceeded' errors.",
+  "rca of the issue": "No product bugs found. The only initial pytest failure (dashboard_shape asserting 'Hire' decision still pending) was a test-script race with parallel xdist workers: TestDecisionApproval approved the seeded pending decision before TestDashboard ran. Fixed by asserting on the seeded pending PO (which is not mutated by other tests) and shape checks only. The single UI test miss (Ask AI response not found) was because (a) my selector used chat-msg-assistant-* while frontend emits chat-msg-ai-*, and (b) force=True clicking on the ask-submit button did not trigger the form's onSubmit reliably; retry using ask-suggestion buttons or programmatic form submit succeeded, and AI response arrived in ~6-8s."
+}

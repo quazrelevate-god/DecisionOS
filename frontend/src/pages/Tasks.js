@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "../lib/api";
+import { useAuth } from "../context/AuthContext";
 import { PageHeader, Chip, EmptyState } from "../components/common";
 import { toast } from "sonner";
 import { Plus } from "@phosphor-icons/react";
@@ -13,9 +14,8 @@ const COLUMNS = [
   { key: "done", label: "Done" },
 ];
 const NEXT = { blocked: null, todo: "in_progress", in_progress: "done", done: "todo" };
-const ROLES = ["owner", "sales", "production", "finance"];
 
-function NewTaskDialog({ onCreated }) {
+function NewTaskDialog({ onCreated, roleOptions }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ title: "", description: "", assignee_role: "", priority: "medium", due_in_days: "" });
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -48,7 +48,7 @@ function NewTaskDialog({ onCreated }) {
           <textarea className={inp} rows={2} placeholder="Description" value={form.description} onChange={set("description")} />
           <select data-testid="task-role-select" className={inp} value={form.assignee_role} onChange={set("assignee_role")}>
             <option value="">Assign role…</option>
-            {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+            {roleOptions.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
           </select>
           <div className="flex gap-3">
             <select className={inp} value={form.priority} onChange={set("priority")}>
@@ -67,7 +67,9 @@ function NewTaskDialog({ onCreated }) {
 
 export default function Tasks() {
   const qc = useQueryClient();
+  const { tenant } = useAuth();
   const [mine, setMine] = useState(false);
+  const roleOptions = [{ key: "owner", label: "Owner" }, ...(tenant?.roles || [])];
   const { data } = useQuery({ queryKey: ["tasks", mine], queryFn: () => api.get(`/tasks?mine=${mine}`).then((r) => r.data) });
 
   const move = async (t) => {
@@ -90,7 +92,7 @@ export default function Tasks() {
             className={`px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black transition-colors ${mine ? "bg-brand-blue text-white" : "bg-white hover:bg-black/5"}`}>
             {mine ? "My Tasks" : "All Tasks"}
           </button>
-          <NewTaskDialog onCreated={() => qc.invalidateQueries({ queryKey: ["tasks", mine] })} />
+          <NewTaskDialog onCreated={() => qc.invalidateQueries({ queryKey: ["tasks", mine] })} roleOptions={roleOptions} />
         </div>
       </PageHeader>
 

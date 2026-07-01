@@ -4,24 +4,25 @@ import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { PageHeader, Chip } from "../components/common";
 import { toast } from "sonner";
-import { UserPlus } from "@phosphor-icons/react";
+import { UserPlus, Buildings, Package } from "@phosphor-icons/react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../components/ui/dialog";
 
-const ROLES = ["owner", "sales", "production", "finance"];
-
 export default function Team() {
-  const { user } = useAuth();
+  const { user, tenant } = useAuth();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", email: "", password: "", role: "sales" });
+  const roleOptions = tenant?.roles || [];
+  const [form, setForm] = useState({ name: "", email: "", password: "", role: roleOptions[0]?.key || "" });
   const { data } = useQuery({ queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data) });
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+
+  const roleLabel = (key) => (key === "owner" ? "Owner" : roleOptions.find((r) => r.key === key)?.label || key);
 
   const add = async () => {
     try {
       await api.post("/users", form);
-      toast.success(`${form.name} added as ${form.role}`);
-      setForm({ name: "", email: "", password: "", role: "sales" });
+      toast.success(`${form.name} added as ${roleLabel(form.role)}`);
+      setForm({ name: "", email: "", password: "", role: roleOptions[0]?.key || "" });
       setOpen(false);
       qc.invalidateQueries({ queryKey: ["users"] });
     } catch (e) {
@@ -47,7 +48,7 @@ export default function Team() {
                 <input data-testid="member-email-input" className={inp} type="email" placeholder="Email" value={form.email} onChange={set("email")} />
                 <input data-testid="member-password-input" className={inp} type="password" placeholder="Temp password (min 6)" value={form.password} onChange={set("password")} />
                 <select data-testid="member-role-select" className={inp} value={form.role} onChange={set("role")}>
-                  {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+                  {roleOptions.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
                 </select>
               </div>
               <DialogFooter>
@@ -58,6 +59,40 @@ export default function Team() {
         )}
       </PageHeader>
 
+      {/* Company profile */}
+      <div className="grid lg:grid-cols-3 gap-6 mb-8">
+        <div className="card-brutal p-6 lg:col-span-1" data-testid="company-profile">
+          <div className="flex items-center gap-2 mb-4">
+            <Buildings size={20} weight="bold" className="text-brand-red" />
+            <h2 className="font-heading font-extrabold uppercase tracking-tight text-lg">Company</h2>
+          </div>
+          <p className="font-heading font-black text-xl leading-tight">{tenant?.name}</p>
+          <dl className="mt-4 space-y-2 text-sm">
+            <div className="flex justify-between gap-3 border-b border-black/10 pb-1"><dt className="text-muted-foreground">Industry</dt><dd className="font-semibold text-right" data-testid="profile-industry">{tenant?.industry || "—"}</dd></div>
+            <div className="flex justify-between gap-3 border-b border-black/10 pb-1"><dt className="text-muted-foreground">Team size</dt><dd className="font-semibold">{tenant?.company_size || "—"}</dd></div>
+            <div className="flex justify-between gap-3 border-b border-black/10 pb-1"><dt className="text-muted-foreground">Region</dt><dd className="font-semibold">{tenant?.region || "—"}</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Currency</dt><dd className="font-semibold">{tenant?.currency || "—"}</dd></div>
+          </dl>
+        </div>
+
+        <div className="card-brutal p-6 lg:col-span-2" data-testid="products-card">
+          <div className="flex items-center gap-2 mb-4">
+            <Package size={20} weight="bold" className="text-brand-blue" />
+            <h2 className="font-heading font-extrabold uppercase tracking-tight text-lg">Products & Services</h2>
+          </div>
+          {(tenant?.products || []).length === 0 && <p className="text-sm text-muted-foreground">No products captured yet.</p>}
+          <div className="grid sm:grid-cols-2 gap-3">
+            {(tenant?.products || []).map((p, i) => (
+              <div key={i} data-testid={`profile-product-${i}`} className="border border-black/20 p-3">
+                <p className="font-semibold text-sm">{p.name}</p>
+                {p.description && <p className="text-xs text-muted-foreground mt-1">{p.description}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <h2 className="font-heading text-2xl font-extrabold uppercase tracking-tight mb-4">Members</h2>
       <div className="card-brutal divide-y divide-black/10">
         {(data || []).map((u) => (
           <div key={u.id} data-testid={`team-member-${u.id}`} className="p-4 flex items-center justify-between gap-4">

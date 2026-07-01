@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { PageHeader, Chip, EmptyState } from "../components/common";
+import { money } from "../lib/format";
 import { toast } from "sonner";
 import { CheckCircle, XCircle, Warning, Clock, TrendUp } from "@phosphor-icons/react";
 
@@ -17,7 +18,7 @@ function Stat({ label, value, accent }) {
 }
 
 export default function Dashboard() {
-  const { user } = useAuth();
+  const { user, tenant } = useAuth();
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ["dashboard"], queryFn: () => api.get("/dashboard").then((r) => r.data) });
 
@@ -81,7 +82,7 @@ export default function Dashboard() {
               <div key={w.id} data-testid={`approval-purchase-${w.id}`} className="card-brutal p-5">
                 <Chip value="purchase" className="bg-brand-yellow text-black mb-2" />
                 <p className="font-heading font-bold text-lg leading-tight">{w.title}</p>
-                <p className="text-sm text-muted-foreground mt-1">{w.counterparty} · ₹{(w.amount || 0).toLocaleString("en-IN")}</p>
+                <p className="text-sm text-muted-foreground mt-1">{w.counterparty} · {money(w.amount || 0, tenant?.currency)}</p>
                 <Link to="/workflows" className="inline-block mt-3 text-sm text-brand-blue font-semibold hover:underline">Review in Workflows →</Link>
               </div>
             ))}

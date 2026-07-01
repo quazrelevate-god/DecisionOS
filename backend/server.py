@@ -100,14 +100,51 @@ def require_role(*roles):
     return checker
 
 
+DEFAULT_ROLES = [
+    {"key": "sales", "label": "Sales"},
+    {"key": "operations", "label": "Operations"},
+    {"key": "finance", "label": "Finance"},
+]
+
+
+async def tenant_role_keys(tenant_id: str) -> set:
+    t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "roles": 1})
+    keys = {r.get("key") for r in ((t.get("roles") if t else None) or [])}
+    keys.discard(None)
+    keys.add("owner")
+    return keys
+
+
 # ---------------------------------------------------------------------------
 # Models
 # ---------------------------------------------------------------------------
+class RoleItem(BaseModel):
+    key: str
+    label: str
+
+
+class ProductItem(BaseModel):
+    name: str
+    description: Optional[str] = ""
+
+
 class RegisterInput(BaseModel):
     company_name: str
     name: str
     email: EmailStr
     password: str = Field(min_length=6)
+    industry: Optional[str] = None
+    company_size: Optional[str] = None
+    region: Optional[str] = None
+    currency: Optional[str] = "INR"
+    roles: Optional[List[RoleItem]] = None
+    products: Optional[List[ProductItem]] = None
+
+
+class OnboardingSuggestInput(BaseModel):
+    industry: str
+    company_size: Optional[str] = None
+    description: Optional[str] = None
 
 
 class LoginInput(BaseModel):
@@ -202,16 +239,18 @@ def _extract_json(text: str):
     return json.loads(text)
 
 
-async def ai_extract(transcript: str, session_id: str) -> dict:
+async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[list] = None) -> dict:
+    roles = allowed_roles or ["owner", "sales", "operations", "finance"]
+    roles_str = ",".join(roles)
     system = (
         "You are the extraction engine of DecisionOS, an operating brain for small businesses. "
         "Convert a founder's spoken/written directive into structured operational data. "
         "Return ONLY valid JSON, no prose. Schema: "
         "{\"summary\": string, \"decisions\": [{\"title\": string, \"detail\": string, \"category\": string}], "
-        "\"tasks\": [{\"title\": string, \"description\": string, \"assignee_role\": one of [owner,sales,production,finance], "
+        "\"tasks\": [{\"title\": string, \"description\": string, \"assignee_role\": one of [" + roles_str + "], "
         "\"priority\": one of [low,medium,high], \"due_in_days\": integer or null}], "
         "\"workflow_events\": [{\"type\": one of [sales_dispatch,purchase_payment], \"action\": string, \"detail\": string}]}. "
-        "Infer sensible owners and due dates. If nothing applies, use empty arrays."
+        "Pick assignee_role ONLY from the provided role list. Infer sensible owners and due dates. If nothing applies, use empty arrays."
     )
     prompt = f"Founder directive transcript:\n\"\"\"\n{transcript}\n\"\"\"\nExtract the structured JSON now."
     chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=session_id, system_message=system).with_model(*LLM_MODEL)
@@ -251,7 +290,8 @@ async def process_voice_note(note_id: str):
             await db.voice_notes.update_one({"id": note_id}, {"$set": {"transcript": transcript}})
 
         await db.voice_notes.update_one({"id": note_id}, {"$set": {"status": "structuring"}})
-        extracted = await ai_extract(transcript or "", session_id=f"extract-{note_id}")
+        troles = await tenant_role_keys(tenant_id)
+        extracted = await ai_extract(transcript or "", session_id=f"extract-{note_id}", allowed_roles=sorted(troles))
 
         decision_id = new_id()
         decision = {
@@ -270,7 +310,7 @@ async def process_voice_note(note_id: str):
             due = None
             if isinstance(t.get("due_in_days"), int):
                 due = (datetime.now(timezone.utc) + timedelta(days=t["due_in_days"])).isoformat()
-            role = t.get("assignee_role") if t.get("assignee_role") in ROLES else None
+            role = t.get("assignee_role") if t.get("assignee_role") in troles else None
             await db.tasks.insert_one({
                 "id": tid, "tenant_id": tenant_id, "title": t.get("title", "Untitled task"),
                 "description": t.get("description", ""), "assignee_role": role, "assignee_id": None,
@@ -292,13 +332,65 @@ async def process_voice_note(note_id: str):
 # ---------------------------------------------------------------------------
 # Auth routes
 # ---------------------------------------------------------------------------
+@api.post("/onboarding/suggest")
+async def onboarding_suggest(inp: OnboardingSuggestInput):
+    system = (
+        "You are an onboarding assistant for DecisionOS, a business operations app. "
+        "Given an industry, propose the team roles/departments and example products or services a small business in that "
+        "industry would have. Return ONLY valid JSON, no prose: "
+        "{\"roles\": [{\"key\": lowercase_snake_case_slug, \"label\": Human Readable}], "
+        "\"products\": [{\"name\": string, \"description\": short string}]}. "
+        "Provide 3-6 roles (do NOT include 'owner' — it is implicit) and 3-5 example products/services. Keep it specific to the industry."
+    )
+    prompt = f"Industry: {inp.industry}\nCompany size: {inp.company_size or 'unspecified'}\nExtra notes: {inp.description or 'none'}\nSuggest roles and example products/services now."
+    chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=f"onboard-{new_id()}", system_message=system).with_model(*LLM_MODEL)
+    try:
+        resp = await chat.send_message(UserMessage(text=prompt))
+        data = _extract_json(resp)
+    except Exception as e:
+        logger.error(f"onboarding_suggest failed: {e}")
+        data = {}
+    roles = []
+    for r in (data.get("roles") or []):
+        label = (r.get("label") or r.get("key") or "").strip()
+        key = (r.get("key") or label).strip().lower().replace(" ", "_").replace("/", "_").replace("-", "_")
+        if key and key != "owner":
+            roles.append({"key": key, "label": label or key.replace("_", " ").title()})
+    products = []
+    for p in (data.get("products") or []):
+        name = (p.get("name") or "").strip()
+        if name:
+            products.append({"name": name, "description": (p.get("description") or "").strip()})
+    if not roles:
+        roles = DEFAULT_ROLES
+    return {"roles": roles[:6], "products": products[:5]}
+
+
 @api.post("/auth/register")
 async def register(inp: RegisterInput):
     email = inp.email.lower()
     if await db.users.find_one({"email": email}):
         raise HTTPException(status_code=400, detail="Email already registered")
     tenant_id = new_id()
-    await db.tenants.insert_one({"id": tenant_id, "name": inp.company_name, "created_at": now_iso()})
+    roles = [r.model_dump() for r in (inp.roles or [])] or DEFAULT_ROLES
+    # de-dupe + drop any 'owner' role (implicit)
+    seen, clean_roles = set(), []
+    for r in roles:
+        k = r.get("key")
+        if k and k != "owner" and k not in seen:
+            seen.add(k)
+            clean_roles.append({"key": k, "label": r.get("label") or k.replace("_", " ").title()})
+    tenant_doc = {
+        "id": tenant_id, "name": inp.company_name,
+        "industry": inp.industry or "General",
+        "company_size": inp.company_size or "",
+        "region": inp.region or "",
+        "currency": (inp.currency or "INR").upper(),
+        "roles": clean_roles or DEFAULT_ROLES,
+        "products": [p.model_dump() for p in (inp.products or [])],
+        "created_at": now_iso(),
+    }
+    await db.tenants.insert_one(tenant_doc)
     user_id = new_id()
     await db.users.insert_one({
         "id": user_id, "tenant_id": tenant_id, "name": inp.name, "email": email,
@@ -306,7 +398,8 @@ async def register(inp: RegisterInput):
     })
     token = create_token(user_id, tenant_id, "owner")
     user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
-    return {"token": token, "user": user, "tenant": {"id": tenant_id, "name": inp.company_name}}
+    tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0})
+    return {"token": token, "user": user, "tenant": tenant}
 
 
 @api.post("/auth/login")
@@ -339,7 +432,7 @@ async def list_users(user: dict = Depends(get_current_user)):
 
 @api.post("/users")
 async def create_user(inp: UserCreateInput, user: dict = Depends(require_role("owner"))):
-    if inp.role not in ROLES:
+    if inp.role not in await tenant_role_keys(user["tenant_id"]):
         raise HTTPException(status_code=400, detail="Invalid role")
     email = inp.email.lower()
     if await db.users.find_one({"email": email}):
@@ -511,9 +604,10 @@ async def create_task(inp: TaskCreateInput, user: dict = Depends(get_current_use
     due = None
     if isinstance(inp.due_in_days, int):
         due = (datetime.now(timezone.utc) + timedelta(days=inp.due_in_days)).isoformat()
+    troles = await tenant_role_keys(user["tenant_id"])
     await db.tasks.insert_one({
         "id": tid, "tenant_id": user["tenant_id"], "title": inp.title, "description": inp.description or "",
-        "assignee_role": inp.assignee_role if inp.assignee_role in ROLES else None,
+        "assignee_role": inp.assignee_role if inp.assignee_role in troles else None,
         "assignee_id": inp.assignee_id, "priority": inp.priority or "medium",
         "status": "todo", "due_date": due, "decision_id": None, "source": "manual", "created_at": now_iso(),
     })
@@ -527,7 +621,7 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
     if not t:
         raise HTTPException(status_code=404, detail="Not found")
     updates = {k: v for k, v in inp.model_dump().items() if v is not None}
-    if "assignee_role" in updates and updates["assignee_role"] not in ROLES:
+    if "assignee_role" in updates and updates["assignee_role"] not in await tenant_role_keys(user["tenant_id"]):
         updates.pop("assignee_role")
     if updates:
         await db.tasks.update_one({"id": task_id}, {"$set": updates})
@@ -713,7 +807,15 @@ async def seed_demo():
         return
     logger.info("Seeding Sharma demo workspace...")
     tid = new_id()
-    await db.tenants.insert_one({"id": tid, "name": "Sharma Textiles Pvt Ltd", "created_at": now_iso()})
+    await db.tenants.insert_one({
+        "id": tid, "name": "Sharma Textiles Pvt Ltd", "created_at": now_iso(),
+        "industry": "Textile Manufacturing", "company_size": "11-50", "region": "India", "currency": "INR",
+        "roles": [{"key": "sales", "label": "Sales"}, {"key": "production", "label": "Production"},
+                  {"key": "finance", "label": "Finance"}],
+        "products": [{"name": "Cotton kurta sets", "description": "Festive apparel collection"},
+                     {"name": "Silk dupattas", "description": "Premium woven accessories"},
+                     {"name": "Bulk fabric rolls", "description": "Wholesale cotton & silk"}],
+    })
 
     def mkuser(name, email, role):
         uid = new_id()
@@ -821,6 +923,34 @@ Auth: JWT Bearer token returned by login/register, send as `Authorization: Beare
     creds_path.write_text(content)
 
 
+async def migrate_tenants():
+    """Backfill onboarding fields for tenants created before industry-aware onboarding."""
+    async for t in db.tenants.find({"roles": {"$exists": False}}):
+        await db.tenants.update_one({"id": t["id"]}, {"$set": {
+            "industry": t.get("industry", "General"),
+            "company_size": t.get("company_size", ""),
+            "region": t.get("region", ""),
+            "currency": t.get("currency", "INR"),
+            "roles": DEFAULT_ROLES,
+            "products": t.get("products", []),
+        }})
+
+
+async def fixup_demo_tenant():
+    """Ensure the seeded Sharma demo reflects its industry-aware profile (idempotent)."""
+    owner = await db.users.find_one({"email": DEMO_EMAIL}, {"_id": 0, "tenant_id": 1})
+    if not owner:
+        return
+    await db.tenants.update_one({"id": owner["tenant_id"]}, {"$set": {
+        "industry": "Textile Manufacturing", "company_size": "11-50", "region": "India", "currency": "INR",
+        "roles": [{"key": "sales", "label": "Sales"}, {"key": "production", "label": "Production"},
+                  {"key": "finance", "label": "Finance"}],
+        "products": [{"name": "Cotton kurta sets", "description": "Festive apparel collection"},
+                     {"name": "Silk dupattas", "description": "Premium woven accessories"},
+                     {"name": "Bulk fabric rolls", "description": "Wholesale cotton & silk"}],
+    }})
+
+
 @app.on_event("startup")
 async def startup():
     await db.users.create_index("email", unique=True)
@@ -828,6 +958,8 @@ async def startup():
     await db.tasks.create_index("tenant_id")
     await db.workflows.create_index("tenant_id")
     await seed_demo()
+    await migrate_tenants()
+    await fixup_demo_tenant()
     await write_test_credentials()
 
 

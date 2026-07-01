@@ -1,0 +1,30 @@
+{
+  "summary": "Comprehensive testing of iteration 5 (industry-aware onboarding + per-tenant dynamic roles). Backend: 43/43 pytest pass (38 pre-existing + 5 new in test_onboarding.py). New endpoint POST /api/onboarding/suggest returns industry-relevant roles (3-6, no 'owner') and 3-5 products for both 'Restaurant / Food & Beverage' and 'Technology / SaaS'. POST /api/auth/register accepts industry/company_size/region/currency/roles/products, de-dupes roles and drops 'owner'. Dynamic-role enforcement: with tenant roles [kitchen, front_of_house], /api/users role='kitchen' -> 200, role='sales' -> 400; /api/tasks with assignee_role='sales' stores null while 'kitchen' persists. Sharma demo migrated: /api/auth/me tenant.industry='Textile Manufacturing', roles=[sales, production, finance], 3 products, currency=INR. All regression tests pass (voice-notes owner-gate, workflow next-stage-only, purchase approval owner-gate, brain search, Ask AI, digest mocked, tenant isolation). Frontend E2E: 3-step registration wizard works end-to-end — Step1 (company/name/email/password), Step2 (industry/size/currency/region), Step2->AI suggest returns 5 role chips (head_chef removed successfully, custom 'kitchen' added, no 'owner' chip) + 5 products, Step3 create-workspace redirects to '/'. /team shows company-profile (industry='Restaurant / Food & Beverage', size=1-10, region=USA, currency=USD) and products-card with AI products. Sidebar shows tenant industry under company name. Sharma /team profile-industry='Textile Manufacturing', 3 profile-product-{i}. Add-member dialog member-role-select lists ONLY tenant roles [sales, production, finance] (no 'kitchen'). /workflows tabs relabeled 'Order Fulfilment'/'Procurement' with unchanged testids; ₹ symbol renders via money() (INR) for Sharma seed data. Mobile 390x844: bottom nav visible, no horizontal overflow. No open issues.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_onboarding.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/full_results.xml",
+    "/app/test_reports/pytest/onboarding_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py:110 tenant_role_keys() correctly appends 'owner' — matches spec that owner is implicit.",
+    "server.py:242 ai_extract() takes allowed_roles and injects into the prompt, keeping AI output consistent with tenant roles.",
+    "server.py:369 register() properly de-dupes roles by key and drops 'owner' (implicit) — verified.",
+    "server.py:335 /onboarding/suggest is public (no Depends(get_current_user)) as required for pre-registration use.",
+    "server.py:926 migrate_tenants() only backfills tenants without 'roles' field — idempotent and safe.",
+    "server.py:939 fixup_demo_tenant() unconditionally forces Sharma industry/roles/products every startup — this OVERWRITES any manual edits to the demo tenant. Acceptable for demo but could surprise if reused later.",
+    "Login.js:88 slugify+dedupe on client is a nice UX guard, but backend also de-dupes so the safety net is defense-in-depth.",
+    "Login.js:113 register() swallows only the error message; consider surfacing a toast on unexpected 5xx alongside setError."
+  ],
+  "updated_files": ["/app/backend/tests/test_onboarding.py"],
+  "success_rate": {"backend": "100% (43/43)", "frontend": "100% (all critical flows verified)"},
+  "test_credentials": "owner@sharma.com / demo1234 (owner); sales@sharma.com / demo1234 (sales) — /app/memory/test_credentials.md",
+  "seed_data_creation": "Registered ad-hoc test tenants (TEST_Bistro_*, TEST_Co_*) during pytest and playwright runs; TEST_ prefixed workflows created by regression tests remain in Sharma tenant (14 sales_dispatch workflows now vs 2 seeded). Non-destructive.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 5 (industry-aware onboarding + dynamic roles) verified 100%. New test file /app/backend/tests/test_onboarding.py covers /api/onboarding/suggest (public), custom-role registration, owner-role stripping, and Sharma migration. Frontend wizard uses testids: toggle-auth-mode, onboarding-step-{1,2,3}, register-{company,name,email,password}-input, industry-select, company-size-select, currency-select, region-input, onboarding-suggest-button, roles-list, role-chip-{key}, remove-role-{key}, role-input, add-role-button, products-list, product-name-{i}, product-desc-{i}, add-product-button, remove-product-{i}, onboarding-create-button. Team page: company-profile, profile-industry, products-card, profile-product-{i}, member-role-select (dynamic). Workflow tab testids unchanged: workflow-tab-sales_dispatch / workflow-tab-purchase_payment. Sharma seeded workflows persist across TEST_ pollution.",
+  "rca of the issue": "No issues found."
+}

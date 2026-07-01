@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "../lib/api";
+import { useAuth } from "../context/AuthContext";
 import { PageHeader, Chip } from "../components/common";
+import { money } from "../lib/format";
 import { toast } from "sonner";
 import { Plus, ArrowRight } from "@phosphor-icons/react";
 import {
@@ -9,8 +11,8 @@ import {
 } from "../components/ui/dialog";
 
 const TABS = [
-  { key: "sales_dispatch", label: "Sales → Dispatch" },
-  { key: "purchase_payment", label: "Purchase → Payment" },
+  { key: "sales_dispatch", label: "Order Fulfilment", sub: "Sales → Dispatch" },
+  { key: "purchase_payment", label: "Procurement", sub: "Purchase → Payment" },
 ];
 const STAGE_LABEL = (s) => s.replace(/_/g, " ");
 
@@ -56,6 +58,7 @@ function NewWorkflowDialog({ type, onCreated }) {
 
 export default function Workflows() {
   const qc = useQueryClient();
+  const { tenant } = useAuth();
   const [tab, setTab] = useState("sales_dispatch");
   const { data } = useQuery({ queryKey: ["workflows", tab], queryFn: () => api.get(`/workflows?type=${tab}`).then((r) => r.data) });
 
@@ -86,8 +89,9 @@ export default function Workflows() {
       <div className="flex border border-black mb-6 w-fit">
         {TABS.map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)} data-testid={`workflow-tab-${t.key}`}
-            className={`px-5 py-2.5 text-sm font-semibold uppercase tracking-wider border-r border-black last:border-r-0 transition-colors ${tab === t.key ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
-            {t.label}
+            className={`px-5 py-2.5 text-left border-r border-black last:border-r-0 transition-colors ${tab === t.key ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+            <span className="block text-sm font-semibold uppercase tracking-wider">{t.label}</span>
+            <span className={`block text-[10px] uppercase tracking-widest ${tab === t.key ? "text-white/60" : "text-muted-foreground"}`}>{t.sub}</span>
           </button>
         ))}
       </div>
@@ -110,7 +114,7 @@ export default function Workflows() {
                       <div key={w.id} data-testid={`workflow-card-${w.id}`} className="border border-black p-3 shadow-hover bg-white">
                         <p className="font-semibold text-sm leading-tight">{w.title}</p>
                         {w.counterparty && <p className="text-xs text-muted-foreground mt-1">{w.counterparty}</p>}
-                        {w.amount != null && <p className="font-mono text-xs mt-1">₹{w.amount.toLocaleString("en-IN")}</p>}
+                        {w.amount != null && <p className="font-mono text-xs mt-1">{money(w.amount, tenant?.currency)}</p>}
                         {!isLast && (
                           <button onClick={() => advance(w)} data-testid={`advance-workflow-${w.id}`}
                             className="mt-3 w-full flex items-center justify-center gap-1 border border-black py-1.5 text-xs font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors">

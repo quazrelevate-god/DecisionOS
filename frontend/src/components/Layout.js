@@ -98,6 +98,7 @@ export default function Layout({ children }) {
           <p className="mt-3 label-mono text-muted-foreground truncate" data-testid="tenant-name">
             {tenant?.name}
           </p>
+          {tenant?.industry && <p className="label-mono text-brand-red truncate mt-1">{tenant.industry}</p>}
         </div>
         <nav className="flex-1 py-4">
           <NavItems />

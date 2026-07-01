@@ -24,7 +24,9 @@ Multi-tenant isolation, role-based access, voice+text capture, AI structuring wi
 - AI extraction: transcript → Decision (pending_approval) + linked blocked Tasks (assignee_role constrained to tenant roles); owner approve unblocks, reject cancels.
 - Tasks board, Workflows kanban (next-stage-only, owner-gated purchase approval), Company Brain search, Ask AI, Daily Brief dashboard, mocked Resend digest, Team management.
 - Fully responsive mobile app-style shell (top bar + drawer + bottom tab nav).
-- Tested: backend 43/43 pytest, frontend 100% across 5 iterations. No product bugs.
+- **Contacts CRM** (`/contacts`): combined customers & vendors with company/phone/email/address/GST/tags/status/assigned-owner/notes; Owner+Sales manage (finance/production read-only); linked into workflows via contact picker; searchable in Company Brain and queryable via Ask AI.
+- **Multilingual voice**: Owner Inbox language selector (Auto / English / Tamil / Tanglish); Whisper transcription (language/prompt) + Claude extraction understand all three and output structured English tasks.
+- Tested: backend 58/58 pytest, frontend 100% across 7 iterations. No product bugs (one cosmetic hydration warning on an `<option>`, non-functional).
 
 ## Backlog / Next
 - **P1**: Real Resend send (plug RESEND_API_KEY); scheduled/cron daily digest.

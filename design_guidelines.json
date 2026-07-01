@@ -1,0 +1,125 @@
+{
+  "theme": "LIGHT",
+  "archetype": "4 (Swiss & High-Contrast)",
+  "design_philosophy": {
+    "identity": "E1 The Anti-AI Designer",
+    "core_principles": [
+      "Color is function. 95% monochrome with highly intentional accent colors.",
+      "Tension over harmony. Asymmetry and harsh contrast replace safe AI templates.",
+      "The OS is the brain. Utilitarian, modular, raw structures with exposed borders."
+    ],
+    "anti_patterns": [
+      "No gradients over 20%.",
+      "No center-everything layouts.",
+      "No Inter, Roboto, Open Sans for headings.",
+      "No soft, muddy shadows."
+    ]
+  },
+  "colors": {
+    "base": {
+      "background": "#F4F4F5",
+      "surface": "#FFFFFF",
+      "foreground": "#0A0A0B"
+    },
+    "accents": {
+      "primary": "#FF3B30",
+      "secondary": "#002FA7",
+      "warning": "#FFCC00"
+    },
+    "borders": {
+      "default": "#18181B",
+      "subtle": "rgba(0, 0, 0, 0.1)"
+    },
+    "states": {
+      "hover": "rgba(0, 0, 0, 0.05)",
+      "active": "rgba(0, 0, 0, 0.1)"
+    }
+  },
+  "typography": {
+    "headings": {
+      "family": "Chivo, sans-serif",
+      "weights": ["800", "900"],
+      "tracking": "tracking-tighter"
+    },
+    "body": {
+      "family": "IBM Plex Mono, monospace",
+      "weights": ["400", "500"]
+    },
+    "hierarchy": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl font-black uppercase tracking-tighter text-foreground",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl font-extrabold uppercase tracking-tight text-foreground",
+      "h3": "text-xl sm:text-2xl font-bold uppercase text-foreground",
+      "body": "text-base leading-relaxed text-foreground",
+      "labels": "text-xs uppercase tracking-[0.2em] font-medium text-foreground"
+    }
+  },
+  "spacing_and_layout": {
+    "strategy": "The Control Room Grid",
+    "grid_system": "grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6",
+    "containers": "border-collapse style layout, sharp edges, 1px solid borders.",
+    "padding": "Generous internal padding for cards (p-6 or p-8).",
+    "radii": "rounded-none (Brutalist strictness)"
+  },
+  "components": {
+    "buttons": "Square edges, solid primary color or transparent with 1px black border. High contrast text.",
+    "cards": "Flat background, 1px solid border-[#18181B], no shadow. Hover: slight lift (-translate-y-1) and sharp black shadow (shadow-[4px_4px_0px_#000]).",
+    "voice_recorder": "Large, immersive button (Safe Zone enabled) with solid primary color. Z-axis 3D waveform or visual breath ring. Real-time mono-spaced captions below it.",
+    "workflow_boards": "Kanban style but brutalist. Exposed borders. Background white, columns separated by 1px solid border. No gaps between columns.",
+    "chat_interface": "Command-line aesthetic for 'Ask AI'. Monospace inputs, system-like prompt prefixes (>) instead of chat bubbles.",
+    "shadcn_overrides": [
+      "Override all border-radius to 0 (rounded-none).",
+      "Replace soft box-shadows with hard 1px borders or solid offset shadows.",
+      "Use IBM Plex Mono for form inputs and table cells."
+    ]
+  },
+  "motion": {
+    "philosophy": "Micro-interactions for feedback only. Snappy, mechanical.",
+    "hover": "transition-transform duration-200 ease-out",
+    "voice_active": "Pulse animation for recording state, dynamic scaling for waveform.",
+    "accessibility": "Must respect prefers-reduced-motion."
+  },
+  "icons": {
+    "library": "@phosphor-icons/react",
+    "style": "Regular or Bold weight (no duotone or light for brutalist theme).",
+    "installation": "yarn add @phosphor-icons/react"
+  },
+  "media": {
+    "images": [
+      {
+        "category": "texture",
+        "description": "Background noise for active voice recording state or brutalist accents",
+        "url": "https://images.pexels.com/photos/18599094/pexels-photo-18599094.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
+      },
+      {
+        "category": "avatar_owner",
+        "description": "Sharma - Owner Avatar",
+        "url": "https://images.pexels.com/photos/26872232/pexels-photo-26872232.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
+      },
+      {
+        "category": "avatar_team",
+        "description": "Sales/Finance Lead Avatar",
+        "url": "https://images.pexels.com/photos/31869537/pexels-photo-31869537.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
+      },
+      {
+        "category": "logo_placeholder",
+        "description": "DecisionOS Minimalist Logo Element",
+        "url": "https://images.pexels.com/photos/5477692/pexels-photo-5477692.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
+      }
+    ]
+  },
+  "accessibility_and_testing": {
+    "contrast": "Minimum 4.5:1 ratio enforced everywhere.",
+    "testing_attributes": "All interactive elements MUST include data-testid attribute. Format: kebab-case, role-based. Examples: data-testid='voice-record-button', data-testid='approve-task-button', data-testid='owner-inbox-tab'."
+  },
+  "instructions_to_main_agent": [
+    "Install Google Fonts 'Chivo' and 'IBM Plex Mono' via index.css or index.html.",
+    "Install @phosphor-icons/react.",
+    "Configure tailwind.config.js with the specified custom colors, font families, and extend box-shadow for the brutalist shadow-[4px_4px_0px_#000] effect.",
+    "Build the dashboard using pure HTML/Tailwind for the structural grid. Use Shadcn components for complex interactive elements (Dialog, Select, Tabs).",
+    "CRITICAL: Strip out any rounded corners from Shadcn components using 'rounded-none'. Replace any soft shadows with 1px black borders.",
+    "Implement the 'Voice-first owner inbox' with the brutalist aesthetic: high-contrast recording button, real-time mono-spaced captions.",
+    "Ensure all components use the '.js' extension instead of '.tsx' since this environment requires JavaScript.",
+    "For the 'Company Brain' and 'Ask AI' interfaces, implement a clean, data-dense layout using 'IBM Plex Mono' to evoke a command-center/technical feel.",
+    "Ensure ALL interactive items (buttons, inputs, workflow cards) have data-testid attributes for testing."
+  ]
+}

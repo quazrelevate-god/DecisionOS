@@ -416,13 +416,30 @@ async def enrich_decision(d: dict) -> dict:
     return d
 
 
+async def enrich_decisions(decisions: list) -> list:
+    task_ids = list({tid for d in decisions for tid in d.get("task_ids", [])})
+    creator_ids = list({d.get("created_by") for d in decisions if d.get("created_by")})
+    tasks_map = {}
+    if task_ids:
+        for t in await db.tasks.find({"id": {"$in": task_ids}}, {"_id": 0}).to_list(2000):
+            tasks_map[t["id"]] = t
+    users_map = {}
+    if creator_ids:
+        for u in await db.users.find({"id": {"$in": creator_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(500):
+            users_map[u["id"]] = u["name"]
+    for d in decisions:
+        d["tasks"] = [tasks_map[t] for t in d.get("task_ids", []) if t in tasks_map]
+        d["created_by_name"] = users_map.get(d.get("created_by"), "Unknown")
+    return decisions
+
+
 @api.get("/decisions")
 async def list_decisions(status: Optional[str] = None, user: dict = Depends(get_current_user)):
     q = {"tenant_id": user["tenant_id"]}
     if status:
         q["status"] = status
     decisions = await db.decisions.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
-    return [await enrich_decision(d) for d in decisions]
+    return await enrich_decisions(decisions)
 
 
 @api.get("/decisions/{decision_id}")
@@ -465,6 +482,18 @@ async def enrich_task(t: dict) -> dict:
     return t
 
 
+async def enrich_tasks(tasks: list) -> list:
+    ids = list({t["assignee_id"] for t in tasks if t.get("assignee_id")})
+    umap = {}
+    if ids:
+        for u in await db.users.find({"id": {"$in": ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(500):
+            umap[u["id"]] = u["name"]
+    for t in tasks:
+        if t.get("assignee_id"):
+            t["assignee_name"] = umap.get(t["assignee_id"])
+    return tasks
+
+
 @api.get("/tasks")
 async def list_tasks(status: Optional[str] = None, mine: Optional[bool] = False, user: dict = Depends(get_current_user)):
     q = {"tenant_id": user["tenant_id"]}
@@ -473,7 +502,7 @@ async def list_tasks(status: Optional[str] = None, mine: Optional[bool] = False,
     if mine:
         q["$or"] = [{"assignee_id": user["id"]}, {"assignee_role": user["role"]}]
     tasks = await db.tasks.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
-    return [await enrich_task(t) for t in tasks]
+    return await enrich_tasks(tasks)
 
 
 @api.post("/tasks")
@@ -569,8 +598,8 @@ async def brain_search(q: str = "", user: dict = Depends(get_current_user)):
     tasks = await db.tasks.find({"tenant_id": tid, "$or": [{"title": rx}, {"description": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
     workflows = await db.workflows.find({"tenant_id": tid, "$or": [{"title": rx}, {"detail": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
     return {
-        "decisions": [await enrich_decision(d) for d in decisions],
-        "tasks": [await enrich_task(t) for t in tasks],
+        "decisions": await enrich_decisions(decisions),
+        "tasks": await enrich_tasks(tasks),
         "workflows": workflows,
     }
 
@@ -581,9 +610,9 @@ async def brain_search(q: str = "", user: dict = Depends(get_current_user)):
 @api.post("/ask")
 async def ask_ai(inp: AskInput, user: dict = Depends(get_current_user)):
     tid = user["tenant_id"]
-    decisions = await db.decisions.find({"tenant_id": tid}, {"_id": 0}).sort("created_at", -1).to_list(60)
-    tasks = await db.tasks.find({"tenant_id": tid}, {"_id": 0}).sort("created_at", -1).to_list(120)
-    workflows = await db.workflows.find({"tenant_id": tid}, {"_id": 0}).sort("created_at", -1).to_list(60)
+    decisions = await db.decisions.find({"tenant_id": tid}, {"_id": 0, "title": 1, "summary": 1, "status": 1}).sort("created_at", -1).to_list(60)
+    tasks = await db.tasks.find({"tenant_id": tid}, {"_id": 0, "title": 1, "status": 1, "assignee_role": 1, "due_date": 1}).sort("created_at", -1).to_list(120)
+    workflows = await db.workflows.find({"tenant_id": tid}, {"_id": 0, "title": 1, "type": 1, "stage": 1, "amount": 1}).sort("created_at", -1).to_list(60)
     users = await db.users.find({"tenant_id": tid}, {"_id": 0, "name": 1, "role": 1}).to_list(60)
 
     def slim_d(d):
@@ -631,9 +660,9 @@ async def dashboard(user: dict = Depends(get_current_user)):
     active_wf = await db.workflows.count_documents({"tenant_id": tid, "stage": {"$nin": ["delivered", "paid"]}})
     activity = await db.activity.find({"tenant_id": tid}, {"_id": 0}).sort("created_at", -1).to_list(15)
     return {
-        "pending_decisions": [await enrich_decision(d) for d in pending_decisions],
+        "pending_decisions": await enrich_decisions(pending_decisions),
         "pending_purchases": pending_purchases,
-        "overdue_tasks": [await enrich_task(t) for t in overdue],
+        "overdue_tasks": await enrich_tasks(overdue),
         "stats": {"open_tasks": open_tasks, "done_tasks": done_tasks, "active_workflows": active_wf,
                   "pending_approvals": len(pending_decisions) + len(pending_purchases)},
         "activity": activity,

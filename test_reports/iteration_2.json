@@ -1,0 +1,29 @@
+{
+  "summary": "Regression + new guards verified for DecisionOS after N+1 refactor. Backend: 38/38 pytest cases pass, including 4 new enrichment shape tests (decisions have tasks+created_by_name; tasks have assignee_name; dashboard+brain search enriched), 4 new owner-only ingestion tests (POST /api/voice-notes & /api/voice-notes/text return 403 for sales/production/finance, 200 for owner), and 3 new workflow next-stage-only tests (skip requested->paid = 400, requested->approved->ordered = 200, backward confirmed->order_received = 400). Existing purchase 'approved' owner gate, decision approve/reject with task unblock/cancel + non-owner 403, tasks CRUD, workflows list/create, team owner-only add, mocked digest all still pass. Frontend smoke: owner login -> dashboard (11 pending approvals, 9 open tasks, 1 overdue, 25 active workflows) renders; owner /inbox shows text-directive-input + submit-text-directive (no owner-only-notice); text directive submit works end-to-end; /workflows kanban shows 11 advance-workflow-* buttons; /tasks shows 12 advance-task-* buttons; /brain search 'cotton' works; /ask via ask-suggestion returns chat-msg-ai-0 in ~7s; sales login /inbox correctly shows owner-only-notice with NO text-directive-input.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py monolith (~820+ lines) still not split into routers — carried over from iteration 1, low priority for MVP.",
+    "advance_workflow now enforces tgt_idx == cur_idx+1 correctly — verified via skip-stage 400 and backward 400.",
+    "Owner-gate on POST /api/voice-notes and POST /api/voice-notes/text via Depends(require_role('owner')) works correctly for all three non-owner roles (sales/production/finance) — verified via automated tests.",
+    "enrich_decisions and enrich_tasks preserve all previously expected fields (tasks list on decisions, created_by_name, assignee_name on tasks with assignee_id) across list_decisions, list_tasks, dashboard, and brain_search. No regressions detected.",
+    "Ask AI still returns grounded 'answer' string after field projections were added to context queries — verified both via pytest (>5 chars answer) and via UI (chat-msg-ai response rendered).",
+    "Consider a min-length or rate-limit on /api/brain/search (empty q still returns broad results) — carried over from iteration 1.",
+    "No password-strength / brute-force protection on /api/auth/login — carried over from iteration 1."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py (added TestEnrichmentShape, TestVoiceNoteOwnerGate, TestWorkflowNextStageGuard — 10 new tests)"
+  ],
+  "success_rate": {"backend": "100% (38/38)", "frontend": "100%"},
+  "test_credentials": "owner@sharma.com / demo1234 (owner); sales@sharma.com / demo1234; production@sharma.com / demo1234; finance@sharma.com / demo1234 — auto-seeded on backend startup; also documented at /app/memory/test_credentials.md.",
+  "seed_data_creation": "None additional. Tests create disposable TEST_* rows (workflows for skip/next/backward, purchase gate, and TEST_ users) which are not auto-cleaned but do not affect subsequent runs.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Purchase_payment stages are requested->approved->ordered->received->payment_pending->paid (NOT requested->approved->paid). Sales_dispatch stages: order_received->confirmed->in_production->ready->dispatched->delivered. For next-stage validation tests, use the correct sequential stage. Backend hosts at REACT_APP_BACKEND_URL from frontend/.env. Auth uses JWT Bearer in localStorage key 'dos_token'. For UI Ask AI test, click [data-testid^=ask-suggestion].first (not ask-submit) — response arrives in ~6-8s under 'chat-msg-ai-{i}'. Ingress can briefly time out (observed once during test run); if a request times out, sleep 5s and retry — no code fix needed.",
+  "rca of the issue": "No product bugs found in this iteration. One test-authoring bug was self-corrected: initial TestWorkflowNextStageGuard.test_next_stage_ok tried approved->paid, but purchase_payment stages have 'ordered' between approved and paid, so backend correctly returned 400. Fixed test to advance approved->ordered; all 38 tests pass."
+}

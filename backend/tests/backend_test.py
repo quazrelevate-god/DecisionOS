@@ -353,6 +353,122 @@ class TestDigest:
         assert r.status_code == 403
 
 
+# -------- NEW: Enrichment shape (batch enrich_decisions / enrich_tasks) --------
+class TestEnrichmentShape:
+    def test_decisions_list_enriched(self, owner_auth):
+        r = requests.get(f"{API}/decisions", headers=_hdr(owner_auth["token"]), timeout=10)
+        assert r.status_code == 200
+        decs = r.json()
+        assert isinstance(decs, list) and len(decs) >= 1
+        for d in decs:
+            assert "tasks" in d, f"decision {d.get('id')} missing 'tasks'"
+            assert isinstance(d["tasks"], list)
+            # created_by_name should be present (may be None if user removed, but key must exist)
+            assert "created_by_name" in d, f"decision {d.get('id')} missing 'created_by_name'"
+
+    def test_tasks_list_assignee_name(self, owner_auth):
+        r = requests.get(f"{API}/tasks", headers=_hdr(owner_auth["token"]), timeout=10)
+        assert r.status_code == 200
+        tasks = r.json()
+        # any task with assignee_id must have assignee_name key
+        for t in tasks:
+            if t.get("assignee_id"):
+                assert "assignee_name" in t, f"task {t.get('id')} with assignee_id missing 'assignee_name'"
+
+    def test_dashboard_enrichment(self, owner_auth):
+        r = requests.get(f"{API}/dashboard", headers=_hdr(owner_auth["token"]), timeout=10)
+        assert r.status_code == 200
+        data = r.json()
+        for d in data.get("pending_decisions", []):
+            assert "tasks" in d
+            assert "created_by_name" in d
+        for t in data.get("overdue_tasks", []):
+            if t.get("assignee_id"):
+                assert "assignee_name" in t
+
+    def test_brain_search_enrichment(self, owner_auth):
+        r = requests.get(f"{API}/brain/search?q=cotton", headers=_hdr(owner_auth["token"]), timeout=10)
+        assert r.status_code == 200
+        data = r.json()
+        for d in data.get("decisions", []):
+            assert "tasks" in d, "brain search decision missing linked tasks"
+        for t in data.get("tasks", []):
+            # If assignee_id exists, assignee_name must exist
+            if t.get("assignee_id"):
+                assert "assignee_name" in t
+
+
+# -------- NEW GUARD 1: Owner-only voice-note ingestion --------
+class TestVoiceNoteOwnerGate:
+    def test_text_directive_sales_forbidden(self, sales_auth):
+        r = requests.post(f"{API}/voice-notes/text", json={"text": "test directive"},
+                          headers=_hdr(sales_auth["token"]), timeout=10)
+        assert r.status_code == 403, f"expected 403 for sales, got {r.status_code}: {r.text}"
+
+    def test_text_directive_production_forbidden(self, production_auth):
+        r = requests.post(f"{API}/voice-notes/text", json={"text": "test directive"},
+                          headers=_hdr(production_auth["token"]), timeout=10)
+        assert r.status_code == 403
+
+    def test_text_directive_finance_forbidden(self, finance_auth):
+        r = requests.post(f"{API}/voice-notes/text", json={"text": "test directive"},
+                          headers=_hdr(finance_auth["token"]), timeout=10)
+        assert r.status_code == 403
+
+    def test_voice_note_audio_sales_forbidden(self, sales_auth):
+        # POST /api/voice-notes with a fake tiny audio file - should 403 before any processing
+        files = {"file": ("t.webm", b"fake-audio", "audio/webm")}
+        headers = {"Authorization": f"Bearer {sales_auth['token']}"}
+        r = requests.post(f"{API}/voice-notes", files=files, headers=headers, timeout=10)
+        assert r.status_code == 403, f"expected 403 sales voice-notes, got {r.status_code}: {r.text}"
+
+
+# -------- NEW GUARD 2: Workflow next-stage-only ordering --------
+class TestWorkflowNextStageGuard:
+    def test_skip_stage_rejected(self, owner_auth):
+        # Create a purchase_payment workflow (stages: requested -> approved -> paid -> done)
+        cr = requests.post(f"{API}/workflows", json={
+            "type": "purchase_payment", "title": "TEST_PO_skip", "detail": "test", "amount": 100, "counterparty": "TEST_v",
+        }, headers=_hdr(owner_auth["token"]), timeout=10).json()
+        wid = cr["id"]
+        assert cr["stage"] == "requested"
+        # Try to jump requested -> paid (skip 'approved')
+        r = requests.patch(f"{API}/workflows/{wid}/advance", json={"stage": "paid"},
+                           headers=_hdr(owner_auth["token"]), timeout=10)
+        assert r.status_code == 400, f"expected 400 for skip-stage, got {r.status_code}: {r.text}"
+
+    def test_next_stage_ok(self, owner_auth):
+        cr = requests.post(f"{API}/workflows", json={
+            "type": "purchase_payment", "title": "TEST_PO_next", "detail": "t", "amount": 200, "counterparty": "TEST_v2",
+        }, headers=_hdr(owner_auth["token"]), timeout=10).json()
+        wid = cr["id"]
+        # requested -> approved (next stage, owner)
+        r = requests.patch(f"{API}/workflows/{wid}/advance", json={"stage": "approved"},
+                           headers=_hdr(owner_auth["token"]), timeout=10)
+        assert r.status_code == 200, r.text
+        assert r.json()["stage"] == "approved"
+        # approved -> ordered (next stage in purchase_payment: requested->approved->ordered->received->payment_pending->paid)
+        r2 = requests.patch(f"{API}/workflows/{wid}/advance", json={"stage": "ordered"},
+                            headers=_hdr(owner_auth["token"]), timeout=10)
+        assert r2.status_code == 200
+        assert r2.json()["stage"] == "ordered"
+
+    def test_backward_stage_rejected(self, owner_auth):
+        # Sales_dispatch: order_received -> confirmed -> packed -> shipped -> delivered
+        cr = requests.post(f"{API}/workflows", json={
+            "type": "sales_dispatch", "title": "TEST_back", "detail": "t", "amount": 100, "counterparty": "TEST",
+        }, headers=_hdr(owner_auth["token"]), timeout=10).json()
+        wid = cr["id"]
+        # advance to confirmed
+        adv = requests.patch(f"{API}/workflows/{wid}/advance", json={"stage": "confirmed"},
+                             headers=_hdr(owner_auth["token"]), timeout=10)
+        assert adv.status_code == 200
+        # try going backward
+        r = requests.patch(f"{API}/workflows/{wid}/advance", json={"stage": "order_received"},
+                           headers=_hdr(owner_auth["token"]), timeout=10)
+        assert r.status_code == 400
+
+
 # -------- Team users --------
 class TestTeam:
     def test_list_users(self, owner_auth):

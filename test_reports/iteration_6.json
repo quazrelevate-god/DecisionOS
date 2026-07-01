@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 6 (Other industry -> free-text description) verified end-to-end. Backend: 46 total tests; 44 pass. New /app/backend/tests/test_custom_industry.py (3/3 pass): (a) POST /api/onboarding/suggest with free-text sentence 'We run a mobile pet grooming and dog walking service' returns 3-6 industry-relevant roles (no 'owner') and 0-5 products; (b) POST /api/auth/register with a sentence as industry stores the sentence verbatim and /api/auth/me returns the same sentence; (c) preset 'Technology / SaaS' still returns valid suggestions. 2 flaky failures in TestDecisionApproval are pre-existing parallel-execution state pollution (pending decisions consumed by concurrent workers); they PASS in isolation and are unrelated to iteration 6. Frontend E2E (1280x900): (1) Register wizard step-1 -> step-2 works. (2) industry-select has 28 options (26 industries + blank + 'Other'), confirming expanded list. (3) custom-industry-wrap is HIDDEN by default and for preset 'Technology / SaaS'. (4) Selecting 'Other' reveals custom-industry-input textarea. (5) Validation: with 'Other' + empty textarea, onboarding-suggest-button shows auth-error 'Please describe your industry in a short sentence' and does NOT advance. (6) Filling sentence -> AI returned highly relevant chips: ['Lead Groomer','Dog Walker','Booking Coordinator','Van & Equipment Technician'] and 5 pet-grooming products (Mobile Full Groom, Bath & Brush Out, 30/60-Min Dog Walk, Puppy's First Groom Package). (7) Step-3 header shows the custom sentence. (8) onboarding-create-button routes to '/'. (9) /team profile-industry shows the sentence; products-card lists AI products. REGRESSION preset flow: Technology / SaaS shows 6 chips, header shows preset label, tenant.industry stores 'Technology / SaaS' verbatim. REGRESSION Sharma demo: owner login works, dashboard loads, /workflows testids workflow-tab-sales_dispatch & workflow-tab-purchase_payment present, /team profile-industry='Textile Manufacturing', Ask AI + Brain load. REGRESSION mobile 390x844: bottom nav visible, no horizontal overflow.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/decisions/{id}/approve|reject", "issue": "TestDecisionApproval::test_reject_by_sales_forbidden and test_approve_by_owner_unblocks_tasks are flaky under pytest-xdist parallel execution (pending decisions consumed by a concurrent worker approving one). Pass in isolation. Pre-existing, not iteration 6. Consider using a per-test seeded decision (create_test_decision fixture) instead of relying on dashboard['pending_decisions'][0]."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_custom_industry.py",
+    "/app/backend/tests/test_onboarding.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/iteration6_full.xml"
+  ],
+  "action_items": [
+    "(Non-blocking) Refactor TestDecisionApproval to seed its own decision instead of picking pending_decisions[0] to eliminate parallel-run flakiness."
+  ],
+  "critical_code_review_comments": [
+    "Login.js:69 fetchSuggestions cleanly computes eff = industry==='Other' ? customIndustry.trim() : industry; validation on empty is early-return with auth-error — matches spec.",
+    "Login.js:72 setResolvedIndustry(eff) is called BEFORE the async /onboarding/suggest call; if the AI call fails, the toast fires and step advances to 3 with resolvedIndustry already set to the sentence — which is the desired behavior (user can still edit).",
+    "Login.js:109 submitRegister sends industry: resolvedIndustry || form.industry — correct for both Other (sentence) and preset paths.",
+    "Login.js:230 conditional rendering `form.industry === 'Other' &&` correctly hides/shows the custom-industry-wrap div; the textarea uses rows={2} and resize-none for consistent UX.",
+    "format.js:16 INDUSTRIES expanded to 26 concrete entries + 'Other' (27) — dropdown shows 28 including the empty placeholder, matches user request for a much longer list.",
+    "backend server.py accepts industry as free-form string — no server-side validation issue found; register stores it verbatim as verified by TestFreeTextIndustry::test_register_with_custom_industry_sentence.",
+    "Minor: customIndustry state is never reset when the user switches from 'Other' back to a preset. If user picks 'Other', types text, then switches to 'Manufacturing', the (hidden) textarea value remains in state. Since fetchSuggestions uses eff = industry==='Other' ? customIndustry : industry, this is harmless — but worth cleaning up for tidiness."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_custom_industry.py (new)"
+  ],
+  "success_rate": {"backend": "96% (44/46; 2 pre-existing flakes unrelated to iter6)", "frontend": "100% (all primary + 3 regression flows verified)"},
+  "test_credentials": "owner@sharma.com / demo1234 (Sharma owner); fresh unique emails other_<uuid>@example.com and tech_<uuid>@example.com used for register flows",
+  "seed_data_creation": "Registered ad-hoc test tenants during pytest + playwright (TEST_Pets_*, TEST_Co_*, TEST_Bistro_*, TEST_PetGrooming_Co, TEST_SaaS_Co). Non-destructive; do not touch Sharma tenant.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 6: 'Other' industry reveals custom-industry-input textarea (Login.js:230-243); validation via fetchSuggestions Login.js:69-70; resolvedIndustry state carries the sentence through to Step3 header and submitRegister. INDUSTRIES list in format.js now has 26 concrete + Other (28 total dropdown options incl. placeholder). Backend /api/onboarding/suggest is public and free-text tolerant; /api/auth/register stores industry verbatim. Test file: /app/backend/tests/test_custom_industry.py. TestDecisionApproval in backend_test.py is flaky under -n auto parallel execution (pre-existing) — either mark it serial or seed its own decision.",
+  "rca of the issue": "No iteration-6 issues. Flaky decision-approval tests: parallel workers race on shared seed decisions — one approves it, subsequent workers see empty pending_decisions[]. Mitigation: create per-test decision inside the test itself (or scope xdist to run TestDecisionApproval serially with @pytest.mark.serial + --dist=loadfile)."
+}

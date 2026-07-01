@@ -28,6 +28,8 @@ export default function Login() {
   const [roles, setRoles] = useState([]);
   const [roleInput, setRoleInput] = useState("");
   const [products, setProducts] = useState([]);
+  const [customIndustry, setCustomIndustry] = useState("");
+  const [resolvedIndustry, setResolvedIndustry] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
@@ -64,11 +66,14 @@ export default function Login() {
   // Step 2 -> fetch AI suggestions, then go to step 3
   const fetchSuggestions = async () => {
     if (!form.industry) { setError("Please choose your industry"); return; }
+    const eff = form.industry === "Other" ? customIndustry.trim() : form.industry;
+    if (form.industry === "Other" && !eff) { setError("Please describe your industry in a short sentence"); return; }
     setError("");
+    setResolvedIndustry(eff);
     setSuggesting(true);
     try {
       const { data } = await api.post("/onboarding/suggest", {
-        industry: form.industry, company_size: form.company_size,
+        industry: eff, company_size: form.company_size,
       });
       setRoles(data.roles || []);
       setProducts((data.products || []).map((p) => ({ name: p.name, description: p.description || "" })));
@@ -101,6 +106,7 @@ export default function Login() {
     try {
       await register({
         ...form,
+        industry: resolvedIndustry || form.industry,
         roles,
         products: products.filter((p) => p.name.trim()),
       });
@@ -221,6 +227,20 @@ export default function Login() {
                       {INDUSTRIES.map((i) => <option key={i} value={i}>{i}</option>)}
                     </select>
                   </div>
+                  {form.industry === "Other" && (
+                    <div data-testid="custom-industry-wrap">
+                      <label className="label-mono text-muted-foreground">Describe your industry</label>
+                      <textarea
+                        data-testid="custom-industry-input"
+                        className={`${inputCls} mt-1 resize-none`}
+                        rows={2}
+                        placeholder="e.g. We run a mobile pet-grooming service across the city"
+                        value={customIndustry}
+                        onChange={(e) => setCustomIndustry(e.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">AI will read this to suggest your roles & products.</p>
+                    </div>
+                  )}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="label-mono text-muted-foreground">Company size</label>
@@ -256,7 +276,7 @@ export default function Login() {
               {step === 3 && (
                 <div className="space-y-5" data-testid="onboarding-step-3">
                   <p className="text-sm text-muted-foreground flex items-center gap-1.5">
-                    <Sparkle size={14} weight="fill" className="text-brand-red" /> AI-suggested for <strong>{form.industry}</strong>. Edit freely.
+                    <Sparkle size={14} weight="fill" className="text-brand-red" /> AI-suggested for <strong>{resolvedIndustry || form.industry}</strong>. Edit freely.
                   </p>
 
                   {/* Roles */}

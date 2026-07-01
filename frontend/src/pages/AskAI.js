@@ -35,7 +35,7 @@ export default function AskAI() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)]">
+    <div className="flex flex-col h-[calc(100vh-13rem)] lg:h-[calc(100vh-8rem)]">
       <PageHeader eyebrow="Query your company context" title="Ask AI" />
 
       <div className="flex-1 border border-black bg-brand-ink text-white font-mono text-sm overflow-y-auto p-6 space-y-4">

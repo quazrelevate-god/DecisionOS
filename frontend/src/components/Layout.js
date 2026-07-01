@@ -1,7 +1,14 @@
-import { NavLink, useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
 import api from "../lib/api";
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+  SheetTitle,
+} from "./ui/sheet";
 import {
   Gauge,
   Microphone,
@@ -12,6 +19,7 @@ import {
   UsersThree,
   SignOut,
   EnvelopeSimple,
+  List as ListIcon,
 } from "@phosphor-icons/react";
 
 const NAV = [
@@ -24,9 +32,23 @@ const NAV = [
   { to: "/team", label: "Team", icon: UsersThree, testid: "nav-team" },
 ];
 
+// Primary items for the mobile bottom tab bar
+const BOTTOM_NAV = [NAV[0], NAV[1], NAV[2], NAV[3], NAV[5]];
+
+const Logo = () => (
+  <div className="flex items-center gap-2">
+    <div className="w-8 h-8 bg-brand-red flex items-center justify-center">
+      <span className="font-heading font-black text-white text-lg leading-none">D</span>
+    </div>
+    <span className="font-heading font-black text-xl tracking-tighter uppercase">DecisionOS</span>
+  </div>
+);
+
 export default function Layout({ children }) {
   const { user, tenant, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const doLogout = () => {
     logout();
@@ -42,43 +64,43 @@ export default function Layout({ children }) {
     }
   };
 
+  const NavItems = ({ onNavigate }) => (
+    <>
+      {NAV.map(({ to, label, icon: Icon, testid }) => (
+        <NavLink
+          key={to}
+          to={to}
+          end={to === "/"}
+          data-testid={testid}
+          onClick={onNavigate}
+          className={({ isActive }) =>
+            `flex items-center gap-3 px-6 py-3 text-sm border-l-4 transition-colors ${
+              isActive
+                ? "border-brand-red bg-brand-ink text-white font-semibold"
+                : "border-transparent hover:bg-black/5"
+            }`
+          }
+        >
+          <Icon size={18} weight="bold" />
+          {label}
+        </NavLink>
+      ))}
+    </>
+  );
+
   return (
     <div className="min-h-screen flex bg-brand-paper text-brand-ink">
-      {/* Sidebar */}
-      <aside className="w-64 shrink-0 border-r border-black bg-white flex flex-col sticky top-0 h-screen">
+      {/* Desktop sidebar */}
+      <aside className="hidden lg:flex w-64 shrink-0 border-r border-black bg-white flex-col sticky top-0 h-screen">
         <div className="px-6 py-6 border-b border-black">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-brand-red flex items-center justify-center">
-              <span className="font-heading font-black text-white text-lg leading-none">D</span>
-            </div>
-            <span className="font-heading font-black text-xl tracking-tighter uppercase">DecisionOS</span>
-          </div>
+          <Logo />
           <p className="mt-3 label-mono text-muted-foreground truncate" data-testid="tenant-name">
             {tenant?.name}
           </p>
         </div>
-
         <nav className="flex-1 py-4">
-          {NAV.map(({ to, label, icon: Icon, testid }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={to === "/"}
-              data-testid={testid}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-6 py-3 text-sm border-l-4 transition-colors ${
-                  isActive
-                    ? "border-brand-red bg-brand-ink text-white font-semibold"
-                    : "border-transparent hover:bg-black/5"
-                }`
-              }
-            >
-              <Icon size={18} weight="bold" />
-              {label}
-            </NavLink>
-          ))}
+          <NavItems />
         </nav>
-
         <div className="border-t border-black p-4">
           <button
             onClick={doLogout}
@@ -92,7 +114,8 @@ export default function Layout({ children }) {
 
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 border-b border-black bg-white flex items-center justify-between px-8 sticky top-0 z-10">
+        {/* Desktop top bar */}
+        <header className="hidden lg:flex h-16 border-b border-black bg-white items-center justify-between px-8 sticky top-0 z-10">
           <div className="flex items-center gap-3">
             <span className="label-mono text-muted-foreground">Signed in as</span>
             <span className="font-semibold text-sm" data-testid="current-user-name">{user?.name}</span>
@@ -110,8 +133,80 @@ export default function Layout({ children }) {
             </button>
           )}
         </header>
-        <main className="flex-1 p-8 overflow-x-hidden">{children}</main>
+
+        {/* Mobile top app bar */}
+        <header className="lg:hidden h-14 border-b border-black bg-white flex items-center justify-between px-4 sticky top-0 z-20">
+          <Logo />
+          <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
+            <SheetTrigger asChild>
+              <button
+                data-testid="mobile-menu-button"
+                aria-label="Open menu"
+                className="w-10 h-10 flex items-center justify-center border border-black bg-white hover:bg-brand-ink hover:text-white transition-colors"
+              >
+                <ListIcon size={20} weight="bold" />
+              </button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-72 p-0 border-r border-black rounded-none bg-white flex flex-col" data-testid="mobile-drawer">
+              <SheetTitle className="sr-only">Navigation</SheetTitle>
+              <div className="px-6 py-5 border-b border-black">
+                <Logo />
+                <p className="mt-2 label-mono text-muted-foreground truncate">{tenant?.name}</p>
+                <div className="mt-3 flex items-center gap-2">
+                  <span className="font-semibold text-sm">{user?.name}</span>
+                  <span className="px-2 py-0.5 text-xs uppercase tracking-wider bg-brand-blue text-white font-semibold">
+                    {user?.role}
+                  </span>
+                </div>
+              </div>
+              <nav className="flex-1 py-3 overflow-y-auto">
+                <NavItems onNavigate={() => setDrawerOpen(false)} />
+              </nav>
+              <div className="border-t border-black p-4 space-y-2">
+                {user?.role === "owner" && (
+                  <button
+                    onClick={() => { setDrawerOpen(false); sendDigest(); }}
+                    data-testid="mobile-send-digest-button"
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm border border-black bg-brand-yellow font-semibold"
+                  >
+                    <EnvelopeSimple size={16} weight="bold" /> Send Daily Digest
+                  </button>
+                )}
+                <button
+                  onClick={doLogout}
+                  data-testid="mobile-logout-button"
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm border border-black hover:bg-brand-ink hover:text-white transition-colors"
+                >
+                  <SignOut size={16} weight="bold" /> Sign out
+                </button>
+              </div>
+            </SheetContent>
+          </Sheet>
+        </header>
+
+        <main className="flex-1 p-4 lg:p-8 pb-24 lg:pb-8 overflow-x-hidden">{children}</main>
       </div>
+
+      {/* Mobile bottom tab bar */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 border-t border-black bg-white flex z-20" data-testid="mobile-bottom-nav">
+        {BOTTOM_NAV.map(({ to, label, icon: Icon }) => {
+          const active = to === "/" ? location.pathname === "/" : location.pathname.startsWith(to);
+          return (
+            <NavLink
+              key={to}
+              to={to}
+              end={to === "/"}
+              data-testid={`bottomnav-${to === "/" ? "dashboard" : to.slice(1)}`}
+              className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 border-r border-black/10 last:border-r-0 transition-colors ${
+                active ? "bg-brand-ink text-white" : "text-brand-ink hover:bg-black/5"
+              }`}
+            >
+              <Icon size={20} weight={active ? "fill" : "bold"} />
+              <span className="text-[10px] uppercase tracking-wide font-semibold leading-none">{label.split(" ")[label.split(" ").length - 1]}</span>
+            </NavLink>
+          );
+        })}
+      </nav>
     </div>
   );
 }

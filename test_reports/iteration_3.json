@@ -1,0 +1,45 @@
+{
+  "summary": "Mobile responsiveness (390x844) + desktop regression (1920x800) verified for DecisionOS after Layout.js + AskAI.js refactor. All 8 test areas pass on the app side. ONE preview-environment overlay issue detected: the Emergent preview badge (#emergent-badge, z-index:9999, fixed bottom-right) covers the right half of the mobile bottom-nav and intercepts pointer events for bottomnav-tasks and bottomnav-ask. Hiding the badge restores routing to /tasks and /ask correctly.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Layout mobile-bottom-nav",
+        "issue": "The Emergent preview badge (#emergent-badge, z-index:9999, fixed at x:196,y:788,w:178,h:40) overlays the two rightmost tabs (bottomnav-tasks, bottomnav-ask) on mobile viewport (390x844). mobile-bottom-nav uses z-index:20, so the badge intercepts real pointer events even though the anchors are clickable in the DOM. When the badge is hidden via JS, both tabs navigate correctly. Only affects the Emergent preview environment; will NOT affect production deployments where the badge is absent. On mobile preview, though, real users cannot tap Tasks or Ask AI from the bottom nav — they must use the drawer instead.",
+        "selector": "#emergent-badge vs [data-testid=mobile-bottom-nav]",
+        "priority": "MEDIUM (preview-only, workaround: use drawer)"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Mobile drawer (Sheet)",
+        "issues": [
+          "Console warning: 'Missing Description or aria-describedby={undefined} for DialogContent' from Radix Sheet — accessibility warning only, no functional impact. Consider adding <SheetDescription> or aria-describedby prop."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_3.json"
+  ],
+  "action_items": [
+    "OPTIONAL (preview UX only): to make Tasks/Ask tappable in the preview environment on mobile, raise mobile-bottom-nav z-index above 9999 (e.g. z-[10000]), OR add padding-right / offset so tabs 4-5 sit left of the badge, OR ensure the badge is hidden on <1024px widths. This is NOT a functional bug — behind the badge the anchors work; and in production (no emergent-badge) everything routes correctly.",
+    "MINOR: add a SheetDescription (or aria-describedby) to the mobile drawer to silence the Radix a11y warning."
+  ],
+  "critical_code_review_comments": [
+    "Layout.js correctly gates sidebar with 'hidden lg:flex' and bottom-nav with 'lg:hidden'. Desktop top bar uses 'hidden lg:flex', mobile top bar uses 'lg:hidden' — split is clean.",
+    "NavItems is rendered inside BOTH the hidden desktop sidebar and the mobile drawer, so nav-* testids resolve to 2 DOM nodes on mobile. Tests must scope to '[data-testid=mobile-drawer] [data-testid=nav-*]' or use bottomnav-* — noted correctly in the review request.",
+    "main content padding 'pb-24 lg:pb-8' correctly clears the fixed bottom-nav (49px tall) on mobile. Ask AI container 'h-[calc(100vh-13rem)]' verified: input bottom=707px, submit bottom=708px, mobile-bottom-nav top=795px → ~87px clearance. No overlap.",
+    "AskAI.js uses SUGGESTIONS + ask() helper — clean; log state properly persists chat-msg-{role}-{i}.",
+    "mobile-bottom-nav z-index:20 is fine for the app itself, but is lower than the emergent-badge (9999). Consider raising to a higher value for defensive stacking on preview URLs."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100% (functional); 1 preview-env overlay note"},
+  "test_credentials": "owner@sharma.com / demo1234 (owner); sales@sharma.com / demo1234 (sales) — from /app/memory/test_credentials.md.",
+  "seed_data_creation": "None. One test directive ('Order 50 bags of dye by Friday') submitted via mobile owner inbox — accepted and cleared.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Mobile viewport 390x844 works end-to-end. IMPORTANT: on the Emergent preview URL, the #emergent-badge overlay covers bottomnav-tasks & bottomnav-ask — Playwright's force=True bypasses actionability but the browser still routes real pointer events to the topmost element (badge z-index:9999), so those two tab clicks do NOT navigate in tests. Workarounds: (a) execute JS: `document.querySelector('#emergent-badge').style.display='none'` before clicking those tabs, or (b) test navigation via drawer or direct page.goto. All other bottom-nav tabs (dashboard, inbox, workflows) work with normal clicks. AskAI response comes back in ~5-10s; wait for [data-testid^='chat-msg-ai-']. Desktop regression at 1920x800 fully intact.",
+  "rca of the issue": "RCA (preview-only): bottomnav-tasks and bottomnav-ask do not respond to clicks on mobile in the preview because the Emergent watermark anchor (id='emergent-badge', target='_blank', position:fixed, right:0, bottom≈16px, z-index:9999) has a bounding rect of {x:196, y:788, w:178, h:40} that geometrically covers the right ~50% of the 49px tall bottom nav (y:795-844) — i.e., tabs 4 (tasks) and 5 (ask). Because the badge has z-index 9999 vs bottom-nav's z-index 20, the badge sits on top in the stacking context and captures all pointer events. Reproduction: mobile viewport 390x844 → login as owner → navigate to '/' → click [data-testid='bottomnav-tasks'] with force=True → URL stays at '/'. Mitigation options: (1) raise mobile-bottom-nav z-index above 9999, (2) add right-side padding/margin to tabs 4-5 so they clear the badge zone, (3) reduce to 4 primary bottom tabs, (4) accept as preview-only artifact (production deployments don't inject #emergent-badge). Verified fix: page.evaluate hide-badge then click both tabs → both routed correctly to /tasks and /ask."
+}

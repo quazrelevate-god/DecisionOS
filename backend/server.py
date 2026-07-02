@@ -260,6 +260,26 @@ async def log_activity(tenant_id: str, actor: str, kind: str, message: str, enti
 
 
 # ---------------------------------------------------------------------------
+# Unified Inbox
+# ---------------------------------------------------------------------------
+INBOX_CLASSES = ("customer", "supplier", "invoice", "payment", "complaint", "task", "approval", "reminder", "decision")
+
+
+async def add_inbox_item(tenant_id, created_by, source, classification, title,
+                         preview="", ref_type=None, ref_id=None, contact_id=None,
+                         amount=None, status="open"):
+    doc = {
+        "id": new_id(), "tenant_id": tenant_id, "created_by": created_by,
+        "source": source, "classification": classification if classification in INBOX_CLASSES else "task",
+        "title": title or "Untitled", "preview": preview or "",
+        "ref_type": ref_type, "ref_id": ref_id, "contact_id": contact_id,
+        "amount": amount, "status": status, "created_at": now_iso(),
+    }
+    await db.inbox.insert_one(doc)
+    return doc["id"]
+
+
+# ---------------------------------------------------------------------------
 # AI helpers
 # ---------------------------------------------------------------------------
 def _extract_json(text: str):
@@ -380,6 +400,11 @@ async def process_voice_note(note_id: str):
             task_ids.append(tid)
         decision["task_ids"] = task_ids
         await db.decisions.insert_one(decision)
+        _icls = "approval" if dtype == "approval" else ("task" if task_ids else "reminder")
+        await add_inbox_item(tenant_id, note["created_by"],
+                             "voice" if note.get("kind") == "audio" else "text",
+                             _icls, decision["title"], (decision.get("summary") or "")[:180],
+                             "decision", decision_id, status="open")
         # Voice shortcuts: lightweight reminders + company memory
         for r in (extracted.get("reminders") or []):
             due = None
@@ -891,12 +916,33 @@ async def ask_ai(inp: AskInput, user: dict = Depends(get_current_user)):
         "team": users,
         "contacts": contacts,
         "company_memory": [m["text"] for m in memory],
+        "today": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
     }
+    money_access = user["role"] in ("owner", "finance")
+    if money_access:
+        invs = await db.invoices.find({"tenant_id": tid}, {"_id": 0, "type": 1, "number": 1, "contact_name": 1, "amount": 1, "currency": 1, "status": 1, "date": 1, "due_date": 1, "line_items": 1}).sort("created_at", -1).to_list(300)
+        pays = await db.payments.find({"tenant_id": tid}, {"_id": 0, "direction": 1, "amount": 1, "contact_name": 1, "date": 1, "method": 1, "invoice_number": 1}).sort("created_at", -1).to_list(300)
+        outstanding = {}
+        for i in invs:
+            nm = i.get("contact_name") or "Unknown"
+            outstanding[nm] = outstanding.get(nm, 0) + float(i.get("amount") or 0)
+        for p in pays:
+            nm = p.get("contact_name") or "Unknown"
+            outstanding[nm] = outstanding.get(nm, 0) - float(p.get("amount") or 0)
+        context["invoices"] = invs
+        context["payments"] = pays
+        context["outstanding_by_party"] = {k: round(v, 2) for k, v in outstanding.items() if round(v, 2) != 0}
+        context["currency"] = await _tenant_currency(tid)
     system = (
         "You are the Ask AI assistant of DecisionOS. Answer questions ONLY using the provided company context JSON. "
         "Be concise and factual. If the answer isn't in the data, say you don't have that information yet. Do not invent data. "
+        "The context includes today's date; use it for time questions like 'yesterday', 'today' or 'not paid in 30 days'. "
+        + ("It also includes invoices, payments, per-party outstanding balances and the company currency; "
+           "use these to answer money questions (who owes the most, overdue collections, supplier payments due, sales totals). "
+           if money_access else
+           "Financial data (invoices, payments, outstanding) is NOT available to this user's role; if asked about money, say it is restricted to Owner and Finance. ") +
         "Return ONLY valid JSON: {\"answer\": string (markdown allowed), "
-        "\"citations\": [{\"type\": one of [decision,task,workflow,contact], \"title\": string}]}. "
+        "\"citations\": [{\"type\": one of [decision,task,workflow,contact,invoice,payment], \"title\": string}]}. "
         "Citations MUST be the specific records you used to answer (empty array if none)."
     )
     prompt = f"Company context:\n{json.dumps(context)}\n\nQuestion: {inp.question}"
@@ -1123,6 +1169,9 @@ async def create_complaint(inp: ComplaintInput, user: dict = Depends(require_rol
            "text": inp.text, "severity": inp.severity or "medium", "status": "open",
            "created_by": user["id"], "created_at": now_iso()}
     await db.complaints.insert_one(doc)
+    await add_inbox_item(user["tenant_id"], user["id"], "manual", "complaint",
+                         f"Complaint: {(name or 'customer')}", inp.text[:180],
+                         "complaint", cid, contact_id=inp.customer_id, status="open")
     await log_activity(user["tenant_id"], user["id"], "complaint_logged", f"Complaint logged: {inp.text[:60]}", "complaint", cid)
     doc.pop("_id", None)
     return doc
@@ -1415,6 +1464,33 @@ DOC_MIME = {"pdf": "application/pdf", "png": "image/png", "jpg": "image/jpeg",
             "jpeg": "image/jpeg", "webp": "image/webp"}
 
 
+def _classify_ingestion(doc: dict) -> str:
+    dt = doc.get("doc_type")
+    if dt in ("sales_invoice", "purchase_bill"):
+        return "invoice"
+    if dt == "payment":
+        return "payment"
+    if dt == "purchase_order":
+        return "task"
+    ent = doc.get("entity")
+    if ent == "customers":
+        return "customer"
+    if ent == "vendors":
+        return "supplier"
+    if ent == "invoices":
+        return "invoice"
+    if ent == "payments":
+        return "payment"
+    recs = doc.get("records") or {}
+    if recs.get("invoices"):
+        return "invoice"
+    if recs.get("payments"):
+        return "payment"
+    if recs.get("contacts"):
+        return "customer"
+    return "task"
+
+
 @api.post("/ingest/document")
 async def ingest_document(file: UploadFile = File(...), source: str = Form("upload"),
                           user: dict = Depends(require_role(*INGEST_ROLES))):
@@ -1442,6 +1518,12 @@ async def ingest_document(file: UploadFile = File(...), source: str = Form("uplo
         doc.update({"status": "failed", "error": str(e)[:300], "records": _normalise_records({})})
     await db.ingestions.insert_one(dict(doc))
     doc.pop("_id", None)
+    inbox_id = await add_inbox_item(user["tenant_id"], user["id"], doc["source"],
+                                    _classify_ingestion(doc), doc.get("summary") or doc["filename"],
+                                    doc["filename"], "ingestion", ing_id,
+                                    status="done" if doc["status"] == "failed" else "open")
+    await db.ingestions.update_one({"id": ing_id}, {"$set": {"inbox_id": inbox_id}})
+    doc["inbox_id"] = inbox_id
     return doc
 
 
@@ -1477,6 +1559,12 @@ async def ingest_csv(file: UploadFile = File(...), user: dict = Depends(require_
         doc.update({"status": "failed", "error": str(e)[:300], "records": _normalise_records({})})
     await db.ingestions.insert_one(dict(doc))
     doc.pop("_id", None)
+    inbox_id = await add_inbox_item(user["tenant_id"], user["id"], "csv",
+                                    _classify_ingestion(doc), doc.get("summary") or doc["filename"],
+                                    doc["filename"], "ingestion", ing_id,
+                                    status="done" if doc["status"] == "failed" else "open")
+    await db.ingestions.update_one({"id": ing_id}, {"$set": {"inbox_id": inbox_id}})
+    doc["inbox_id"] = inbox_id
     return doc
 
 
@@ -1497,6 +1585,8 @@ async def commit_ingestion(ingestion_id: str, inp: IngestCommitInput,
     await db.ingestions.update_one({"id": ingestion_id},
                                    {"$set": {"status": "filed", "records": _normalise_records(inp.records),
                                              "created_counts": created, "filed_at": now_iso()}})
+    if ing.get("inbox_id"):
+        await db.inbox.update_one({"id": ing["inbox_id"]}, {"$set": {"status": "done"}})
     label = ing.get("filename", "document")
     await log_activity(user["tenant_id"], user["id"], "data_ingested",
                        f"Filed data from '{label}' — {created['contacts']} contacts, {created['invoices']} invoices, {created['payments']} payments, {created['tasks']} tasks",
@@ -1528,6 +1618,101 @@ async def list_invoices(type: Optional[str] = None, user: dict = Depends(get_cur
 @api.get("/payments")
 async def list_payments(user: dict = Depends(get_current_user)):
     return await db.payments.find({"tenant_id": user["tenant_id"]}, {"_id": 0}).sort("created_at", -1).to_list(500)
+
+
+# ---------------------------------------------------------------------------
+# Unified Inbox feed
+# ---------------------------------------------------------------------------
+@api.get("/inbox")
+async def list_inbox(classification: Optional[str] = None, status: Optional[str] = None,
+                     user: dict = Depends(get_current_user)):
+    tid = user["tenant_id"]
+    query = {"tenant_id": tid}
+    if classification and classification in INBOX_CLASSES:
+        query["classification"] = classification
+    if status in ("open", "done", "dismissed"):
+        query["status"] = status
+    items = await db.inbox.find(query, {"_id": 0}).sort("created_at", -1).to_list(300)
+    counts = {}
+    async for row in db.inbox.aggregate([
+        {"$match": {"tenant_id": tid, "status": "open"}},
+        {"$group": {"_id": "$classification", "n": {"$sum": 1}}},
+    ]):
+        counts[row["_id"]] = row["n"]
+    open_total = await db.inbox.count_documents({"tenant_id": tid, "status": "open"})
+    return {"items": items, "counts": counts, "open_total": open_total}
+
+
+class InboxStatusInput(BaseModel):
+    status: str
+
+
+@api.post("/inbox/{item_id}/status")
+async def set_inbox_status(item_id: str, inp: InboxStatusInput, user: dict = Depends(get_current_user)):
+    if inp.status not in ("open", "done", "dismissed"):
+        raise HTTPException(status_code=400, detail="Invalid status")
+    res = await db.inbox.update_one({"id": item_id, "tenant_id": user["tenant_id"]}, {"$set": {"status": inp.status}})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Not found")
+    return {"ok": True, "status": inp.status}
+
+
+# ---------------------------------------------------------------------------
+# 360° Customer / Supplier profile  (Owner + Finance only)
+# ---------------------------------------------------------------------------
+@api.get("/contacts/{contact_id}/profile")
+async def contact_profile(contact_id: str, user: dict = Depends(require_role("owner", "finance"))):
+    tid = user["tenant_id"]
+    c = await db.contacts.find_one({"id": contact_id, "tenant_id": tid}, {"_id": 0})
+    if not c:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    name = c.get("name") or ""
+    name_rx = {"$regex": f"^{re.escape(name)}$", "$options": "i"}
+    loose_rx = {"$regex": re.escape(name), "$options": "i"} if name else {"$exists": False}
+    match_party = {"tenant_id": tid, "$or": [{"contact_id": contact_id}, {"contact_name": name_rx}]}
+
+    invoices = await db.invoices.find(match_party, {"_id": 0}).sort("created_at", -1).to_list(500)
+    payments = await db.payments.find(match_party, {"_id": 0}).sort("created_at", -1).to_list(500)
+    complaints = await db.complaints.find({"tenant_id": tid, "customer_id": contact_id}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    workflows = await db.workflows.find({"tenant_id": tid, "contact_id": contact_id}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    tasks = await db.tasks.find({"tenant_id": tid, "title": loose_rx}, {"_id": 0}).sort("created_at", -1).to_list(200) if name else []
+    decisions = await db.decisions.find(
+        {"tenant_id": tid, "$or": [{"title": loose_rx}, {"summary": loose_rx}]}, {"_id": 0}
+    ).sort("created_at", -1).to_list(100) if name else []
+
+    total_billed = sum(float(i.get("amount") or 0) for i in invoices)
+    total_paid = sum(float(p.get("amount") or 0) for p in payments)
+    outstanding = round(total_billed - total_paid, 2)
+    last_payment = payments[0].get("date") if payments else None
+
+    # follow-ups = reminder tasks + open workflows
+    follow_ups = [t for t in tasks if t.get("source") in ("reminder", "ingest")]
+    pending_deliveries = [w for w in workflows if w.get("stage") not in ("delivered", "paid")]
+
+    # price history for suppliers, from purchase bill line items
+    price_history = []
+    if c.get("type") == "vendor":
+        for inv in invoices:
+            for li in (inv.get("line_items") or []):
+                if li.get("description"):
+                    price_history.append({"item": li.get("description"), "rate": li.get("rate"),
+                                          "date": inv.get("date") or inv.get("created_at", "")[:10]})
+
+    return {
+        "contact": c,
+        "summary": {"total_billed": round(total_billed, 2), "total_paid": round(total_paid, 2),
+                    "outstanding": outstanding, "last_payment": last_payment,
+                    "open_complaints": len([x for x in complaints if x.get("status") != "resolved"])},
+        "invoices": invoices,
+        "payments": payments,
+        "complaints": complaints,
+        "workflows": workflows,
+        "pending_deliveries": pending_deliveries,
+        "follow_ups": follow_ups,
+        "tasks": await enrich_tasks(tasks),
+        "decisions": decisions,
+        "price_history": price_history,
+    }
 
 
 @api.post("/webhooks/whatsapp")

@@ -1,0 +1,43 @@
+{
+  "summary": "Iteration 13 — 6-step 'Digital Executive Office' onboarding wizard + employee invites verified end-to-end. Backend 9/9 new tests (test_iteration13.py: register with gst/branches/business_scale/current_software persisted, duplicate email 400, invites POST/GET owner-only with de-dup, tenant isolation, no-auth blocked) + 38/38 regression (backend_test.py) = 47/47 green. Frontend E2E: fresh signup on /login → Register toggle → Step 1 (company/name/email/password/industry/gst/branches) → Step 2 (size/currency/sales/purchases/customers/suppliers/region) → Step 3 (software chips Excel+Tally+Others with 'QuickBooks' text) → onboarding-create-button spins then advances to Step 4 with valid auth token (verified in localStorage, len=275) → Step 4 CSV upload shows 'Imported 3 contacts · 0 invoices · 0 payments' → Step 5 add 2 phones and send invites → Step 6 AI animation completes (ai-step-3 gets bg-brand-ink text-white) → onboarding-enter-button navigates to / (Unified Inbox) showing new tenant name TEST_PREMIUM_... with the imported CSV item in the inbox. Regression: demo-login-owner lands on / (Sharma Textiles inbox); manual login sales@sharma.com/demo1234 lands on / with Inbox visible.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration13.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/iteration13.xml",
+    "/app/test_reports/pytest/regression13.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py now 2010 lines — continued growth past the 700-line guideline. Recommend splitting into routers/ modules (auth, invites, onboarding, ingest, inbox, contacts_profile, etc.). Same as iter12 note, still non-blocking.",
+    "InviteInput.phones has no format validation (any non-empty string accepted) — a stray '+91 abc' would be stored. For MVP fine because SMS delivery is mocked, but when Twilio is wired up, add E.164 validation (e.g. `re.match(r'^\\+?[1-9]\\d{7,14}$', p)`) or use pydantic constrained str.",
+    "POST /api/invites doesn't cap the number of phones per request — a client could POST 10k phones and inflate the tenant document unbounded. Add a reasonable max (e.g. 100 per call).",
+    "InviteInput uses a raw dict for each invite (phone/status/invited_at/invited_by) without a Pydantic model — refactor into `class Invite(BaseModel)` for consistency with other domain models.",
+    "Login.js is now 396 lines and packs auth + full 6-step wizard + upload + invites in one component. Consider splitting: components/onboarding/Step1Company.js, Step2Scale.js, Step3Software.js, Step4Connect.js, Step5Invite.js, Step6AI.js with a wizard state container.",
+    "In createWorkspace() a failing /onboarding/suggest is silently swallowed (empty catch) — that's fine per spec (falls back to DEFAULT_ROLES), but a low-priority console.warn would help debugging when the LLM budget is exhausted.",
+    "Step 4 tally/zoho tiles are labelled 'Coming soon' but are still styled as clickable-looking labels with `border border-dashed`. They correctly have no onClick, but a user might expect a tooltip on hover. Cosmetic UX polish.",
+    "Step 5 invite phone chips don't offer a remove/x button — once added, a user can't remove a wrong number without going back to the previous step (and back does not clear phones). Add a small ✕ per chip.",
+    "aiProgress useEffect (Login.js:138-143) resets to 0 whenever `step` changes to 6, but the timers array captured in closure is cleared only in cleanup — if the component re-renders during animation, timers may leak. Minor React housekeeping."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration13.py (new — 9 tests for iter13: register-with-new-fields x3 + invites x6)"
+  ],
+  "success_rate": {
+    "backend": "100% (47/47 — 9 new iter13 + 38 regression)",
+    "frontend": "100% (all 8 required flows verified: register-toggle, steps 1-6, csv upload, invites, enter-button → /, plus regression demo-login-owner + manual sales login)"
+  },
+  "test_credentials": "owner@sharma.com / sales@sharma.com / production@sharma.com / finance@sharma.com — all pw demo1234 (from /app/memory/test_credentials.md). New tenant emails generated per test on @example.com domain.",
+  "seed_data_creation": "Created several TEST_ tenants via register endpoint (TEST_Premium_*, TEST_Minimal_*, TEST_Dup_*, TEST_InvIso_*, TEST_Bistro_*). Sharma demo tenant now has 2 pending phone invites (+919999911111, +919999922222) added by the owner-invite test. E2E wizard also created a real tenant TEST_PREMIUM_<ts> with 3 contacts imported from customers.csv and 2 phone invites — this tenant is authenticated and can be reused for follow-up UX testing.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 13 fully green. Endpoints tested: POST /api/auth/register (accepts gst, branches, business_scale dict, current_software list; duplicate email → 400; roles fallback to DEFAULT_ROLES when omitted), POST /api/invites (owner-only, de-dupes phones, strips blanks, returns {added, invited_employees}; non-owner → 403; no-auth → 401/403), GET /api/invites (any tenant member gets the list). Frontend testids exercised: toggle-auth-mode, onboarding-step (1..6), onboarding-step-{1..6}, register-company-input, register-name-input, register-email-input, register-password-input, industry-select, register-gst-input, register-branches-input, onboarding-next-1, company-size-select, currency-select, scale-{sales,purchases,customers,suppliers}-input, region-input, onboarding-next-2, software-{excel,tally,zoho,others}, software-other-input, onboarding-create-button, connect-{excel,tally,zoho}, connect-excel-input, import-summary, onboarding-{skip,next}-4, invite-phone-input, add-phone-button, invite-list, onboarding-{invite,skip}-5, ai-step-{0..3}, onboarding-enter-button, plus login regressions (login-email-input, login-password-input, auth-submit-button, demo-login-owner/sales/production/finance). Run: `python -m pytest backend/tests/test_iteration13.py backend/tests/backend_test.py -o addopts=''` (47 tests, ~37s).",
+  "rca of the issue": "N/A — no bugs found."
+}

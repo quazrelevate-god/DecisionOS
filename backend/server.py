@@ -139,8 +139,16 @@ class RegisterInput(BaseModel):
     company_size: Optional[str] = None
     region: Optional[str] = None
     currency: Optional[str] = "INR"
+    gst: Optional[str] = None
+    branches: Optional[str] = None
+    business_scale: Optional[dict] = None
+    current_software: Optional[List[str]] = None
     roles: Optional[List[RoleItem]] = None
     products: Optional[List[ProductItem]] = None
+
+
+class InviteInput(BaseModel):
+    phones: List[str]
 
 
 class OnboardingSuggestInput(BaseModel):
@@ -487,6 +495,11 @@ async def register(inp: RegisterInput):
         "company_size": inp.company_size or "",
         "region": inp.region or "",
         "currency": (inp.currency or "INR").upper(),
+        "gst": inp.gst or "",
+        "branches": inp.branches or "",
+        "business_scale": inp.business_scale or {},
+        "current_software": inp.current_software or [],
+        "invited_employees": [],
         "roles": clean_roles or DEFAULT_ROLES,
         "products": [p.model_dump() for p in (inp.products or [])],
         "created_at": now_iso(),
@@ -520,6 +533,30 @@ async def login(inp: LoginInput):
 async def me(user: dict = Depends(get_current_user)):
     tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
     return {"user": user, "tenant": tenant}
+
+
+@api.get("/invites")
+async def list_invites(user: dict = Depends(get_current_user)):
+    t = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0, "invited_employees": 1})
+    return (t or {}).get("invited_employees", [])
+
+
+@api.post("/invites")
+async def add_invites(inp: InviteInput, user: dict = Depends(require_role("owner"))):
+    clean = []
+    seen = set()
+    for p in inp.phones:
+        p = (p or "").strip()
+        if p and p not in seen:
+            seen.add(p)
+            clean.append({"phone": p, "status": "pending", "invited_at": now_iso(), "invited_by": user["id"]})
+    if clean:
+        await db.tenants.update_one({"id": user["tenant_id"]}, {"$push": {"invited_employees": {"$each": clean}}})
+        await log_activity(user["tenant_id"], user["id"], "employees_invited",
+                           f"Invited {len(clean)} employee(s) — SMS pending", "tenant", user["tenant_id"])
+    t = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0, "invited_employees": 1})
+    # NOTE: real SMS delivery pending Twilio credentials; invites stored as 'pending'.
+    return {"added": len(clean), "invited_employees": (t or {}).get("invited_employees", [])}
 
 
 # ---------------------------------------------------------------------------

@@ -211,7 +211,15 @@ export default function Inbox() {
         {(decisionsQ.data || []).map((d) => (
           <div key={d.id} data-testid={`decision-card-${d.id}`} className="card-brutal p-5">
             <div className="flex items-center justify-between gap-2 mb-2">
-              <Chip value={d.status} data-testid={`decision-status-${d.id}`} />
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <Chip value={d.status} data-testid={`decision-status-${d.id}`} />
+                {d.dtype && <Chip value={d.dtype} className="bg-brand-blue text-white" data-testid={`decision-type-${d.id}`} />}
+                {typeof d.confidence === "number" && (
+                  <span className="text-xs font-mono text-muted-foreground" data-testid={`decision-confidence-${d.id}`}>
+                    {Math.round(d.confidence * 100)}% conf
+                  </span>
+                )}
+              </div>
               <span className="label-mono text-muted-foreground">{d.created_by_name}</span>
             </div>
             <p className="font-heading font-bold text-lg leading-tight">{d.title}</p>

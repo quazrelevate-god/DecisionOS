@@ -280,7 +280,9 @@ async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[l
         "You are the extraction engine of DecisionOS, an operating brain for small businesses. "
         "Convert a founder's spoken/written directive into structured operational data. "
         "Return ONLY valid JSON, no prose. Schema: "
-        "{\"summary\": string, \"decisions\": [{\"title\": string, \"detail\": string, \"category\": string}], "
+        "{\"summary\": string, \"confidence\": number between 0 and 1, "
+        "\"decisions\": [{\"title\": string, \"detail\": string, \"category\": string, "
+        "\"type\": one of [directive,approval,policy,observation]}], "
         "\"tasks\": [{\"title\": string, \"description\": string, \"assignee_role\": one of [" + roles_str + "], "
         "\"priority\": one of [low,medium,high], \"due_in_days\": integer or null}], "
         "\"workflow_events\": [{\"type\": one of [sales_dispatch,purchase_payment], \"action\": string, \"detail\": string}]}. "
@@ -339,12 +341,18 @@ async def process_voice_note(note_id: str):
         extracted = await ai_extract(transcript or "", session_id=f"extract-{note_id}", allowed_roles=sorted(troles))
 
         decision_id = new_id()
+        dlist = extracted.get("decisions", [])
+        first = dlist[0] if dlist else {}
+        dtype = first.get("type") if first.get("type") in ("directive", "approval", "policy", "observation") else "directive"
+        conf = extracted.get("confidence", 0.8)
+        conf = float(conf) if isinstance(conf, (int, float)) else 0.8
         decision = {
             "id": decision_id, "tenant_id": tenant_id, "voice_note_id": note_id,
             "title": (extracted.get("decisions") or [{}])[0].get("title") or (extracted.get("summary") or "New decision")[:80],
             "summary": extracted.get("summary", ""),
             "items": extracted.get("decisions", []),
             "workflow_events": extracted.get("workflow_events", []),
+            "dtype": dtype, "confidence": round(max(0.0, min(1.0, conf)), 2),
             "status": "pending_approval",
             "created_by": note["created_by"], "created_at": now_iso(),
             "task_ids": [],
@@ -640,6 +648,8 @@ async def enrich_decisions(decisions: list) -> list:
     for d in decisions:
         d["tasks"] = [tasks_map[t] for t in d.get("task_ids", []) if t in tasks_map]
         d["created_by_name"] = users_map.get(d.get("created_by"), "Unknown")
+        d.setdefault("dtype", "directive")
+        d.setdefault("confidence", None)
     return decisions
 
 
@@ -855,17 +865,26 @@ async def ask_ai(inp: AskInput, user: dict = Depends(get_current_user)):
     }
     system = (
         "You are the Ask AI assistant of DecisionOS. Answer questions ONLY using the provided company context JSON. "
-        "Be concise, factual, and reference specific decisions, tasks or workflows. If the answer isn't in the data, "
-        "say you don't have that information yet. Do not invent data."
+        "Be concise and factual. If the answer isn't in the data, say you don't have that information yet. Do not invent data. "
+        "Return ONLY valid JSON: {\"answer\": string (markdown allowed), "
+        "\"citations\": [{\"type\": one of [decision,task,workflow,contact], \"title\": string}]}. "
+        "Citations MUST be the specific records you used to answer (empty array if none)."
     )
     prompt = f"Company context:\n{json.dumps(context)}\n\nQuestion: {inp.question}"
     chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=f"ask-{tid}", system_message=system).with_model(*LLM_MODEL)
     try:
-        answer = await chat.send_message(UserMessage(text=prompt))
+        raw = await chat.send_message(UserMessage(text=prompt))
     except Exception as e:
         logger.exception("ask_ai failed")
         raise HTTPException(status_code=502, detail="AI service error")
-    return {"answer": answer}
+    try:
+        data = _extract_json(raw)
+        answer = data.get("answer") or raw
+        citations = data.get("citations") if isinstance(data.get("citations"), list) else []
+    except Exception:
+        answer, citations = raw, []
+    clean_cites = [{"type": c.get("type"), "title": c.get("title")} for c in citations if isinstance(c, dict) and c.get("title")]
+    return {"answer": answer, "citations": clean_cites[:8]}
 
 
 # ---------------------------------------------------------------------------
@@ -882,6 +901,11 @@ async def dashboard(user: dict = Depends(get_current_user)):
     done_tasks = await db.tasks.count_documents({"tenant_id": tid, "status": "done"})
     active_wf = await db.workflows.count_documents({"tenant_id": tid, "stage": {"$nin": ["delivered", "paid"]}})
     activity = await db.activity.find({"tenant_id": tid}, {"_id": 0}).sort("created_at", -1).to_list(15)
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    wins = await db.activity.find(
+        {"tenant_id": tid, "kind": {"$in": ["task_done", "decision_approved", "workflow_advanced"]}, "created_at": {"$gte": today_start}},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(20)
     return {
         "pending_decisions": await enrich_decisions(pending_decisions),
         "pending_purchases": pending_purchases,
@@ -889,6 +913,7 @@ async def dashboard(user: dict = Depends(get_current_user)):
         "stats": {"open_tasks": open_tasks, "done_tasks": done_tasks, "active_workflows": active_wf,
                   "pending_approvals": len(pending_decisions) + len(pending_purchases)},
         "activity": activity,
+        "wins": wins,
     }
 
 

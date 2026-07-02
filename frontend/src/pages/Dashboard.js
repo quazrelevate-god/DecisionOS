@@ -6,7 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import { PageHeader, Chip, EmptyState } from "../components/common";
 import { money } from "../lib/format";
 import { toast } from "sonner";
-import { CheckCircle, XCircle, Warning, Clock, TrendUp } from "@phosphor-icons/react";
+import { CheckCircle, XCircle, Warning, Clock, TrendUp, Trophy } from "@phosphor-icons/react";
 
 function Stat({ label, value, accent }) {
   return (
@@ -104,6 +104,21 @@ export default function Dashboard() {
                     <p className="text-xs text-muted-foreground mt-1">{t.assignee_role || "unassigned"}</p>
                   </div>
                   <Chip value={t.priority} />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h2 className="font-heading text-2xl font-extrabold uppercase tracking-tight mb-4 flex items-center gap-2">
+              <Trophy size={22} weight="bold" className="text-brand-blue" /> Wins Today
+            </h2>
+            <div className="card-brutal divide-y divide-black/10" data-testid="wins-list">
+              {(data.wins || []).length === 0 && <p className="p-4 text-sm text-muted-foreground">No wins logged yet today — go close something!</p>}
+              {(data.wins || []).map((w) => (
+                <div key={w.id} className="p-4 flex items-start gap-3">
+                  <CheckCircle size={16} weight="fill" className="mt-0.5 text-brand-blue shrink-0" />
+                  <p className="text-sm">{w.message}</p>
                 </div>
               ))}
             </div>

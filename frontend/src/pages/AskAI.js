@@ -26,7 +26,7 @@ export default function AskAI() {
     setBusy(true);
     try {
       const { data } = await api.post("/ask", { question: text });
-      setLog((l) => [...l, { role: "ai", text: data.answer }]);
+      setLog((l) => [...l, { role: "ai", text: data.answer, citations: data.citations || [] }]);
     } catch {
       setLog((l) => [...l, { role: "ai", text: "AI service error. Please try again." }]);
     } finally {
@@ -50,7 +50,19 @@ export default function AskAI() {
             {m.role === "user" ? (
               <p className="text-brand-yellow">{"> "}{m.text}</p>
             ) : (
-              <p className="text-white whitespace-pre-wrap leading-relaxed">{m.text}</p>
+              <div>
+                <p className="text-white whitespace-pre-wrap leading-relaxed">{m.text}</p>
+                {(m.citations || []).length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2" data-testid={`citations-${i}`}>
+                    <span className="text-white/40 text-xs uppercase tracking-wider mr-1">Sources:</span>
+                    {m.citations.map((c, ci) => (
+                      <span key={ci} data-testid="citation-chip" className="inline-flex items-center gap-1 border border-white/40 text-white/80 px-2 py-0.5 text-[11px]">
+                        <span className="text-brand-red uppercase">{c.type}</span> {c.title}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         ))}

@@ -33,6 +33,10 @@ const STATUS_STYLES = {
   finance: "bg-white text-black",
   sales_dispatch: "bg-brand-yellow text-black",
   purchase_payment: "bg-brand-yellow text-black",
+  directive: "bg-brand-blue text-white",
+  approval: "bg-brand-blue text-white",
+  policy: "bg-brand-ink text-white",
+  observation: "bg-black/10 text-black",
 };
 
 export function Chip({ value, className = "", ...rest }) {

@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 8 (Decision taxonomy + confidence, Ask AI citations, Today 'Wins') fully verified. Backend: 8/8 new tests in test_iteration8.py PASS + 58/58 regression (backend_test.py 38 + test_iteration7.py 20) — 4 initial regression errors were transient TLS connect timeouts to the preview URL that ALL passed on immediate retry (net-flake, not code). New coverage: (1) POST /api/voice-notes/text with 'Approve the new packaging vendor and ask production to place a trial order of 500 boxes by next Wednesday.' processes to status=done and the resulting decision carries dtype in {directive|approval|policy|observation} + numeric confidence in [0,1] with >=1 task. (2) GET /api/decisions returns dtype+confidence on every doc; seeded/older docs get dtype='directive' + confidence=None (verified). (3) POST /api/ask returns {answer:string, citations:list of {type,title}} shape; citation type when present is in {decision,task,workflow,contact}; each citation has non-empty title; capped at 8. (4) GET /api/dashboard returns 'wins' array; after POST /api/decisions/{id}/approve wins grows by >=1 and the newest entry has kind='decision_approved'. (5) Owner-gate regression: sales@sharma.com POST /voice-notes/text -> 403. Frontend E2E 1920x1080 (owner): (a) Dashboard '/'—'Wins Today' heading + data-testid='wins-list' render; approving a pending decision via /api/decisions/{id}/approve grows the visible list (baseline 9 -> 10, newest text 'Approved \\'Prioritize Delhi Customer Follow-up\\' — tasks unblocked'). (b) /ask—question 'What purchases need my approval and who is the vendor?' produced a grounded markdown answer AND rendered 2 citation-chip elements under data-testid='citations-1' ('WORKFLOW · PO #219 — Packaging boxes', 'WORKFLOW · PO #221 — Cotton yarn (2 tonnes)'); ask-suggestion click still fires a second AI reply (msg count 1 -> 2). (c) /inbox—38 decision-type-{id} chips already present; only 7 decision-confidence-{id} chips (correct: older/seeded decisions have confidence=null so the numeric chip is suppressed per Inbox.js:217 typeof===number guard). After submitting the approval directive via submit-text-directive, counts grow to 39 types + 8 confidences and the newest chip reads 'APPROVAL' / '97% conf' — perfect. (d) Mobile 390x844: no horizontal overflow (scrollWidth=innerWidth=390), all 5 bottomnav items present. Note: Ask AI ask-submit button is intercepted by the '#emergent-badge' anchor overlay in some viewports — worked around in tests by pressing Enter on the input; suggestion clicks work with force=True. Not a functional bug (the form onSubmit fires via Enter) but worth flagging.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "AskAI submit button", "issue": "The absolutely-positioned '#emergent-badge' anchor (bottom-right platform badge) overlaps the ask-submit button on ~1920x1080 and blocks pointer events. Pressing Enter still submits the form, but users clicking Ask directly can be blocked. Consider z-indexing the submit button above the badge, or right-padding the form.", "selector": "[data-testid=\"ask-submit\"]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration8.py",
+    "/app/test_reports/pytest/iteration8.xml",
+    "/app/test_reports/pytest/iteration8_regression.xml"
+  ],
+  "action_items": [
+    "(low priority, cosmetic) Add z-index/right-padding so #emergent-badge does not overlap the ask-submit button; not a bug in DecisionOS code, but user-visible on Ask AI page."
+  ],
+  "critical_code_review_comments": [
+    "server.py:283-293 ai_extract JSON schema now includes top-level 'confidence' (0..1) and decision 'type' in {directive,approval,policy,observation}; system prompt is clear and produces the required fields.",
+    "server.py:345-355 process_voice_note reads dtype from decisions[0].type with a safe fallback to 'directive' and clamps confidence to [0,1] rounded to 2dp — correct and defensive.",
+    "server.py:651-652 enrich_decisions setdefault(dtype='directive', confidence=None) ensures legacy docs never break the API contract; matches Inbox.js:217 guard perfectly.",
+    "server.py:866-887 ask_ai now instructs JSON output with citations[]; parses via _extract_json with a safe fallback (raw text + []), coerces to [{type,title}] and caps at 8. Robust to LLM formatting drift.",
+    "server.py:904-908 dashboard 'wins' filter uses today_start (UTC midnight) and kinds {task_done,decision_approved,workflow_advanced} — accurate and cheap.",
+    "AskAI.js:29,55-64 stores citations on each AI message and renders citation-chip nodes inside citations-{i} — matches the spec testids.",
+    "Inbox.js:216-221 renders decision-type-{id} + decision-confidence-{id} with the confidence chip guarded by typeof===number so seeded null values don't render an empty chip — clean UX.",
+    "Dashboard.js:112-125 'Wins Today' section has heading + wins-list testid + empty state text; consumes data.wins directly.",
+    "Cosmetic: '#emergent-badge' overlaps ask-submit at 1920 wide; consider z-index or padding-right on the Ask page form (not a DecisionOS logic bug)."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration8.py (new)"],
+  "success_rate": {"backend": "100% (66/66: 8 new iter8 + 58 regression)", "frontend": "100% (Dashboard Wins, Ask AI citations, Inbox dtype+confidence, mobile shell)"},
+  "test_credentials": "owner@sharma.com / demo1234; sales@sharma.com / demo1234; production@sharma.com / demo1234; finance@sharma.com / demo1234 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Approved 1 seeded pending decision in the demo tenant to prove wins-list populates ('Prioritize Delhi Customer Follow-up'). Submitted 1 approval directive via /api/voice-notes/text to create a new decision + tasks (dtype='approval', confidence≈0.97). These are cumulative alongside prior iterations' TEST_* residue (per agent-to-agent note, safe to ignore).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All 3 iteration-8 features (decision dtype+confidence, Ask AI citations, dashboard Wins) are green end-to-end. Test file /app/backend/tests/test_iteration8.py has 8 tests, ~13s runtime. If tests time out on the preview URL, retry once — the emergentagent.com edge occasionally connect-timeouts on parallel workers (observed 4/58 in one regression pass, all passed on retry). For UI, the '#emergent-badge' overlay intercepts ask-submit clicks at large viewports — use Enter or force=True (docs already updated in the report). No new mocked APIs beyond the pre-existing /api/brief/send-digest (RESEND_API_KEY empty).",
+  "rca of the issue": "N/A — no bugs found in this iteration's feature work. The one minor UI note (Emergent badge overlaying ask-submit) is a platform badge overlap, not a DecisionOS defect; keyboard submit still works, and force=True click bypasses in tests."
+}

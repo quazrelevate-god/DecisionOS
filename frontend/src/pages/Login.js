@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import api, { formatApiError } from "../lib/api";
-import { INDUSTRIES, COMPANY_SIZES, CURRENCIES } from "../lib/format";
+import { INDUSTRIES, COMPANY_SIZES, CURRENCIES, slugify } from "../lib/format";
 import {
   Microphone, Sparkle, X, Plus, ArrowRight, ArrowLeft, Buildings, ChartLineUp,
   Stack, UploadSimple, DeviceMobile, Check, CircleNotch, Table as TableIcon,
@@ -51,6 +51,11 @@ export default function Login() {
   const [phones, setPhones] = useState([]);
   const [phoneInput, setPhoneInput] = useState("");
   const [importSummary, setImportSummary] = useState(null);
+  const [roles, setRoles] = useState([]);
+  const [roleInput, setRoleInput] = useState("");
+  const [products, setProducts] = useState([]);
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggested, setSuggested] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -73,16 +78,39 @@ export default function Login() {
 
   const toggleSoftware = (k) => setSoftware((s) => (s.includes(k) ? s.filter((x) => x !== k) : [...s, k]));
 
-  // Step 3 → create the workspace, then continue to Connect/Invite/AI steps authenticated
+  // Step 4 — fetch AI-suggested team roles & products/services for the chosen industry
+  const fetchSuggestions = async () => {
+    const eff = form.industry === "Other" ? customIndustry.trim() : form.industry;
+    setSuggesting(true);
+    try {
+      const { data } = await api.post("/onboarding/suggest", { industry: eff, company_size: form.company_size });
+      setRoles(data.roles || []);
+      setProducts((data.products || []).map((p) => ({ name: p.name, description: p.description || "" })));
+    } catch {
+      toast.error("Couldn't fetch AI suggestions — add your team & products manually");
+    } finally {
+      setSuggesting(false);
+      setSuggested(true);
+    }
+  };
+  const goToTeamStep = () => { setStep(4); if (!suggested) fetchSuggestions(); };
+
+  const addRole = () => {
+    const label = roleInput.trim();
+    const key = slugify(label);
+    if (!key || key === "owner" || roles.some((r) => r.key === key)) { setRoleInput(""); return; }
+    setRoles([...roles, { key, label }]); setRoleInput("");
+  };
+  const removeRole = (key) => setRoles(roles.filter((r) => r.key !== key));
+  const addProduct = () => setProducts([...products, { name: "", description: "" }]);
+  const updateProduct = (i, k, v) => setProducts(products.map((p, idx) => (idx === i ? { ...p, [k]: v } : p)));
+  const removeProduct = (i) => setProducts(products.filter((_, idx) => idx !== i));
+
+  // Step 4 → create the workspace with reviewed team & products, then continue authenticated
   const createWorkspace = async () => {
     setError(""); setBusy(true);
     const eff = form.industry === "Other" ? customIndustry.trim() : form.industry;
     try {
-      let roles = [], products = [];
-      try {
-        const { data } = await api.post("/onboarding/suggest", { industry: eff, company_size: form.company_size });
-        roles = data.roles || []; products = (data.products || []).map((p) => ({ name: p.name, description: p.description || "" }));
-      } catch { /* fall back to default roles */ }
       const sw = software.includes("Others") && otherSoftware.trim()
         ? [...software.filter((x) => x !== "Others"), otherSoftware.trim()] : software;
       await register({
@@ -94,9 +122,9 @@ export default function Login() {
           employees: form.company_size, monthly_sales: form.monthly_sales,
           monthly_purchases: form.monthly_purchases, customers: form.num_customers, suppliers: form.num_suppliers,
         },
-        roles, products,
+        roles, products: products.filter((p) => p.name.trim()),
       });
-      setStep(4);
+      setStep(5);
     } catch (err) {
       setError(formatApiError(err.response?.data?.detail) || "Could not create workspace");
     } finally { setBusy(false); }
@@ -127,16 +155,16 @@ export default function Login() {
     setPhones([...phones, p]); setPhoneInput("");
   };
   const sendInvites = async () => {
-    if (phones.length === 0) { setStep(6); return; }
+    if (phones.length === 0) { setStep(7); return; }
     setBusy(true);
     try { await api.post("/invites", { phones }); toast.success(`${phones.length} invite(s) queued`); }
     catch { /* non-blocking */ }
-    finally { setBusy(false); setStep(6); }
+    finally { setBusy(false); setStep(7); }
   };
 
-  // Step 6 animated progress
+  // Step 7 animated progress
   useEffect(() => {
-    if (step !== 6) return;
+    if (step !== 7) return;
     setAiProgress(0);
     const timers = AI_STEPS.map((_, i) => setTimeout(() => setAiProgress(i + 1), (i + 1) * 850));
     return () => timers.forEach(clearTimeout);
@@ -147,7 +175,7 @@ export default function Login() {
   const stepValid1 = form.company_name && form.name && form.email && form.password.length >= 6 && form.industry &&
     (form.industry !== "Other" || customIndustry.trim());
 
-  const TOTAL = 6;
+  const TOTAL = 7;
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2 bg-brand-paper text-brand-ink">
@@ -299,16 +327,68 @@ export default function Login() {
                   {error && <p data-testid="auth-error" className="text-sm text-brand-red font-semibold">{error}</p>}
                   <div className="flex gap-2">
                     <button onClick={() => setStep(2)} className="flex items-center gap-2 px-4 py-3 border border-black text-sm font-semibold uppercase tracking-wider hover:bg-black/5"><ArrowLeft size={16} weight="bold" /></button>
-                    <button disabled={busy} data-testid="onboarding-create-button" onClick={createWorkspace} className="flex-1 flex items-center justify-center gap-2 bg-brand-red text-white font-semibold uppercase tracking-wider py-3 border border-black hover:shadow-brutal transition-all disabled:opacity-50">
+                    <button data-testid="onboarding-next-3" onClick={goToTeamStep} className="flex-1 flex items-center justify-center gap-2 bg-brand-ink text-white font-semibold uppercase tracking-wider py-3 border border-black hover:shadow-brutal transition-all">Next <ArrowRight size={16} weight="bold" /></button>
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 4 — AI-suggested team & products */}
+              {step === 4 && (
+                <div className="space-y-5" data-testid="onboarding-step-4">
+                  <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                    <Sparkle size={16} weight="fill" className="text-brand-red" /> AI-suggested team & offerings for <strong>{(form.industry === "Other" ? customIndustry : form.industry) || "your business"}</strong>. Edit freely.
+                  </p>
+                  {suggesting ? (
+                    <div className="flex items-center gap-2 border border-black p-6 justify-center" data-testid="suggest-loading">
+                      <CircleNotch size={18} className="animate-spin" /> <span className="text-sm font-semibold uppercase tracking-wider">AI is building your team…</span>
+                    </div>
+                  ) : (
+                    <>
+                      <div>
+                        <label className={labelCls}>Team roles (besides Owner)</label>
+                        <div className="flex flex-wrap gap-2 mt-2" data-testid="roles-list">
+                          {roles.map((r) => (
+                            <span key={r.key} data-testid={`role-chip-${r.key}`} className="inline-flex items-center gap-1.5 border border-black bg-white px-2.5 py-1 text-xs uppercase tracking-wider font-semibold">
+                              {r.label}<button onClick={() => removeRole(r.key)} data-testid={`remove-role-${r.key}`} className="hover:text-brand-red"><X size={12} weight="bold" /></button>
+                            </span>
+                          ))}
+                          {roles.length === 0 && <span className="text-xs text-muted-foreground">No roles yet — add some below.</span>}
+                        </div>
+                        <div className="flex gap-2 mt-2">
+                          <input data-testid="role-input" className={inputCls} placeholder="Add a role (e.g. Marketing)" value={roleInput} onChange={(e) => setRoleInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addRole(); } }} />
+                          <button onClick={addRole} data-testid="add-role-button" className="px-4 border border-black bg-brand-ink text-white hover:shadow-brutal-sm transition-all"><Plus size={16} weight="bold" /></button>
+                        </div>
+                      </div>
+                      <div>
+                        <label className={labelCls}>Products / Services</label>
+                        <div className="space-y-2 mt-2" data-testid="products-list">
+                          {products.map((p, i) => (
+                            <div key={i} data-testid={`product-row-${i}`} className="border border-black p-2">
+                              <div className="flex gap-2">
+                                <input data-testid={`product-name-${i}`} className="flex-1 border border-black/40 px-2 py-1.5 text-sm font-mono focus:outline-none" placeholder="Name" value={p.name} onChange={(e) => updateProduct(i, "name", e.target.value)} />
+                                <button onClick={() => removeProduct(i)} data-testid={`remove-product-${i}`} className="px-2 border border-black hover:bg-brand-red hover:text-white transition-colors"><X size={14} weight="bold" /></button>
+                              </div>
+                              <input data-testid={`product-desc-${i}`} className="w-full border border-black/40 px-2 py-1.5 text-xs font-mono mt-2 focus:outline-none" placeholder="Short description" value={p.description} onChange={(e) => updateProduct(i, "description", e.target.value)} />
+                            </div>
+                          ))}
+                        </div>
+                        <button onClick={addProduct} data-testid="add-product-button" className="mt-2 flex items-center gap-1.5 text-sm text-brand-blue font-semibold hover:underline"><Plus size={14} weight="bold" /> Add product / service</button>
+                      </div>
+                    </>
+                  )}
+                  {error && <p data-testid="auth-error" className="text-sm text-brand-red font-semibold">{error}</p>}
+                  <div className="flex gap-2">
+                    <button onClick={() => setStep(3)} className="flex items-center gap-2 px-4 py-3 border border-black text-sm font-semibold uppercase tracking-wider hover:bg-black/5"><ArrowLeft size={16} weight="bold" /></button>
+                    <button disabled={busy || suggesting} data-testid="onboarding-create-button" onClick={createWorkspace} className="flex-1 flex items-center justify-center gap-2 bg-brand-red text-white font-semibold uppercase tracking-wider py-3 border border-black hover:shadow-brutal transition-all disabled:opacity-50">
                       {busy ? <><CircleNotch size={16} className="animate-spin" /> Creating…</> : <>Create workspace <ArrowRight size={16} weight="bold" /></>}
                     </button>
                   </div>
                 </div>
               )}
 
-              {/* STEP 4 — Connect business */}
-              {step === 4 && (
-                <div className="space-y-4" data-testid="onboarding-step-4">
+              {/* STEP 5 — Connect business */}
+              {step === 5 && (
+                <div className="space-y-4" data-testid="onboarding-step-5">
                   <p className="text-sm text-muted-foreground flex items-center gap-1.5"><UploadSimple size={16} weight="bold" className="text-brand-red" /> Connect your business data</p>
                   <label data-testid="connect-excel" className={`border border-black p-5 flex flex-col items-center text-center cursor-pointer hover:shadow-brutal-sm transition-all ${uploading ? "opacity-60 pointer-events-none" : ""}`}>
                     <TableIcon size={30} weight="bold" className="text-brand-blue mb-2" />
@@ -328,15 +408,15 @@ export default function Login() {
                     ))}
                   </div>
                   <div className="flex gap-2">
-                    <button data-testid="onboarding-skip-4" onClick={() => setStep(5)} className="flex-1 px-4 py-3 border border-black text-sm font-semibold uppercase tracking-wider hover:bg-black/5">Skip</button>
-                    <button data-testid="onboarding-next-4" onClick={() => setStep(5)} className="flex-1 flex items-center justify-center gap-2 bg-brand-ink text-white font-semibold uppercase tracking-wider py-3 border border-black hover:shadow-brutal transition-all">Continue <ArrowRight size={16} weight="bold" /></button>
+                    <button data-testid="onboarding-skip-5" onClick={() => setStep(6)} className="flex-1 px-4 py-3 border border-black text-sm font-semibold uppercase tracking-wider hover:bg-black/5">Skip</button>
+                    <button data-testid="onboarding-next-5" onClick={() => setStep(6)} className="flex-1 flex items-center justify-center gap-2 bg-brand-ink text-white font-semibold uppercase tracking-wider py-3 border border-black hover:shadow-brutal transition-all">Continue <ArrowRight size={16} weight="bold" /></button>
                   </div>
                 </div>
               )}
 
-              {/* STEP 5 — Invite employees */}
-              {step === 5 && (
-                <div className="space-y-4" data-testid="onboarding-step-5">
+              {/* STEP 6 — Invite employees */}
+              {step === 6 && (
+                <div className="space-y-4" data-testid="onboarding-step-6">
                   <p className="text-sm text-muted-foreground flex items-center gap-1.5"><DeviceMobile size={16} weight="bold" className="text-brand-red" /> Invite your team by mobile number</p>
                   <div className="flex gap-2">
                     <input data-testid="invite-phone-input" className={inputCls} placeholder="e.g. +91 98765 43210" value={phoneInput} onChange={(e) => setPhoneInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addPhone(); } }} />
@@ -352,15 +432,15 @@ export default function Login() {
                   </div>
                   <p className="text-xs text-muted-foreground">SMS invites are queued and sent once your SMS provider is connected.</p>
                   <div className="flex gap-2">
-                    <button data-testid="onboarding-skip-5" onClick={() => setStep(6)} className="flex-1 px-4 py-3 border border-black text-sm font-semibold uppercase tracking-wider hover:bg-black/5">Skip</button>
+                    <button data-testid="onboarding-skip-6" onClick={() => setStep(7)} className="flex-1 px-4 py-3 border border-black text-sm font-semibold uppercase tracking-wider hover:bg-black/5">Skip</button>
                     <button disabled={busy} data-testid="onboarding-invite-button" onClick={sendInvites} className="flex-1 flex items-center justify-center gap-2 bg-brand-ink text-white font-semibold uppercase tracking-wider py-3 border border-black hover:shadow-brutal transition-all disabled:opacity-50">Continue <ArrowRight size={16} weight="bold" /></button>
                   </div>
                 </div>
               )}
 
-              {/* STEP 6 — AI learns business */}
-              {step === 6 && (
-                <div className="space-y-5" data-testid="onboarding-step-6">
+              {/* STEP 7 — AI learns business */}
+              {step === 7 && (
+                <div className="space-y-5" data-testid="onboarding-step-7">
                   <p className="text-sm text-muted-foreground flex items-center gap-1.5"><Sparkle size={16} weight="fill" className="text-brand-red" /> DecisionOS is learning your business</p>
                   <div className="space-y-2">
                     {AI_STEPS.map((s, i) => {

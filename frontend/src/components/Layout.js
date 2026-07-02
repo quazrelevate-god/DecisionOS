@@ -132,14 +132,18 @@ export default function Layout({ children }) {
           </p>
           {tenant?.industry && <p className="label-mono text-brand-red truncate mt-1">{tenant.industry}</p>}
         </div>
-        <nav className="flex-1 py-4">
+        <nav className="flex-1 min-h-0 overflow-y-auto py-4">
           <NavItems />
         </nav>
-        <div className="border-t border-black p-4">
+        <div className="border-t border-black p-4 shrink-0">
+          <div className="mb-2 leading-tight" data-testid="current-user">
+            <p className="text-sm font-semibold truncate">{user?.name}</p>
+            <p className="label-mono text-muted-foreground truncate">{user?.email}</p>
+          </div>
           <button
             onClick={doLogout}
             data-testid="logout-button"
-            className="w-full flex items-center gap-2 px-3 py-2 text-sm border border-black hover:bg-brand-ink hover:text-white transition-colors"
+            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold uppercase tracking-wider bg-white text-brand-red border-2 border-brand-red hover:bg-brand-red hover:text-white transition-colors"
           >
             <SignOut size={16} weight="bold" /> Sign out
           </button>
@@ -216,7 +220,7 @@ export default function Layout({ children }) {
                 <button
                   onClick={doLogout}
                   data-testid="mobile-logout-button"
-                  className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm border border-black hover:bg-brand-ink hover:text-white transition-colors"
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold uppercase tracking-wider bg-white text-brand-red border-2 border-brand-red hover:bg-brand-red hover:text-white transition-colors"
                 >
                   <SignOut size={16} weight="bold" /> Sign out
                 </button>

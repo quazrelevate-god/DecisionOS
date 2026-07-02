@@ -1,0 +1,42 @@
+{
+  "summary": "Iteration 11 — Data Input (ingestion) pipeline fully tested. Backend 18/18 new tests + 38/38 regression = 56/56 green. Frontend Ingest.js flow verified end-to-end: /ingest nav → CSV upload (Claude auto-detect customers) → review panel → edit contact → remove one → File it → 200 filed → invoices/contacts persisted. Document upload (Gemini vision OCR of /tmp/invoice.png) → review panel → edit invoice → File it → invoice row appears in invoices-table. Records tabs (invoices/payments) switch cleanly (payments shows EmptyState 'No payments yet' when list empty — by design). WhatsApp banner visible. Production role correctly sees 'VIEW-ONLY' banner (no upload zones) and can browse invoices-table. WhatsApp webhook returns not_configured (MOCKED as designed).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_ingest.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/iteration11_ingest.xml",
+    "/app/test_reports/pytest/regression.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is now 1787 lines — well past the 700-line guideline. Continues to grow. Recommend splitting the ingestion block (lines ~1225-1540) into backend/routers/ingest.py or similar. Non-blocking.",
+    "commit_ingestion_records dedupes contacts by exact (case-insensitive) name match only. If two CSV rows share a name but differ in phone/GST/email, the later phone/email is silently dropped (existing contact wins). Consider merging phone/email fields into existing contact when they were previously blank, or matching by (name, phone) tuple.",
+    "ingest_document accepts source as a Form field but only allows 'upload' or 'whatsapp' — no validation error is returned for other values, they silently fall back to 'upload'. Minor: log or 400 for clarity.",
+    "GET /api/ingest returns unbounded 50 rows — no pagination or ?limit param. With WhatsApp firehose enabled later this will need pagination.",
+    "Payments EmptyState is shown even under the 'PAYMENTS' tab correctly (data-testid='payments-table' only renders when list non-empty). Tests should not assume the table id exists when list empty — noted.",
+    "IngestCommitInput.records: dict is untyped — no Pydantic validation for the nested shape. Malformed client payloads would rely on _normalise_records defensiveness. Acceptable but worth typing later.",
+    "WhatsApp webhook endpoint /api/webhooks/whatsapp is public (no auth) — appropriate for Meta webhook, but no signature verification stub is in place. When WHATSAPP_TOKEN is added, main agent must add X-Hub-Signature-256 HMAC check.",
+    "Frontend Ingest.js: 'View records' anchor <a href='#records'> is desktop-only (hidden md:flex) but /ingest page already has records tables further down — fine, minor UX nit.",
+    "ai_extract_document / ai_map_spreadsheet catch generic Exception and store first 300 chars of error to ingestion.status='failed' — good defensive UX. Verified with production role gate.",
+    "Enrichment: filed invoices carry ingestion_id — used to correlate; verified in test_commit_document_creates_invoice_and_task.",
+    "nav-ingest is shown to production role too (even though they can't upload) — arguably correct since they can VIEW filed records. UI shows 'View-only' banner which is clear."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_ingest.py (new — 18 tests covering all ingestion endpoints, roles, dedupe, isolation, whatsapp mock)"
+  ],
+  "success_rate": {"backend": "100% (56/56 — 18 new + 38 regression)", "frontend": "100% (all 10 required flows verified)"},
+  "test_credentials": "owner@sharma.com / sales@sharma.com / production@sharma.com / finance@sharma.com — all pw demo1234 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Uploaded /tmp/customers.csv (3 customers: Ravi Traders, Meena Exports, Anand Mills) and /tmp/invoice.png (INV-2045 Kumar Garments ₹28000). Filed both; created contacts + 1 sales_invoice + 1 follow-up task per doc run. Multiple 'FILED' history rows exist from prior tests — expected.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Data Input (ingestion) pipeline verified. Endpoints: POST /api/ingest/document (Gemini vision), POST /api/ingest/csv (Claude spreadsheet mapping), POST /api/ingest/{id}/commit (double-commit -> 400), GET /api/ingest, GET /api/ingest/{id} (404 on missing), GET /api/invoices, GET /api/payments, POST /api/webhooks/whatsapp (returns {status:'not_configured'} while WHATSAPP_TOKEN empty — MOCKED by design). INGEST_ROLES=(owner,sales,finance) — production gets 403 on ingest but can GET invoices/payments. Frontend: /ingest with upload-document-input, upload-csv-input, ingest-review-panel, ingest-file-button, review-contact-{i}, review-invoice-{i}, review-payment-{i}, review-task-{i}, remove-{bucket}-{i}, records-tab-invoices/payments, invoices-table, payments-table (renders only when non-empty), whatsapp-soon-banner. Production role UI shows 'View-only' EmptyState. Contact dedupe is by case-insensitive name match — repeated CSV uploads of the same 3 names will create 0 new contacts but still succeed with filed=True. LLM budget failures return status='failed' with error field — tests handle this via pytest.skip. Regression suite (backend_test.py) still 38/38 green.",
+  "rca of the issue": "N/A — no bugs found."
+}

@@ -16,6 +16,7 @@ import Contacts from "./pages/Contacts";
 import CEOBrief from "./pages/CEOBrief";
 import Notifications from "./pages/Notifications";
 import MyWork from "./pages/MyWork";
+import Ingest from "./pages/Ingest";
 
 function Protected({ children }) {
   const { user, loading } = useAuth();
@@ -43,6 +44,7 @@ function App() {
             <Route path="/inbox" element={<Protected><Inbox /></Protected>} />
             <Route path="/workflows" element={<Protected><Workflows /></Protected>} />
             <Route path="/contacts" element={<Protected><Contacts /></Protected>} />
+            <Route path="/ingest" element={<Protected><Ingest /></Protected>} />
             <Route path="/tasks" element={<Protected><Tasks /></Protected>} />
             <Route path="/brain" element={<Protected><Brain /></Protected>} />
             <Route path="/ask" element={<Protected><AskAI /></Protected>} />

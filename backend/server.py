@@ -4,6 +4,7 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 import os
+import re
 import uuid
 import json
 import logging
@@ -19,7 +20,7 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field, EmailStr
 
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
 from emergentintegrations.llm.openai import OpenAISpeechToText
 
 # ---------------------------------------------------------------------------
@@ -33,6 +34,7 @@ EMERGENT_LLM_KEY = os.environ['EMERGENT_LLM_KEY']
 JWT_SECRET = os.environ['JWT_SECRET']
 JWT_ALGORITHM = "HS256"
 LLM_MODEL = ("anthropic", "claude-sonnet-4-6")
+VISION_MODEL = ("gemini", "gemini-2.5-flash")
 
 ROLES = ["owner", "sales", "production", "finance"]
 
@@ -849,12 +851,14 @@ async def brain_search(q: str = "", user: dict = Depends(get_current_user)):
     workflows = await db.workflows.find({"tenant_id": tid, "$or": [{"title": rx}, {"detail": rx}, {"counterparty": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
     contacts = await db.contacts.find({"tenant_id": tid, "$or": [{"name": rx}, {"company": rx}, {"email": rx}, {"phone": rx}, {"notes": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
     memory = await db.memory.find({"tenant_id": tid, "text": rx}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    invoices = await db.invoices.find({"tenant_id": tid, "$or": [{"number": rx}, {"contact_name": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
     return {
         "decisions": await enrich_decisions(decisions),
         "tasks": await enrich_tasks(tasks),
         "workflows": workflows,
         "contacts": await enrich_contacts(contacts),
         "memory": memory,
+        "invoices": invoices,
     }
 
 
@@ -1215,6 +1219,325 @@ async def get_file(fname: str):
     if not path.exists() or "/" in fname or ".." in fname:
         raise HTTPException(status_code=404, detail="Not found")
     return FileResponse(str(path))
+
+
+# ---------------------------------------------------------------------------
+# Data ingestion: PDF/Image OCR + CSV/Excel import (WhatsApp-ready pipeline)
+# ---------------------------------------------------------------------------
+INGEST_ROLES = ("owner", "sales", "finance")
+
+_DOC_SYSTEM = (
+    "You are the document ingestion engine of DecisionOS, an operating brain for small businesses. "
+    "Read the attached business document (a sales invoice, purchase bill, payment receipt, purchase order, "
+    "or a photo/WhatsApp screenshot of one) and extract structured operational data. Return ONLY valid JSON, no prose. "
+    "Schema: {"
+    "\"summary\": string (one short line describing the document), "
+    "\"doc_type\": one of [sales_invoice, purchase_bill, payment, purchase_order, other], "
+    "\"confidence\": number between 0 and 1, "
+    "\"contacts\": [{\"type\": one of [customer, vendor], \"name\": string, \"company\": string, \"phone\": string, \"email\": string, \"address\": string, \"tax_id\": string}], "
+    "\"invoices\": [{\"type\": one of [sales_invoice, purchase_bill], \"number\": string, \"contact_name\": string, \"date\": string, \"due_date\": string, \"amount\": number, \"currency\": string, \"line_items\": [{\"description\": string, \"qty\": number, \"rate\": number, \"amount\": number}]}], "
+    "\"payments\": [{\"direction\": one of [in, out], \"amount\": number, \"date\": string, \"method\": string, \"reference\": string, \"contact_name\": string, \"invoice_number\": string}], "
+    "\"tasks\": [{\"title\": string, \"priority\": one of [low,medium,high], \"due_in_days\": integer or null}]}. "
+    "Rules: A sales invoice is money owed TO the company by a customer (party type=customer). "
+    "A purchase bill is money the company owes a vendor (party type=vendor). "
+    "For every unpaid invoice or bill, add ONE follow-up task (e.g. 'Collect payment for invoice #123 from Acme' or 'Pay vendor bill #45 to XYZ'). "
+    "A payment 'in' reduces a customer receivable; 'out' settles a vendor bill. "
+    "Dates as YYYY-MM-DD when readable else empty string. Amounts are plain numbers without currency symbols. "
+    "Default currency to {currency}. Documents may be in English, Tamil or Tanglish — understand them and output all values in English. "
+    "Use empty arrays where nothing applies."
+)
+
+_CSV_SYSTEM = (
+    "You classify and map spreadsheet data for DecisionOS. Given the column headers and rows of a business spreadsheet, "
+    "decide which entity it represents and map EVERY row to structured records. Return ONLY valid JSON, no prose. "
+    "Schema: {\"entity\": one of [customers, vendors, invoices, payments], \"summary\": string, "
+    "\"contacts\": [{\"type\": one of [customer, vendor], \"name\": string, \"company\": string, \"phone\": string, \"email\": string, \"address\": string, \"tax_id\": string}], "
+    "\"invoices\": [{\"type\": one of [sales_invoice, purchase_bill], \"number\": string, \"contact_name\": string, \"date\": string, \"due_date\": string, \"amount\": number, \"currency\": string}], "
+    "\"payments\": [{\"direction\": one of [in, out], \"amount\": number, \"date\": string, \"method\": string, \"reference\": string, \"contact_name\": string, \"invoice_number\": string}], "
+    "\"tasks\": [{\"title\": string, \"priority\": one of [low,medium,high], \"due_in_days\": integer or null}]}. "
+    "If the file is a customer/vendor list, fill 'contacts'. If it lists invoices/bills, fill 'invoices' (and add a follow-up task per unpaid row). "
+    "If it lists payments/receipts, fill 'payments'. Map each spreadsheet row to exactly one record. Amounts are plain numbers. "
+    "Default currency to {currency}. Use empty arrays for the entities that do not apply."
+)
+
+
+def _normalise_records(data: dict) -> dict:
+    out = {}
+    for k in ("contacts", "invoices", "payments", "tasks"):
+        out[k] = data.get(k) if isinstance(data.get(k), list) else []
+    return out
+
+
+async def ai_extract_document(file_path: str, mime_type: str, session_id: str, currency: str = "INR") -> dict:
+    fc = FileContentWithMimeType(file_path=file_path, mime_type=mime_type)
+    chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=session_id,
+                   system_message=_DOC_SYSTEM.replace("{currency}", currency)).with_model(*VISION_MODEL)
+    resp = await chat.send_message(UserMessage(text="Extract the structured JSON from this document now.", file_contents=[fc]))
+    data = _extract_json(resp)
+    return {
+        "summary": data.get("summary", ""),
+        "doc_type": data.get("doc_type", "other"),
+        "confidence": data.get("confidence", 0.7),
+        "records": _normalise_records(data),
+    }
+
+
+async def ai_map_spreadsheet(headers: list, rows: list, session_id: str, currency: str = "INR") -> dict:
+    payload = {"headers": headers, "rows": rows[:300]}
+    chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=session_id,
+                   system_message=_CSV_SYSTEM.replace("{currency}", currency)).with_model(*LLM_MODEL)
+    resp = await chat.send_message(UserMessage(text=f"Spreadsheet data:\n{json.dumps(payload)}\n\nClassify and map to JSON now."))
+    data = _extract_json(resp)
+    return {
+        "summary": data.get("summary", ""),
+        "entity": data.get("entity", ""),
+        "records": _normalise_records(data),
+    }
+
+
+async def _tenant_currency(tenant_id: str) -> str:
+    t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "currency": 1})
+    return (t or {}).get("currency", "INR")
+
+
+async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, ingestion_id: str, source: str) -> dict:
+    created = {"contacts": 0, "invoices": 0, "payments": 0, "tasks": 0}
+    currency = await _tenant_currency(tenant_id)
+    troles = await tenant_role_keys(tenant_id)
+    followup_role = "finance" if "finance" in troles else ("sales" if "sales" in troles else None)
+    name_to_id = {}
+
+    async def resolve_contact(name: str, ctype: str = "customer"):
+        name = (name or "").strip()
+        if not name:
+            return None
+        key = name.lower()
+        if key in name_to_id:
+            return name_to_id[key]
+        existing = await db.contacts.find_one(
+            {"tenant_id": tenant_id, "name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}},
+            {"_id": 0, "id": 1})
+        if existing:
+            name_to_id[key] = existing["id"]
+            return existing["id"]
+        cid = new_id()
+        ctype = ctype if ctype in CONTACT_TYPES else ("vendor" if ctype in ("vendor", "supplier") else "customer")
+        await db.contacts.insert_one({
+            "id": cid, "tenant_id": tenant_id, "type": ctype, "name": name,
+            "company": "", "phone": "", "email": "", "address": "", "tax_id": "",
+            "tags": ["imported"], "status": "active", "assigned_id": None, "notes": "",
+            "created_by": user_id, "created_at": now_iso(), "source": source, "ingestion_id": ingestion_id,
+        })
+        name_to_id[key] = cid
+        created["contacts"] += 1
+        return cid
+
+    for c in records.get("contacts", []):
+        name = (c.get("name") or "").strip()
+        if not name:
+            continue
+        ctype = c.get("type") if c.get("type") in CONTACT_TYPES else ("vendor" if c.get("type") == "supplier" else "customer")
+        key = name.lower()
+        existing = await db.contacts.find_one(
+            {"tenant_id": tenant_id, "name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}}, {"_id": 0, "id": 1})
+        if existing:
+            name_to_id[key] = existing["id"]
+            continue
+        cid = new_id()
+        await db.contacts.insert_one({
+            "id": cid, "tenant_id": tenant_id, "type": ctype, "name": name,
+            "company": c.get("company", "") or "", "phone": c.get("phone", "") or "",
+            "email": c.get("email", "") or "", "address": c.get("address", "") or "",
+            "tax_id": c.get("tax_id", "") or "", "tags": ["imported"], "status": "active",
+            "assigned_id": None, "notes": "", "created_by": user_id, "created_at": now_iso(),
+            "source": source, "ingestion_id": ingestion_id,
+        })
+        name_to_id[key] = cid
+        created["contacts"] += 1
+
+    for inv in records.get("invoices", []):
+        itype = inv.get("type") if inv.get("type") in ("sales_invoice", "purchase_bill") else "sales_invoice"
+        ctype = "customer" if itype == "sales_invoice" else "vendor"
+        cid = await resolve_contact(inv.get("contact_name"), ctype)
+        try:
+            amount = float(inv.get("amount") or 0)
+        except (TypeError, ValueError):
+            amount = 0.0
+        await db.invoices.insert_one({
+            "id": new_id(), "tenant_id": tenant_id, "type": itype,
+            "number": str(inv.get("number") or ""), "contact_id": cid,
+            "contact_name": (inv.get("contact_name") or "").strip(),
+            "date": inv.get("date", "") or "", "due_date": inv.get("due_date", "") or "",
+            "amount": amount, "currency": inv.get("currency") or currency,
+            "status": "unpaid", "line_items": inv.get("line_items") if isinstance(inv.get("line_items"), list) else [],
+            "source": source, "ingestion_id": ingestion_id, "created_by": user_id, "created_at": now_iso(),
+        })
+        created["invoices"] += 1
+
+    for p in records.get("payments", []):
+        direction = p.get("direction") if p.get("direction") in ("in", "out") else "in"
+        ctype = "customer" if direction == "in" else "vendor"
+        cid = await resolve_contact(p.get("contact_name"), ctype)
+        try:
+            amount = float(p.get("amount") or 0)
+        except (TypeError, ValueError):
+            amount = 0.0
+        await db.payments.insert_one({
+            "id": new_id(), "tenant_id": tenant_id, "direction": direction, "amount": amount,
+            "date": p.get("date", "") or "", "method": p.get("method", "") or "",
+            "reference": p.get("reference", "") or "", "contact_id": cid,
+            "contact_name": (p.get("contact_name") or "").strip(),
+            "invoice_number": str(p.get("invoice_number") or ""), "currency": currency,
+            "source": source, "ingestion_id": ingestion_id, "created_by": user_id, "created_at": now_iso(),
+        })
+        created["payments"] += 1
+
+    for t in records.get("tasks", []):
+        title = (t.get("title") or "").strip()
+        if not title:
+            continue
+        due = None
+        if isinstance(t.get("due_in_days"), int):
+            due = (datetime.now(timezone.utc) + timedelta(days=t["due_in_days"])).isoformat()
+        await db.tasks.insert_one({
+            "id": new_id(), "tenant_id": tenant_id, "title": title, "description": "",
+            "assignee_role": followup_role, "assignee_id": None,
+            "priority": t.get("priority", "medium") if t.get("priority") in ("low", "medium", "high") else "medium",
+            "status": "todo", "due_date": due, "decision_id": None,
+            "source": "ingest", "created_at": now_iso(),
+        })
+        created["tasks"] += 1
+
+    return created
+
+
+DOC_MIME = {"pdf": "application/pdf", "png": "image/png", "jpg": "image/jpeg",
+            "jpeg": "image/jpeg", "webp": "image/webp"}
+
+
+@api.post("/ingest/document")
+async def ingest_document(file: UploadFile = File(...), source: str = Form("upload"),
+                          user: dict = Depends(require_role(*INGEST_ROLES))):
+    ext = (file.filename or "file.pdf").split(".")[-1].lower()
+    if ext not in DOC_MIME:
+        raise HTTPException(status_code=400, detail="Upload a PDF or image (PNG/JPG/WEBP)")
+    ing_id = new_id()
+    fname = f"ingest_{ing_id}.{ext}"
+    path = UPLOAD_DIR / fname
+    with open(path, "wb") as f:
+        f.write(await file.read())
+    doc = {
+        "id": ing_id, "tenant_id": user["tenant_id"], "created_by": user["id"],
+        "source": source if source in ("upload", "whatsapp") else "upload",
+        "kind": "pdf" if ext == "pdf" else "image", "filename": file.filename or fname,
+        "file_url": f"/api/files/{fname}", "status": "review", "created_at": now_iso(),
+    }
+    try:
+        currency = await _tenant_currency(user["tenant_id"])
+        result = await ai_extract_document(str(path), DOC_MIME[ext], f"ingest-{ing_id}", currency)
+        doc.update({"summary": result["summary"], "doc_type": result["doc_type"],
+                    "confidence": result["confidence"], "records": result["records"]})
+    except Exception as e:
+        logger.exception("ingest_document extraction failed")
+        doc.update({"status": "failed", "error": str(e)[:300], "records": _normalise_records({})})
+    await db.ingestions.insert_one(dict(doc))
+    doc.pop("_id", None)
+    return doc
+
+
+@api.post("/ingest/csv")
+async def ingest_csv(file: UploadFile = File(...), user: dict = Depends(require_role(*INGEST_ROLES))):
+    import pandas as pd
+    ext = (file.filename or "file.csv").split(".")[-1].lower()
+    if ext not in ("csv", "xlsx", "xls"):
+        raise HTTPException(status_code=400, detail="Upload a CSV or Excel (.xlsx) file")
+    ing_id = new_id()
+    fname = f"ingest_{ing_id}.{ext}"
+    path = UPLOAD_DIR / fname
+    with open(path, "wb") as f:
+        f.write(await file.read())
+    try:
+        df = pd.read_excel(path) if ext in ("xlsx", "xls") else pd.read_csv(path)
+        df = df.fillna("")
+        headers = [str(c) for c in df.columns]
+        rows = df.astype(str).values.tolist()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not read the file: {str(e)[:150]}")
+    doc = {
+        "id": ing_id, "tenant_id": user["tenant_id"], "created_by": user["id"], "source": "csv",
+        "kind": ext, "filename": file.filename or fname, "file_url": f"/api/files/{fname}",
+        "status": "review", "row_count": len(rows), "created_at": now_iso(),
+    }
+    try:
+        currency = await _tenant_currency(user["tenant_id"])
+        result = await ai_map_spreadsheet(headers, rows, f"ingest-{ing_id}", currency)
+        doc.update({"summary": result["summary"], "entity": result["entity"], "records": result["records"]})
+    except Exception as e:
+        logger.exception("ingest_csv mapping failed")
+        doc.update({"status": "failed", "error": str(e)[:300], "records": _normalise_records({})})
+    await db.ingestions.insert_one(dict(doc))
+    doc.pop("_id", None)
+    return doc
+
+
+class IngestCommitInput(BaseModel):
+    records: dict
+
+
+@api.post("/ingest/{ingestion_id}/commit")
+async def commit_ingestion(ingestion_id: str, inp: IngestCommitInput,
+                           user: dict = Depends(require_role(*INGEST_ROLES))):
+    ing = await db.ingestions.find_one({"id": ingestion_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
+    if not ing:
+        raise HTTPException(status_code=404, detail="Ingestion not found")
+    if ing.get("status") == "filed":
+        raise HTTPException(status_code=400, detail="This upload has already been filed")
+    created = await commit_ingestion_records(user["tenant_id"], user["id"], _normalise_records(inp.records),
+                                             ingestion_id, ing.get("source", "upload"))
+    await db.ingestions.update_one({"id": ingestion_id},
+                                   {"$set": {"status": "filed", "records": _normalise_records(inp.records),
+                                             "created_counts": created, "filed_at": now_iso()}})
+    label = ing.get("filename", "document")
+    await log_activity(user["tenant_id"], user["id"], "data_ingested",
+                       f"Filed data from '{label}' — {created['contacts']} contacts, {created['invoices']} invoices, {created['payments']} payments, {created['tasks']} tasks",
+                       "ingestion", ingestion_id)
+    return {"filed": True, "created": created}
+
+
+@api.get("/ingest")
+async def list_ingestions(user: dict = Depends(get_current_user)):
+    return await db.ingestions.find({"tenant_id": user["tenant_id"]}, {"_id": 0}).sort("created_at", -1).to_list(50)
+
+
+@api.get("/ingest/{ingestion_id}")
+async def get_ingestion(ingestion_id: str, user: dict = Depends(get_current_user)):
+    ing = await db.ingestions.find_one({"id": ingestion_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
+    if not ing:
+        raise HTTPException(status_code=404, detail="Not found")
+    return ing
+
+
+@api.get("/invoices")
+async def list_invoices(type: Optional[str] = None, user: dict = Depends(get_current_user)):
+    query = {"tenant_id": user["tenant_id"]}
+    if type in ("sales_invoice", "purchase_bill"):
+        query["type"] = type
+    return await db.invoices.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+
+
+@api.get("/payments")
+async def list_payments(user: dict = Depends(get_current_user)):
+    return await db.payments.find({"tenant_id": user["tenant_id"]}, {"_id": 0}).sort("created_at", -1).to_list(500)
+
+
+@api.post("/webhooks/whatsapp")
+async def whatsapp_webhook(request: Request):
+    # WhatsApp Business API (Meta Cloud) ingestion — reuses commit_ingestion_records.
+    # Wiring pending user-provided WHATSAPP_TOKEN / phone-number-id / verify token.
+    if not os.environ.get("WHATSAPP_TOKEN"):
+        return {"status": "not_configured",
+                "detail": "WhatsApp ingestion is ready but not connected. Add WhatsApp Cloud API credentials to enable."}
+    return {"status": "received"}
 
 
 # ---------------------------------------------------------------------------

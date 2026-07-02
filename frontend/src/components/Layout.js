@@ -26,12 +26,14 @@ import {
   Sun,
   Briefcase,
   List as ListIcon,
+  FileArrowUp,
 } from "@phosphor-icons/react";
 
 const NAV = [
   { to: "/", label: "Daily Brief", icon: Gauge, testid: "nav-dashboard" },
   { to: "/brief", label: "CEO Brief", icon: Sun, testid: "nav-ceo-brief" },
   { to: "/inbox", label: "Owner Inbox", icon: Microphone, testid: "nav-inbox" },
+  { to: "/ingest", label: "Data Input", icon: FileArrowUp, testid: "nav-ingest" },
   { to: "/workflows", label: "Workflows", icon: Kanban, testid: "nav-workflows" },
   { to: "/contacts", label: "People", icon: AddressBook, testid: "nav-contacts" },
   { to: "/tasks", label: "Tasks", icon: CheckSquare, testid: "nav-tasks" },

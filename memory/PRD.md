@@ -36,7 +36,12 @@ Multi-tenant isolation, role-based access, voice+text capture, AI structuring wi
 - **Premium 6-step onboarding** ("Digital Executive Office"): Step1 company+account+GST+branches, Step2 business scale, Step3 current software, Step4 connect (Excel live via ingestion; Tally/Zoho coming-soon), Step5 invite employees by mobile (pending invites), Step6 animated "AI learns business". Workspace is created at end of Step3 so Steps 4-5 run authenticated. Tenant now stores gst/branches/business_scale/current_software/invited_employees. Endpoints: `GET/POST /api/invites`.
 - Tested: iterations 11-14 — backend 62/62 (+regression), frontend E2E across owner/finance/sales/production. No product bugs.
 
-## Access Control (2026-07-02)
+## WhatsApp Cloud API ingestion (2026-07-02)
+- Live Meta WhatsApp Business Cloud API webhook wired into the ingestion pipeline. `GET /api/webhooks/whatsapp` (verify handshake) + `POST /api/webhooks/whatsapp` (X-Hub-Signature-256 validated when WA_APP_SECRET set; processing in BackgroundTasks, returns 200 immediately).
+- Incoming image/PDF → download media via Graph API (`v21.0`) → `ai_extract_document` → auto-`commit_ingestion_records` → ingestion + inbox item (source=whatsapp) → confirmation reply to sender. Text messages → structured via `process_voice_note`.
+- Tenant resolution: sender phone matched against `tenants.invited_employees`, else `WA_TENANT_ID` env. Owner user used as created_by.
+- Env (backend/.env): WA_ACCESS_TOKEN, WA_PHONE_NUMBER_ID, WA_VERIFY_TOKEN, WA_APP_SECRET, WA_TENANT_ID, GRAPH_API_VERSION. Empty until user provides → endpoint returns not_configured.
+- Verified: GET verify returns challenge; POST text message created a whatsapp-sourced note structured into inbox. Media path reuses already-tested ingestion pipeline (not exercised live pending real creds).
 - **Module-level per-employee permissions**: 9 access keys — inbox, data_input, people, finance, workflows, tasks, brain, ask, team_manage. Team "Add member" and per-member "Access" dialogs let the owner pick exactly what each employee can open/use (role-select pre-fills sensible defaults, editable). Endpoints: `POST /api/users` (permissions), `PATCH /api/users/{id}` (role+permissions), gated by `team_manage`.
 - Enforcement: owner bypass; users with no `permissions` fall back to ROLE_DEFAULT_PERMS (sales→+data_input+people; finance→+data_input+finance; others→base). Backend `require_perm` guards Finance (`/invoices`,`/payments`,`/contacts/{id}/profile`, Ask-AI money), Data Input (`/ingest/*`), Team management (`/users`,`/invites`). Frontend hides nav items (Layout) and page actions (Ingest/Contacts/Inbox/ContactProfile) via `lib/perms.js` `hasPerm`.
 

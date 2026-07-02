@@ -7,14 +7,17 @@ import os
 import re
 import uuid
 import json
+import hmac
+import hashlib
 import logging
 import asyncio
+import httpx
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 
 import bcrypt
 import jwt
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, UploadFile, File, Form, BackgroundTasks
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, UploadFile, File, Form, BackgroundTasks, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -1817,14 +1820,139 @@ async def contact_profile(contact_id: str, user: dict = Depends(require_perm("fi
     }
 
 
+@api.get("/webhooks/whatsapp")
+async def whatsapp_verify(request: Request):
+    # Meta webhook verification handshake
+    params = request.query_params
+    if params.get("hub.mode") == "subscribe" and params.get("hub.verify_token") == os.environ.get("WA_VERIFY_TOKEN"):
+        return Response(content=params.get("hub.challenge", ""), media_type="text/plain")
+    raise HTTPException(status_code=403, detail="Verification failed")
+
+
 @api.post("/webhooks/whatsapp")
-async def whatsapp_webhook(request: Request):
-    # WhatsApp Business API (Meta Cloud) ingestion — reuses commit_ingestion_records.
-    # Wiring pending user-provided WHATSAPP_TOKEN / phone-number-id / verify token.
-    if not os.environ.get("WHATSAPP_TOKEN"):
+async def whatsapp_webhook(request: Request, background: BackgroundTasks):
+    if not os.environ.get("WA_ACCESS_TOKEN"):
         return {"status": "not_configured",
-                "detail": "WhatsApp ingestion is ready but not connected. Add WhatsApp Cloud API credentials to enable."}
-    return {"status": "received"}
+                "detail": "WhatsApp ingestion is ready but not connected. Add WA_ACCESS_TOKEN / WA_PHONE_NUMBER_ID / WA_VERIFY_TOKEN to enable."}
+    raw = await request.body()
+    app_secret = os.environ.get("WA_APP_SECRET")
+    if app_secret:
+        sig = request.headers.get("X-Hub-Signature-256", "")
+        expected = "sha256=" + hmac.new(app_secret.encode(), raw, hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected, sig):
+            raise HTTPException(status_code=403, detail="Invalid signature")
+    try:
+        body = json.loads(raw)
+    except Exception:
+        return {"status": "ok"}
+    for entry in body.get("entry", []):
+        for change in entry.get("changes", []):
+            value = change.get("value", {})
+            for message in value.get("messages", []):
+                background.add_task(process_whatsapp_message, message)
+    return {"status": "ok"}
+
+
+def _norm_phone(p: str) -> str:
+    return re.sub(r"\D", "", p or "")[-10:]
+
+
+async def resolve_wa_tenant(sender: str):
+    sp = _norm_phone(sender)
+    if sp:
+        async for t in db.tenants.find({"invited_employees.0": {"$exists": True}}, {"_id": 0, "id": 1, "invited_employees": 1}):
+            for inv in t.get("invited_employees", []):
+                if _norm_phone(inv.get("phone")) == sp:
+                    return t["id"]
+    return os.environ.get("WA_TENANT_ID") or None
+
+
+async def download_wa_media(media_id: str) -> bytes:
+    token = os.environ.get("WA_ACCESS_TOKEN")
+    ver = os.environ.get("GRAPH_API_VERSION", "v21.0")
+    headers = {"Authorization": f"Bearer {token}"}
+    async with httpx.AsyncClient(timeout=60) as c:
+        meta = (await c.get(f"https://graph.facebook.com/{ver}/{media_id}", headers=headers)).json()
+        url = meta.get("url")
+        if not url:
+            raise Exception("media url unavailable")
+        return (await c.get(url, headers=headers)).content
+
+
+async def send_wa_reply(to_phone: str, text: str):
+    token = os.environ.get("WA_ACCESS_TOKEN")
+    pnid = os.environ.get("WA_PHONE_NUMBER_ID")
+    ver = os.environ.get("GRAPH_API_VERSION", "v21.0")
+    if not (token and pnid):
+        return
+    try:
+        async with httpx.AsyncClient(timeout=30) as c:
+            await c.post(f"https://graph.facebook.com/{ver}/{pnid}/messages",
+                         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+                         json={"messaging_product": "whatsapp", "to": to_phone, "type": "text", "text": {"body": text}})
+    except Exception:
+        logger.exception("WhatsApp reply failed")
+
+
+WA_MIME_EXT = {"application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
+
+
+async def process_whatsapp_message(message: dict):
+    sender = message.get("from", "")
+    mtype = message.get("type")
+    try:
+        tenant_id = await resolve_wa_tenant(sender)
+        if not tenant_id:
+            logger.info(f"[WHATSAPP] no tenant for {sender}; ignoring")
+            return
+        owner = await db.users.find_one({"tenant_id": tenant_id, "role": "owner"}, {"_id": 0, "id": 1})
+        owner_id = owner["id"] if owner else "whatsapp"
+
+        if mtype in ("image", "document"):
+            media = message[mtype]
+            mime = media.get("mime_type", "application/pdf" if mtype == "document" else "image/jpeg").split(";")[0]
+            if mime not in WA_MIME_EXT:
+                await send_wa_reply(sender, "Sorry, I can only read PDF or image invoices/receipts.")
+                return
+            ext = WA_MIME_EXT[mime]
+            data = await download_wa_media(media["id"])
+            ing_id = new_id()
+            fname = f"ingest_{ing_id}.{ext}"
+            with open(UPLOAD_DIR / fname, "wb") as f:
+                f.write(data)
+            currency = await _tenant_currency(tenant_id)
+            result = await ai_extract_document(str(UPLOAD_DIR / fname), mime, f"ingest-{ing_id}", currency)
+            doc = {
+                "id": ing_id, "tenant_id": tenant_id, "created_by": owner_id, "source": "whatsapp",
+                "kind": "pdf" if ext == "pdf" else "image", "filename": media.get("filename") or fname,
+                "file_url": f"/api/files/{fname}", "status": "review", "created_at": now_iso(),
+                "summary": result["summary"], "doc_type": result["doc_type"],
+                "confidence": result["confidence"], "records": result["records"],
+                "wa_from": sender,
+            }
+            created = await commit_ingestion_records(tenant_id, owner_id, result["records"], ing_id, "whatsapp")
+            doc.update({"status": "filed", "created_counts": created, "filed_at": now_iso()})
+            await db.ingestions.insert_one(dict(doc))
+            inbox_id = await add_inbox_item(tenant_id, owner_id, "whatsapp", _classify_ingestion(doc),
+                                            doc["summary"] or doc["filename"], doc["filename"],
+                                            "ingestion", ing_id, status="done")
+            await db.ingestions.update_one({"id": ing_id}, {"$set": {"inbox_id": inbox_id}})
+            await send_wa_reply(sender, f"✅ Filed to DecisionOS: {doc['summary'] or doc['filename']}\n"
+                                        f"{created['invoices']} invoice(s), {created['payments']} payment(s), {created['contacts']} contact(s), {created['tasks']} task(s).")
+
+        elif mtype == "text":
+            text = message["text"]["body"]
+            note_id = new_id()
+            await db.voice_notes.insert_one({
+                "id": note_id, "tenant_id": tenant_id, "created_by": owner_id, "kind": "text",
+                "audio_path": None, "transcript": text, "language": "auto",
+                "status": "queued", "source": "whatsapp", "created_at": now_iso(),
+            })
+            await process_voice_note(note_id)
+            await send_wa_reply(sender, "✅ Got it — logged to DecisionOS and structured into your inbox.")
+    except Exception as e:
+        logger.exception("process_whatsapp_message failed")
+        await send_wa_reply(sender, "Sorry, I couldn't process that. Please try again.")
 
 
 # ---------------------------------------------------------------------------

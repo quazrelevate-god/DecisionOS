@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api, { formatApiError } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { hasPerm } from "../lib/perms";
 import { PageHeader, Chip, EmptyState } from "../components/common";
 import { money } from "../lib/format";
 import { toast } from "sonner";
@@ -181,7 +182,7 @@ export default function Ingest() {
   const [uploading, setUploading] = useState(false);
   const [active, setActive] = useState(null);
   const [tab, setTab] = useState("invoices");
-  const canIngest = ["owner", "sales", "finance"].includes(user?.role);
+  const canIngest = hasPerm(user, "data_input");
 
   const { data: history } = useQuery({ queryKey: ["ingestions"], queryFn: () => api.get("/ingest").then((r) => r.data) });
   const { data: invoices } = useQuery({ queryKey: ["invoices"], queryFn: () => api.get("/invoices").then((r) => r.data) });

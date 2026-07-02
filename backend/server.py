@@ -102,6 +102,45 @@ def require_role(*roles):
     return checker
 
 
+# ---------------------------------------------------------------------------
+# Module-level access permissions
+# ---------------------------------------------------------------------------
+PERMISSION_KEYS = ["inbox", "data_input", "people", "finance", "workflows", "tasks", "brain", "ask", "team_manage"]
+_BASE_PERMS = {"inbox", "people", "workflows", "tasks", "brain", "ask"}
+ROLE_DEFAULT_PERMS = {
+    "sales": _BASE_PERMS | {"data_input"},
+    "finance": _BASE_PERMS | {"data_input", "finance"},
+}
+
+
+def user_perms(user: dict) -> set:
+    if user.get("role") == "owner":
+        return set(PERMISSION_KEYS)
+    p = user.get("permissions")
+    if isinstance(p, list) and len(p) > 0:
+        return {k for k in p if k in PERMISSION_KEYS}
+    return set(ROLE_DEFAULT_PERMS.get(user.get("role"), _BASE_PERMS))
+
+
+def clean_perms(perms) -> list:
+    if not isinstance(perms, list):
+        return []
+    seen, out = set(), []
+    for k in perms:
+        if k in PERMISSION_KEYS and k not in seen:
+            seen.add(k)
+            out.append(k)
+    return out
+
+
+def require_perm(perm):
+    async def checker(user: dict = Depends(get_current_user)) -> dict:
+        if perm not in user_perms(user):
+            raise HTTPException(status_code=403, detail="You don't have access to this feature")
+        return user
+    return checker
+
+
 DEFAULT_ROLES = [
     {"key": "sales", "label": "Sales"},
     {"key": "operations", "label": "Operations"},
@@ -167,6 +206,12 @@ class UserCreateInput(BaseModel):
     email: EmailStr
     password: str = Field(min_length=6)
     role: str
+    permissions: Optional[List[str]] = None
+
+
+class UserUpdateInput(BaseModel):
+    role: Optional[str] = None
+    permissions: Optional[List[str]] = None
 
 
 class TextNoteInput(BaseModel):
@@ -542,7 +587,7 @@ async def list_invites(user: dict = Depends(get_current_user)):
 
 
 @api.post("/invites")
-async def add_invites(inp: InviteInput, user: dict = Depends(require_role("owner"))):
+async def add_invites(inp: InviteInput, user: dict = Depends(require_perm("team_manage"))):
     clean = []
     seen = set()
     for p in inp.phones:
@@ -569,7 +614,7 @@ async def list_users(user: dict = Depends(get_current_user)):
 
 
 @api.post("/users")
-async def create_user(inp: UserCreateInput, user: dict = Depends(require_role("owner"))):
+async def create_user(inp: UserCreateInput, user: dict = Depends(require_perm("team_manage"))):
     if inp.role not in await tenant_role_keys(user["tenant_id"]):
         raise HTTPException(status_code=400, detail="Invalid role")
     email = inp.email.lower()
@@ -578,10 +623,30 @@ async def create_user(inp: UserCreateInput, user: dict = Depends(require_role("o
     uid = new_id()
     await db.users.insert_one({
         "id": uid, "tenant_id": user["tenant_id"], "name": inp.name, "email": email,
-        "password_hash": hash_password(inp.password), "role": inp.role, "created_at": now_iso(),
+        "password_hash": hash_password(inp.password), "role": inp.role,
+        "permissions": clean_perms(inp.permissions), "created_at": now_iso(),
     })
     await log_activity(user["tenant_id"], user["id"], "user_added", f"Added {inp.name} as {inp.role}")
     return await db.users.find_one({"id": uid}, {"_id": 0, "password_hash": 0})
+
+
+@api.patch("/users/{user_id}")
+async def update_user(user_id: str, inp: UserUpdateInput, user: dict = Depends(require_perm("team_manage"))):
+    target = await db.users.find_one({"id": user_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
+    if not target:
+        raise HTTPException(status_code=404, detail="Member not found")
+    if target["role"] == "owner":
+        raise HTTPException(status_code=400, detail="Owner access cannot be changed")
+    updates = {}
+    if inp.role is not None:
+        if inp.role not in await tenant_role_keys(user["tenant_id"]) or inp.role == "owner":
+            raise HTTPException(status_code=400, detail="Invalid role")
+        updates["role"] = inp.role
+    if inp.permissions is not None:
+        updates["permissions"] = clean_perms(inp.permissions)
+    if updates:
+        await db.users.update_one({"id": user_id}, {"$set": updates})
+    return await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
 
 
 # ---------------------------------------------------------------------------
@@ -955,7 +1020,7 @@ async def ask_ai(inp: AskInput, user: dict = Depends(get_current_user)):
         "company_memory": [m["text"] for m in memory],
         "today": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
     }
-    money_access = user["role"] in ("owner", "finance")
+    money_access = "finance" in user_perms(user)
     if money_access:
         invs = await db.invoices.find({"tenant_id": tid}, {"_id": 0, "type": 1, "number": 1, "contact_name": 1, "amount": 1, "currency": 1, "status": 1, "date": 1, "due_date": 1, "line_items": 1}).sort("created_at", -1).to_list(300)
         pays = await db.payments.find({"tenant_id": tid}, {"_id": 0, "direction": 1, "amount": 1, "contact_name": 1, "date": 1, "method": 1, "invoice_number": 1}).sort("created_at", -1).to_list(300)
@@ -1530,7 +1595,7 @@ def _classify_ingestion(doc: dict) -> str:
 
 @api.post("/ingest/document")
 async def ingest_document(file: UploadFile = File(...), source: str = Form("upload"),
-                          user: dict = Depends(require_role(*INGEST_ROLES))):
+                          user: dict = Depends(require_perm("data_input"))):
     ext = (file.filename or "file.pdf").split(".")[-1].lower()
     if ext not in DOC_MIME:
         raise HTTPException(status_code=400, detail="Upload a PDF or image (PNG/JPG/WEBP)")
@@ -1565,7 +1630,7 @@ async def ingest_document(file: UploadFile = File(...), source: str = Form("uplo
 
 
 @api.post("/ingest/csv")
-async def ingest_csv(file: UploadFile = File(...), user: dict = Depends(require_role(*INGEST_ROLES))):
+async def ingest_csv(file: UploadFile = File(...), user: dict = Depends(require_perm("data_input"))):
     import pandas as pd
     ext = (file.filename or "file.csv").split(".")[-1].lower()
     if ext not in ("csv", "xlsx", "xls"):
@@ -1611,7 +1676,7 @@ class IngestCommitInput(BaseModel):
 
 @api.post("/ingest/{ingestion_id}/commit")
 async def commit_ingestion(ingestion_id: str, inp: IngestCommitInput,
-                           user: dict = Depends(require_role(*INGEST_ROLES))):
+                           user: dict = Depends(require_perm("data_input"))):
     ing = await db.ingestions.find_one({"id": ingestion_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
     if not ing:
         raise HTTPException(status_code=404, detail="Ingestion not found")
@@ -1645,7 +1710,7 @@ async def get_ingestion(ingestion_id: str, user: dict = Depends(get_current_user
 
 
 @api.get("/invoices")
-async def list_invoices(type: Optional[str] = None, user: dict = Depends(get_current_user)):
+async def list_invoices(type: Optional[str] = None, user: dict = Depends(require_perm("finance"))):
     query = {"tenant_id": user["tenant_id"]}
     if type in ("sales_invoice", "purchase_bill"):
         query["type"] = type
@@ -1653,7 +1718,7 @@ async def list_invoices(type: Optional[str] = None, user: dict = Depends(get_cur
 
 
 @api.get("/payments")
-async def list_payments(user: dict = Depends(get_current_user)):
+async def list_payments(user: dict = Depends(require_perm("finance"))):
     return await db.payments.find({"tenant_id": user["tenant_id"]}, {"_id": 0}).sort("created_at", -1).to_list(500)
 
 
@@ -1698,7 +1763,7 @@ async def set_inbox_status(item_id: str, inp: InboxStatusInput, user: dict = Dep
 # 360° Customer / Supplier profile  (Owner + Finance only)
 # ---------------------------------------------------------------------------
 @api.get("/contacts/{contact_id}/profile")
-async def contact_profile(contact_id: str, user: dict = Depends(require_role("owner", "finance"))):
+async def contact_profile(contact_id: str, user: dict = Depends(require_perm("finance"))):
     tid = user["tenant_id"]
     c = await db.contacts.find_one({"id": contact_id, "tenant_id": tid}, {"_id": 0})
     if not c:

@@ -1,0 +1,43 @@
+{
+  "summary": "Iteration 14 — Module-level per-employee ACCESS CONTROL fully verified end-to-end. Backend: 24/24 new (test_iteration14.py: limited-user enforcement x10 incl. Ask AI money restriction, role-default fallback x5 for finance/sales/production demo users, owner-bypass x4, PATCH /users/{id} x4 incl. owner-protected + invalid-role + team_manage gate, POST /users cleans unknown perm keys) + 38/38 regression (backend_test.py) = 62/62 green. Frontend: owner sees ALL nav items incl Team; Team dialog renders 9 permission chips (perm-inbox/data_input/people/finance/workflows/tasks/brain/ask/team_manage); sales-role select pre-fills expected defaults (inbox/data_input/people/workflows/tasks/brain/ask ON, finance+team_manage OFF); toggle works; edit-access-<id> opens dialog in edit mode with NO name/email/password fields, prefilled with member's current perms; save triggers PATCH and updates member-access-count-<id> label 2→3. Limited user (inbox+tasks+brain) nav gating correct: no nav-ingest / nav-contacts / nav-ask / nav-workflows / nav-team, but Inbox/Tasks/Brain/Daily Brief/CEO Brief/My Work visible. Page gating: /ingest shows 'View-only' EmptyState (no upload zones), Inbox 'inbox-upload-button' hidden (count=0), /contacts hides all view-profile-<id> 360° buttons (count=0), direct /contacts/:id renders 'RESTRICTED — The 360° profile is available to Owner and Finance only.'",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration14.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/iteration14.xml",
+    "/app/test_reports/pytest/regression14.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is now ~2010 lines — same guideline breach noted since iter12/iter13. Iter14 added PERMISSION_KEYS/ROLE_DEFAULT_PERMS/user_perms/clean_perms/require_perm just above line 100; consider extracting to backend/permissions.py so business modules can import cleanly and to keep server.py under 700 LOC.",
+    "Frontend PERMISSION_KEYS/ROLE_DEFAULT_PERMS in /app/frontend/src/lib/perms.js are duplicated from backend server.py — they can drift silently. Consider exposing a `/api/perms/meta` endpoint or generating perms.js from a shared JSON so backend is the single source of truth.",
+    "clean_perms() preserves insertion order but PATCH stores whatever order the client sent — tests use set() comparison. If UI ever depends on ordering (e.g. reporting), sort the list before storing for determinism.",
+    "In user_perms(), an empty `permissions: []` list falls through to ROLE_DEFAULT_PERMS (because of `len(p) > 0` check). That means owners cannot explicitly revoke ALL access without deleting a member — save with 0 checkboxes silently reverts to role default. Consider treating empty list as 'no perms at all' or forcing at least one perm at save time in the UI.",
+    "Inbox 'inbox-upload-button' gating relies on hasPerm(user,'data_input'); the Ingest route itself is not wrapped in a ProtectedRoute, so a determined URL-typist reaches /ingest and sees the View-only EmptyState — fine, but the /voice-notes and /voice-notes/text endpoints are still gated by require_role('owner') (not require_perm), which mixes the two authz models. Consider migrating those to require_perm('data_input') for consistency (owner is auto-authorized via user_perms bypass).",
+    "The Ask AI money-restriction message is achieved by injecting different system-prompt text based on money_access — the LLM may occasionally still leak partial numbers if any slipped into decisions/tasks context. Adding explicit redaction of amount fields in the non-finance context would be safer.",
+    "Team.js MemberDialog uses button-styled chips (data-testid=perm-*) instead of native <input type=checkbox>. That's fine for a11y since role=button + toggle state is announced, but adding `aria-pressed={on}` would improve screen-reader UX.",
+    "MemberDialog#save: when create fails with a validation error, form state is preserved — good; but when API returns 400 (duplicate email etc), toast shows raw formatApiError result — no field-level highlight. Minor UX polish.",
+    "In Layout.js the mobile bottom nav (BOTTOM_NAV) doesn't gate 'Brief' or 'Work' — those are always shown. Correct per spec (My Work/Daily Brief/CEO Brief remain for everyone), but note that /my-work is not in the perm-gated NAV either; if 'My Work' should require an assignment perm, add one."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration14.py (new — 24 tests for iter14 module-level ACL)"
+  ],
+  "success_rate": {
+    "backend": "100% (62/62 — 24 new iter14 + 38 regression)",
+    "frontend": "100% (all 4 spec scenarios: owner nav, add-user dialog + 9 checkboxes + sales defaults + toggle, edit-access dialog + PATCH persistence + member-access-count update, limited-user nav gating + Ingest View-only + Inbox upload hidden + Contacts 360° hidden + direct profile Restricted)"
+  },
+  "test_credentials": "owner@sharma.com, sales@sharma.com, production@sharma.com, finance@sharma.com — all pw demo1234 (per /app/memory/test_credentials.md). Limited test users created dynamically via POST /api/users with @example.com domain.",
+  "seed_data_creation": "Iter14 tests created several TEST_ users in the Sharma tenant: TEST_limited_<hex>, TEST_cleanperms_<hex>, TEST_UILimited (via UI). All members with 'TEST_' prefix and unique random emails so re-runs don't collide. No teardown implemented (backend has no DELETE /api/users endpoint); these members will accumulate — recommend adding a cleanup route or DB-level TEST_ prefix sweeper.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 14 fully green. Endpoints newly exercised: POST /api/users with permissions list (owner-only via require_perm('team_manage'); cleans unknown keys via clean_perms), PATCH /api/users/{id} (owner cannot patch owner user → 400; invalid role → 400; non-team_manage user → 403), GET /api/invoices + /api/payments + /api/contacts/{id}/profile (require_perm('finance')), POST /api/ingest/csv + /api/ingest/document (require_perm('data_input')), POST /api/invites (require_perm('team_manage')), POST /api/ask (money_access = 'finance' in user_perms(user) — restricted response string checked). Role-default fallback path verified for demo users without a permissions field. Frontend testids exercised: add-user-button, member-name/email/password-input, member-role-select, permission-list, perm-{inbox,data_input,people,finance,workflows,tasks,brain,ask,team_manage} (on-state = className contains 'bg-brand-ink'), member-save-submit, edit-access-<id>, member-access-count-<id>, nav-{inbox,ingest,contacts,workflows,tasks,brain,ask,team,dashboard,my-work,ceo-brief}, view-profile-<id>, inbox-upload-button, and page bodies checked for 'View-only' and 'Restricted'. Run: `python -m pytest backend/tests/test_iteration14.py backend/tests/backend_test.py -o addopts=''` (62 tests, ~50s). Note: localStorage token key is 'dos_token' (not 'token').",
+  "rca of the issue": "N/A — no bugs found."
+}

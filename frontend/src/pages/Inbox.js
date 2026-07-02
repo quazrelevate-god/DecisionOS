@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { hasPerm } from "../lib/perms";
 import { PageHeader, Chip, EmptyState } from "../components/common";
 import { money } from "../lib/format";
 import { toast } from "sonner";
@@ -51,7 +52,7 @@ export default function Inbox() {
   const mediaRef = useRef(null);
   const chunksRef = useRef([]);
   const elapsed = useElapsed(recording);
-  const canUpload = ["owner", "sales", "finance"].includes(user?.role);
+  const canUpload = hasPerm(user, "data_input");
 
   const notesQ = useQuery({
     queryKey: ["voice-notes"],

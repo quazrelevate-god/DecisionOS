@@ -2,6 +2,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { hasPerm } from "../lib/perms";
 import { Chip, EmptyState } from "../components/common";
 import { money } from "../lib/format";
 import {
@@ -42,7 +43,7 @@ export default function ContactProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const canView = ["owner", "finance"].includes(user?.role);
+  const canView = hasPerm(user, "finance");
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["contact-profile", id],

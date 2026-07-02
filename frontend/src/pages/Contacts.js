@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { hasPerm } from "../lib/perms";
 import { PageHeader, Chip, EmptyState } from "../components/common";
 import { toast } from "sonner";
 import { Plus, MagnifyingGlass, PencilSimple, Trash, Phone, EnvelopeSimple, MapPin, Warning, Eye } from "@phosphor-icons/react";
@@ -130,7 +131,7 @@ export default function Contacts() {
   const [status, setStatus] = useState("");
   const [q, setQ] = useState("");
   const canManage = user?.role === "owner" || user?.role === "sales";
-  const can360 = user?.role === "owner" || user?.role === "finance";
+  const can360 = hasPerm(user, "finance");
 
   const { data } = useQuery({
     queryKey: ["contacts", type, status, q],

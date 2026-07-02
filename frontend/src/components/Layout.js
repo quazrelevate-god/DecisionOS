@@ -2,6 +2,7 @@ import { useState } from "react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
+import { hasPerm } from "../lib/perms";
 import { toast } from "sonner";
 import api from "../lib/api";
 import {
@@ -31,26 +32,26 @@ import {
 } from "@phosphor-icons/react";
 
 const NAV = [
-  { to: "/", label: "Inbox", icon: Tray, testid: "nav-inbox" },
+  { to: "/", label: "Inbox", icon: Tray, testid: "nav-inbox", perm: "inbox" },
   { to: "/dashboard", label: "Daily Brief", icon: Gauge, testid: "nav-dashboard" },
   { to: "/brief", label: "CEO Brief", icon: Sun, testid: "nav-ceo-brief" },
-  { to: "/ingest", label: "Data Input", icon: FileArrowUp, testid: "nav-ingest" },
-  { to: "/workflows", label: "Workflows", icon: Kanban, testid: "nav-workflows" },
-  { to: "/contacts", label: "People", icon: AddressBook, testid: "nav-contacts" },
-  { to: "/tasks", label: "Tasks", icon: CheckSquare, testid: "nav-tasks" },
+  { to: "/ingest", label: "Data Input", icon: FileArrowUp, testid: "nav-ingest", perm: "data_input" },
+  { to: "/workflows", label: "Workflows", icon: Kanban, testid: "nav-workflows", perm: "workflows" },
+  { to: "/contacts", label: "People", icon: AddressBook, testid: "nav-contacts", perm: "people" },
+  { to: "/tasks", label: "Tasks", icon: CheckSquare, testid: "nav-tasks", perm: "tasks" },
   { to: "/my-work", label: "My Work", icon: Briefcase, testid: "nav-my-work" },
-  { to: "/brain", label: "Company Brain", icon: BrainIcon, testid: "nav-brain" },
-  { to: "/ask", label: "Ask AI", icon: ChatCircleText, testid: "nav-ask" },
-  { to: "/team", label: "Team", icon: UsersThree, testid: "nav-team" },
+  { to: "/brain", label: "Company Brain", icon: BrainIcon, testid: "nav-brain", perm: "brain" },
+  { to: "/ask", label: "Ask AI", icon: ChatCircleText, testid: "nav-ask", perm: "ask" },
+  { to: "/team", label: "Team", icon: UsersThree, testid: "nav-team", perm: "team_manage" },
 ];
 
 // Primary items for the mobile bottom tab bar
 const BOTTOM_NAV = [
-  { to: "/", label: "Inbox", icon: Tray },
-  { to: "/ingest", label: "Data", icon: FileArrowUp },
+  { to: "/", label: "Inbox", icon: Tray, perm: "inbox" },
+  { to: "/ingest", label: "Data", icon: FileArrowUp, perm: "data_input" },
   { to: "/brief", label: "Brief", icon: Sun },
   { to: "/my-work", label: "Work", icon: Briefcase },
-  { to: "/ask", label: "Ask", icon: ChatCircleText },
+  { to: "/ask", label: "Ask", icon: ChatCircleText, perm: "ask" },
 ];
 
 const Logo = () => (
@@ -98,7 +99,7 @@ export default function Layout({ children }) {
 
   const NavItems = ({ onNavigate }) => (
     <>
-      {NAV.map(({ to, label, icon: Icon, testid }) => (
+      {NAV.filter((n) => !n.perm || hasPerm(user, n.perm)).map(({ to, label, icon: Icon, testid }) => (
         <NavLink
           key={to}
           to={to}
@@ -230,7 +231,7 @@ export default function Layout({ children }) {
 
       {/* Mobile bottom tab bar */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 border-t border-black bg-white flex z-[10000]" data-testid="mobile-bottom-nav">
-        {BOTTOM_NAV.map(({ to, label, icon: Icon }) => {
+        {BOTTOM_NAV.filter((n) => !n.perm || hasPerm(user, n.perm)).map(({ to, label, icon: Icon }) => {
           const active = to === "/" ? location.pathname === "/" : location.pathname.startsWith(to);
           return (
             <NavLink

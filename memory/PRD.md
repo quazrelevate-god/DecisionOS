@@ -34,7 +34,11 @@ Multi-tenant isolation, role-based access, voice+text capture, AI structuring wi
 - **360° Customer/Supplier profile** (`/contacts/:id`, Owner+Finance only): aggregates contact details, sales/purchase bills, payments, **outstanding** (Σ billed − Σ paid), follow-ups, complaints, tasks, decisions; suppliers add pending deliveries + price history. `GET /api/contacts/{id}/profile`.
 - **Owner-level Ask AI over money** (Owner+Finance): `/api/ask` context extended with invoices, payments, per-party outstanding, company currency and today's date — answers "who owes the most", "not paid in 30 days", "yesterday's sales". Money data withheld from Sales/Production.
 - **Premium 6-step onboarding** ("Digital Executive Office"): Step1 company+account+GST+branches, Step2 business scale, Step3 current software, Step4 connect (Excel live via ingestion; Tally/Zoho coming-soon), Step5 invite employees by mobile (pending invites), Step6 animated "AI learns business". Workspace is created at end of Step3 so Steps 4-5 run authenticated. Tenant now stores gst/branches/business_scale/current_software/invited_employees. Endpoints: `GET/POST /api/invites`.
-- Tested: iterations 11-13 — backend 47/47 (+regression), frontend E2E across owner/finance/sales/production. No product bugs.
+- Tested: iterations 11-14 — backend 62/62 (+regression), frontend E2E across owner/finance/sales/production. No product bugs.
+
+## Access Control (2026-07-02)
+- **Module-level per-employee permissions**: 9 access keys — inbox, data_input, people, finance, workflows, tasks, brain, ask, team_manage. Team "Add member" and per-member "Access" dialogs let the owner pick exactly what each employee can open/use (role-select pre-fills sensible defaults, editable). Endpoints: `POST /api/users` (permissions), `PATCH /api/users/{id}` (role+permissions), gated by `team_manage`.
+- Enforcement: owner bypass; users with no `permissions` fall back to ROLE_DEFAULT_PERMS (sales→+data_input+people; finance→+data_input+finance; others→base). Backend `require_perm` guards Finance (`/invoices`,`/payments`,`/contacts/{id}/profile`, Ask-AI money), Data Input (`/ingest/*`), Team management (`/users`,`/invites`). Frontend hides nav items (Layout) and page actions (Ingest/Contacts/Inbox/ContactProfile) via `lib/perms.js` `hasPerm`.
 
 ## Backlog / Next
 - **P0 (needs user keys)**: WhatsApp Document Ingestion — Meta WhatsApp Cloud API webhook to auto-file forwarded invoices/screenshots via existing `ingest_document` pipeline. Awaiting WHATSAPP_TOKEN / phone-number-id / verify token.

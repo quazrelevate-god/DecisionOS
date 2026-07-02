@@ -14,7 +14,17 @@ export default function Team() {
   const roleOptions = tenant?.roles || [];
   const [form, setForm] = useState({ name: "", email: "", password: "", role: roleOptions[0]?.key || "" });
   const { data } = useQuery({ queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data) });
+  const { data: attendance } = useQuery({ queryKey: ["attendance"], queryFn: () => api.get("/attendance").then((r) => r.data) });
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const isOwner = user?.role === "owner";
+  const absentIds = new Set((attendance || []).filter((a) => a.status === "absent").map((a) => a.user_id));
+
+  const toggleAbsent = async (u) => {
+    const nowAbsent = absentIds.has(u.id);
+    await api.post("/attendance", { user_id: u.id, status: nowAbsent ? "present" : "absent" });
+    toast.success(`${u.name} marked ${nowAbsent ? "present" : "absent"}`);
+    qc.invalidateQueries({ queryKey: ["attendance"] });
+  };
 
   const roleLabel = (key) => (key === "owner" ? "Owner" : roleOptions.find((r) => r.key === key)?.label || key);
 
@@ -105,7 +115,16 @@ export default function Team() {
                 <p className="text-xs text-muted-foreground font-mono">{u.email}</p>
               </div>
             </div>
-            <Chip value={u.role} className={u.role === "owner" ? "bg-brand-red text-white" : "bg-brand-blue text-white"} />
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              <Chip value={u.role} className={u.role === "owner" ? "bg-brand-red text-white" : "bg-brand-blue text-white"} />
+              {absentIds.has(u.id) && <Chip value="absent" className="bg-black text-white" data-testid={`absent-badge-${u.id}`} />}
+              {isOwner && u.role !== "owner" && (
+                <button onClick={() => toggleAbsent(u)} data-testid={`toggle-absent-${u.id}`}
+                  className="text-xs uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-ink hover:text-white transition-colors">
+                  {absentIds.has(u.id) ? "Mark present" : "Mark absent"}
+                </button>
+              )}
+            </div>
           </div>
         ))}
       </div>

@@ -114,6 +114,19 @@ export default function Brain() {
               </div>
             </section>
           </div>
+          {(res.memory || []).length > 0 && (
+            <div className="mt-8">
+              <h3 className="font-heading font-extrabold uppercase tracking-tight text-lg mb-3">Company Memory ({res.memory.length})</h3>
+              <div className="grid md:grid-cols-2 gap-3">
+                {res.memory.map((m) => (
+                  <div key={m.id} data-testid={`brain-memory-${m.id}`} className="card-brutal p-4 border-l-4 border-l-brand-red">
+                    <p className="text-sm">{m.text}</p>
+                    <Chip value={m.tag} className="mt-2 bg-brand-ink text-white" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
 import api from "../lib/api";
@@ -21,22 +22,33 @@ import {
   AddressBook,
   SignOut,
   EnvelopeSimple,
+  Bell,
+  Sun,
+  Briefcase,
   List as ListIcon,
 } from "@phosphor-icons/react";
 
 const NAV = [
   { to: "/", label: "Daily Brief", icon: Gauge, testid: "nav-dashboard" },
+  { to: "/brief", label: "CEO Brief", icon: Sun, testid: "nav-ceo-brief" },
   { to: "/inbox", label: "Owner Inbox", icon: Microphone, testid: "nav-inbox" },
   { to: "/workflows", label: "Workflows", icon: Kanban, testid: "nav-workflows" },
-  { to: "/contacts", label: "Contacts", icon: AddressBook, testid: "nav-contacts" },
+  { to: "/contacts", label: "People", icon: AddressBook, testid: "nav-contacts" },
   { to: "/tasks", label: "Tasks", icon: CheckSquare, testid: "nav-tasks" },
+  { to: "/my-work", label: "My Work", icon: Briefcase, testid: "nav-my-work" },
   { to: "/brain", label: "Company Brain", icon: BrainIcon, testid: "nav-brain" },
   { to: "/ask", label: "Ask AI", icon: ChatCircleText, testid: "nav-ask" },
   { to: "/team", label: "Team", icon: UsersThree, testid: "nav-team" },
 ];
 
 // Primary items for the mobile bottom tab bar
-const BOTTOM_NAV = [NAV[0], NAV[1], NAV[2], NAV[4], NAV[6]];
+const BOTTOM_NAV = [
+  { to: "/brief", label: "Brief", icon: Sun },
+  { to: "/inbox", label: "Inbox", icon: Microphone },
+  { to: "/my-work", label: "Work", icon: Briefcase },
+  { to: "/tasks", label: "Tasks", icon: CheckSquare },
+  { to: "/ask", label: "Ask", icon: ChatCircleText },
+];
 
 const Logo = () => (
   <div className="flex items-center gap-2">
@@ -52,6 +64,20 @@ export default function Layout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const { data: notif } = useQuery({ queryKey: ["notifications"], queryFn: () => api.get("/notifications").then((r) => r.data), refetchInterval: 30000 });
+  const unread = notif?.unread || 0;
+
+  const Bellicon = () => (
+    <button onClick={() => navigate("/notifications")} data-testid="notif-bell"
+      className="relative w-10 h-10 flex items-center justify-center border border-black hover:bg-brand-ink hover:text-white transition-colors">
+      <Bell size={18} weight="bold" />
+      {unread > 0 && (
+        <span data-testid="notif-count" className="absolute -top-2 -right-2 bg-brand-red text-white text-[10px] min-w-5 h-5 px-1 flex items-center justify-center border border-black font-bold">
+          {unread}
+        </span>
+      )}
+    </button>
+  );
 
   const doLogout = () => {
     logout();
@@ -128,20 +154,26 @@ export default function Layout({ children }) {
             </span>
           </div>
           {user?.role === "owner" && (
-            <button
-              onClick={sendDigest}
-              data-testid="send-digest-button"
-              className="flex items-center gap-2 px-4 py-2 text-sm border border-black bg-brand-yellow font-semibold hover:shadow-brutal-sm transition-all"
-            >
-              <EnvelopeSimple size={16} weight="bold" /> Send Daily Digest
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={sendDigest}
+                data-testid="send-digest-button"
+                className="flex items-center gap-2 px-4 py-2 text-sm border border-black bg-brand-yellow font-semibold hover:shadow-brutal-sm transition-all"
+              >
+                <EnvelopeSimple size={16} weight="bold" /> Send Daily Digest
+              </button>
+              <Bellicon />
+            </div>
           )}
+          {user?.role !== "owner" && <Bellicon />}
         </header>
 
         {/* Mobile top app bar */}
         <header className="lg:hidden h-14 border-b border-black bg-white flex items-center justify-between px-4 sticky top-0 z-20">
           <Logo />
-          <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
+          <div className="flex items-center gap-2">
+            <Bellicon />
+            <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
             <SheetTrigger asChild>
               <button
                 data-testid="mobile-menu-button"
@@ -187,6 +219,7 @@ export default function Layout({ children }) {
               </div>
             </SheetContent>
           </Sheet>
+          </div>
         </header>
 
         <main className="flex-1 p-4 lg:p-8 pb-24 lg:pb-8 overflow-x-hidden">{children}</main>

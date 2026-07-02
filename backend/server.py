@@ -199,7 +199,7 @@ class AskInput(BaseModel):
     question: str
 
 
-CONTACT_TYPES = ("customer", "vendor")
+CONTACT_TYPES = ("customer", "dealer", "vendor")
 CONTACT_STATUS = ("lead", "active", "inactive")
 
 
@@ -285,7 +285,11 @@ async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[l
         "\"type\": one of [directive,approval,policy,observation]}], "
         "\"tasks\": [{\"title\": string, \"description\": string, \"assignee_role\": one of [" + roles_str + "], "
         "\"priority\": one of [low,medium,high], \"due_in_days\": integer or null}], "
-        "\"workflow_events\": [{\"type\": one of [sales_dispatch,purchase_payment], \"action\": string, \"detail\": string}]}. "
+        "\"workflow_events\": [{\"type\": one of [sales_dispatch,purchase_payment], \"action\": string, \"detail\": string}], "
+        "\"reminders\": [{\"title\": string, \"due_in_days\": integer or null}], "
+        "\"memory_notes\": [{\"text\": string, \"tag\": string}]}. "
+        "Use 'reminders' for simple personal follow-ups (e.g. 'call Kumar tomorrow', 'follow up with Toyota next Monday'). "
+        "Use 'memory_notes' for lasting facts/policies the company should remember (e.g. 'don't purchase from XYZ again', 'salary increment for Arun from August'). "
         "The transcript may be in English, Tamil, or Tanglish (casual Tamil-English code-mix). Fully understand it regardless "
         "of language, and produce ALL output field values in clear English. "
         "Pick assignee_role ONLY from the provided role list. Infer sensible owners and due dates. If nothing applies, use empty arrays."
@@ -374,6 +378,23 @@ async def process_voice_note(note_id: str):
             task_ids.append(tid)
         decision["task_ids"] = task_ids
         await db.decisions.insert_one(decision)
+        # Voice shortcuts: lightweight reminders + company memory
+        for r in (extracted.get("reminders") or []):
+            due = None
+            if isinstance(r.get("due_in_days"), int):
+                due = (datetime.now(timezone.utc) + timedelta(days=r["due_in_days"])).isoformat()
+            await db.tasks.insert_one({
+                "id": new_id(), "tenant_id": tenant_id, "title": r.get("title", "Reminder"),
+                "description": "", "assignee_role": None, "assignee_id": note["created_by"],
+                "priority": "medium", "status": "todo", "due_date": due, "decision_id": None,
+                "source": "reminder", "created_at": now_iso(),
+            })
+        for m in (extracted.get("memory_notes") or []):
+            if m.get("text"):
+                await db.memory.insert_one({
+                    "id": new_id(), "tenant_id": tenant_id, "text": m["text"],
+                    "tag": m.get("tag", "note"), "created_by": note["created_by"], "created_at": now_iso(),
+                })
         await db.voice_notes.update_one({"id": note_id}, {"$set": {"status": "done", "decision_id": decision_id, "processed_at": now_iso()}})
         await log_activity(tenant_id, note["created_by"], "decision_extracted",
                            f"Extracted decision '{decision['title']}' with {len(task_ids)} task(s)", "decision", decision_id)
@@ -827,11 +848,13 @@ async def brain_search(q: str = "", user: dict = Depends(get_current_user)):
     tasks = await db.tasks.find({"tenant_id": tid, "$or": [{"title": rx}, {"description": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
     workflows = await db.workflows.find({"tenant_id": tid, "$or": [{"title": rx}, {"detail": rx}, {"counterparty": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
     contacts = await db.contacts.find({"tenant_id": tid, "$or": [{"name": rx}, {"company": rx}, {"email": rx}, {"phone": rx}, {"notes": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    memory = await db.memory.find({"tenant_id": tid, "text": rx}, {"_id": 0}).sort("created_at", -1).to_list(50)
     return {
         "decisions": await enrich_decisions(decisions),
         "tasks": await enrich_tasks(tasks),
         "workflows": workflows,
         "contacts": await enrich_contacts(contacts),
+        "memory": memory,
     }
 
 
@@ -846,6 +869,7 @@ async def ask_ai(inp: AskInput, user: dict = Depends(get_current_user)):
     workflows = await db.workflows.find({"tenant_id": tid}, {"_id": 0, "title": 1, "type": 1, "stage": 1, "amount": 1, "counterparty": 1}).sort("created_at", -1).to_list(60)
     users = await db.users.find({"tenant_id": tid}, {"_id": 0, "name": 1, "role": 1}).to_list(60)
     contacts = await db.contacts.find({"tenant_id": tid}, {"_id": 0, "name": 1, "company": 1, "type": 1, "status": 1, "phone": 1, "email": 1}).sort("created_at", -1).to_list(100)
+    memory = await db.memory.find({"tenant_id": tid}, {"_id": 0, "text": 1, "tag": 1}).sort("created_at", -1).to_list(100)
 
     def slim_d(d):
         return {"title": d["title"], "summary": d.get("summary"), "status": d.get("status")}
@@ -862,6 +886,7 @@ async def ask_ai(inp: AskInput, user: dict = Depends(get_current_user)):
         "workflows": [slim_w(w) for w in workflows],
         "team": users,
         "contacts": contacts,
+        "company_memory": [m["text"] for m in memory],
     }
     system = (
         "You are the Ask AI assistant of DecisionOS. Answer questions ONLY using the provided company context JSON. "
@@ -893,6 +918,7 @@ async def ask_ai(inp: AskInput, user: dict = Depends(get_current_user)):
 @api.get("/dashboard")
 async def dashboard(user: dict = Depends(get_current_user)):
     tid = user["tenant_id"]
+    await run_followup(tid)
     now = datetime.now(timezone.utc).isoformat()
     pending_decisions = await db.decisions.find({"tenant_id": tid, "status": "pending_approval"}, {"_id": 0}).to_list(50)
     pending_purchases = await db.workflows.find({"tenant_id": tid, "type": "purchase_payment", "stage": "requested"}, {"_id": 0}).to_list(50)
@@ -947,6 +973,248 @@ async def send_digest(user: dict = Depends(require_role("owner"))):
             raise HTTPException(status_code=502, detail="Email provider error")
     logger.info(f"[DIGEST MOCK] To {user['email']}:\n{html}")
     return {"sent": False, "mocked": True, "to": user["email"], "preview_html": html}
+
+
+# ---------------------------------------------------------------------------
+# Follow-up engine, notifications, attendance, complaints, memory, CEO brief
+# ---------------------------------------------------------------------------
+NOTIF_LEVELS = {1: "reminder", 2: "urgency", 3: "manager", 4: "owner"}
+
+
+class AttendanceInput(BaseModel):
+    user_id: str
+    status: str = "absent"
+    date: Optional[str] = None
+
+
+class ComplaintInput(BaseModel):
+    customer_id: Optional[str] = None
+    text: str
+    severity: Optional[str] = "medium"
+
+
+class MemoryInput(BaseModel):
+    text: str
+    tag: Optional[str] = "note"
+
+
+async def _owner_ids(tenant_id: str) -> list:
+    return [u["id"] for u in await db.users.find({"tenant_id": tenant_id, "role": "owner"}, {"_id": 0, "id": 1}).to_list(50)]
+
+
+async def push_notification(tenant_id, user_ids, level, message, entity_type=None, entity_id=None):
+    for uid in set(u for u in user_ids if u):
+        await db.notifications.insert_one({
+            "id": new_id(), "tenant_id": tenant_id, "user_id": uid, "level": NOTIF_LEVELS.get(level, "reminder"),
+            "message": message, "entity_type": entity_type, "entity_id": entity_id, "read": False, "created_at": now_iso(),
+        })
+
+
+async def dispatch_owner_alert(tenant_id, message):
+    owners = await db.users.find({"tenant_id": tenant_id, "role": "owner"}, {"_id": 0, "email": 1}).to_list(10)
+    resend_key = os.environ.get("RESEND_API_KEY", "")
+    if resend_key and owners:
+        try:
+            import resend
+            resend.api_key = resend_key
+            resend.Emails.send({"from": os.environ.get("RESEND_FROM_EMAIL", "DecisionOS <onboarding@resend.dev>"),
+                                "to": [o["email"] for o in owners], "subject": "DecisionOS — Owner Alert",
+                                "html": f"<p>{message}</p>"})
+        except Exception as e:
+            logger.error(f"owner email alert failed: {e}")
+    else:
+        logger.info(f"[EMAIL MOCK] Owner alert: {message}")
+    # WhatsApp: ready-to-plug (requires WHATSAPP_API_KEY / provider)
+    if not os.environ.get("WHATSAPP_API_KEY", ""):
+        logger.info(f"[WHATSAPP MOCK] Owner alert: {message}")
+
+
+async def run_followup(tenant_id: str):
+    now = datetime.now(timezone.utc)
+    tasks = await db.tasks.find(
+        {"tenant_id": tenant_id, "status": {"$in": ["todo", "in_progress"]}, "due_date": {"$ne": None, "$lt": now.isoformat()}},
+        {"_id": 0}
+    ).to_list(500)
+    owners = await _owner_ids(tenant_id)
+    for t in tasks:
+        try:
+            due = datetime.fromisoformat(t["due_date"])
+            if due.tzinfo is None:
+                due = due.replace(tzinfo=timezone.utc)
+        except Exception:
+            continue
+        days = (now - due).days
+        target = 1 if days < 1 else 2 if days < 2 else 3 if days < 3 else 4
+        if target <= t.get("escalation_level", 0):
+            continue
+        if t.get("assignee_id"):
+            recipients = [t["assignee_id"]]
+        elif t.get("assignee_role"):
+            recipients = [u["id"] for u in await db.users.find({"tenant_id": tenant_id, "role": t["assignee_role"]}, {"_id": 0, "id": 1}).to_list(50)]
+        else:
+            recipients = owners
+        msg = f"Task '{t['title']}' is overdue by {days} day(s)."
+        if target in (1, 2):
+            await push_notification(tenant_id, recipients, target, msg, "task", t["id"])
+        elif target == 3:
+            await push_notification(tenant_id, owners, 3, f"[Manager escalation] {msg}", "task", t["id"])
+        else:
+            await push_notification(tenant_id, owners, 4, f"[OWNER ALERT] {msg}", "task", t["id"])
+            await dispatch_owner_alert(tenant_id, msg)
+        await db.tasks.update_one({"id": t["id"]}, {"$set": {"escalation_level": target, "last_escalated": now_iso()}})
+
+
+@api.get("/notifications")
+async def list_notifications(user: dict = Depends(get_current_user)):
+    await run_followup(user["tenant_id"])
+    items = await db.notifications.find({"tenant_id": user["tenant_id"], "user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return {"notifications": items, "unread": sum(1 for n in items if not n.get("read"))}
+
+
+@api.post("/notifications/{nid}/read")
+async def read_notification(nid: str, user: dict = Depends(get_current_user)):
+    await db.notifications.update_one({"id": nid, "tenant_id": user["tenant_id"], "user_id": user["id"]}, {"$set": {"read": True}})
+    return {"ok": True}
+
+
+@api.post("/notifications/read-all")
+async def read_all_notifications(user: dict = Depends(get_current_user)):
+    await db.notifications.update_many({"tenant_id": user["tenant_id"], "user_id": user["id"], "read": False}, {"$set": {"read": True}})
+    return {"ok": True}
+
+
+@api.post("/follow-up/run")
+async def followup_run(user: dict = Depends(get_current_user)):
+    await run_followup(user["tenant_id"])
+    return {"ok": True}
+
+
+@api.post("/attendance")
+async def mark_attendance(inp: AttendanceInput, user: dict = Depends(require_role("owner"))):
+    date = inp.date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    await db.attendance.update_one(
+        {"tenant_id": user["tenant_id"], "user_id": inp.user_id, "date": date},
+        {"$set": {"status": inp.status, "marked_by": user["id"], "updated_at": now_iso()},
+         "$setOnInsert": {"id": new_id(), "created_at": now_iso()}},
+        upsert=True,
+    )
+    return {"ok": True}
+
+
+@api.get("/attendance")
+async def list_attendance(date: Optional[str] = None, user: dict = Depends(get_current_user)):
+    date = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    return await db.attendance.find({"tenant_id": user["tenant_id"], "date": date}, {"_id": 0}).to_list(500)
+
+
+@api.post("/complaints")
+async def create_complaint(inp: ComplaintInput, user: dict = Depends(require_role("owner", "sales"))):
+    name = None
+    if inp.customer_id:
+        c = await db.contacts.find_one({"id": inp.customer_id, "tenant_id": user["tenant_id"]}, {"_id": 0, "name": 1, "company": 1})
+        if c:
+            name = c.get("company") or c.get("name")
+    cid = new_id()
+    doc = {"id": cid, "tenant_id": user["tenant_id"], "customer_id": inp.customer_id, "customer_name": name,
+           "text": inp.text, "severity": inp.severity or "medium", "status": "open",
+           "created_by": user["id"], "created_at": now_iso()}
+    await db.complaints.insert_one(doc)
+    await log_activity(user["tenant_id"], user["id"], "complaint_logged", f"Complaint logged: {inp.text[:60]}", "complaint", cid)
+    doc.pop("_id", None)
+    return doc
+
+
+@api.get("/complaints")
+async def list_complaints(status: Optional[str] = None, user: dict = Depends(get_current_user)):
+    q = {"tenant_id": user["tenant_id"]}
+    if status:
+        q["status"] = status
+    return await db.complaints.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
+
+
+@api.patch("/complaints/{cid}/resolve")
+async def resolve_complaint(cid: str, user: dict = Depends(require_role("owner", "sales"))):
+    res = await db.complaints.update_one({"id": cid, "tenant_id": user["tenant_id"]}, {"$set": {"status": "resolved", "resolved_at": now_iso()}})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Not found")
+    return {"ok": True}
+
+
+@api.get("/memory")
+async def list_memory(user: dict = Depends(get_current_user)):
+    return await db.memory.find({"tenant_id": user["tenant_id"]}, {"_id": 0}).sort("created_at", -1).to_list(200)
+
+
+@api.post("/memory")
+async def add_memory(inp: MemoryInput, user: dict = Depends(get_current_user)):
+    mid = new_id()
+    doc = {"id": mid, "tenant_id": user["tenant_id"], "text": inp.text, "tag": inp.tag or "note",
+           "created_by": user["id"], "created_at": now_iso()}
+    await db.memory.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@api.get("/brief")
+async def ceo_brief(period: str = "morning", user: dict = Depends(get_current_user)):
+    tid = user["tenant_id"]
+    await run_followup(tid)
+    now = datetime.now(timezone.utc)
+    today = now.strftime("%Y-%m-%d")
+    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if period == "weekly":
+        start_iso = (now - timedelta(days=7)).isoformat()
+    elif period == "monthly":
+        start_iso = (now - timedelta(days=30)).isoformat()
+    else:
+        start_iso = midnight.isoformat()
+
+    delayed = await db.tasks.count_documents({"tenant_id": tid, "status": {"$in": ["todo", "in_progress"]}, "due_date": {"$lt": now.isoformat(), "$ne": None}})
+    if period == "morning":
+        y_start = (midnight - timedelta(days=1)).isoformat()
+        completed = await db.activity.count_documents({"tenant_id": tid, "kind": "task_done", "created_at": {"$gte": y_start, "$lt": midnight.isoformat()}})
+        completed_label = "completed yesterday"
+    else:
+        completed = await db.activity.count_documents({"tenant_id": tid, "kind": "task_done", "created_at": {"$gte": start_iso}})
+        completed_label = f"completed ({period})"
+    pending_dec = await db.decisions.count_documents({"tenant_id": tid, "status": "pending_approval"})
+    pending_pur = await db.workflows.count_documents({"tenant_id": tid, "type": "purchase_payment", "stage": "requested"})
+    absent = await db.attendance.count_documents({"tenant_id": tid, "date": today, "status": "absent"})
+    complaints = await db.complaints.count_documents({"tenant_id": tid, "status": "open"})
+    payment_overdue = await db.workflows.count_documents({"tenant_id": tid, "type": "purchase_payment", "stage": "payment_pending"})
+    greet = "Good morning" if period in ("morning", "weekly", "monthly") else "Good evening"
+    return {
+        "period": period,
+        "greeting": f"{greet}, {user['name'].split(' ')[0]}",
+        "completed_label": completed_label,
+        "counters": {
+            "delayed": delayed, "completed": completed, "awaiting_approval": pending_dec + pending_pur,
+            "absent": absent, "complaints": complaints, "payment_overdue": payment_overdue,
+        },
+    }
+
+
+@api.post("/tasks/{task_id}/attachment")
+async def upload_task_attachment(task_id: str, file: UploadFile = File(...), kind: str = Form("photo"), user: dict = Depends(get_current_user)):
+    t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]})
+    if not t:
+        raise HTTPException(status_code=404, detail="Not found")
+    ext = (file.filename or "file.bin").split(".")[-1]
+    fname = f"att_{task_id}_{new_id()}.{ext}"
+    with open(UPLOAD_DIR / fname, "wb") as f:
+        f.write(await file.read())
+    att = {"kind": kind, "filename": fname, "url": f"/api/files/{fname}", "at": now_iso()}
+    await db.tasks.update_one({"id": task_id}, {"$push": {"attachments": att}})
+    return att
+
+
+@api.get("/files/{fname}")
+async def get_file(fname: str):
+    from fastapi.responses import FileResponse
+    path = UPLOAD_DIR / fname
+    if not path.exists() or "/" in fname or ".." in fname:
+        raise HTTPException(status_code=404, detail="Not found")
+    return FileResponse(str(path))
 
 
 # ---------------------------------------------------------------------------

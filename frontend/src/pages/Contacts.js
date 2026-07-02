@@ -4,12 +4,47 @@ import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { PageHeader, Chip, EmptyState } from "../components/common";
 import { toast } from "sonner";
-import { Plus, MagnifyingGlass, PencilSimple, Trash, Phone, EnvelopeSimple, MapPin } from "@phosphor-icons/react";
+import { Plus, MagnifyingGlass, PencilSimple, Trash, Phone, EnvelopeSimple, MapPin, Warning } from "@phosphor-icons/react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../components/ui/dialog";
 
-const TYPES = ["customer", "vendor"];
+const TYPES = ["customer", "dealer", "vendor"];
 const STATUSES = ["lead", "active", "inactive"];
 const inp = "w-full border border-black px-3 py-2 text-sm font-mono focus:outline-none focus:shadow-brutal-sm";
+
+function ComplaintDialog({ contact, onSaved }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+  const [severity, setSeverity] = useState("medium");
+  const save = async () => {
+    if (!text.trim()) return toast.error("Describe the complaint");
+    try {
+      await api.post("/complaints", { customer_id: contact.id, text, severity });
+      toast.success("Complaint logged");
+      setText(""); setOpen(false); onSaved && onSaved();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed");
+    }
+  };
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button data-testid={`log-complaint-${contact.id}`} className="w-8 h-8 flex items-center justify-center border border-black hover:bg-purple-600 hover:text-white transition-colors"><Warning size={14} weight="bold" /></button>
+      </DialogTrigger>
+      <DialogContent className="border border-black rounded-none">
+        <DialogHeader><DialogTitle className="font-heading uppercase tracking-tight">Log complaint — {contact.name}</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <textarea data-testid="complaint-text-input" className={inp} rows={3} placeholder="What went wrong?" value={text} onChange={(e) => setText(e.target.value)} />
+          <select className={inp} value={severity} onChange={(e) => setSeverity(e.target.value)}>
+            {["low", "medium", "high"].map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <DialogFooter>
+          <button data-testid="complaint-save-button" onClick={save} className="bg-purple-600 text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">Log complaint</button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 function ContactDialog({ trigger, initial, onSaved, users }) {
   const [open, setOpen] = useState(false);
@@ -158,6 +193,7 @@ export default function Contacts() {
               </div>
               {canManage && (
                 <div className="flex gap-1">
+                  {c.type === "customer" && <ComplaintDialog contact={c} onSaved={refresh} />}
                   <ContactDialog
                     users={users} initial={c} onSaved={refresh}
                     trigger={<button data-testid={`edit-contact-${c.id}`} className="w-8 h-8 flex items-center justify-center border border-black hover:bg-brand-ink hover:text-white transition-colors"><PencilSimple size={14} weight="bold" /></button>}

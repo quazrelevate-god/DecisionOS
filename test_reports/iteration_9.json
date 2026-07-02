@@ -1,0 +1,23 @@
+{
+  "summary": "Frontend-only regression for Ask AI badge-overlap fix. Verified that adding 'relative z-[10000]' to data-testid='ask-submit' successfully raises the submit button above #emergent-badge (z-index 9999). At viewport 1920x1080 the submit button (x=1787..1888, y=1002..1048) physically overlaps the badge (x=1726..1904, y=1024..1064) in the lower ~50% of the button, but document.elementFromPoint at the button center now returns the BUTTON[data-testid=ask-submit] (not the badge). A plain click (force=False) submits the form, the AI responds via /api/ask, and citations render as expected. Suggestion buttons also fire /api/ask normally.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_9.json"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Fix is minimally invasive and correct: 'relative' establishes a stacking context and 'z-[10000]' > badge's 9999. Verified via computed style AND elementFromPoint (source of truth for pointer-event hit-testing).",
+    "AskAI.js is small (~99 lines) and clean; no further refactor needed."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not tested (skipped per request)", "frontend": "100%"},
+  "test_credentials": "owner@sharma.com / demo1234 (from /app/memory/test_credentials.md convention)",
+  "seed_data_creation": "None. Used existing seeded owner account and workflow data.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 9 verified the ONLY change from iter_8: z-[10000]+relative on ask-submit. Backend was NOT retested (iter_8 was 66/66 green). Assertion of 'no click interception' was proven with page.click(ask-submit) at force=False AND document.elementFromPoint at the button's center returning the button itself despite geometric overlap with #emergent-badge. LLM /api/ask returned a real answer with citations on first try (no Budget exceeded encountered). Suggestion chips still work.",
+  "rca of the issue": "Original: #emergent-badge is fixed at bottom-right with z-index 9999. The Ask AI submit button lives in normal flow (auto z-index, no stacking context) so any overlap area was captured by the badge for pointer events. Fix: adding position:relative creates a stacking context on the button, and z-[10000] (>9999) makes it paint AND hit-test above the badge. Verified via elementFromPoint returning the button, and a non-forced click actually submitting the form."
+}

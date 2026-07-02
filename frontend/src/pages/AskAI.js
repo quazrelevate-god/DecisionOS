@@ -90,7 +90,7 @@ export default function AskAI() {
             className="flex-1 py-3 px-3 text-sm focus:outline-none"
           />
         </div>
-        <button data-testid="ask-submit" disabled={busy} className="bg-brand-red text-white px-6 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all disabled:opacity-50">
+        <button data-testid="ask-submit" disabled={busy} className="relative z-[10000] bg-brand-red text-white px-6 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all disabled:opacity-50">
           <PaperPlaneTilt size={16} weight="bold" /> Ask
         </button>
       </form>

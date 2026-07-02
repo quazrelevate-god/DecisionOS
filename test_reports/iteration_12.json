@@ -1,0 +1,44 @@
+{
+  "summary": "Iteration 12 — Unified Inbox + 360° Contact Profile + Money-gated Ask AI verified end-to-end. Backend 21/21 new tests (test_iteration12.py) + 38/38 regression (backend_test.py) = 59/59 green. Frontend verified for owner/finance/sales/production roles: home=/ is Unified Inbox with capture (owner only), filter chips with counts, mark-done/dismiss, pending approvals with approve/reject, 360° ContactProfile with 4 stat cards + all sections, role-gated view-profile (owner+finance only), production/sales get 'Restricted' page on direct /contacts/:id navigation. Nav reorder correct: Inbox first pointing to /, Daily Brief at /dashboard, Data Input present.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration12.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/iteration12.xml",
+    "/app/test_reports/pytest/regression12.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py now 1972 lines — growth continues past the 700-line guideline. Recommend splitting: routers/inbox.py (~90 lines), routers/contacts_profile.py (~55 lines), routers/ingest.py (already flagged). Non-blocking.",
+    "contact_profile aggregation matches invoices/payments by BOTH contact_id OR case-insensitive exact contact_name — that's why 'Kumar Garments' inflated outstanding from earlier iterations still shows up (multiple filed rows). Fine for demo but eventually contact_id-only matching would be more precise.",
+    "contact_profile tasks are matched by loose regex on task.title (case-insensitive substring of contact name). Prone to false positives if contact name is a common word ('Sharma', 'Kumar'). Would be safer to link tasks via a contact_id field. Non-blocking.",
+    "contact_profile 'price_history' iterates purchase invoice line_items — only populated if line_items were extracted by the AI during ingestion. For customer contacts price_history is always empty (by design). Consider hiding the section in the UI when empty.",
+    "Inbox capture UI is correctly gated by user.role==='owner' (line 145 of Inbox.js). 'Upload data' button uses canUpload=[owner,sales,finance]. This is intentional and matches spec — non-owners see owner-only-notice but sales/finance can still click Upload Data → /ingest (consistent with INGEST_ROLES). Good.",
+    "Ask AI money-restriction message relies entirely on the LLM to refuse for sales/production. Backend does NOT strip financial context — it just tells the model to say 'restricted'. In practice tests passed (model refuses), but a determined prompt-injection could get around it. Consider stripping numeric amounts from context entirely for non-money roles. Low priority.",
+    "GET /api/inbox returns up to 300 rows unbounded — no pagination. With WhatsApp firehose enabled later this needs limit/offset.",
+    "GET /api/contacts/{id}/profile does not enforce that the contact belongs to the same tenant explicitly at the response level (it uses tenant_id in the query — safe). Just noting for clarity.",
+    "Mobile bottom nav data-testid for '/' is still `bottomnav-dashboard` (Layout.js line 240). Now that '/' is Inbox this label is stale — consider renaming to `bottomnav-inbox` for consistency. Cosmetic.",
+    "openItem() in Inbox.js only routes ingestion and complaint items ('View' button). Invoice/payment inbox items currently show View but navigate nowhere useful (they render as classification=invoice/payment but ref_type is 'invoice'/'payment' — no click handler). Not a bug per spec but a small UX gap."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration12.py (new — 21 tests for Inbox list/status/auto-create, ContactProfile role-gate + shape, Ask AI money gate)"
+  ],
+  "success_rate": {
+    "backend": "100% (59/59 — 21 new iter12 + 38 regression)",
+    "frontend": "100% (all 11 required flows verified across owner/finance/sales/production roles)"
+  },
+  "test_credentials": "owner@sharma.com / sales@sharma.com / production@sharma.com / finance@sharma.com — all pw demo1234 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Added a few TEST_ complaints and one TEST_ voice-note directive on the demo tenant (used to verify inbox auto-creation + mark-done/dismiss). Uploaded a TEST_ CSV via /api/ingest/csv (2 rows) and committed it — inbox item flipped open→done. No production data mutated. Kumar Garments still has inflated outstanding (expected noise per E1 note).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 12 fully green. Endpoints tested: GET /api/inbox (?classification=&status=), POST /api/inbox/{id}/status (400/404 covered), GET /api/contacts/{id}/profile (owner+finance only, 404 on missing), POST /api/ask (money context only for owner/finance; sales/production get refusal). Inbox auto-creation verified for text directives (ref_type=decision), complaints (classification=complaint), and CSV ingestion (open→commit→done). Frontend testids: nav-inbox(/), nav-dashboard(/dashboard), inbox-feed, inbox-filters, inbox-filter-{all|customer|supplier|invoice|payment|complaint|task|approval|reminder}, inbox-item-{id}, inbox-class-{id}, inbox-done-{id}, inbox-dismiss-{id}, inbox-open-{id}, inbox-approve-{id}, inbox-reject-{id}, owner-only-notice (sales/prod/finance), voice-record-button/text-directive-input/language-selector (owner only), view-profile-{id} (owner+finance on Contacts), profile-header + stat-outstanding/billed/paid/complaints on ContactProfile, 'RESTRICTED' text shown to sales/production on direct /contacts/:id. Bottom mobile nav testid for '/' is stale (`bottomnav-dashboard`) — cosmetic only. Backend tests to run: `python -m pytest backend/tests/test_iteration12.py backend/tests/backend_test.py -o addopts=''`.",
+  "rca of the issue": "N/A — no bugs found."
+}

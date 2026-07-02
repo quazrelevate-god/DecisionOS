@@ -27,12 +27,13 @@ import {
   Briefcase,
   List as ListIcon,
   FileArrowUp,
+  Tray,
 } from "@phosphor-icons/react";
 
 const NAV = [
-  { to: "/", label: "Daily Brief", icon: Gauge, testid: "nav-dashboard" },
+  { to: "/", label: "Inbox", icon: Tray, testid: "nav-inbox" },
+  { to: "/dashboard", label: "Daily Brief", icon: Gauge, testid: "nav-dashboard" },
   { to: "/brief", label: "CEO Brief", icon: Sun, testid: "nav-ceo-brief" },
-  { to: "/inbox", label: "Owner Inbox", icon: Microphone, testid: "nav-inbox" },
   { to: "/ingest", label: "Data Input", icon: FileArrowUp, testid: "nav-ingest" },
   { to: "/workflows", label: "Workflows", icon: Kanban, testid: "nav-workflows" },
   { to: "/contacts", label: "People", icon: AddressBook, testid: "nav-contacts" },
@@ -45,10 +46,10 @@ const NAV = [
 
 // Primary items for the mobile bottom tab bar
 const BOTTOM_NAV = [
+  { to: "/", label: "Inbox", icon: Tray },
+  { to: "/ingest", label: "Data", icon: FileArrowUp },
   { to: "/brief", label: "Brief", icon: Sun },
-  { to: "/inbox", label: "Inbox", icon: Microphone },
   { to: "/my-work", label: "Work", icon: Briefcase },
-  { to: "/tasks", label: "Tasks", icon: CheckSquare },
   { to: "/ask", label: "Ask", icon: ChatCircleText },
 ];
 

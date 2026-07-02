@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { PageHeader, Chip, EmptyState } from "../components/common";
 import { toast } from "sonner";
-import { Plus, MagnifyingGlass, PencilSimple, Trash, Phone, EnvelopeSimple, MapPin, Warning } from "@phosphor-icons/react";
+import { Plus, MagnifyingGlass, PencilSimple, Trash, Phone, EnvelopeSimple, MapPin, Warning, Eye } from "@phosphor-icons/react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../components/ui/dialog";
 
 const TYPES = ["customer", "dealer", "vendor"];
@@ -124,10 +125,12 @@ function ContactDialog({ trigger, initial, onSaved, users }) {
 export default function Contacts() {
   const { user } = useAuth();
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const [type, setType] = useState("");
   const [status, setStatus] = useState("");
   const [q, setQ] = useState("");
   const canManage = user?.role === "owner" || user?.role === "sales";
+  const can360 = user?.role === "owner" || user?.role === "finance";
 
   const { data } = useQuery({
     queryKey: ["contacts", type, status, q],
@@ -193,6 +196,9 @@ export default function Contacts() {
               </div>
               {canManage && (
                 <div className="flex gap-1">
+                  {can360 && (
+                    <button data-testid={`view-profile-${c.id}`} onClick={() => navigate(`/contacts/${c.id}`)} title="360° profile" className="w-8 h-8 flex items-center justify-center border border-black hover:bg-brand-blue hover:text-white transition-colors"><Eye size={14} weight="bold" /></button>
+                  )}
                   {c.type === "customer" && <ComplaintDialog contact={c} onSaved={refresh} />}
                   <ContactDialog
                     users={users} initial={c} onSaved={refresh}
@@ -200,6 +206,9 @@ export default function Contacts() {
                   />
                   <button data-testid={`delete-contact-${c.id}`} onClick={() => remove(c.id)} className="w-8 h-8 flex items-center justify-center border border-black hover:bg-brand-red hover:text-white transition-colors"><Trash size={14} weight="bold" /></button>
                 </div>
+              )}
+              {!canManage && can360 && (
+                <button data-testid={`view-profile-${c.id}`} onClick={() => navigate(`/contacts/${c.id}`)} title="360° profile" className="w-8 h-8 flex items-center justify-center border border-black hover:bg-brand-blue hover:text-white transition-colors"><Eye size={14} weight="bold" /></button>
               )}
             </div>
             <p className="font-heading font-bold text-lg leading-tight">{c.name}</p>

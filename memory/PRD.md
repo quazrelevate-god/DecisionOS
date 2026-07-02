@@ -28,9 +28,15 @@ Multi-tenant isolation, role-based access, voice+text capture, AI structuring wi
 - **Multilingual voice**: Owner Inbox language selector (Auto / English / Tamil / Tanglish); Whisper transcription (language/prompt) + Claude extraction understand all three and output structured English tasks.
 - Tested: backend 58/58 pytest, frontend 100% across 7 iterations. No product bugs (one cosmetic hydration warning on an `<option>`, non-functional).
 
+## Implemented (2026-07-02) — Data Input + Unified Inbox + 360° + Premium Onboarding
+- **Data ingestion pipeline** (`/ingest`): PDF/image invoice OCR via Gemini vision (`gemini-2.5-flash`) and CSV/Excel import with AI auto-detect (Claude). Upload → AI extraction → editable **review panel** → File it → creates Contacts, Invoices/Bills, Payments + auto follow-up Tasks. New collections: `invoices`, `payments`, `ingestions`. Endpoints: `POST /api/ingest/document|csv`, `POST /api/ingest/{id}/commit`, `GET /api/ingest`, `/invoices`, `/payments`. Filed invoices searchable in Company Brain. WhatsApp webhook stub (`/api/webhooks/whatsapp`) ready, returns not_configured until keys added.
+- **Unified Inbox** = the new PRIMARY home screen (`/`). Merges voice/text capture + uploads + incoming items; every item AI-classified into Customer/Supplier/Invoice/Payment/Complaint/Task/Approval/Reminder. Filter chips w/ open counts, mark done/dismiss, plus owner Pending-Approvals. New `inbox` collection + `add_inbox_item` helper wired into voice processing, ingestion (open→done on commit), complaints. Endpoints: `GET /api/inbox`, `POST /api/inbox/{id}/status`. Old Daily Brief dashboard moved to `/dashboard`.
+- **360° Customer/Supplier profile** (`/contacts/:id`, Owner+Finance only): aggregates contact details, sales/purchase bills, payments, **outstanding** (Σ billed − Σ paid), follow-ups, complaints, tasks, decisions; suppliers add pending deliveries + price history. `GET /api/contacts/{id}/profile`.
+- **Owner-level Ask AI over money** (Owner+Finance): `/api/ask` context extended with invoices, payments, per-party outstanding, company currency and today's date — answers "who owes the most", "not paid in 30 days", "yesterday's sales". Money data withheld from Sales/Production.
+- **Premium 6-step onboarding** ("Digital Executive Office"): Step1 company+account+GST+branches, Step2 business scale, Step3 current software, Step4 connect (Excel live via ingestion; Tally/Zoho coming-soon), Step5 invite employees by mobile (pending invites), Step6 animated "AI learns business". Workspace is created at end of Step3 so Steps 4-5 run authenticated. Tenant now stores gst/branches/business_scale/current_software/invited_employees. Endpoints: `GET/POST /api/invites`.
+- Tested: iterations 11-13 — backend 47/47 (+regression), frontend E2E across owner/finance/sales/production. No product bugs.
+
 ## Backlog / Next
-- **P1**: Real Resend send (plug RESEND_API_KEY); scheduled/cron daily digest.
-- **P1**: Retry/backoff for transient LLM "budget exceeded" in `process_voice_note`.
-- **P2**: Cursor-based pagination for high-volume lists; split server.py into routers.
-- **P2**: Purchase→Payment optional Stripe integration; WhatsApp/SMS alerts (post-MVP open questions).
-- **P2**: Brute-force protection / password strength; explicit CORS origins for production.
+- **P0 (needs user keys)**: WhatsApp Document Ingestion — Meta WhatsApp Cloud API webhook to auto-file forwarded invoices/screenshots via existing `ingest_document` pipeline. Awaiting WHATSAPP_TOKEN / phone-number-id / verify token.
+- **P1 (needs user keys)**: Real SMS employee invites (Twilio) — wire into `POST /api/invites`. Zoho Books connector (customers/invoices/payments/bills) — needs Zoho Client ID/Secret.
+- **P2**: Tally connector (read-only, local agent bridge). Real Resend digest send. Retry/backoff for transient LLM budget errors. Cursor pagination; split server.py into routers. Auto-mark invoices paid when payments reconcile against them.

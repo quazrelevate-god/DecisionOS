@@ -135,7 +135,7 @@ export default function Layout({ children }) {
         <nav className="flex-1 min-h-0 overflow-y-auto py-4">
           <NavItems />
         </nav>
-        <div className="border-t border-black p-4 shrink-0">
+        <div className="border-t border-black p-4 pb-6 shrink-0">
           <div className="mb-2 leading-tight" data-testid="current-user">
             <p className="text-sm font-semibold truncate">{user?.name}</p>
             <p className="label-mono text-muted-foreground truncate">{user?.email}</p>

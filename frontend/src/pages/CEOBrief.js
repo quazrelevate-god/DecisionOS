@@ -13,16 +13,16 @@ const PERIODS = [
 ];
 
 const ROWS = [
-  { key: "delayed", label: "delayed tasks", dot: "bg-brand-red", icon: Clock },
-  { key: "completed", label: "completed", dot: "bg-green-600", icon: CheckCircle },
-  { key: "awaiting_approval", label: "waiting for your approval", dot: "bg-brand-yellow", icon: Stamp },
-  { key: "absent", label: "employees absent", dot: "bg-brand-blue", icon: UserMinus },
-  { key: "complaints", label: "customer complaint(s)", dot: "bg-purple-600", icon: Warning },
-  { key: "payment_overdue", label: "payment(s) overdue", dot: "bg-orange-500", icon: CurrencyInr },
+  { key: "delayed", label: "delayed tasks", bg: "bg-brand-red", on: "text-white", accent: "text-brand-red", icon: Clock },
+  { key: "completed", label: "completed", bg: "bg-green-600", on: "text-white", accent: "text-green-600", icon: CheckCircle },
+  { key: "awaiting_approval", label: "waiting for your approval", bg: "bg-brand-yellow", on: "text-black", accent: "text-amber-600", icon: Stamp },
+  { key: "absent", label: "employees absent", bg: "bg-brand-blue", on: "text-white", accent: "text-brand-blue", icon: UserMinus },
+  { key: "complaints", label: "customer complaint(s)", bg: "bg-purple-600", on: "text-white", accent: "text-purple-600", icon: Warning },
+  { key: "payment_overdue", label: "payment(s) overdue", bg: "bg-orange-500", on: "text-white", accent: "text-orange-500", icon: CurrencyInr },
 ];
 
 export default function CEOBrief() {
-  const { user } = useAuth();
+  useAuth();
   const [period, setPeriod] = useState("morning");
   const { data, isLoading } = useQuery({ queryKey: ["brief", period], queryFn: () => api.get(`/brief?period=${period}`).then((r) => r.data) });
   const { data: complaints } = useQuery({ queryKey: ["complaints", "open"], queryFn: () => api.get("/complaints?status=open").then((r) => r.data) });
@@ -43,28 +43,33 @@ export default function CEOBrief() {
       {isLoading || !data ? (
         <p className="font-mono text-sm">Loading brief…</p>
       ) : (
-        <div className="max-w-2xl">
-          <div className="card-brutal p-8" data-testid="ceo-brief-card">
-            <h2 className="font-heading text-3xl font-black tracking-tighter mb-1">{data.greeting}</h2>
-            <p className="text-sm text-muted-foreground mb-6">Today you have</p>
-            <ul className="space-y-3">
-              {ROWS.map((r) => {
-                const val = data.counters[r.key];
-                const label = r.key === "completed" ? data.completed_label || "completed" : r.label;
-                return (
-                  <li key={r.key} data-testid={`brief-row-${r.key}`} className="flex items-center gap-4 text-lg">
-                    <span className={`w-3 h-3 rounded-full ${r.dot} shrink-0`} />
-                    <span className="font-heading font-black text-2xl w-10 text-right">{val}</span>
-                    <span className="text-base">{label}</span>
-                  </li>
-                );
-              })}
-            </ul>
-            <p className="mt-8 text-sm text-muted-foreground italic">That's it. Exactly like a CEO.</p>
+        <div data-testid="ceo-brief-card">
+          <h2 className="font-heading text-3xl font-black tracking-tighter">{data.greeting}</h2>
+          <p className="text-sm text-muted-foreground mt-1 mb-6">Today you have</p>
+
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+            {ROWS.map((r) => {
+              const val = data.counters[r.key];
+              const label = r.key === "completed" ? (data.completed_label || "completed") : r.label;
+              return (
+                <div key={r.key} data-testid={`brief-row-${r.key}`} className="card-brutal p-6 shadow-hover">
+                  <div className="flex items-center justify-between">
+                    <div className={`w-11 h-11 flex items-center justify-center border border-black ${r.bg} ${r.on}`}>
+                      <r.icon size={22} weight="bold" />
+                    </div>
+                    <span className={`w-3 h-3 rounded-full ${r.bg}`} />
+                  </div>
+                  <p className={`font-heading text-5xl font-black tracking-tighter mt-4 ${r.accent}`} data-testid={`brief-count-${r.key}`}>{val}</p>
+                  <p className="text-sm text-muted-foreground mt-1 leading-tight">{label}</p>
+                </div>
+              );
+            })}
           </div>
 
+          <p className="mt-8 text-sm text-muted-foreground italic">That's it. Exactly like a CEO.</p>
+
           {(complaints || []).length > 0 && (
-            <div className="mt-6">
+            <div className="mt-8 max-w-2xl">
               <h3 className="font-heading font-extrabold uppercase tracking-tight text-lg mb-3">Open Complaints</h3>
               <div className="card-brutal divide-y divide-black/10">
                 {complaints.map((c) => (

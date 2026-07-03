@@ -1,0 +1,43 @@
+{
+  "summary": "Iteration 15 — BUG FIX VERIFIED end-to-end. Company Brain search (GET /api/brain/search) now correctly tokenizes multi-word queries and escapes regex special chars. Backend: 11/11 new tests in test_iteration15.py (multi-word, single-word regression, empty q, regex-special-chars, Ask AI regression) + 38/38 regression (backend_test.py) = 49/49 green. Frontend: /brain page — 'Kumar Garments payment' now shows '24 LINKED RECORD(S)' (was 'no records'); decisions=2, tasks=21, contacts=1. 'cotton supplier' -> 68 records. 'who owes money' -> 1. 'payment (urgent)' -> 21 (no 500, parens escaped). 'cotton+supplier' -> 0 no crash (plus escaped). Single-word 'payment' regression -> 21 records. Ask AI still returns answer for owner. Empty q returns records via $exists filter.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/brain", "issues": ["UI only renders Decisions/Tasks/Workflows/Contacts columns and computes 'linked record(s)' total from those 4. Backend also returns `invoices` (5 hits for 'Kumar Garments payment') and `memory`, but Brain.js discards them — the total under-counts and users cannot see invoice matches from the Brain search UI (pre-existing, not introduced by this fix)."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration15.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/iteration15.xml",
+    "/app/test_reports/pytest/regression15.xml"
+  ],
+  "action_items": [
+    "OPTIONAL/UX: Brain.js should surface `invoices` and `memory` sections (backend already returns them) OR at least include their counts in the 'linked record(s)' total so the UI count matches API response. Not blocking; the reported bug is fixed."
+  ],
+  "critical_code_review_comments": [
+    "brain_search regex is now OR-across-tokens (`t1|t2|t3`). This is good for recall but may cause noisy hits for very common short words. Tokens <2 chars are already filtered — reasonable. Consider also filtering trivial stopwords ('the','and','who','money' etc) or supporting AND-mode via a query flag for precision-heavy searches.",
+    "Empty q with $exists:True dumps up to 50 records per collection (~300 total across 6 collections) — fine for demo tenants, but for large tenants this could be heavy. Consider limiting to 20 per collection when q is empty, or requiring q to be non-empty.",
+    "`q.split()` uses whitespace-only splitting; hyphenated queries like 'kumar-garments' remain a single token — mostly OK, but note `re.escape('-')` produces '\\-' which is safe. Fine.",
+    "server.py is now ~2204 lines (grew again since iter14 report 2010). Same guideline breach: recommend splitting into routers/modules.",
+    "Brain.js line 22: `total` calc excludes invoices+memory but backend returns them — silent drift between backend contract and UI. Add a UI section for invoices (esp. important for owner/finance users who have money_access)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration15.py (new — 11 tests: 4 multi-word, 1 single-word regression, 1 empty q, 4 special-char safety, 1 Ask AI regression)"
+  ],
+  "success_rate": {
+    "backend": "100% (49/49 — 11 iter15 + 38 regression)",
+    "frontend": "100% (6/6 scenarios: multi-word Kumar Garments payment / cotton supplier / who owes money, special-chars payment(urgent) / cotton+supplier, single-word regression payment)"
+  },
+  "test_credentials": "owner@sharma.com / demo1234, sales@sharma.com / demo1234 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "None — used existing Sharma demo tenant seed data (Kumar Garments contact, INV-2045 invoice, cotton-supplier decisions/tasks).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iter15 bug fix in server.py brain_search (line 975) confirmed working. Test file: /app/backend/tests/test_iteration15.py. Run with `python -m pytest backend/tests/test_iteration15.py backend/tests/backend_test.py -o addopts=''` (49 tests, ~50s). Key selectors verified on /brain: brain-search-input, brain-search-button, brain-decision-<id>, brain-task-<id>, brain-contact-<id>; UI shows 'N LINKED RECORD(S)' (uppercase per label-mono class) with 4-column grid. Backend returns 6 collections (decisions/tasks/workflows/contacts/memory/invoices) but UI only shows 4 — see design_issues.",
+  "rca of the issue": "ROOT CAUSE: Old brain_search built regex as `{'$regex': re.escape(q), '$options':'i'}` — so a multi-word query 'Kumar Garments payment' became the single literal substring pattern `Kumar\\ Garments\\ payment` which matches only documents containing that exact contiguous phrase. Since demo docs mention 'Kumar Garments' and 'payment' separately, nothing matched -> 'no records found'. FIX (verified line 978-979): tokens = [re.escape(t) for t in q.split() if len(t)>=2]; rx = {'$regex':'|'.join(tokens),'$options':'i'} if tokens else {'$exists':True} — builds an OR pattern like `Kumar|Garments|payment` so any doc containing any token hits. Special chars in each token still re.escape'd (parens/plus safe), and empty/all-short-token queries fall back to $exists which returns any records. REPRO (before fix): GET /api/brain/search?q=Kumar%20Garments%20payment -> all arrays empty. VERIFICATION (after fix): same request -> {decisions:2, tasks:21, workflows:0, contacts:1, memory:0, invoices:5}. MITIGATION: none needed; fix is in place and both backend+frontend confirm resolution."
+}

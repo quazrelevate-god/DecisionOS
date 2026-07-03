@@ -975,7 +975,8 @@ async def advance_workflow(workflow_id: str, inp: WorkflowAdvanceInput, user: di
 @api.get("/brain/search")
 async def brain_search(q: str = "", user: dict = Depends(get_current_user)):
     tid = user["tenant_id"]
-    rx = {"$regex": q, "$options": "i"} if q else {"$exists": True}
+    tokens = [re.escape(t) for t in q.split() if len(t) >= 2]
+    rx = {"$regex": "|".join(tokens), "$options": "i"} if tokens else {"$exists": True}
     decisions = await db.decisions.find({"tenant_id": tid, "$or": [{"title": rx}, {"summary": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
     tasks = await db.tasks.find({"tenant_id": tid, "$or": [{"title": rx}, {"description": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
     workflows = await db.workflows.find({"tenant_id": tid, "$or": [{"title": rx}, {"detail": rx}, {"counterparty": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)

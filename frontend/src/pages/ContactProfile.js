@@ -145,7 +145,7 @@ export default function ContactProfile() {
             {(rel.signals || []).length > 0 && (
               <div className="flex flex-wrap gap-2 mt-3" data-testid="rel-signals">
                 {rel.signals.map((s, i) => (
-                  <span key={i} className="inline-block px-2 py-0.5 text-xs border border-black bg-white">{s}</span>
+                  <span key={`sig-${i}-${s.slice(0, 20)}`} className="inline-block px-2 py-0.5 text-xs border border-black bg-white">{s}</span>
                 ))}
               </div>
             )}
@@ -196,7 +196,7 @@ export default function ContactProfile() {
       {isVendor && price_history.length > 0 && (
         <Section icon={TrendUp} title="Price History" count={price_history.length}>
           <Table head={["Item", "Rate", "Date"]} rows={price_history.map((h, i) => (
-            <tr key={i} className="border-t border-black/10">
+            <tr key={`${h.item || "row"}-${h.date || ""}-${i}`} className="border-t border-black/10">
               <td className="px-3 py-2">{h.item}</td>
               <td className="px-3 py-2 font-semibold">{money(h.rate, cur)}</td>
               <td className="px-3 py-2 font-mono text-xs">{h.date || "—"}</td>

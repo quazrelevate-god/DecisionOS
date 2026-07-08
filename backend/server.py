@@ -10,7 +10,6 @@ import json
 import hmac
 import hashlib
 import logging
-import asyncio
 import httpx
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
@@ -1870,7 +1869,7 @@ async def ask_ai(inp: AskInput, user: dict = Depends(get_current_user)):
     chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=f"ask-{tid}", system_message=system).with_model(*LLM_MODEL)
     try:
         raw = await chat.send_message(UserMessage(text=prompt))
-    except Exception as e:
+    except Exception:
         logger.exception("ask_ai failed")
         raise HTTPException(status_code=502, detail="AI service error")
     try:
@@ -2875,7 +2874,7 @@ async def process_whatsapp_message(message: dict):
             })
             await process_voice_note(note_id)
             await send_wa_reply(sender, "✅ Got it — logged to DecisionOS and structured into your inbox.")
-    except Exception as e:
+    except Exception:
         logger.exception("process_whatsapp_message failed")
         await send_wa_reply(sender, "Sorry, I couldn't process that. Please try again.")
 

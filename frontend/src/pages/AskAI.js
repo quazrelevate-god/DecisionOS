@@ -15,20 +15,21 @@ export default function AskAI() {
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
   const endRef = useRef(null);
+  const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [log, busy]);
 
   const ask = async (question) => {
     const text = question ?? q;
     if (!text.trim() || busy) return;
-    setLog((l) => [...l, { role: "user", text }]);
+    setLog((l) => [...l, { id: uid(), role: "user", text }]);
     setQ("");
     setBusy(true);
     try {
       const { data } = await api.post("/ask", { question: text });
-      setLog((l) => [...l, { role: "ai", text: data.answer, citations: data.citations || [] }]);
+      setLog((l) => [...l, { id: uid(), role: "ai", text: data.answer, citations: data.citations || [] }]);
     } catch {
-      setLog((l) => [...l, { role: "ai", text: "AI service error. Please try again." }]);
+      setLog((l) => [...l, { id: uid(), role: "ai", text: "AI service error. Please try again." }]);
     } finally {
       setBusy(false);
     }
@@ -46,7 +47,7 @@ export default function AskAI() {
           </div>
         )}
         {log.map((m, i) => (
-          <div key={i} data-testid={`chat-msg-${m.role}-${i}`}>
+          <div key={m.id} data-testid={`chat-msg-${m.role}-${i}`}>
             {m.role === "user" ? (
               <p className="text-brand-yellow">{"> "}{m.text}</p>
             ) : (
@@ -56,7 +57,7 @@ export default function AskAI() {
                   <div className="flex flex-wrap gap-1.5 mt-2" data-testid={`citations-${i}`}>
                     <span className="text-white/40 text-xs uppercase tracking-wider mr-1">Sources:</span>
                     {m.citations.map((c, ci) => (
-                      <span key={ci} data-testid="citation-chip" className="inline-flex items-center gap-1 border border-white/40 text-white/80 px-2 py-0.5 text-[11px]">
+                      <span key={`${c.type}-${c.title}-${ci}`} data-testid="citation-chip" className="inline-flex items-center gap-1 border border-white/40 text-white/80 px-2 py-0.5 text-[11px]">
                         <span className="text-brand-red uppercase">{c.type}</span> {c.title}
                       </span>
                     ))}

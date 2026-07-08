@@ -118,7 +118,7 @@ export default function WorkCoach() {
               </div>
               <ul className="space-y-2">
                 {s.strengths.map((it, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm">
+                  <li key={`str-${i}-${it.slice(0, 24)}`} className="flex items-start gap-2 text-sm">
                     <CheckCircle size={16} weight="fill" className="text-green-600 shrink-0 mt-0.5" /> {it}
                   </li>
                 ))}
@@ -131,7 +131,7 @@ export default function WorkCoach() {
               </div>
               <ul className="space-y-2">
                 {s.improvements.map((it, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm">
+                  <li key={`imp-${i}-${it.slice(0, 24)}`} className="flex items-start gap-2 text-sm">
                     <span className="text-amber-600 font-bold shrink-0">→</span> {it}
                   </li>
                 ))}

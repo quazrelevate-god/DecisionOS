@@ -271,7 +271,7 @@ export default function Inbox() {
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold leading-tight">{t.title.replace(/^Follow-up:\s*/, "")}</p>
-                  {t.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{t.description}</p>}
+                  {t.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{t.description.split(/Context:\s*/).pop()}</p>}
                   <p className="label-mono text-brand-red mt-1">Open in My Work →</p>
                 </div>
               </button>

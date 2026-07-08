@@ -50,7 +50,7 @@ function ComplaintDialog({ contact, onSaved }) {
 
 function ContactDialog({ trigger, initial, onSaved, users }) {
   const [open, setOpen] = useState(false);
-  const blank = { type: "customer", name: "", company: "", phone: "", email: "", address: "", tax_id: "", tags: "", status: "lead", assigned_id: "", notes: "" };
+  const blank = { type: "customer", name: "", company: "", phone: "", email: "", address: "", tax_id: "", tags: "", status: "lead", assigned_id: "", notes: "", birthday: "" };
   const [form, setForm] = useState(blank);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
@@ -58,7 +58,7 @@ function ContactDialog({ trigger, initial, onSaved, users }) {
     setOpen(o);
     if (o) {
       setForm(initial
-        ? { ...initial, tags: (initial.tags || []).join(", "), assigned_id: initial.assigned_id || "", company: initial.company || "", phone: initial.phone || "", email: initial.email || "", address: initial.address || "", tax_id: initial.tax_id || "", notes: initial.notes || "" }
+        ? { ...initial, tags: (initial.tags || []).join(", "), assigned_id: initial.assigned_id || "", company: initial.company || "", phone: initial.phone || "", email: initial.email || "", address: initial.address || "", tax_id: initial.tax_id || "", notes: initial.notes || "", birthday: initial.birthday || "" }
         : blank);
     }
   };
@@ -68,7 +68,7 @@ function ContactDialog({ trigger, initial, onSaved, users }) {
     const payload = {
       type: form.type, name: form.name, company: form.company, phone: form.phone, email: form.email,
       address: form.address, tax_id: form.tax_id, status: form.status,
-      assigned_id: form.assigned_id || null, notes: form.notes,
+      assigned_id: form.assigned_id || null, notes: form.notes, birthday: form.birthday,
       tags: form.tags ? form.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
     };
     try {
@@ -106,6 +106,10 @@ function ContactDialog({ trigger, initial, onSaved, users }) {
           <div className="grid grid-cols-2 gap-3">
             <input className={inp} placeholder="GST / Tax ID" value={form.tax_id} onChange={set("tax_id")} />
             <input className={inp} placeholder="Tags (comma separated)" value={form.tags} onChange={set("tags")} />
+          </div>
+          <div>
+            <label className="label-mono text-muted-foreground">Birthday (optional)</label>
+            <input type="date" data-testid="contact-birthday-input" className={inp} value={form.birthday} onChange={set("birthday")} />
           </div>
           <select data-testid="contact-assigned-select" className={inp} value={form.assigned_id} onChange={set("assigned_id")}>
             <option value="">Assign owner…</option>

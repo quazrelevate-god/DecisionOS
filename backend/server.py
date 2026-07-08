@@ -273,6 +273,7 @@ class ContactInput(BaseModel):
     status: Optional[str] = "lead"
     assigned_id: Optional[str] = None
     notes: Optional[str] = ""
+    birthday: Optional[str] = ""
 
 
 class ContactUpdateInput(BaseModel):
@@ -287,6 +288,7 @@ class ContactUpdateInput(BaseModel):
     status: Optional[str] = None
     assigned_id: Optional[str] = None
     notes: Optional[str] = None
+    birthday: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -452,6 +454,80 @@ async def ai_score_tasks(tasks: list, currency: str, session_id: str) -> dict:
     except Exception as e:
         logger.error(f"AI score parse error: {e} :: {resp[:300]}")
     return out
+
+
+async def ai_score_contact(contact: dict, metrics: dict, currency: str, session_id: str) -> dict:
+    """Score a customer/supplier relationship. Returns {relationship_score, risk_score, reason, signals}."""
+    ctype = contact.get("type") or "customer"
+    payload = {
+        "name": contact.get("name"), "type": ctype,
+        "status": contact.get("status"), "tags": contact.get("tags"),
+        "outstanding": metrics.get("outstanding"), "total_billed": metrics.get("total_billed"),
+        "total_paid": metrics.get("total_paid"), "last_payment": metrics.get("last_payment"),
+        "open_complaints": metrics.get("open_complaints"),
+        "pending_deliveries": metrics.get("pending_deliveries"),
+        "invoice_count": metrics.get("invoice_count"), "payment_count": metrics.get("payment_count"),
+    }
+    system = (
+        "You are the relationship-intelligence engine of DecisionOS for a small business. "
+        f"Currency is {currency}. Given a {ctype}'s financial & interaction history, rate two things 0-100: "
+        "relationship_score (overall health/value of the relationship — high = strong, loyal, profitable), and "
+        "risk_score (likelihood of a problem — non-payment, churn, complaints, supply risk; high = risky). "
+        "Give a one-line reason and up to 3 short signal phrases. "
+        "Return ONLY valid JSON: {\"relationship_score\":int,\"risk_score\":int,\"reason\":string,\"signals\":[string]}."
+    )
+    prompt = json.dumps(payload, ensure_ascii=False, default=str) + "\nScore this relationship now."
+    chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=session_id, system_message=system).with_model(*LLM_MODEL)
+    resp = await chat.send_message(UserMessage(text=prompt))
+    def clamp(v):
+        try:
+            return max(0, min(100, int(round(float(v)))))
+        except Exception:
+            return 0
+    try:
+        d = _extract_json(resp)
+        return {
+            "relationship_score": clamp(d.get("relationship_score")),
+            "risk_score": clamp(d.get("risk_score")),
+            "reason": str(d.get("reason") or "")[:200],
+            "signals": [str(s)[:60] for s in (d.get("signals") or [])][:3],
+        }
+    except Exception as e:
+        logger.error(f"AI contact score parse error: {e} :: {resp[:300]}")
+        return {}
+
+
+async def ai_meeting_notes(transcript: str, members: list, session_id: str) -> dict:
+    """Turn a raw meeting transcript into structured minutes + action items."""
+    names = [m.get("name") for m in (members or []) if m.get("name")]
+    members_line = ("Team members you may assign action items to by name: " + ", ".join(names) + ". "
+                    "Set action_items[].assignee_name to the closest matching name when a person is named, else empty. ") if names else ""
+    system = (
+        "You are the meeting-notes engine of DecisionOS for a small business. "
+        "Convert a raw meeting transcript into concise, structured minutes. Return ONLY valid JSON: "
+        "{\"title\": string (short meeting title), \"summary\": string (2-4 sentences), "
+        "\"key_points\": [string], \"decisions\": [string], "
+        "\"action_items\": [{\"title\": string, \"assignee_name\": string, \"due_in_days\": integer or null}]}. "
+        + members_line +
+        "The transcript may be English, Tamil or Tanglish — understand it and output all values in clear English."
+    )
+    prompt = f"Meeting transcript:\n\"\"\"\n{transcript}\n\"\"\"\nExtract the structured minutes now."
+    chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=session_id, system_message=system).with_model(*LLM_MODEL)
+    resp = await chat.send_message(UserMessage(text=prompt))
+    try:
+        d = _extract_json(resp)
+    except Exception as e:
+        logger.error(f"AI meeting parse error: {e} :: {resp[:300]}")
+        d = {}
+    d.setdefault("title", "Meeting")
+    d.setdefault("summary", (transcript or "")[:200])
+    for k in ("key_points", "decisions", "action_items"):
+        if not isinstance(d.get(k), list):
+            d[k] = []
+    return d
+
+
+
 
 
 
@@ -784,6 +860,7 @@ async def create_contact(inp: ContactInput, user: dict = Depends(require_role("o
         "company": inp.company or "", "phone": inp.phone or "", "email": inp.email or "",
         "address": inp.address or "", "tax_id": inp.tax_id or "", "tags": inp.tags or [],
         "status": status, "assigned_id": inp.assigned_id, "notes": inp.notes or "",
+        "birthday": inp.birthday or "",
         "created_by": user["id"], "created_at": now_iso(),
     }
     await db.contacts.insert_one(doc)
@@ -869,6 +946,171 @@ async def get_voice_note(note_id: str, user: dict = Depends(get_current_user)):
 
 
 # ---------------------------------------------------------------------------
+# Meeting Notes
+# ---------------------------------------------------------------------------
+async def process_meeting(meeting_id: str):
+    m = await db.meetings.find_one({"id": meeting_id})
+    if not m:
+        return
+    tid = m["tenant_id"]
+    try:
+        await db.meetings.update_one({"id": meeting_id}, {"$set": {"status": "transcribing"}})
+        transcript = m.get("transcript")
+        if not transcript and m.get("audio_path"):
+            transcript = await transcribe_audio(m["audio_path"], m.get("language", "auto"))
+            await db.meetings.update_one({"id": meeting_id}, {"$set": {"transcript": transcript}})
+        await db.meetings.update_one({"id": meeting_id}, {"$set": {"status": "structuring"}})
+        members = await db.users.find({"tenant_id": tid}, {"_id": 0, "id": 1, "name": 1, "role": 1}).to_list(200)
+        notes = await ai_meeting_notes(transcript or "", members, session_id=f"meeting-{meeting_id}")
+        task_ids = []
+        for a in notes.get("action_items", []):
+            if not a.get("title"):
+                continue
+            due = None
+            if isinstance(a.get("due_in_days"), int):
+                due = (datetime.now(timezone.utc) + timedelta(days=a["due_in_days"])).isoformat()
+            member = match_member_by_name(members, a.get("assignee_name", ""))
+            tid_task = new_id()
+            await db.tasks.insert_one({
+                "id": tid_task, "tenant_id": tid, "title": a["title"], "description": "From meeting notes",
+                "assignee_role": member["role"] if member else None, "assignee_id": member["id"] if member else None,
+                "priority": "medium", "status": "todo", "due_date": due, "decision_id": None,
+                "source": "meeting", "created_at": now_iso(),
+            })
+            task_ids.append(tid_task)
+        await db.meetings.update_one({"id": meeting_id}, {"$set": {
+            "title": notes.get("title"), "summary": notes.get("summary"),
+            "key_points": notes.get("key_points", []), "decisions": notes.get("decisions", []),
+            "action_items": notes.get("action_items", []), "task_ids": task_ids,
+            "status": "done", "processed_at": now_iso(),
+        }})
+        await log_activity(tid, m["created_by"], "meeting_processed",
+                           f"Meeting notes ready: '{notes.get('title')}' — {len(task_ids)} action item(s)", "meeting", meeting_id)
+    except Exception as e:
+        logger.exception("process_meeting failed")
+        await db.meetings.update_one({"id": meeting_id}, {"$set": {"status": "failed", "error": str(e)}})
+
+
+@api.post("/meetings")
+async def create_meeting(background: BackgroundTasks, file: UploadFile = File(...), language: str = Form("auto"), user: dict = Depends(get_current_user)):
+    mid = new_id()
+    ext = (file.filename or "audio.webm").split(".")[-1]
+    path = UPLOAD_DIR / f"meeting-{mid}.{ext}"
+    content = await file.read()
+    with open(path, "wb") as f:
+        f.write(content)
+    await db.meetings.insert_one({
+        "id": mid, "tenant_id": user["tenant_id"], "created_by": user["id"], "created_by_name": user.get("name"),
+        "kind": "audio", "audio_path": str(path), "transcript": None, "language": language,
+        "title": "Processing meeting…", "summary": "", "key_points": [], "decisions": [], "action_items": [],
+        "status": "queued", "created_at": now_iso(),
+    })
+    background.add_task(process_meeting, mid)
+    return {"id": mid, "status": "queued"}
+
+
+@api.post("/meetings/text")
+async def create_meeting_text(inp: TextNoteInput, background: BackgroundTasks, user: dict = Depends(get_current_user)):
+    mid = new_id()
+    await db.meetings.insert_one({
+        "id": mid, "tenant_id": user["tenant_id"], "created_by": user["id"], "created_by_name": user.get("name"),
+        "kind": "text", "audio_path": None, "transcript": inp.text, "language": inp.language or "auto",
+        "title": "Processing meeting…", "summary": "", "key_points": [], "decisions": [], "action_items": [],
+        "status": "queued", "created_at": now_iso(),
+    })
+    background.add_task(process_meeting, mid)
+    return {"id": mid, "status": "queued"}
+
+
+@api.get("/meetings")
+async def list_meetings(user: dict = Depends(get_current_user)):
+    return await db.meetings.find({"tenant_id": user["tenant_id"]}, {"_id": 0, "audio_path": 0}).sort("created_at", -1).to_list(100)
+
+
+@api.get("/meetings/{meeting_id}")
+async def get_meeting(meeting_id: str, user: dict = Depends(get_current_user)):
+    m = await db.meetings.find_one({"id": meeting_id, "tenant_id": user["tenant_id"]}, {"_id": 0, "audio_path": 0})
+    if not m:
+        raise HTTPException(status_code=404, detail="Not found")
+    return m
+
+
+
+# ---------------------------------------------------------------------------
+# Operating Score
+# ---------------------------------------------------------------------------
+def _clamp100(v):
+    return max(0, min(100, int(round(v))))
+
+
+@api.get("/operating-score")
+async def operating_score(user: dict = Depends(get_current_user)):
+    tid = user["tenant_id"]
+    now = datetime.now(timezone.utc).isoformat()
+    can_finance = user.get("role") == "owner" or "finance" in user_perms(user)
+
+    tasks = await db.tasks.find({"tenant_id": tid}, {"_id": 0}).to_list(2000)
+    decisions = await db.decisions.find({"tenant_id": tid}, {"_id": 0, "status": 1}).to_list(2000)
+    complaints = await db.complaints.find({"tenant_id": tid}, {"_id": 0, "status": 1}).to_list(500)
+
+    def is_open(t):
+        return t.get("status") in ("todo", "in_progress", "blocked")
+    done = sum(1 for t in tasks if t.get("status") == "done")
+    open_tasks = [t for t in tasks if is_open(t)]
+    overdue = sum(1 for t in open_tasks if t.get("due_date") and t["due_date"] < now)
+    actionable = done + len(open_tasks)
+    completion = (done / actionable) if actionable else 0.7
+    overdue_ratio = (overdue / len(open_tasks)) if open_tasks else 0
+    execution = _clamp100(completion * 100 - overdue_ratio * 40)
+
+    total_billed = total_paid = 0.0
+    overdue_inv = 0
+    if can_finance:
+        invs = await db.invoices.find({"tenant_id": tid}, {"_id": 0, "amount": 1, "type": 1, "status": 1, "due_date": 1}).to_list(2000)
+        pays = await db.payments.find({"tenant_id": tid}, {"_id": 0, "amount": 1}).to_list(2000)
+        total_billed = sum(float(i.get("amount") or 0) for i in invs if i.get("type") == "sales_invoice")
+        total_paid = sum(float(p.get("amount") or 0) for p in pays)
+        overdue_inv = sum(1 for i in invs if i.get("type") == "sales_invoice" and i.get("status") != "paid" and i.get("due_date") and i["due_date"] < now)
+    collected = (min(total_paid, total_billed) / total_billed) if total_billed else 0.7
+    finance = _clamp100(collected * 100 - overdue_inv * 5)
+
+    total_dec = len(decisions)
+    approved = sum(1 for d in decisions if d.get("status") == "approved")
+    approved_rate = (approved / total_dec) if total_dec else 0.7
+    sales = _clamp100(approved_rate * 100)
+
+    open_complaints = sum(1 for c in complaints if c.get("status") != "resolved")
+    responsiveness = _clamp100(100 - open_complaints * 12 - overdue * 3)
+
+    categories = {"execution": execution, "finance": finance, "sales": sales, "responsiveness": responsiveness}
+    weights = {"execution": 0.35, "finance": 0.25, "sales": 0.2, "responsiveness": 0.2}
+    overall = _clamp100(sum(categories[k] * weights[k] for k in categories))
+
+    # Per-employee execution
+    members = await db.users.find({"tenant_id": tid}, {"_id": 0, "id": 1, "name": 1, "role": 1}).to_list(200)
+    employees = []
+    for mbr in members:
+        mine = [t for t in tasks if t.get("assignee_id") == mbr["id"] or (not t.get("assignee_id") and t.get("assignee_role") == mbr["role"])]
+        m_done = sum(1 for t in mine if t.get("status") == "done")
+        m_open = [t for t in mine if is_open(t)]
+        m_overdue = sum(1 for t in m_open if t.get("due_date") and t["due_date"] < now)
+        m_action = m_done + len(m_open)
+        m_comp = (m_done / m_action) if m_action else 0
+        m_score = _clamp100(m_comp * 100 - (m_overdue / len(m_open) if m_open else 0) * 40) if m_action else None
+        employees.append({"id": mbr["id"], "name": mbr["name"], "role": mbr["role"],
+                          "score": m_score, "done": m_done, "open": len(m_open), "overdue": m_overdue})
+    employees.sort(key=lambda e: (e["score"] if e["score"] is not None else -1), reverse=True)
+
+    return {
+        "company": {"overall": overall, "categories": categories},
+        "stats": {"done": done, "open": len(open_tasks), "overdue": overdue,
+                  "total_decisions": total_dec, "approved": approved, "open_complaints": open_complaints,
+                  "outstanding": round(total_billed - total_paid, 2) if can_finance else None},
+        "employees": employees,
+        "can_finance": can_finance,
+    }
+
+
 # Decisions
 # ---------------------------------------------------------------------------
 async def enrich_decision(d: dict) -> dict:
@@ -1996,7 +2238,113 @@ async def contact_profile(contact_id: str, user: dict = Depends(require_perm("fi
         "tasks": await enrich_tasks(tasks),
         "decisions": decisions,
         "price_history": price_history,
+        "ai_relationship": c.get("ai_relationship"),
     }
+
+
+@api.post("/contacts/{contact_id}/rescore")
+async def rescore_contact(contact_id: str, user: dict = Depends(require_perm("finance"))):
+    tid = user["tenant_id"]
+    c = await db.contacts.find_one({"id": contact_id, "tenant_id": tid}, {"_id": 0})
+    if not c:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    name = c.get("name") or ""
+    name_rx = {"$regex": f"^{re.escape(name)}$", "$options": "i"}
+    match_party = {"tenant_id": tid, "$or": [{"contact_id": contact_id}, {"contact_name": name_rx}]}
+    invoices = await db.invoices.find(match_party, {"_id": 0, "amount": 1}).to_list(500)
+    payments = await db.payments.find(match_party, {"_id": 0, "amount": 1, "date": 1}).sort("created_at", -1).to_list(500)
+    complaints = await db.complaints.find({"tenant_id": tid, "customer_id": contact_id}, {"_id": 0, "status": 1}).to_list(200)
+    workflows = await db.workflows.find({"tenant_id": tid, "contact_id": contact_id}, {"_id": 0, "stage": 1}).to_list(200)
+    total_billed = sum(float(i.get("amount") or 0) for i in invoices)
+    total_paid = sum(float(p.get("amount") or 0) for p in payments)
+    metrics = {
+        "outstanding": round(total_billed - total_paid, 2), "total_billed": round(total_billed, 2),
+        "total_paid": round(total_paid, 2), "last_payment": payments[0].get("date") if payments else None,
+        "open_complaints": len([x for x in complaints if x.get("status") != "resolved"]),
+        "pending_deliveries": len([w for w in workflows if w.get("stage") not in ("delivered", "paid")]),
+        "invoice_count": len(invoices), "payment_count": len(payments),
+    }
+    currency = await _tenant_currency(tid)
+    scores = await ai_score_contact(c, metrics, currency, session_id=f"contact-{contact_id}")
+    if scores:
+        scores["scored_at"] = now_iso()
+        await db.contacts.update_one({"id": contact_id}, {"$set": {"ai_relationship": scores}})
+    return {"ai_relationship": scores}
+
+
+@api.get("/calendar")
+async def business_calendar(days: int = 45, user: dict = Depends(get_current_user)):
+    """Unified business calendar: upcoming payments due, task deadlines, deliveries, complaints, birthdays."""
+    tid = user["tenant_id"]
+    can_finance = user.get("role") == "owner" or "finance" in user_perms(user)
+    now = datetime.now(timezone.utc)
+    start = (now - timedelta(days=14)).date().isoformat()
+    end = (now + timedelta(days=days)).date().isoformat()
+    events = []
+
+    def add(date, etype, title, subtitle="", contact_id=None, entity_id=None, amount=None):
+        d = (date or "")[:10]
+        if not d:
+            return
+        events.append({"date": d, "type": etype, "title": title, "subtitle": subtitle,
+                       "contact_id": contact_id, "entity_id": entity_id, "amount": amount,
+                       "overdue": d < now.date().isoformat()})
+
+    # Payments due (unpaid sales invoices) — finance only
+    if can_finance:
+        invs = await db.invoices.find(
+            {"tenant_id": tid, "type": "sales_invoice", "status": {"$ne": "paid"}, "due_date": {"$ne": None}},
+            {"_id": 0}).to_list(500)
+        for i in invs:
+            add(i.get("due_date"), "payment_due",
+                f"Payment due: {i.get('contact_name') or 'Customer'}",
+                f"{i.get('currency') or ''} {i.get('amount')}", i.get("contact_id"), i.get("id"), i.get("amount"))
+
+    # Task deadlines (open)
+    tasks = await db.tasks.find(
+        {"tenant_id": tid, "status": {"$in": ["todo", "in_progress", "blocked"]}, "due_date": {"$ne": None}},
+        {"_id": 0}).to_list(500)
+    for t in tasks:
+        add(t.get("due_date"), "task", t.get("title", "Task"),
+            (t.get("assignee_role") or "team"), None, t.get("id"))
+
+    # Deliveries (open sales workflows)
+    wfs = await db.workflows.find(
+        {"tenant_id": tid, "type": "sales_dispatch", "stage": {"$nin": ["delivered", "paid"]}},
+        {"_id": 0}).to_list(300)
+    for w in wfs:
+        dt = w.get("expected_date") or w.get("due_date")
+        if dt:
+            add(dt, "delivery", f"Delivery: {w.get('title') or w.get('counterparty') or 'Order'}",
+                (w.get("stage") or "").replace("_", " "), w.get("contact_id"), w.get("id"))
+
+    # Complaints (recent)
+    comps = await db.complaints.find({"tenant_id": tid}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    for c in comps:
+        add(c.get("created_at"), "complaint", f"Complaint: {(c.get('text') or '')[:50]}",
+            c.get("severity") or "", c.get("customer_id"), c.get("id"))
+
+    # Birthdays (this year, from contact.birthday MM-DD or YYYY-MM-DD)
+    contacts = await db.contacts.find({"tenant_id": tid, "birthday": {"$nin": [None, ""]}},
+                                      {"_id": 0, "id": 1, "name": 1, "birthday": 1}).to_list(500)
+    for c in contacts:
+        b = (c.get("birthday") or "").strip()
+        md = b[-5:] if len(b) >= 5 else ""
+        if len(md) == 5 and "-" in md:
+            add(f"{now.year}-{md}", "birthday", f"Birthday: {c.get('name')}", "", c.get("id"))
+
+    events = [e for e in events if start <= e["date"] <= end]
+    events.sort(key=lambda e: e["date"])
+    days_map = {}
+    for e in events:
+        days_map.setdefault(e["date"], []).append(e)
+    grouped = [{"date": d, "events": evs} for d, evs in sorted(days_map.items())]
+    counts = {}
+    for e in events:
+        counts[e["type"]] = counts.get(e["type"], 0) + 1
+    return {"days": grouped, "counts": counts, "total": len(events)}
+
+
 
 
 @api.get("/webhooks/whatsapp")

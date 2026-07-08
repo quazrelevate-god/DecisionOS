@@ -20,6 +20,9 @@ import Ingest from "./pages/Ingest";
 import ContactProfile from "./pages/ContactProfile";
 import Journal from "./pages/Journal";
 import Priorities from "./pages/Priorities";
+import Calendar from "./pages/Calendar";
+import Meetings from "./pages/Meetings";
+import OperatingScore from "./pages/OperatingScore";
 
 function Protected({ children }) {
   const { user, loading } = useAuth();
@@ -53,6 +56,9 @@ function App() {
             <Route path="/ingest" element={<Protected><Ingest /></Protected>} />
             <Route path="/tasks" element={<Protected><Tasks /></Protected>} />
             <Route path="/priorities" element={<Protected><Priorities /></Protected>} />
+            <Route path="/calendar" element={<Protected><Calendar /></Protected>} />
+            <Route path="/meetings" element={<Protected><Meetings /></Protected>} />
+            <Route path="/operating-score" element={<Protected><OperatingScore /></Protected>} />
             <Route path="/brain" element={<Protected><Brain /></Protected>} />
             <Route path="/ask" element={<Protected><AskAI /></Protected>} />
             <Route path="/team" element={<Protected><Team /></Protected>} />

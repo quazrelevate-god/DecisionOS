@@ -7,6 +7,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "../components/ui/dialog";
 import {
   MagnifyingGlass,
@@ -73,6 +74,7 @@ function TimelineDialog({ decisionId, open, onClose }) {
           <DialogTitle className="font-heading text-2xl font-black uppercase tracking-tighter pr-6">
             {data?.title || "Decision Timeline"}
           </DialogTitle>
+          <DialogDescription className="sr-only">Git-style history of this decision</DialogDescription>
         </DialogHeader>
         {data?.status && <Chip value={data.status} className="w-fit" />}
         {isLoading ? (

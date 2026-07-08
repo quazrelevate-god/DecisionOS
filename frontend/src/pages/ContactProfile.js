@@ -1,13 +1,14 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
 import { Chip, EmptyState } from "../components/common";
 import { money } from "../lib/format";
+import { toast } from "sonner";
 import {
   ArrowLeft, Phone, EnvelopeSimple, MapPin, Receipt, CurrencyCircleDollar,
-  Warning, Truck, TrendUp, Brain, CheckSquare, Buildings,
+  Warning, Truck, TrendUp, Brain, CheckSquare, Buildings, Sparkle, Heart, ShieldWarning,
 } from "@phosphor-icons/react";
 
 const Stat = ({ label, value, accent, testid }) => (
@@ -44,6 +45,7 @@ export default function ContactProfile() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const canView = hasPerm(user, "finance");
+  const qc = useQueryClient();
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["contact-profile", id],
@@ -52,13 +54,38 @@ export default function ContactProfile() {
     retry: false,
   });
 
+  const rescore = useMutation({
+    mutationFn: () => api.post(`/contacts/${id}/rescore`).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["contact-profile", id] });
+      toast.success("Relationship scored by AI");
+    },
+    onError: () => toast.error("Could not score right now"),
+  });
+
   if (!canView) return <EmptyState title="Restricted" hint="The 360° profile is available to Owner and Finance only." />;
   if (isLoading) return <div className="font-mono text-sm uppercase tracking-widest py-20 text-center">Loading profile…</div>;
   if (error) return <EmptyState title="Not found" hint="This contact could not be loaded." />;
 
-  const { contact: c, summary, invoices, payments, complaints, pending_deliveries, follow_ups, decisions, price_history } = data;
+  const { contact: c, summary, invoices, payments, complaints, pending_deliveries, follow_ups, decisions, price_history, ai_relationship } = data;
   const isVendor = c.type === "vendor";
   const cur = invoices?.[0]?.currency || "INR";
+  const rel = ai_relationship;
+
+  const ScoreBox = ({ label, value, Icon, good }) => {
+    const color = value == null ? "text-black/30" : good ? (value >= 60 ? "text-green-600" : value >= 30 ? "text-amber-600" : "text-brand-red")
+      : (value >= 60 ? "text-brand-red" : value >= 30 ? "text-amber-600" : "text-green-600");
+    return (
+      <div className="flex items-center gap-3" data-testid={`rel-${label.toLowerCase()}`}>
+        <div className="w-14 h-14 flex flex-col items-center justify-center border-2 border-black bg-white shrink-0">
+          <span className={`font-heading text-2xl font-black leading-none ${color}`}>{value != null ? value : "—"}</span>
+        </div>
+        <div className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide">
+          <Icon size={16} weight="bold" className="text-muted-foreground" /> {label}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div>
@@ -88,6 +115,42 @@ export default function ContactProfile() {
         <Stat testid="stat-billed" label={isVendor ? "Total Billed" : "Total Invoiced"} value={money(summary.total_billed, cur)} />
         <Stat testid="stat-paid" label="Total Paid" value={money(summary.total_paid, cur)} />
         <Stat testid="stat-complaints" label="Open Complaints" value={summary.open_complaints} accent={summary.open_complaints > 0 ? "text-purple-600" : ""} />
+      </div>
+
+      {/* AI Relationship Intelligence */}
+      <div className="card-brutal p-6 mb-8" data-testid="relationship-card">
+        <div className="flex items-center justify-between gap-4 flex-wrap mb-4">
+          <div className="flex items-center gap-2">
+            <Sparkle size={18} weight="bold" className="text-brand-red" />
+            <h2 className="font-heading text-xl font-extrabold uppercase tracking-tight">Relationship Intelligence</h2>
+          </div>
+          <button
+            onClick={() => rescore.mutate()}
+            disabled={rescore.isPending}
+            data-testid="rescore-contact-btn"
+            className="flex items-center gap-2 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider bg-brand-yellow hover:shadow-brutal-sm transition-all disabled:opacity-50"
+          >
+            <Sparkle size={16} weight="bold" /> {rescore.isPending ? "Scoring…" : rel ? "Re-score" : "Score with AI"}
+          </button>
+        </div>
+        {!rel ? (
+          <p className="text-sm text-muted-foreground">No AI assessment yet. Click "Score with AI" to analyze this relationship's health and risk.</p>
+        ) : (
+          <div>
+            <div className="flex flex-wrap gap-8">
+              <ScoreBox label="Relationship" value={rel.relationship_score} Icon={Heart} good />
+              <ScoreBox label="Risk" value={rel.risk_score} Icon={ShieldWarning} good={false} />
+            </div>
+            {rel.reason && <p className="text-sm mt-4 italic text-muted-foreground">{rel.reason}</p>}
+            {(rel.signals || []).length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-3" data-testid="rel-signals">
+                {rel.signals.map((s, i) => (
+                  <span key={i} className="inline-block px-2 py-0.5 text-xs border border-black bg-white">{s}</span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <Section icon={Receipt} title={isVendor ? "Purchase Bills" : "Sales Bills"} count={invoices.length}>

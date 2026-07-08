@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "../lib/api";
 import { PageHeader, Chip, EmptyState } from "../components/common";
@@ -32,8 +32,11 @@ export default function Priorities() {
   const { data, isLoading } = useQuery({
     queryKey: ["priorities"],
     queryFn: () => api.post("/tasks/prioritize").then((r) => r.data),
-    onSuccess: (d) => setRanked(d.tasks),
   });
+
+  useEffect(() => {
+    if (data?.tasks) setRanked(data.tasks);
+  }, [data]);
 
   const rerank = useMutation({
     mutationFn: () => api.post("/tasks/prioritize?force=true").then((r) => r.data),

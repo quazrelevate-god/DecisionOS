@@ -1748,7 +1748,7 @@ async def respond_to_handoff(task_id: str, inp: RespondInput, user: dict = Depen
     t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
     if not t:
         raise HTTPException(status_code=404, detail="Not found")
-    if not t.get("parent_task_id") or not t.get("raised_by"):
+    if not t.get("parent_task_id"):
         raise HTTPException(status_code=400, detail="This task is not an escalation/handoff you can respond to")
     if not _can_work_task(user, t):
         raise HTTPException(status_code=403, detail="Only the assignee or owner can respond")
@@ -1758,7 +1758,13 @@ async def respond_to_handoff(task_id: str, inp: RespondInput, user: dict = Depen
 
     tenant_id = user["tenant_id"]
     parent_id = t["parent_task_id"]
-    raised_by = t["raised_by"]
+    parent = await db.tasks.find_one({"id": parent_id}, {"_id": 0})
+    # Route the reply back to whoever raised it; fall back to the original task's assignee for legacy items.
+    raised_by = t.get("raised_by") or (parent or {}).get("assignee_id")
+    raised_by_name = t.get("raised_by_name")
+    if not raised_by_name and raised_by:
+        ru = await db.users.find_one({"id": raised_by}, {"_id": 0, "name": 1})
+        raised_by_name = (ru or {}).get("name")
     kind = "response" if t.get("source") == "escalation" else "handoff_reply"
 
     # Push the answer into the ORIGINAL task's trail so the person who raised it continues with context.
@@ -1766,20 +1772,21 @@ async def respond_to_handoff(task_id: str, inp: RespondInput, user: dict = Depen
         "id": new_id(), "kind": kind, "text": text,
         "step_id": None, "step_text": t.get("raised_step_text"),
         "author_id": user["id"], "author_name": user.get("name"),
-        "to_id": raised_by, "to_role": None, "to_name": t.get("raised_by_name"),
+        "to_id": raised_by, "to_role": None, "to_name": raised_by_name,
         "followup_task_id": None, "created_at": now_iso(),
     }
-    await db.tasks.update_one({"id": parent_id}, {"$push": {"updates": entry}})
+    if parent_id:
+        await db.tasks.update_one({"id": parent_id}, {"$push": {"updates": entry}})
     # Resolve this follow-up.
     await db.tasks.update_one({"id": task_id}, {"$set": {"status": "done", "resolved_at": now_iso()}})
 
-    parent = await db.tasks.find_one({"id": parent_id}, {"_id": 0, "title": 1, "decision_id": 1})
     ptitle = (parent or {}).get("title", "your task")
-    await push_notification(tenant_id, [raised_by], 2,
-                            f"[Reply] {user['name']} responded on: {ptitle[:80]} — “{text[:100]}”",
-                            "task", parent_id)
+    if raised_by:
+        await push_notification(tenant_id, [raised_by], 2,
+                                f"[Reply] {user['name']} responded on: {ptitle[:80]} — “{text[:100]}”",
+                                "task", parent_id)
     await log_activity(tenant_id, user["id"], "handoff_resolved",
-                       f"{user['name']} responded to {t.get('raised_by_name')} on '{ptitle}'", "task", parent_id)
+                       f"{user['name']} responded to {raised_by_name or 'the requester'} on '{ptitle}'", "task", parent_id)
     if parent and parent.get("decision_id"):
         await add_decision_event(parent["decision_id"], f"{user['name']} responded: {text[:80]}", user["name"], "event")
     return await enrich_task(await db.tasks.find_one({"id": task_id}, {"_id": 0}))

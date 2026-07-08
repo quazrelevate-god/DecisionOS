@@ -25,6 +25,8 @@ function EscalationCard({ t, onRespond, highlight }) {
     try {
       await onRespond(t.id, text.trim());
       setText("");
+    } catch {
+      // error toast already shown by onRespond; keep the typed text so the user can retry
     } finally {
       setSending(false);
     }
@@ -285,7 +287,7 @@ export default function Inbox() {
       refresh();
     } catch (e) {
       toast.error(e.response?.data?.detail || "Could not send response");
-      throw e;
+      throw e; // let the card keep the typed text; caller swallows this
     }
   };
 

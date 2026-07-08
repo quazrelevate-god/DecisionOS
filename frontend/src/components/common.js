@@ -39,8 +39,13 @@ const STATUS_STYLES = {
   observation: "bg-black/10 text-black",
 };
 
+const STATUS_LABELS = {
+  blocked: "pending approval",
+};
+
 export function Chip({ value, className = "", ...rest }) {
   const style = STATUS_STYLES[value] || "bg-white text-black";
+  const label = STATUS_LABELS[value] || String(value || "").replace(/_/g, " ");
   return (
     <span
       className={cn(
@@ -50,7 +55,7 @@ export function Chip({ value, className = "", ...rest }) {
       )}
       {...rest}
     >
-      {String(value || "").replace(/_/g, " ")}
+      {label}
     </span>
   );
 }

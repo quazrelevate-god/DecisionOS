@@ -8,7 +8,7 @@ import { Plus, User } from "@phosphor-icons/react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../components/ui/dialog";
 
 const COLUMNS = [
-  { key: "blocked", label: "Blocked" },
+  { key: "blocked", label: "Pending Approval" },
   { key: "todo", label: "To Do" },
   { key: "in_progress", label: "In Progress" },
   { key: "done", label: "Done" },

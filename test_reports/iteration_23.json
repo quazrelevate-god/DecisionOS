@@ -1,0 +1,50 @@
+{
+  "summary": "Iteration 23 — Note & Handoff capability verified end-to-end. Backend: 13/13 pytest passed in ~5s covering POST /api/tasks/{id}/updates for note/handoff/escalate paths, permission gates (assignee/owner only, 403 for finance on production-only task; 404 missing task; 400 empty text; 401 unauth), validation (400 missing to_id/to_role, 400 invalid to_role), action=note appends to task.updates with step_text resolved from execution_plan and does NOT create a follow-up or push a notification, action=handoff to member creates a linked follow-up (source='handoff', parent_task_id=<original>, status='todo', assignee_id=member) and pushes '[Handoff] ...' to the member, action=handoff to_role creates a role-scoped follow-up (assignee_id=None, assignee_role=<role>) that appears in that role's My Work mine=true pool, action=escalate targets tenant owner (to_role='owner', to_id=owner.id), builds a high-priority follow-up and pushes '[Escalation] ...' to the owner. Original task is unchanged (assignee_id remains production). Frontend: logged in as production@sharma.com → /my-work rendered 67 task-trail-<id> cards + 16 exec-update-<id>-<i> per-step Update buttons; on task 03736b76, posted a step-scoped NOTE via exec-update (trail shows 'On: <step>' + note text + 'Amit Verma · time'), then HANDED OFF via add-update to Priya Nair (sales) — trail shows 'Amit Verma → Priya Nair', then ESCALATED — trail shows 'Amit Verma → Rajesh Sharma'. Verified follow-up delivery: sales@sharma.com login shows 'Follow-up: TEST_iter20_ask_forbidden' in My Work with '[Handoff] ... — Iter23 UI handoff to sales' as the top URGENCY notification; owner@sharma.com login shows the same task as HIGH-priority 'Follow-up:' card and '[Escalation] ... — Iter23 UI escalating blocker' as the top notification. Regression: /api/tasks scoping and notifications shape endpoints still work.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/tasks/{id}", "issue": "No single-task GET route — tests had to list and filter. Not a bug per se, but adds coupling; consider adding for direct-linked task views."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "MyWork UpdateForm handoff picker", "issues": ["React hydration warning in console: '<span> cannot be a child of <option>' — caused by the Emergent x-file-name/x-component debug wrapper injecting <span> inside <option>. Dev-only annotation, not a runtime bug, but pollutes console with a hydration error on every task card that opens the handoff form."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration23.py",
+    "/app/test_reports/pytest/iteration23.xml"
+  ],
+  "action_items": [
+    "Optional: dedupe [Handoff]/[Escalation] notifications — Sales/Owner see 3 identical top messages because the escalate/handoff notifications get re-pushed when the demo already had similar entries (see iter22 curl test residue). Not a correctness bug but noisy for busy tenants. Consider a debounce or 'coalesce identical push within 10s' rule in push_notification.",
+    "Optional: add a per-task-updates rate limit (currently 1 request → 1 follow-up task + 1 notification, no cap). A user could hammer 'Post' and generate many follow-ups + noisy pings.",
+    "Optional: server.py is 3128 lines — carry-forward feedback from iter17-22 to split into routers (tasks_router, updates_router)."
+  ],
+  "critical_code_review_comments": [
+    "server.py:1611-1694 add_task_update — clean, permission-gated via _can_work_task (assignee_id, assignee_role for pool tasks, or owner). 404/400/403 branching correct. Empty text is trimmed before check. Good.",
+    "server.py:1624-1628 step_text resolution walks (t.get('execution_plan') or {}).get('steps', []) and matches by s['id']. If step_id is provided but doesn't match, step_text stays None (silent). Consider a 400 for unknown step_id to catch client bugs early.",
+    "server.py:1636-1652 target resolution — escalate ignores to_id/to_role and always resolves to tenant owner (correct per spec). Handoff to member does an existence + tenant check on to_id (404 if wrong tenant). Handoff to_role validates against tenant_role_keys (400 for unknown). Good.",
+    "server.py:1656-1666 follow-up task insert — sets parent_task_id, source='handoff' (even for escalate — the audit trail conflates the two; consider source='escalate' when action='escalate' for cleaner analytics). Priority='high' for escalate is correct. Status='todo'. Carries decision_id if any. Good.",
+    "server.py:1660 assignee_id — for role-only handoff (no to_id) it's set to None, correct. For escalate to_id is set from owner.id (via the earlier branch), so the ternary `to_id if inp.to_id or action == 'escalate' else None` is correct but a bit twisted; a boolean var `pinned_to_id = bool(inp.to_id) or action == 'escalate'` would read cleaner.",
+    "server.py:1670-1671 role member fetch is capped at 50 — a large tenant with more sales/finance users would silently drop notifications for members beyond the first 50. Consider .to_list(None) or a documented cap.",
+    "server.py:1673-1680 entry — appended atomically with $push. Good. Note that concurrent requests can $push in any order; if strict ordering matters, add a sequence field.",
+    "server.py:1682-1692 activity + notification + decision-timeline — decision-timeline event fires for both handoff and escalate when task has decision_id (matches spec).",
+    "MyWork.js:13-76 UpdateForm — data-testids consistent (update-text-<id>, update-action-<kind>-<id>, update-member-<id>, update-submit-<id>). Client-side validation for handoff (must pick person or team) matches server's 400. Good.",
+    "MyWork.js:56-59 members <option>: the option has children which include a nested <span> (Emergent x-component overlay). Fix at the tooling layer, not at MyWork.js — but it triggers a real React hydration warning in the console."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration23.py (new — 13 tests: 4 permission, 2 note, 4 handoff, 1 escalate, 2 regression)"
+  ],
+  "success_rate": {
+    "backend": "100% (13/13 pytest passed in 5.0s)",
+    "frontend": "100% — production posts step-scoped NOTE, HANDOFF to sales, ESCALATE to owner from My Work UI; sales & owner both see 'Follow-up:' cards + '[Handoff]/[Escalation]' notifications; trail renders 'On: <step>' + 'author → recipient · time' correctly. One dev-only console hydration warning (span inside option) from the Emergent debug wrapper."
+  },
+  "test_credentials": "production@sharma.com / demo1234, sales@sharma.com / demo1234, owner@sharma.com / demo1234, finance@sharma.com / demo1234 (from /app/memory/test_credentials.md).",
+  "seed_data_creation": "Created and cleaned up a task 'TEST_iter23_note_handoff_task' + its handoff/escalate follow-ups via owner token in the seeded_task fixture (auto-cleaned on module teardown). UI test posted 1 note + 1 handoff + 1 escalate on demo task 03736b76 (TEST_iter20_ask_forbidden) — these three updates + 2 follow-up tasks ('Follow-up: TEST_iter20_ask_forbidden' assigned to Priya Nair and to Rajesh Sharma) remain in demo data as intended visible artifacts of the flow; safe (non-destructive) and can be deleted by owner via /tasks if desired.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iter23 verified the Note & Handoff capability end-to-end: (1) Backend POST /api/tasks/{id}/updates covers note/handoff/escalate with correct perms, follow-up creation (parent_task_id, source='handoff', assignee resolution), notifications ('[Handoff]'/'[Escalation]' prefix, level 2/3), and decision-timeline event when task has decision_id. (2) No GET /tasks/{id} route — use list_tasks + filter. (3) Notifications endpoint returns {notifications:[...], unread:N}, NOT {items:[...]}. Use payload.get('notifications') || payload.get('items') || []. (4) auth/me returns {user:{...}, tenant:...}, unwrap .user before reading id. (5) Frontend testids: task-trail-<id>, add-update-<id>, exec-update-<id>-<i>, update-form-<id>, update-text-<id>, update-action-note/handoff/escalate-<id>, update-member-<id>, update-submit-<id>, trail-list-<id>. (6) One dev-only console hydration warning (span inside option) — cosmetic, not a bug. (7) Rerun: `pytest backend/tests/test_iteration23.py -o addopts= -v` — expect 13 pass in ~5s. Iteration 21 WorkCoach 403 loading-forever issue still open (unrelated).",
+  "rca of the issue": "N/A — this iteration is a feature-verification pass, not a bug fix. All specified behaviors match the request. Cosmetic: React hydration warning `<span>` cannot be child of `<option>` on the member <select> comes from the Emergent x-file-name/x-component debug wrapper wrapping the {m.name} string in a <span data-ve-dynamic=true>. This is injected by the Emergent dev tooling around dynamic array expressions and would not appear in a production build. Suppression: either mark the option's dynamic text as static, or configure the Emergent overlay to skip children of <option>."
+}

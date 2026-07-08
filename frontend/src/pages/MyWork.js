@@ -2,19 +2,134 @@ import { useRef, useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "../lib/api";
 import { PageHeader, Chip, EmptyState } from "../components/common";
+import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
 import {
   CheckCircle, Camera, Microphone, Stop, ChatCircleText,
   Sparkle, Plus, Trash, ArrowUp, ArrowDown, Robot, PencilSimple, ListChecks, CaretDown,
+  ArrowBendUpRight, WarningCircle, ChatText, ArrowRight,
 } from "@phosphor-icons/react";
 
-function ExecutionPlan({ t, onChange }) {
+function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel }) {
+  const [text, setText] = useState("");
+  const [action, setAction] = useState("note");
+  const [toId, setToId] = useState("");
+  const [toRole, setToRole] = useState("");
+  const [busy, setBusy] = useState(false);
+  const inp = "w-full border border-black px-2 py-1.5 text-sm focus:outline-none";
+
+  const submit = async () => {
+    if (!text.trim()) return toast.error("Write what you found");
+    if (action === "handoff" && !toId && !toRole) return toast.error("Pick a person or team to hand off to");
+    setBusy(true);
+    try {
+      await api.post(`/tasks/${taskId}/updates`, {
+        text, step_id: stepId || null, action,
+        to_id: toId || null, to_role: toId ? null : (toRole || null),
+      });
+      toast.success(action === "note" ? "Update logged" : action === "escalate" ? "Escalated to owner" : "Handed off");
+      onDone();
+    } catch (e) { toast.error(e.response?.data?.detail || "Could not post update"); }
+    finally { setBusy(false); }
+  };
+
+  const ACTIONS = [
+    { key: "note", label: "Log note", icon: ChatText },
+    { key: "handoff", label: "Hand off", icon: ArrowBendUpRight },
+    { key: "escalate", label: "Escalate", icon: WarningCircle },
+  ];
+
+  return (
+    <div className="border border-dashed border-black/50 p-3 space-y-2 bg-brand-paper" data-testid={`update-form-${taskId}`}>
+      <textarea rows={2} value={text} onChange={(e) => setText(e.target.value)} data-testid={`update-text-${taskId}`}
+        placeholder="What did you find? e.g. Logistics can't commit to a date — supplier issue" className={inp} />
+      <div className="flex gap-1">
+        {ACTIONS.map((a) => (
+          <button key={a.key} onClick={() => setAction(a.key)} data-testid={`update-action-${a.key}-${taskId}`}
+            className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-semibold uppercase tracking-wider border border-black transition-colors ${action === a.key ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+            <a.icon size={13} weight="bold" /> {a.label}
+          </button>
+        ))}
+      </div>
+      {action === "handoff" && (
+        <div className="space-y-2">
+          <select className={inp} value={toId} onChange={(e) => setToId(e.target.value)} data-testid={`update-member-${taskId}`}>
+            <option value="">— Hand off to a team member —</option>
+            {members.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
+          </select>
+          <select className={inp} value={toRole} onChange={(e) => setToRole(e.target.value)} disabled={!!toId}>
+            <option value="">…or to a whole team {toId ? "(member selected)" : ""}</option>
+            {roleOptions.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+          </select>
+        </div>
+      )}
+      {action === "escalate" && <p className="text-xs text-muted-foreground">This will alert the owner and create a follow-up for them.</p>}
+      <div className="flex gap-2">
+        <button onClick={submit} disabled={busy} data-testid={`update-submit-${taskId}`}
+          className="flex-1 bg-brand-blue text-white py-1.5 text-xs font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-50">
+          {busy ? "Posting…" : "Post"}
+        </button>
+        <button onClick={onCancel} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-black hover:bg-black/5">Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+const UPDATE_ICON = { note: ChatText, handoff: ArrowBendUpRight, escalate: WarningCircle };
+
+function TaskTrail({ t, members, roleOptions, onChange }) {
+  const [open, setOpen] = useState(false);
+  const updates = t.updates || [];
+  return (
+    <div className="mt-4 border-t border-black/10 pt-4" data-testid={`task-trail-${t.id}`}>
+      <div className="flex items-center justify-between mb-2">
+        <span className="flex items-center gap-2 font-heading font-extrabold uppercase tracking-tight text-sm">
+          <ChatCircleText size={16} weight="bold" className="text-brand-red" /> Activity &amp; Handoffs
+        </span>
+        {!open && (
+          <button onClick={() => setOpen(true)} data-testid={`add-update-${t.id}`}
+            className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-yellow transition-colors">
+            <Plus size={12} weight="bold" /> Update / Escalate
+          </button>
+        )}
+      </div>
+      {updates.length > 0 && (
+        <ul className="space-y-2 mb-2" data-testid={`trail-list-${t.id}`}>
+          {updates.map((u) => {
+            const Icon = UPDATE_ICON[u.kind] || ChatText;
+            return (
+              <li key={u.id} className="flex items-start gap-2 border border-black/15 p-2.5">
+                <Icon size={15} weight="bold" className={`mt-0.5 shrink-0 ${u.kind === "escalate" ? "text-brand-red" : u.kind === "handoff" ? "text-brand-blue" : "text-muted-foreground"}`} />
+                <div className="min-w-0 flex-1">
+                  {u.step_text && <p className="label-mono text-muted-foreground">On: {u.step_text}</p>}
+                  <p className="text-sm">{u.text}</p>
+                  <p className="label-mono text-muted-foreground mt-1">
+                    {u.author_name}
+                    {u.to_name && <> <ArrowRight size={10} weight="bold" className="inline" /> {u.to_name}</>}
+                    {" · "}{new Date(u.created_at).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {open && (
+        <UpdateForm taskId={t.id} stepId={null} members={members} roleOptions={roleOptions}
+          onDone={() => { setOpen(false); onChange(); }} onCancel={() => setOpen(false)} />
+      )}
+    </div>
+  );
+}
+
+function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
   const plan = t.execution_plan;
   const [steps, setSteps] = useState(plan?.steps || []);
   const [editing, setEditing] = useState(!plan || plan.status === "draft");
   const [busy, setBusy] = useState(false);
   const [newStep, setNewStep] = useState("");
   const [ask, setAsk] = useState({});
+  const [updStep, setUpdStep] = useState(null);
 
   useEffect(() => {
     setSteps(t.execution_plan?.steps || []);
@@ -131,9 +246,19 @@ function ExecutionPlan({ t, onChange }) {
                     className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-yellow transition-colors">
                     <Sparkle size={12} weight="bold" /> Ask AI
                   </button>
+                  <button onClick={() => setUpdStep(updStep === s.id ? null : s.id)} data-testid={`exec-update-${t.id}-${i}`}
+                    className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-blue hover:text-white transition-colors">
+                    <ArrowBendUpRight size={12} weight="bold" /> Update
+                  </button>
                 </>
               )}
             </div>
+            {updStep === s.id && (
+              <div className="ml-7 mt-1.5 mb-2" data-testid={`exec-update-form-${t.id}-${i}`}>
+                <UpdateForm taskId={t.id} stepId={s.id} members={members} roleOptions={roleOptions}
+                  onDone={() => { setUpdStep(null); onChange(); }} onCancel={() => setUpdStep(null)} />
+              </div>
+            )}
             {ask[s.id] && (
               <div className="ml-7 mt-1.5 mb-2 border border-black bg-brand-paper p-2.5 text-xs" data-testid={`exec-ask-result-${t.id}-${i}`}>
                 {ask[s.id].loading ? <p className="font-mono">AI is thinking…</p>
@@ -189,7 +314,7 @@ function ExecutionPlan({ t, onChange }) {
   );
 }
 
-function TaskCard({ t, onChange }) {
+function TaskCard({ t, onChange, members = [], roleOptions = [] }) {
   const [uploading, setUploading] = useState(false);
   const [recording, setRecording] = useState(false);
   const fileRef = useRef(null);
@@ -284,15 +409,20 @@ function TaskCard({ t, onChange }) {
         </div>
       )}
 
-      {t.status !== "blocked" && <ExecutionPlan t={t} onChange={onChange} />}
+      {t.status !== "blocked" && <ExecutionPlan t={t} onChange={onChange} members={members} roleOptions={roleOptions} />}
+      <TaskTrail t={t} onChange={onChange} members={members} roleOptions={roleOptions} />
     </div>
   );
 }
 
 export default function MyWork() {
   const qc = useQueryClient();
+  const { tenant } = useAuth();
   const tasksQ = useQuery({ queryKey: ["tasks", true], queryFn: () => api.get("/tasks?mine=true").then((r) => r.data) });
   const notifQ = useQuery({ queryKey: ["notifications"], queryFn: () => api.get("/notifications").then((r) => r.data) });
+  const usersQ = useQuery({ queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data) });
+  const members = usersQ.data || [];
+  const roleOptions = [{ key: "owner", label: "Owner" }, ...(tenant?.roles || [])];
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["tasks", true] });
@@ -311,13 +441,13 @@ export default function MyWork() {
           <h2 className="font-heading text-2xl font-extrabold uppercase tracking-tight mb-4">My Tasks</h2>
           {open.length === 0 && <EmptyState title="Nothing pending" hint="You're all caught up!" />}
           <div className="space-y-4">
-            {open.map((t) => <TaskCard key={t.id} t={t} onChange={refresh} />)}
+            {open.map((t) => <TaskCard key={t.id} t={t} onChange={refresh} members={members} roleOptions={roleOptions} />)}
           </div>
           {done.length > 0 && (
             <>
               <h3 className="font-heading font-extrabold uppercase tracking-tight text-lg mt-8 mb-3 text-muted-foreground">Completed</h3>
               <div className="space-y-3">
-                {done.map((t) => <TaskCard key={t.id} t={t} onChange={refresh} />)}
+                {done.map((t) => <TaskCard key={t.id} t={t} onChange={refresh} members={members} roleOptions={roleOptions} />)}
               </div>
             </>
           )}

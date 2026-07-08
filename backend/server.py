@@ -1600,6 +1600,102 @@ async def ask_step_ai(task_id: str, inp: StepAskInput, user: dict = Depends(get_
     return await ai_step_assist(t, inp.step_text, industry, session_id=f"step-{task_id}")
 
 
+class TaskUpdateNoteInput(BaseModel):
+    text: str
+    step_id: Optional[str] = None
+    action: str = "note"  # "note" | "handoff" | "escalate"
+    to_id: Optional[str] = None      # member id (handoff to a person)
+    to_role: Optional[str] = None    # role key (handoff to a team)
+
+
+@api.post("/tasks/{task_id}/updates")
+async def add_task_update(task_id: str, inp: TaskUpdateNoteInput, user: dict = Depends(get_current_user)):
+    t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
+    if not t:
+        raise HTTPException(status_code=404, detail="Not found")
+    if not _can_work_task(user, t):
+        raise HTTPException(status_code=403, detail="Only the assignee or owner can post updates")
+    text = (inp.text or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Note text is required")
+    action = inp.action if inp.action in ("note", "handoff", "escalate") else "note"
+
+    step_text = None
+    if inp.step_id:
+        for s in (t.get("execution_plan") or {}).get("steps", []):
+            if s.get("id") == inp.step_id:
+                step_text = s.get("text")
+                break
+
+    tenant_id = user["tenant_id"]
+    followup_task_id = None
+    to_name = to_id = to_role = None
+    notify_ids, notify_level, notify_prefix = [], 2, "[Handoff]"
+
+    if action in ("handoff", "escalate"):
+        if action == "escalate":
+            owner = await db.users.find_one({"tenant_id": tenant_id, "role": "owner"}, {"_id": 0})
+            if not owner:
+                raise HTTPException(status_code=400, detail="No owner to escalate to")
+            to_id, to_name, to_role = owner["id"], owner.get("name"), "owner"
+            notify_level, notify_prefix = 3, "[Escalation]"
+        elif inp.to_id:
+            member = await db.users.find_one({"id": inp.to_id, "tenant_id": tenant_id}, {"_id": 0})
+            if not member:
+                raise HTTPException(status_code=404, detail="Team member not found")
+            to_id, to_name, to_role = member["id"], member.get("name"), member.get("role")
+        elif inp.to_role:
+            if inp.to_role not in await tenant_role_keys(tenant_id):
+                raise HTTPException(status_code=400, detail="Invalid role")
+            to_role, to_name = inp.to_role, inp.to_role
+        else:
+            raise HTTPException(status_code=400, detail="Choose a person or team to hand off to")
+
+        followup_task_id = new_id()
+        base = step_text or t.get("title", "task")
+        await db.tasks.insert_one({
+            "id": followup_task_id, "tenant_id": tenant_id,
+            "title": f"Follow-up: {base}"[:180],
+            "description": f"Handed off by {user['name']} on '{t.get('title')}'.\nContext: {text}",
+            "assignee_id": to_id if inp.to_id or action == "escalate" else None,
+            "assignee_role": to_role,
+            "priority": "high" if action == "escalate" else (t.get("priority") or "medium"),
+            "status": "todo", "due_date": t.get("due_date"),
+            "decision_id": t.get("decision_id"), "parent_task_id": task_id,
+            "source": "handoff", "created_at": now_iso(),
+        })
+        if to_id:
+            notify_ids = [to_id]
+        else:
+            role_members = await db.users.find({"tenant_id": tenant_id, "role": to_role}, {"_id": 0, "id": 1}).to_list(50)
+            notify_ids = [m["id"] for m in role_members]
+
+    entry = {
+        "id": new_id(), "kind": action, "text": text,
+        "step_id": inp.step_id, "step_text": step_text,
+        "author_id": user["id"], "author_name": user.get("name"),
+        "to_id": to_id, "to_role": to_role, "to_name": to_name,
+        "followup_task_id": followup_task_id, "created_at": now_iso(),
+    }
+    await db.tasks.update_one({"id": task_id}, {"$push": {"updates": entry}})
+
+    if action == "note":
+        await log_activity(tenant_id, user["id"], "task_note", f"Note on '{t.get('title')}': {text[:80]}", "task", task_id)
+    else:
+        verb = "escalated to" if action == "escalate" else "handed off to"
+        await log_activity(tenant_id, user["id"], f"task_{action}",
+                           f"{t.get('title')} {verb} {to_name}", "task", task_id)
+        await push_notification(tenant_id, notify_ids, notify_level,
+                                f"{notify_prefix} {user['name']} needs you on: {(step_text or t.get('title'))[:90]} — “{text[:100]}”",
+                                "task", followup_task_id)
+        if t.get("decision_id"):
+            await add_decision_event(t["decision_id"], f"{t.get('title')} {verb} {to_name}", user["name"], "assigned")
+
+    return await enrich_task(await db.tasks.find_one({"id": task_id}, {"_id": 0}))
+
+
+
+
 
 @api.post("/tasks/prioritize")
 async def prioritize_tasks(force: bool = False, limit: int = 25, user: dict = Depends(get_current_user)):

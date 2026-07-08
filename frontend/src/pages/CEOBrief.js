@@ -7,7 +7,7 @@ import { PageHeader, Chip } from "../components/common";
 import { money } from "../lib/format";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
-import { Clock, CheckCircle, Stamp, UserMinus, Warning, CurrencyInr, XCircle, ArrowClockwise, CaretRight, Fire, BookOpen } from "@phosphor-icons/react";
+import { Clock, CheckCircle, Stamp, UserMinus, Warning, CurrencyInr, XCircle, ArrowClockwise, CaretRight, Fire, BookOpen, ListChecks, WarningCircle, ArrowBendUpRight, Sparkle } from "@phosphor-icons/react";
 
 const PERIODS = [
   { key: "morning", label: "Morning" },
@@ -23,6 +23,15 @@ const ROWS = [
   { key: "absent", label: "employees absent", bg: "bg-brand-blue", on: "text-white", accent: "text-brand-blue", icon: UserMinus },
   { key: "complaints", label: "customer complaint(s)", bg: "bg-purple-600", on: "text-white", accent: "text-purple-600", icon: Warning },
   { key: "payment_overdue", label: "payment(s) overdue", bg: "bg-orange-500", on: "text-white", accent: "text-orange-500", icon: CurrencyInr },
+];
+
+const EMP_ROWS = [
+  { key: "delayed", label: "overdue tasks", bg: "bg-brand-red", on: "text-white", accent: "text-brand-red", icon: Clock },
+  { key: "in_progress", label: "in progress", bg: "bg-brand-blue", on: "text-white", accent: "text-brand-blue", icon: ArrowClockwise },
+  { key: "todo", label: "to do", bg: "bg-brand-yellow", on: "text-black", accent: "text-amber-600", icon: ListChecks },
+  { key: "completed", label: "completed", bg: "bg-green-600", on: "text-white", accent: "text-green-600", icon: CheckCircle },
+  { key: "escalations", label: "escalated to you", bg: "bg-brand-red", on: "text-white", accent: "text-brand-red", icon: WarningCircle },
+  { key: "handoffs", label: "handed to you", bg: "bg-purple-600", on: "text-white", accent: "text-purple-600", icon: ArrowBendUpRight },
 ];
 
 const FIRES = { key: "fires", label: "fires to put out today", accent: "text-brand-red", icon: Fire };
@@ -66,10 +75,10 @@ function DetailDialog({ row, period, open, onClose }) {
     escalation: (id) => `/?focus=attention:${id}`,
     purchase: () => `/workflows`,
     payment: () => `/workflows`,
-    task: () => `/tasks`,
+    task: () => `/my-work`,
     complaint: () => `/contacts`,
-    absent: () => `/team`,
-    activity: () => `/tasks`,
+    absent: () => `/contacts`,
+    activity: () => `/my-work`,
   };
   const go = (it) => {
     const fn = NAV[it.kind];
@@ -155,8 +164,10 @@ function DetailDialog({ row, period, open, onClose }) {
 }
 
 export default function CEOBrief() {
-  useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
+  const isOwner = user?.role === "owner";
+  const rows = isOwner ? ROWS : EMP_ROWS;
   const [period, setPeriod] = useState("morning");
   const [activeRow, setActiveRow] = useState(null);
   const { data, isLoading } = useQuery({
@@ -167,11 +178,18 @@ export default function CEOBrief() {
 
   return (
     <div>
-      <PageHeader eyebrow="Your company at a glance" title="CEO Brief">
-        <button onClick={() => navigate("/journal")} data-testid="brief-open-journal"
-          className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
-          <BookOpen size={16} weight="bold" /> CEO Journal
-        </button>
+      <PageHeader eyebrow={isOwner ? "Your company at a glance" : "Your day at a glance"} title={isOwner ? "CEO Brief" : "My Brief"}>
+        {isOwner ? (
+          <button onClick={() => navigate("/journal")} data-testid="brief-open-journal"
+            className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
+            <BookOpen size={16} weight="bold" /> CEO Journal
+          </button>
+        ) : (
+          <button onClick={() => navigate("/coach")} data-testid="brief-open-coach"
+            className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
+            <Sparkle size={16} weight="bold" /> AI Coach
+          </button>
+        )}
       </PageHeader>
 
       <div className="flex border border-black mb-8 w-fit">
@@ -188,9 +206,9 @@ export default function CEOBrief() {
       ) : (
         <div data-testid="ceo-brief-card">
           <h2 className="font-heading text-3xl font-black tracking-tighter">{data.greeting}</h2>
-          <p className="text-sm text-muted-foreground mt-1 mb-6">Tap any block to see the details and act on them.</p>
+          <p className="text-sm text-muted-foreground mt-1 mb-6">Tap any block to see the details{isOwner ? " and act on them." : "."}</p>
 
-          {data.counters.fires > 0 && (
+          {isOwner && data.counters.fires > 0 && (
             <button type="button" onClick={() => setActiveRow(FIRES)} data-testid="brief-row-fires"
               className="w-full card-brutal p-5 mb-6 bg-brand-red text-white flex items-center justify-between gap-4 text-left transition-all hover:-translate-y-0.5 focus:outline-none">
               <div className="flex items-center gap-4">
@@ -209,8 +227,8 @@ export default function CEOBrief() {
           )}
 
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-            {ROWS.map((r) => {
-              const val = data.counters[r.key];
+            {rows.map((r) => {
+              const val = data.counters[r.key] ?? 0;
               const label = r.key === "completed" ? (data.completed_label || "completed") : r.label;
               return (
                 <button key={r.key} type="button" onClick={() => setActiveRow(r)} data-testid={`brief-row-${r.key}`}
@@ -232,7 +250,7 @@ export default function CEOBrief() {
           </div>
 
           <p className="mt-8 text-sm text-muted-foreground italic flex items-center gap-2">
-            <ArrowClockwise size={14} /> Auto-refreshes every 30s. That's it. Exactly like a CEO.
+            <ArrowClockwise size={14} /> Auto-refreshes every 30s.{isOwner ? " That's it. Exactly like a CEO." : ""}
           </p>
         </div>
       )}

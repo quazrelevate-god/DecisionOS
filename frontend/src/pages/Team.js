@@ -4,7 +4,7 @@ import api, { formatApiError } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { Chip } from "../components/common";import { PERMISSIONS, defaultPermsForRole, hasPerm, userPerms } from "../lib/perms";
 import { toast } from "sonner";
-import { UserPlus, Buildings, Package, PencilSimple, ShieldCheck, Check } from "@phosphor-icons/react";
+import { UserPlus, PencilSimple, ShieldCheck, Check } from "@phosphor-icons/react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../components/ui/dialog";
 
 const inp = "w-full border border-black px-3 py-2 text-sm font-mono focus:outline-none focus:shadow-brutal-sm";
@@ -116,32 +116,7 @@ export function TeamPanel() {
         </div>
       )}
 
-      {/* Company profile */}
-      <div className="grid lg:grid-cols-3 gap-6 mb-8">
-        <div className="card-brutal p-6 lg:col-span-1" data-testid="company-profile">
-          <div className="flex items-center gap-2 mb-4"><Buildings size={20} weight="bold" className="text-brand-red" /><h2 className="font-heading font-extrabold uppercase tracking-tight text-lg">Company</h2></div>
-          <p className="font-heading font-black text-xl leading-tight">{tenant?.name}</p>
-          <dl className="mt-4 space-y-2 text-sm">
-            <div className="flex justify-between gap-3 border-b border-black/10 pb-1"><dt className="text-muted-foreground">Industry</dt><dd className="font-semibold text-right" data-testid="profile-industry">{tenant?.industry || "—"}</dd></div>
-            <div className="flex justify-between gap-3 border-b border-black/10 pb-1"><dt className="text-muted-foreground">Team size</dt><dd className="font-semibold">{tenant?.company_size || "—"}</dd></div>
-            {tenant?.gst && <div className="flex justify-between gap-3 border-b border-black/10 pb-1"><dt className="text-muted-foreground">GST</dt><dd className="font-semibold font-mono text-xs">{tenant.gst}</dd></div>}
-            <div className="flex justify-between gap-3 border-b border-black/10 pb-1"><dt className="text-muted-foreground">Region</dt><dd className="font-semibold">{tenant?.region || "—"}</dd></div>
-            <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Currency</dt><dd className="font-semibold">{tenant?.currency || "—"}</dd></div>
-          </dl>
-        </div>
-        <div className="card-brutal p-6 lg:col-span-2" data-testid="products-card">
-          <div className="flex items-center gap-2 mb-4"><Package size={20} weight="bold" className="text-brand-blue" /><h2 className="font-heading font-extrabold uppercase tracking-tight text-lg">Products & Services</h2></div>
-          {(tenant?.products || []).length === 0 && <p className="text-sm text-muted-foreground">No products captured yet.</p>}
-          <div className="grid sm:grid-cols-2 gap-3">
-            {(tenant?.products || []).map((p, i) => (
-              <div key={i} data-testid={`profile-product-${i}`} className="border border-black/20 p-3">
-                <p className="font-semibold text-sm">{p.name}</p>
-                {p.description && <p className="text-xs text-muted-foreground mt-1">{p.description}</p>}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      {/* Company profile & products now live in the top-bar company icon dialog */}
 
       <h2 className="font-heading text-2xl font-extrabold uppercase tracking-tight mb-4">Members</h2>
       <div className="card-brutal divide-y divide-black/10">

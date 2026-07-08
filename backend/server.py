@@ -925,7 +925,7 @@ async def enrich_contacts(contacts: list) -> list:
 
 @api.get("/contacts")
 async def list_contacts(type: Optional[str] = None, status: Optional[str] = None, q: Optional[str] = None,
-                        user: dict = Depends(get_current_user)):
+                        user: dict = Depends(require_perm("people"))):
     query = {"tenant_id": user["tenant_id"]}
     if type:
         query["type"] = type
@@ -1176,7 +1176,7 @@ def _clamp100(v):
 
 
 @api.get("/operating-score")
-async def operating_score(user: dict = Depends(get_current_user)):
+async def operating_score(user: dict = Depends(require_role("owner"))):
     tid = user["tenant_id"]
     now = datetime.now(timezone.utc).isoformat()
     can_finance = user.get("role") == "owner" or "finance" in user_perms(user)
@@ -1894,7 +1894,7 @@ async def create_workflow(inp: WorkflowCreateInput, user: dict = Depends(get_cur
 
 
 @api.patch("/workflows/{workflow_id}/advance")
-async def advance_workflow(workflow_id: str, inp: WorkflowAdvanceInput, user: dict = Depends(get_current_user)):
+async def advance_workflow(workflow_id: str, inp: WorkflowAdvanceInput, user: dict = Depends(require_perm("workflows"))):
     wf = await db.workflows.find_one({"id": workflow_id, "tenant_id": user["tenant_id"]})
     if not wf:
         raise HTTPException(status_code=404, detail="Not found")
@@ -1917,7 +1917,7 @@ async def advance_workflow(workflow_id: str, inp: WorkflowAdvanceInput, user: di
 # Company Brain search
 # ---------------------------------------------------------------------------
 @api.get("/brain/search")
-async def brain_search(q: str = "", user: dict = Depends(get_current_user)):
+async def brain_search(q: str = "", user: dict = Depends(require_perm("brain"))):
     tid = user["tenant_id"]
     tokens = [re.escape(t) for t in q.split() if len(t) >= 2]
     rx = {"$regex": "|".join(tokens), "$options": "i"} if tokens else {"$exists": True}
@@ -1941,7 +1941,7 @@ async def brain_search(q: str = "", user: dict = Depends(get_current_user)):
 # Ask AI
 # ---------------------------------------------------------------------------
 @api.post("/ask")
-async def ask_ai(inp: AskInput, user: dict = Depends(get_current_user)):
+async def ask_ai(inp: AskInput, user: dict = Depends(require_perm("ask"))):
     tid = user["tenant_id"]
     decisions = await db.decisions.find({"tenant_id": tid}, {"_id": 0, "title": 1, "summary": 1, "status": 1}).sort("created_at", -1).to_list(60)
     tasks = await db.tasks.find({"tenant_id": tid}, {"_id": 0, "title": 1, "status": 1, "assignee_role": 1, "due_date": 1}).sort("created_at", -1).to_list(120)
@@ -2271,30 +2271,48 @@ async def ceo_brief(period: str = "morning", user: dict = Depends(get_current_us
         start_iso = (now - timedelta(days=30)).isoformat()
     else:
         start_iso = midnight.isoformat()
+    is_owner = user["role"] == "owner"
+    greet = "Good morning" if period in ("morning", "weekly", "monthly") else "Good evening"
 
-    delayed = await db.tasks.count_documents({"tenant_id": tid, "status": {"$in": ["todo", "in_progress"]}, "due_date": {"$lt": now.isoformat(), "$ne": None}})
     if period == "morning":
         y_start = (midnight - timedelta(days=1)).isoformat()
-        completed = await db.activity.count_documents({"tenant_id": tid, "kind": "task_done", "created_at": {"$gte": y_start, "$lt": midnight.isoformat()}})
+        completed_range = {"$gte": y_start, "$lt": midnight.isoformat()}
         completed_label = "completed yesterday"
     else:
-        completed = await db.activity.count_documents({"tenant_id": tid, "kind": "task_done", "created_at": {"$gte": start_iso}})
+        completed_range = {"$gte": start_iso}
         completed_label = f"completed ({period})"
-    pending_dec = await db.decisions.count_documents({"tenant_id": tid, "status": "pending_approval"})
-    pending_pur = await db.workflows.count_documents({"tenant_id": tid, "type": "purchase_payment", "stage": "requested"})
-    absent = await db.attendance.count_documents({"tenant_id": tid, "date": today, "status": "absent"})
-    complaints = await db.complaints.count_documents({"tenant_id": tid, "status": "open"})
-    payment_overdue = await db.workflows.count_documents({"tenant_id": tid, "type": "purchase_payment", "stage": "payment_pending"})
-    fires = await db.tasks.count_documents({"tenant_id": tid, "source": "escalation", "status": {"$ne": "done"}})
-    greet = "Good morning" if period in ("morning", "weekly", "monthly") else "Good evening"
+
+    if is_owner:
+        delayed = await db.tasks.count_documents({"tenant_id": tid, "status": {"$in": ["todo", "in_progress"]}, "due_date": {"$lt": now.isoformat(), "$ne": None}})
+        completed = await db.activity.count_documents({"tenant_id": tid, "kind": "task_done", "created_at": completed_range})
+        pending_dec = await db.decisions.count_documents({"tenant_id": tid, "status": "pending_approval"})
+        pending_pur = await db.workflows.count_documents({"tenant_id": tid, "type": "purchase_payment", "stage": "requested"})
+        absent = await db.attendance.count_documents({"tenant_id": tid, "date": today, "status": "absent"})
+        complaints = await db.complaints.count_documents({"tenant_id": tid, "status": "open"})
+        payment_overdue = await db.workflows.count_documents({"tenant_id": tid, "type": "purchase_payment", "stage": "payment_pending"})
+        fires = await db.tasks.count_documents({"tenant_id": tid, "source": "escalation", "status": {"$ne": "done"}})
+        counters = {"delayed": delayed, "completed": completed, "awaiting_approval": pending_dec + pending_pur,
+                    "absent": absent, "complaints": complaints, "payment_overdue": payment_overdue, "fires": fires}
+    else:
+        mine = {"$or": [{"assignee_id": user["id"]}, {"assignee_role": user["role"]}]}
+
+        def mq(extra):
+            return {"tenant_id": tid, **mine, **extra}
+        delayed = await db.tasks.count_documents(mq({"status": {"$in": ["todo", "in_progress"]}, "due_date": {"$lt": now.isoformat(), "$ne": None}}))
+        todo = await db.tasks.count_documents(mq({"status": "todo"}))
+        in_progress = await db.tasks.count_documents(mq({"status": "in_progress"}))
+        completed = await db.activity.count_documents({"tenant_id": tid, "kind": "task_done", "actor": user["id"], "created_at": completed_range})
+        escalations = await db.tasks.count_documents(mq({"source": "escalation", "status": {"$ne": "done"}}))
+        handoffs = await db.tasks.count_documents(mq({"source": "handoff", "status": {"$ne": "done"}}))
+        counters = {"delayed": delayed, "todo": todo, "in_progress": in_progress,
+                    "completed": completed, "escalations": escalations, "handoffs": handoffs}
+
     return {
         "period": period,
+        "role": user["role"],
         "greeting": f"{greet}, {user['name'].split(' ')[0]}",
         "completed_label": completed_label,
-        "counters": {
-            "delayed": delayed, "completed": completed, "awaiting_approval": pending_dec + pending_pur,
-            "absent": absent, "complaints": complaints, "payment_overdue": payment_overdue, "fires": fires,
-        },
+        "counters": counters,
     }
 
 
@@ -2314,10 +2332,18 @@ async def brief_details(key: str, period: str = "morning", user: dict = Depends(
 
     items = []
     actionable = False
+    is_owner = user["role"] == "owner"
+    mine = None if is_owner else {"$or": [{"assignee_id": user["id"]}, {"assignee_role": user["role"]}]}
+
+    def scope(q):
+        return q if not mine else {**q, **mine}
+
+    if key in {"awaiting_approval", "absent", "complaints", "payment_overdue", "fires"} and not is_owner:
+        return {"key": key, "actionable": False, "items": []}
 
     if key == "delayed":
         tasks = await db.tasks.find(
-            {"tenant_id": tid, "status": {"$in": ["todo", "in_progress"]}, "due_date": {"$lt": now.isoformat(), "$ne": None}},
+            scope({"tenant_id": tid, "status": {"$in": ["todo", "in_progress"]}, "due_date": {"$lt": now.isoformat(), "$ne": None}}),
             {"_id": 0}).sort("due_date", 1).to_list(200)
         tasks = await enrich_tasks(tasks)
         for t in tasks:
@@ -2325,13 +2351,32 @@ async def brief_details(key: str, period: str = "morning", user: dict = Depends(
                           "subtitle": t.get("assignee_name") or t.get("assignee_role") or "unassigned",
                           "meta": t.get("priority"), "kind": "task", "due_date": t.get("due_date")})
 
+    elif key in ("todo", "in_progress"):
+        tasks = await db.tasks.find(scope({"tenant_id": tid, "status": key}), {"_id": 0}).sort("created_at", -1).to_list(200)
+        tasks = await enrich_tasks(tasks)
+        for t in tasks:
+            items.append({"id": t["id"], "title": t["title"],
+                          "subtitle": t.get("assignee_name") or t.get("assignee_role") or "unassigned",
+                          "meta": t.get("priority"), "kind": "task"})
+
+    elif key in ("escalations", "handoffs"):
+        src = "escalation" if key == "escalations" else "handoff"
+        tasks = await db.tasks.find(scope({"tenant_id": tid, "source": src, "status": {"$ne": "done"}}), {"_id": 0}).sort("created_at", -1).to_list(200)
+        tasks = await enrich_tasks(tasks)
+        for t in tasks:
+            sub = f"Raised by {t['raised_by_name']}" if t.get("raised_by_name") else (t.get("assignee_name") or "")
+            items.append({"id": t["id"], "title": t["title"], "subtitle": sub, "meta": t.get("priority"), "kind": "task"})
+
     elif key == "completed":
         if period == "morning":
             y_start = (midnight - timedelta(days=1)).isoformat()
             trange = {"$gte": y_start, "$lt": midnight.isoformat()}
         else:
             trange = {"$gte": start_iso}
-        acts = await db.activity.find({"tenant_id": tid, "kind": "task_done", "created_at": trange}, {"_id": 0}).sort("created_at", -1).to_list(200)
+        aq = {"tenant_id": tid, "kind": "task_done", "created_at": trange}
+        if not is_owner:
+            aq["actor"] = user["id"]
+        acts = await db.activity.find(aq, {"_id": 0}).sort("created_at", -1).to_list(200)
         for a in acts:
             items.append({"id": a["id"], "title": a.get("message"), "subtitle": "", "kind": "activity"})
 

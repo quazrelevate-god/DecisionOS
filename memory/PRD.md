@@ -36,6 +36,10 @@ Multi-tenant isolation, role-based access, voice+text capture, AI structuring wi
 - **Premium 6-step onboarding** ("Digital Executive Office"): Step1 company+account+GST+branches, Step2 business scale, Step3 current software, Step4 connect (Excel live via ingestion; Tally/Zoho coming-soon), Step5 invite employees by mobile (pending invites), Step6 animated "AI learns business". Workspace is created at end of Step3 so Steps 4-5 run authenticated. Tenant now stores gst/branches/business_scale/current_software/invited_employees. Endpoints: `GET/POST /api/invites`.
 - Tested: iterations 11-14 — backend 62/62 (+regression), frontend E2E across owner/finance/sales/production. No product bugs.
 
+## Task allocation to team members (2026-07-03)
+- Tasks can be assigned to a specific person (assignee_id), not just a role. New Task dialog has a member picker + role fallback; each task card shows the assignee (person chip / role / Unassigned) and a "Reassign to…" dropdown. Backend validates assignee_id against tenant users and auto-derives assignee_role from the member; status-only PATCH preserves the assignee (exclude_unset).
+- Voice/text directives resolve named people: `ai_extract` receives team member names and emits `assignee_name`; `match_member_by_name` (exact → first-name/token) maps it to a member so the task is assigned to that exact person, else falls back to role-based auto-assignment. Verified iterations 16 (47/47) & 17 (55/55).
+
 ## WhatsApp Cloud API ingestion (2026-07-02)
 - Live Meta WhatsApp Business Cloud API webhook wired into the ingestion pipeline. `GET /api/webhooks/whatsapp` (verify handshake) + `POST /api/webhooks/whatsapp` (X-Hub-Signature-256 validated when WA_APP_SECRET set; processing in BackgroundTasks, returns 200 immediately).
 - Incoming image/PDF → download media via Graph API (`v21.0`) → `ai_extract_document` → auto-`commit_ingestion_records` → ingestion + inbox item (source=whatsapp) → confirmation reply to sender. Text messages → structured via `process_voice_note`.

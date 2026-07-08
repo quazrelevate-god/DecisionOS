@@ -527,6 +527,66 @@ async def ai_meeting_notes(transcript: str, members: list, session_id: str) -> d
     return d
 
 
+async def ai_execution_plan(task: dict, industry: str, currency: str, session_id: str) -> dict:
+    """Generate a context-aware execution checklist for a task. Returns {task_type, steps:[str]}."""
+    system = (
+        "You are the execution-planning engine of DecisionOS for a small business. "
+        f"Industry: {industry or 'general'}. Currency: {currency}. "
+        "Given a task an employee must do, first classify it into one of "
+        "[collection, quotation, complaint, supplier_payment, sales_followup, delivery, generic], "
+        "then produce a concise, practical, ordered checklist of execution steps the employee should follow "
+        "to complete it well. 5-9 short action steps, each a single imperative line (no numbering, no sub-bullets). "
+        "Tailor steps to the specific task. Return ONLY valid JSON: "
+        "{\"task_type\": string, \"steps\": [string]}."
+    )
+    prompt = (f"Task title: {task.get('title','')}\n"
+              f"Description: {task.get('description','') or '(none)'}\n"
+              f"Assigned role: {task.get('assignee_role') or 'team'}\n"
+              f"Priority: {task.get('priority','medium')}\n"
+              "Generate the execution checklist now.")
+    chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=session_id, system_message=system).with_model(*LLM_MODEL)
+    resp = await chat.send_message(UserMessage(text=prompt))
+    try:
+        d = _extract_json(resp)
+    except Exception as e:
+        logger.error(f"AI execution plan parse error: {e} :: {resp[:300]}")
+        d = {}
+    steps = [str(s).strip() for s in (d.get("steps") or []) if str(s).strip()][:12]
+    if not steps:
+        steps = ["Review the task details", "Do the work", "Upload proof / notes", "Close the task"]
+    return {"task_type": d.get("task_type") or "generic", "steps": steps}
+
+
+async def ai_step_assist(task: dict, step_text: str, industry: str, session_id: str) -> dict:
+    """Suggest a script/guidance for a single execution step + likely objections and responses."""
+    system = (
+        "You are DecisionOS's execution assistant helping a small-business employee complete one step of a task. "
+        f"Industry: {industry or 'general'}. "
+        "Give a short, ready-to-use suggestion (a phone/message script or concrete guidance, 1-3 sentences) for the step, "
+        "and 2-4 likely objections the other party may raise with a crisp suggested response for each. "
+        "Be practical and polite. Return ONLY valid JSON: "
+        "{\"suggestion\": string, \"objections\": [{\"objection\": string, \"response\": string}]}."
+    )
+    prompt = (f"Task: {task.get('title','')}\n"
+              f"Context: {task.get('description','') or '(none)'}\n"
+              f"Current step: {step_text}\n"
+              "Give the suggestion and objection handling now.")
+    chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=session_id, system_message=system).with_model(*LLM_MODEL)
+    resp = await chat.send_message(UserMessage(text=prompt))
+    try:
+        d = _extract_json(resp)
+    except Exception as e:
+        logger.error(f"AI step assist parse error: {e} :: {resp[:300]}")
+        d = {}
+    objs = []
+    for o in (d.get("objections") or [])[:4]:
+        if isinstance(o, dict) and o.get("objection"):
+            objs.append({"objection": str(o["objection"])[:160], "response": str(o.get("response") or "")[:280]})
+    return {"suggestion": str(d.get("suggestion") or "")[:600], "objections": objs}
+
+
+
+
 
 
 
@@ -1342,6 +1402,102 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
             await log_activity(user["tenant_id"], user["id"], "task_assigned",
                                f"Assigned '{t['title']}' to {(member or {}).get('name', 'a member')}", "task", task_id)
     return await enrich_task(await db.tasks.find_one({"id": task_id}, {"_id": 0}))
+
+
+# ---------------------------------------------------------------------------
+# AI Execution Guide
+# ---------------------------------------------------------------------------
+class ExecStep(BaseModel):
+    id: Optional[str] = None
+    text: str
+    done: Optional[bool] = False
+
+
+class ExecPlanInput(BaseModel):
+    steps: List[ExecStep]
+    status: Optional[str] = None
+
+
+class StepAskInput(BaseModel):
+    step_text: str
+
+
+def _can_work_task(user: dict, t: dict) -> bool:
+    return (user.get("role") == "owner"
+            or t.get("assignee_id") == user["id"]
+            or (t.get("assignee_role") and t.get("assignee_role") == user.get("role")))
+
+
+def _plan_progress(steps: list) -> int:
+    if not steps:
+        return 0
+    done = sum(1 for s in steps if s.get("done"))
+    return round(done / len(steps) * 100)
+
+
+async def _tenant_industry(tenant_id: str) -> str:
+    t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "industry": 1})
+    return (t or {}).get("industry") or "general"
+
+
+@api.post("/tasks/{task_id}/execution-plan/generate")
+async def generate_execution_plan(task_id: str, user: dict = Depends(get_current_user)):
+    t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
+    if not t:
+        raise HTTPException(status_code=404, detail="Not found")
+    if not _can_work_task(user, t):
+        raise HTTPException(status_code=403, detail="Only the assignee or owner can plan this task")
+    industry = await _tenant_industry(user["tenant_id"])
+    currency = await _tenant_currency(user["tenant_id"])
+    gen = await ai_execution_plan(t, industry, currency, session_id=f"exec-{task_id}")
+    steps = [{"id": new_id(), "text": s, "done": False} for s in gen["steps"]]
+    plan = {"status": "draft", "task_type": gen["task_type"], "steps": steps,
+            "progress": 0, "generated_at": now_iso(), "updated_at": now_iso()}
+    await db.tasks.update_one({"id": task_id}, {"$set": {"execution_plan": plan}})
+    return await enrich_task(await db.tasks.find_one({"id": task_id}, {"_id": 0}))
+
+
+@api.patch("/tasks/{task_id}/execution-plan")
+async def save_execution_plan(task_id: str, inp: ExecPlanInput, user: dict = Depends(get_current_user)):
+    t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
+    if not t:
+        raise HTTPException(status_code=404, detail="Not found")
+    if not _can_work_task(user, t):
+        raise HTTPException(status_code=403, detail="Only the assignee or owner can edit this plan")
+    steps = [{"id": s.id or new_id(), "text": s.text.strip(), "done": bool(s.done)}
+             for s in inp.steps if s.text.strip()]
+    existing = t.get("execution_plan") or {}
+    plan = {
+        "status": inp.status or existing.get("status") or "draft",
+        "task_type": existing.get("task_type", "generic"),
+        "steps": steps, "progress": _plan_progress(steps),
+        "generated_at": existing.get("generated_at") or now_iso(), "updated_at": now_iso(),
+    }
+    updates = {"execution_plan": plan}
+    # Keep the task board in sync: starting work moves a todo task into progress; finishing all steps can complete it.
+    if plan["status"] == "accepted" and steps:
+        if plan["progress"] == 100 and t.get("status") not in ("done", "blocked"):
+            updates["status"] = "done"
+        elif plan["progress"] > 0 and t.get("status") == "todo":
+            updates["status"] = "in_progress"
+    await db.tasks.update_one({"id": task_id}, {"$set": updates})
+    if updates.get("status") == "done":
+        await log_activity(user["tenant_id"], user["id"], "task_done", f"Completed task '{t['title']}'", "task", task_id)
+        if t.get("decision_id"):
+            await add_decision_event(t["decision_id"], f"{t['title']} → done", user["name"], "task")
+    return await enrich_task(await db.tasks.find_one({"id": task_id}, {"_id": 0}))
+
+
+@api.post("/tasks/{task_id}/steps/ask")
+async def ask_step_ai(task_id: str, inp: StepAskInput, user: dict = Depends(get_current_user)):
+    t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
+    if not t:
+        raise HTTPException(status_code=404, detail="Not found")
+    if not _can_work_task(user, t):
+        raise HTTPException(status_code=403, detail="Only the assignee or owner can use this")
+    industry = await _tenant_industry(user["tenant_id"])
+    return await ai_step_assist(t, inp.step_text, industry, session_id=f"step-{task_id}")
+
 
 
 @api.post("/tasks/prioritize")

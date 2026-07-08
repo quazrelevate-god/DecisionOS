@@ -1,0 +1,49 @@
+{
+  "summary": "Iteration 20 — Full-stack pass on AI Execution Guide (Phase 1). Backend: 12/12 pytest green in 18.7s (generate happy paths for role-assignee & owner, 403 for finance on production-scoped task, 404 on missing task, full PATCH flow covering reorder + custom add + empty drop + progress recompute + status transition todo→in_progress at 60% + →done at 100%, PATCH forbidden for finance, all-empty steps dropped to []; Ask AI returns suggestion+objections with min 1 objection, 403 for finance, 404 on missing task; regressions: production role-scoped visibility still holds, PATCH /tasks complete still works). Frontend: production@sharma.com logs into /my-work, sees 64 tasks (all production role), 53 show 'Generate AI execution plan' dashed-border button — click generates 7 context-aware steps in ~10s (contextual to invoice INV-2213 collection), edit mode renders step inputs + up/down/remove + newstep + add + Accept & Start + Save. Custom step 'Meet the Purchase Manager' appended → 8 steps. Accept & start → accepted mode with progress bar + 0%, checkbox on step 0 → progress 13% live, Ask AI on step 1 returned a 1307-char script + 4 objections rendered in the panel (verified 'IF THEY PUSH BACK' block with 4 objection/response pairs). Customize steps button re-enters edit mode. Regression: Complete/Photo/Voice-reply buttons present on all 61 non-done tasks.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration20.py",
+    "/app/test_reports/pytest/iteration20.xml"
+  ],
+  "action_items": [
+    "Optional: MyWork.js:22 `useEffect` dep list contains only `t.execution_plan?.updated_at` and `...status` — if the plan is regenerated with the same updated_at (unlikely but possible in a fast test) the local `steps` state won't sync. In practice this is fine because generated_at always advances, but consider using `plan?.updated_at + plan?.steps?.length` or a stable JSON hash for full safety.",
+    "Optional: MyWork.js:63 `toggle()` posts on every check with status='accepted'. That means each click is an LLM-free round-trip to the backend, which is fine, but there's no client-side loading indicator; if the API is slow the user may double-click and race. Consider disabling the checkbox briefly during the PATCH.",
+    "Optional: server.py:1478-1482 status transition logic — once a task hits status='done' via the plan, it stays 'done' even if the user later unchecks steps (progress drops below 100). The task status won't automatically flip back. Confirmed by code: `if plan['progress'] == 100 and t.get('status') not in ('done','blocked')` — after status='done', the guard blocks it, but the *reverse* transition (100→90%) also has no handler. This is likely intentional (completion is one-way) but worth documenting.",
+    "Optional: MyWork.js line 285 wraps ExecutionPlan in `{t.status !== 'blocked' && ...}`. Once a task auto-transitions to status='done' via the plan reaching 100%, the plan section still renders in Completed section which is correct — but for a completed task the 'Customize steps' button still shows, which would let the employee re-open steps and drop progress below 100% (see previous item). Consider hiding customize on status='done'.",
+    "Optional: server.py:1443-1457 generate — no rate-limit / dedupe. A user could spam-click the generate button and burn LLM calls; each click overwrites the existing plan. Consider a 202 + short-circuit if a plan was generated in the last N seconds."
+  ],
+  "critical_code_review_comments": [
+    "server.py:1425-1428 _can_work_task — matches on either assignee_id, matching assignee_role, OR role=='owner'. Correct per spec. A user with role='sales' and no assignee_id but the task has assignee_role='sales' can also touch it — this matches the review request's 'assignee_role' branch.",
+    "server.py:1467-1468 empty-text drop — uses `s.text.strip()` truthiness so whitespace-only steps are dropped. Verified in TestPatch.test_patch_all_empty_steps_dropped. Steps that arrive without an id get a fresh new_id() — safe.",
+    "server.py:1478-1482 status transition — correct: (a) status=='accepted' + progress>0 + task was 'todo' → 'in_progress'; (b) progress==100 → 'done' (unless already 'done' or 'blocked'). Verified end-to-end via TestPatch.",
+    "server.py:1484-1487 on completion via plan — logs activity + adds decision timeline event if the task is linked. Correct.",
+    "server.py:1499 ai_step_assist — no bounded rate; will re-call LLM every Ask AI click even for the same step_text. Consider a short in-memory or task-doc cache keyed by (task_id, step_text).",
+    "server.py:557 ai_execution_plan fallback — if AI returns no steps, uses a generic 4-step fallback. Verified never to be empty. Good defensive default.",
+    "server.py:585 ai_step_assist — clamps objections to 4 and suggestion to 600 chars. Reasonable.",
+    "server.py is now 2931 lines — same feedback as iter17/18/19. Route explosion: consider splitting into routers (exec_plan_router, tasks_router).",
+    "MyWork.js — ExecutionPlan is a big component (~180 lines) inside a page file that's now 342 lines. Extracting to /components/ExecutionPlan.js would isolate testing and reduce re-render surface for TaskCard.",
+    "MyWork.js:203 sets explicit `Content-Type: multipart/form-data` header (no boundary). Browser/axios usually overrides correctly for FormData bodies, but safer to omit. (Same feedback as iter19 on Meetings.js.)",
+    "MyWork.js:81-87 askAI — no timeout, no cancel-on-unmount. If the user navigates away mid-request, setAsk on unmounted component would trigger a React warning. Consider AbortController."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration20.py (new — 12 tests across TestGenerate, TestPatch, TestAsk, TestRegression)"
+  ],
+  "success_rate": {
+    "backend": "100% (12/12 pytest passed in 18.7s)",
+    "frontend": "100% on all AI Execution Guide flows: generate → 8-step plan → add custom → accept → checkbox toggle live 0%→13% → Ask AI (1307-char script + 4 objections) → Customize back to edit; regression buttons intact on 61 tasks."
+  },
+  "test_credentials": "production@sharma.com / demo1234, owner@sharma.com / demo1234, finance@sharma.com / demo1234 (from /app/memory/test_credentials.md).",
+  "seed_data_creation": "9 test tasks created in Sharma tenant (TEST_iter20_gen_by_role, TEST_iter20_gen_by_owner, TEST_iter20_gen_forbidden, TEST_iter20_patch_flow, TEST_iter20_patch_forbidden, TEST_iter20_empty_drop, TEST_iter20_ask_step, TEST_iter20_ask_forbidden, TEST_iter20_regression_complete) — most assigned to production role. One task (TEST_iter20_patch_flow) was walked through the full lifecycle and now has status='done' with a 100% execution_plan. Non-destructive — cleanup via `db.tasks.delete_many({title: /^TEST_iter20_/})` if desired. Additionally one plan was generated + accepted via the UI on task 03736b76-3dfb-4892-a5da-e97c436c0a74 ('TEST_iter20_ask_forbidden' — same demo tenant task the ask-forbidden test targeted but pre-populated a plan from the UI walkthrough); this task is now status=in_progress with a saved execution_plan.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iter20 verified end-to-end on Phase-1 AI Execution Guide: (1) POST /api/tasks/{id}/execution-plan/generate — perm-gated via _can_work_task (owner OR assignee_id==user.id OR task.assignee_role==user.role). LLM call takes ~5-15s and returns {task_type, steps}. Backend stores execution_plan={status:'draft', task_type, steps:[{id,text,done:false}], progress:0, generated_at, updated_at} on the task doc. Returns enriched task. Verified 403 for finance user on production-scoped task, 404 for missing task. (2) PATCH /api/tasks/{id}/execution-plan {steps:[{id?,text,done}], status} — same perm gate. Empty-text steps dropped. Steps without id get fresh new_id(). Progress recomputed as round(done/total*100). Status transitions: status=='accepted' + progress>0 + task.status=='todo' → task.status='in_progress'; progress==100 (and task not already done/blocked) → task.status='done' (logs activity + decision-timeline event if linked). Reverse transition NOT wired — once done, unchecking steps doesn't revert to in_progress. Verified 403 for finance. (3) POST /api/tasks/{id}/steps/ask {step_text} — returns {suggestion:str<=600, objections:[{objection,response}]<=4}. Perm-gated + 404 handled. (4) Frontend testids present and functional: generate-plan-<id>, exec-plan-<id>, exec-progress-<id>, exec-step-<id>-<i>, exec-toggle-<id>-<i>, exec-ask-<id>-<i>, exec-ask-result-<id>-<i>, exec-remove-<id>-<i>, exec-newstep-<id>, exec-add-<id>, exec-accept-<id>, exec-save-<id>, exec-edit-<id>. Progress bar updates live via optimistic setState in toggle() + persist(). Ask AI panel renders suggestion + 'If they push back' section with objection/response pairs and a dismiss button. (5) Regression: production sees only production lane (0 leaks in 64 tasks). Complete/Photo/Voice-reply buttons untouched — 61 of each on non-done tasks. Note: MyWork.js hides ExecutionPlan for status=='blocked' tasks (line 285) — this matches PENDING APPROVAL chip which appears to map to blocked. All observed correctly.",
+  "rca of the issue": "N/A — Phase-1 feature verification pass. Contract fully verified: LLM-generated context-aware checklist, employee edit/reorder/add-custom flow, progress-driven task status transitions, per-step AI script + objection handling, and role/assignee perm gating with proper 403/404 behavior."
+}

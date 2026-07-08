@@ -233,7 +233,7 @@ export default function Layout({ children }) {
               <nav className="flex-1 py-3 overflow-y-auto">
                 <NavItems onNavigate={() => setDrawerOpen(false)} />
               </nav>
-              <div className="border-t border-black p-4 space-y-2">
+              <div className="border-t border-black p-4 space-y-2 pb-24">
                 {user?.role === "owner" && (
                   <button
                     onClick={() => { setDrawerOpen(false); sendDigest(); }}

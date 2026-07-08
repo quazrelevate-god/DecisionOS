@@ -1,0 +1,49 @@
+{
+  "summary": "Iteration 21 — Full-stack pass on Personal AI Work Coach (Phase 2 part 1). Backend: 14/14 pytest green in 14.7s covering GET /api/work-coach (own default, own via ?user_id, owner-viewing-employee, non-owner 403, missing-user 404, unauth 401), POST /api/work-coach/refresh (own returns headline+strengths[1-4]+improvements[1-3]+recommendation+generated_at+stats_snapshot within length caps, cached summary re-served on subsequent GET, owner for employee, sales-for-others 403, 404 for missing) and stats correctness (completion_rate math, actionable=completed+open, owner-view matches employee self-view for identical stats). Frontend: (1) production@sharma.com → nav-coach → /coach shows all four stat cards (Completed Tasks 3, Open 49, Overdue 18, Completion 6%) + proof/plans/photos/voice row (0%/3/0/0), existing cached coach-summary already visible with coach-strengths/coach-improvements/coach-recommendation; clicking coach-refresh-btn regenerated in ~6s and toast 'AI coach updated' shown, new context-specific strengths & recommendation rendered. (2) owner@sharma.com → /operating-score renders 25 coach-link-<id> entries per employee; clicking first navigates to /coach?user=<id> and shows THAT employee's stats (Completed 32, Open 28, Completion 53%, No coaching yet empty state → Generate coaching button). (3) sales@sharma.com direct nav to /coach?user=<production-id> gets 403 from backend (confirmed 3× 403 console errors) and does NOT show any other employee's stats/summary — data is safe. Minor UX gap: page hangs on 'Loading your coach…' indefinitely (see frontend_issues).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "WorkCoach.js", "issue": "On 403 (non-owner viewing another user's coach), useQuery.data stays undefined so `isLoading || !data` renders 'Loading your coach…' forever with no error message or redirect. The api interceptor's global toast may or may not fire depending on setup. Data is not leaked (safe), but UX is broken — user sees indefinite loading spinner text.", "selector": "text=Loading your coach…", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration21.py",
+    "/app/test_reports/pytest/iteration21.xml"
+  ],
+  "action_items": [
+    "WorkCoach.js: handle the 403/error state from useQuery. Options: (a) show error card with message 'You don't have permission to view this coach' + link back to /coach for own coach, or (b) redirect non-owners away when ?user query is set to a different id. Read `error` from useQuery and render an error UI instead of the loading text.",
+    "Optional: WorkCoach.js line 38 — `s = refresh.data?.summary || summary`. After a successful refresh, react-query cache is set via qc.setQueryData so `data.summary` also updates; the OR fallback is redundant but harmless.",
+    "Optional: server.py:1266 update_one only sets coach_summary but doesn't scope by tenant_id; safe because id is a UUID and _resolve_coach_target already validates tenant, but adding tenant_id filter is defense-in-depth.",
+    "Optional: /work-coach/refresh has no rate-limit; a user (or the owner) can hammer the button and burn LLM calls (~10-20s each). Consider a short cooldown or per-target debounce.",
+    "Optional: OperatingScore.js:92 shows the Coach link to every logged-in user viewing the page. The backend correctly 403s non-owners, but the link is only meaningful to the owner. Consider hiding/conditionally rendering coach-link for non-owners to avoid dead clicks (currently the leaderboard filter shows employees only when owner is on the page — verify)."
+  ],
+  "critical_code_review_comments": [
+    "server.py:1179-1210 compute_employee_stats — task match uses assignee_id==uid OR (assignee_id is None AND assignee_role==role). Matches Iter20/Iter16 pattern; consistent with _can_work_task. Good.",
+    "server.py:1204 completion_rate = round(done/actionable*100). actionable = done + open (open = todo+in_progress+blocked). Overdue is a subset of open, not double-counted. Verified via test_completion_rate_math.",
+    "server.py:1205 proof_upload_rate uses len(done) as denominator not actionable — correct interpretation of the spec ('proof upload rate from task attachments on done tasks').",
+    "server.py:1213-1236 ai_work_coach — clamps headline<=200, strengths<=4 items each <=120 chars, improvements<=3 items each <=120 chars, recommendation<=240. Defensive against LLM overrun. Verified.",
+    "server.py:1239-1247 _resolve_coach_target — 403 for non-owner trying to view others, 404 for missing user (tenant-scoped). Order is correct: role check BEFORE db lookup so we don't reveal existence of foreign-tenant users. Good.",
+    "server.py:1259-1268 refresh persists summary on the user doc as coach_summary. Cached in GET response. No TTL/staleness — user always sees the last-generated summary regardless of age. Consider adding a 'stale' badge if generated_at is >7 days old.",
+    "WorkCoach.js — solid brutalist UI, all data-testids present (coach-stat-*, coach-refresh-btn, coach-summary, coach-strengths, coach-improvements, coach-recommendation, coach-empty). Icon imports from @phosphor-icons/react. Refresh mutation uses optimistic setQueryData on success — smooth.",
+    "OperatingScore.js:92 coach-link-<id> uses <Link to=`/coach?user=${e.id}`>. Correct testid pattern.",
+    "server.py is 3027 lines — same 'split into routers' feedback as iterations 17-20. Now with 4 more routes (work-coach + refresh) it's overdue. Consider extracting a coach_router."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration21.py (new — 14 tests)"
+  ],
+  "success_rate": {
+    "backend": "100% (14/14 pytest passed in 14.7s)",
+    "frontend": "95% — all core flows work (nav, own stats, refresh in ~6s, owner-views-employee, permission enforced backend). One UX gap on 403 (infinite 'Loading' text)."
+  },
+  "test_credentials": "production@sharma.com / demo1234, owner@sharma.com / demo1234, sales@sharma.com / demo1234, finance@sharma.com / demo1234 (from /app/memory/test_credentials.md).",
+  "seed_data_creation": "None. AI coach summaries were generated/refreshed on demo users (production and sales) via the API — these are stored on the user document under coach_summary. Non-destructive to task/company state. If desired: db.users.update_many({}, {$unset: {coach_summary: 1}}) to reset.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iter21 verified end-to-end on Phase 2 Work Coach: (1) GET /api/work-coach returns {target:{id,name,role}, stats:{completed,open,overdue,actionable,completion_rate,proof_upload_rate,plans_used,plans_completed,photos_uploaded,voice_updates}, summary:cached|null}. Own coach always allowed (with or without ?user_id=self). ?user_id=<other> — 403 for non-owners, 404 for missing user (both tenant-scoped). (2) POST /api/work-coach/refresh — same perm gate, always returns freshly-generated summary with headline/strengths[1-4]/improvements[1-3]/recommendation/generated_at/stats_snapshot; persists to user.coach_summary. Length caps enforced (headline<=200, items<=120, recommendation<=240). AI takes ~6-10s in practice (fast because model is decisive). (3) Frontend routes: /coach in App.js, nav-coach in Layout.js, WorkCoach.js reads ?user query and passes as user_id. All data-testids present. OperatingScore.js coach-link-<id> works. (4) Known UX issue: WorkCoach.js does not handle the 403 error state — page shows 'Loading your coach…' forever. Fix suggestion in action_items. Data is NOT leaked. (5) All 14 pytest tests in /app/backend/tests/test_iteration21.py can be re-run in ~15s. Regression: /operating-score still returns employees list correctly.",
+  "rca of the issue": "Frontend UX bug on 403: WorkCoach.js line 35 `if (isLoading || !data) return <div>Loading your coach…</div>`. When useQuery gets a 403, isLoading becomes false but data stays undefined, so !data is truthy and the loading text is rendered indefinitely. The useQuery result's `error` field is never inspected. Fix: `const { data, isLoading, error } = useQuery(...); if (error) return <ErrorCard error={error} />; if (isLoading || !data) return <Loading />;`. Reproduction: login sales@sharma.com, then hit /coach?user=<production-id>. Backend correctly returns 403 (verified 3 console errors). Data is safe."
+}

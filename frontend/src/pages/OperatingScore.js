@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import api from "../lib/api";
 import { PageHeader } from "../components/common";
-import { Gauge, Lightning, CurrencyCircleDollar, TrendUp, ChatCenteredDots, Trophy } from "@phosphor-icons/react";
+import { Gauge, Lightning, CurrencyCircleDollar, TrendUp, ChatCenteredDots, Trophy, Sparkle } from "@phosphor-icons/react";
 
 const CATS = [
   { key: "execution", label: "Execution", icon: Lightning, color: "bg-brand-blue" },
@@ -88,6 +89,10 @@ export default function OperatingScore() {
               <p className="text-sm font-semibold truncate">{e.name}</p>
               <p className="label-mono text-muted-foreground">{e.role} · {e.done} done · {e.open} open{e.overdue > 0 ? ` · ${e.overdue} overdue` : ""}</p>
             </div>
+            <Link to={`/coach?user=${e.id}`} data-testid={`coach-link-${e.id}`}
+              className="hidden sm:flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-black px-3 py-1.5 hover:bg-brand-yellow transition-colors shrink-0">
+              <Sparkle size={13} weight="bold" /> Coach
+            </Link>
             <div className="w-14 h-14 flex flex-col items-center justify-center border-2 border-black bg-white shrink-0">
               <span className={`font-heading text-2xl font-black leading-none ${scoreColor(e.score)}`}>{e.score != null ? e.score : "—"}</span>
             </div>

@@ -1173,6 +1173,103 @@ async def operating_score(user: dict = Depends(get_current_user)):
     }
 
 
+# ---------------------------------------------------------------------------
+# Personal AI Work Coach
+# ---------------------------------------------------------------------------
+async def compute_employee_stats(tenant_id: str, target: dict) -> dict:
+    uid, role = target["id"], target.get("role")
+    now = datetime.now(timezone.utc).isoformat()
+    tasks = await db.tasks.find(
+        {"tenant_id": tenant_id, "$or": [{"assignee_id": uid}, {"assignee_id": None, "assignee_role": role}]},
+        {"_id": 0}).to_list(3000)
+    done = [t for t in tasks if t.get("status") == "done"]
+    open_tasks = [t for t in tasks if t.get("status") in ("todo", "in_progress", "blocked")]
+    overdue = [t for t in open_tasks if t.get("due_date") and t["due_date"] < now]
+    actionable = len(done) + len(open_tasks)
+
+    def has_attach(t, kind=None):
+        atts = t.get("attachments") or []
+        return any((kind is None or a.get("kind") == kind) for a in atts) if atts else False
+
+    done_with_proof = sum(1 for t in done if has_attach(t))
+    with_plan = sum(1 for t in tasks if (t.get("execution_plan") or {}).get("status") == "accepted")
+    plans_completed = sum(1 for t in tasks if (t.get("execution_plan") or {}).get("progress") == 100)
+    photos = sum(len([a for a in (t.get("attachments") or []) if a.get("kind") == "photo"]) for t in tasks)
+    voices = sum(len([a for a in (t.get("attachments") or []) if a.get("kind") == "voice"]) for t in tasks)
+    return {
+        "completed": len(done),
+        "open": len(open_tasks),
+        "overdue": len(overdue),
+        "actionable": actionable,
+        "completion_rate": round(len(done) / actionable * 100) if actionable else 0,
+        "proof_upload_rate": round(done_with_proof / len(done) * 100) if done else 0,
+        "plans_used": with_plan,
+        "plans_completed": plans_completed,
+        "photos_uploaded": photos,
+        "voice_updates": voices,
+    }
+
+
+async def ai_work_coach(target: dict, stats: dict, session_id: str) -> dict:
+    system = (
+        "You are a supportive but honest performance coach inside DecisionOS, an operating system for a small business. "
+        "Given one employee's work statistics, write a short performance review. Be specific and reference the numbers. "
+        "Return ONLY valid JSON: {\"headline\": string (one encouraging sentence), "
+        "\"strengths\": [string] (2-4 concrete strengths), \"improvements\": [string] (1-3 gentle, actionable areas), "
+        "\"recommendation\": string (one concrete habit to adopt next). Keep every item under 18 words.}"
+    )
+    prompt = (f"Employee: {target.get('name')} (role: {target.get('role')})\n"
+              f"Stats: {json.dumps(stats)}\n"
+              "Write the review now.")
+    chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=session_id, system_message=system).with_model(*LLM_MODEL)
+    resp = await chat.send_message(UserMessage(text=prompt))
+    try:
+        d = _extract_json(resp)
+    except Exception as e:
+        logger.error(f"AI work coach parse error: {e} :: {resp[:300]}")
+        d = {}
+    return {
+        "headline": str(d.get("headline") or "")[:200],
+        "strengths": [str(s)[:120] for s in (d.get("strengths") or [])][:4],
+        "improvements": [str(s)[:120] for s in (d.get("improvements") or [])][:3],
+        "recommendation": str(d.get("recommendation") or "")[:240],
+    }
+
+
+async def _resolve_coach_target(user: dict, user_id: Optional[str]) -> dict:
+    if user_id and user_id != user["id"]:
+        if user.get("role") != "owner":
+            raise HTTPException(status_code=403, detail="Only the owner can view others' coaching")
+        target = await db.users.find_one({"id": user_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
+        if not target:
+            raise HTTPException(status_code=404, detail="Employee not found")
+        return target
+    return user
+
+
+@api.get("/work-coach")
+async def get_work_coach(user_id: Optional[str] = None, user: dict = Depends(get_current_user)):
+    target = await _resolve_coach_target(user, user_id)
+    stats = await compute_employee_stats(user["tenant_id"], target)
+    cached = target.get("coach_summary")
+    return {"target": {"id": target["id"], "name": target.get("name"), "role": target.get("role")},
+            "stats": stats, "summary": cached}
+
+
+@api.post("/work-coach/refresh")
+async def refresh_work_coach(user_id: Optional[str] = None, user: dict = Depends(get_current_user)):
+    target = await _resolve_coach_target(user, user_id)
+    stats = await compute_employee_stats(user["tenant_id"], target)
+    summary = await ai_work_coach(target, stats, session_id=f"coach-{target['id']}")
+    summary["generated_at"] = now_iso()
+    summary["stats_snapshot"] = stats
+    await db.users.update_one({"id": target["id"]}, {"$set": {"coach_summary": summary}})
+    return {"target": {"id": target["id"], "name": target.get("name"), "role": target.get("role")},
+            "stats": stats, "summary": summary}
+
+
+
+
 # Decisions
 # ---------------------------------------------------------------------------
 async def enrich_decision(d: dict) -> dict:

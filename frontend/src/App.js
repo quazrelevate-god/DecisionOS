@@ -23,6 +23,7 @@ import Priorities from "./pages/Priorities";
 import Calendar from "./pages/Calendar";
 import Meetings from "./pages/Meetings";
 import OperatingScore from "./pages/OperatingScore";
+import WorkCoach from "./pages/WorkCoach";
 
 function Protected({ children }) {
   const { user, loading } = useAuth();
@@ -59,6 +60,7 @@ function App() {
             <Route path="/calendar" element={<Protected><Calendar /></Protected>} />
             <Route path="/meetings" element={<Protected><Meetings /></Protected>} />
             <Route path="/operating-score" element={<Protected><OperatingScore /></Protected>} />
+            <Route path="/coach" element={<Protected><WorkCoach /></Protected>} />
             <Route path="/brain" element={<Protected><Brain /></Protected>} />
             <Route path="/ask" element={<Protected><AskAI /></Protected>} />
             <Route path="/team" element={<Protected><Team /></Protected>} />

@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 22 — verified the My Work task-scoping bug fix on GET /api/tasks. Backend: 10/10 pytest passed in 3.6s. Direct measurements against the live demo tenant: (a) production@sharma.com mine=true -> total=63, mine=6, unclaimed_pool=57, other_member=0 (matches the fix). (b) production mine=false -> total=65, roles seen = {production} only (no sales/finance leakage; broader lane preserved). (c) owner mine=false spans multiple roles and returns superset of production's board. (d) owner mine=true only contains own + unclaimed owner-role tasks. (e) A targeted probe seeded a task assigned to ANOTHER production member via owner token; verified it appears in production's team-board (mine=false) but NOT in production's mine=true — bug reproduction path fully closed. Cleanup done. Frontend (production@sharma.com login → /my-work): 63 mywork-task-* cards rendered, one-to-one match with the API response; DOM audit confirmed 0 cards belonging to another user. Complete / Photo / Voice Reply buttons and Generate AI Execution Plan CTA all present on task cards; the previously seeded TEST_iter20_ask_forbidden card shows the AI Execution Guide with checklist + Ask AI buttons + Customize Steps, so existing actions still work. Messages panel populated with reminders/urgencies. Sales and Finance mine=true also verified leak-free.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration22.py",
+    "/app/test_reports/pytest/iteration22.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py:1440-1454 list_tasks — the fix is correct and minimal: for mine=true, $or:[{assignee_id:user.id},{assignee_id:None,assignee_role:user.role}]; for non-owner mine=false, $or:[{assignee_id:user.id},{assignee_role:user.role}] (broader lane intentionally); owner mine=false returns all tenant tasks. Predicate is symmetric with _can_work_task and matches the coach-stats matcher (server.py:1179-1210), so all task-scoping paths are now consistent.",
+    "Note on data shape: the DB stores assignee_id as None when a task is unclaimed. The Mongo query {assignee_id: None} matches both missing-field and explicit-null documents in pymongo/motor — verified via the 57-count of unclaimed_pool matching the intended interpretation. If any legacy tasks ever set assignee_id: '' (empty string) they would slip through both branches — recommend a defensive migration or Pydantic model to normalize empty strings to None (nice-to-have, no evidence in current data).",
+    "server.py still 3032 lines — carry-forward feedback from iterations 17-21 to split into routers (tasks_router, coach_router, etc.). Not blocking.",
+    "MyWork.js line 294 uses queryKey ['tasks', true] which is distinct from the ['tasks'] key used by Tasks board — cache invalidation of one does not clobber the other. Good.",
+    "No _id serialization issues observed on /api/tasks; explicit projection {'_id': 0} preserved.",
+    "Iteration 21 open UX issue (WorkCoach loading-forever on 403) not addressed in this iteration — out of scope for this bug fix but still open."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration22.py (new — 10 tests covering the bug fix + 2 regressions + 1 targeted seed-and-cleanup probe)"
+  ],
+  "success_rate": {
+    "backend": "100% (10/10 pytest passed in 3.6s)",
+    "frontend": "100% — My Work renders exactly the 63 scoped tasks with 0 cross-member leakage; all action buttons and AI Execution Guide functional."
+  },
+  "test_credentials": "production@sharma.com / demo1234, owner@sharma.com / demo1234, sales@sharma.com / demo1234, finance@sharma.com / demo1234 (from /app/memory/test_credentials.md).",
+  "seed_data_creation": "test_targeted_other_production_member_task_not_leaked creates a temporary task titled 'TEST_iter22_other_member_leakage_probe' assigned to another production member via owner token and DELETEs it in the finally block. Non-destructive.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iter22 verified the /api/tasks scoping fix end-to-end. If you re-run: (1) `pytest backend/tests/test_iteration22.py` — expect 10 pass in <5s; (2) production mine=true should stay at 6 own + 57 pool + 0 leaks (exact numbers may drift as demo data changes, but the invariant 'other_member=0' MUST hold); (3) production mine=false should NEVER contain assignee_role in {sales, finance}; (4) owner mine=false must be a superset of any non-owner's board and must include multiple roles. The predicate in server.py:1449-1452 is the single source of truth — if that changes, re-run these tests. Iteration 21 WorkCoach 403 UX issue is still open (unrelated to this bug fix).",
+  "rca of the issue": "Root cause: previous list_tasks handler used q['assignee_role']==user.role for mine=true which matched EVERY task in the role — including tasks explicitly assigned to another named user of that role, because assignee_role is auto-populated from the assignee's role at create/update time (server.py:1471, 1494). Fix: split the mine=true branch into an $or of two mutually-exclusive predicates — (a) tasks pinned to me by id, and (b) unclaimed role-pool tasks (assignee_id is None AND assignee_role == my role). Preservation: the non-owner mine=false branch keeps the broader OR (any of my id OR my role) so the team board still shows the whole role lane. Reproduction (pre-fix): login production@sharma.com, GET /api/tasks?mine=true, filter for assignee_id != me AND assignee_id != None → previous count would be >0; post-fix it is 0 (verified 63/6/57/0)."
+}

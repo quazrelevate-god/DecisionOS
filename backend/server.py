@@ -1442,9 +1442,13 @@ async def list_tasks(status: Optional[str] = None, mine: Optional[bool] = False,
     q = {"tenant_id": user["tenant_id"]}
     if status:
         q["status"] = status
-    # Non-owners only ever see their own lane (their tasks + their role's tasks).
-    # Owner sees everything, and may opt into a personal view via ?mine=true.
-    if user["role"] != "owner" or mine:
+    # ?mine=true (My Work / personal): only tasks assigned to ME + unclaimed role-pool tasks.
+    #   Excludes tasks assigned to other specific members of my role.
+    # Non-owner team board (mine=false): the whole role lane (any member of my role + role-level tasks).
+    # Owner (mine=false): everything.
+    if mine:
+        q["$or"] = [{"assignee_id": user["id"]}, {"assignee_id": None, "assignee_role": user["role"]}]
+    elif user["role"] != "owner":
         q["$or"] = [{"assignee_id": user["id"]}, {"assignee_role": user["role"]}]
     tasks = await db.tasks.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
     return await enrich_tasks(tasks)

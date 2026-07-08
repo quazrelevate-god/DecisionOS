@@ -1,9 +1,10 @@
 import { useState } from "react";
 import api from "../lib/api";
 import { PageHeader, Chip, EmptyState } from "../components/common";
-import { MagnifyingGlass } from "@phosphor-icons/react";
+import { MagnifyingGlass, ChatCircleText } from "@phosphor-icons/react";
+import { AskPanel } from "./AskAI";
 
-export default function Brain() {
+function SearchPanel() {
   const [q, setQ] = useState("");
   const [res, setRes] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -23,8 +24,6 @@ export default function Brain() {
 
   return (
     <div>
-      <PageHeader eyebrow="Linked operational memory" title="Company Brain" />
-
       <form onSubmit={search} className="flex gap-2 mb-8 max-w-2xl">
         <div className="flex-1 flex items-center border border-black bg-white px-4">
           <MagnifyingGlass size={18} weight="bold" className="text-muted-foreground" />
@@ -129,6 +128,29 @@ export default function Brain() {
           )}
         </>
       )}
+    </div>
+  );
+}
+
+
+export default function Brain() {
+  const [tab, setTab] = useState("ask");
+  return (
+    <div>
+      <PageHeader eyebrow="Everything your business knows" title="Company Brain">
+        <div className="flex border border-black" data-testid="brain-tabs">
+          <button onClick={() => setTab("ask")} data-testid="brain-tab-ask"
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border-r border-black transition-colors ${tab === "ask" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+            <ChatCircleText size={16} weight="bold" /> Ask
+          </button>
+          <button onClick={() => setTab("search")} data-testid="brain-tab-search"
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider transition-colors ${tab === "search" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+            <MagnifyingGlass size={16} weight="bold" /> Search
+          </button>
+        </div>
+      </PageHeader>
+
+      {tab === "ask" ? <AskPanel /> : <SearchPanel />}
     </div>
   );
 }

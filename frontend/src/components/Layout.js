@@ -45,7 +45,6 @@ const NAV = [
   { to: "/coach", label: "Work Coach", icon: Barbell, testid: "nav-coach" },
   { to: "/meetings", label: "Meeting Notes", icon: MicrophoneStage, testid: "nav-meetings" },
   { to: "/brain", label: "Company Brain", icon: BrainIcon, testid: "nav-brain", perm: "brain" },
-  { to: "/ask", label: "Ask AI", icon: ChatCircleText, testid: "nav-ask", perm: "ask" },
   { to: "/team", label: "Team", icon: UsersThree, testid: "nav-team", perm: "team_manage" },
 ];
 
@@ -55,7 +54,7 @@ const BOTTOM_NAV = [
   { to: "/ingest", label: "Capture", icon: FileArrowUp, perm: "data_input" },
   { to: "/brief", label: "Brief", icon: Sun },
   { to: "/my-work", label: "Work", icon: Briefcase },
-  { to: "/ask", label: "Ask", icon: ChatCircleText, perm: "ask" },
+  { to: "/brain", label: "Brain", icon: ChatCircleText, perm: "brain" },
 ];
 
 const Logo = () => (

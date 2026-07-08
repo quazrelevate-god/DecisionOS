@@ -8,7 +8,6 @@ import Login from "./pages/Login";
 import Inbox from "./pages/Inbox";
 import Workflows from "./pages/Workflows";
 import Brain from "./pages/Brain";
-import AskAI from "./pages/AskAI";
 import Team from "./pages/Team";
 import Contacts from "./pages/Contacts";
 import CEOBrief from "./pages/CEOBrief";
@@ -60,7 +59,7 @@ function App() {
             <Route path="/operating-score" element={<Protected><OperatingScore /></Protected>} />
             <Route path="/coach" element={<Protected><WorkCoach /></Protected>} />
             <Route path="/brain" element={<Protected><Brain /></Protected>} />
-            <Route path="/ask" element={<Protected><AskAI /></Protected>} />
+            <Route path="/ask" element={<Navigate to="/brain" replace />} />
             <Route path="/team" element={<Protected><Team /></Protected>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

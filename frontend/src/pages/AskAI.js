@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from "react";
 import api from "../lib/api";
-import { PageHeader } from "../components/common";
 import { PaperPlaneTilt } from "@phosphor-icons/react";
 
 const SUGGESTIONS = [
@@ -10,7 +9,7 @@ const SUGGESTIONS = [
   "What did I decide about festive stock?",
 ];
 
-export default function AskAI() {
+export function AskPanel() {
   const [log, setLog] = useState([]);
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
@@ -36,9 +35,7 @@ export default function AskAI() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-13rem)] lg:h-[calc(100vh-8rem)]">
-      <PageHeader eyebrow="Query your company context" title="Ask AI" />
-
+    <div className="flex flex-col h-[calc(100vh-16rem)] lg:h-[calc(100vh-13rem)]">
       <div className="flex-1 border border-black bg-brand-ink text-white font-mono text-sm overflow-y-auto p-6 space-y-4">
         {log.length === 0 && (
           <div className="text-white/50">

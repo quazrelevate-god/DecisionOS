@@ -1,4 +1,5 @@
 ## Changelog
+- 2026-06: CEO Brief blocks are now interactive drill-downs. Each counter card (delayed, completed, awaiting approval, absent, complaints, payment overdue) is clickable and opens a modal listing its items with in-place actions — Approve/Reject decisions, Review purchases in Workflows, Mark complaints resolved. Removed the scroll-down actionable section. Brief counters auto-refresh every 30s. Added backend `GET /api/brief/details?key=&period=`.
 - 2026-06: Merged "Daily Brief" into "CEO Brief". Removed the separate Daily Brief nav item + Dashboard.js page. CEO Brief now shows period counter cards (Morning/Evening/Weekly/Monthly) plus the actionable Daily Brief blocks (Pending Approvals w/ approve-reject, Overdue Tasks, Wins Today, Recent Activity). `/dashboard` redirects to `/brief`.
 
 

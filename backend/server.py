@@ -2260,6 +2260,84 @@ async def ceo_brief(period: str = "morning", user: dict = Depends(get_current_us
     }
 
 
+@api.get("/brief/details")
+async def brief_details(key: str, period: str = "morning", user: dict = Depends(get_current_user)):
+    """Drill-down items behind a CEO Brief counter block."""
+    tid = user["tenant_id"]
+    now = datetime.now(timezone.utc)
+    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    today = now.strftime("%Y-%m-%d")
+    if period == "weekly":
+        start_iso = (now - timedelta(days=7)).isoformat()
+    elif period == "monthly":
+        start_iso = (now - timedelta(days=30)).isoformat()
+    else:
+        start_iso = midnight.isoformat()
+
+    items = []
+    actionable = False
+
+    if key == "delayed":
+        tasks = await db.tasks.find(
+            {"tenant_id": tid, "status": {"$in": ["todo", "in_progress"]}, "due_date": {"$lt": now.isoformat(), "$ne": None}},
+            {"_id": 0}).sort("due_date", 1).to_list(200)
+        tasks = await enrich_tasks(tasks)
+        for t in tasks:
+            items.append({"id": t["id"], "title": t["title"],
+                          "subtitle": t.get("assignee_name") or t.get("assignee_role") or "unassigned",
+                          "meta": t.get("priority"), "kind": "task", "due_date": t.get("due_date")})
+
+    elif key == "completed":
+        if period == "morning":
+            y_start = (midnight - timedelta(days=1)).isoformat()
+            trange = {"$gte": y_start, "$lt": midnight.isoformat()}
+        else:
+            trange = {"$gte": start_iso}
+        acts = await db.activity.find({"tenant_id": tid, "kind": "task_done", "created_at": trange}, {"_id": 0}).sort("created_at", -1).to_list(200)
+        for a in acts:
+            items.append({"id": a["id"], "title": a.get("message"), "subtitle": "", "kind": "activity"})
+
+    elif key == "awaiting_approval":
+        actionable = True
+        decisions = await db.decisions.find({"tenant_id": tid, "status": "pending_approval"}, {"_id": 0}).to_list(50)
+        decisions = await enrich_decisions(decisions)
+        for d in decisions:
+            items.append({"id": d["id"], "title": d["title"], "subtitle": d.get("summary") or "",
+                          "meta": f"{len(d.get('tasks', []))} task(s) blocked", "kind": "decision"})
+        purchases = await db.workflows.find({"tenant_id": tid, "type": "purchase_payment", "stage": "requested"}, {"_id": 0}).to_list(50)
+        for w in purchases:
+            items.append({"id": w["id"], "title": w.get("title"), "subtitle": w.get("counterparty") or "",
+                          "meta": w.get("amount"), "kind": "purchase"})
+
+    elif key == "absent":
+        recs = await db.attendance.find({"tenant_id": tid, "date": today, "status": "absent"}, {"_id": 0}).to_list(200)
+        uids = [r["user_id"] for r in recs if r.get("user_id")]
+        umap = {}
+        if uids:
+            for u in await db.users.find({"id": {"$in": uids}}, {"_id": 0, "id": 1, "name": 1, "role": 1}).to_list(200):
+                umap[u["id"]] = u
+        for r in recs:
+            u = umap.get(r.get("user_id"), {})
+            items.append({"id": r.get("user_id") or new_id(), "title": u.get("name", "Unknown"), "subtitle": u.get("role", ""), "kind": "absent"})
+
+    elif key == "complaints":
+        actionable = True
+        recs = await db.complaints.find({"tenant_id": tid, "status": "open"}, {"_id": 0}).sort("created_at", -1).to_list(200)
+        for c in recs:
+            items.append({"id": c["id"], "title": c.get("text"), "subtitle": c.get("customer_name") or "Unknown",
+                          "meta": c.get("severity"), "kind": "complaint"})
+
+    elif key == "payment_overdue":
+        recs = await db.workflows.find({"tenant_id": tid, "type": "purchase_payment", "stage": "payment_pending"}, {"_id": 0}).to_list(200)
+        for w in recs:
+            items.append({"id": w["id"], "title": w.get("title"), "subtitle": w.get("counterparty") or "",
+                          "meta": w.get("amount"), "kind": "payment"})
+
+    return {"key": key, "actionable": actionable, "items": items}
+
+
+
+
 @api.post("/tasks/{task_id}/attachment")
 async def upload_task_attachment(task_id: str, file: UploadFile = File(...), kind: str = Form("photo"), user: dict = Depends(get_current_user)):
     t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]})

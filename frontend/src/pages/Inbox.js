@@ -11,7 +11,57 @@ import {
   Microphone, Stop, PaperPlaneTilt, CheckCircle, XCircle, Spinner,
   UsersThree, Truck, Receipt, CurrencyCircleDollar, Warning, CheckSquare,
   SealCheck, Bell, Brain, FileArrowUp, Check, X, ArrowClockwise, User, UserPlus, Question,
+  WarningCircle, ArrowBendUpRight,
 } from "@phosphor-icons/react";
+
+function EscalationCard({ t, onRespond }) {
+  const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
+  const isEsc = t.source === "escalation";
+
+  const send = async () => {
+    if (!text.trim()) return toast.error("Type a response first");
+    setSending(true);
+    try {
+      await onRespond(t.id, text.trim());
+      setText("");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div data-testid={`escalation-card-${t.id}`} className="card-brutal p-5">
+      <div className="flex items-center gap-1.5 flex-wrap mb-2">
+        <span data-testid={`escalation-badge-${t.id}`}
+          className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-black ${isEsc ? "bg-brand-red text-white" : "bg-brand-blue text-white"}`}>
+          {isEsc ? <WarningCircle size={12} weight="bold" /> : <ArrowBendUpRight size={12} weight="bold" />}
+          {isEsc ? "Escalation" : "Handoff"}
+        </span>
+        <Chip value={t.priority} />
+      </div>
+      <p className="font-heading font-bold text-lg leading-tight">{t.title}</p>
+      {t.description && <p className="text-sm text-muted-foreground mt-2">{t.description}</p>}
+      {t.raised_step_text && (
+        <p className="text-xs text-muted-foreground mt-2 border-l-2 border-black/30 pl-2 italic">On step: {t.raised_step_text}</p>
+      )}
+      {t.raised_by_name && (
+        <p className="label-mono text-muted-foreground mt-3 flex items-center gap-1">
+          <User size={12} weight="bold" /> Raised by {t.raised_by_name}
+        </p>
+      )}
+      <div className="mt-4 border-t border-black/15 pt-3">
+        <textarea data-testid={`escalation-response-${t.id}`} value={text} onChange={(e) => setText(e.target.value)} rows={2}
+          placeholder={isEsc ? `Type your decision — this goes back to ${t.raised_by_name || "the person who raised it"}` : `Reply to ${t.raised_by_name || "the sender"}`}
+          className="w-full border border-black p-2.5 text-sm font-mono focus:outline-none focus:shadow-brutal-sm transition-shadow resize-none" />
+        <button onClick={send} disabled={sending || !text.trim()} data-testid={`escalation-send-${t.id}`}
+          className="mt-2 flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-50">
+          <PaperPlaneTilt size={15} weight="bold" /> {sending ? "Sending…" : "Send response"}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function PendingApprovalCard({ d, members, roleOptions, onApprove, onReject, onRefresh }) {
   const [adding, setAdding] = useState(false);
@@ -228,6 +278,17 @@ export default function Inbox() {
     catch (e) { toast.error(e.response?.data?.detail || "Failed"); }
   };
 
+  const respondEscalation = async (id, text) => {
+    try {
+      await api.post(`/tasks/${id}/respond`, { text });
+      toast.success("Response sent — routed back to the person who raised it");
+      refresh();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Could not send response");
+      throw e;
+    }
+  };
+
   const setStatus = async (id, status) => {
     try { await api.post(`/inbox/${id}/status`, { status }); refresh(); }
     catch { toast.error("Failed"); }
@@ -320,6 +381,44 @@ export default function Inbox() {
         </div>
       )}
 
+      {/* Pending approvals (owner) */}
+      {user?.role === "owner" && pending.length > 0 && (
+        <div className="mb-10">
+          <h2 className="font-heading text-2xl font-extrabold uppercase tracking-tight mb-4">Decision Approvals</h2>
+          <div className="grid md:grid-cols-2 gap-4">
+            {pending.map((d) => (
+              <PendingApprovalCard
+                key={d.id}
+                d={d}
+                members={members}
+                roleOptions={roleOptions}
+                onApprove={(id) => decide(id, "approve")}
+                onReject={(id) => decide(id, "reject")}
+                onRefresh={refresh}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Needs your attention (escalations & handoffs) */}
+      {escalations.length > 0 && (
+        <div className="mb-10" data-testid="needs-attention-section">
+          <h2 className="font-heading text-2xl font-extrabold uppercase tracking-tight mb-4 flex items-center gap-2">
+            <WarningCircle size={22} weight="bold" className="text-brand-red" /> Needs Your Attention
+            <span className="min-w-5 h-5 px-1.5 flex items-center justify-center text-xs border border-black bg-brand-red text-white">{escalations.length}</span>
+          </h2>
+          <div className="grid md:grid-cols-2 gap-4">
+            {escalations.map((t) => (
+              <EscalationCard key={t.id} t={t} onRespond={respondEscalation} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Tasks feed */}
+      <h2 className="font-heading text-2xl font-extrabold uppercase tracking-tight mb-4">Tasks &amp; Activity</h2>
+
       {/* Filter chips */}
       <div className="flex flex-wrap gap-2 mb-4" data-testid="inbox-filters">
         {FILTERS.map((f) => {
@@ -366,26 +465,6 @@ export default function Inbox() {
           );
         })}
       </div>
-
-      {/* Pending approvals (owner) */}
-      {user?.role === "owner" && pending.length > 0 && (
-        <>
-          <h2 className="font-heading text-2xl font-extrabold uppercase tracking-tight mb-4">Pending Approvals</h2>
-          <div className="grid md:grid-cols-2 gap-4">
-            {pending.map((d) => (
-              <PendingApprovalCard
-                key={d.id}
-                d={d}
-                members={members}
-                roleOptions={roleOptions}
-                onApprove={(id) => decide(id, "approve")}
-                onReject={(id) => decide(id, "reject")}
-                onRefresh={refresh}
-              />
-            ))}
-          </div>
-        </>
-      )}
     </div>
   );
 }

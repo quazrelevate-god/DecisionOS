@@ -330,7 +330,7 @@ export default function Inbox() {
 
   return (
     <div>
-      <PageHeader eyebrow="Your day in one place" title="Inbox">
+      <PageHeader eyebrow="Your day in one place" title="Decision Desk">
         {canUpload && (
           <button data-testid="inbox-upload-button" onClick={() => navigate("/ingest")}
             className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">

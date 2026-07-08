@@ -37,7 +37,7 @@ import {
 } from "@phosphor-icons/react";
 
 const NAV = [
-  { to: "/", label: "Inbox", icon: Tray, testid: "nav-inbox", perm: "inbox" },
+  { to: "/", label: "Decision Desk", icon: Tray, testid: "nav-inbox", perm: "inbox" },
   { to: "/brief", label: "CEO Brief", icon: Sun, testid: "nav-ceo-brief" },
   { to: "/operating-score", label: "Operating Score", icon: GaugeIcon, testid: "nav-operating-score" },
   { to: "/journal", label: "CEO Journal", icon: BookOpen, testid: "nav-journal", perm: "brain" },
@@ -57,7 +57,7 @@ const NAV = [
 
 // Primary items for the mobile bottom tab bar
 const BOTTOM_NAV = [
-  { to: "/", label: "Inbox", icon: Tray, perm: "inbox" },
+  { to: "/", label: "Decision Desk", icon: Tray, perm: "inbox" },
   { to: "/ingest", label: "Data", icon: FileArrowUp, perm: "data_input" },
   { to: "/brief", label: "Brief", icon: Sun },
   { to: "/my-work", label: "Work", icon: Briefcase },

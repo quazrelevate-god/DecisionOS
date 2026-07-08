@@ -9,6 +9,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 
 const inp = "w-full border border-black px-3 py-2 text-sm font-mono focus:outline-none focus:shadow-brutal-sm";
 
+const MENU_PREVIEW = [
+  { label: "Decision Desk", perm: "inbox" },
+  { label: "CEO Brief", perm: null },
+  { label: "My Work", perm: null },
+  { label: "People", perm: "people" },
+  { label: "Company Brain", perm: "brain" },
+  { label: "Capture", perm: "data_input" },
+  { label: "Workflows", perm: "workflows" },
+  { label: "Meeting Notes", perm: null },
+];
+
 function MemberDialog({ trigger, initial, roleOptions, onSaved }) {
   const [open, setOpen] = useState(false);
   const blank = { name: "", email: "", password: "", role: roleOptions[0]?.key || "", permissions: defaultPermsForRole(roleOptions[0]?.key) };
@@ -79,6 +90,22 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved }) {
                   </button>
                 );
               })}
+            </div>
+
+            <div className="mt-4 border-t border-black/15 pt-3" data-testid="menu-preview">
+              <p className="label-mono text-muted-foreground mb-2">This member will see these menus</p>
+              <div className="flex flex-wrap gap-1.5">
+                {MENU_PREVIEW.map((m) => {
+                  const visible = !m.perm || form.permissions.includes(m.perm);
+                  return (
+                    <span key={m.label} data-testid={`preview-${m.label}`}
+                      className={`px-2 py-1 text-xs font-semibold border border-black ${visible ? "bg-green-600 text-white" : "bg-white text-muted-foreground line-through opacity-60"}`}>
+                      {m.label}
+                    </span>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-2 italic">CEO Brief shows their personal brief. Everyone always has CEO Brief, My Work & Meeting Notes.</p>
             </div>
           </div>
         </div>

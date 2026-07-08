@@ -1,0 +1,45 @@
+{
+  "summary": "Iteration 16 — Task allocation to team members: FULLY VERIFIED end-to-end. Backend: 9/9 new tests in test_iteration16.py green (create with valid/bogus/role-only/invalid-role, PATCH reassign, PATCH status-only preserves assignee via exclude_unset, PATCH bogus assignee ignored, GET /tasks?mine=true by both assignee_id and assignee_role) + 38/38 regression tests (backend_test.py) = 47/47 green. Frontend: Full flow verified on /tasks — new-task-button opens dialog; task-member-select lists ALL tenant users as 'Name · role' (verified 'Priya Nair · sales'); task-role-select becomes DISABLED after member pick; task created with Priya shows in task-column-todo with person chip task-assignee-<id> = 'Priya Nair'; reassign-task-<id> dropdown reassigns to 'Rajesh Sharma · owner', chip updates to 'Rajesh Sharma', 'Task created' toast confirmed; advance-task-<id> moves card to task-column-in_progress and assignee 'Rajesh Sharma' is preserved (exclude_unset works end-to-end); toggle-mine flips label to 'MY TASKS'; unassigned task shows italic 'Unassigned'; role-only task shows role chip 'SALES'.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/tasks New Task dialog — task-member-select", "issues": ["Dropdown shows ALL tenant users including 15+ 'TEST_member · production' rows and other legacy test users (Lim, TEST Limited, TEST CleanPerms, TEST UILimited). Not caused by this iteration but the member picker becomes very noisy — consider filtering out soft-deleted / test users or making it a searchable combobox. UX-only, not a functional bug."]},
+      {"screen": "/tasks — dev-only hydration warning", "issues": ["Console warning: '<span> cannot be a child of <option>' due to Emergent dev-mode instrumentation wrapping {m.name} inside <option> tags. Dev-instrumentation artifact, not user-visible; will not appear in production build."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration16.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/iteration16.xml"
+  ],
+  "action_items": [
+    "Optional/UX: filter or de-duplicate stale 'TEST_member · production' entries from the member dropdown (either seed cleanup or exclude via /api/users?active=true). Not blocking; feature works.",
+    "Optional cleanup: many 'UI_TEST_*' tasks now pollute the TO DO column (117 tasks). Add a cleanup fixture or a soft-delete endpoint so QA runs don't accumulate."
+  ],
+  "critical_code_review_comments": [
+    "server.py:914 — update_task builds `updates` by excluding None values (`if v is not None`) BEFORE checking assignee_id, so PATCH {assignee_id: null} (explicit unassign) is dropped entirely and cannot unassign a task. If the UI ever needs an 'Unassign' action, the endpoint would need a distinct sentinel or a dedicated route. Minor gap — reassign works because a real id is always sent.",
+    "server.py:914 — after popping bogus assignee_id, `updates` may still contain assignee_role. If a client sends both an invalid assignee_id AND a valid assignee_role, the role now silently overrides — arguably fine but worth documenting.",
+    "Tasks.js line 55 & 160 — options rendered as `{m.name} · {m.role}` produces the React dev warning about span-inside-option (Emergent instrumentation). In production build this vanishes, but if strict hydration is enforced elsewhere, consider `` `${m.name} · ${m.role}` `` template literal to keep the option content as a single text node.",
+    "Tasks.js line 86 — `useQuery(['users'])` has no staleTime; every navigation to /tasks refetches the full user list. Cache it (staleTime: 60_000) since the roster rarely changes.",
+    "server.py now ~2221 lines (was 2204 last iter). Same recurring guideline breach — recommend splitting into routers (tasks_router.py, workflows_router.py, brain_router.py, auth_router.py).",
+    "GET /api/users exposes ALL tenant users incl. any soft-deleted/test ones — no active/status filter. Combined with 20+ TEST_member rows, the member dropdown becomes unusable for larger tenants. Add ?active=true filter or soft-delete flag."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration16.py (new — 9 pytest tests: 4 create-variants, 3 patch-variants, 2 mine-filter)"
+  ],
+  "success_rate": {
+    "backend": "100% (47/47 — 9 iter16 + 38 regression)",
+    "frontend": "100% (7/7 scenarios: dialog opens, member+role selects present, role-select disables on member pick, create with member shows person chip, reassign updates chip + toast, status advance preserves assignee, unassigned + role-only chips render correctly, toggle-mine label flips)"
+  },
+  "test_credentials": "owner@sharma.com / demo1234, sales@sharma.com / demo1234 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Created UI_TEST_alloc_*, UI_TEST_unassigned_*, UI_TEST_roleonly_* tasks and TEST_* backend-test tasks in Sharma tenant. Non-destructive but adds ~5-10 tasks per run; see action_items for cleanup suggestion.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iter16 task allocation feature confirmed working end-to-end. Backend tests at /app/backend/tests/test_iteration16.py — run with `python -m pytest backend/tests/test_iteration16.py backend/tests/backend_test.py -o addopts=''` (47 tests, ~37s). Key selectors verified on /tasks: new-task-button, task-title-input, task-member-select, task-role-select (disables when member selected), task-create-submit, task-column-<status>, task-card-<id>, task-assignee-<id>, reassign-task-<id>, advance-task-<id>, toggle-mine. Login for UI tests: use data-testid='demo-login-owner' (submits automatically) — the SIGN IN <button type='submit'> also works but only when both email+password inputs are filled first. Task assignment auto-fills assignee_role from member's role server-side (server.py:891-895 and 913-918). PATCH exclude_unset behavior preserves assignee on status-only updates.",
+  "rca of the issue": "N/A — this was a feature-addition iteration (not a bug fix). Verified the following contract: (a) POST /api/tasks with assignee_id -> validates against db.users where id AND tenant_id match; unknown id => assignee_id set to null (no crash) and assignee_role also nulled unless a valid tenant role was supplied; valid id => assignee_role auto-populated from member.role. (b) PATCH /api/tasks/{id} uses inp.model_dump(exclude_unset=True) so status-only patch does NOT wipe assignee_id/assignee_role — verified via test_patch_status_only_preserves_assignee. (c) GET /api/tasks?mine=true builds Mongo $or over assignee_id==user.id OR assignee_role==user.role — both branches verified via tests using sales@sharma.com. (d) Frontend /tasks reads members from /api/users and renders as person-chip (task-assignee-<id> with 'Priya Nair' text) vs role-chip vs 'Unassigned' fallback, and disables task-role-select whenever a member is chosen (form.assignee_id truthy)."
+}

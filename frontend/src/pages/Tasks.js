@@ -4,7 +4,7 @@ import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { PageHeader, Chip, EmptyState } from "../components/common";
 import { toast } from "sonner";
-import { Plus } from "@phosphor-icons/react";
+import { Plus, User } from "@phosphor-icons/react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../components/ui/dialog";
 
 const COLUMNS = [
@@ -15,20 +15,22 @@ const COLUMNS = [
 ];
 const NEXT = { blocked: null, todo: "in_progress", in_progress: "done", done: "todo" };
 
-function NewTaskDialog({ onCreated, roleOptions }) {
+function NewTaskDialog({ onCreated, roleOptions, members }) {
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ title: "", description: "", assignee_role: "", priority: "medium", due_in_days: "" });
+  const [form, setForm] = useState({ title: "", description: "", assignee_id: "", assignee_role: "", priority: "medium", due_in_days: "" });
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const create = async () => {
     if (!form.title.trim()) return;
     try {
       await api.post("/tasks", {
         title: form.title, description: form.description,
-        assignee_role: form.assignee_role || null, priority: form.priority,
+        assignee_id: form.assignee_id || null,
+        assignee_role: form.assignee_id ? null : (form.assignee_role || null),
+        priority: form.priority,
         due_in_days: form.due_in_days ? Number(form.due_in_days) : null,
       });
       toast.success("Task created");
-      setForm({ title: "", description: "", assignee_role: "", priority: "medium", due_in_days: "" });
+      setForm({ title: "", description: "", assignee_id: "", assignee_role: "", priority: "medium", due_in_days: "" });
       setOpen(false);
       onCreated();
     } catch { toast.error("Create failed"); }
@@ -46,10 +48,20 @@ function NewTaskDialog({ onCreated, roleOptions }) {
         <div className="space-y-3">
           <input data-testid="task-title-input" className={inp} placeholder="Task title" value={form.title} onChange={set("title")} />
           <textarea className={inp} rows={2} placeholder="Description" value={form.description} onChange={set("description")} />
-          <select data-testid="task-role-select" className={inp} value={form.assignee_role} onChange={set("assignee_role")}>
-            <option value="">Assign role…</option>
-            {roleOptions.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
-          </select>
+          <div>
+            <label className="label-mono text-muted-foreground">Assign to team member</label>
+            <select data-testid="task-member-select" className={`${inp} mt-1`} value={form.assignee_id} onChange={set("assignee_id")}>
+              <option value="">— Pick a person —</option>
+              {members.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="label-mono text-muted-foreground">…or assign by role {form.assignee_id && "(ignored — member selected)"}</label>
+            <select data-testid="task-role-select" className={`${inp} mt-1`} value={form.assignee_role} onChange={set("assignee_role")} disabled={!!form.assignee_id}>
+              <option value="">Any / unassigned</option>
+              {roleOptions.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+            </select>
+          </div>
           <div className="flex gap-3">
             <select className={inp} value={form.priority} onChange={set("priority")}>
               {["low", "medium", "high"].map((p) => <option key={p} value={p}>{p}</option>)}
@@ -71,15 +83,28 @@ export default function Tasks() {
   const [mine, setMine] = useState(false);
   const roleOptions = [{ key: "owner", label: "Owner" }, ...(tenant?.roles || [])];
   const { data } = useQuery({ queryKey: ["tasks", mine], queryFn: () => api.get(`/tasks?mine=${mine}`).then((r) => r.data) });
+  const { data: users } = useQuery({ queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data) });
+  const members = users || [];
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["tasks", mine] });
+    qc.invalidateQueries({ queryKey: ["dashboard"] });
+  };
 
   const move = async (t) => {
     const next = NEXT[t.status];
     if (!next) return toast.info("Task is blocked until its decision is approved");
+    try { await api.patch(`/tasks/${t.id}`, { status: next }); invalidate(); }
+    catch { toast.error("Update failed"); }
+  };
+
+  const reassign = async (t, memberId) => {
+    if (!memberId) return;
     try {
-      await api.patch(`/tasks/${t.id}`, { status: next });
-      qc.invalidateQueries({ queryKey: ["tasks", mine] });
-      qc.invalidateQueries({ queryKey: ["dashboard"] });
-    } catch { toast.error("Update failed"); }
+      const { data: updated } = await api.patch(`/tasks/${t.id}`, { assignee_id: memberId });
+      toast.success(`Assigned to ${updated.assignee_name || "member"}`);
+      invalidate();
+    } catch { toast.error("Reassign failed"); }
   };
 
   const overdue = (t) => t.due_date && new Date(t.due_date) < new Date() && t.status !== "done";
@@ -92,7 +117,7 @@ export default function Tasks() {
             className={`px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black transition-colors ${mine ? "bg-brand-blue text-white" : "bg-white hover:bg-black/5"}`}>
             {mine ? "My Tasks" : "All Tasks"}
           </button>
-          <NewTaskDialog onCreated={() => qc.invalidateQueries({ queryKey: ["tasks", mine] })} roleOptions={roleOptions} />
+          <NewTaskDialog onCreated={invalidate} roleOptions={roleOptions} members={members} />
         </div>
       </PageHeader>
 
@@ -115,12 +140,28 @@ export default function Tasks() {
                     </div>
                     {t.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{t.description}</p>}
                     <div className="flex items-center gap-1.5 mt-3 flex-wrap">
-                      {t.assignee_role && <Chip value={t.assignee_role} className="bg-white" />}
+                      {t.assignee_name ? (
+                        <span data-testid={`task-assignee-${t.id}`} className="inline-flex items-center gap-1 bg-brand-ink text-white px-2 py-0.5 text-xs font-semibold">
+                          <User size={11} weight="bold" /> {t.assignee_name}
+                        </span>
+                      ) : t.assignee_role ? (
+                        <Chip value={t.assignee_role} className="bg-white" data-testid={`task-assignee-${t.id}`} />
+                      ) : (
+                        <span className="text-xs text-muted-foreground italic">Unassigned</span>
+                      )}
                       {overdue(t) && <Chip value="overdue" className="bg-brand-red text-white" />}
                     </div>
+                    <select
+                      data-testid={`reassign-task-${t.id}`}
+                      value={t.assignee_id || ""}
+                      onChange={(e) => reassign(t, e.target.value)}
+                      className="mt-3 w-full border border-black px-2 py-1.5 text-xs font-mono bg-white focus:outline-none focus:shadow-brutal-sm">
+                      <option value="">Reassign to…</option>
+                      {members.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
+                    </select>
                     {NEXT[t.status] && (
                       <button onClick={() => move(t)} data-testid={`advance-task-${t.id}`}
-                        className="mt-3 w-full border border-black py-1.5 text-xs font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors">
+                        className="mt-2 w-full border border-black py-1.5 text-xs font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors">
                         Move to {NEXT[t.status].replace(/_/g, " ")}
                       </button>
                     )}

@@ -885,10 +885,17 @@ async def create_task(inp: TaskCreateInput, user: dict = Depends(get_current_use
     if isinstance(inp.due_in_days, int):
         due = (datetime.now(timezone.utc) + timedelta(days=inp.due_in_days)).isoformat()
     troles = await tenant_role_keys(user["tenant_id"])
+    assignee_id = inp.assignee_id
+    role = inp.assignee_role if inp.assignee_role in troles else None
+    if assignee_id:
+        member = await db.users.find_one({"id": assignee_id, "tenant_id": user["tenant_id"]}, {"_id": 0, "role": 1})
+        if not member:
+            assignee_id = None
+        elif not role:
+            role = member["role"]
     await db.tasks.insert_one({
         "id": tid, "tenant_id": user["tenant_id"], "title": inp.title, "description": inp.description or "",
-        "assignee_role": inp.assignee_role if inp.assignee_role in troles else None,
-        "assignee_id": inp.assignee_id, "priority": inp.priority or "medium",
+        "assignee_role": role, "assignee_id": assignee_id, "priority": inp.priority or "medium",
         "status": "todo", "due_date": due, "decision_id": None, "source": "manual", "created_at": now_iso(),
     })
     await log_activity(user["tenant_id"], user["id"], "task_created", f"Created task '{inp.title}'", "task", tid)
@@ -900,13 +907,23 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
     t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]})
     if not t:
         raise HTTPException(status_code=404, detail="Not found")
-    updates = {k: v for k, v in inp.model_dump().items() if v is not None}
+    updates = {k: v for k, v in inp.model_dump(exclude_unset=True).items() if v is not None}
     if "assignee_role" in updates and updates["assignee_role"] not in await tenant_role_keys(user["tenant_id"]):
         updates.pop("assignee_role")
+    if updates.get("assignee_id"):
+        member = await db.users.find_one({"id": updates["assignee_id"], "tenant_id": user["tenant_id"]}, {"_id": 0, "role": 1})
+        if not member:
+            updates.pop("assignee_id")
+        else:
+            updates["assignee_role"] = member["role"]
     if updates:
         await db.tasks.update_one({"id": task_id}, {"$set": updates})
         if updates.get("status") == "done":
             await log_activity(user["tenant_id"], user["id"], "task_done", f"Completed task '{t['title']}'", "task", task_id)
+        elif updates.get("assignee_id"):
+            member = await db.users.find_one({"id": updates["assignee_id"]}, {"_id": 0, "name": 1})
+            await log_activity(user["tenant_id"], user["id"], "task_assigned",
+                               f"Assigned '{t['title']}' to {(member or {}).get('name', 'a member')}", "task", task_id)
     return await enrich_task(await db.tasks.find_one({"id": task_id}, {"_id": 0}))
 
 

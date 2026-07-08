@@ -52,10 +52,10 @@ const BOTTOM_NAV = [
 
 const Logo = () => (
   <div className="flex items-center gap-2">
-    <div className="w-8 h-8 bg-brand-red flex items-center justify-center">
-      <span className="font-heading font-black text-white text-lg leading-none">D</span>
+    <div className="w-9 h-9 bg-brand-red flex items-center justify-center">
+      <span className="font-heading font-black text-white text-xl leading-none">D</span>
     </div>
-    <span className="font-heading font-black text-xl tracking-tighter uppercase">DecisionOS</span>
+    <span className="font-heading font-black text-2xl tracking-tighter uppercase">DecisionOS</span>
   </div>
 );
 

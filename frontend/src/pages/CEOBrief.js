@@ -7,7 +7,7 @@ import { PageHeader, Chip } from "../components/common";
 import { money } from "../lib/format";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
-import { Clock, CheckCircle, Stamp, UserMinus, Warning, CurrencyInr, XCircle, ArrowClockwise, CaretRight, Fire } from "@phosphor-icons/react";
+import { Clock, CheckCircle, Stamp, UserMinus, Warning, CurrencyInr, XCircle, ArrowClockwise, CaretRight, Fire, BookOpen } from "@phosphor-icons/react";
 
 const PERIODS = [
   { key: "morning", label: "Morning" },
@@ -156,6 +156,7 @@ function DetailDialog({ row, period, open, onClose }) {
 
 export default function CEOBrief() {
   useAuth();
+  const navigate = useNavigate();
   const [period, setPeriod] = useState("morning");
   const [activeRow, setActiveRow] = useState(null);
   const { data, isLoading } = useQuery({
@@ -166,7 +167,12 @@ export default function CEOBrief() {
 
   return (
     <div>
-      <PageHeader eyebrow="Your company at a glance" title="CEO Brief" />
+      <PageHeader eyebrow="Your company at a glance" title="CEO Brief">
+        <button onClick={() => navigate("/journal")} data-testid="brief-open-journal"
+          className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
+          <BookOpen size={16} weight="bold" /> CEO Journal
+        </button>
+      </PageHeader>
 
       <div className="flex border border-black mb-8 w-fit">
         {PERIODS.map((p) => (

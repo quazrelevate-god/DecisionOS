@@ -41,7 +41,7 @@ const NAV = [
   { to: "/brief", label: "CEO Brief", icon: Sun, testid: "nav-ceo-brief" },
   { to: "/operating-score", label: "Operating Score", icon: GaugeIcon, testid: "nav-operating-score" },
   { to: "/journal", label: "CEO Journal", icon: BookOpen, testid: "nav-journal", perm: "brain" },
-  { to: "/ingest", label: "Data Input", icon: FileArrowUp, testid: "nav-ingest", perm: "data_input" },
+  { to: "/ingest", label: "Capture", icon: FileArrowUp, testid: "nav-ingest", perm: "data_input" },
   { to: "/workflows", label: "Workflows", icon: Kanban, testid: "nav-workflows", perm: "workflows" },
   { to: "/contacts", label: "People", icon: AddressBook, testid: "nav-contacts", perm: "people" },
   { to: "/calendar", label: "Calendar", icon: CalendarBlank, testid: "nav-calendar" },
@@ -58,7 +58,7 @@ const NAV = [
 // Primary items for the mobile bottom tab bar
 const BOTTOM_NAV = [
   { to: "/", label: "Decision Desk", icon: Tray, perm: "inbox" },
-  { to: "/ingest", label: "Data", icon: FileArrowUp, perm: "data_input" },
+  { to: "/ingest", label: "Capture", icon: FileArrowUp, perm: "data_input" },
   { to: "/brief", label: "Brief", icon: Sun },
   { to: "/my-work", label: "Work", icon: Briefcase },
   { to: "/ask", label: "Ask", icon: ChatCircleText, perm: "ask" },

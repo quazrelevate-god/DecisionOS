@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import {
   Microphone, Stop, PaperPlaneTilt, CheckCircle, XCircle, Spinner,
   UsersThree, Truck, Receipt, CurrencyCircleDollar, Warning, CheckSquare,
-  SealCheck, Bell, Brain, FileArrowUp, Check, X, ArrowClockwise, User, UserPlus,
+  SealCheck, Bell, Brain, FileArrowUp, Check, X, ArrowClockwise, User, UserPlus, Question,
 } from "@phosphor-icons/react";
 
 function PendingApprovalCard({ d, members, roleOptions, onApprove, onReject, onRefresh }) {
@@ -131,6 +131,9 @@ export default function Inbox() {
   const navigate = useNavigate();
   const [recording, setRecording] = useState(false);
   const [text, setText] = useState("");
+  const [clarify, setClarify] = useState(null);
+  const [answers, setAnswers] = useState({});
+  const [checking, setChecking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [language, setLanguage] = useState("auto");
   const [filter, setFilter] = useState("all");
@@ -190,15 +193,32 @@ export default function Inbox() {
   };
   const stopRec = () => { mediaRef.current?.stop(); setRecording(false); };
 
-  const submitText = async () => {
-    if (!text.trim()) return;
+  const runCapture = async (finalText) => {
     setBusy(true);
     try {
-      await api.post("/voice-notes/text", { text, language });
-      setText("");
+      await api.post("/voice-notes/text", { text: finalText, language });
+      setText(""); setClarify(null); setAnswers({});
       toast.success("Directive submitted — structuring…");
       refresh();
     } catch { toast.error("Submit failed"); } finally { setBusy(false); }
+  };
+
+  const submitText = async () => {
+    if (!text.trim()) return;
+    setChecking(true);
+    try {
+      const { data } = await api.post("/capture/clarify", { text });
+      if (data.complete) { await runCapture(text); }
+      else { setClarify(data); setAnswers({}); }
+    } catch { await runCapture(text); }  // never block capture on clarify failure
+    finally { setChecking(false); }
+  };
+
+  const submitWithDetails = () => {
+    const details = (clarify?.questions || [])
+      .filter((q) => (answers[q.id] || "").trim())
+      .map((q) => `- ${q.question} ${answers[q.id].trim()}`).join("\n");
+    runCapture(details ? `${text}\n\nDetails provided:\n${details}` : text);
   };
 
   const decide = async (id, action) => {
@@ -254,10 +274,40 @@ export default function Inbox() {
             <textarea data-testid="text-directive-input" value={text} onChange={(e) => setText(e.target.value)} rows={5}
               placeholder="e.g. Tell sales to send the revised quote to the Delhi retailer by Friday and ask finance to clear the packaging invoice."
               className="w-full border border-black p-3 text-sm font-mono focus:outline-none focus:shadow-brutal-sm transition-shadow resize-none" />
-            <button onClick={submitText} disabled={busy || !text.trim()} data-testid="submit-text-directive"
-              className="mt-3 flex items-center gap-2 bg-brand-red text-white px-5 py-2.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all disabled:opacity-50">
-              <PaperPlaneTilt size={16} weight="bold" /> Structure it
-            </button>
+
+            {clarify ? (
+              <div className="mt-3 border border-dashed border-brand-blue p-3" data-testid="clarify-panel">
+                <p className="flex items-center gap-2 label-mono text-brand-blue mb-2">
+                  <Question size={15} weight="bold" /> A few quick details for a sharper plan
+                </p>
+                <div className="space-y-2">
+                  {clarify.questions.map((q) => (
+                    <div key={q.id} data-testid={`clarify-q-${q.id}`}>
+                      <label className="text-xs font-medium block mb-1">{q.question}</label>
+                      <input value={answers[q.id] || ""} onChange={(e) => setAnswers({ ...answers, [q.id]: e.target.value })}
+                        data-testid={`clarify-a-${q.id}`} placeholder={q.hint}
+                        className="w-full border border-black px-2 py-1.5 text-sm focus:outline-none" />
+                    </div>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-2 mt-3">
+                  <button onClick={submitWithDetails} disabled={busy} data-testid="clarify-submit"
+                    className="flex items-center gap-2 bg-brand-red text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all disabled:opacity-50">
+                    <PaperPlaneTilt size={15} weight="bold" /> {busy ? "Structuring…" : "Submit with details"}
+                  </button>
+                  <button onClick={() => runCapture(text)} disabled={busy} data-testid="clarify-skip"
+                    className="px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:bg-black/5 disabled:opacity-50">
+                    Skip &amp; structure anyway
+                  </button>
+                  <button onClick={() => setClarify(null)} className="px-3 py-2 text-sm font-semibold uppercase tracking-wider hover:text-brand-red">Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <button onClick={submitText} disabled={busy || checking || !text.trim()} data-testid="submit-text-directive"
+                className="mt-3 flex items-center gap-2 bg-brand-red text-white px-5 py-2.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all disabled:opacity-50">
+                <PaperPlaneTilt size={16} weight="bold" /> {checking ? "Checking…" : "Structure it"}
+              </button>
+            )}
           </div>
         </div>
       ) : (

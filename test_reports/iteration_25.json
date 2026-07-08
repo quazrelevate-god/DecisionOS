@@ -1,0 +1,44 @@
+{
+  "summary": "Iteration 25 — Verified the new AI clarification-questions gate (POST /api/capture/clarify) end-to-end and its Inbox UI. Backend: 8/8 pytest passed in ~15s covering auth (401 no-auth, 403 for production non-owner, 400 empty text, 422 missing text), semantics ('Collect 200000' returns complete:false with 4 questions each having id/question/hint; a fully-specified directive returns complete:true + questions:[]; ≤4 questions cap enforced), no side effects (clarify does NOT create voice_notes — before/after count identical), and regression on /voice-notes/text (still creates voice_note, background processes to status='done' with a decision_id assigned within ~15-30s). Frontend (owner@sharma.com): (1) capture card + submit-text-directive visible; (2) typing 'Collect 200000' and clicking 'Structure it' shows the clarify-panel with exactly 4 questions rendered as clarify-q-<id> divs each with a matching clarify-a-<id> input using the hint as placeholder; (3) Cancel hides panel and preserves 'Collect 200000' in the textarea; (4) Skip & structure anyway fires POST /api/voice-notes/text with the ORIGINAL text and clears the box; (5) Submit with details fires POST /api/voice-notes/text with an enriched body of the form `<original>\\n\\nDetails provided:\\n- <Q1> <A1>\\n- <Q2> <A2>\\n...` (payload capture confirmed the exact structure); (6) A COMPLETE directive ('Tell Ravi to collect 200000 from ABC Industries against invoice INV-45 by tomorrow over phone.') returns complete=true, the clarify-panel is NEVER shown, and /voice-notes/text is posted directly; (7) voice-record-button remains present. Non-owner (production@sharma.com) at /inbox sees owner-only-notice, and text-directive-input + voice-record-button are absent — clarify UI is fully owner-gated. The clarify-then-structure flow works cleanly; the AI produces sharp, non-redundant questions (e.g. 'From whom should the ₹2,00,000 be collected?' with hint 'Rajesh Fabrics') and the enriched payload flows through to the async structuring pipeline.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Inbox capture card", "issues": ["Cancel button uses no data-testid and no visual weight (only text 'Cancel', hover→brand-red). Non-blocking, but a data-testid='clarify-cancel' would help future automation; and a subtle border would match the Skip button's brutalist styling."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration25.py",
+    "/app/test_reports/pytest/iteration25.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py:991-1030 ClarifyInput + ai_clarify_directive + POST /capture/clarify — clean, permission-gated via require_role('owner'), 400 on empty text, JSON-only response, defensive parse (falls back to {complete:true, questions:[]} on parse error so UI is never blocked). Good.",
+    "server.py:1017 questions capped at 4 via slice [:4] and each field length-capped (question≤160, hint≤120). Tenant industry threaded through _tenant_industry for context. Session id is per-user which is a nice choice for LLM continuity but does mean back-to-back different directives from the same owner share LLM context — acceptable for a short-lived clarify prompt.",
+    "server.py:1020 `complete = bool(d.get('complete')) or len(qs) == 0` — always returns complete=true if the model returned no valid questions, even if it claimed complete=false. This is the right behavior: if the model can't produce actionable clarifying questions it shouldn't block the user. Documented behavior matches the UI's 'clarify never blocks capture' contract.",
+    "Inbox.js:206-215 submitText — clean pattern: (1) call /capture/clarify, (2) if complete, forward to runCapture, (3) else render panel, (4) on any error, silently fall through to runCapture. Non-blocking clarify is the correct UX and matches the server-side fallback. The 'Checking…' label on the disabled button is a nice loading affordance.",
+    "Inbox.js:217-222 submitWithDetails — only includes answered questions in the enriched body (empty answers are filtered out). Verified in the network payload: the string is `original\\n\\nDetails provided:\\n- <q> <a>` per line. If ALL answers are empty, it sends the original text unchanged — same behavior as Skip; consider adding a hint (or disabling submit-with-details until at least one answer is filled) to make the two buttons visibly meaningful.",
+    "Inbox.js:302 Cancel button — no data-testid, could be added as `clarify-cancel` for parity with clarify-submit/clarify-skip. Cosmetic.",
+    "Inbox.js:200 runCapture setText('') + setClarify(null) + setAnswers({}) — clears all three states atomically after successful POST. Good.",
+    "Optional: the clarify LLM call is on the request path (5-20s) with no cache. Repeated identical directives from the same owner will re-hit the LLM. For heavy testing/demo it could be worth a 5-minute in-memory LRU keyed on (tenant, industry, sha1(text)).",
+    "Optional: the enriched payload's language is always 'auto' (from state); if the owner picked 'ta' or 'tanglish' via lang-<key> the runCapture correctly threads it through — good.",
+    "Nice-to-have carry-forward from iter17-24: server.py is 3170 lines; consider splitting into routers. Not an action item for this iteration."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration25.py (new — 8 tests: 4 auth/validation, 3 semantics/no-side-effect, 1 voice-notes regression)"
+  ],
+  "success_rate": {
+    "backend": "100% (8/8 pytest passed in 15.24s)",
+    "frontend": "100% — owner clarify-panel, Cancel/Skip/Submit-with-details, complete-directive skip, non-owner gate all verified with 0 console errors"
+  },
+  "test_credentials": "owner@sharma.com / demo1234 (capture UI + clarify); production@sharma.com / demo1234 (non-owner 403 + owner-only-notice). Source: /app/memory/test_credentials.md.",
+  "seed_data_creation": "The clarify UI tests naturally created 2 real decisions in the demo tenant: (1) 'Initiate Payment Collection from Customer' (from Submit-with-details on 'TEST_iter25 collect payment from customer' with 4 answers 'answer_0..3') and (2) 'Collect payment from ABC Industries for INV-45' (from the complete-directive test). Plus one voice note from Skip on 'Follow up on payment' and one regression voice note ('TEST_iter25_regression_...'). These are visible in Inbox/Pending Approvals and are safe (non-destructive); owner can dismiss/reject from UI if desired. No teardown was needed because the flow is additive.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iter25 covers the new /api/capture/clarify endpoint and Inbox clarify-panel UI. Rerun: `pytest backend/tests/test_iteration25.py -o addopts= -v` — expect 8 pass in ~15s. Key facts for the next agent: (1) clarify AI takes 5-20s and returns {complete:bool, questions:[{id,question,hint}]}; empty text → 400, non-owner → 403. (2) Voice-note terminal status is 'done' (NOT 'processed'/'structured'). Poll GET /api/voice-notes/{id} for status=='done' + decision_id present. (3) Frontend testids: text-directive-input, submit-text-directive (label 'Structure it' | 'Checking…'), clarify-panel, clarify-q-<id>, clarify-a-<id>, clarify-submit ('Submit with details'), clarify-skip ('Skip & structure anyway'). Cancel button has NO data-testid — use get_by_role('button', name='Cancel'). (4) Submit-with-details POSTs to /voice-notes/text with body `<original>\\n\\nDetails provided:\\n- <q> <a>` per line; empty answers are filtered. (5) Complete directive skips the panel entirely and posts to /voice-notes/text directly. (6) Non-owner sees owner-only-notice and no capture/voice-record buttons. (7) Clarify has a 3-layer failsafe: (a) parse error → returns complete:true, (b) UI catch → runCapture fallback, so capture is never blocked.",
+  "rca of the issue": "N/A — feature-verification pass with no bugs found. The clarify feature works exactly as specified: 4 sharp questions on 'Collect 200000', 0 questions on the fully-specified directive, correct owner gating, correct enrichment of the /voice-notes/text payload, and correct Skip/Cancel semantics."
+}

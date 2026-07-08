@@ -10,8 +10,95 @@ import { toast } from "sonner";
 import {
   Microphone, Stop, PaperPlaneTilt, CheckCircle, XCircle, Spinner,
   UsersThree, Truck, Receipt, CurrencyCircleDollar, Warning, CheckSquare,
-  SealCheck, Bell, Brain, FileArrowUp, Check, X, ArrowClockwise,
+  SealCheck, Bell, Brain, FileArrowUp, Check, X, ArrowClockwise, User, UserPlus,
 } from "@phosphor-icons/react";
+
+function PendingApprovalCard({ d, members, roleOptions, onApprove, onReject, onRefresh }) {
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState({ title: "", assignee_id: "", assignee_role: "", priority: "medium" });
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const inp = "w-full border border-black px-2 py-1.5 text-xs font-mono focus:outline-none";
+
+  const addTask = async () => {
+    if (!form.title.trim()) return toast.error("Task title required");
+    if (!form.assignee_id && !form.assignee_role) return toast.error("Pick a member or role");
+    try {
+      await api.post(`/decisions/${d.id}/tasks`, {
+        title: form.title,
+        assignee_id: form.assignee_id || null,
+        assignee_role: form.assignee_id ? null : (form.assignee_role || null),
+        priority: form.priority,
+      });
+      toast.success("Team member added to this decision");
+      setForm({ title: "", assignee_id: "", assignee_role: "", priority: "medium" });
+      setAdding(false);
+      onRefresh();
+    } catch (e) { toast.error(e.response?.data?.detail || "Could not add task"); }
+  };
+
+  return (
+    <div data-testid={`decision-card-${d.id}`} className="card-brutal p-5">
+      <div className="flex items-center gap-1.5 flex-wrap mb-2">
+        <Chip value={d.status} data-testid={`decision-status-${d.id}`} />
+        {d.dtype && <Chip value={d.dtype} className="bg-brand-blue text-white" />}
+      </div>
+      <p className="font-heading font-bold text-lg leading-tight">{d.title}</p>
+      {d.summary && <p className="text-sm text-muted-foreground mt-2">{d.summary}</p>}
+      {d.tasks?.length > 0 && (
+        <ul className="mt-3 space-y-2" data-testid={`decision-tasks-${d.id}`}>
+          {d.tasks.map((t) => (
+            <li key={t.id} className="flex items-center justify-between gap-2 border border-black/15 px-3 py-2">
+              <span className="text-sm">{t.title}</span>
+              {t.assignee_name ? (
+                <span className="inline-flex items-center gap-1 bg-brand-ink text-white px-2 py-0.5 text-xs font-semibold shrink-0">
+                  <User size={11} weight="bold" /> {t.assignee_name}
+                </span>
+              ) : t.assignee_role ? (
+                <Chip value={t.assignee_role} className="bg-white shrink-0" />
+              ) : (
+                <span className="text-xs text-muted-foreground italic shrink-0">Unassigned</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {adding ? (
+        <div className="mt-3 border border-dashed border-black/40 p-3 space-y-2" data-testid={`add-task-form-${d.id}`}>
+          <input data-testid={`add-task-title-${d.id}`} className={inp} placeholder="What should they do?" value={form.title} onChange={set("title")} />
+          <select data-testid={`add-task-member-${d.id}`} className={inp} value={form.assignee_id} onChange={set("assignee_id")}>
+            <option value="">— Assign to a team member —</option>
+            {members.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
+          </select>
+          <select className={inp} value={form.assignee_role} onChange={set("assignee_role")} disabled={!!form.assignee_id}>
+            <option value="">…or by role {form.assignee_id ? "(member selected)" : ""}</option>
+            {roleOptions.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+          </select>
+          <div className="flex gap-2">
+            <button data-testid={`add-task-save-${d.id}`} onClick={addTask} className="flex-1 bg-brand-ink text-white py-1.5 text-xs font-semibold uppercase tracking-wider border border-black hover:bg-brand-red transition-colors">Add</button>
+            <button onClick={() => setAdding(false)} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-black hover:bg-black/5">Cancel</button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setAdding(true)} data-testid={`add-member-${d.id}`}
+          className="mt-3 w-full flex items-center justify-center gap-2 border border-dashed border-black/50 py-2 text-xs font-semibold uppercase tracking-wider hover:bg-black/5 transition-colors">
+          <UserPlus size={15} weight="bold" /> Add team member / task
+        </button>
+      )}
+
+      <div className="flex gap-2 mt-4">
+        <button onClick={() => onApprove(d.id)} data-testid={`inbox-approve-${d.id}`}
+          className="flex-1 flex items-center justify-center gap-2 bg-brand-blue text-white py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">
+          <CheckCircle size={16} weight="bold" /> Approve
+        </button>
+        <button onClick={() => onReject(d.id)} data-testid={`inbox-reject-${d.id}`}
+          className="flex items-center gap-2 bg-white py-2 px-4 text-sm font-semibold uppercase tracking-wider border border-black hover:bg-brand-ink hover:text-white transition-colors">
+          <XCircle size={16} weight="bold" /> Reject
+        </button>
+      </div>
+    </div>
+  );
+}
 
 const PROCESSING = ["queued", "transcribing", "structuring"];
 
@@ -39,7 +126,7 @@ function useElapsed(active) {
 }
 
 export default function Inbox() {
-  const { user } = useAuth();
+  const { user, tenant } = useAuth();
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [recording, setRecording] = useState(false);
@@ -66,6 +153,9 @@ export default function Inbox() {
     refetchInterval: processing ? 2500 : false,
   });
   const decisionsQ = useQuery({ queryKey: ["decisions"], queryFn: () => api.get("/decisions").then((r) => r.data) });
+  const usersQ = useQuery({ queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data), enabled: user?.role === "owner" });
+  const members = usersQ.data || [];
+  const roleOptions = [{ key: "owner", label: "Owner" }, ...(tenant?.roles || [])];
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["voice-notes"] });
@@ -229,34 +319,15 @@ export default function Inbox() {
           <h2 className="font-heading text-2xl font-extrabold uppercase tracking-tight mb-4">Pending Approvals</h2>
           <div className="grid md:grid-cols-2 gap-4">
             {pending.map((d) => (
-              <div key={d.id} data-testid={`decision-card-${d.id}`} className="card-brutal p-5">
-                <div className="flex items-center gap-1.5 flex-wrap mb-2">
-                  <Chip value={d.status} data-testid={`decision-status-${d.id}`} />
-                  {d.dtype && <Chip value={d.dtype} className="bg-brand-blue text-white" />}
-                </div>
-                <p className="font-heading font-bold text-lg leading-tight">{d.title}</p>
-                <p className="text-sm text-muted-foreground mt-2">{d.summary}</p>
-                {d.tasks?.length > 0 && (
-                  <ul className="mt-3 space-y-2">
-                    {d.tasks.map((t) => (
-                      <li key={t.id} className="flex items-center justify-between gap-2 border border-black/15 px-3 py-2">
-                        <span className="text-sm">{t.title}</span>
-                        {t.assignee_role && <Chip value={t.assignee_role} className="bg-white" />}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <div className="flex gap-2 mt-4">
-                  <button onClick={() => decide(d.id, "approve")} data-testid={`inbox-approve-${d.id}`}
-                    className="flex-1 flex items-center justify-center gap-2 bg-brand-blue text-white py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">
-                    <CheckCircle size={16} weight="bold" /> Approve
-                  </button>
-                  <button onClick={() => decide(d.id, "reject")} data-testid={`inbox-reject-${d.id}`}
-                    className="flex items-center gap-2 bg-white py-2 px-4 text-sm font-semibold uppercase tracking-wider border border-black hover:bg-brand-ink hover:text-white transition-colors">
-                    <XCircle size={16} weight="bold" /> Reject
-                  </button>
-                </div>
-              </div>
+              <PendingApprovalCard
+                key={d.id}
+                d={d}
+                members={members}
+                roleOptions={roleOptions}
+                onApprove={(id) => decide(id, "approve")}
+                onReject={(id) => decide(id, "reject")}
+                onRefresh={refresh}
+              />
             ))}
           </div>
         </>

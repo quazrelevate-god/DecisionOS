@@ -1118,7 +1118,7 @@ async def operating_score(user: dict = Depends(get_current_user)):
 async def enrich_decision(d: dict) -> dict:
     tasks = await db.tasks.find({"id": {"$in": d.get("task_ids", [])}}, {"_id": 0}).to_list(200)
     creator = await db.users.find_one({"id": d.get("created_by")}, {"_id": 0, "name": 1})
-    d["tasks"] = tasks
+    d["tasks"] = await enrich_tasks(tasks)
     d["created_by_name"] = creator["name"] if creator else "Unknown"
     return d
 
@@ -1128,7 +1128,7 @@ async def enrich_decisions(decisions: list) -> list:
     creator_ids = list({d.get("created_by") for d in decisions if d.get("created_by")})
     tasks_map = {}
     if task_ids:
-        for t in await db.tasks.find({"id": {"$in": task_ids}}, {"_id": 0}).to_list(2000):
+        for t in await enrich_tasks(await db.tasks.find({"id": {"$in": task_ids}}, {"_id": 0}).to_list(2000)):
             tasks_map[t["id"]] = t
     users_map = {}
     if creator_ids:
@@ -1187,6 +1187,43 @@ async def ceo_journal(q: str = "", user: dict = Depends(require_perm("brain"))):
         days.setdefault(day, {"date": day, "decisions": [], "notes": []})["notes"].append(m)
     return {"days": sorted(days.values(), key=lambda x: x["date"], reverse=True)}
 
+
+
+
+@api.post("/decisions/{decision_id}/tasks")
+async def add_decision_task(decision_id: str, inp: TaskCreateInput, user: dict = Depends(require_role("owner"))):
+    d = await db.decisions.find_one({"id": decision_id, "tenant_id": user["tenant_id"]})
+    if not d:
+        raise HTTPException(status_code=404, detail="Not found")
+    troles = await tenant_role_keys(user["tenant_id"])
+    assignee_id = inp.assignee_id
+    role = inp.assignee_role if inp.assignee_role in troles else None
+    if assignee_id:
+        member = await db.users.find_one({"id": assignee_id, "tenant_id": user["tenant_id"]}, {"_id": 0, "role": 1, "name": 1})
+        if not member:
+            assignee_id = None
+        else:
+            role = member["role"]
+    due = None
+    if isinstance(inp.due_in_days, int):
+        due = (datetime.now(timezone.utc) + timedelta(days=inp.due_in_days)).isoformat()
+    # Blocked while the decision is still pending; unblocks on approval like the rest.
+    status = "blocked" if d.get("status") == "pending_approval" else ("cancelled" if d.get("status") == "rejected" else "todo")
+    tid = new_id()
+    await db.tasks.insert_one({
+        "id": tid, "tenant_id": user["tenant_id"], "title": inp.title, "description": inp.description or "",
+        "assignee_role": role, "assignee_id": assignee_id, "priority": inp.priority or "medium",
+        "status": status, "due_date": due, "decision_id": decision_id, "source": "manual", "created_at": now_iso(),
+    })
+    await db.decisions.update_one({"id": decision_id}, {"$push": {"task_ids": tid}})
+    who = None
+    if assignee_id:
+        who = (member or {}).get("name")
+    who = who or role or "team"
+    await add_decision_event(decision_id, f"Task added for {who}: {inp.title}", user["name"], "assigned")
+    await log_activity(user["tenant_id"], user["id"], "decision_task_added",
+                       f"Added task '{inp.title}' to '{d['title']}' for {who}", "decision", decision_id)
+    return await enrich_decision(await db.decisions.find_one({"id": decision_id}, {"_id": 0}))
 
 
 

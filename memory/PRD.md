@@ -1,3 +1,7 @@
+## Changelog
+- 2026-06: Merged "Daily Brief" into "CEO Brief". Removed the separate Daily Brief nav item + Dashboard.js page. CEO Brief now shows period counter cards (Morning/Evening/Weekly/Monthly) plus the actionable Daily Brief blocks (Pending Approvals w/ approve-reject, Overdue Tasks, Wins Today, Recent Activity). `/dashboard` redirects to `/brief`.
+
+
 # DecisionOS — PRD & Build Log
 
 ## Original Problem Statement

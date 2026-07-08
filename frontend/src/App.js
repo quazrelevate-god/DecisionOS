@@ -5,7 +5,6 @@ import { Toaster } from "./components/ui/sonner";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import Layout from "./components/Layout";
 import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
 import Inbox from "./pages/Inbox";
 import Workflows from "./pages/Workflows";
 import Tasks from "./pages/Tasks";
@@ -45,7 +44,7 @@ function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/" element={<Protected><Inbox /></Protected>} />
-            <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
+            <Route path="/dashboard" element={<Navigate to="/brief" replace />} />
             <Route path="/brief" element={<Protected><CEOBrief /></Protected>} />
             <Route path="/journal" element={<Protected><Journal /></Protected>} />
             <Route path="/my-work" element={<Protected><MyWork /></Protected>} />

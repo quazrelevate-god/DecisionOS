@@ -1,9 +1,12 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-import { PageHeader } from "../components/common";
-import { Clock, CheckCircle, Stamp, UserMinus, Warning, CurrencyInr } from "@phosphor-icons/react";
+import { PageHeader, Chip, EmptyState } from "../components/common";
+import { money } from "../lib/format";
+import { toast } from "sonner";
+import { Clock, CheckCircle, Stamp, UserMinus, Warning, CurrencyInr, XCircle, TrendUp, Trophy } from "@phosphor-icons/react";
 
 const PERIODS = [
   { key: "morning", label: "Morning" },
@@ -22,10 +25,23 @@ const ROWS = [
 ];
 
 export default function CEOBrief() {
-  useAuth();
+  const { user, tenant } = useAuth();
+  const qc = useQueryClient();
   const [period, setPeriod] = useState("morning");
   const { data, isLoading } = useQuery({ queryKey: ["brief", period], queryFn: () => api.get(`/brief?period=${period}`).then((r) => r.data) });
   const { data: complaints } = useQuery({ queryKey: ["complaints", "open"], queryFn: () => api.get("/complaints?status=open").then((r) => r.data) });
+  const { data: dash } = useQuery({ queryKey: ["dashboard"], queryFn: () => api.get("/dashboard").then((r) => r.data) });
+
+  const decide = async (id, action) => {
+    try {
+      await api.post(`/decisions/${id}/${action}`);
+      toast.success(`Decision ${action === "approve" ? "approved — tasks unblocked" : "rejected"}`);
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["brief"] });
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Action failed");
+    }
+  };
 
   return (
     <div>
@@ -81,6 +97,107 @@ export default function CEOBrief() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Actionable blocks (merged from Daily Brief) */}
+      {dash && (
+        <div className="mt-12 pt-10 border-t-2 border-black" data-testid="brief-actionable">
+          <p className="label-mono text-muted-foreground mb-6">Live · needs action now</p>
+          <div className="grid lg:grid-cols-2 gap-6">
+            {/* Approvals */}
+            <section>
+              <h2 className="font-heading text-2xl font-extrabold uppercase tracking-tight mb-4">Pending Approvals</h2>
+              <div className="space-y-4">
+                {dash.pending_decisions.length === 0 && dash.pending_purchases.length === 0 && (
+                  <EmptyState title="All clear" hint="No decisions or purchases waiting." />
+                )}
+                {dash.pending_decisions.map((d) => (
+                  <div key={d.id} data-testid={`approval-decision-${d.id}`} className="card-brutal p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <Chip value="decision" className="bg-brand-blue text-white mb-2" />
+                        <p className="font-heading font-bold text-lg leading-tight">{d.title}</p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-2 line-clamp-2">{d.summary}</p>
+                    <p className="label-mono text-muted-foreground mt-3">{d.tasks?.length || 0} task(s) blocked</p>
+                    {user?.role === "owner" && (
+                      <div className="flex gap-2 mt-4">
+                        <button onClick={() => decide(d.id, "approve")} data-testid={`approve-decision-${d.id}`}
+                          className="flex-1 flex items-center justify-center gap-2 bg-brand-blue text-white py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">
+                          <CheckCircle size={16} weight="bold" /> Approve
+                        </button>
+                        <button onClick={() => decide(d.id, "reject")} data-testid={`reject-decision-${d.id}`}
+                          className="flex items-center justify-center gap-2 bg-white py-2 px-4 text-sm font-semibold uppercase tracking-wider border border-black hover:bg-brand-ink hover:text-white transition-colors">
+                          <XCircle size={16} weight="bold" /> Reject
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {dash.pending_purchases.map((w) => (
+                  <div key={w.id} data-testid={`approval-purchase-${w.id}`} className="card-brutal p-5">
+                    <Chip value="purchase" className="bg-brand-yellow text-black mb-2" />
+                    <p className="font-heading font-bold text-lg leading-tight">{w.title}</p>
+                    <p className="text-sm text-muted-foreground mt-1">{w.counterparty} · {money(w.amount || 0, tenant?.currency)}</p>
+                    <Link to="/workflows" className="inline-block mt-3 text-sm text-brand-blue font-semibold hover:underline">Review in Workflows →</Link>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {/* Overdue + Activity */}
+            <section className="space-y-8">
+              <div>
+                <h2 className="font-heading text-2xl font-extrabold uppercase tracking-tight mb-4 flex items-center gap-2">
+                  <Warning size={22} weight="bold" className="text-brand-red" /> Overdue Tasks
+                </h2>
+                <div className="space-y-2">
+                  {dash.overdue_tasks.length === 0 && <EmptyState title="Nothing overdue" />}
+                  {dash.overdue_tasks.map((t) => (
+                    <div key={t.id} data-testid={`overdue-task-${t.id}`} className="card-brutal p-4 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-sm">{t.title}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{t.assignee_role || "unassigned"}</p>
+                      </div>
+                      <Chip value={t.priority} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h2 className="font-heading text-2xl font-extrabold uppercase tracking-tight mb-4 flex items-center gap-2">
+                  <Trophy size={22} weight="bold" className="text-brand-blue" /> Wins Today
+                </h2>
+                <div className="card-brutal divide-y divide-black/10" data-testid="wins-list">
+                  {(dash.wins || []).length === 0 && <p className="p-4 text-sm text-muted-foreground">No wins logged yet today — go close something!</p>}
+                  {(dash.wins || []).map((w) => (
+                    <div key={w.id} className="p-4 flex items-start gap-3">
+                      <CheckCircle size={16} weight="fill" className="mt-0.5 text-brand-blue shrink-0" />
+                      <p className="text-sm">{w.message}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h2 className="font-heading text-2xl font-extrabold uppercase tracking-tight mb-4 flex items-center gap-2">
+                  <Clock size={22} weight="bold" /> Recent Activity
+                </h2>
+                <div className="card-brutal divide-y divide-black/10">
+                  {dash.activity.length === 0 && <p className="p-4 text-sm text-muted-foreground">No activity yet.</p>}
+                  {dash.activity.map((a) => (
+                    <div key={a.id} className="p-4 flex items-start gap-3">
+                      <TrendUp size={16} weight="bold" className="mt-0.5 text-brand-blue shrink-0" />
+                      <p className="text-sm">{a.message}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+          </div>
         </div>
       )}
     </div>

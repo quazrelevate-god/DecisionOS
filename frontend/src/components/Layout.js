@@ -13,7 +13,6 @@ import {
   SheetDescription,
 } from "./ui/sheet";
 import {
-  Gauge,
   Microphone,
   Brain as BrainIcon,
   ChatCircleText,
@@ -39,7 +38,6 @@ import {
 
 const NAV = [
   { to: "/", label: "Inbox", icon: Tray, testid: "nav-inbox", perm: "inbox" },
-  { to: "/dashboard", label: "Daily Brief", icon: Gauge, testid: "nav-dashboard" },
   { to: "/brief", label: "CEO Brief", icon: Sun, testid: "nav-ceo-brief" },
   { to: "/operating-score", label: "Operating Score", icon: GaugeIcon, testid: "nav-operating-score" },
   { to: "/journal", label: "CEO Journal", icon: BookOpen, testid: "nav-journal", perm: "brain" },

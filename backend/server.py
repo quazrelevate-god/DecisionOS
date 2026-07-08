@@ -229,7 +229,7 @@ class OtpVerifyInput(BaseModel):
 class UserCreateInput(BaseModel):
     name: str
     email: EmailStr
-    password: str = Field(min_length=6)
+    password: Optional[str] = None  # optional — omit for passwordless (mobile OTP) members
     role: str
     phone: Optional[str] = None
     permissions: Optional[List[str]] = None
@@ -987,14 +987,27 @@ async def create_user(inp: UserCreateInput, user: dict = Depends(require_perm("t
     email = inp.email.lower()
     if await db.users.find_one({"email": email}):
         raise HTTPException(status_code=400, detail="Email already registered")
+    phone = (inp.phone or "").strip()
+    pwd = (inp.password or "").strip()
+    passwordless = not pwd
+    if passwordless:
+        if len(_norm_phone(phone)) < 10:
+            raise HTTPException(status_code=400, detail="A valid mobile number is required for passwordless (OTP) members")
+        # No usable password — this member logs in only via mobile OTP.
+        password_hash = hash_password(new_id() + new_id())
+    else:
+        if len(pwd) < 6:
+            raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+        password_hash = hash_password(pwd)
     uid = new_id()
     await db.users.insert_one({
         "id": uid, "tenant_id": user["tenant_id"], "name": inp.name, "email": email,
-        "phone": (inp.phone or "").strip(),
-        "password_hash": hash_password(inp.password), "role": inp.role,
+        "phone": phone, "passwordless": passwordless,
+        "password_hash": password_hash, "role": inp.role,
         "permissions": clean_perms(inp.permissions), "created_at": now_iso(),
     })
-    await log_activity(user["tenant_id"], user["id"], "user_added", f"Added {inp.name} as {inp.role}")
+    await log_activity(user["tenant_id"], user["id"], "user_added",
+                       f"Added {inp.name} as {inp.role}" + (" (mobile OTP login)" if passwordless else ""))
     return await db.users.find_one({"id": uid}, {"_id": 0, "password_hash": 0})
 
 

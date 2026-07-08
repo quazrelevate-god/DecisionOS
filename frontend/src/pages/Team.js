@@ -22,7 +22,7 @@ const MENU_PREVIEW = [
 
 function MemberDialog({ trigger, initial, roleOptions, onSaved }) {
   const [open, setOpen] = useState(false);
-  const blank = { name: "", email: "", password: "", phone: "", role: roleOptions[0]?.key || "", permissions: defaultPermsForRole(roleOptions[0]?.key) };
+  const blank = { name: "", email: "", password: "", phone: "", passwordless: false, role: roleOptions[0]?.key || "", permissions: defaultPermsForRole(roleOptions[0]?.key) };
   const [form, setForm] = useState(blank);
   const editing = !!initial;
 
@@ -31,7 +31,7 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved }) {
     if (o) {
       if (initial) {
         setForm({
-          name: initial.name, email: initial.email, password: "", phone: initial.phone || "", role: initial.role,
+          name: initial.name, email: initial.email, password: "", phone: initial.phone || "", passwordless: false, role: initial.role,
           permissions: Array.isArray(initial.permissions) && initial.permissions.length ? [...initial.permissions] : defaultPermsForRole(initial.role),
         });
       } else setForm(blank);
@@ -47,8 +47,14 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved }) {
         await api.patch(`/users/${initial.id}`, { role: form.role, permissions: form.permissions, phone: form.phone });
         toast.success(`${initial.name}'s access updated`);
       } else {
-        if (!form.name.trim() || !form.email.trim() || form.password.length < 6) return toast.error("Name, email and a 6+ char password are required");
-        await api.post("/users", { name: form.name, email: form.email, password: form.password, role: form.role, permissions: form.permissions, phone: form.phone });
+        if (!form.name.trim() || !form.email.trim()) return toast.error("Name and email are required");
+        if (form.passwordless) {
+          if (form.phone.replace(/\D/g, "").length < 10) return toast.error("A valid mobile number is required for OTP login");
+          await api.post("/users", { name: form.name, email: form.email, role: form.role, permissions: form.permissions, phone: form.phone });
+        } else {
+          if (form.password.length < 6) return toast.error("Set a 6+ char password, or switch to mobile OTP login");
+          await api.post("/users", { name: form.name, email: form.email, password: form.password, role: form.role, permissions: form.permissions, phone: form.phone });
+        }
         toast.success(`${form.name} added`);
       }
       setOpen(false); onSaved();
@@ -66,9 +72,20 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved }) {
           {!editing && <>
             <input data-testid="member-name-input" className={inp} placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             <input data-testid="member-email-input" className={inp} type="email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-            <input data-testid="member-password-input" className={inp} type="password" placeholder="Temp password (min 6)" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+            <div className="flex border border-black" data-testid="login-method-toggle">
+              <button type="button" data-testid="login-method-password" onClick={() => setForm({ ...form, passwordless: false })}
+                className={`flex-1 px-3 py-2 text-xs font-semibold uppercase tracking-wider transition-colors ${!form.passwordless ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>Password login</button>
+              <button type="button" data-testid="login-method-otp" onClick={() => setForm({ ...form, passwordless: true })}
+                className={`flex-1 px-3 py-2 text-xs font-semibold uppercase tracking-wider border-l border-black transition-colors ${form.passwordless ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>Mobile OTP</button>
+            </div>
+            {!form.passwordless && (
+              <input data-testid="member-password-input" className={inp} type="password" placeholder="Temp password (min 6)" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+            )}
           </>}
-          <input data-testid="member-phone-input" className={inp} type="tel" placeholder="Mobile number (for OTP login)" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+          <input data-testid="member-phone-input" className={inp} type="tel" placeholder={form.passwordless ? "Mobile number (required for OTP login)" : "Mobile number (for OTP login)"} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+          {!editing && form.passwordless && (
+            <p className="text-[11px] text-muted-foreground -mt-1 italic" data-testid="passwordless-hint">No password needed — this member signs in with a one-time code sent to their mobile.</p>
+          )}
           <div>
             <label className="label-mono text-muted-foreground">Role</label>
             <select data-testid="member-role-select" className={`${inp} mt-1`} value={form.role} onChange={(e) => setRole(e.target.value)}>

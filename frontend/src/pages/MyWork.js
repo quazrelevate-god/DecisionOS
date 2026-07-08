@@ -177,10 +177,12 @@ function ExecutionPlan({ t, onChange }) {
               className="px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:bg-black/5">Save</button>
           </>
         ) : (
-          <button onClick={() => setEditing(true)} data-testid={`exec-edit-${t.id}`}
-            className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider border border-black px-4 py-2 hover:bg-brand-ink hover:text-white transition-colors">
-            <PencilSimple size={15} weight="bold" /> Customize steps
-          </button>
+          t.status !== "done" && (
+            <button onClick={() => setEditing(true)} data-testid={`exec-edit-${t.id}`}
+              className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider border border-black px-4 py-2 hover:bg-brand-ink hover:text-white transition-colors">
+              <PencilSimple size={15} weight="bold" /> Customize steps
+            </button>
+          )
         )}
       </div>
     </div>

@@ -16,7 +16,6 @@ import {
 import {
   Microphone,
   Brain as BrainIcon,
-  ChatCircleText,
   Kanban,
   AddressBook,
   SignOut,
@@ -34,21 +33,21 @@ import {
 const NAV = [
   { to: "/", label: "Decision Desk", icon: Tray, testid: "nav-inbox", perm: "inbox" },
   { to: "/brief", label: "CEO Brief", icon: Sun, testid: "nav-ceo-brief" },
+  { to: "/my-work", label: "My Work", icon: Briefcase, testid: "nav-my-work" },
+  { to: "/contacts", label: "People", icon: AddressBook, testid: "nav-contacts", perm: "people" },
+  { to: "/brain", label: "Company Brain", icon: BrainIcon, testid: "nav-brain", perm: "brain" },
   { to: "/ingest", label: "Capture", icon: FileArrowUp, testid: "nav-ingest", perm: "data_input" },
   { to: "/workflows", label: "Workflows", icon: Kanban, testid: "nav-workflows", perm: "workflows" },
-  { to: "/contacts", label: "People", icon: AddressBook, testid: "nav-contacts", perm: "people" },
-  { to: "/my-work", label: "My Work", icon: Briefcase, testid: "nav-my-work" },
   { to: "/meetings", label: "Meeting Notes", icon: MicrophoneStage, testid: "nav-meetings" },
-  { to: "/brain", label: "Company Brain", icon: BrainIcon, testid: "nav-brain", perm: "brain" },
 ];
 
 // Primary items for the mobile bottom tab bar
 const BOTTOM_NAV = [
-  { to: "/", label: "Decision Desk", icon: Tray, perm: "inbox" },
-  { to: "/ingest", label: "Capture", icon: FileArrowUp, perm: "data_input" },
+  { to: "/", label: "Desk", icon: Tray, perm: "inbox" },
   { to: "/brief", label: "Brief", icon: Sun },
   { to: "/my-work", label: "Work", icon: Briefcase },
-  { to: "/brain", label: "Brain", icon: ChatCircleText, perm: "brain" },
+  { to: "/contacts", label: "People", icon: AddressBook, perm: "people" },
+  { to: "/brain", label: "Brain", icon: BrainIcon, perm: "brain" },
 ];
 
 const Logo = () => (

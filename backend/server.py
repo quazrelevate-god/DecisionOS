@@ -1248,7 +1248,9 @@ async def list_tasks(status: Optional[str] = None, mine: Optional[bool] = False,
     q = {"tenant_id": user["tenant_id"]}
     if status:
         q["status"] = status
-    if mine:
+    # Non-owners only ever see their own lane (their tasks + their role's tasks).
+    # Owner sees everything, and may opt into a personal view via ?mine=true.
+    if user["role"] != "owner" or mine:
         q["$or"] = [{"assignee_id": user["id"]}, {"assignee_role": user["role"]}]
     tasks = await db.tasks.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
     return await enrich_tasks(tasks)
@@ -1308,9 +1310,10 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
 @api.post("/tasks/prioritize")
 async def prioritize_tasks(force: bool = False, limit: int = 25, user: dict = Depends(get_current_user)):
     tid = user["tenant_id"]
-    open_tasks = await db.tasks.find(
-        {"tenant_id": tid, "status": {"$in": ["todo", "in_progress", "blocked"]}}, {"_id": 0}
-    ).sort("created_at", -1).to_list(limit)
+    q = {"tenant_id": tid, "status": {"$in": ["todo", "in_progress", "blocked"]}}
+    if user["role"] != "owner":
+        q["$or"] = [{"assignee_id": user["id"]}, {"assignee_role": user["role"]}]
+    open_tasks = await db.tasks.find(q, {"_id": 0}).sort("created_at", -1).to_list(limit)
     todo = [t for t in open_tasks if force or not t.get("ai_scores")]
     scored_n = 0
     if todo:

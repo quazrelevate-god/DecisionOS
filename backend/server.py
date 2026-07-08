@@ -8,6 +8,7 @@ import re
 import uuid
 import json
 import hmac
+import random
 import hashlib
 import logging
 import httpx
@@ -176,6 +177,7 @@ class RegisterInput(BaseModel):
     name: str
     email: EmailStr
     password: str = Field(min_length=6)
+    phone: Optional[str] = None
     industry: Optional[str] = None
     company_size: Optional[str] = None
     region: Optional[str] = None
@@ -195,6 +197,7 @@ class TenantUpdateInput(BaseModel):
     region: Optional[str] = None
     currency: Optional[str] = None
     gst: Optional[str] = None
+    phone: Optional[str] = None
     branches: Optional[str] = None
     products: Optional[List[ProductItem]] = None
 
@@ -214,16 +217,27 @@ class LoginInput(BaseModel):
     password: str
 
 
+class OtpRequestInput(BaseModel):
+    phone: str
+
+
+class OtpVerifyInput(BaseModel):
+    phone: str
+    code: str
+
+
 class UserCreateInput(BaseModel):
     name: str
     email: EmailStr
     password: str = Field(min_length=6)
     role: str
+    phone: Optional[str] = None
     permissions: Optional[List[str]] = None
 
 
 class UserUpdateInput(BaseModel):
     role: Optional[str] = None
+    phone: Optional[str] = None
     permissions: Optional[List[str]] = None
 
 
@@ -794,6 +808,7 @@ async def register(inp: RegisterInput):
     user_id = new_id()
     await db.users.insert_one({
         "id": user_id, "tenant_id": tenant_id, "name": inp.name, "email": email,
+        "phone": (inp.phone or "").strip(),
         "password_hash": hash_password(inp.password), "role": "owner", "created_at": now_iso(),
     })
     token = create_token(user_id, tenant_id, "owner")
@@ -815,6 +830,98 @@ async def login(inp: LoginInput):
     return {"token": token, "user": user, "tenant": tenant}
 
 
+# ---------------------------------------------------------------------------
+# Mobile + OTP login (alternate auth). DEV mode returns OTP until Twilio keys added.
+# ---------------------------------------------------------------------------
+OTP_TTL_SECONDS = 300
+OTP_MAX_ATTEMPTS = 5
+OTP_RESEND_COOLDOWN = 30
+TWILIO_ENABLED = bool(os.environ.get("TWILIO_ACCOUNT_SID") and os.environ.get("TWILIO_AUTH_TOKEN") and os.environ.get("TWILIO_FROM_NUMBER"))
+
+
+def _hash_otp(code: str, phone: str) -> str:
+    return hashlib.sha256(f"{phone}:{code}:decisionos".encode()).hexdigest()
+
+
+async def _send_otp_sms(phone: str, code: str) -> bool:
+    """Send OTP via Twilio when configured; otherwise dev mode (no send)."""
+    if not TWILIO_ENABLED:
+        return False
+    try:
+        from twilio.rest import Client
+        client = Client(os.environ["TWILIO_ACCOUNT_SID"], os.environ["TWILIO_AUTH_TOKEN"])
+        client.messages.create(
+            body=f"Your DecisionOS login code is {code}. Valid for 5 minutes.",
+            from_=os.environ["TWILIO_FROM_NUMBER"], to=phone,
+        )
+        return True
+    except Exception as e:
+        logging.error(f"Twilio OTP send failed: {e}")
+        return False
+
+
+@api.post("/auth/otp/request")
+async def request_otp(inp: OtpRequestInput):
+    norm = _norm_phone(inp.phone)
+    if len(norm) < 10:
+        raise HTTPException(status_code=400, detail="Enter a valid mobile number")
+    # Match a registered user by last-10-digit phone
+    candidates = await db.users.find({"phone": {"$exists": True, "$ne": ""}}, {"_id": 0, "id": 1, "phone": 1}).to_list(2000)
+    match = next((u for u in candidates if _norm_phone(u.get("phone", "")) == norm), None)
+    if not match:
+        raise HTTPException(status_code=404, detail="No account is registered with this mobile number")
+
+    existing = await db.otp_codes.find_one({"phone": norm}, {"_id": 0})
+    if existing:
+        age = (datetime.now(timezone.utc) - datetime.fromisoformat(existing["created_at"])).total_seconds()
+        if age < OTP_RESEND_COOLDOWN:
+            raise HTTPException(status_code=429, detail=f"Please wait {int(OTP_RESEND_COOLDOWN - age)}s before requesting a new code")
+
+    code = f"{random.randint(0, 999999):06d}"
+    now = datetime.now(timezone.utc)
+    await db.otp_codes.update_one(
+        {"phone": norm},
+        {"$set": {"phone": norm, "code_hash": _hash_otp(code, norm),
+                  "expires_at": (now + timedelta(seconds=OTP_TTL_SECONDS)).isoformat(),
+                  "created_at": now.isoformat(), "attempts": 0}},
+        upsert=True,
+    )
+    sent = await _send_otp_sms(inp.phone, code)
+    resp = {"sent": sent, "dev_mode": not TWILIO_ENABLED}
+    if not TWILIO_ENABLED:
+        resp["dev_otp"] = code  # DEV ONLY — remove once Twilio is live
+    return resp
+
+
+@api.post("/auth/otp/verify")
+async def verify_otp(inp: OtpVerifyInput):
+    norm = _norm_phone(inp.phone)
+    rec = await db.otp_codes.find_one({"phone": norm}, {"_id": 0})
+    if not rec:
+        raise HTTPException(status_code=400, detail="Request an OTP first")
+    if datetime.now(timezone.utc) > datetime.fromisoformat(rec["expires_at"]):
+        await db.otp_codes.delete_one({"phone": norm})
+        raise HTTPException(status_code=400, detail="OTP expired. Request a new one")
+    if rec.get("attempts", 0) >= OTP_MAX_ATTEMPTS:
+        await db.otp_codes.delete_one({"phone": norm})
+        raise HTTPException(status_code=429, detail="Too many attempts. Request a new OTP")
+    if _hash_otp((inp.code or "").strip(), norm) != rec["code_hash"]:
+        await db.otp_codes.update_one({"phone": norm}, {"$inc": {"attempts": 1}})
+        raise HTTPException(status_code=401, detail="Incorrect OTP")
+
+    await db.otp_codes.delete_one({"phone": norm})
+    candidates = await db.users.find({"phone": {"$exists": True, "$ne": ""}}).to_list(2000)
+    user = next((u for u in candidates if _norm_phone(u.get("phone", "")) == norm), None)
+    if not user:
+        raise HTTPException(status_code=404, detail="Account not found")
+    token = create_token(user["id"], user["tenant_id"], user["role"])
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    user.pop("_id", None)
+    user.pop("password_hash", None)
+    return {"token": token, "user": user, "tenant": tenant}
+
+
+
 @api.get("/auth/me")
 async def me(user: dict = Depends(get_current_user)):
     tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
@@ -824,7 +931,7 @@ async def me(user: dict = Depends(get_current_user)):
 @api.patch("/tenant")
 async def update_tenant(inp: TenantUpdateInput, user: dict = Depends(require_perm("team_manage"))):
     updates = {}
-    for f in ["name", "industry", "company_size", "region", "gst", "branches"]:
+    for f in ["name", "industry", "company_size", "region", "gst", "phone", "branches"]:
         v = getattr(inp, f)
         if v is not None:
             updates[f] = v.strip() if isinstance(v, str) else v
@@ -883,6 +990,7 @@ async def create_user(inp: UserCreateInput, user: dict = Depends(require_perm("t
     uid = new_id()
     await db.users.insert_one({
         "id": uid, "tenant_id": user["tenant_id"], "name": inp.name, "email": email,
+        "phone": (inp.phone or "").strip(),
         "password_hash": hash_password(inp.password), "role": inp.role,
         "permissions": clean_perms(inp.permissions), "created_at": now_iso(),
     })
@@ -904,6 +1012,8 @@ async def update_user(user_id: str, inp: UserUpdateInput, user: dict = Depends(r
         updates["role"] = inp.role
     if inp.permissions is not None:
         updates["permissions"] = clean_perms(inp.permissions)
+    if inp.phone is not None:
+        updates["phone"] = inp.phone.strip()
     if updates:
         await db.users.update_one({"id": user_id}, {"$set": updates})
     return await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
@@ -3162,15 +3272,15 @@ async def seed_demo():
                      {"name": "Bulk fabric rolls", "description": "Wholesale cotton & silk"}],
     })
 
-    def mkuser(name, email, role):
+    def mkuser(name, email, role, phone=""):
         uid = new_id()
-        return uid, {"id": uid, "tenant_id": tid, "name": name, "email": email,
+        return uid, {"id": uid, "tenant_id": tid, "name": name, "email": email, "phone": phone,
                      "password_hash": hash_password(DEMO_PASSWORD), "role": role, "created_at": now_iso()}
 
-    owner_id, owner = mkuser("Rajesh Sharma", DEMO_EMAIL, "owner")
-    sales_id, sales = mkuser("Priya Nair", "sales@sharma.com", "sales")
-    prod_id, prod = mkuser("Amit Verma", "production@sharma.com", "production")
-    fin_id, fin = mkuser("Sunita Rao", "finance@sharma.com", "finance")
+    owner_id, owner = mkuser("Rajesh Sharma", DEMO_EMAIL, "owner", "+91 98200 10001")
+    sales_id, sales = mkuser("Priya Nair", "sales@sharma.com", "sales", "+91 98200 10002")
+    prod_id, prod = mkuser("Amit Verma", "production@sharma.com", "production", "+91 98200 10003")
+    fin_id, fin = mkuser("Sunita Rao", "finance@sharma.com", "finance", "+91 98200 10004")
     await db.users.insert_many([owner, sales, prod, fin])
 
     # Decisions + tasks

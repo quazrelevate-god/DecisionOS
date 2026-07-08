@@ -42,6 +42,12 @@ export function AuthProvider({ children }) {
     return data;
   };
 
+  const loginWithOtp = async (phone, code) => {
+    const { data } = await api.post("/auth/otp/verify", { phone, code });
+    persist(data);
+    return data;
+  };
+
   const logout = () => {
     localStorage.removeItem("dos_token");
     setUser(null);
@@ -55,7 +61,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, tenant, loading, login, register, logout, refreshTenant }}>
+    <AuthContext.Provider value={{ user, tenant, loading, login, register, logout, refreshTenant, loginWithOtp }}>
       {children}
     </AuthContext.Provider>
   );

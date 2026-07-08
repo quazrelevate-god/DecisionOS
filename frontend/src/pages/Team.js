@@ -22,7 +22,7 @@ const MENU_PREVIEW = [
 
 function MemberDialog({ trigger, initial, roleOptions, onSaved }) {
   const [open, setOpen] = useState(false);
-  const blank = { name: "", email: "", password: "", role: roleOptions[0]?.key || "", permissions: defaultPermsForRole(roleOptions[0]?.key) };
+  const blank = { name: "", email: "", password: "", phone: "", role: roleOptions[0]?.key || "", permissions: defaultPermsForRole(roleOptions[0]?.key) };
   const [form, setForm] = useState(blank);
   const editing = !!initial;
 
@@ -31,7 +31,7 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved }) {
     if (o) {
       if (initial) {
         setForm({
-          name: initial.name, email: initial.email, password: "", role: initial.role,
+          name: initial.name, email: initial.email, password: "", phone: initial.phone || "", role: initial.role,
           permissions: Array.isArray(initial.permissions) && initial.permissions.length ? [...initial.permissions] : defaultPermsForRole(initial.role),
         });
       } else setForm(blank);
@@ -44,11 +44,11 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved }) {
   const save = async () => {
     try {
       if (editing) {
-        await api.patch(`/users/${initial.id}`, { role: form.role, permissions: form.permissions });
+        await api.patch(`/users/${initial.id}`, { role: form.role, permissions: form.permissions, phone: form.phone });
         toast.success(`${initial.name}'s access updated`);
       } else {
         if (!form.name.trim() || !form.email.trim() || form.password.length < 6) return toast.error("Name, email and a 6+ char password are required");
-        await api.post("/users", { name: form.name, email: form.email, password: form.password, role: form.role, permissions: form.permissions });
+        await api.post("/users", { name: form.name, email: form.email, password: form.password, role: form.role, permissions: form.permissions, phone: form.phone });
         toast.success(`${form.name} added`);
       }
       setOpen(false); onSaved();
@@ -68,6 +68,7 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved }) {
             <input data-testid="member-email-input" className={inp} type="email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
             <input data-testid="member-password-input" className={inp} type="password" placeholder="Temp password (min 6)" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
           </>}
+          <input data-testid="member-phone-input" className={inp} type="tel" placeholder="Mobile number (for OTP login)" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
           <div>
             <label className="label-mono text-muted-foreground">Role</label>
             <select data-testid="member-role-select" className={`${inp} mt-1`} value={form.role} onChange={(e) => setRole(e.target.value)}>

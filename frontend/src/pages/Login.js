@@ -35,12 +35,16 @@ const AI_STEPS = [
 ];
 
 export default function Login() {
-  const { login, register } = useAuth();
+  const { login, register, loginWithOtp } = useAuth();
   const navigate = useNavigate();
   const [mode, setMode] = useState("login");
+  const [loginTab, setLoginTab] = useState("password");
+  const [otpPhone, setOtpPhone] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
-    company_name: "", name: "", email: "", password: "",
+    company_name: "", name: "", email: "", password: "", phone: "",
     industry: "", gst: "", branches: "",
     company_size: "", region: "", currency: "INR",
     monthly_sales: "", monthly_purchases: "", num_customers: "", num_suppliers: "",
@@ -73,6 +77,24 @@ export default function Login() {
     setError(""); setBusy(true);
     try { await login(email, "demo1234"); navigate("/"); }
     catch (err) { setError(formatApiError(err.response?.data?.detail)); }
+    finally { setBusy(false); }
+  };
+
+  const requestOtp = async (e) => {
+    e.preventDefault(); setError(""); setBusy(true);
+    try {
+      const { data } = await api.post("/auth/otp/request", { phone: otpPhone });
+      setOtpSent(true);
+      if (data.dev_otp) toast.info(`Dev OTP: ${data.dev_otp} (auto-filled)`);
+      else toast.success("OTP sent to your mobile");
+      if (data.dev_otp) setOtpCode(data.dev_otp);
+    } catch (err) { setError(formatApiError(err.response?.data?.detail) || "Failed"); }
+    finally { setBusy(false); }
+  };
+  const submitOtp = async (e) => {
+    e.preventDefault(); setError(""); setBusy(true);
+    try { await loginWithOtp(otpPhone, otpCode); navigate("/"); }
+    catch (err) { setError(formatApiError(err.response?.data?.detail) || "Failed"); }
     finally { setBusy(false); }
   };
 
@@ -114,7 +136,7 @@ export default function Login() {
       const sw = software.includes("Others") && otherSoftware.trim()
         ? [...software.filter((x) => x !== "Others"), otherSoftware.trim()] : software;
       await register({
-        company_name: form.company_name, name: form.name, email: form.email, password: form.password,
+        company_name: form.company_name, name: form.name, email: form.email, password: form.password, phone: form.phone,
         industry: eff || "General", gst: form.gst, branches: form.branches,
         company_size: form.company_size, region: form.region, currency: form.currency,
         current_software: sw,
@@ -211,12 +233,49 @@ export default function Login() {
             <>
               <h2 className="font-heading text-3xl font-black uppercase tracking-tighter mb-1">Sign in</h2>
               <p className="text-sm text-muted-foreground mb-6">Access your company brain.</p>
-              <form onSubmit={doLogin} className="space-y-4">
-                <input data-testid="login-email-input" type="email" className={inputCls} placeholder="Email" value={form.email} onChange={set("email")} required />
-                <input data-testid="login-password-input" type="password" className={inputCls} placeholder="Password" value={form.password} onChange={set("password")} required />
-                {error && <p data-testid="auth-error" className="text-sm text-brand-red font-semibold">{error}</p>}
-                <button type="submit" disabled={busy} data-testid="auth-submit-button" className="w-full bg-brand-red text-white font-semibold uppercase tracking-wider py-3 border border-black hover:shadow-brutal transition-all disabled:opacity-50">{busy ? "…" : "Sign in"}</button>
-              </form>
+
+              <div className="flex border border-black mb-5" data-testid="login-tabs">
+                <button onClick={() => { setLoginTab("password"); setError(""); }} data-testid="login-tab-password"
+                  className={`flex-1 px-3 py-2 text-xs font-semibold uppercase tracking-wider border-r border-black transition-colors ${loginTab === "password" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+                  Email &amp; Password
+                </button>
+                <button onClick={() => { setLoginTab("otp"); setError(""); }} data-testid="login-tab-otp"
+                  className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold uppercase tracking-wider transition-colors ${loginTab === "otp" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+                  <DeviceMobile size={14} weight="bold" /> Mobile OTP
+                </button>
+              </div>
+
+              {loginTab === "password" && (
+                <form onSubmit={doLogin} className="space-y-4">
+                  <input data-testid="login-email-input" type="email" className={inputCls} placeholder="Email" value={form.email} onChange={set("email")} required />
+                  <input data-testid="login-password-input" type="password" className={inputCls} placeholder="Password" value={form.password} onChange={set("password")} required />
+                  {error && <p data-testid="auth-error" className="text-sm text-brand-red font-semibold">{error}</p>}
+                  <button type="submit" disabled={busy} data-testid="auth-submit-button" className="w-full bg-brand-red text-white font-semibold uppercase tracking-wider py-3 border border-black hover:shadow-brutal transition-all disabled:opacity-50">{busy ? "…" : "Sign in"}</button>
+                </form>
+              )}
+
+              {loginTab === "otp" && (
+                <form onSubmit={otpSent ? submitOtp : requestOtp} className="space-y-4" data-testid="otp-form">
+                  <div className="flex gap-2">
+                    <input data-testid="otp-phone-input" type="tel" className={inputCls} placeholder="Registered mobile number" value={otpPhone} onChange={(e) => setOtpPhone(e.target.value)} disabled={otpSent} required />
+                    {otpSent && (
+                      <button type="button" onClick={() => { setOtpSent(false); setOtpCode(""); setError(""); }} data-testid="otp-change-number"
+                        className="border border-black px-3 text-xs font-semibold uppercase hover:bg-black/5 whitespace-nowrap">Change</button>
+                    )}
+                  </div>
+                  {otpSent && (
+                    <input data-testid="otp-code-input" inputMode="numeric" maxLength={6} className={`${inputCls} tracking-[0.5em] text-center text-lg`} placeholder="Enter 6-digit OTP" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))} required />
+                  )}
+                  {error && <p data-testid="auth-error" className="text-sm text-brand-red font-semibold">{error}</p>}
+                  <button type="submit" disabled={busy} data-testid="otp-submit-button" className="w-full bg-brand-red text-white font-semibold uppercase tracking-wider py-3 border border-black hover:shadow-brutal transition-all disabled:opacity-50">
+                    {busy ? "…" : otpSent ? "Verify & sign in" : "Send OTP"}
+                  </button>
+                  {otpSent && (
+                    <button type="button" onClick={requestOtp} disabled={busy} data-testid="otp-resend" className="w-full text-sm text-brand-blue font-semibold hover:underline">Resend OTP</button>
+                  )}
+                </form>
+              )}
+
               <button onClick={goToRegister} data-testid="toggle-auth-mode" className="mt-4 text-sm text-brand-blue font-semibold hover:underline">Need a workspace? Register →</button>
               <div className="mt-8 border-t border-black/20 pt-6">
                 <p className="label-mono text-muted-foreground mb-3">Try the Sharma demo</p>
@@ -251,6 +310,7 @@ export default function Login() {
                     <input data-testid="register-email-input" type="email" className={inputCls} placeholder="Work email" value={form.email} onChange={set("email")} />
                   </div>
                   <input data-testid="register-password-input" type="password" className={inputCls} placeholder="Password (min 6)" value={form.password} onChange={set("password")} />
+                  <input data-testid="register-phone-input" type="tel" className={inputCls} placeholder="Mobile number (for OTP login)" value={form.phone} onChange={set("phone")} />
                   <div>
                     <label className={labelCls}>Industry</label>
                     <select data-testid="industry-select" className={`${inputCls} mt-1`} value={form.industry} onChange={set("industry")}>

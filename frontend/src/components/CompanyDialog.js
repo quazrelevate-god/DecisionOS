@@ -11,6 +11,7 @@ const FIELDS = [
   { key: "name", label: "Company name" },
   { key: "industry", label: "Industry" },
   { key: "company_size", label: "Team size" },
+  { key: "phone", label: "Company mobile" },
   { key: "region", label: "Region" },
   { key: "currency", label: "Currency" },
   { key: "gst", label: "GST / Tax ID" },
@@ -30,7 +31,7 @@ export function CompanyDialog({ trigger }) {
     if (o && tenant) {
       setForm({
         name: tenant.name || "", industry: tenant.industry || "", company_size: tenant.company_size || "",
-        region: tenant.region || "", currency: tenant.currency || "", gst: tenant.gst || "", branches: tenant.branches || "",
+        phone: tenant.phone || "", region: tenant.region || "", currency: tenant.currency || "", gst: tenant.gst || "", branches: tenant.branches || "",
       });
       setProducts((tenant.products || []).map((p) => ({ name: p.name || "", description: p.description || "" })));
     }

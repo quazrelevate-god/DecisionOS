@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import api from "../lib/api";
@@ -19,9 +20,14 @@ export default function OperatingScore() {
     queryFn: () => api.get("/operating-score").then((r) => r.data),
   });
 
+  const rankedEmployees = useMemo(
+    () => (data?.employees || []).filter((e) => e.score != null || e.open > 0 || e.done > 0),
+    [data]
+  );
+
   if (isLoading || !data) return <div className="font-mono text-sm py-20 text-center">Computing operating score…</div>;
 
-  const { company, stats, employees } = data;
+  const { company, stats } = data;
   const overall = company.overall;
 
   return (
@@ -82,7 +88,7 @@ export default function OperatingScore() {
         <h2 className="font-heading text-xl font-extrabold uppercase tracking-tight">Team Execution</h2>
       </div>
       <div className="card-brutal divide-y divide-black/10" data-testid="operating-employees">
-        {employees.filter((e) => e.score != null || e.open > 0 || e.done > 0).map((e, i) => (
+        {rankedEmployees.map((e, i) => (
           <div key={e.id} data-testid={`operating-emp-${e.id}`} className="p-4 flex items-center gap-4">
             <span className="font-heading text-lg font-black text-black/30 w-6">{i + 1}</span>
             <div className="flex-1 min-w-0">

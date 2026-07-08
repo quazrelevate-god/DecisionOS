@@ -261,10 +261,10 @@ function TaskCard({ t, onChange }) {
 
       {(t.attachments || []).length > 0 && (
         <div className="flex flex-wrap gap-2 mt-3">
-          {t.attachments.map((a, i) => (
+          {t.attachments.map((a) => (
             a.kind === "photo"
-              ? <img key={i} src={`${process.env.REACT_APP_BACKEND_URL}${a.url}`} alt="proof" className="w-16 h-16 object-cover border border-black" data-testid={`att-photo-${t.id}-${i}`} />
-              : <audio key={i} controls src={`${process.env.REACT_APP_BACKEND_URL}${a.url}`} className="h-8" data-testid={`att-voice-${t.id}-${i}`} />
+              ? <img key={a.url} src={`${process.env.REACT_APP_BACKEND_URL}${a.url}`} alt="proof" className="w-16 h-16 object-cover border border-black" data-testid={`att-photo-${t.id}-${a.url}`} />
+              : <audio key={a.url} controls src={`${process.env.REACT_APP_BACKEND_URL}${a.url}`} className="h-8" data-testid={`att-voice-${t.id}-${a.url}`} />
           ))}
         </div>
       )}

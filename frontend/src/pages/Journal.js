@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import api from "../lib/api";
 import { PageHeader, Chip, EmptyState } from "../components/common";
@@ -115,7 +115,8 @@ export default function Journal() {
   });
 
   const days = data?.days || [];
-  const hasContent = days.some((d) => d.decisions.length || d.notes.length);
+  const visibleDays = useMemo(() => days.filter((d) => d.decisions.length || d.notes.length), [days]);
+  const hasContent = visibleDays.length > 0;
 
   return (
     <div>
@@ -150,7 +151,7 @@ export default function Journal() {
         <EmptyState title="Nothing logged yet" hint="Decisions you capture and approve will appear here, grouped by day." />
       ) : (
         <div className="space-y-10" data-testid="journal-days">
-          {days.filter((d) => d.decisions.length || d.notes.length).map((day) => (
+          {visibleDays.map((day) => (
             <section key={day.date} data-testid={`journal-day-${day.date}`}>
               <div className="flex items-center gap-3 mb-4">
                 <h2 className="font-heading text-xl font-black uppercase tracking-tight">{fmtDay(day.date)}</h2>

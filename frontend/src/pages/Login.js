@@ -158,7 +158,7 @@ export default function Login() {
     if (phones.length === 0) { setStep(7); return; }
     setBusy(true);
     try { await api.post("/invites", { phones }); toast.success(`${phones.length} invite(s) queued`); }
-    catch { /* non-blocking */ }
+    catch (err) { console.error("invite send failed (non-blocking):", err); }
     finally { setBusy(false); setStep(7); }
   };
 

@@ -4,10 +4,11 @@ import api from "../lib/api";
 import { PageHeader, Chip, EmptyState } from "../components/common";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
+import { TaskBoard } from "./Tasks";
 import {
   CheckCircle, Camera, Microphone, Stop, ChatCircleText,
   Sparkle, Plus, Trash, ArrowUp, ArrowDown, Robot, PencilSimple, ListChecks, CaretDown,
-  ArrowBendUpRight, WarningCircle, ChatText, ArrowRight,
+  ArrowBendUpRight, WarningCircle, ChatText, ArrowRight, Kanban, ListChecks as ListIcon,
 } from "@phosphor-icons/react";
 
 function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel }) {
@@ -420,6 +421,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [] }) {
 export default function MyWork() {
   const qc = useQueryClient();
   const { tenant } = useAuth();
+  const [view, setView] = useState("mywork");
   const tasksQ = useQuery({ queryKey: ["tasks", true], queryFn: () => api.get("/tasks?mine=true").then((r) => r.data) });
   const notifQ = useQuery({ queryKey: ["notifications"], queryFn: () => api.get("/notifications").then((r) => r.data) });
   const usersQ = useQuery({ queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data) });
@@ -436,8 +438,22 @@ export default function MyWork() {
 
   return (
     <div>
-      <PageHeader eyebrow="Your day, simplified" title="My Work" />
+      <PageHeader eyebrow="Your day, simplified" title="My Work">
+        <div className="flex border border-black" data-testid="work-view-toggle">
+          <button onClick={() => setView("mywork")} data-testid="work-view-mywork"
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border-r border-black transition-colors ${view === "mywork" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+            <ListIcon size={16} weight="bold" /> My Work
+          </button>
+          <button onClick={() => setView("board")} data-testid="work-view-board"
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider transition-colors ${view === "board" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+            <Kanban size={16} weight="bold" /> Board
+          </button>
+        </div>
+      </PageHeader>
 
+      {view === "board" ? (
+        <TaskBoard />
+      ) : (
       <div className="grid lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2">
           <h2 className="font-heading text-2xl font-extrabold uppercase tracking-tight mb-4">My Tasks</h2>
@@ -470,6 +486,7 @@ export default function MyWork() {
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 }

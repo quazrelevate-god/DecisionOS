@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-import { PageHeader, Chip, EmptyState } from "../components/common";
+import { Chip } from "../components/common";
 import { toast } from "sonner";
 import { Plus, User } from "@phosphor-icons/react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../components/ui/dialog";
@@ -77,7 +77,7 @@ function NewTaskDialog({ onCreated, roleOptions, members }) {
   );
 }
 
-export default function Tasks() {
+export function TaskBoard() {
   const qc = useQueryClient();
   const { tenant, user } = useAuth();
   const isOwner = user?.role === "owner";
@@ -112,21 +112,19 @@ export default function Tasks() {
 
   return (
     <div>
-      <PageHeader eyebrow={isOwner ? "Team execution" : "Your team's lane"} title="Tasks">
-        <div className="flex items-center gap-3">
-          {isOwner ? (
-            <button onClick={() => setMine(!mine)} data-testid="toggle-mine"
-              className={`px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black transition-colors ${mine ? "bg-brand-blue text-white" : "bg-white hover:bg-black/5"}`}>
-              {mine ? "My Tasks" : "All Tasks"}
-            </button>
-          ) : (
-            <span data-testid="lane-badge" className="px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black bg-brand-blue text-white">
-              {user?.role} lane
-            </span>
-          )}
-          <NewTaskDialog onCreated={invalidate} roleOptions={roleOptions} members={members} />
-        </div>
-      </PageHeader>
+      <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
+        {isOwner ? (
+          <button onClick={() => setMine(!mine)} data-testid="toggle-mine"
+            className={`px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black transition-colors ${mine ? "bg-brand-blue text-white" : "bg-white hover:bg-black/5"}`}>
+            {mine ? "My Tasks" : "All Tasks"}
+          </button>
+        ) : (
+          <span data-testid="lane-badge" className="px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black bg-brand-blue text-white">
+            {user?.role} lane
+          </span>
+        )}
+        <NewTaskDialog onCreated={invalidate} roleOptions={roleOptions} members={members} />
+      </div>
 
       <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
         {COLUMNS.map((col) => {

@@ -7,7 +7,6 @@ import Layout from "./components/Layout";
 import Login from "./pages/Login";
 import Inbox from "./pages/Inbox";
 import Workflows from "./pages/Workflows";
-import Tasks from "./pages/Tasks";
 import Brain from "./pages/Brain";
 import AskAI from "./pages/AskAI";
 import Team from "./pages/Team";
@@ -54,7 +53,7 @@ function App() {
             <Route path="/contacts" element={<Protected><Contacts /></Protected>} />
             <Route path="/contacts/:id" element={<Protected><ContactProfile /></Protected>} />
             <Route path="/ingest" element={<Protected><Ingest /></Protected>} />
-            <Route path="/tasks" element={<Protected><Tasks /></Protected>} />
+            <Route path="/tasks" element={<Navigate to="/my-work" replace />} />
             <Route path="/priorities" element={<Protected><Priorities /></Protected>} />
             <Route path="/calendar" element={<Protected><Calendar /></Protected>} />
             <Route path="/meetings" element={<Protected><Meetings /></Protected>} />

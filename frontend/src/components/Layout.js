@@ -50,13 +50,13 @@ const BOTTOM_NAV = [
   { to: "/brain", label: "Brain", icon: BrainIcon, perm: "brain" },
 ];
 
-const Logo = () => (
-  <div className="flex items-center gap-2">
-    <div className="w-8 h-8 bg-brand-red flex items-center justify-center">
-      <span className="font-heading font-black text-white text-lg leading-none">D</span>
-    </div>
-    <span className="font-heading font-black text-xl tracking-tighter uppercase">DecisionOS</span>
-  </div>
+const Logo = ({ className = "h-8" }) => (
+  <img
+    src="https://customer-assets.emergentagent.com/job_founder-os-58/artifacts/0ntrxfwq_DecisionOS_Logo_Transparent.png"
+    alt="DecisionOS"
+    className={`${className} w-auto object-contain`}
+    data-testid="app-logo"
+  />
 );
 
 export default function Layout({ children }) {

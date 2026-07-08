@@ -156,6 +156,7 @@ export default function Inbox() {
     refetchInterval: processing ? 2500 : false,
   });
   const decisionsQ = useQuery({ queryKey: ["decisions"], queryFn: () => api.get("/decisions").then((r) => r.data) });
+  const myTasksQ = useQuery({ queryKey: ["tasks", true], queryFn: () => api.get("/tasks?mine=true").then((r) => r.data) });
   const usersQ = useQuery({ queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data), enabled: user?.role === "owner" });
   const members = usersQ.data || [];
   const roleOptions = [{ key: "owner", label: "Owner" }, ...(tenant?.roles || [])];
@@ -165,6 +166,7 @@ export default function Inbox() {
     qc.invalidateQueries({ queryKey: ["decisions"] });
     qc.invalidateQueries({ queryKey: ["inbox"] });
     qc.invalidateQueries({ queryKey: ["dashboard"] });
+    qc.invalidateQueries({ queryKey: ["tasks", true] });
   };
 
   const startRec = async () => {
@@ -240,6 +242,7 @@ export default function Inbox() {
   const inbox = inboxQ.data || { items: [], counts: {}, open_total: 0 };
   const items = (inbox.items || []).filter((i) => i.status !== "dismissed" && (filter === "all" || i.classification === filter));
   const pending = (decisionsQ.data || []).filter((d) => d.status === "pending_approval");
+  const escalations = (myTasksQ.data || []).filter((t) => (t.source === "escalation" || t.source === "handoff") && t.status !== "done");
 
   return (
     <div>
@@ -251,6 +254,31 @@ export default function Inbox() {
           </button>
         )}
       </PageHeader>
+
+      {/* Escalations & Handoffs directed to me */}
+      {escalations.length > 0 && (
+        <div className="mb-8 border-2 border-brand-red bg-brand-red/5" data-testid="escalations-section">
+          <div className="flex items-center gap-2 px-4 py-2.5 bg-brand-red text-white">
+            <Warning size={18} weight="fill" />
+            <h2 className="font-heading font-black uppercase tracking-tight text-sm">Needs your attention — {escalations.length} escalation/handoff{escalations.length !== 1 ? "s" : ""}</h2>
+          </div>
+          <div className="divide-y divide-black/10">
+            {escalations.map((t) => (
+              <button key={t.id} onClick={() => navigate("/my-work")} data-testid={`escalation-${t.id}`}
+                className="w-full text-left p-4 flex items-start gap-3 hover:bg-white transition-colors">
+                <span className={`px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-black shrink-0 ${t.source === "escalation" ? "bg-brand-red text-white" : "bg-brand-blue text-white"}`}>
+                  {t.source === "escalation" ? "Escalation" : "Handoff"}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold leading-tight">{t.title.replace(/^Follow-up:\s*/, "")}</p>
+                  {t.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{t.description}</p>}
+                  <p className="label-mono text-brand-red mt-1">Open in My Work →</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Capture */}
       {user?.role === "owner" ? (
@@ -299,7 +327,8 @@ export default function Inbox() {
                     className="px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:bg-black/5 disabled:opacity-50">
                     Skip &amp; structure anyway
                   </button>
-                  <button onClick={() => setClarify(null)} className="px-3 py-2 text-sm font-semibold uppercase tracking-wider hover:text-brand-red">Cancel</button>
+                  <button onClick={() => setClarify(null)} data-testid="clarify-cancel"
+                    className="px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:bg-black/5">Cancel</button>
                 </div>
               </div>
             ) : (

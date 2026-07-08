@@ -381,6 +381,8 @@ function TaskCard({ t, onChange, members = [], roleOptions = [] }) {
       {t.description && <p className="text-sm text-muted-foreground mt-1">{t.description}</p>}
       <div className="flex items-center gap-1.5 mt-3">
         <Chip value={t.status} />
+        {t.source === "escalation" && <span data-testid={`badge-escalation-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-black bg-brand-red text-white">Escalation</span>}
+        {t.source === "handoff" && <span data-testid={`badge-handoff-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-black bg-brand-blue text-white">Handoff</span>}
         {t.due_date && <span className="text-xs text-muted-foreground">due {new Date(t.due_date).toLocaleDateString()}</span>}
       </div>
 

@@ -1704,7 +1704,7 @@ async def add_task_update(task_id: str, inp: TaskUpdateNoteInput, user: dict = D
             "priority": "high" if action == "escalate" else (t.get("priority") or "medium"),
             "status": "todo", "due_date": t.get("due_date"),
             "decision_id": t.get("decision_id"), "parent_task_id": task_id,
-            "source": "handoff", "created_at": now_iso(),
+            "source": "escalation" if action == "escalate" else "handoff", "created_at": now_iso(),
         })
         if to_id:
             notify_ids = [to_id]

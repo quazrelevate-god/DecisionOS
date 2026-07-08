@@ -82,6 +82,8 @@ export default function Layout({ children }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { data: notif } = useQuery({ queryKey: ["notifications"], queryFn: () => api.get("/notifications").then((r) => r.data), refetchInterval: 30000 });
   const unread = notif?.unread || 0;
+  const { data: brief } = useQuery({ queryKey: ["fires-count"], queryFn: () => api.get("/brief?period=morning").then((r) => r.data), refetchInterval: 60000, enabled: user?.role === "owner" });
+  const fires = brief?.counters?.fires || 0;
 
   const Bellicon = () => (
     <button onClick={() => navigate("/notifications")} data-testid="notif-bell"
@@ -128,6 +130,12 @@ export default function Layout({ children }) {
         >
           <Icon size={18} weight="bold" />
           {label}
+          {to === "/brief" && fires > 0 && (
+            <span data-testid="nav-fires-badge" title={`${fires} fire(s) to put out`}
+              className="ml-auto bg-brand-red text-white text-[10px] min-w-5 h-5 px-1 flex items-center justify-center border border-black font-bold rounded-full animate-pulse">
+              {fires}
+            </span>
+          )}
         </NavLink>
       ))}
     </>

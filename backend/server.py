@@ -860,6 +860,30 @@ async def _send_otp_sms(phone: str, code: str) -> bool:
         return False
 
 
+async def _issue_otp(norm: str, display_phone: str, enforce_cooldown: bool = True):
+    """Generate + store a 6-digit OTP for a normalized phone and (try to) send it."""
+    if enforce_cooldown:
+        existing = await db.otp_codes.find_one({"phone": norm}, {"_id": 0})
+        if existing:
+            age = (datetime.now(timezone.utc) - datetime.fromisoformat(existing["created_at"])).total_seconds()
+            if age < OTP_RESEND_COOLDOWN:
+                raise HTTPException(status_code=429, detail=f"Please wait {int(OTP_RESEND_COOLDOWN - age)}s before requesting a new code")
+    code = f"{random.randint(0, 999999):06d}"
+    now = datetime.now(timezone.utc)
+    await db.otp_codes.update_one(
+        {"phone": norm},
+        {"$set": {"phone": norm, "code_hash": _hash_otp(code, norm),
+                  "expires_at": (now + timedelta(seconds=OTP_TTL_SECONDS)).isoformat(),
+                  "created_at": now.isoformat(), "attempts": 0}},
+        upsert=True,
+    )
+    sent = await _send_otp_sms(display_phone, code)
+    resp = {"sent": sent, "dev_mode": not TWILIO_ENABLED}
+    if not TWILIO_ENABLED:
+        resp["dev_otp"] = code  # DEV ONLY — remove once real SMS is live
+    return resp
+
+
 @api.post("/auth/otp/request")
 async def request_otp(inp: OtpRequestInput):
     norm = _norm_phone(inp.phone)
@@ -870,26 +894,44 @@ async def request_otp(inp: OtpRequestInput):
     match = next((u for u in candidates if _norm_phone(u.get("phone", "")) == norm), None)
     if not match:
         raise HTTPException(status_code=404, detail="No account is registered with this mobile number")
+    return await _issue_otp(norm, inp.phone)
 
-    existing = await db.otp_codes.find_one({"phone": norm}, {"_id": 0})
-    if existing:
-        age = (datetime.now(timezone.utc) - datetime.fromisoformat(existing["created_at"])).total_seconds()
-        if age < OTP_RESEND_COOLDOWN:
-            raise HTTPException(status_code=429, detail=f"Please wait {int(OTP_RESEND_COOLDOWN - age)}s before requesting a new code")
 
-    code = f"{random.randint(0, 999999):06d}"
-    now = datetime.now(timezone.utc)
-    await db.otp_codes.update_one(
-        {"phone": norm},
-        {"$set": {"phone": norm, "code_hash": _hash_otp(code, norm),
-                  "expires_at": (now + timedelta(seconds=OTP_TTL_SECONDS)).isoformat(),
-                  "created_at": now.isoformat(), "attempts": 0}},
-        upsert=True,
-    )
-    sent = await _send_otp_sms(inp.phone, code)
-    resp = {"sent": sent, "dev_mode": not TWILIO_ENABLED}
-    if not TWILIO_ENABLED:
-        resp["dev_otp"] = code  # DEV ONLY — remove once Twilio is live
+def _mask_phone(phone: str) -> str:
+    d = re.sub(r"\D", "", phone or "")
+    return ("•••• " + d[-4:]) if len(d) >= 4 else "••••"
+
+
+@api.get("/auth/invite/{token}")
+async def invite_info(token: str):
+    """Public — resolve an invite link to a friendly welcome (no OTP sent yet)."""
+    user = await db.users.find_one({"invite_token": token}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="This invite link is invalid or has already been used")
+    exp = user.get("invite_expires_at")
+    if exp and datetime.now(timezone.utc) > datetime.fromisoformat(exp):
+        raise HTTPException(status_code=410, detail="This invite link has expired — ask your admin to resend")
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0, "name": 1})
+    return {"name": user.get("name"), "phone_masked": _mask_phone(user.get("phone", "")),
+            "company": (tenant or {}).get("name", "your workspace")}
+
+
+@api.post("/auth/invite/{token}/start")
+async def invite_start(token: str):
+    """Public — send the login OTP to the invited member's phone."""
+    user = await db.users.find_one({"invite_token": token}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="This invite link is invalid or has already been used")
+    exp = user.get("invite_expires_at")
+    if exp and datetime.now(timezone.utc) > datetime.fromisoformat(exp):
+        raise HTTPException(status_code=410, detail="This invite link has expired — ask your admin to resend")
+    phone = user.get("phone", "")
+    norm = _norm_phone(phone)
+    if len(norm) < 10:
+        raise HTTPException(status_code=400, detail="No mobile number on file for this invite")
+    resp = await _issue_otp(norm, phone, enforce_cooldown=False)
+    resp["phone"] = phone  # returned so the invitee's device can verify
+    resp["name"] = user.get("name")
     return resp
 
 
@@ -976,7 +1018,7 @@ async def add_invites(inp: InviteInput, user: dict = Depends(require_perm("team_
 # ---------------------------------------------------------------------------
 @api.get("/users")
 async def list_users(user: dict = Depends(get_current_user)):
-    users = await db.users.find({"tenant_id": user["tenant_id"]}, {"_id": 0, "password_hash": 0}).to_list(500)
+    users = await db.users.find({"tenant_id": user["tenant_id"]}, {"_id": 0, "password_hash": 0, "invite_token": 0, "invite_expires_at": 0}).to_list(500)
     return users
 
 
@@ -1000,15 +1042,39 @@ async def create_user(inp: UserCreateInput, user: dict = Depends(require_perm("t
             raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
         password_hash = hash_password(pwd)
     uid = new_id()
-    await db.users.insert_one({
+    invite_token = None
+    doc = {
         "id": uid, "tenant_id": user["tenant_id"], "name": inp.name, "email": email,
         "phone": phone, "passwordless": passwordless,
         "password_hash": password_hash, "role": inp.role,
         "permissions": clean_perms(inp.permissions), "created_at": now_iso(),
-    })
+    }
+    if len(_norm_phone(phone)) >= 10:
+        invite_token = new_id()
+        doc["invite_token"] = invite_token
+        doc["invite_expires_at"] = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+    await db.users.insert_one(doc)
     await log_activity(user["tenant_id"], user["id"], "user_added",
                        f"Added {inp.name} as {inp.role}" + (" (mobile OTP login)" if passwordless else ""))
-    return await db.users.find_one({"id": uid}, {"_id": 0, "password_hash": 0})
+    out = await db.users.find_one({"id": uid}, {"_id": 0, "password_hash": 0})
+    if invite_token:
+        out["invite_token"] = invite_token
+    return out
+
+
+@api.post("/users/{user_id}/invite")
+async def regenerate_invite(user_id: str, user: dict = Depends(require_perm("team_manage"))):
+    target = await db.users.find_one({"id": user_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
+    if not target:
+        raise HTTPException(status_code=404, detail="Member not found")
+    if len(_norm_phone(target.get("phone", ""))) < 10:
+        raise HTTPException(status_code=400, detail="Add a mobile number for this member first")
+    token = new_id()
+    await db.users.update_one({"id": user_id}, {"$set": {
+        "invite_token": token,
+        "invite_expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+    }})
+    return {"invite_token": token, "name": target.get("name"), "phone_masked": _mask_phone(target.get("phone", ""))}
 
 
 @api.patch("/users/{user_id}")

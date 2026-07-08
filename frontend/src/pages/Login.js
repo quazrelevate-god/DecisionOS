@@ -42,6 +42,7 @@ export default function Login() {
   const [otpPhone, setOtpPhone] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [otpSent, setOtpSent] = useState(false);
+  const [invite, setInvite] = useState(null);
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
     company_name: "", name: "", email: "", password: "", phone: "",
@@ -66,6 +67,26 @@ export default function Login() {
   const [aiProgress, setAiProgress] = useState(0);
 
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+
+  // Invite deep-link: /?invite=<token> — auto-switch to OTP and text the code.
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get("invite");
+    if (!token) return;
+    setMode("login"); setLoginTab("otp");
+    (async () => {
+      try {
+        const { data } = await api.get(`/auth/invite/${token}`);
+        setInvite({ ...data, token });
+        const start = await api.post(`/auth/invite/${token}/start`);
+        setOtpPhone(start.data.phone);
+        setOtpSent(true);
+        if (start.data.dev_otp) { setOtpCode(start.data.dev_otp); toast.info(`Dev OTP: ${start.data.dev_otp} (auto-filled)`); }
+        else toast.success("We texted a login code to your mobile");
+      } catch (err) {
+        setError(formatApiError(err.response?.data?.detail) || "This invite link is invalid or expired");
+      }
+    })();
+  }, []);
 
   const doLogin = async (e) => {
     e.preventDefault(); setError(""); setBusy(true);
@@ -256,6 +277,12 @@ export default function Login() {
 
               {loginTab === "otp" && (
                 <form onSubmit={otpSent ? submitOtp : requestOtp} className="space-y-4" data-testid="otp-form">
+                  {invite && (
+                    <div className="border border-black bg-brand-yellow/40 p-3" data-testid="invite-welcome">
+                      <p className="font-heading font-bold uppercase tracking-tight text-sm">Welcome, {invite.name}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">You've been invited to <strong>{invite.company}</strong>. Enter the code we sent to {invite.phone_masked} to sign in — no password needed.</p>
+                    </div>
+                  )}
                   <div className="flex gap-2">
                     <input data-testid="otp-phone-input" type="tel" className={inputCls} placeholder="Registered mobile number" value={otpPhone} onChange={(e) => setOtpPhone(e.target.value)} disabled={otpSent} required />
                     {otpSent && (

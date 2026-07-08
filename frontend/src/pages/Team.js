@@ -4,10 +4,38 @@ import api, { formatApiError } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { Chip } from "../components/common";import { PERMISSIONS, defaultPermsForRole, hasPerm, userPerms } from "../lib/perms";
 import { toast } from "sonner";
-import { UserPlus, PencilSimple, ShieldCheck, Check } from "@phosphor-icons/react";
+import { UserPlus, PencilSimple, ShieldCheck, Check, LinkSimple, Copy, WhatsappLogo } from "@phosphor-icons/react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../components/ui/dialog";
 
 const inp = "w-full border border-black px-3 py-2 text-sm font-mono focus:outline-none focus:shadow-brutal-sm";
+
+function InviteLinkModal({ info, onClose }) {
+  const link = info ? `${window.location.origin}/login?invite=${info.token}` : "";
+  const msg = info ? `You're invited to DecisionOS. Tap to sign in — we'll text you a login code: ${link}` : "";
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(link); toast.success("Invite link copied"); }
+    catch { toast.error("Couldn't copy — select and copy manually"); }
+  };
+  return (
+    <Dialog open={!!info} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="border border-black rounded-none" data-testid="invite-link-modal">
+        <DialogHeader><DialogTitle className="font-heading uppercase tracking-tight">Invite {info?.name}</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">Share this one-tap link. {info?.name} opens it and gets a login code texted to <strong>{info?.phone_masked}</strong> — no password needed.</p>
+          <div className="flex gap-2">
+            <input readOnly value={link} data-testid="invite-link-input" className={inp} onFocus={(e) => e.target.select()} />
+            <button onClick={copy} data-testid="copy-invite-link" className="flex items-center gap-1.5 border border-black px-3 text-xs font-semibold uppercase tracking-wider bg-brand-ink text-white hover:shadow-brutal-sm transition-all"><Copy size={14} weight="bold" /> Copy</button>
+          </div>
+          <a href={`https://wa.me/?text=${encodeURIComponent(msg)}`} target="_blank" rel="noreferrer" data-testid="invite-whatsapp-share"
+            className="flex items-center justify-center gap-2 border border-black px-4 py-2.5 text-sm font-semibold uppercase tracking-wider hover:bg-green-600 hover:text-white transition-colors">
+            <WhatsappLogo size={16} weight="bold" /> Share on WhatsApp
+          </a>
+          <p className="text-[11px] text-muted-foreground italic">Auto-SMS delivery starts once your SMS provider is connected — until then, share this link directly. Link expires in 7 days.</p>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 const MENU_PREVIEW = [
   { label: "Decision Desk", perm: "inbox" },
@@ -20,7 +48,7 @@ const MENU_PREVIEW = [
   { label: "Meeting Notes", perm: null },
 ];
 
-function MemberDialog({ trigger, initial, roleOptions, onSaved }) {
+function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite }) {
   const [open, setOpen] = useState(false);
   const blank = { name: "", email: "", password: "", phone: "", passwordless: false, role: roleOptions[0]?.key || "", permissions: defaultPermsForRole(roleOptions[0]?.key) };
   const [form, setForm] = useState(blank);
@@ -48,14 +76,21 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved }) {
         toast.success(`${initial.name}'s access updated`);
       } else {
         if (!form.name.trim() || !form.email.trim()) return toast.error("Name and email are required");
+        let res;
         if (form.passwordless) {
           if (form.phone.replace(/\D/g, "").length < 10) return toast.error("A valid mobile number is required for OTP login");
-          await api.post("/users", { name: form.name, email: form.email, role: form.role, permissions: form.permissions, phone: form.phone });
+          res = await api.post("/users", { name: form.name, email: form.email, role: form.role, permissions: form.permissions, phone: form.phone });
         } else {
           if (form.password.length < 6) return toast.error("Set a 6+ char password, or switch to mobile OTP login");
-          await api.post("/users", { name: form.name, email: form.email, password: form.password, role: form.role, permissions: form.permissions, phone: form.phone });
+          res = await api.post("/users", { name: form.name, email: form.email, password: form.password, role: form.role, permissions: form.permissions, phone: form.phone });
         }
         toast.success(`${form.name} added`);
+        setOpen(false); onSaved();
+        if (res?.data?.invite_token && onInvite) {
+          const d = form.phone.replace(/\D/g, "");
+          onInvite({ token: res.data.invite_token, name: form.name, phone_masked: d.length >= 4 ? "•••• " + d.slice(-4) : "••••" });
+        }
+        return;
       }
       setOpen(false); onSaved();
     } catch (e) {
@@ -139,6 +174,7 @@ export function TeamPanel() {
   const { user, tenant } = useAuth();
   const qc = useQueryClient();
   const roleOptions = tenant?.roles || [];
+  const [invite, setInvite] = useState(null);
   const { data } = useQuery({ queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data) });
   const { data: attendance } = useQuery({ queryKey: ["attendance"], queryFn: () => api.get("/attendance").then((r) => r.data) });
   const canManageTeam = hasPerm(user, "team_manage");
@@ -152,11 +188,21 @@ export function TeamPanel() {
     qc.invalidateQueries({ queryKey: ["attendance"] });
   };
 
+  const getInviteLink = async (u) => {
+    try {
+      const { data } = await api.post(`/users/${u.id}/invite`);
+      setInvite({ token: data.invite_token, name: data.name, phone_masked: data.phone_masked });
+    } catch (e) {
+      toast.error(formatApiError(e.response?.data?.detail) || "Couldn't create invite link");
+    }
+  };
+
   return (
     <div>
+      <InviteLinkModal info={invite} onClose={() => setInvite(null)} />
       {canManageTeam && (
         <div className="flex justify-end mb-6">
-          <MemberDialog roleOptions={roleOptions} onSaved={refresh}
+          <MemberDialog roleOptions={roleOptions} onSaved={refresh} onInvite={setInvite}
             trigger={<button data-testid="add-user-button" className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all"><UserPlus size={16} weight="bold" /> Add Member</button>} />
         </div>
       )}
@@ -184,6 +230,9 @@ export function TeamPanel() {
                 <>
                   <MemberDialog roleOptions={roleOptions} initial={u} onSaved={refresh}
                     trigger={<button data-testid={`edit-access-${u.id}`} className="flex items-center gap-1 text-xs uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-blue hover:text-white transition-colors"><PencilSimple size={12} weight="bold" /> Access</button>} />
+                  {u.phone && (
+                    <button onClick={() => getInviteLink(u)} data-testid={`invite-link-${u.id}`} className="flex items-center gap-1 text-xs uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-red hover:text-white transition-colors"><LinkSimple size={12} weight="bold" /> Invite</button>
+                  )}
                   <button onClick={() => toggleAbsent(u)} data-testid={`toggle-absent-${u.id}`} className="text-xs uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-ink hover:text-white transition-colors">
                     {absentIds.has(u.id) ? "Mark present" : "Mark absent"}
                   </button>

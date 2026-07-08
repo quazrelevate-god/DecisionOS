@@ -22,6 +22,7 @@ import {
   SignOut,
   EnvelopeSimple,
   Bell,
+  Buildings,
   Sun,
   Briefcase,
   MicrophoneStage,
@@ -81,6 +82,15 @@ export default function Layout({ children }) {
         </span>
       )}
     </button>
+  );
+
+  const ProfileButton = () => (
+    <CompanyDialog trigger={
+      <button data-testid="company-profile-button" title="Company details"
+        className="w-10 h-10 flex items-center justify-center border border-black hover:bg-brand-ink hover:text-white transition-colors">
+        <Buildings size={18} weight="bold" />
+      </button>
+    } />
   );
 
   const doLogout = () => {
@@ -178,16 +188,23 @@ export default function Layout({ children }) {
               >
                 <EnvelopeSimple size={16} weight="bold" /> Send Daily Digest
               </button>
+              <ProfileButton />
               <Bellicon />
             </div>
           )}
-          {user?.role !== "owner" && <Bellicon />}
+          {user?.role !== "owner" && (
+            <div className="flex items-center gap-3">
+              <ProfileButton />
+              <Bellicon />
+            </div>
+          )}
         </header>
 
         {/* Mobile top app bar */}
         <header className="lg:hidden h-14 border-b border-black bg-white flex items-center justify-between px-4 sticky top-0 z-20">
           <Logo />
           <div className="flex items-center gap-2">
+            <ProfileButton />
             <Bellicon />
             <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
             <SheetTrigger asChild>

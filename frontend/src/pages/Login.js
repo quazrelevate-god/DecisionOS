@@ -69,9 +69,11 @@ export default function Login() {
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
   // Invite deep-link: /?invite=<token> — auto-switch to OTP and text the code.
+  const inviteStarted = useRef(false);
   useEffect(() => {
     const token = new URLSearchParams(window.location.search).get("invite");
-    if (!token) return;
+    if (!token || inviteStarted.current) return;
+    inviteStarted.current = true;
     setMode("login"); setLoginTab("otp");
     (async () => {
       try {

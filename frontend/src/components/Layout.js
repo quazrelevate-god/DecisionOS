@@ -17,14 +17,12 @@ import {
   Brain as BrainIcon,
   ChatCircleText,
   Kanban,
-  UsersThree,
   AddressBook,
   SignOut,
   EnvelopeSimple,
   Bell,
   Sun,
   Briefcase,
-  Sparkle,
   MicrophoneStage,
   Gauge as GaugeIcon,
   Barbell,
@@ -40,12 +38,10 @@ const NAV = [
   { to: "/ingest", label: "Capture", icon: FileArrowUp, testid: "nav-ingest", perm: "data_input" },
   { to: "/workflows", label: "Workflows", icon: Kanban, testid: "nav-workflows", perm: "workflows" },
   { to: "/contacts", label: "People", icon: AddressBook, testid: "nav-contacts", perm: "people" },
-  { to: "/priorities", label: "Priorities", icon: Sparkle, testid: "nav-priorities", perm: "tasks" },
   { to: "/my-work", label: "My Work", icon: Briefcase, testid: "nav-my-work" },
   { to: "/coach", label: "Work Coach", icon: Barbell, testid: "nav-coach" },
   { to: "/meetings", label: "Meeting Notes", icon: MicrophoneStage, testid: "nav-meetings" },
   { to: "/brain", label: "Company Brain", icon: BrainIcon, testid: "nav-brain", perm: "brain" },
-  { to: "/team", label: "Team", icon: UsersThree, testid: "nav-team", perm: "team_manage" },
 ];
 
 // Primary items for the mobile bottom tab bar

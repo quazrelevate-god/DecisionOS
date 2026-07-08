@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
-import { PageHeader, Chip, EmptyState } from "../components/common";
+import { Chip, EmptyState } from "../components/common";
 import { toast } from "sonner";
 import { Plus, MagnifyingGlass, PencilSimple, Trash, Phone, EnvelopeSimple, MapPin, Warning, Eye } from "@phosphor-icons/react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../components/ui/dialog";
@@ -48,9 +48,9 @@ function ComplaintDialog({ contact, onSaved }) {
   );
 }
 
-function ContactDialog({ trigger, initial, onSaved, users }) {
+function ContactDialog({ trigger, initial, onSaved, users, defaultType }) {
   const [open, setOpen] = useState(false);
-  const blank = { type: "customer", name: "", company: "", phone: "", email: "", address: "", tax_id: "", tags: "", status: "lead", assigned_id: "", notes: "", birthday: "" };
+  const blank = { type: defaultType || "customer", name: "", company: "", phone: "", email: "", address: "", tax_id: "", tags: "", status: "lead", assigned_id: "", notes: "", birthday: "" };
   const [form, setForm] = useState(blank);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
@@ -127,23 +127,23 @@ function ContactDialog({ trigger, initial, onSaved, users }) {
   );
 }
 
-export default function Contacts() {
+export function ContactsPanel({ types, addLabel = "Add Contact" }) {
   const { user } = useAuth();
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const [type, setType] = useState("");
   const [status, setStatus] = useState("");
   const [q, setQ] = useState("");
   const canManage = user?.role === "owner" || user?.role === "sales";
   const can360 = hasPerm(user, "finance");
 
   const { data } = useQuery({
-    queryKey: ["contacts", type, status, q],
-    queryFn: () => api.get(`/contacts?type=${type}&status=${status}&q=${encodeURIComponent(q)}`).then((r) => r.data),
+    queryKey: ["contacts", status, q],
+    queryFn: () => api.get(`/contacts?type=&status=${status}&q=${encodeURIComponent(q)}`).then((r) => r.data),
   });
   const { data: users } = useQuery({ queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data) });
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["contacts"] });
+  const contacts = (data || []).filter((c) => types.includes(c.type));
 
   const remove = async (id) => {
     try {
@@ -159,40 +159,33 @@ export default function Contacts() {
 
   return (
     <div>
-      <PageHeader eyebrow="Customers & vendors" title="Contacts">
-        {canManage && (
-          <ContactDialog
-            users={users}
-            onSaved={refresh}
-            trigger={
-              <button data-testid="add-contact-button" className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
-                <Plus size={16} weight="bold" /> Add Contact
-              </button>
-            }
-          />
-        )}
-      </PageHeader>
-
-      {/* Filters */}
-      <div className="flex flex-wrap gap-2 mb-6">
+      <div className="flex flex-wrap items-center gap-2 mb-6">
         <div className="flex items-center border border-black bg-white px-3 flex-1 min-w-[200px]">
           <MagnifyingGlass size={16} weight="bold" className="text-muted-foreground" />
           <input data-testid="contact-search-input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, company, phone, email…" className="flex-1 py-2 px-2 text-sm font-mono focus:outline-none" />
         </div>
-        <select data-testid="contact-type-filter" value={type} onChange={(e) => setType(e.target.value)} className={selectCls}>
-          <option value="">All types</option>
-          {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-        </select>
         <select data-testid="contact-status-filter" value={status} onChange={(e) => setStatus(e.target.value)} className={selectCls}>
           <option value="">All statuses</option>
           {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
+        {canManage && (
+          <ContactDialog
+            users={users}
+            defaultType={types[0]}
+            onSaved={refresh}
+            trigger={
+              <button data-testid="add-contact-button" className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
+                <Plus size={16} weight="bold" /> {addLabel}
+              </button>
+            }
+          />
+        )}
       </div>
 
-      {(data || []).length === 0 && <EmptyState title="No contacts yet" hint={canManage ? "Add your first customer or vendor." : "No contacts match your filters."} />}
+      {contacts.length === 0 && <EmptyState title="Nobody here yet" hint={canManage ? "Add your first record." : "No records match your filters."} />}
 
       <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {(data || []).map((c) => (
+        {contacts.map((c) => (
           <div key={c.id} data-testid={`contact-card-${c.id}`} className="card-brutal p-5 shadow-hover">
             <div className="flex items-start justify-between gap-2 mb-2">
               <div className="flex items-center gap-2">

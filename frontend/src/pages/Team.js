@@ -2,8 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api, { formatApiError } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-import { PageHeader, Chip } from "../components/common";
-import { PERMISSIONS, defaultPermsForRole, hasPerm, userPerms } from "../lib/perms";
+import { Chip } from "../components/common";import { PERMISSIONS, defaultPermsForRole, hasPerm, userPerms } from "../lib/perms";
 import { toast } from "sonner";
 import { UserPlus, Buildings, Package, PencilSimple, ShieldCheck, Check } from "@phosphor-icons/react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../components/ui/dialog";
@@ -91,7 +90,7 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved }) {
   );
 }
 
-export default function Team() {
+export function TeamPanel() {
   const { user, tenant } = useAuth();
   const qc = useQueryClient();
   const roleOptions = tenant?.roles || [];
@@ -110,12 +109,12 @@ export default function Team() {
 
   return (
     <div>
-      <PageHeader eyebrow="Roles & access control" title="Team">
-        {canManageTeam && (
+      {canManageTeam && (
+        <div className="flex justify-end mb-6">
           <MemberDialog roleOptions={roleOptions} onSaved={refresh}
             trigger={<button data-testid="add-user-button" className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all"><UserPlus size={16} weight="bold" /> Add Member</button>} />
-        )}
-      </PageHeader>
+        </div>
+      )}
 
       {/* Company profile */}
       <div className="grid lg:grid-cols-3 gap-6 mb-8">

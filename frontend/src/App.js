@@ -8,15 +8,13 @@ import Login from "./pages/Login";
 import Inbox from "./pages/Inbox";
 import Workflows from "./pages/Workflows";
 import Brain from "./pages/Brain";
-import Team from "./pages/Team";
-import Contacts from "./pages/Contacts";
+import People from "./pages/People";
 import CEOBrief from "./pages/CEOBrief";
 import Notifications from "./pages/Notifications";
 import MyWork from "./pages/MyWork";
 import Ingest from "./pages/Ingest";
 import ContactProfile from "./pages/ContactProfile";
 import Journal from "./pages/Journal";
-import Priorities from "./pages/Priorities";
 import Calendar from "./pages/Calendar";
 import Meetings from "./pages/Meetings";
 import OperatingScore from "./pages/OperatingScore";
@@ -49,18 +47,18 @@ function App() {
             <Route path="/notifications" element={<Protected><Notifications /></Protected>} />
             <Route path="/inbox" element={<Protected><Inbox /></Protected>} />
             <Route path="/workflows" element={<Protected><Workflows /></Protected>} />
-            <Route path="/contacts" element={<Protected><Contacts /></Protected>} />
+            <Route path="/contacts" element={<Protected><People /></Protected>} />
             <Route path="/contacts/:id" element={<Protected><ContactProfile /></Protected>} />
             <Route path="/ingest" element={<Protected><Ingest /></Protected>} />
             <Route path="/tasks" element={<Navigate to="/my-work" replace />} />
-            <Route path="/priorities" element={<Protected><Priorities /></Protected>} />
+            <Route path="/priorities" element={<Navigate to="/my-work" replace />} />
             <Route path="/calendar" element={<Protected><Calendar /></Protected>} />
             <Route path="/meetings" element={<Protected><Meetings /></Protected>} />
             <Route path="/operating-score" element={<Protected><OperatingScore /></Protected>} />
             <Route path="/coach" element={<Protected><WorkCoach /></Protected>} />
             <Route path="/brain" element={<Protected><Brain /></Protected>} />
             <Route path="/ask" element={<Navigate to="/brain" replace />} />
-            <Route path="/team" element={<Protected><Team /></Protected>} />
+            <Route path="/team" element={<Navigate to="/contacts" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>

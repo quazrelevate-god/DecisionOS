@@ -315,7 +315,39 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
   );
 }
 
-function TaskCard({ t, onChange, members = [], roleOptions = [] }) {
+const PRIORITY_AXES = [
+  { key: "business_impact", label: "Impact", color: "bg-brand-blue" },
+  { key: "revenue", label: "Revenue", color: "bg-green-600" },
+  { key: "risk", label: "Risk", color: "bg-brand-red" },
+  { key: "urgency", label: "Urgency", color: "bg-orange-500" },
+];
+
+function PriorityScoreBars({ scores }) {
+  return (
+    <div className="mt-3 border border-black/15 bg-black/[0.02] p-3" data-testid="priority-score-bars">
+      <div className="flex items-center justify-between mb-2">
+        <span className="label-mono text-muted-foreground flex items-center gap-1"><Sparkle size={12} weight="bold" className="text-brand-red" /> AI Priority</span>
+        {scores.priority_score != null && (
+          <span className="font-heading font-black text-lg leading-none" data-testid="priority-score-value">{scores.priority_score}</span>
+        )}
+      </div>
+      <div className="space-y-1.5">
+        {PRIORITY_AXES.map((a) => (
+          <div key={a.key} className="flex items-center gap-2" data-testid={`axis-${a.key}`}>
+            <span className="label-mono w-16 shrink-0 text-muted-foreground">{a.label}</span>
+            <div className="flex-1 h-2 bg-black/10 border border-black/20">
+              <div className={`h-full ${a.color}`} style={{ width: `${scores[a.key] || 0}%` }} />
+            </div>
+            <span className="label-mono w-7 text-right">{scores[a.key] || 0}</span>
+          </div>
+        ))}
+      </div>
+      {scores.reason && <p className="text-xs text-muted-foreground mt-2 italic">{scores.reason}</p>}
+    </div>
+  );
+}
+
+function TaskCard({ t, onChange, members = [], roleOptions = [], scores }) {
   const [uploading, setUploading] = useState(false);
   const [recording, setRecording] = useState(false);
   const fileRef = useRef(null);
@@ -380,6 +412,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [] }) {
         <Chip value={t.priority} />
       </div>
       {t.description && <p className="text-sm text-muted-foreground mt-1">{t.description}</p>}
+      {scores && <PriorityScoreBars scores={scores} />}
       <div className="flex items-center gap-1.5 mt-3">
         <Chip value={t.status} />
         {t.source === "escalation" && <span data-testid={`badge-escalation-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-black bg-brand-red text-white">Escalation</span>}
@@ -422,9 +455,11 @@ export default function MyWork() {
   const qc = useQueryClient();
   const { tenant } = useAuth();
   const [view, setView] = useState("mywork");
+  const [aiPriority, setAiPriority] = useState(false);
   const tasksQ = useQuery({ queryKey: ["tasks", true], queryFn: () => api.get("/tasks?mine=true").then((r) => r.data) });
   const notifQ = useQuery({ queryKey: ["notifications"], queryFn: () => api.get("/notifications").then((r) => r.data) });
   const usersQ = useQuery({ queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data) });
+  const prioritiesQ = useQuery({ queryKey: ["priorities"], queryFn: () => api.post("/tasks/prioritize").then((r) => r.data), enabled: aiPriority });
   const members = usersQ.data || [];
   const roleOptions = [{ key: "owner", label: "Owner" }, ...(tenant?.roles || [])];
 
@@ -433,21 +468,36 @@ export default function MyWork() {
     qc.invalidateQueries({ queryKey: ["notifications"] });
   };
 
-  const open = (tasksQ.data || []).filter((t) => t.status !== "done");
+  const scoreMap = {};
+  (prioritiesQ.data?.tasks || []).forEach((pt) => { if (pt.ai_scores) scoreMap[pt.id] = pt.ai_scores; });
+  const scoring = aiPriority && prioritiesQ.isFetching && !prioritiesQ.data;
+
+  let open = (tasksQ.data || []).filter((t) => t.status !== "done");
+  if (aiPriority) {
+    open = [...open].sort((a, b) => (scoreMap[b.id]?.priority_score || 0) - (scoreMap[a.id]?.priority_score || 0));
+  }
   const done = (tasksQ.data || []).filter((t) => t.status === "done");
 
   return (
     <div>
       <PageHeader eyebrow="Your day, simplified" title="My Work">
-        <div className="flex border border-black" data-testid="work-view-toggle">
-          <button onClick={() => setView("mywork")} data-testid="work-view-mywork"
-            className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border-r border-black transition-colors ${view === "mywork" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
-            <ListIcon size={16} weight="bold" /> My Work
-          </button>
-          <button onClick={() => setView("board")} data-testid="work-view-board"
-            className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider transition-colors ${view === "board" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
-            <Kanban size={16} weight="bold" /> Board
-          </button>
+        <div className="flex items-center gap-3 flex-wrap">
+          {view === "mywork" && (
+            <button onClick={() => setAiPriority((v) => !v)} data-testid="ai-priority-toggle"
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black transition-all ${aiPriority ? "bg-brand-red text-white shadow-brutal-sm" : "bg-brand-yellow hover:shadow-brutal-sm"}`}>
+              <Sparkle size={16} weight="bold" /> {scoring ? "Scoring…" : aiPriority ? "AI Priority: On" : "AI Priority"}
+            </button>
+          )}
+          <div className="flex border border-black" data-testid="work-view-toggle">
+            <button onClick={() => setView("mywork")} data-testid="work-view-mywork"
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border-r border-black transition-colors ${view === "mywork" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+              <ListIcon size={16} weight="bold" /> My Work
+            </button>
+            <button onClick={() => setView("board")} data-testid="work-view-board"
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider transition-colors ${view === "board" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+              <Kanban size={16} weight="bold" /> Board
+            </button>
+          </div>
         </div>
       </PageHeader>
 
@@ -456,10 +506,12 @@ export default function MyWork() {
       ) : (
       <div className="grid lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2">
-          <h2 className="font-heading text-2xl font-extrabold uppercase tracking-tight mb-4">My Tasks</h2>
+          <h2 className="font-heading text-2xl font-extrabold uppercase tracking-tight mb-4">
+            {aiPriority ? "My Tasks — Priority Line" : "My Tasks"}
+          </h2>
           {open.length === 0 && <EmptyState title="Nothing pending" hint="You're all caught up!" />}
           <div className="space-y-4">
-            {open.map((t) => <TaskCard key={t.id} t={t} onChange={refresh} members={members} roleOptions={roleOptions} />)}
+            {open.map((t) => <TaskCard key={t.id} t={t} onChange={refresh} members={members} roleOptions={roleOptions} scores={aiPriority ? scoreMap[t.id] : undefined} />)}
           </div>
           {done.length > 0 && (
             <>

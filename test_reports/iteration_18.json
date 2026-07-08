@@ -1,0 +1,54 @@
+{
+  "summary": "Iteration 18 — Full-stack pass on Phase 1 (CEO Journal + Decision Timeline) and Phase 2 (AI Task Prioritization). Backend: 18/18 iter18 pytest green (17 pass + 1 skip [expected: needs multi-event decision]) + 38/38 backend_test.py regression = 55/55 total. Frontend: Journal loads 5 day sections / 80 decision cards, timeline dialog opens with 2+ events (verified 'created' + 'rejected' kinds), search 'payment' correctly filters to 3 day sections, /priorities renders 25 AI-ranked tasks with priority-score chips (top=88) + all 4 axis bars per task, Re-prioritize button wired. Caching verified via API (second call scored=0). New voice-created decisions receive a 'created' timeline event; approve pushes 'approved' (+ 'assigned' per task), reject pushes 'rejected'. Task PATCH still emits 'task' timeline events on decision.timeline.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Priorities initial load",
+        "issue": "Priorities.js:35 uses `onSuccess` inside useQuery — React Query v5 (installed: 5.56.2) removed useQuery.onSuccess callback, so `setRanked(d.tasks)` from the initial query never fires. UI still renders correctly because of the `ranked || data?.tasks` fallback, but the local state is dead. Refactor: remove the onSuccess or replace with `useEffect(() => setRanked(data?.tasks), [data])`. In practice: the only side-effect this had would be if `ranked` was ever reset to null while data still exists — currently unreachable, so this is a latent code-smell, not a user-visible bug.",
+        "affected_selectors": ["[data-testid=\"priorities-list\"]"]
+      }
+    ],
+    "design_issues": [
+      {
+        "screen": "TimelineDialog (Journal)",
+        "issues": ["A11y warning in console: 'Missing Description or aria-describedby={undefined} for {DialogContent}'. Radix Dialog expects a DialogDescription for screen readers. Add a visually-hidden description or aria-describedby."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration18.py",
+    "/app/test_reports/pytest/iteration18.xml"
+  ],
+  "action_items": [
+    "Optional: refactor Priorities.js:35 to remove the dead `onSuccess` (React Query v5 no-op) — replace with useEffect that syncs `ranked` from `data`.",
+    "Optional: add DialogDescription (or aria-describedby={undefined}-suppressor) to TimelineDialog in Journal.js to silence the Radix a11y warning."
+  ],
+  "critical_code_review_comments": [
+    "server.py:1064-1087 prioritize_tasks — the outer loop `for i in range(0, len(todo), 25)` chunks in 25s BUT the tasks list was already capped at `limit` (default 25) by the DB query on line 1069, so the chunking is effectively single-shot. If limit is raised >25 in the future this correctly batches; keep the safety cap in mind.",
+    "server.py:1077-1084 — after ai_score_tasks returns, the code walks the FULL `open_tasks` list (not `chunk`) to attach scores. Correct but slightly wasteful — you'll iterate the same list N/25 times. For today's cap=25 it's fine.",
+    "server.py:928-944 ceo_journal — `q.split()` splits on whitespace only; multi-word queries build a token OR-regex from tokens ≥2 chars. Consider quoting/escaping already handled via re.escape (line 931) — good.",
+    "server.py:918-925 decision_timeline — reads `timeline` field from doc; if the decision was created BEFORE the timeline feature landed (older seed data), the field may be missing and returns []. Current behaviour is graceful (empty list). Consider a lightweight backfill migration so old approved decisions get a synthetic 'created' event.",
+    "server.py:549 timeline seeded ONLY on voice-notes-created decisions. Any code path that inserts a decision directly (e.g. future manual /decisions POST) will miss the 'created' event. Consider centralising decision-creation through a helper that seeds timeline + inbox item + activity in one place.",
+    "server.py file is 2382 lines — same feedback as iter17. Route explosion — split into routers (journal_router, tasks_router, decisions_router...).",
+    "Priorities.js — no loading state while `rerank.isPending` beyond the button text change. On a fresh force re-score (~30s) users see the OLD ranked list unchanged and only the button says 'Scoring…'. Consider dimming the list or adding a subtle progress indicator.",
+    "Priorities.js — score display shows raw `s.priority_score` but if a task has no ai_scores at all it renders '—' (line 78). Cached-only prioritize response returns a mix; those unscored tasks land at the bottom (priority_score defaulted to -1 in sort) — good UX."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration18.py (new — 18 tests across TestJournal, TestDecisionTimeline, TestPrioritize, TestRegression)"
+  ],
+  "success_rate": {
+    "backend": "100% (17 pass / 1 skip on multi-event timeline sort — insufficient historical data — 0 fail) + 38/38 backend_test regression",
+    "frontend": "100% on Journal + Timeline + Priorities flows"
+  },
+  "test_credentials": "owner@sharma.com / demo1234 (from /app/memory/test_credentials.md).",
+  "seed_data_creation": "3 voice-notes created in Sharma tenant (TEST_iter18*, TEST_iter18_approve, TEST_iter18_reject) → 3 decisions + a handful of blocked tasks. 1 manual regression task (TEST_iter18_regression_task) created, moved through in_progress→done. Non-destructive; blocked/done tasks won't clutter active boards. The prioritize test triggered cached score writes on up to 25 open tasks (durable — persists as ai_scores field on task docs). No hard cleanup needed but next tester can delete by title prefix if desired.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iter18 verified end-to-end: (1) GET /api/journal — brain-perm gated, returns {days:[{date, decisions[], notes[]}]} DESC-sorted, `?q=<token>` filters via case-insensitive regex OR over decision.title/summary and memory.text. (2) GET /api/decisions/{id}/timeline — returns {title,status,timeline[{ts,label,actor,kind}]} sorted by ts. Timeline events written by add_decision_event(server.py:318). (3) POST /api/tasks/prioritize [?force=true&?limit=N] — scores up to 25 open tasks via ai_score_tasks (LLM call ~25-30s for a full batch of 25). Response {tasks:[...ai_scores:{business_impact,revenue,risk,urgency,priority_score,reason}...], scored:N}. Cached on task doc (`ai_scores`, `scored_at`) — second call scored=0, instant. (4) Approve/reject push timeline events (approved/rejected + assigned-per-task). (5) Task PATCH with status change on a task with decision_id also pushes a 'task' timeline event. Frontend: Journal.js + Priorities.js both wired via api client on `/api` base, useQuery keys ['journal', term] and ['priorities']. All expected data-testids present: nav-journal, nav-priorities, journal-day-*, journal-decision-*, journal-search-input, journal-search-btn, timeline-dialog, timeline-event-*, priorities-list, priority-task-*, priority-score-*, reprioritize-btn, score-impact/revenue/risk/urgency. Only latent code-smell: Priorities.js:35 dead `onSuccess` on useQuery (v5 no-op, harmless). Only a11y issue: TimelineDialog missing DialogDescription (Radix warning).",
+  "rca of the issue": "N/A — this was a feature verification pass, no bug hunted. Contract verified: (a) journal groups decisions+memory by created_at[:10], sorts DESC; (b) timeline events are $push'ed onto decision.timeline array by add_decision_event helper, called from approve_decision, reject_decision, and update_task (when status changes on a task tied to a decision); (c) prioritize caches by writing ai_scores + scored_at back to task doc atomically inside the same loop, so subsequent calls without force skip anything already scored."
+}

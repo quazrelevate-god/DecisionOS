@@ -403,6 +403,58 @@ async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[l
     return data
 
 
+async def ai_score_tasks(tasks: list, currency: str, session_id: str) -> dict:
+    """Score open tasks on 4 axes (0-100) + a blended priority score. Returns {task_id: scores}."""
+    if not tasks:
+        return {}
+    today = datetime.now(timezone.utc).date().isoformat()
+    lines = []
+    for t in tasks:
+        lines.append({
+            "id": t["id"], "title": t.get("title", ""), "description": (t.get("description") or "")[:200],
+            "priority": t.get("priority", "medium"), "due_date": (t.get("due_date") or "")[:10],
+            "assignee_role": t.get("assignee_role") or "unassigned", "status": t.get("status"),
+        })
+    system = (
+        "You are the prioritization engine of DecisionOS, an operating brain for a small business. "
+        f"Today is {today}. Currency is {currency}. "
+        "For EACH task, rate 0-100 on four axes: "
+        "business_impact (effect on operations/customers), revenue (direct money at stake / upside), "
+        "risk (cost of NOT doing it — penalties, churn, compliance), and urgency (time pressure vs due date). "
+        "Then give a blended priority_score 0-100 (higher = do sooner) and a one-line reason. "
+        "Return ONLY valid JSON: {\"scores\":[{\"id\":string,\"business_impact\":int,\"revenue\":int,"
+        "\"risk\":int,\"urgency\":int,\"priority_score\":int,\"reason\":string}]}. "
+        "Include every task id exactly once."
+    )
+    prompt = "Tasks:\n" + json.dumps(lines, ensure_ascii=False) + "\nScore them now."
+    chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=session_id, system_message=system).with_model(*LLM_MODEL)
+    resp = await chat.send_message(UserMessage(text=prompt))
+    out = {}
+    try:
+        data = _extract_json(resp)
+        for s in data.get("scores", []):
+            tid = s.get("id")
+            if not tid:
+                continue
+            def clamp(v):
+                try:
+                    return max(0, min(100, int(round(float(v)))))
+                except Exception:
+                    return 0
+            out[tid] = {
+                "business_impact": clamp(s.get("business_impact")),
+                "revenue": clamp(s.get("revenue")),
+                "risk": clamp(s.get("risk")),
+                "urgency": clamp(s.get("urgency")),
+                "priority_score": clamp(s.get("priority_score")),
+                "reason": str(s.get("reason") or "")[:200],
+            }
+    except Exception as e:
+        logger.error(f"AI score parse error: {e} :: {resp[:300]}")
+    return out
+
+
+
 async def transcribe_audio(path: str, language: str = "auto") -> str:
     stt = OpenAISpeechToText(api_key=EMERGENT_LLM_KEY)
     kwargs = {"model": "whisper-1", "response_format": "json"}
@@ -1007,6 +1059,33 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
             await log_activity(user["tenant_id"], user["id"], "task_assigned",
                                f"Assigned '{t['title']}' to {(member or {}).get('name', 'a member')}", "task", task_id)
     return await enrich_task(await db.tasks.find_one({"id": task_id}, {"_id": 0}))
+
+
+@api.post("/tasks/prioritize")
+async def prioritize_tasks(force: bool = False, limit: int = 25, user: dict = Depends(get_current_user)):
+    tid = user["tenant_id"]
+    open_tasks = await db.tasks.find(
+        {"tenant_id": tid, "status": {"$in": ["todo", "in_progress", "blocked"]}}, {"_id": 0}
+    ).sort("created_at", -1).to_list(limit)
+    todo = [t for t in open_tasks if force or not t.get("ai_scores")]
+    scored_n = 0
+    if todo:
+        currency = await _tenant_currency(tid)
+        now = now_iso()
+        for i in range(0, len(todo), 25):
+            chunk = todo[i:i + 25]
+            scores = await ai_score_tasks(chunk, currency, session_id=f"prioritize-{tid}-{i}")
+            for t in open_tasks:
+                s = scores.get(t["id"])
+                if s:
+                    t["ai_scores"] = s
+                    t["scored_at"] = now
+                    scored_n += 1
+                    await db.tasks.update_one({"id": t["id"]}, {"$set": {"ai_scores": s, "scored_at": now}})
+    open_tasks = await enrich_tasks(open_tasks)
+    open_tasks.sort(key=lambda t: (t.get("ai_scores") or {}).get("priority_score", -1), reverse=True)
+    return {"tasks": open_tasks, "scored": scored_n}
+
 
 
 # ---------------------------------------------------------------------------

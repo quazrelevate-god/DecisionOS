@@ -18,6 +18,8 @@ import Notifications from "./pages/Notifications";
 import MyWork from "./pages/MyWork";
 import Ingest from "./pages/Ingest";
 import ContactProfile from "./pages/ContactProfile";
+import Journal from "./pages/Journal";
+import Priorities from "./pages/Priorities";
 
 function Protected({ children }) {
   const { user, loading } = useAuth();
@@ -41,6 +43,7 @@ function App() {
             <Route path="/" element={<Protected><Inbox /></Protected>} />
             <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
             <Route path="/brief" element={<Protected><CEOBrief /></Protected>} />
+            <Route path="/journal" element={<Protected><Journal /></Protected>} />
             <Route path="/my-work" element={<Protected><MyWork /></Protected>} />
             <Route path="/notifications" element={<Protected><Notifications /></Protected>} />
             <Route path="/inbox" element={<Protected><Inbox /></Protected>} />
@@ -49,6 +52,7 @@ function App() {
             <Route path="/contacts/:id" element={<Protected><ContactProfile /></Protected>} />
             <Route path="/ingest" element={<Protected><Ingest /></Protected>} />
             <Route path="/tasks" element={<Protected><Tasks /></Protected>} />
+            <Route path="/priorities" element={<Protected><Priorities /></Protected>} />
             <Route path="/brain" element={<Protected><Brain /></Protected>} />
             <Route path="/ask" element={<Protected><AskAI /></Protected>} />
             <Route path="/team" element={<Protected><Team /></Protected>} />

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
@@ -14,7 +14,7 @@ import {
   WarningCircle, ArrowBendUpRight,
 } from "@phosphor-icons/react";
 
-function EscalationCard({ t, onRespond }) {
+function EscalationCard({ t, onRespond, highlight }) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const isEsc = t.source === "escalation";
@@ -31,7 +31,7 @@ function EscalationCard({ t, onRespond }) {
   };
 
   return (
-    <div data-testid={`escalation-card-${t.id}`} className="card-brutal p-5">
+    <div data-testid={`escalation-card-${t.id}`} className={`card-brutal p-5 transition-all ${highlight ? "ring-4 ring-brand-red ring-offset-2" : ""}`}>
       <div className="flex items-center gap-1.5 flex-wrap mb-2">
         <span data-testid={`escalation-badge-${t.id}`}
           className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-black ${isEsc ? "bg-brand-red text-white" : "bg-brand-blue text-white"}`}>
@@ -63,7 +63,7 @@ function EscalationCard({ t, onRespond }) {
   );
 }
 
-function PendingApprovalCard({ d, members, roleOptions, onApprove, onReject, onRefresh }) {
+function PendingApprovalCard({ d, members, roleOptions, onApprove, onReject, onRefresh, highlight }) {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ title: "", assignee_id: "", assignee_role: "", priority: "medium" });
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -87,7 +87,7 @@ function PendingApprovalCard({ d, members, roleOptions, onApprove, onReject, onR
   };
 
   return (
-    <div data-testid={`decision-card-${d.id}`} className="card-brutal p-5">
+    <div data-testid={`decision-card-${d.id}`} className={`card-brutal p-5 transition-all ${highlight ? "ring-4 ring-brand-red ring-offset-2" : ""}`}>
       <div className="flex items-center gap-1.5 flex-wrap mb-2">
         <Chip value={d.status} data-testid={`decision-status-${d.id}`} />
         {d.dtype && <Chip value={d.dtype} className="bg-brand-blue text-white" />}
@@ -305,6 +305,29 @@ export default function Inbox() {
   const pending = (decisionsQ.data || []).filter((d) => d.status === "pending_approval");
   const escalations = (myTasksQ.data || []).filter((t) => (t.source === "escalation" || t.source === "handoff") && t.status !== "done");
 
+  // Deep-link from CEO Brief: ?focus=approval:<id> or attention:<id> — scroll to & highlight the card.
+  const [params, setParams] = useSearchParams();
+  const focus = params.get("focus");
+  const [highlightId, setHighlightId] = useState(null);
+  const dataReady = (decisionsQ.data || myTasksQ.data) ? true : false;
+  useEffect(() => {
+    if (!focus) return;
+    const [type, id] = focus.split(":");
+    const testid = type === "approval" ? `decision-card-${id}` : type === "attention" ? `escalation-card-${id}` : null;
+    if (!testid) return;
+    const timer = setTimeout(() => {
+      const el = document.querySelector(`[data-testid="${testid}"]`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        setHighlightId(id);
+        setParams({}, { replace: true });
+        setTimeout(() => setHighlightId(null), 3500);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus, dataReady]);
+
   return (
     <div>
       <PageHeader eyebrow="Your day in one place" title="Inbox">
@@ -395,6 +418,7 @@ export default function Inbox() {
                 onApprove={(id) => decide(id, "approve")}
                 onReject={(id) => decide(id, "reject")}
                 onRefresh={refresh}
+                highlight={highlightId === d.id}
               />
             ))}
           </div>
@@ -410,7 +434,7 @@ export default function Inbox() {
           </h2>
           <div className="grid md:grid-cols-2 gap-4">
             {escalations.map((t) => (
-              <EscalationCard key={t.id} t={t} onRespond={respondEscalation} />
+              <EscalationCard key={t.id} t={t} onRespond={respondEscalation} highlight={highlightId === t.id} />
             ))}
           </div>
         </div>

@@ -2248,6 +2248,7 @@ async def ceo_brief(period: str = "morning", user: dict = Depends(get_current_us
     absent = await db.attendance.count_documents({"tenant_id": tid, "date": today, "status": "absent"})
     complaints = await db.complaints.count_documents({"tenant_id": tid, "status": "open"})
     payment_overdue = await db.workflows.count_documents({"tenant_id": tid, "type": "purchase_payment", "stage": "payment_pending"})
+    fires = await db.tasks.count_documents({"tenant_id": tid, "source": "escalation", "status": {"$ne": "done"}})
     greet = "Good morning" if period in ("morning", "weekly", "monthly") else "Good evening"
     return {
         "period": period,
@@ -2255,7 +2256,7 @@ async def ceo_brief(period: str = "morning", user: dict = Depends(get_current_us
         "completed_label": completed_label,
         "counters": {
             "delayed": delayed, "completed": completed, "awaiting_approval": pending_dec + pending_pur,
-            "absent": absent, "complaints": complaints, "payment_overdue": payment_overdue,
+            "absent": absent, "complaints": complaints, "payment_overdue": payment_overdue, "fires": fires,
         },
     }
 
@@ -2332,6 +2333,13 @@ async def brief_details(key: str, period: str = "morning", user: dict = Depends(
         for w in recs:
             items.append({"id": w["id"], "title": w.get("title"), "subtitle": w.get("counterparty") or "",
                           "meta": w.get("amount"), "kind": "payment"})
+
+    elif key == "fires":
+        tasks = await db.tasks.find({"tenant_id": tid, "source": "escalation", "status": {"$ne": "done"}}, {"_id": 0}).sort("created_at", -1).to_list(200)
+        tasks = await enrich_tasks(tasks)
+        for t in tasks:
+            sub = f"Raised by {t['raised_by_name']}" if t.get("raised_by_name") else (t.get("assignee_name") or "")
+            items.append({"id": t["id"], "title": t["title"], "subtitle": sub, "meta": t.get("priority"), "kind": "escalation"})
 
     return {"key": key, "actionable": actionable, "items": items}
 

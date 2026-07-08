@@ -255,31 +255,6 @@ export default function Inbox() {
         )}
       </PageHeader>
 
-      {/* Escalations & Handoffs directed to me */}
-      {escalations.length > 0 && (
-        <div className="mb-8 border-2 border-brand-red bg-brand-red/5" data-testid="escalations-section">
-          <div className="flex items-center gap-2 px-4 py-2.5 bg-brand-red text-white">
-            <Warning size={18} weight="fill" />
-            <h2 className="font-heading font-black uppercase tracking-tight text-sm">Needs your attention — {escalations.length} escalation/handoff{escalations.length !== 1 ? "s" : ""}</h2>
-          </div>
-          <div className="divide-y divide-black/10">
-            {escalations.map((t) => (
-              <button key={t.id} onClick={() => navigate("/my-work")} data-testid={`escalation-${t.id}`}
-                className="w-full text-left p-4 flex items-start gap-3 hover:bg-white transition-colors">
-                <span className={`px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-black shrink-0 ${t.source === "escalation" ? "bg-brand-red text-white" : "bg-brand-blue text-white"}`}>
-                  {t.source === "escalation" ? "Escalation" : "Handoff"}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold leading-tight">{t.title.replace(/^Follow-up:\s*/, "")}</p>
-                  {t.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{t.description.split(/Context:\s*/).pop()}</p>}
-                  <p className="label-mono text-brand-red mt-1">Open in My Work →</p>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Capture */}
       {user?.role === "owner" ? (
         <div className="grid lg:grid-cols-2 gap-4 mb-8">

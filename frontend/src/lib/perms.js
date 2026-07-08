@@ -12,10 +12,10 @@ export const PERMISSIONS = [
 
 export const PERMISSION_KEYS = PERMISSIONS.map((p) => p.key);
 
-const BASE = ["inbox", "people", "workflows", "tasks", "brain", "ask"];
+const BASE = ["inbox", "data_input", "people", "workflows", "tasks", "brain", "ask"];
 export const ROLE_DEFAULT_PERMS = {
-  sales: [...BASE, "data_input"],
-  finance: [...BASE, "data_input", "finance"],
+  sales: [...BASE],
+  finance: [...BASE, "finance"],
 };
 
 export function defaultPermsForRole(role) {

@@ -202,8 +202,9 @@ export default function Login() {
       {/* Right form */}
       <div className="flex items-center justify-center p-6 lg:p-12">
         <div className="w-full max-w-md">
-          <div className="lg:hidden mb-8">
-            <img src="https://customer-assets.emergentagent.com/job_founder-os-58/artifacts/0ntrxfwq_DecisionOS_Logo_Transparent.png" alt="DecisionOS" className="h-9 w-auto object-contain" />
+          <div className="lg:hidden flex items-center gap-2 mb-8">
+            <div className="w-8 h-8 bg-brand-red flex items-center justify-center"><span className="font-heading font-black text-white">D</span></div>
+            <span className="font-heading font-black text-xl tracking-tighter uppercase">DecisionOS</span>
           </div>
 
           {mode === "login" && (

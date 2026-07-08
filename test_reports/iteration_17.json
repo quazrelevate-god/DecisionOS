@@ -1,0 +1,39 @@
+{
+  "summary": "Iteration 17 — Voice/text directive extraction now resolves named team members to specific assignees. 8/8 new pytest tests in test_iteration17.py green + 47/47 regression (test_iteration16.py + backend_test.py) = 55/55 total. Verified: (a) 'Tell Priya to send the revised quote... ask finance to clear the packaging invoice' produces two tasks — one assigned to Priya Nair (assignee_id=<Priya's id>, assignee_role='sales', title contains 'quote') and one role-only finance task (assignee_role='finance', assignee_id=null). All voice-created tasks are 'blocked' with source='voice'. (b) 'Ask sales to prepare the monthly report' (no name) → role-only sales task, assignee_id null. (c) First-name-only 'Tell Priya to follow up...' correctly resolves to Priya Nair via match_member_by_name's token-overlap branch. (d) Unknown name 'Zephyrine' does NOT crash the pipeline — voice-note still reaches status='done', decision_id set, tasks created with assignee_id null (role fallback works). (e) Multilingual/Tanglish 'Priya kitte solu revised quote Kumar Garments...' still produces English task titles. (f) Reminders + memory_notes + inbox item still created (regression). (g) Manual task allocation (iter16) still works — create with assignee_id, PATCH reassign, PATCH status-only preserves assignee via exclude_unset.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration17.py",
+    "/app/test_reports/pytest/iteration17.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py:415-429 match_member_by_name — token-overlap branch matches ANY overlapping token. If two members share e.g. 'Kumar' as surname, the first inserted wins silently. For the Sharma tenant this is fine (unique first names), but in tenants with 'John Smith' + 'Amanda Smith' a directive saying 'ask Smith' would be ambiguous. Consider requiring first-name match or logging when >1 candidate matches.",
+    "server.py:415-429 the regex strips ALL punctuation and lowercases, but does NOT normalise unicode (e.g. accented names 'José' vs 'jose'). For India/Tamil names it's fine today; worth NFKD-normalising if the team expands.",
+    "server.py:475-480 the LLM-supplied assignee_role is OVERWRITTEN by member.role whenever a name matches — this is the intended contract but silently discards the model's role hint. Fine, but worth a code comment so future devs don't rewrite the precedence.",
+    "server.py:449 members query fetches up to 200 users incl. stale 'TEST_member' rows, which are then advertised to the LLM in the system prompt. In Sharma tenant this dumps ~20+ noise names into every prompt (LLM token cost + potential mis-matching). Recommend filtering out soft-deleted / TEST_ prefixed / status!='active' users before passing to ai_extract.",
+    "server.py:391 the JSON-parse fallback drops 'assignee_name' field entirely (only sets summary/decisions/tasks/workflow_events). If the LLM occasionally returns malformed JSON, name-assignment silently regresses to role-only. Minor edge — add a warning log so this shows up in monitoring.",
+    "server.py file is now 2253 lines. Same repeated feedback from iter16 — split into routers.",
+    "GET /api/inbox returns {items, counts, open_total} but many callers/tests may expect a raw list (as in older iterations). Consider documenting or adding a compat shim if any frontend still expects a list."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration17.py (new — 8 pytest tests: 1 sanity + 4 named-assignment + 2 pipeline regression + 1 manual-alloc regression)"
+  ],
+  "success_rate": {
+    "backend": "100% (55/55 — 8 iter17 + 9 iter16 + 38 backend_test regression)",
+    "frontend": "not tested (backend-only iteration per request)"
+  },
+  "test_credentials": "owner@sharma.com / demo1234 (from /app/memory/test_credentials.md). Tenant members verified in test: Rajesh Sharma (owner), Priya Nair (sales), Amit Verma (production), Sunita Rao (finance).",
+  "seed_data_creation": "Each named-assignment test creates 1 voice_note + 1 decision (pending_approval) + N blocked tasks in Sharma tenant. 5 voice-note runs = ~5 decisions + ~8-12 blocked tasks + a few reminders/memory notes. Non-destructive; blocked tasks won't appear on normal task boards until decisions are approved. Manual-alloc regression test cleans up its own TEST_iter17_manual_alloc task.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iter17 feature (named-person assignment from voice/text directives) confirmed working end-to-end at the backend. Tests at /app/backend/tests/test_iteration17.py — run with `python -m pytest backend/tests/test_iteration17.py -o addopts='' -v` (~40s incl. LLM calls). Key contract verified: POST /api/voice-notes/text kicks off background process_voice_note which (i) fetches all tenant users, (ii) calls ai_extract with members list — LLM emits per-task 'assignee_name', (iii) match_member_by_name resolves exact/first-name/token overlap, (iv) if matched: task.assignee_id = member.id AND task.assignee_role = member.role (member.role WINS over LLM's role), (v) if no match: assignee_id=null, LLM-supplied role used if valid, else null. All voice tasks start status='blocked' with source='voice'. LLM latency is 3-8s per note; poll /api/voice-notes/{id} until status='done' (max ~60s safety timeout in tests). If retesting UI, note that the Inbox voice/text input triggers the same POST /api/voice-notes/text — you should see person chips on the resulting tasks in /tasks (though tasks are blocked so may need to approve the decision first).",
+  "rca of the issue": "N/A — feature-addition iteration, not a bug fix. Contract verified in tests: (1) named person resolution: LLM prompt now enumerates team members ('Team members you can assign to by name: <names>...'), asks for per-task assignee_name field; process_voice_note calls match_member_by_name (server.py:415-429) which does case-insensitive exact match first, then token/first-name overlap; on hit, assignee_id=member.id and assignee_role=member.role. (2) role fallback when no name: assignee_name empty in LLM output → match returns None → assignee_id stays null, LLM's assignee_role kept (if valid tenant role). (3) unknown name resilience: match_member_by_name returns None cleanly, no exception; verified by 'Zephyrine' test that pipeline reaches status='done' with a task created. (4) Tanglish still works: LLM system prompt already instructs English-only output; verified all task titles are ASCII."
+}

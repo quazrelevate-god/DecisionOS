@@ -351,9 +351,16 @@ def _extract_json(text: str):
     return json.loads(text)
 
 
-async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[list] = None) -> dict:
+async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[list] = None, members: Optional[list] = None) -> dict:
     roles = allowed_roles or ["owner", "sales", "operations", "finance"]
     roles_str = ",".join(roles)
+    names = [m.get("name") for m in (members or []) if m.get("name")]
+    members_line = (
+        "Team members you can assign to by name: " + ", ".join(names) + ". "
+        "If the directive explicitly names a person (e.g. 'tell Priya to...', 'ask Rajesh...'), set that task's "
+        "\"assignee_name\" to the closest matching team member name above. Otherwise leave \"assignee_name\" empty "
+        "and just pick a sensible \"assignee_role\". "
+    ) if names else ""
     system = (
         "You are the extraction engine of DecisionOS, an operating brain for small businesses. "
         "Convert a founder's spoken/written directive into structured operational data. "
@@ -362,10 +369,12 @@ async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[l
         "\"decisions\": [{\"title\": string, \"detail\": string, \"category\": string, "
         "\"type\": one of [directive,approval,policy,observation]}], "
         "\"tasks\": [{\"title\": string, \"description\": string, \"assignee_role\": one of [" + roles_str + "], "
+        "\"assignee_name\": string (a specific team member's name if one is explicitly mentioned, else empty), "
         "\"priority\": one of [low,medium,high], \"due_in_days\": integer or null}], "
         "\"workflow_events\": [{\"type\": one of [sales_dispatch,purchase_payment], \"action\": string, \"detail\": string}], "
         "\"reminders\": [{\"title\": string, \"due_in_days\": integer or null}], "
         "\"memory_notes\": [{\"text\": string, \"tag\": string}]}. "
+        + members_line +
         "Use 'reminders' for simple personal follow-ups (e.g. 'call Kumar tomorrow', 'follow up with Toyota next Monday'). "
         "Use 'memory_notes' for lasting facts/policies the company should remember (e.g. 'don't purchase from XYZ again', 'salary increment for Arun from August'). "
         "The transcript may be in English, Tamil, or Tanglish (casual Tamil-English code-mix). Fully understand it regardless "
@@ -403,6 +412,23 @@ async def transcribe_audio(path: str, language: str = "auto") -> str:
     return resp.text
 
 
+def match_member_by_name(members: list, name: str):
+    n = re.sub(r"[^a-z ]", "", (name or "").lower()).strip()
+    if not n or not members:
+        return None
+    for m in members:  # exact (case-insensitive) full-name match
+        if (m.get("name") or "").lower().strip() == n:
+            return m
+    tokens = set(n.split())
+    best = None
+    for m in members:  # first-name / token overlap
+        mtoks = set((m.get("name") or "").lower().split())
+        if tokens & mtoks:
+            best = m
+            break
+    return best
+
+
 # ---------------------------------------------------------------------------
 # Voice note processing pipeline
 # ---------------------------------------------------------------------------
@@ -420,7 +446,8 @@ async def process_voice_note(note_id: str):
 
         await db.voice_notes.update_one({"id": note_id}, {"$set": {"status": "structuring"}})
         troles = await tenant_role_keys(tenant_id)
-        extracted = await ai_extract(transcript or "", session_id=f"extract-{note_id}", allowed_roles=sorted(troles))
+        members = await db.users.find({"tenant_id": tenant_id}, {"_id": 0, "id": 1, "name": 1, "role": 1}).to_list(200)
+        extracted = await ai_extract(transcript or "", session_id=f"extract-{note_id}", allowed_roles=sorted(troles), members=members)
 
         decision_id = new_id()
         dlist = extracted.get("decisions", [])
@@ -446,9 +473,14 @@ async def process_voice_note(note_id: str):
             if isinstance(t.get("due_in_days"), int):
                 due = (datetime.now(timezone.utc) + timedelta(days=t["due_in_days"])).isoformat()
             role = t.get("assignee_role") if t.get("assignee_role") in troles else None
+            assignee_id = None
+            member = match_member_by_name(members, t.get("assignee_name", ""))
+            if member:
+                assignee_id = member["id"]
+                role = member["role"]
             await db.tasks.insert_one({
                 "id": tid, "tenant_id": tenant_id, "title": t.get("title", "Untitled task"),
-                "description": t.get("description", ""), "assignee_role": role, "assignee_id": None,
+                "description": t.get("description", ""), "assignee_role": role, "assignee_id": assignee_id,
                 "priority": t.get("priority", "medium") if t.get("priority") in ("low", "medium", "high") else "medium",
                 "status": "blocked", "due_date": due, "decision_id": decision_id,
                 "source": "voice", "created_at": now_iso(),

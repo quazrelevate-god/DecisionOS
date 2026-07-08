@@ -1,10 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, Link } from "react-router-dom";
 import api from "../lib/api";
 import { PageHeader } from "../components/common";
 import { toast } from "sonner";
 import {
-  Sparkle, CheckCircle, TrendUp, Lightbulb, Trophy, Target, SealCheck, Camera, Microphone,
+  Sparkle, CheckCircle, TrendUp, Lightbulb, Trophy, Target, SealCheck, Camera, Microphone, ShieldWarning,
 } from "@phosphor-icons/react";
 
 function Stat({ label, value, suffix = "", accent = "" }) {
@@ -21,9 +21,10 @@ export default function WorkCoach() {
   const userId = params.get("user");
   const qc = useQueryClient();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ["work-coach", userId],
     queryFn: () => api.get(`/work-coach${userId ? `?user_id=${userId}` : ""}`).then((r) => r.data),
+    retry: false,
   });
 
   const refresh = useMutation({
@@ -32,6 +33,28 @@ export default function WorkCoach() {
     onError: () => toast.error("Could not refresh coaching"),
   });
 
+  if (isError) {
+    const status = error?.response?.status;
+    return (
+      <div>
+        <PageHeader eyebrow="AI Work Coach" title="Access denied" />
+        <div className="card-brutal p-8 text-center" data-testid="coach-error">
+          <ShieldWarning size={32} weight="bold" className="text-brand-red mx-auto mb-3" />
+          <p className="font-heading text-lg font-extrabold uppercase tracking-tight">
+            {status === 403 ? "Not allowed" : "Couldn't load coaching"}
+          </p>
+          <p className="text-sm text-muted-foreground mt-1">
+            {status === 403
+              ? "Only the owner can view another team member's coaching. You can always view your own."
+              : "Something went wrong. Please try again."}
+          </p>
+          <Link to="/coach" className="inline-block mt-4 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors">
+            View my coach
+          </Link>
+        </div>
+      </div>
+    );
+  }
   if (isLoading || !data) return <div className="font-mono text-sm py-20 text-center">Loading your coach…</div>;
 
   const { target, stats, summary } = data;

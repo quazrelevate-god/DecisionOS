@@ -315,6 +315,13 @@ async def log_activity(tenant_id: str, actor: str, kind: str, message: str, enti
     })
 
 
+async def add_decision_event(decision_id: str, label: str, actor: str = "System", kind: str = "event"):
+    await db.decisions.update_one(
+        {"id": decision_id},
+        {"$push": {"timeline": {"ts": now_iso(), "label": label, "actor": actor, "kind": kind}}})
+
+
+
 # ---------------------------------------------------------------------------
 # Unified Inbox
 # ---------------------------------------------------------------------------
@@ -487,6 +494,7 @@ async def process_voice_note(note_id: str):
             })
             task_ids.append(tid)
         decision["task_ids"] = task_ids
+        decision["timeline"] = [{"ts": now_iso(), "label": f"Decision captured from {note.get('kind') or 'voice'}", "actor": "Owner", "kind": "created"}]
         await db.decisions.insert_one(decision)
         _icls = "approval" if dtype == "approval" else ("task" if task_ids else "reminder")
         await add_inbox_item(tenant_id, note["created_by"],
@@ -855,6 +863,37 @@ async def get_decision(decision_id: str, user: dict = Depends(get_current_user))
     return await enrich_decision(d)
 
 
+@api.get("/decisions/{decision_id}/timeline")
+async def decision_timeline(decision_id: str, user: dict = Depends(get_current_user)):
+    d = await db.decisions.find_one({"id": decision_id, "tenant_id": user["tenant_id"]},
+                                    {"_id": 0, "title": 1, "status": 1, "timeline": 1})
+    if not d:
+        raise HTTPException(status_code=404, detail="Not found")
+    tl = sorted(d.get("timeline", []), key=lambda e: e.get("ts", ""))
+    return {"title": d.get("title"), "status": d.get("status"), "timeline": tl}
+
+
+@api.get("/journal")
+async def ceo_journal(q: str = "", user: dict = Depends(require_perm("brain"))):
+    tid = user["tenant_id"]
+    tokens = [re.escape(t) for t in q.split() if len(t) >= 2]
+    rx = {"$regex": "|".join(tokens), "$options": "i"} if tokens else {"$exists": True}
+    dfilter = {"tenant_id": tid, "$or": [{"title": rx}, {"summary": rx}]} if tokens else {"tenant_id": tid}
+    decisions = await db.decisions.find(dfilter, {"_id": 0, "id": 1, "title": 1, "dtype": 1, "status": 1, "created_at": 1}).sort("created_at", -1).to_list(500)
+    mfilter = {"tenant_id": tid, "text": rx} if tokens else {"tenant_id": tid}
+    memory = await db.memory.find(mfilter, {"_id": 0, "id": 1, "text": 1, "tag": 1, "created_at": 1}).sort("created_at", -1).to_list(500)
+    days = {}
+    for d in decisions:
+        day = (d.get("created_at") or "")[:10]
+        days.setdefault(day, {"date": day, "decisions": [], "notes": []})["decisions"].append(d)
+    for m in memory:
+        day = (m.get("created_at") or "")[:10]
+        days.setdefault(day, {"date": day, "decisions": [], "notes": []})["notes"].append(m)
+    return {"days": sorted(days.values(), key=lambda x: x["date"], reverse=True)}
+
+
+
+
 @api.post("/decisions/{decision_id}/approve")
 async def approve_decision(decision_id: str, user: dict = Depends(require_role("owner"))):
     d = await db.decisions.find_one({"id": decision_id, "tenant_id": user["tenant_id"]})
@@ -862,6 +901,14 @@ async def approve_decision(decision_id: str, user: dict = Depends(require_role("
         raise HTTPException(status_code=404, detail="Not found")
     await db.decisions.update_one({"id": decision_id}, {"$set": {"status": "approved", "decided_at": now_iso()}})
     await db.tasks.update_many({"decision_id": decision_id, "status": "blocked"}, {"$set": {"status": "todo"}})
+    await add_decision_event(decision_id, "Approved — tasks unblocked", user["name"], "approved")
+    for t in await db.tasks.find({"decision_id": decision_id}, {"_id": 0}).to_list(100):
+        who = None
+        if t.get("assignee_id"):
+            m = await db.users.find_one({"id": t["assignee_id"]}, {"_id": 0, "name": 1})
+            who = (m or {}).get("name")
+        who = who or t.get("assignee_role") or "team"
+        await add_decision_event(decision_id, f"Task assigned to {who}: {t['title']}", user["name"], "assigned")
     await log_activity(user["tenant_id"], user["id"], "decision_approved", f"Approved '{d['title']}' — tasks unblocked", "decision", decision_id)
     return await enrich_decision(await db.decisions.find_one({"id": decision_id}, {"_id": 0}))
 
@@ -873,6 +920,7 @@ async def reject_decision(decision_id: str, user: dict = Depends(require_role("o
         raise HTTPException(status_code=404, detail="Not found")
     await db.decisions.update_one({"id": decision_id}, {"$set": {"status": "rejected", "decided_at": now_iso()}})
     await db.tasks.update_many({"decision_id": decision_id}, {"$set": {"status": "cancelled"}})
+    await add_decision_event(decision_id, "Rejected", user["name"], "rejected")
     await log_activity(user["tenant_id"], user["id"], "decision_rejected", f"Rejected '{d['title']}'", "decision", decision_id)
     return await enrich_decision(await db.decisions.find_one({"id": decision_id}, {"_id": 0}))
 
@@ -950,6 +998,8 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
             updates["assignee_role"] = member["role"]
     if updates:
         await db.tasks.update_one({"id": task_id}, {"$set": updates})
+        if updates.get("status") and t.get("decision_id"):
+            await add_decision_event(t["decision_id"], f"{t['title']} → {updates['status'].replace('_',' ')}", user["name"], "task")
         if updates.get("status") == "done":
             await log_activity(user["tenant_id"], user["id"], "task_done", f"Completed task '{t['title']}'", "task", task_id)
         elif updates.get("assignee_id"):

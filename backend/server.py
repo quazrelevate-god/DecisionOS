@@ -511,7 +511,7 @@ async def ai_meeting_notes(transcript: str, members: list, session_id: str) -> d
         + members_line +
         "The transcript may be English, Tamil or Tanglish — understand it and output all values in clear English."
     )
-    prompt = f"Meeting transcript:\n\"\"\"\n{transcript}\n\"\"\"\nExtract the structured minutes now."
+    prompt = f"Meeting transcript:\n\"\"\"\n{(transcript or '')[:40000]}\n\"\"\"\nExtract the structured minutes now."
     chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=session_id, system_message=system).with_model(*LLM_MODEL)
     resp = await chat.send_message(UserMessage(text=prompt))
     try:
@@ -1072,7 +1072,7 @@ async def operating_score(user: dict = Depends(get_current_user)):
         total_paid = sum(float(p.get("amount") or 0) for p in pays)
         overdue_inv = sum(1 for i in invs if i.get("type") == "sales_invoice" and i.get("status") != "paid" and i.get("due_date") and i["due_date"] < now)
     collected = (min(total_paid, total_billed) / total_billed) if total_billed else 0.7
-    finance = _clamp100(collected * 100 - overdue_inv * 5)
+    finance = _clamp100(collected * 100 - overdue_inv * 5) if can_finance else None
 
     total_dec = len(decisions)
     approved = sum(1 for d in decisions if d.get("status") == "approved")
@@ -1084,7 +1084,9 @@ async def operating_score(user: dict = Depends(get_current_user)):
 
     categories = {"execution": execution, "finance": finance, "sales": sales, "responsiveness": responsiveness}
     weights = {"execution": 0.35, "finance": 0.25, "sales": 0.2, "responsiveness": 0.2}
-    overall = _clamp100(sum(categories[k] * weights[k] for k in categories))
+    avail = {k: v for k, v in categories.items() if v is not None}
+    wsum = sum(weights[k] for k in avail) or 1
+    overall = _clamp100(sum(avail[k] * weights[k] for k in avail) / wsum)
 
     # Per-employee execution
     members = await db.users.find({"tenant_id": tid}, {"_id": 0, "id": 1, "name": 1, "role": 1}).to_list(200)
@@ -2334,6 +2336,9 @@ async def business_calendar(days: int = 45, user: dict = Depends(get_current_use
             add(f"{now.year}-{md}", "birthday", f"Birthday: {c.get('name')}", "", c.get("id"))
 
     events = [e for e in events if start <= e["date"] <= end]
+    for e in events:
+        if e["type"] == "birthday":
+            e["overdue"] = False
     events.sort(key=lambda e: e["date"])
     days_map = {}
     for e in events:

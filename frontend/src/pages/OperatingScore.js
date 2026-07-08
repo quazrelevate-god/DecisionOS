@@ -42,16 +42,17 @@ export default function OperatingScore() {
         <div className="flex-1 w-full space-y-4">
           {CATS.map((c) => {
             const v = company.categories[c.key];
+            const has = v != null;
             return (
               <div key={c.key} data-testid={`operating-cat-${c.key}`}>
                 <div className="flex items-center justify-between mb-1">
                   <span className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide">
                     <c.icon size={15} weight="bold" className="text-muted-foreground" /> {c.label}
                   </span>
-                  <span className={`font-heading font-black ${scoreColor(v)}`}>{v}</span>
+                  <span className={`font-heading font-black ${scoreColor(v)}`}>{has ? v : "—"}</span>
                 </div>
                 <div className="h-3 bg-black/10 border border-black">
-                  <div className={`h-full ${c.color}`} style={{ width: `${v}%` }} />
+                  <div className={`h-full ${c.color}`} style={{ width: `${has ? v : 0}%` }} />
                 </div>
               </div>
             );

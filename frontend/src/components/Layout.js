@@ -24,7 +24,6 @@ import {
   Sun,
   Briefcase,
   MicrophoneStage,
-  Barbell,
   List as ListIcon,
   FileArrowUp,
   Tray,
@@ -37,7 +36,6 @@ const NAV = [
   { to: "/workflows", label: "Workflows", icon: Kanban, testid: "nav-workflows", perm: "workflows" },
   { to: "/contacts", label: "People", icon: AddressBook, testid: "nav-contacts", perm: "people" },
   { to: "/my-work", label: "My Work", icon: Briefcase, testid: "nav-my-work" },
-  { to: "/coach", label: "Work Coach", icon: Barbell, testid: "nav-coach" },
   { to: "/meetings", label: "Meeting Notes", icon: MicrophoneStage, testid: "nav-meetings" },
   { to: "/brain", label: "Company Brain", icon: BrainIcon, testid: "nav-brain", perm: "brain" },
 ];

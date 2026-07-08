@@ -24,7 +24,6 @@ import {
   Sun,
   Briefcase,
   MicrophoneStage,
-  Gauge as GaugeIcon,
   Barbell,
   List as ListIcon,
   FileArrowUp,
@@ -34,7 +33,6 @@ import {
 const NAV = [
   { to: "/", label: "Decision Desk", icon: Tray, testid: "nav-inbox", perm: "inbox" },
   { to: "/brief", label: "CEO Brief", icon: Sun, testid: "nav-ceo-brief" },
-  { to: "/operating-score", label: "Operating Score", icon: GaugeIcon, testid: "nav-operating-score" },
   { to: "/ingest", label: "Capture", icon: FileArrowUp, testid: "nav-ingest", perm: "data_input" },
   { to: "/workflows", label: "Workflows", icon: Kanban, testid: "nav-workflows", perm: "workflows" },
   { to: "/contacts", label: "People", icon: AddressBook, testid: "nav-contacts", perm: "people" },

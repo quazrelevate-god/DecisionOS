@@ -3,14 +3,13 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-import { hasPerm } from "../lib/perms";
 import { PageHeader, Chip, EmptyState } from "../components/common";
 import { money } from "../lib/format";
 import { toast } from "sonner";
 import {
   Microphone, Stop, PaperPlaneTilt, CheckCircle, XCircle, Spinner,
   UsersThree, Truck, Receipt, CurrencyCircleDollar, Warning, CheckSquare,
-  SealCheck, Bell, Brain, FileArrowUp, Check, X, ArrowClockwise, User, UserPlus, Question,
+  SealCheck, Bell, Brain, Gauge, Check, X, ArrowClockwise, User, UserPlus, Question,
   WarningCircle, ArrowBendUpRight,
 } from "@phosphor-icons/react";
 
@@ -194,7 +193,6 @@ export default function Inbox() {
   const mediaRef = useRef(null);
   const chunksRef = useRef([]);
   const elapsed = useElapsed(recording);
-  const canUpload = hasPerm(user, "data_input");
 
   const notesQ = useQuery({
     queryKey: ["voice-notes"],
@@ -333,12 +331,10 @@ export default function Inbox() {
   return (
     <div>
       <PageHeader eyebrow="Your day in one place" title="Decision Desk">
-        {canUpload && (
-          <button data-testid="inbox-upload-button" onClick={() => navigate("/ingest")}
-            className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
-            <FileArrowUp size={16} weight="bold" /> Upload data
-          </button>
-        )}
+        <button data-testid="inbox-operating-score-button" onClick={() => navigate("/operating-score")}
+          className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
+          <Gauge size={16} weight="bold" /> Operating Score
+        </button>
       </PageHeader>
 
       {/* Capture */}

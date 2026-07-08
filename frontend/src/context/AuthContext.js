@@ -48,8 +48,14 @@ export function AuthProvider({ children }) {
     setTenant(null);
   };
 
+  const refreshTenant = async () => {
+    const { data } = await api.get("/auth/me");
+    setTenant(data.tenant);
+    return data.tenant;
+  };
+
   return (
-    <AuthContext.Provider value={{ user, tenant, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, tenant, loading, login, register, logout, refreshTenant }}>
       {children}
     </AuthContext.Provider>
   );

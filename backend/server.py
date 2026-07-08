@@ -188,6 +188,17 @@ class RegisterInput(BaseModel):
     products: Optional[List[ProductItem]] = None
 
 
+class TenantUpdateInput(BaseModel):
+    name: Optional[str] = None
+    industry: Optional[str] = None
+    company_size: Optional[str] = None
+    region: Optional[str] = None
+    currency: Optional[str] = None
+    gst: Optional[str] = None
+    branches: Optional[str] = None
+    products: Optional[List[ProductItem]] = None
+
+
 class InviteInput(BaseModel):
     phones: List[str]
 
@@ -808,6 +819,25 @@ async def login(inp: LoginInput):
 async def me(user: dict = Depends(get_current_user)):
     tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
     return {"user": user, "tenant": tenant}
+
+
+@api.patch("/tenant")
+async def update_tenant(inp: TenantUpdateInput, user: dict = Depends(require_perm("team_manage"))):
+    updates = {}
+    for f in ["name", "industry", "company_size", "region", "gst", "branches"]:
+        v = getattr(inp, f)
+        if v is not None:
+            updates[f] = v.strip() if isinstance(v, str) else v
+    if inp.currency is not None:
+        updates["currency"] = inp.currency.strip().upper()
+    if inp.products is not None:
+        updates["products"] = [p.model_dump() for p in inp.products if (p.name or "").strip()]
+    if not updates:
+        raise HTTPException(status_code=400, detail="Nothing to update")
+    await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": updates})
+    await log_activity(user["tenant_id"], user["id"], "company_updated", f"{user['name']} updated company details")
+    return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+
 
 
 @api.get("/invites")

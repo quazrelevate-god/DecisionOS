@@ -1,0 +1,43 @@
+{
+  "summary": "Iter31 — Execution Summary panel E2E verification (Option A / accurate labels). BACKEND: 4/4 pytest pass in 19.84s (/app/backend/tests/test_iteration31.py). (1) owner login returns JWT; (2) multi-directive 'Follow up overdue customers / Stop dispatch / Sales review Friday / Hire two technicians' → note.status='done' with execution_summary={tasks>0, assignees>0, approvals, workflows, meetings, reminders} all numeric ints; (workflows>=1 OR meetings>=1) held; decision object mirrors identical execution_summary via GET /api/decisions; (3) meeting-only directive ('Arrange a sales review with the team on Friday...') → meetings>=1 AND a source='meeting' task appears in /api/tasks?mine=true; (4) reminder-only ('Remind me to call Kumar tomorrow') → reminders>=1 or tasks>=1, approvals>=0. FRONTEND (Playwright, all 3 UI flows pass): TEST1 happy-path — after submit-text-directive + clarify-skip, execution-summary-panel revealed within timeout with es-count-tasks=3, chip keys ['es-chip-tasks','es-chip-assignees','es-chip-workflows','es-chip-approvals','es-chip-meetings'], es-closing-line='Approve the decision below to activate execution across your team.', es-review-btn present (because approvals>=1). Clicking es-review-btn unmounts the panel and a pending decision-card-<id> with inbox-approve button is visible. TEST2 reminder-only — panel shows only es-chip-reminders (labelled 'reminder set'), no es-review-btn, es-closing-line='Your company is ready to execute today's priorities.', es-close-btn text is 'Done' — click dismisses panel. TEST3 regression — clicking inbox-approve on an approval card fires 'Decision approved' toast (approve flow works alongside the new panel). Accurate labels ('workflow flagged', 'meeting detected', 'approval to review') render exactly per Option A. CLEANUP: all voice_notes/decisions/tasks created by these tests were removed from the Sharma demo tenant via mongo (decisions went from 110 → 103, matching the 7 test-created titles).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "ExecutionSummary Dialog", "issues": ["Radix Dialog a11y warning: 'DialogContent requires a DialogTitle...' + 'Missing Description or aria-describedby={undefined}'. The visual H2 ('Execution plan is ready') is not tied to DialogTitle / DialogDescription primitives — screen readers won't announce a title. Non-blocking; wrap the H2 in <DialogTitle> and add <DialogDescription> (or VisuallyHidden versions) inside DialogContent."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration31.py",
+    "/app/test_reports/pytest/iteration31.xml"
+  ],
+  "action_items": [
+    "Optional a11y polish: wrap the ExecutionSummary heading in <DialogTitle> (import from ./ui/dialog) and add a <DialogDescription> (or VisuallyHidden) — silences the Radix warning and makes the panel screen-reader friendly.",
+    "Consider adding DELETE endpoints for /api/voice-notes/{id} and /api/decisions/{id} (or a 'delete note+cascade decision+tasks' owner-only op). Current lack forced this test to clean up via direct mongo — brittle for future testing agents.",
+    "Non-blocking: the ai_extract prompt occasionally emits a defensive 'Transcript is too garbled...' decision on healthy transcripts (seen 1× across runs — see cleanup output). Not caused by this feature but visible because the panel surfaces the note; safe to keep an eye on."
+  ],
+  "critical_code_review_comments": [
+    "server.py:756-763 execution_summary correctly counts by de-duplicated assignee_keys (u:<id> vs r:<role>) so two tasks assigned to the same person count as 1 assignee — matches the 'people assigned' label. Clean.",
+    "server.py:759 approvals=1 gate is `task_ids AND status=='pending_approval'`. Reminder-only paths (no tasks generated) correctly yield approvals=0 — verified by TEST2 in UI where es-chip-approvals was absent.",
+    "server.py:741-754 meeting_events loop creates a source='meeting' task per event with title suffixed by ' (when)' — assigns to note['created_by'] (owner) with status='todo'. Reasonable default; may want an assignee_role='sales' for meetings when the transcript names sales, but out of scope.",
+    "server.py:764-765 execution_summary is written twice — once on decisions (partial-update) and once on voice_notes (full update-with status='done'). Both are $set on separate collections and don't need to be atomic since the frontend reads execution_summary off the voice_note first; harmless but a comment would help future maintainers.",
+    "Inbox.js:263-270 useEffect correctly guards on submittedNoteId + status='done' + execution_summary presence; sets execPanel and clears submittedNoteId to prevent re-open on subsequent polls. Verified via TEST2 where a second directive after closing panel #1 revealed a new panel.",
+    "Inbox.js:272-276 reviewFromSummary captures decisionId BEFORE clearing execPanel — correct ordering avoids losing the id.",
+    "ExecutionSummary.js:35 chips=chips.filter(v>0) is correct — reminder-only path renders only the reminders chip (verified via TEST2 chip enumeration).",
+    "ExecutionSummary.js:5-21 CountUp uses requestAnimationFrame with delay via setTimeout — animation cleanly cancels via useEffect cleanup. No memory leak.",
+    "ExecutionSummary.js hasApprovals gate correctly swaps es-close-btn label 'Later' vs 'Done' AND toggles the es-review-btn visibility. Verified in TEST2 ('Done') vs TEST1 ('Later' + 'Review & approve').",
+    "A11y: ExecutionSummary DialogContent has no DialogTitle/Description child → Radix logs 2 warnings per open. Wrap the H2 in <DialogTitle> (visually keeping the same style) and add a <DialogDescription> (or VisuallyHidden Radix.VisuallyHidden). Minor.",
+    "server.py has no DELETE endpoints for voice_notes/decisions — this makes test cleanup impossible via public API; testing agents will keep polluting the demo tenant. Add owner-scoped soft-delete or hard-delete."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration31.py (new — 4 pytest tests + auto mongo-cleanup fixture)"
+  ],
+  "success_rate": {"backend": "100% (4/4 pytest passed in 19.84s)", "frontend": "100% (3/3 UI flows passed — happy-path panel + reveal chips + review closes panel + regression approve)"},
+  "test_credentials": "Owner owner@sharma.com/demo1234 from /app/memory/test_credentials.md",
+  "seed_data_creation": "All test-generated data cleaned up: 5 voice_notes, 7 decisions, ~19 tasks (12 Kumar reminders + 3 meeting follow-ups + 8 decision tasks) removed from demo tenant post-run via direct mongo. Sharma demo verified back to 103 decisions (baseline).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iter31 verifies Execution Summary panel (accurate labels — 'workflow flagged', 'meeting detected', 'approval to review', 'reminder set'). Rerun backend: `pytest /app/backend/tests/test_iteration31.py -o addopts= -v` (~20s, hits real Emergent LLM Claude — non-deterministic but assertions are threshold-based). Frontend selectors verified: [data-testid=text-directive-input], [data-testid=submit-text-directive], [data-testid=clarify-skip], [data-testid=execution-summary-panel], [data-testid=execution-summary-chips], [data-testid=es-chip-{tasks|assignees|workflows|approvals|meetings|reminders}], [data-testid=es-count-{k}], [data-testid=es-closing-line], [data-testid=es-review-btn] (approval only), [data-testid=es-close-btn]. Backend endpoints hit: POST /api/auth/login, POST /api/voice-notes/text, GET /api/voice-notes (polling), GET /api/decisions, GET /api/tasks?mine=true. AI structuring takes 10-30s; poll interval 2s, timeout 90s. Only accessibility bug noted — main agent's call whether to address in this iteration.",
+  "rca of the issue": "No critical bugs found — feature works end-to-end. Only a minor Radix a11y warning: /app/frontend/src/components/ExecutionSummary.js:41 uses <DialogContent> without a <DialogTitle> or <DialogDescription> child, so Radix emits 'DialogContent requires a DialogTitle' + 'Missing Description or aria-describedby' warnings on every open. Fix in <10 lines: `import { DialogTitle, DialogDescription } from './ui/dialog'` then replace the H2 with `<DialogTitle asChild><h2 ...>Execution plan is ready</h2></DialogTitle>` and add `<DialogDescription className='sr-only'>Real counts of tasks, people, workflows, approvals, meetings and reminders produced by this directive.</DialogDescription>` right after."
+}

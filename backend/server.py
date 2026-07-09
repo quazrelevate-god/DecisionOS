@@ -406,9 +406,11 @@ async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[l
         "\"priority\": one of [low,medium,high], \"due_in_days\": integer or null}], "
         "\"workflow_events\": [{\"type\": one of [sales_dispatch,purchase_payment], \"action\": string, \"detail\": string}], "
         "\"reminders\": [{\"title\": string, \"due_in_days\": integer or null}], "
+        "\"meeting_events\": [{\"title\": string, \"when\": string, \"due_in_days\": integer or null}], "
         "\"memory_notes\": [{\"text\": string, \"tag\": string}]}. "
         + members_line +
         "Use 'reminders' for simple personal follow-ups (e.g. 'call Kumar tomorrow', 'follow up with Toyota next Monday'). "
+        "Use 'meeting_events' for meetings/reviews/calls to be scheduled (e.g. 'arrange a sales review on Friday', 'set up a vendor call Monday'). Keep meetings OUT of reminders. "
         "Use 'memory_notes' for lasting facts/policies the company should remember (e.g. 'don't purchase from XYZ again', 'salary increment for Arun from August'). "
         "The transcript may be in English, Tamil, or Tanglish (casual Tamil-English code-mix). Fully understand it regardless "
         "of language, and produce ALL output field values in clear English. "
@@ -423,7 +425,7 @@ async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[l
         logger.error(f"AI extract parse error: {e} :: {resp[:400]}")
         data = {"summary": transcript[:200], "decisions": [], "tasks": [], "workflow_events": []}
     data.setdefault("summary", "")
-    for k in ("decisions", "tasks", "workflow_events"):
+    for k in ("decisions", "tasks", "workflow_events", "reminders", "meeting_events", "memory_notes"):
         if not isinstance(data.get(k), list):
             data[k] = []
     return data
@@ -686,6 +688,7 @@ async def process_voice_note(note_id: str):
             "task_ids": [],
         }
         task_ids = []
+        assignee_keys = set()
         for t in extracted.get("tasks", []):
             tid = new_id()
             due = None
@@ -697,6 +700,10 @@ async def process_voice_note(note_id: str):
             if member:
                 assignee_id = member["id"]
                 role = member["role"]
+            if assignee_id:
+                assignee_keys.add(f"u:{assignee_id}")
+            elif role:
+                assignee_keys.add(f"r:{role}")
             await db.tasks.insert_one({
                 "id": tid, "tenant_id": tenant_id, "title": t.get("title", "Untitled task"),
                 "description": t.get("description", ""), "assignee_role": role, "assignee_id": assignee_id,
@@ -730,7 +737,32 @@ async def process_voice_note(note_id: str):
                     "id": new_id(), "tenant_id": tenant_id, "text": m["text"],
                     "tag": m.get("tag", "note"), "created_by": note["created_by"], "created_at": now_iso(),
                 })
-        await db.voice_notes.update_one({"id": note_id}, {"$set": {"status": "done", "decision_id": decision_id, "processed_at": now_iso()}})
+        # Meetings: create a lightweight follow-up task per detected meeting (source=meeting)
+        meetings = extracted.get("meeting_events") or []
+        for mt in meetings:
+            due = None
+            if isinstance(mt.get("due_in_days"), int):
+                due = (datetime.now(timezone.utc) + timedelta(days=mt["due_in_days"])).isoformat()
+            when = (mt.get("when") or "").strip()
+            title = (mt.get("title") or "Meeting").strip()
+            await db.tasks.insert_one({
+                "id": new_id(), "tenant_id": tenant_id,
+                "title": title + (f" ({when})" if when else ""),
+                "description": "", "assignee_role": None, "assignee_id": note["created_by"],
+                "priority": "medium", "status": "todo", "due_date": due, "decision_id": None,
+                "source": "meeting", "created_at": now_iso(),
+            })
+        # Execution summary — real counts of what this directive produced
+        execution_summary = {
+            "tasks": len(task_ids),
+            "assignees": len(assignee_keys),
+            "approvals": 1 if (task_ids and decision["status"] == "pending_approval") else 0,
+            "workflows": len(extracted.get("workflow_events") or []),
+            "meetings": len(meetings),
+            "reminders": len(extracted.get("reminders") or []),
+        }
+        await db.decisions.update_one({"id": decision_id}, {"$set": {"execution_summary": execution_summary}})
+        await db.voice_notes.update_one({"id": note_id}, {"$set": {"status": "done", "decision_id": decision_id, "execution_summary": execution_summary, "processed_at": now_iso()}})
         await log_activity(tenant_id, note["created_by"], "decision_extracted",
                            f"Extracted decision '{decision['title']}' with {len(task_ids)} task(s)", "decision", decision_id)
     except Exception as e:

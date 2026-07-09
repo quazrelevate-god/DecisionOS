@@ -77,3 +77,12 @@
     .recording-pulse { animation: none; }
     .shadow-hover { transition: none; }
 }
+
+@keyframes es-reveal-kf {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.es-reveal { opacity: 0; animation: es-reveal-kf 0.45s ease-out forwards; }
+@media (prefers-reduced-motion: reduce) {
+  .es-reveal { animation: none; opacity: 1; }
+}

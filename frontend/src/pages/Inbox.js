@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { PageHeader, Chip, EmptyState } from "../components/common";
+import ExecutionSummary from "../components/ExecutionSummary";
 import { money } from "../lib/format";
 import { toast } from "sonner";
 import {
@@ -188,6 +189,8 @@ export default function Inbox() {
   const [busy, setBusy] = useState(false);
   const [language, setLanguage] = useState("auto");
   const [filter, setFilter] = useState("all");
+  const [submittedNoteId, setSubmittedNoteId] = useState(null);
+  const [execPanel, setExecPanel] = useState(null);
   const languageRef = useRef("auto");
   languageRef.current = language;
   const mediaRef = useRef(null);
@@ -248,11 +251,28 @@ export default function Inbox() {
   const runCapture = async (finalText) => {
     setBusy(true);
     try {
-      await api.post("/voice-notes/text", { text: finalText, language });
+      const { data } = await api.post("/voice-notes/text", { text: finalText, language });
+      if (data?.id) setSubmittedNoteId(data.id);
       setText(""); setClarify(null); setAnswers({});
       toast.success("Directive submitted — structuring…");
       refresh();
     } catch { toast.error("Submit failed"); } finally { setBusy(false); }
+  };
+
+  // When the just-submitted directive finishes structuring, reveal the Execution Summary.
+  useEffect(() => {
+    if (!submittedNoteId) return;
+    const note = (notesQ.data || []).find((n) => n.id === submittedNoteId);
+    if (note && note.status === "done" && note.execution_summary) {
+      setExecPanel({ ...note.execution_summary, decisionId: note.decision_id });
+      setSubmittedNoteId(null);
+    }
+  }, [notesQ.data, submittedNoteId]);
+
+  const reviewFromSummary = () => {
+    const id = execPanel?.decisionId;
+    setExecPanel(null);
+    if (id) setParams({ focus: `approval:${id}` });
   };
 
   const submitText = async () => {
@@ -330,6 +350,7 @@ export default function Inbox() {
 
   return (
     <div>
+      <ExecutionSummary data={execPanel} onClose={() => setExecPanel(null)} onReview={reviewFromSummary} />
       <PageHeader eyebrow="Your day in one place" title="Decision Desk">
         {user?.role === "owner" && (
           <button data-testid="inbox-operating-score-button" onClick={() => navigate("/operating-score")}

@@ -659,10 +659,9 @@ _WEEKDAYS = {"monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3, "friday":
 
 
 def _resolve_meeting_date(when: str, due_in_days) -> str:
-    """Resolve a meeting's natural-language timing into an ISO date (YYYY-MM-DD)."""
+    """Resolve a meeting's natural-language timing into an ISO date (YYYY-MM-DD).
+    Explicit day references in `when` take priority over the LLM's due_in_days heuristic."""
     now = datetime.now(timezone.utc)
-    if isinstance(due_in_days, int):
-        return (now + timedelta(days=due_in_days)).date().isoformat()
     w = (when or "").lower()
     if "today" in w:
         return now.date().isoformat()
@@ -674,6 +673,8 @@ def _resolve_meeting_date(when: str, due_in_days) -> str:
             if "next" in w:
                 ahead += 7
             return (now + timedelta(days=ahead)).date().isoformat()
+    if isinstance(due_in_days, int):
+        return (now + timedelta(days=due_in_days)).date().isoformat()
     if "next week" in w:
         return (now + timedelta(days=7)).date().isoformat()
     return (now + timedelta(days=2)).date().isoformat()

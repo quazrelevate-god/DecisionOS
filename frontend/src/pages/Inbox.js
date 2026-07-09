@@ -270,10 +270,14 @@ export default function Inbox() {
       const hasAny = Object.values(note.execution_summary).some((v) => (v || 0) > 0);
       if (hasAny) setExecPanel({ ...note.execution_summary, decisionId: note.decision_id });
       setSubmittedNoteId(null);
+      // processing produced new tasks/workflows/meetings — refresh those views
+      ["decisions", "inbox", "dashboard", "calendar", ["tasks", true]].forEach((k) =>
+        qc.invalidateQueries({ queryKey: Array.isArray(k) ? k : [k] }));
+      qc.invalidateQueries({ queryKey: ["workflows"] });
     } else if (note.status === "failed") {
       setSubmittedNoteId(null);
     }
-  }, [notesQ.data, submittedNoteId]);
+  }, [notesQ.data, submittedNoteId, qc]);
 
   const reviewFromSummary = () => {
     const id = execPanel?.decisionId;

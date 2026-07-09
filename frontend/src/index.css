@@ -82,6 +82,9 @@
     .dark .text-black\/30 { color: rgba(244,244,245,0.38); }
     .dark .text-black\/40 { color: rgba(244,244,245,0.48); }
     .dark .text-muted-foreground { color: #a1a1aa; }
+    /* brand-blue is intentionally dark (#002FA7) for light-mode contrast — lift it on dark surfaces */
+    .dark .text-brand-blue { color: #6ea8ff; }
+    .dark .hover\:text-brand-red:hover { color: #ff6b62; }
     /* status accents — brighten for dark bg contrast */
     .dark .text-green-600 { color: #4ade80; }
     .dark .text-amber-600 { color: #fbbf24; }

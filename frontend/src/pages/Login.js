@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../hooks/useTheme";
 import api, { formatApiError } from "../lib/api";
 import { INDUSTRIES, COMPANY_SIZES, CURRENCIES, slugify } from "../lib/format";
 import {
   Microphone, Sparkle, X, Plus, ArrowRight, ArrowLeft, Buildings, ChartLineUp,
   Stack, UploadSimple, DeviceMobile, Check, CircleNotch, Table as TableIcon,
-  Brain, CheckCircle, Files, Gauge, WhatsappLogo,
+  Brain, CheckCircle, Files, Gauge, WhatsappLogo, Sun, MoonStars,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
@@ -19,6 +20,72 @@ const DEMO = [
 
 const inputCls = "w-full border border-black bg-white px-4 py-3 text-sm font-mono focus:outline-none focus:shadow-brutal-sm transition-shadow";
 const labelCls = "label-mono text-muted-foreground";
+
+// Masks a phone to show only the last 4 digits, e.g. +91 98765 43210 -> +91 ••••• •3210
+const maskPhone = (raw) => {
+  if (!raw) return "your mobile";
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length < 4) return raw;
+  return `••••• ${digits.slice(-4)}`;
+};
+
+// Polished 6-box OTP input with paste + keyboard navigation.
+const OtpBoxes = ({ value, onChange, disabled }) => {
+  const refs = useRef([]);
+  const digits = value.split("").concat(Array(6).fill("")).slice(0, 6);
+
+  const setAt = (i, d) => {
+    const next = digits.slice();
+    next[i] = d;
+    onChange(next.join("").replace(/\D/g, "").slice(0, 6));
+  };
+
+  const handleChange = (i) => (e) => {
+    const d = e.target.value.replace(/\D/g, "");
+    if (!d) return;
+    if (d.length > 1) {
+      // pasted / multi-char: fill from current box
+      const chars = d.slice(0, 6 - i).split("");
+      const next = digits.slice();
+      chars.forEach((c, k) => { next[i + k] = c; });
+      onChange(next.join("").replace(/\D/g, "").slice(0, 6));
+      const focusIdx = Math.min(i + chars.length, 5);
+      refs.current[focusIdx]?.focus();
+      return;
+    }
+    setAt(i, d);
+    if (i < 5) refs.current[i + 1]?.focus();
+  };
+
+  const handleKeyDown = (i) => (e) => {
+    if (e.key === "Backspace") {
+      if (digits[i]) setAt(i, "");
+      else if (i > 0) { setAt(i - 1, ""); refs.current[i - 1]?.focus(); }
+    } else if (e.key === "ArrowLeft" && i > 0) refs.current[i - 1]?.focus();
+    else if (e.key === "ArrowRight" && i < 5) refs.current[i + 1]?.focus();
+  };
+
+  return (
+    <div className="flex gap-2 justify-between" data-testid="otp-boxes">
+      {digits.map((d, i) => (
+        <input
+          key={i}
+          ref={(el) => (refs.current[i] = el)}
+          data-testid={`otp-box-${i}`}
+          inputMode="numeric"
+          maxLength={6}
+          autoFocus={i === 0}
+          disabled={disabled}
+          value={d}
+          onChange={handleChange(i)}
+          onKeyDown={handleKeyDown(i)}
+          onFocus={(e) => e.target.select()}
+          className="w-full aspect-square min-w-0 border border-black bg-white text-center text-xl font-heading font-black focus:outline-none focus:shadow-brutal-sm focus:border-brand-red transition-all disabled:opacity-50"
+        />
+      ))}
+    </div>
+  );
+};
 
 const SOFTWARE = [
   { key: "Excel", live: true },
@@ -36,12 +103,14 @@ const AI_STEPS = [
 
 export default function Login() {
   const { login, register, loginWithOtp } = useAuth();
+  const { isDark, toggle: toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [mode, setMode] = useState("login");
   const [loginTab, setLoginTab] = useState("password");
   const [otpPhone, setOtpPhone] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [otpSent, setOtpSent] = useState(false);
+  const [resendIn, setResendIn] = useState(0);
   const [invite, setInvite] = useState(null);
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
@@ -68,6 +137,14 @@ export default function Login() {
 
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
+  // OTP resend cooldown ticker (30s, matches backend cooldown)
+  const startResendTimer = () => setResendIn(30);
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const t = setTimeout(() => setResendIn((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendIn]);
+
   // Invite deep-link: /?invite=<token> — auto-switch to OTP and text the code.
   const inviteStarted = useRef(false);
   useEffect(() => {
@@ -82,6 +159,7 @@ export default function Login() {
         const start = await api.post(`/auth/invite/${token}/start`);
         setOtpPhone(start.data.phone);
         setOtpSent(true);
+        startResendTimer();
         if (start.data.dev_otp) { setOtpCode(start.data.dev_otp); toast.info(`Dev OTP: ${start.data.dev_otp} (auto-filled)`); }
         else toast.success("We texted a login code to your mobile");
       } catch (err) {
@@ -108,6 +186,7 @@ export default function Login() {
     try {
       const { data } = await api.post("/auth/otp/request", { phone: otpPhone });
       setOtpSent(true);
+      startResendTimer();
       if (data.dev_otp) toast.info(`Dev OTP: ${data.dev_otp} (auto-filled)`);
       else toast.success("OTP sent to your mobile");
       if (data.dev_otp) setOtpCode(data.dev_otp);
@@ -224,6 +303,15 @@ export default function Login() {
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2 bg-brand-paper text-brand-ink">
+      <button
+        onClick={toggleTheme}
+        data-testid="login-theme-toggle"
+        title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+        aria-label="Toggle dark mode"
+        className="fixed top-4 right-4 z-50 w-10 h-10 flex items-center justify-center border border-black bg-white text-brand-ink hover:bg-brand-ink hover:text-white transition-colors"
+      >
+        {isDark ? <Sun size={18} weight="bold" /> : <MoonStars size={18} weight="bold" />}
+      </button>
       {/* Left brand panel */}
       <div className="hidden lg:flex flex-col justify-between bg-brand-ink text-white p-12 border-r border-black">
         <div className="flex items-center gap-3">
@@ -285,22 +373,45 @@ export default function Login() {
                       <p className="text-xs text-muted-foreground mt-0.5">You've been invited to <strong>{invite.company}</strong>. Enter the code we sent to {invite.phone_masked} to sign in — no password needed.</p>
                     </div>
                   )}
-                  <div className="flex gap-2">
-                    <input data-testid="otp-phone-input" type="tel" className={inputCls} placeholder="Registered mobile number" value={otpPhone} onChange={(e) => setOtpPhone(e.target.value)} disabled={otpSent} required />
-                    {otpSent && (
-                      <button type="button" onClick={() => { setOtpSent(false); setOtpCode(""); setError(""); }} data-testid="otp-change-number"
-                        className="border border-black px-3 text-xs font-semibold uppercase hover:bg-black/5 whitespace-nowrap">Change</button>
-                    )}
-                  </div>
-                  {otpSent && (
-                    <input data-testid="otp-code-input" inputMode="numeric" maxLength={6} className={`${inputCls} tracking-[0.5em] text-center text-lg`} placeholder="Enter 6-digit OTP" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))} required />
-                  )}
-                  {error && <p data-testid="auth-error" className="text-sm text-brand-red font-semibold">{error}</p>}
-                  <button type="submit" disabled={busy} data-testid="otp-submit-button" className="w-full bg-brand-red text-white font-semibold uppercase tracking-wider py-3 border border-black hover:shadow-brutal transition-all disabled:opacity-50">
-                    {busy ? "…" : otpSent ? "Verify & sign in" : "Send OTP"}
-                  </button>
-                  {otpSent && (
-                    <button type="button" onClick={requestOtp} disabled={busy} data-testid="otp-resend" className="w-full text-sm text-brand-blue font-semibold hover:underline">Resend OTP</button>
+                  {!otpSent ? (
+                    <>
+                      <div>
+                        <label className={labelCls}>Mobile number</label>
+                        <input data-testid="otp-phone-input" type="tel" className={`${inputCls} mt-1`} placeholder="Registered mobile number" value={otpPhone} onChange={(e) => setOtpPhone(e.target.value)} required />
+                      </div>
+                      {error && <p data-testid="auth-error" className="text-sm text-brand-red font-semibold">{error}</p>}
+                      <button type="submit" disabled={busy} data-testid="otp-submit-button" className="w-full bg-brand-red text-white font-semibold uppercase tracking-wider py-3 border border-black hover:shadow-brutal transition-all disabled:opacity-50">
+                        {busy ? "Sending…" : "Send OTP"}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between border border-black bg-white px-3 py-2.5" data-testid="otp-phone-confirm">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <DeviceMobile size={16} weight="bold" className="text-brand-red shrink-0" />
+                          <span className="text-sm font-mono truncate">Code sent to <strong>{invite?.phone_masked || maskPhone(otpPhone)}</strong></span>
+                        </div>
+                        <button type="button" onClick={() => { setOtpSent(false); setOtpCode(""); setError(""); setResendIn(0); }} data-testid="otp-change-number"
+                          className="text-xs font-semibold uppercase text-brand-blue hover:underline whitespace-nowrap ml-2 shrink-0">Change</button>
+                      </div>
+                      <div>
+                        <label className={labelCls}>Enter 6-digit code</label>
+                        <div className="mt-2">
+                          <OtpBoxes value={otpCode} onChange={setOtpCode} disabled={busy} />
+                        </div>
+                      </div>
+                      {error && <p data-testid="auth-error" className="text-sm text-brand-red font-semibold">{error}</p>}
+                      <button type="submit" disabled={busy || otpCode.length !== 6} data-testid="otp-submit-button" className="w-full bg-brand-red text-white font-semibold uppercase tracking-wider py-3 border border-black hover:shadow-brutal transition-all disabled:opacity-50">
+                        {busy ? "Verifying…" : "Verify & sign in"}
+                      </button>
+                      <div className="text-center text-sm" data-testid="otp-resend-row">
+                        {resendIn > 0 ? (
+                          <span className="text-muted-foreground">Resend code in <span className="font-semibold tabular-nums">{resendIn}s</span></span>
+                        ) : (
+                          <button type="button" onClick={requestOtp} disabled={busy} data-testid="otp-resend" className="text-brand-blue font-semibold hover:underline">Didn't get it? Resend OTP</button>
+                        )}
+                      </div>
+                    </>
                   )}
                 </form>
               )}

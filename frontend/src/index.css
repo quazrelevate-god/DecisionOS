@@ -53,6 +53,8 @@
 /* Dark-mode remap of the neo-brutalist utility classes (specificity 0,2,0 beats 0,1,0) */
 @layer utilities {
     .dark .bg-white { background-color: #16171c; }
+    .dark .bg-brand-paper { background-color: #0d0e12; }
+    .dark .bg-brand-yellow\/40 { background-color: rgba(250, 204, 21, 0.14); }
     .dark .bg-brand-cream, .dark .bg-\[\#F4F4F5\], .dark .bg-gray-50, .dark .bg-slate-50 { background-color: #1c1d23; }
     .dark .border-black { border-color: #d4d4d8; }
     .dark .text-black { color: #f4f4f5; }
@@ -68,6 +70,7 @@
     .dark .card-brutal { background-color: #16171c; border-color: #d4d4d8; }
     .dark ::-webkit-scrollbar-track { background: #16171c; }
     .dark ::-webkit-scrollbar-thumb { background: #52525b; border-color: #16171c; }
+}
 
 @layer base {
     * {

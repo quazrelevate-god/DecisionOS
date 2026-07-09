@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../hooks/useTheme";
 import { hasPerm } from "../lib/perms";
 import { CompanyDialog } from "./CompanyDialog";
 import { toast } from "sonner";
@@ -23,6 +24,7 @@ import {
   Bell,
   Buildings,
   Sun,
+  MoonStars,
   Briefcase,
   MicrophoneStage,
   List as ListIcon,
@@ -65,6 +67,7 @@ export default function Layout({ children }) {
   const navBottom = useMemo(() => BOTTOM_NAV.filter((n) => !n.perm || hasPerm(user, n.perm)), [user]);
   const navigate = useNavigate();
   const location = useLocation();
+  const { isDark, toggle: toggleTheme } = useTheme();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { data: notif } = useQuery({ queryKey: ["notifications"], queryFn: () => api.get("/notifications").then((r) => r.data), refetchInterval: 30000 });
   const unread = notif?.unread || 0;
@@ -90,6 +93,18 @@ export default function Layout({ children }) {
         <Buildings size={18} weight="bold" />
       </button>
     } />
+  );
+
+  const ThemeToggle = () => (
+    <button
+      onClick={toggleTheme}
+      data-testid="theme-toggle"
+      title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+      aria-label="Toggle dark mode"
+      className="w-10 h-10 flex items-center justify-center border border-black hover:bg-brand-ink hover:text-white transition-colors"
+    >
+      {isDark ? <Sun size={18} weight="bold" /> : <MoonStars size={18} weight="bold" />}
+    </button>
   );
 
   const doLogout = () => {
@@ -187,12 +202,14 @@ export default function Layout({ children }) {
               >
                 <EnvelopeSimple size={16} weight="bold" /> Send Daily Digest
               </button>
+              <ThemeToggle />
               <ProfileButton />
               <Bellicon />
             </div>
           )}
           {user?.role !== "owner" && (
             <div className="flex items-center gap-3">
+              <ThemeToggle />
               <ProfileButton />
               <Bellicon />
             </div>
@@ -203,6 +220,7 @@ export default function Layout({ children }) {
         <header className="lg:hidden h-14 border-b border-black bg-white flex items-center justify-between px-4 sticky top-0 z-20">
           <Logo />
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             <ProfileButton />
             <Bellicon />
             <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>

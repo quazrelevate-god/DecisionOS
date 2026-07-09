@@ -404,13 +404,14 @@ async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[l
         "\"tasks\": [{\"title\": string, \"description\": string, \"assignee_role\": one of [" + roles_str + "], "
         "\"assignee_name\": string (a specific team member's name if one is explicitly mentioned, else empty), "
         "\"priority\": one of [low,medium,high], \"due_in_days\": integer or null}], "
-        "\"workflow_events\": [{\"type\": one of [sales_dispatch,purchase_payment], \"action\": string, \"detail\": string}], "
+        "\"workflow_events\": [{\"type\": one of [sales_dispatch,purchase_payment], \"title\": string, \"detail\": string, \"counterparty\": string, \"amount\": number or null}], "
         "\"reminders\": [{\"title\": string, \"due_in_days\": integer or null}], "
         "\"meeting_events\": [{\"title\": string, \"when\": string, \"due_in_days\": integer or null}], "
         "\"memory_notes\": [{\"text\": string, \"tag\": string}]}. "
         + members_line +
         "Use 'reminders' for simple personal follow-ups (e.g. 'call Kumar tomorrow', 'follow up with Toyota next Monday'). "
         "Use 'meeting_events' for meetings/reviews/calls to be scheduled (e.g. 'arrange a sales review on Friday', 'set up a vendor call Monday'). Keep meetings OUT of reminders. "
+        "Use 'workflow_events' ONLY for concrete order-fulfilment (sales_dispatch) or procurement (purchase_payment) items to track on the board — e.g. 'dispatch the Toyota order', 'raise a purchase for 50 spindles from Rajesh Traders'. Include the counterparty (customer/vendor name) and amount when mentioned. Do NOT put general rules/policies here — those belong in memory_notes. "
         "Use 'memory_notes' for lasting facts/policies the company should remember (e.g. 'don't purchase from XYZ again', 'salary increment for Arun from August'). "
         "The transcript may be in English, Tamil, or Tanglish (casual Tamil-English code-mix). Fully understand it regardless "
         "of language, and produce ALL output field values in clear English. "
@@ -752,16 +753,44 @@ async def process_voice_note(note_id: str):
                 "priority": "medium", "status": "todo", "due_date": due, "decision_id": None,
                 "source": "meeting", "created_at": now_iso(),
             })
+        # Workflows: materialize each detected workflow_event into a real board card
+        wf_ids = []
+        for ev in (extracted.get("workflow_events") or []):
+            wtype = ev.get("type")
+            if wtype not in WORKFLOW_STAGES:
+                continue
+            stages = WORKFLOW_STAGES[wtype]
+            title = (ev.get("title") or ev.get("action") or ("Order" if wtype == "sales_dispatch" else "Purchase")).strip()
+            cp = (ev.get("counterparty") or "").strip()
+            contact_id = None
+            if cp:
+                c = await db.contacts.find_one({"tenant_id": tenant_id, "$or": [
+                    {"name": {"$regex": f"^{re.escape(cp)}$", "$options": "i"}},
+                    {"company": {"$regex": f"^{re.escape(cp)}$", "$options": "i"}}]}, {"_id": 0, "id": 1, "name": 1, "company": 1})
+                if c:
+                    contact_id = c["id"]
+                    cp = cp or c.get("company") or c.get("name") or ""
+            amount = ev.get("amount") if isinstance(ev.get("amount"), (int, float)) else None
+            wid = new_id()
+            await db.workflows.insert_one({
+                "id": wid, "tenant_id": tenant_id, "type": wtype, "title": title,
+                "detail": ev.get("detail", ""), "amount": amount, "counterparty": cp, "contact_id": contact_id,
+                "stage": stages[0], "stages": stages,
+                "history": [{"stage": stages[0], "note": "Auto-created from directive", "by": note["created_by"], "at": now_iso()}],
+                "source": "voice", "decision_id": decision_id,
+                "created_by": note["created_by"], "created_at": now_iso(),
+            })
+            wf_ids.append(wid)
         # Execution summary — real counts of what this directive produced
         execution_summary = {
             "tasks": len(task_ids),
             "assignees": len(assignee_keys),
             "approvals": 1 if (task_ids and decision["status"] == "pending_approval") else 0,
-            "workflows": len(extracted.get("workflow_events") or []),
+            "workflows": len(wf_ids),
             "meetings": len(meetings),
             "reminders": len(extracted.get("reminders") or []),
         }
-        await db.decisions.update_one({"id": decision_id}, {"$set": {"execution_summary": execution_summary}})
+        await db.decisions.update_one({"id": decision_id}, {"$set": {"execution_summary": execution_summary, "workflow_ids": wf_ids}})
         await db.voice_notes.update_one({"id": note_id}, {"$set": {"status": "done", "decision_id": decision_id, "execution_summary": execution_summary, "processed_at": now_iso()}})
         await log_activity(tenant_id, note["created_by"], "decision_extracted",
                            f"Extracted decision '{decision['title']}' with {len(task_ids)} task(s)", "decision", decision_id)

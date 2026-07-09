@@ -28,7 +28,7 @@ export default function ExecutionSummary({ data, onReview, onClose }) {
   const chips = [
     { key: "tasks", icon: CheckSquare, value: s.tasks, label: (n) => plural(n, "task created", "tasks created"), color: "bg-brand-ink" },
     { key: "assignees", icon: UsersThree, value: s.assignees, label: (n) => plural(n, "person assigned", "people assigned"), color: "bg-brand-blue" },
-    { key: "workflows", icon: Truck, value: s.workflows, label: (n) => plural(n, "workflow flagged", "workflows flagged"), color: "bg-brand-ink" },
+    { key: "workflows", icon: Truck, value: s.workflows, label: (n) => plural(n, "workflow generated", "workflows generated"), color: "bg-brand-ink" },
     { key: "approvals", icon: SealCheck, value: s.approvals, label: (n) => plural(n, "approval to review", "approvals to review"), color: "bg-brand-red" },
     { key: "meetings", icon: CalendarCheck, value: s.meetings, label: (n) => plural(n, "meeting detected", "meetings detected"), color: "bg-brand-ink" },
     { key: "reminders", icon: BellRinging, value: s.reminders, label: (n) => plural(n, "reminder set", "reminders set"), color: "bg-brand-ink" },

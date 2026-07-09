@@ -927,6 +927,32 @@ OTP_TTL_SECONDS = 300
 OTP_MAX_ATTEMPTS = 5
 OTP_RESEND_COOLDOWN = 30
 TWILIO_ENABLED = bool(os.environ.get("TWILIO_ACCOUNT_SID") and os.environ.get("TWILIO_AUTH_TOKEN") and os.environ.get("TWILIO_FROM_NUMBER"))
+APM_SMS_API_KEY = os.environ.get("APM_SMS_API_KEY")
+APM_OTP_ENDPOINT = os.environ.get("APM_OTP_ENDPOINT", "Registration")  # "Registration" or "ForgotPassword"
+APM_ENABLED = bool(APM_SMS_API_KEY)
+
+
+async def _apm_send_and_fetch_otp(norm_phone: str):
+    """Call the APM gateway to SEND an OTP SMS and return the 6-digit code it generated.
+    Returns None when APM is not configured (caller falls back to a self-generated code)."""
+    if not APM_ENABLED:
+        return None
+    endpoint = APM_OTP_ENDPOINT if APM_OTP_ENDPOINT in ("Registration", "ForgotPassword") else "Registration"
+    url = f"https://sms.apmtechnologies.in/api/Home/{endpoint}"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.post(url, params={"ApiKey": APM_SMS_API_KEY, "PhoneNumber": norm_phone})
+            r.raise_for_status()
+            m = re.search(r"\b\d{6}\b", r.text or "")
+            if m:
+                return m.group(0)
+            logging.error(f"APM OTP: no 6-digit code in response: {(r.text or '')[:300]}")
+            raise HTTPException(status_code=502, detail="SMS provider returned an unexpected response")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"APM OTP gateway error: {e}")
+        raise HTTPException(status_code=503, detail="SMS service is temporarily unavailable. Please try again.")
 
 
 def _hash_otp(code: str, phone: str) -> str:
@@ -958,8 +984,17 @@ async def _issue_otp(norm: str, display_phone: str, enforce_cooldown: bool = Tru
             age = (datetime.now(timezone.utc) - datetime.fromisoformat(existing["created_at"])).total_seconds()
             if age < OTP_RESEND_COOLDOWN:
                 raise HTTPException(status_code=429, detail=f"Please wait {int(OTP_RESEND_COOLDOWN - age)}s before requesting a new code")
-    code = f"{secrets.randbelow(1000000):06d}"  # cryptographically secure OTP
+    code = f"{secrets.randbelow(1000000):06d}"  # cryptographically secure fallback OTP
     now = datetime.now(timezone.utc)
+    # Prefer the APM gateway when configured: it sends the SMS AND returns the code it generated.
+    apm_code = await _apm_send_and_fetch_otp(norm)
+    if apm_code:
+        code = apm_code
+        sent = True
+        dev = False
+    else:
+        sent = await _send_otp_sms(display_phone, code)
+        dev = not TWILIO_ENABLED
     await db.otp_codes.update_one(
         {"phone": norm},
         {"$set": {"phone": norm, "code_hash": _hash_otp(code, norm),
@@ -967,10 +1002,9 @@ async def _issue_otp(norm: str, display_phone: str, enforce_cooldown: bool = Tru
                   "created_at": now.isoformat(), "attempts": 0}},
         upsert=True,
     )
-    sent = await _send_otp_sms(display_phone, code)
-    resp = {"sent": sent, "dev_mode": not TWILIO_ENABLED}
-    if not TWILIO_ENABLED:
-        resp["dev_otp"] = code  # DEV ONLY — remove once real SMS is live
+    resp = {"sent": sent, "dev_mode": dev}
+    if dev:
+        resp["dev_otp"] = code  # DEV ONLY — omitted once real SMS (APM/Twilio) is live
     return resp
 
 

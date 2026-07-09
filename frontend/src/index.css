@@ -52,24 +52,51 @@
 
 /* Dark-mode remap of the neo-brutalist utility classes (specificity 0,2,0 beats 0,1,0) */
 @layer utilities {
+    /* ---- Surfaces ---- */
     .dark .bg-white { background-color: #16171c; }
     .dark .bg-brand-paper { background-color: #0d0e12; }
-    .dark .bg-brand-yellow\/40 { background-color: rgba(250, 204, 21, 0.14); }
     .dark .bg-brand-cream, .dark .bg-\[\#F4F4F5\], .dark .bg-gray-50, .dark .bg-slate-50 { background-color: #1c1d23; }
-    .dark .border-black { border-color: #d4d4d8; }
-    .dark .text-black { color: #f4f4f5; }
-    .dark .text-brand-ink { color: #f4f4f5; }
-    .dark .bg-brand-ink { background-color: #000; }
+    /* brand-ink doubles as primary buttons + active states: use a charcoal so it stands out on dark cards (fixes mic button + active tabs) */
+    .dark .bg-brand-ink { background-color: #2b2c33; }
+    .dark .hover\:bg-brand-ink:hover { background-color: #2b2c33; }
+    .dark .bg-black { background-color: #000; }
     .dark .bg-black\/5 { background-color: rgba(255,255,255,0.06); }
     .dark .bg-black\/10 { background-color: rgba(255,255,255,0.10); }
+    .dark .bg-black\/20 { background-color: rgba(255,255,255,0.14); }
+    .dark .bg-black\/80 { background-color: rgba(0,0,0,0.8); }
     .dark .hover\:bg-black\/5:hover { background-color: rgba(255,255,255,0.08); }
-    .dark .border-black\/20 { border-color: rgba(228,228,231,0.22); }
-    .dark .border-black\/10 { border-color: rgba(228,228,231,0.14); }
-    .dark .shadow-brutal, .dark .shadow-brutal-sm, .dark .shadow-hover:hover { box-shadow: 4px 4px 0px #000 !important; }
+    .dark .bg-brand-yellow\/40 { background-color: rgba(250, 204, 21, 0.14); }
+
+    /* ---- Borders (neo-brutalist frame stays visible) ---- */
+    .dark .border-black { border-color: #4a4b54; }
+    .dark .border-black\/10 { border-color: rgba(228,228,231,0.12); }
+    .dark .border-black\/15 { border-color: rgba(228,228,231,0.16); }
+    .dark .border-black\/20 { border-color: rgba(228,228,231,0.20); }
+    .dark .border-black\/30 { border-color: rgba(228,228,231,0.26); }
+    .dark .border-black\/40 { border-color: rgba(228,228,231,0.32); }
+    .dark .border-black\/50 { border-color: rgba(228,228,231,0.40); }
+
+    /* ---- Text ---- */
+    .dark .text-black { color: #f4f4f5; }
+    .dark .text-brand-ink { color: #f4f4f5; }
+    .dark .text-black\/30 { color: rgba(244,244,245,0.38); }
+    .dark .text-black\/40 { color: rgba(244,244,245,0.48); }
     .dark .text-muted-foreground { color: #a1a1aa; }
-    .dark .card-brutal { background-color: #16171c; border-color: #d4d4d8; }
+    /* status accents — brighten for dark bg contrast */
+    .dark .text-green-600 { color: #4ade80; }
+    .dark .text-amber-600 { color: #fbbf24; }
+    .dark .text-orange-600, .dark .text-orange-500 { color: #fb923c; }
+
+    /* ---- Accent surfaces keep readable (dark) text — MUST come after text flips above ---- */
+    .dark .bg-brand-yellow { color: #0A0A0B !important; }
+
+    /* ---- Components / chrome ---- */
+    .dark .card-brutal { background-color: #16171c; border-color: #4a4b54; }
+    .dark .shadow-brutal, .dark .shadow-brutal-sm, .dark .shadow-hover:hover { box-shadow: 4px 4px 0px #000 !important; }
     .dark ::-webkit-scrollbar-track { background: #16171c; }
     .dark ::-webkit-scrollbar-thumb { background: #52525b; border-color: #16171c; }
+    .dark input::placeholder, .dark textarea::placeholder { color: #6b6b75; }
+    .dark select:invalid, .dark select option { color: #f4f4f5; background-color: #16171c; }
 }
 
 @layer base {

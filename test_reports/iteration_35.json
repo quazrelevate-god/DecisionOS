@@ -1,0 +1,39 @@
+{
+  "summary": "Targeted DARK-MODE visual/readability audit across 9 routes on the preview URL as the demo owner. Almost every page renders correctly in dark mode. Found ONE real dark-mode readability bug on /brief (CEO Brief): the brand-blue accent (VIEW DETAILS links and the 'employees absent' large count) has ~1.67:1 contrast on the dark card — effectively invisible. All other pages, chips (MEDIUM/HIGH/OWNER/FINANCE/etc.), the Decision Desk mic button, the yellow 'Send Daily Digest' button, tab active states, and inputs render with acceptable contrast. Light-mode toggle round-trip works.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "CEOBrief.js VIEW DETAILS accent link (6 stat cards)",
+        "issue": "`text-brand-blue` renders as rgb(0,47,167) on the dark card bg rgb(22,23,28) — measured contrast 1.67:1 (WCAG minimum 4.5:1). Text is functionally invisible in dark mode. Repro: /brief with html.dark, scan `.text-brand-blue` — 6 hits, all fail. Root cause: `index.css` has no `.dark .text-brand-blue` remap; the existing overrides flip text-black/text-brand-ink/status colours but leave `text-brand-blue` alone.",
+        "selector": ".text-brand-blue (data-testid brief-row-delayed / brief-row-completed / brief-row-awaiting_approval / brief-row-absent / brief-row-complaints / brief-row-payment_overdue)",
+        "priority": "HIGH"
+      },
+      {
+        "component": "CEOBrief.js 'employees absent' big count",
+        "issue": "The absent-tile accent number uses the same `text-brand-blue` (CEOBrief.js line 23 accent) and is very dim/hard to read on the dark card. Same root cause as above.",
+        "selector": "div in row where key='absent' – large number rendered with `text-brand-blue`",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Add a `.dark .text-brand-blue` override in /app/frontend/src/index.css (@layer utilities dark block) — e.g. `.dark .text-brand-blue { color: #6ea8ff; }` (or use the already-brightened accent 223 90% 62% ≈ #4d8dfa). This alone will fix the CEO Brief VIEW DETAILS links and the absent-count readability with a single line."
+  ],
+  "critical_code_review_comments": [
+    "index.css dark overrides remap text-black / text-brand-ink / text-muted-foreground and green-600 / amber-600 / orange-600, but NOT text-brand-blue. Given `--accent` is already brightened in the dark scale (223 90% 62%), the utility class text-brand-blue should also be lifted for consistency.",
+    "STATUS_STYLES in common.js has entries like `owner: bg-brand-red text-white` but /my-work still renders one chip with class list `text-white bg-white` for 'OWNER' — investigate whether that badge bypasses the Chip component or has a duplicate class conflict; in dark mode it happens to render OK (white on dark charcoal) but in light mode this pair would collapse to invisible.",
+    "Contrast scan noted `bg-black/10 text-black` chips (`low` priority, `blocked`, `cancelled`, `observation` in common.js STATUS_STYLES) — in dark mode these become rgba(255,255,255,0.10) surface with text flipped to #f4f4f5. On the effective composite bg (~#2f3035) contrast is only borderline (~2.5:1). Not shown in current seeded data on /my-work, but worth strengthening for future tasks with those statuses."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped)", "frontend": "89% (8/9 routes clean; /brief has HIGH readability defect)"},
+  "test_credentials": "Demo owner via button data-testid='demo-login-owner' (owner@sharma.com). No OTP attempted.",
+  "seed_data_creation": "None.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Audit was performed at 1920x900 on https://founder-os-58.preview.emergentagent.com. Dark mode was enabled by writing localStorage 'decisionos-theme'='dark' + adding class 'dark' to <html> before login, then confirming after login (already dark) — the in-app data-testid='theme-toggle' successfully round-trips (dark->light verified). Automated contrast scan was DOM-based (WCAG relative luminance). Zero hits on / (Decision Desk, 215 text nodes), /contacts (51), /brain (31), /ingest (173), /workflows (44), /meetings (44), /notifications (249). /my-work (480 nodes) surfaced only false-positives from translucent bg-black/10 chips. /brief (44 nodes) surfaced 6 real hits — all `.text-brand-blue` VIEW DETAILS links. Screenshots saved to /app/.screenshots/{00_login_dark, 01_desk .. 09_notifications, 10_desk_dark, 11_brief_dark, 12_mywork_list_dark, 13_mywork_board_dark, 14_meetings_dark, 15_contacts_dark, 16_brain_dark, 17_desk_light}.png. Positive checks confirmed: (a) mic button (data-testid=voice-record-button) renders as #2b2c33 charcoal with visible border + white mic icon, distinct from #16171c card; (b) 'Send Daily Digest' yellow button = bg rgb(255,204,0) with text rgb(10,10,11) — dark & readable; (c) all yellow chips (MEDIUM, brand-yellow processing/purchase/etc.) have text color rgb(10,10,11); (d) active nav pill on Layout uses bg-brand-ink (#2b2c33) + white text — visually distinct from inactive; (e) tabs (Morning/Evening/Weekly/Monthly on Brief, All/Customer/… on Desk) show active state via bg-brand-ink charcoal; (f) directive textarea placeholder + typed text readable (placeholder color #6b6b75); (g) light-mode toggle correctly sets localStorage 'light' and removes .dark class.",
+  "rca of the issue": "Root cause of the /brief invisible VIEW DETAILS: index.css @layer utilities has no dark-mode override for the Tailwind `text-brand-blue` class. brand-blue is defined as HSL 223 100% 33% (#002FA7) which is intentionally dark for light-mode contrast; on a #16171c/#1c1d23 dark card it lands at 1.67:1 contrast. Fix: append one line `.dark .text-brand-blue { color: #4d8dfa; }` (or similar HSL 223 90% 62% matching --accent). Reproduction steps: 1) login as demo owner, 2) toggle to dark, 3) navigate to /brief, 4) inspect any `[data-testid^='brief-row-']` — the 'VIEW DETAILS ›' span computed color is rgb(0,47,167); the card bg is rgb(22,23,28). Mitigation is trivial and localized to index.css."
+}

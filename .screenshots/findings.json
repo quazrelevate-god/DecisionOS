@@ -1,0 +1,129 @@
+{
+  "/": {
+    "scanned": 215,
+    "issues": [],
+    "isDark": true
+  },
+  "/brief": {
+    "scanned": 44,
+    "issues": [
+      {
+        "kind": "low-contrast-text",
+        "contrast": 1.67,
+        "text": "View details",
+        "tag": "span",
+        "cls": "mt-3 inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-brand-blue",
+        "testid": "brief-row-delayed",
+        "fg": "rgb(0,47,167)",
+        "bg": "rgb(22,23,28)"
+      },
+      {
+        "kind": "low-contrast-text",
+        "contrast": 1.67,
+        "text": "View details",
+        "tag": "span",
+        "cls": "mt-3 inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-brand-blue",
+        "testid": "brief-row-completed",
+        "fg": "rgb(0,47,167)",
+        "bg": "rgb(22,23,28)"
+      },
+      {
+        "kind": "low-contrast-text",
+        "contrast": 1.67,
+        "text": "View details",
+        "tag": "span",
+        "cls": "mt-3 inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-brand-blue",
+        "testid": "brief-row-awaiting_approval",
+        "fg": "rgb(0,47,167)",
+        "bg": "rgb(22,23,28)"
+      },
+      {
+        "kind": "low-contrast-text",
+        "contrast": 1.67,
+        "text": "View details",
+        "tag": "span",
+        "cls": "mt-3 inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-brand-blue",
+        "testid": "brief-row-absent",
+        "fg": "rgb(0,47,167)",
+        "bg": "rgb(22,23,28)"
+      },
+      {
+        "kind": "low-contrast-text",
+        "contrast": 1.67,
+        "text": "View details",
+        "tag": "span",
+        "cls": "mt-3 inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-brand-blue",
+        "testid": "brief-row-complaints",
+        "fg": "rgb(0,47,167)",
+        "bg": "rgb(22,23,28)"
+      },
+      {
+        "kind": "low-contrast-text",
+        "contrast": 1.67,
+        "text": "View details",
+        "tag": "span",
+        "cls": "mt-3 inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-brand-blue",
+        "testid": "brief-row-payment_overdue",
+        "fg": "rgb(0,47,167)",
+        "bg": "rgb(22,23,28)"
+      }
+    ],
+    "isDark": true
+  },
+  "/my-work": {
+    "scanned": 480,
+    "issues": [
+      {
+        "kind": "low-contrast-text",
+        "contrast": 2.56,
+        "text": "cancelled",
+        "tag": "span",
+        "cls": "inline-block px-2 py-0.5 text-xs uppercase tracking-wider font-semibold border border-black bg-black/10 text-muted-foreg",
+        "testid": "mywork-task-87c106c6-98cf-4577-a3e8-603702111d81",
+        "fg": "rgb(161,161,170)",
+        "bg": "rgb(255,255,255)"
+      },
+      {
+        "kind": "low-contrast-text",
+        "contrast": 1.1,
+        "text": "low",
+        "tag": "span",
+        "cls": "inline-block px-2 py-0.5 text-xs uppercase tracking-wider font-semibold border border-black bg-black/10 text-black",
+        "testid": "mywork-task-5014378c-3196-430f-8a72-f11b281271a3",
+        "fg": "rgb(244,244,245)",
+        "bg": "rgb(255,255,255)"
+      }
+    ],
+    "isDark": true
+  },
+  "/contacts": {
+    "scanned": 51,
+    "issues": [],
+    "isDark": true
+  },
+  "/brain": {
+    "scanned": 31,
+    "issues": [],
+    "isDark": true
+  },
+  "/ingest": {
+    "scanned": 173,
+    "issues": [],
+    "isDark": true
+  },
+  "/workflows": {
+    "scanned": 44,
+    "issues": [],
+    "isDark": true
+  },
+  "/meetings": {
+    "scanned": 44,
+    "issues": [],
+    "isDark": true
+  },
+  "/notifications": {
+    "scanned": 249,
+    "issues": [],
+    "isDark": true
+  }
+}

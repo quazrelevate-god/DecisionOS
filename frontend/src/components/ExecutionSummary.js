@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Dialog, DialogContent } from "./ui/dialog";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "./ui/dialog";
 import { CheckSquare, UsersThree, SealCheck, Truck, CalendarCheck, BellRinging, Lightning, ArrowRight } from "@phosphor-icons/react";
 
 function CountUp({ value, delay = 0, duration = 700 }) {
@@ -46,6 +46,8 @@ export default function ExecutionSummary({ data, onReview, onClose }) {
           </div>
           <h2 className="font-heading text-2xl font-black uppercase tracking-tight mt-1">Execution plan is ready</h2>
         </div>
+        <DialogTitle className="sr-only">Execution plan is ready</DialogTitle>
+        <DialogDescription className="sr-only">Real counts of the tasks, people, workflows, approvals, meetings and reminders produced by this directive.</DialogDescription>
 
         <div className="p-6">
           <div className="grid grid-cols-2 gap-3" data-testid="execution-summary-chips">

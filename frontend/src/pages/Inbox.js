@@ -236,8 +236,9 @@ export default function Inbox() {
         fd.append("language", languageRef.current);
         setBusy(true);
         try {
-          await api.post("/voice-notes", fd, { headers: { "Content-Type": "multipart/form-data" } });
-          toast.success("Voice note uploaded — processing…");
+          const { data } = await api.post("/voice-notes", fd, { headers: { "Content-Type": "multipart/form-data" } });
+          if (data?.id) setSubmittedNoteId(data.id);
+          toast.success("Voice note uploaded — structuring…");
           refresh();
         } catch { toast.error("Upload failed"); } finally { setBusy(false); }
       };
@@ -263,8 +264,12 @@ export default function Inbox() {
   useEffect(() => {
     if (!submittedNoteId) return;
     const note = (notesQ.data || []).find((n) => n.id === submittedNoteId);
-    if (note && note.status === "done" && note.execution_summary) {
-      setExecPanel({ ...note.execution_summary, decisionId: note.decision_id });
+    if (!note) return;
+    if (note.status === "done" && note.execution_summary) {
+      const hasAny = Object.values(note.execution_summary).some((v) => (v || 0) > 0);
+      if (hasAny) setExecPanel({ ...note.execution_summary, decisionId: note.decision_id });
+      setSubmittedNoteId(null);
+    } else if (note.status === "failed") {
       setSubmittedNoteId(null);
     }
   }, [notesQ.data, submittedNoteId]);

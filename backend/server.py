@@ -109,7 +109,7 @@ def require_role(*roles):
 # ---------------------------------------------------------------------------
 # Module-level access permissions
 # ---------------------------------------------------------------------------
-PERMISSION_KEYS = ["inbox", "data_input", "people", "finance", "workflows", "tasks", "brain", "ask", "team_manage"]
+PERMISSION_KEYS = ["inbox", "voice_capture", "data_input", "people", "finance", "workflows", "tasks", "brain", "ask", "team_manage"]
 _BASE_PERMS = {"inbox", "data_input", "people", "workflows", "tasks", "brain", "ask"}
 ROLE_DEFAULT_PERMS = {
     "sales": _BASE_PERMS,
@@ -1303,7 +1303,7 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 
 
 @api.post("/voice-notes")
-async def create_voice_note(background: BackgroundTasks, file: UploadFile = File(...), language: str = Form("auto"), user: dict = Depends(require_role("owner"))):
+async def create_voice_note(background: BackgroundTasks, file: UploadFile = File(...), language: str = Form("auto"), user: dict = Depends(require_perm("voice_capture"))):
     note_id = new_id()
     ext = (file.filename or "audio.webm").split(".")[-1]
     path = UPLOAD_DIR / f"{note_id}.{ext}"
@@ -1320,7 +1320,7 @@ async def create_voice_note(background: BackgroundTasks, file: UploadFile = File
 
 
 @api.post("/voice-notes/text")
-async def create_text_note(inp: TextNoteInput, background: BackgroundTasks, user: dict = Depends(require_role("owner"))):
+async def create_text_note(inp: TextNoteInput, background: BackgroundTasks, user: dict = Depends(require_perm("voice_capture"))):
     note_id = new_id()
     await db.voice_notes.insert_one({
         "id": note_id, "tenant_id": user["tenant_id"], "created_by": user["id"],
@@ -1365,7 +1365,7 @@ async def ai_clarify_directive(text: str, industry: str, session_id: str) -> dic
 
 
 @api.post("/capture/clarify")
-async def clarify_directive(inp: ClarifyInput, user: dict = Depends(require_role("owner"))):
+async def clarify_directive(inp: ClarifyInput, user: dict = Depends(require_perm("voice_capture"))):
     text = (inp.text or "").strip()
     if not text:
         raise HTTPException(status_code=400, detail="Text is required")

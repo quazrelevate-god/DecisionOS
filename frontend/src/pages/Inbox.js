@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { hasPerm } from "../lib/perms";
 import { PageHeader, Chip, EmptyState } from "../components/common";
 import ExecutionSummary from "../components/ExecutionSummary";
 import { money } from "../lib/format";
@@ -180,6 +181,7 @@ function useElapsed(active) {
 
 export default function Inbox() {
   const { user, tenant } = useAuth();
+  const canCapture = user?.role === "owner" || hasPerm(user, "voice_capture");
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [recording, setRecording] = useState(false);
@@ -371,7 +373,7 @@ export default function Inbox() {
       </PageHeader>
 
       {/* Capture */}
-      {user?.role === "owner" ? (
+      {canCapture ? (
         <div className="grid lg:grid-cols-2 gap-4 mb-8">
           <div className="card-brutal p-6 flex flex-col items-center justify-center text-center">
             <button onClick={recording ? stopRec : startRec} disabled={busy} data-testid="voice-record-button"
@@ -431,7 +433,7 @@ export default function Inbox() {
         </div>
       ) : (
         <div className="border border-black bg-brand-yellow/40 p-4 text-sm mb-8" data-testid="owner-only-notice">
-          Voice/text capture is owner-only. Your inbox below shows everything happening across the business.
+          Voice/text capture isn't enabled for your access. Your inbox below shows everything happening across the business.
         </div>
       )}
 

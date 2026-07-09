@@ -1,0 +1,26 @@
+{
+  "summary": "Frontend-only e2e verification of the new 'voice_capture' permission end-to-end. All four review scenarios PASSED. (1) Access editor renders 'Voice Box (Decision Desk capture)' toggle at data-testid='perm-voice_capture', OFF by default for Sales (Priya Nair) — visually white while ON perms like 'perm-inbox' use bg-brand-ink text-white. (2) Toggling it ON changed its class to the ON style, Save succeeded (toast 'Priya Nair's access updated'). Re-login as sales@sharma.com via Email & Password tab → Decision Desk now renders both voice-record-button and text-directive-input, and owner-only-notice is NOT present. (3) Revoke path: re-logged as owner, opened Sales access, toggled perm-voice_capture back OFF, saved successfully — clean demo state restored (Sales ends with voice_capture OFF). (4) Owner regression: owner still sees the full capture panel on Decision Desk (voice-record-button + text-directive-input present, no owner-only-notice). No console errors observed (only harmless Radix Dialog aria-describedby warnings).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/iter37_sales_grant.png",
+    "/app/test_reports/iter37_owner_regression.png"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Minor a11y: the permission toggle buttons in /app/frontend/src/pages/Team.js (data-testid='perm-<key>') convey ON/OFF state only via background color classes (bg-brand-ink text-white vs bg-white) with no aria-pressed attribute. Consider adding aria-pressed={perms.includes(p.key)} so screen readers and automated tests can programmatically detect state (tests currently have to inspect className). Non-blocking.",
+    "Radix Dialog warning 'Missing Description or aria-describedby={undefined}' fires when opening the member access dialog. Add DialogDescription (or aria-describedby) to Team.js MemberDialog for a11y compliance."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped per request)", "frontend": "100% (7/7 assertions passed)"},
+  "test_credentials": "Owner: demo-login-owner button (owner@sharma.com / demo1234). Sales: sales@sharma.com / demo1234 via Email & Password tab.",
+  "seed_data_creation": "none — reused existing Sales demo user (Priya Nair, id=6f4e96ab-6795-44f9-893b-a51cd2450543).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "voice_capture permission wiring is verified end-to-end (grant→Sales sees capture panel; revoke→clean state restored). Sales member currently has voice_capture OFF. If retesting UI, the toggle uses class-based state (bg-brand-ink text-white=ON, bg-white=OFF); no aria-pressed yet. Logout is exposed at data-testid='logout-button'. Sales login flow: click 'Email & Password' tab on landing screen, fill input[type=email]/[type=password], click button[type=submit].",
+  "rca of the issue": "N/A — no bug found; feature works as specified."
+}

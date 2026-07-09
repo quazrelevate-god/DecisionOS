@@ -1,5 +1,6 @@
 export const PERMISSIONS = [
   { key: "inbox", label: "Inbox" },
+  { key: "voice_capture", label: "Voice Box (Decision Desk capture)" },
   { key: "data_input", label: "Data Input" },
   { key: "people", label: "People / Contacts" },
   { key: "finance", label: "Finance (invoices, payments, 360°)" },

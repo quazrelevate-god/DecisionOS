@@ -655,6 +655,30 @@ def match_member_by_name(members: list, name: str):
 # ---------------------------------------------------------------------------
 # Voice note processing pipeline
 # ---------------------------------------------------------------------------
+_WEEKDAYS = {"monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3, "friday": 4, "saturday": 5, "sunday": 6}
+
+
+def _resolve_meeting_date(when: str, due_in_days) -> str:
+    """Resolve a meeting's natural-language timing into an ISO date (YYYY-MM-DD)."""
+    now = datetime.now(timezone.utc)
+    if isinstance(due_in_days, int):
+        return (now + timedelta(days=due_in_days)).date().isoformat()
+    w = (when or "").lower()
+    if "today" in w:
+        return now.date().isoformat()
+    if "tomorrow" in w:
+        return (now + timedelta(days=1)).date().isoformat()
+    for name, idx in _WEEKDAYS.items():
+        if name in w:
+            ahead = (idx - now.weekday()) % 7 or 7  # next occurrence, not today
+            if "next" in w:
+                ahead += 7
+            return (now + timedelta(days=ahead)).date().isoformat()
+    if "next week" in w:
+        return (now + timedelta(days=7)).date().isoformat()
+    return (now + timedelta(days=2)).date().isoformat()
+
+
 async def process_voice_note(note_id: str):
     note = await db.voice_notes.find_one({"id": note_id})
     if not note:
@@ -739,19 +763,22 @@ async def process_voice_note(note_id: str):
                     "id": new_id(), "tenant_id": tenant_id, "text": m["text"],
                     "tag": m.get("tag", "note"), "created_by": note["created_by"], "created_at": now_iso(),
                 })
-        # Meetings: create a lightweight follow-up task per detected meeting (source=meeting)
+        # Meetings: schedule a real calendar event + a lightweight (undated) to-do per detected meeting
         meetings = extracted.get("meeting_events") or []
         for mt in meetings:
-            due = None
-            if isinstance(mt.get("due_in_days"), int):
-                due = (datetime.now(timezone.utc) + timedelta(days=mt["due_in_days"])).isoformat()
             when = (mt.get("when") or "").strip()
             title = (mt.get("title") or "Meeting").strip()
+            mdate = _resolve_meeting_date(when, mt.get("due_in_days"))
+            await db.calendar_events.insert_one({
+                "id": new_id(), "tenant_id": tenant_id, "date": mdate, "title": title,
+                "when_text": when, "decision_id": decision_id, "source": "voice",
+                "created_by": note["created_by"], "created_at": now_iso(),
+            })
             await db.tasks.insert_one({
                 "id": new_id(), "tenant_id": tenant_id,
                 "title": title + (f" ({when})" if when else ""),
                 "description": "", "assignee_role": None, "assignee_id": note["created_by"],
-                "priority": "medium", "status": "todo", "due_date": due, "decision_id": None,
+                "priority": "medium", "status": "todo", "due_date": None, "decision_id": None,
                 "source": "meeting", "created_at": now_iso(),
             })
         # Workflows: materialize each detected workflow_event into a real board card
@@ -3238,6 +3265,11 @@ async def business_calendar(days: int = 45, user: dict = Depends(get_current_use
         md = b[-5:] if len(b) >= 5 else ""
         if len(md) == 5 and "-" in md:
             add(f"{now.year}-{md}", "birthday", f"Birthday: {c.get('name')}", "", c.get("id"))
+
+    # Meetings scheduled from directives
+    mevs = await db.calendar_events.find({"tenant_id": tid}, {"_id": 0}).to_list(300)
+    for ev in mevs:
+        add(ev.get("date"), "meeting", ev.get("title", "Meeting"), ev.get("when_text", ""), None, ev.get("id"))
 
     events = [e for e in events if start <= e["date"] <= end]
     for e in events:

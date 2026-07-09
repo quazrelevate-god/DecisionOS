@@ -4,10 +4,11 @@ import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { PageHeader, EmptyState } from "../components/common";
 import {
-  CurrencyCircleDollar, CheckSquare, Truck, Warning, Cake, CalendarBlank,
+  CurrencyCircleDollar, CheckSquare, Truck, Warning, Cake, CalendarBlank, UsersThree,
 } from "@phosphor-icons/react";
 
 const TYPES = {
+  meeting: { label: "Meetings", icon: UsersThree, color: "bg-brand-ink", text: "text-brand-ink" },
   payment_due: { label: "Payments", icon: CurrencyCircleDollar, color: "bg-orange-500", text: "text-orange-600" },
   task: { label: "Tasks", icon: CheckSquare, color: "bg-brand-blue", text: "text-brand-blue" },
   delivery: { label: "Deliveries", icon: Truck, color: "bg-green-600", text: "text-green-600" },

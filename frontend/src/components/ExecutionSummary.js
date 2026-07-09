@@ -30,7 +30,7 @@ export default function ExecutionSummary({ data, onReview, onClose }) {
     { key: "assignees", icon: UsersThree, value: s.assignees, label: (n) => plural(n, "person assigned", "people assigned"), color: "bg-brand-blue" },
     { key: "workflows", icon: Truck, value: s.workflows, label: (n) => plural(n, "workflow generated", "workflows generated"), color: "bg-brand-ink" },
     { key: "approvals", icon: SealCheck, value: s.approvals, label: (n) => plural(n, "approval to review", "approvals to review"), color: "bg-brand-red" },
-    { key: "meetings", icon: CalendarCheck, value: s.meetings, label: (n) => plural(n, "meeting detected", "meetings detected"), color: "bg-brand-ink" },
+    { key: "meetings", icon: CalendarCheck, value: s.meetings, label: (n) => plural(n, "meeting scheduled", "meetings scheduled"), color: "bg-brand-ink" },
     { key: "reminders", icon: BellRinging, value: s.reminders, label: (n) => plural(n, "reminder set", "reminders set"), color: "bg-brand-ink" },
   ].filter((c) => (c.value || 0) > 0);
 

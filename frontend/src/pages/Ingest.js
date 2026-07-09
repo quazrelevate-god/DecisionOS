@@ -25,6 +25,14 @@ const inp = "w-full border border-black px-2.5 py-1.5 text-sm font-mono focus:ou
 
 const EMPTY = { contacts: [], invoices: [], payments: [], tasks: [] };
 
+const withKeys = (recs) => {
+  const out = { ...EMPTY, ...(recs || {}) };
+  ["contacts", "invoices", "payments", "tasks"].forEach((b) => {
+    out[b] = (out[b] || []).map((it) => (it._key ? it : { ...it, _key: `${b}-${Math.random().toString(36).slice(2, 9)}` }));
+  });
+  return out;
+};
+
 function Field({ label, value, onChange, placeholder }) {
   return (
     <label className="block">
@@ -37,7 +45,7 @@ function Field({ label, value, onChange, placeholder }) {
 function ReviewPanel({ ingestion, onFiled, onCancel }) {
   const { tenant } = useAuth();
   const currency = tenant?.currency || "INR";
-  const [records, setRecords] = useState({ ...EMPTY, ...(ingestion.records || {}) });
+  const [records, setRecords] = useState(() => withKeys(ingestion.records));
   const [filing, setFiling] = useState(false);
 
   const setItem = (bucket, idx, key, val) => {
@@ -60,7 +68,9 @@ function ReviewPanel({ ingestion, onFiled, onCancel }) {
   const fileIt = async () => {
     setFiling(true);
     try {
-      const { data } = await api.post(`/ingest/${ingestion.id}/commit`, { records });
+      const clean = {};
+      Object.keys(records).forEach((b) => { clean[b] = (records[b] || []).map(({ _key, ...rest }) => rest); });
+      const { data } = await api.post(`/ingest/${ingestion.id}/commit`, { records: clean });
       const c = data.created;
       toast.success(`Filed: ${c.contacts} contacts · ${c.invoices} invoices · ${c.payments} payments · ${c.tasks} tasks`);
       onFiled();
@@ -107,7 +117,7 @@ function ReviewPanel({ ingestion, onFiled, onCancel }) {
           <p className="label-mono text-brand-red mb-2 flex items-center gap-1"><UsersThree size={14} weight="bold" /> Customers & Vendors ({records.contacts.length})</p>
           <div className="space-y-2">
             {records.contacts.map((c, i) => (
-              <div key={i} className="border border-black/20 p-3 grid grid-cols-2 md:grid-cols-4 gap-2 relative" data-testid={`review-contact-${i}`}>
+              <div key={c._key} className="border border-black/20 p-3 grid grid-cols-2 md:grid-cols-4 gap-2 relative" data-testid={`review-contact-${i}`}>
                 <Field label="Type" value={c.type} onChange={(v) => setItem("contacts", i, "type", v)} />
                 <Field label="Name" value={c.name} onChange={(v) => setItem("contacts", i, "name", v)} />
                 <Field label="Phone" value={c.phone} onChange={(v) => setItem("contacts", i, "phone", v)} />
@@ -125,7 +135,7 @@ function ReviewPanel({ ingestion, onFiled, onCancel }) {
           <p className="label-mono text-brand-red mb-2 flex items-center gap-1"><Receipt size={14} weight="bold" /> Invoices & Bills ({records.invoices.length})</p>
           <div className="space-y-2">
             {records.invoices.map((inv, i) => (
-              <div key={i} className="border border-black/20 p-3 grid grid-cols-2 md:grid-cols-5 gap-2 relative" data-testid={`review-invoice-${i}`}>
+              <div key={inv._key} className="border border-black/20 p-3 grid grid-cols-2 md:grid-cols-5 gap-2 relative" data-testid={`review-invoice-${i}`}>
                 <Field label="Type" value={inv.type} onChange={(v) => setItem("invoices", i, "type", v)} />
                 <Field label="Number" value={inv.number} onChange={(v) => setItem("invoices", i, "number", v)} />
                 <Field label="Party" value={inv.contact_name} onChange={(v) => setItem("invoices", i, "contact_name", v)} />
@@ -144,7 +154,7 @@ function ReviewPanel({ ingestion, onFiled, onCancel }) {
           <p className="label-mono text-brand-red mb-2 flex items-center gap-1"><CurrencyCircleDollar size={14} weight="bold" /> Payments ({records.payments.length})</p>
           <div className="space-y-2">
             {records.payments.map((p, i) => (
-              <div key={i} className="border border-black/20 p-3 grid grid-cols-2 md:grid-cols-5 gap-2 relative" data-testid={`review-payment-${i}`}>
+              <div key={p._key} className="border border-black/20 p-3 grid grid-cols-2 md:grid-cols-5 gap-2 relative" data-testid={`review-payment-${i}`}>
                 <Field label="Direction" value={p.direction} onChange={(v) => setItem("payments", i, "direction", v)} />
                 <Field label="Amount" value={p.amount} onChange={(v) => setItem("payments", i, "amount", v)} />
                 <Field label="Party" value={p.contact_name} onChange={(v) => setItem("payments", i, "contact_name", v)} />
@@ -163,7 +173,7 @@ function ReviewPanel({ ingestion, onFiled, onCancel }) {
           <p className="label-mono text-brand-red mb-2 flex items-center gap-1"><ListChecks size={14} weight="bold" /> Follow-up tasks ({records.tasks.length})</p>
           <div className="space-y-2">
             {records.tasks.map((t, i) => (
-              <div key={i} className="border border-black/20 p-3 flex items-center gap-2 relative" data-testid={`review-task-${i}`}>
+              <div key={t._key} className="border border-black/20 p-3 flex items-center gap-2 relative" data-testid={`review-task-${i}`}>
                 <input className={inp} value={t.title ?? ""} onChange={(e) => setItem("tasks", i, "title", e.target.value)} />
                 <button onClick={() => removeItem("tasks", i)} data-testid={`remove-task-${i}`} className="shrink-0 w-8 h-8 flex items-center justify-center border border-black bg-white hover:bg-brand-red hover:text-white transition-colors"><Trash size={12} weight="bold" /></button>
               </div>

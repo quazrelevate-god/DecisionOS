@@ -9,6 +9,7 @@ import uuid
 import json
 import hmac
 import random
+import secrets
 import hashlib
 import logging
 import httpx
@@ -929,7 +930,7 @@ async def _issue_otp(norm: str, display_phone: str, enforce_cooldown: bool = Tru
             age = (datetime.now(timezone.utc) - datetime.fromisoformat(existing["created_at"])).total_seconds()
             if age < OTP_RESEND_COOLDOWN:
                 raise HTTPException(status_code=429, detail=f"Please wait {int(OTP_RESEND_COOLDOWN - age)}s before requesting a new code")
-    code = f"{random.randint(0, 999999):06d}"
+    code = f"{secrets.randbelow(1000000):06d}"  # cryptographically secure OTP
     now = datetime.now(timezone.utc)
     await db.otp_codes.update_one(
         {"phone": norm},

@@ -136,7 +136,7 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite }) {
               {PERMISSIONS.map((p) => {
                 const on = form.permissions.includes(p.key);
                 return (
-                  <button key={p.key} type="button" data-testid={`perm-${p.key}`} onClick={() => togglePerm(p.key)}
+                  <button key={p.key} type="button" data-testid={`perm-${p.key}`} aria-pressed={on} onClick={() => togglePerm(p.key)}
                     className={`flex items-center justify-between gap-2 border border-black px-3 py-2 text-xs font-semibold text-left transition-colors ${on ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
                     <span>{p.label}</span>
                     <span className={`w-4 h-4 shrink-0 flex items-center justify-center border border-current ${on ? "bg-brand-red text-white border-black" : ""}`}>{on && <Check size={10} weight="bold" />}</span>

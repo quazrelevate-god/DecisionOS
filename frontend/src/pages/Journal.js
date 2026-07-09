@@ -87,7 +87,7 @@ function TimelineDialog({ decisionId, open, onClose }) {
               const Icon = EVENT_ICON[e.kind] || Circle;
               const color = EVENT_COLOR[e.kind] || "text-muted-foreground";
               return (
-                <li key={i} className="mb-6 ml-6" data-testid={`timeline-event-${i}`}>
+                <li key={`${e.kind}-${e.ts || i}`} className="mb-6 ml-6" data-testid={`timeline-event-${i}`}>
                   <span className="absolute -left-[13px] flex items-center justify-center w-6 h-6 bg-white border-2 border-black">
                     <Icon size={13} weight="bold" className={color} />
                   </span>
@@ -114,8 +114,7 @@ export default function Journal() {
     queryFn: () => api.get(`/journal?q=${encodeURIComponent(term)}`).then((r) => r.data),
   });
 
-  const days = data?.days || [];
-  const visibleDays = useMemo(() => days.filter((d) => d.decisions.length || d.notes.length), [days]);
+  const visibleDays = useMemo(() => (data?.days || []).filter((d) => d.decisions.length || d.notes.length), [data]);
   const hasContent = visibleDays.length > 0;
 
   return (

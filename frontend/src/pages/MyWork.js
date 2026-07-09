@@ -271,7 +271,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
                         <div className="mt-2 space-y-1.5">
                           <p className="label-mono text-muted-foreground">If they push back:</p>
                           {ask[s.id].data.objections.map((o, k) => (
-                            <p key={k}><span className="font-semibold">“{o.objection}”</span> — {o.response}</p>
+                            <p key={`${o.objection}-${k}`}><span className="font-semibold">“{o.objection}”</span> — {o.response}</p>
                           ))}
                         </div>
                       )}

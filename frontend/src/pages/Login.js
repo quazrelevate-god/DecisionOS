@@ -130,7 +130,7 @@ export default function Login() {
     try {
       const { data } = await api.post("/onboarding/suggest", { industry: eff, company_size: form.company_size });
       setRoles(data.roles || []);
-      setProducts((data.products || []).map((p) => ({ name: p.name, description: p.description || "" })));
+      setProducts((data.products || []).map((p) => ({ name: p.name, description: p.description || "", _key: Math.random().toString(36).slice(2, 9) })));
     } catch {
       toast.error("Couldn't fetch AI suggestions — add your team & products manually");
     } finally {
@@ -147,7 +147,7 @@ export default function Login() {
     setRoles([...roles, { key, label }]); setRoleInput("");
   };
   const removeRole = (key) => setRoles(roles.filter((r) => r.key !== key));
-  const addProduct = () => setProducts([...products, { name: "", description: "" }]);
+  const addProduct = () => setProducts([...products, { name: "", description: "", _key: Math.random().toString(36).slice(2, 9) }]);
   const updateProduct = (i, k, v) => setProducts(products.map((p, idx) => (idx === i ? { ...p, [k]: v } : p)));
   const removeProduct = (i) => setProducts(products.filter((_, idx) => idx !== i));
 
@@ -167,7 +167,7 @@ export default function Login() {
           employees: form.company_size, monthly_sales: form.monthly_sales,
           monthly_purchases: form.monthly_purchases, customers: form.num_customers, suppliers: form.num_suppliers,
         },
-        roles, products: products.filter((p) => p.name.trim()),
+        roles, products: products.filter((p) => p.name.trim()).map(({ _key, ...r }) => r),
       });
       setStep(5);
     } catch (err) {

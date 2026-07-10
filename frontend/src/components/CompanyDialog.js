@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
 import { toast } from "sonner";
 import { Buildings, Package, Plus, Trash, UsersThree } from "@phosphor-icons/react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "./ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from "./ui/dialog";
 
 const inp = "w-full border border-black px-3 py-2 text-sm font-mono focus:outline-none focus:shadow-brutal-sm disabled:bg-black/5 disabled:text-muted-foreground";
 const FIELDS = [
@@ -117,6 +117,9 @@ export function CompanyDialog({ trigger }) {
           <DialogTitle className="font-heading uppercase tracking-tight flex items-center gap-2">
             <Buildings size={20} weight="bold" className="text-brand-red" /> Company Details
           </DialogTitle>
+          <DialogDescription className="text-sm text-muted-foreground">
+            Update your company profile, products, and team roles.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="grid sm:grid-cols-2 gap-3">

@@ -26,7 +26,7 @@ function MeetingDialog({ id, open, onClose }) {
       </div>
       <ul className="space-y-1.5">
         {items.map((it, i) => (
-          <li key={i} className="text-sm flex gap-2"><span className="text-brand-red">›</span>
+          <li key={typeof it === "string" ? `item-${i}-${it.slice(0, 24)}` : (it.id || `item-${i}-${it.title || ""}`)} className="text-sm flex gap-2"><span className="text-brand-red">›</span>
             <span>{typeof it === "string" ? it : `${it.title}${it.assignee_name ? ` — ${it.assignee_name}` : ""}`}</span>
           </li>
         ))}

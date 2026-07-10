@@ -5,10 +5,8 @@ load_dotenv(ROOT_DIR / '.env')
 
 import os
 import re
-import uuid
 import json
 import hmac
-import random
 import asyncio
 import smtplib
 import ssl
@@ -20,22 +18,27 @@ from email.message import EmailMessage
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 
-import bcrypt
-import jwt
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, UploadFile, File, Form, BackgroundTasks, Response
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field, EmailStr
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
 from emergentintegrations.llm.openai import OpenAISpeechToText
 
-# ---------------------------------------------------------------------------
-# Config
-# ---------------------------------------------------------------------------
-from core import *  # noqa: F401,F403 — shared foundation (config, db, auth, permissions, helpers)
+from core import (
+    db, client, logger, DEFAULT_ROLES,
+    EMERGENT_LLM_KEY, LLM_MODEL, VISION_MODEL,
+    now_iso, new_id, _extract_json,
+    hash_password, verify_password, create_token,
+    set_auth_cookie, clear_auth_cookie,
+    get_current_user, require_role, require_perm, user_perms, clean_perms,
+    tenant_role_keys, log_activity, add_decision_event, normalize_os_blueprint,
+)
 
+# ---------------------------------------------------------------------------
+# Config: foundation (db, auth, permissions, helpers) lives in core.py and is
+# imported explicitly at the top of this module.
+# ---------------------------------------------------------------------------
 app = FastAPI(title="DecisionOS")
 api = APIRouter(prefix="/api")
 

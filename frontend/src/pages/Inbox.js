@@ -26,9 +26,8 @@ function EscalationCard({ t, onRespond, highlight }) {
     try {
       await onRespond(t.id, text.trim());
       setText("");
-    } catch (err) {
-      // error toast already shown by onRespond; keep the typed text so the user can retry
-      console.error("Escalation response failed:", err);
+    } catch {
+      // toast already shown by onRespond; keep the typed text so the user can retry
     } finally {
       setSending(false);
     }

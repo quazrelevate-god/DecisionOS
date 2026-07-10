@@ -71,7 +71,7 @@ const OtpBoxes = ({ value, onChange, disabled }) => {
     <div className="flex gap-2 justify-between" data-testid="otp-boxes">
       {digits.map((d, i) => (
         <input
-          key={i}
+          key={`otp-${i}`}
           ref={(el) => (refs.current[i] = el)}
           data-testid={`otp-box-${i}`}
           inputMode="numeric"
@@ -321,7 +321,7 @@ export default function Login() {
     if (phones.length === 0) { setStep(7); return; }
     setBusy(true);
     try { await api.post("/invites", { phones }); toast.success(`${phones.length} invite(s) queued`); }
-    catch (err) { console.error("invite send failed (non-blocking):", err); }
+    catch { /* invite send is non-blocking; continue onboarding regardless */ }
     finally { setBusy(false); setStep(7); }
   };
 
@@ -475,7 +475,7 @@ export default function Login() {
               </div>
               <div className="flex gap-1 mb-6">
                 {Array.from({ length: TOTAL }).map((_, i) => (
-                  <div key={i} className={`h-1.5 flex-1 border border-black ${i + 1 <= step ? "bg-brand-red" : "bg-white"}`} />
+                  <div key={`step-seg-${i}`} className={`h-1.5 flex-1 border border-black ${i + 1 <= step ? "bg-brand-red" : "bg-white"}`} />
                 ))}
               </div>
 

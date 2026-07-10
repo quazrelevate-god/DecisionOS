@@ -272,6 +272,10 @@ class TextNoteInput(BaseModel):
     language: Optional[str] = "auto"
 
 
+TASK_TYPES = {"operational", "sales", "purchase", "production", "finance", "hr", "other"}
+TASK_STATUSES = {"blocked", "todo", "in_progress", "waiting", "review", "done", "cancelled"}
+
+
 class TaskCreateInput(BaseModel):
     title: str
     description: Optional[str] = ""
@@ -279,6 +283,16 @@ class TaskCreateInput(BaseModel):
     assignee_id: Optional[str] = None
     priority: Optional[str] = "medium"
     due_in_days: Optional[int] = None
+    # Operational-task fields (all optional; used by the My Work "New Task" form)
+    task_type: Optional[str] = None
+    op_category: Optional[str] = None
+    support_id: Optional[str] = None
+    due_date: Optional[str] = None   # ISO date e.g. "2026-06-15"
+    due_time: Optional[str] = None   # "HH:MM"
+    expected_output: Optional[str] = None
+    approval_required: Optional[bool] = False
+    approver_id: Optional[str] = None
+    progress: Optional[int] = None
 
 
 class TaskUpdateInput(BaseModel):
@@ -286,6 +300,7 @@ class TaskUpdateInput(BaseModel):
     assignee_id: Optional[str] = None
     assignee_role: Optional[str] = None
     priority: Optional[str] = None
+    progress: Optional[int] = None
 
 
 class WorkflowCreateInput(BaseModel):
@@ -1952,22 +1967,49 @@ async def reject_decision(decision_id: str, user: dict = Depends(require_role("o
 # ---------------------------------------------------------------------------
 # Tasks
 # ---------------------------------------------------------------------------
+def _derive_task_type(t: dict) -> str:
+    if t.get("task_type") in TASK_TYPES:
+        return t["task_type"]
+    r = t.get("assignee_role")
+    if r in ("sales", "finance", "production", "purchase"):
+        return r
+    return "other"
+
+
 async def enrich_task(t: dict) -> dict:
-    if t.get("assignee_id"):
-        u = await db.users.find_one({"id": t["assignee_id"]}, {"_id": 0, "name": 1})
-        t["assignee_name"] = u["name"] if u else None
+    if not t:
+        return t
+    ids = list({t.get(k) for k in ("assignee_id", "support_id", "approver_id", "created_by") if t.get(k)})
+    umap = {}
+    if ids:
+        for u in await db.users.find({"id": {"$in": ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(50):
+            umap[u["id"]] = u["name"]
+    t["assignee_name"] = umap.get(t.get("assignee_id"))
+    t["support_name"] = umap.get(t.get("support_id"))
+    t["approver_name"] = umap.get(t.get("approver_id"))
+    t["created_by_name"] = umap.get(t.get("created_by"))
+    t["attachment_count"] = len(t.get("attachments") or [])
+    t["task_type"] = _derive_task_type(t)
     return t
 
 
 async def enrich_tasks(tasks: list) -> list:
-    ids = list({t["assignee_id"] for t in tasks if t.get("assignee_id")})
+    ids = set()
+    for t in tasks:
+        for k in ("assignee_id", "support_id", "approver_id", "created_by"):
+            if t.get(k):
+                ids.add(t[k])
     umap = {}
     if ids:
-        for u in await db.users.find({"id": {"$in": ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(500):
+        for u in await db.users.find({"id": {"$in": list(ids)}}, {"_id": 0, "id": 1, "name": 1}).to_list(500):
             umap[u["id"]] = u["name"]
     for t in tasks:
-        if t.get("assignee_id"):
-            t["assignee_name"] = umap.get(t["assignee_id"])
+        t["assignee_name"] = umap.get(t.get("assignee_id"))
+        t["support_name"] = umap.get(t.get("support_id"))
+        t["approver_name"] = umap.get(t.get("approver_id"))
+        t["created_by_name"] = umap.get(t.get("created_by"))
+        t["attachment_count"] = len(t.get("attachments") or [])
+        t["task_type"] = _derive_task_type(t)
     return tasks
 
 
@@ -1992,7 +2034,9 @@ async def list_tasks(status: Optional[str] = None, mine: Optional[bool] = False,
 async def create_task(inp: TaskCreateInput, user: dict = Depends(get_current_user)):
     tid = new_id()
     due = None
-    if isinstance(inp.due_in_days, int):
+    if inp.due_date:
+        due = f"{inp.due_date}T{inp.due_time}:00" if inp.due_time else inp.due_date
+    elif isinstance(inp.due_in_days, int):
         due = (datetime.now(timezone.utc) + timedelta(days=inp.due_in_days)).isoformat()
     troles = await tenant_role_keys(user["tenant_id"])
     assignee_id = inp.assignee_id
@@ -2003,10 +2047,17 @@ async def create_task(inp: TaskCreateInput, user: dict = Depends(get_current_use
             assignee_id = None
         elif not role:
             role = member["role"]
+    task_type = inp.task_type if inp.task_type in TASK_TYPES else None
+    support_id = inp.support_id if inp.support_id and await db.users.find_one({"id": inp.support_id, "tenant_id": user["tenant_id"]}, {"_id": 0}) else None
+    approver_id = inp.approver_id if inp.approver_id and await db.users.find_one({"id": inp.approver_id, "tenant_id": user["tenant_id"]}, {"_id": 0}) else None
+    progress = max(0, min(100, inp.progress)) if isinstance(inp.progress, int) else 0
     await db.tasks.insert_one({
         "id": tid, "tenant_id": user["tenant_id"], "title": inp.title, "description": inp.description or "",
         "assignee_role": role, "assignee_id": assignee_id, "priority": inp.priority or "medium",
         "status": "todo", "due_date": due, "decision_id": None, "source": "manual", "created_at": now_iso(),
+        "task_type": task_type, "op_category": inp.op_category or None, "support_id": support_id,
+        "expected_output": inp.expected_output or None, "approval_required": bool(inp.approval_required),
+        "approver_id": approver_id, "progress": progress, "created_by": user["id"],
     })
     await log_activity(user["tenant_id"], user["id"], "task_created", f"Created task '{inp.title}'", "task", tid)
     return await enrich_task(await db.tasks.find_one({"id": tid}, {"_id": 0}))
@@ -2018,6 +2069,12 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
     if not t:
         raise HTTPException(status_code=404, detail="Not found")
     updates = {k: v for k, v in inp.model_dump(exclude_unset=True).items() if v is not None}
+    if "status" in updates and updates["status"] not in TASK_STATUSES:
+        updates.pop("status")
+    if "progress" in updates:
+        updates["progress"] = max(0, min(100, int(updates["progress"])))
+    if updates.get("status") == "done":
+        updates["progress"] = 100
     if "assignee_role" in updates and updates["assignee_role"] not in await tenant_role_keys(user["tenant_id"]):
         updates.pop("assignee_role")
     if updates.get("assignee_id"):

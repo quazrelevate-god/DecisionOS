@@ -4,8 +4,8 @@ import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { Chip } from "../components/common";
 import { toast } from "sonner";
-import { Plus, User } from "@phosphor-icons/react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../components/ui/dialog";
+import { Plus, User, Paperclip } from "@phosphor-icons/react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from "../components/ui/dialog";
 
 const COLUMNS = [
   { key: "blocked", label: "Pending Approval" },
@@ -15,27 +15,71 @@ const COLUMNS = [
 ];
 const NEXT = { blocked: null, todo: "in_progress", in_progress: "done", done: "todo" };
 
-function NewTaskDialog({ onCreated, roleOptions, members }) {
+export const TASK_TYPES = [
+  { key: "operational", label: "Operational" },
+  { key: "sales", label: "Sales" },
+  { key: "purchase", label: "Purchase" },
+  { key: "production", label: "Production" },
+  { key: "finance", label: "Finance" },
+  { key: "hr", label: "HR" },
+  { key: "other", label: "Other" },
+];
+
+export const OP_CATEGORIES = [
+  "Presentation", "Meeting", "Documentation", "Proposal", "Planning", "Review",
+  "Administration", "Compliance", "Marketing", "HR Activity", "Travel", "Event", "IT Support", "Other",
+];
+
+const EMPTY_FORM = {
+  title: "", description: "", task_type: "operational", op_category: "Presentation",
+  assignee_id: "", assignee_role: "", support_id: "", priority: "medium",
+  due_date: "", due_time: "", expected_output: "", approval_required: false, approver_id: "",
+};
+
+export function NewTaskDialog({ onCreated, roleOptions, members, defaultType }) {
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ title: "", description: "", assignee_id: "", assignee_role: "", priority: "medium", due_in_days: "" });
+  const [form, setForm] = useState({ ...EMPTY_FORM, task_type: defaultType || "operational" });
+  const [file, setFile] = useState(null);
+  const [busy, setBusy] = useState(false);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const isOp = form.task_type === "operational";
+
   const create = async () => {
-    if (!form.title.trim()) return;
+    if (!form.title.trim()) return toast.error("Task title is required");
+    setBusy(true);
     try {
-      await api.post("/tasks", {
+      const { data: task } = await api.post("/tasks", {
         title: form.title, description: form.description,
+        task_type: form.task_type,
+        op_category: isOp ? form.op_category : null,
         assignee_id: form.assignee_id || null,
         assignee_role: form.assignee_id ? null : (form.assignee_role || null),
+        support_id: form.support_id || null,
         priority: form.priority,
-        due_in_days: form.due_in_days ? Number(form.due_in_days) : null,
+        due_date: form.due_date || null,
+        due_time: form.due_time || null,
+        expected_output: form.expected_output || null,
+        approval_required: form.approval_required,
+        approver_id: form.approval_required ? (form.approver_id || null) : null,
       });
+      if (file && task?.id) {
+        const fd = new FormData();
+        fd.append("file", file, file.name);
+        fd.append("kind", "file");
+        try { await api.post(`/tasks/${task.id}/attachment`, fd, { headers: { "Content-Type": "multipart/form-data" } }); }
+        catch { toast.error("Task created, but attachment upload failed"); }
+      }
       toast.success("Task created");
-      setForm({ title: "", description: "", assignee_id: "", assignee_role: "", priority: "medium", due_in_days: "" });
+      setForm({ ...EMPTY_FORM, task_type: defaultType || "operational" });
+      setFile(null);
       setOpen(false);
       onCreated();
-    } catch { toast.error("Create failed"); }
+    } catch (e) { toast.error(e.response?.data?.detail || "Create failed"); }
+    finally { setBusy(false); }
   };
-  const inp = "w-full border border-black px-3 py-2 text-sm font-mono focus:outline-none focus:shadow-brutal-sm";
+
+  const inp = "w-full border border-black px-3 py-2 text-sm font-mono focus:outline-none focus:shadow-brutal-sm bg-white";
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -43,34 +87,93 @@ function NewTaskDialog({ onCreated, roleOptions, members }) {
           <Plus size={16} weight="bold" /> New Task
         </button>
       </DialogTrigger>
-      <DialogContent className="border border-black rounded-none">
-        <DialogHeader><DialogTitle className="font-heading uppercase tracking-tight">New Task</DialogTitle></DialogHeader>
+      <DialogContent className="border border-black rounded-none max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="font-heading uppercase tracking-tight">New Task</DialogTitle>
+          <DialogDescription className="label-mono text-muted-foreground">Capture any company task — operational or department work.</DialogDescription>
+        </DialogHeader>
         <div className="space-y-3">
           <input data-testid="task-title-input" className={inp} placeholder="Task title" value={form.title} onChange={set("title")} />
-          <textarea className={inp} rows={2} placeholder="Description" value={form.description} onChange={set("description")} />
+          <textarea data-testid="task-description-input" className={inp} rows={2} placeholder="Description" value={form.description} onChange={set("description")} />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label-mono text-muted-foreground">Task type</label>
+              <select data-testid="task-type-select" className={`${inp} mt-1`} value={form.task_type} onChange={set("task_type")}>
+                {TASK_TYPES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+              </select>
+            </div>
+            {isOp && (
+              <div data-testid="op-category-wrap">
+                <label className="label-mono text-muted-foreground">Operational category</label>
+                <select data-testid="op-category-select" className={`${inp} mt-1`} value={form.op_category} onChange={set("op_category")}>
+                  {OP_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label-mono text-muted-foreground">Assigned employee</label>
+              <select data-testid="task-member-select" className={`${inp} mt-1`} value={form.assignee_id} onChange={set("assignee_id")}>
+                <option value="">— Pick a person —</option>
+                {members.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label-mono text-muted-foreground">Supporting employee (optional)</label>
+              <select data-testid="task-support-select" className={`${inp} mt-1`} value={form.support_id} onChange={set("support_id")}>
+                <option value="">— None —</option>
+                {members.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
+              </select>
+            </div>
+          </div>
+          {!form.assignee_id && (
+            <div>
+              <label className="label-mono text-muted-foreground">…or assign by team/role</label>
+              <select data-testid="task-role-select" className={`${inp} mt-1`} value={form.assignee_role} onChange={set("assignee_role")}>
+                <option value="">Any / unassigned</option>
+                {roleOptions.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+              </select>
+            </div>
+          )}
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="label-mono text-muted-foreground">Priority</label>
+              <select data-testid="task-priority-select" className={`${inp} mt-1`} value={form.priority} onChange={set("priority")}>
+                {["low", "medium", "high"].map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label-mono text-muted-foreground">Due date</label>
+              <input data-testid="task-due-date" type="date" className={`${inp} mt-1`} value={form.due_date} onChange={set("due_date")} />
+            </div>
+            <div>
+              <label className="label-mono text-muted-foreground">Due time</label>
+              <input data-testid="task-due-time" type="time" className={`${inp} mt-1`} value={form.due_time} onChange={set("due_time")} />
+            </div>
+          </div>
+          <input data-testid="task-expected-output" className={inp} placeholder="Expected output (e.g. Final deck in PDF)" value={form.expected_output} onChange={set("expected_output")} />
+          <label className="flex items-center gap-2 text-sm font-mono cursor-pointer">
+            <input data-testid="task-approval-required" type="checkbox" className="w-4 h-4 border border-black" checked={form.approval_required} onChange={(e) => setForm({ ...form, approval_required: e.target.checked })} />
+            Approval required
+          </label>
+          {form.approval_required && (
+            <div data-testid="task-approver-wrap">
+              <label className="label-mono text-muted-foreground">Approver</label>
+              <select data-testid="task-approver-select" className={`${inp} mt-1`} value={form.approver_id} onChange={set("approver_id")}>
+                <option value="">— Pick an approver —</option>
+                {members.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
+              </select>
+            </div>
+          )}
           <div>
-            <label className="label-mono text-muted-foreground">Assign to team member</label>
-            <select data-testid="task-member-select" className={`${inp} mt-1`} value={form.assignee_id} onChange={set("assignee_id")}>
-              <option value="">— Pick a person —</option>
-              {members.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
-            </select>
+            <label className="label-mono text-muted-foreground flex items-center gap-1"><Paperclip size={12} weight="bold" /> Attachment</label>
+            <input data-testid="task-attachment-input" type="file" className={`${inp} mt-1`} onChange={(e) => setFile(e.target.files?.[0] || null)} />
           </div>
-          <div>
-            <label className="label-mono text-muted-foreground">…or assign by role {form.assignee_id && "(ignored — member selected)"}</label>
-            <select data-testid="task-role-select" className={`${inp} mt-1`} value={form.assignee_role} onChange={set("assignee_role")} disabled={!!form.assignee_id}>
-              <option value="">Any / unassigned</option>
-              {roleOptions.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
-            </select>
-          </div>
-          <div className="flex gap-3">
-            <select className={inp} value={form.priority} onChange={set("priority")}>
-              {["low", "medium", "high"].map((p) => <option key={p} value={p}>{p}</option>)}
-            </select>
-            <input className={inp} type="number" placeholder="Due in days" value={form.due_in_days} onChange={set("due_in_days")} />
-          </div>
+          <p className="label-mono text-muted-foreground">Created by: {user?.name}</p>
         </div>
         <DialogFooter>
-          <button data-testid="task-create-submit" onClick={create} className="bg-brand-red text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">Create</button>
+          <button data-testid="task-create-submit" onClick={create} disabled={busy} className="bg-brand-red text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-50">{busy ? "Creating…" : "Create"}</button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -4,12 +4,39 @@ import api from "../lib/api";
 import { PageHeader, Chip, EmptyState } from "../components/common";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
-import { TaskBoard } from "./Tasks";
+import { TaskBoard, NewTaskDialog } from "./Tasks";
 import {
   CheckCircle, Camera, Microphone, Stop, ChatCircleText,
   Sparkle, Plus, Trash, ArrowUp, ArrowDown, Robot, PencilSimple, ListChecks, CaretDown,
   ArrowBendUpRight, WarningCircle, ChatText, ArrowRight, Kanban, ListChecks as ListIcon,
+  Paperclip, UserCircle, ShieldCheck, Tag,
 } from "@phosphor-icons/react";
+
+const WORK_TABS = [
+  { key: "all", label: "All" },
+  { key: "operational", label: "Operational" },
+  { key: "sales", label: "Sales" },
+  { key: "purchase", label: "Purchase" },
+  { key: "production", label: "Production" },
+  { key: "finance", label: "Finance" },
+  { key: "completed", label: "Completed" },
+];
+
+const STATUS_OPTIONS = [
+  { key: "todo", label: "Not Started" },
+  { key: "in_progress", label: "In Progress" },
+  { key: "waiting", label: "Waiting" },
+  { key: "review", label: "Under Review" },
+  { key: "done", label: "Completed" },
+  { key: "cancelled", label: "Cancelled" },
+];
+const STATUS_LABEL = {
+  todo: "Not Started", in_progress: "In Progress", waiting: "Waiting",
+  review: "Under Review", done: "Completed", cancelled: "Cancelled", blocked: "Pending Approval",
+};
+const PROGRESS_OPTIONS = [0, 25, 50, 75, 100];
+const isTerminal = (t) => t.status === "done" || t.status === "cancelled";
+const isOverdue = (t) => t.due_date && new Date(t.due_date) < new Date() && !isTerminal(t);
 
 function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel }) {
   const [text, setText] = useState("");
@@ -405,6 +432,19 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores }) {
     onChange();
   };
 
+  const setStatus = async (status) => {
+    await api.patch(`/tasks/${t.id}`, { status });
+    toast.success(`Status: ${STATUS_LABEL[status] || status}`);
+    onChange();
+  };
+  const setProgress = async (progress) => {
+    await api.patch(`/tasks/${t.id}`, { progress: Number(progress) });
+    onChange();
+  };
+
+  const isOp = t.task_type === "operational" || !!t.op_category;
+  const selCls = "border border-black px-2 py-1 text-xs font-mono bg-white focus:outline-none";
+
   return (
     <div data-testid={`mywork-task-${t.id}`} className="card-brutal p-5">
       <div className="flex items-start justify-between gap-2">
@@ -413,12 +453,49 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores }) {
       </div>
       {t.description && <p className="text-sm text-muted-foreground mt-1">{t.description}</p>}
       {scores && <PriorityScoreBars scores={scores} />}
-      <div className="flex items-center gap-1.5 mt-3">
-        <Chip value={t.status} />
+
+      {isOp && (
+        <div className="mt-3 flex flex-wrap items-center gap-2" data-testid={`op-meta-${t.id}`}>
+          {t.op_category && <span className="inline-flex items-center gap-1 border border-black px-2 py-0.5 text-xs font-semibold uppercase tracking-wider bg-brand-yellow"><Tag size={11} weight="bold" /> {t.op_category}</span>}
+          {t.assignee_name && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><UserCircle size={13} weight="bold" /> {t.assignee_name}</span>}
+          {t.support_name && <span className="text-xs text-muted-foreground">+ {t.support_name}</span>}
+          {t.approval_required && (
+            <span data-testid={`op-approval-${t.id}`} className="inline-flex items-center gap-1 border border-black px-2 py-0.5 text-xs font-semibold uppercase tracking-wider bg-brand-paper">
+              <ShieldCheck size={11} weight="bold" /> {t.status === "done" ? "Approved" : `${t.approver_name || "Approval"} required`}
+            </span>
+          )}
+        </div>
+      )}
+
+      <div className="flex items-center flex-wrap gap-1.5 mt-3">
+        <span data-testid={`status-chip-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-black bg-white">{STATUS_LABEL[t.status] || t.status}</span>
+        {isOverdue(t) && <span data-testid={`overdue-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-black bg-brand-red text-white">Overdue</span>}
         {t.source === "escalation" && <span data-testid={`badge-escalation-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-black bg-brand-red text-white">Escalation</span>}
         {t.source === "handoff" && <span data-testid={`badge-handoff-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-black bg-brand-blue text-white">Handoff</span>}
-        {t.due_date && <span className="text-xs text-muted-foreground">due {new Date(t.due_date).toLocaleDateString()}</span>}
+        {(t.attachment_count || 0) > 0 && <span data-testid={`att-count-${t.id}`} className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Paperclip size={12} weight="bold" /> {t.attachment_count}</span>}
+        {t.due_date && <span className="text-xs text-muted-foreground">due {new Date(t.due_date).toLocaleString(undefined, { day: "numeric", month: "short", ...(t.due_date.includes("T") ? { hour: "2-digit", minute: "2-digit" } : {}) })}</span>}
       </div>
+
+      <div className="mt-3">
+        <div className="flex items-center justify-between mb-1">
+          <span className="label-mono text-muted-foreground">Progress</span>
+          <span className="label-mono" data-testid={`progress-value-${t.id}`}>{t.progress || 0}%</span>
+        </div>
+        <div className="h-2 bg-black/10 border border-black"><div className="h-full bg-brand-blue transition-all" style={{ width: `${t.progress || 0}%` }} /></div>
+      </div>
+
+      {!isTerminal(t) && (
+        <div className="flex flex-wrap items-center gap-2 mt-3">
+          <label className="label-mono text-muted-foreground">Status</label>
+          <select data-testid={`status-select-${t.id}`} value={t.status === "blocked" ? "todo" : t.status} onChange={(e) => setStatus(e.target.value)} className={selCls}>
+            {STATUS_OPTIONS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+          </select>
+          <label className="label-mono text-muted-foreground ml-1">Set progress</label>
+          <select data-testid={`progress-select-${t.id}`} value={PROGRESS_OPTIONS.includes(t.progress) ? t.progress : 0} onChange={(e) => setProgress(e.target.value)} className={selCls}>
+            {PROGRESS_OPTIONS.map((p) => <option key={p} value={p}>{p}%</option>)}
+          </select>
+        </div>
+      )}
 
       {(t.attachments || []).length > 0 && (
         <div className="flex flex-wrap gap-2 mt-3">
@@ -430,7 +507,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores }) {
         </div>
       )}
 
-      {t.status !== "done" && (
+      {!isTerminal(t) && (
         <div className="flex flex-wrap gap-2 mt-4">
           <button onClick={complete} data-testid={`complete-${t.id}`} className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">
             <CheckCircle size={16} weight="bold" /> Complete
@@ -455,6 +532,7 @@ export default function MyWork() {
   const qc = useQueryClient();
   const { tenant } = useAuth();
   const [view, setView] = useState("mywork");
+  const [tab, setTab] = useState("all");
   const [aiPriority, setAiPriority] = useState(false);
   const tasksQ = useQuery({ queryKey: ["tasks", true], queryFn: () => api.get("/tasks?mine=true").then((r) => r.data) });
   const notifQ = useQuery({ queryKey: ["notifications"], queryFn: () => api.get("/notifications").then((r) => r.data) });
@@ -472,21 +550,37 @@ export default function MyWork() {
   (prioritiesQ.data?.tasks || []).forEach((pt) => { if (pt.ai_scores) scoreMap[pt.id] = pt.ai_scores; });
   const scoring = aiPriority && prioritiesQ.isFetching && !prioritiesQ.data;
 
-  let open = (tasksQ.data || []).filter((t) => t.status !== "done");
-  if (aiPriority) {
-    open = [...open].sort((a, b) => (scoreMap[b.id]?.priority_score || 0) - (scoreMap[a.id]?.priority_score || 0));
+  const all = tasksQ.data || [];
+  const countFor = (key) => {
+    if (key === "completed") return all.filter(isTerminal).length;
+    if (key === "all") return all.filter((t) => !isTerminal(t)).length;
+    return all.filter((t) => !isTerminal(t) && t.task_type === key).length;
+  };
+
+  let list;
+  if (tab === "completed") {
+    list = all.filter(isTerminal);
+  } else if (tab === "all") {
+    list = all.filter((t) => !isTerminal(t));
+  } else {
+    list = all.filter((t) => !isTerminal(t) && t.task_type === tab);
   }
-  const done = (tasksQ.data || []).filter((t) => t.status === "done");
+  if (aiPriority && tab !== "completed") {
+    list = [...list].sort((a, b) => (scoreMap[b.id]?.priority_score || 0) - (scoreMap[a.id]?.priority_score || 0));
+  }
 
   return (
     <div>
       <PageHeader eyebrow="Your day, simplified" title="My Work">
         <div className="flex items-center gap-3 flex-wrap">
           {view === "mywork" && (
-            <button onClick={() => setAiPriority((v) => !v)} data-testid="ai-priority-toggle"
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black transition-all ${aiPriority ? "bg-brand-red text-white shadow-brutal-sm" : "bg-brand-yellow hover:shadow-brutal-sm"}`}>
-              <Sparkle size={16} weight="bold" /> {scoring ? "Scoring…" : aiPriority ? "AI Priority: On" : "AI Priority"}
-            </button>
+            <>
+              <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members} />
+              <button onClick={() => setAiPriority((v) => !v)} data-testid="ai-priority-toggle"
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black transition-all ${aiPriority ? "bg-brand-red text-white shadow-brutal-sm" : "bg-brand-yellow hover:shadow-brutal-sm"}`}>
+                <Sparkle size={16} weight="bold" /> {scoring ? "Scoring…" : aiPriority ? "AI Priority: On" : "AI Priority"}
+              </button>
+            </>
           )}
           <div className="flex border border-black" data-testid="work-view-toggle">
             <button onClick={() => setView("mywork")} data-testid="work-view-mywork"
@@ -506,21 +600,19 @@ export default function MyWork() {
       ) : (
       <div className="grid lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2">
-          <h2 className="font-heading text-2xl font-extrabold uppercase tracking-tight mb-4">
-            {aiPriority ? "My Tasks — Priority Line" : "My Tasks"}
-          </h2>
-          {open.length === 0 && <EmptyState title="Nothing pending" hint="You're all caught up!" />}
-          <div className="space-y-4">
-            {open.map((t) => <TaskCard key={t.id} t={t} onChange={refresh} members={members} roleOptions={roleOptions} scores={aiPriority ? scoreMap[t.id] : undefined} />)}
+          <div className="flex flex-wrap gap-1.5 mb-5 border-b border-black/10 pb-3" data-testid="work-tabs">
+            {WORK_TABS.map((tb) => (
+              <button key={tb.key} onClick={() => setTab(tb.key)} data-testid={`work-tab-${tb.key}`}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-black transition-colors ${tab === tb.key ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+                {tb.label}
+                <span className={`px-1.5 py-0.5 text-[10px] leading-none border ${tab === tb.key ? "border-white/40" : "border-black/20 text-muted-foreground"}`}>{countFor(tb.key)}</span>
+              </button>
+            ))}
           </div>
-          {done.length > 0 && (
-            <>
-              <h3 className="font-heading font-extrabold uppercase tracking-tight text-lg mt-8 mb-3 text-muted-foreground">Completed</h3>
-              <div className="space-y-3">
-                {done.map((t) => <TaskCard key={t.id} t={t} onChange={refresh} members={members} roleOptions={roleOptions} />)}
-              </div>
-            </>
-          )}
+          {list.length === 0 && <EmptyState title={tab === "completed" ? "Nothing completed yet" : "Nothing here"} hint={tab === "all" ? "You're all caught up!" : "No tasks in this category."} />}
+          <div className="space-y-4">
+            {list.map((t) => <TaskCard key={t.id} t={t} onChange={refresh} members={members} roleOptions={roleOptions} scores={aiPriority && tab !== "completed" ? scoreMap[t.id] : undefined} />)}
+          </div>
         </div>
 
         <div>

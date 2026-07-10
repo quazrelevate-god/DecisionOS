@@ -691,6 +691,110 @@ def _resolve_meeting_date(when: str, due_in_days) -> str:
     return (now + timedelta(days=2)).date().isoformat()
 
 
+async def _create_decision_tasks(tenant_id, note, decision_id, extracted, troles, members):
+    """Create the blocked tasks for a decision; returns (task_ids, assignee_keys)."""
+    task_ids = []
+    assignee_keys = set()
+    for t in extracted.get("tasks", []):
+        tid = new_id()
+        due = None
+        if isinstance(t.get("due_in_days"), int):
+            due = (datetime.now(timezone.utc) + timedelta(days=t["due_in_days"])).isoformat()
+        role = t.get("assignee_role") if t.get("assignee_role") in troles else None
+        assignee_id = None
+        member = match_member_by_name(members, t.get("assignee_name", ""))
+        if member:
+            assignee_id = member["id"]
+            role = member["role"]
+        if assignee_id:
+            assignee_keys.add(f"u:{assignee_id}")
+        elif role:
+            assignee_keys.add(f"r:{role}")
+        await db.tasks.insert_one({
+            "id": tid, "tenant_id": tenant_id, "title": t.get("title", "Untitled task"),
+            "description": t.get("description", ""), "assignee_role": role, "assignee_id": assignee_id,
+            "priority": t.get("priority", "medium") if t.get("priority") in ("low", "medium", "high") else "medium",
+            "status": "blocked", "due_date": due, "decision_id": decision_id,
+            "source": "voice", "created_at": now_iso(),
+        })
+        task_ids.append(tid)
+    return task_ids, assignee_keys
+
+
+async def _create_reminders_and_memory(tenant_id, note, extracted):
+    """Voice shortcuts: lightweight personal reminders + lasting company memory."""
+    for r in (extracted.get("reminders") or []):
+        due = None
+        if isinstance(r.get("due_in_days"), int):
+            due = (datetime.now(timezone.utc) + timedelta(days=r["due_in_days"])).isoformat()
+        await db.tasks.insert_one({
+            "id": new_id(), "tenant_id": tenant_id, "title": r.get("title", "Reminder"),
+            "description": "", "assignee_role": None, "assignee_id": note["created_by"],
+            "priority": "medium", "status": "todo", "due_date": due, "decision_id": None,
+            "source": "reminder", "created_at": now_iso(),
+        })
+    for m in (extracted.get("memory_notes") or []):
+        if m.get("text"):
+            await db.memory.insert_one({
+                "id": new_id(), "tenant_id": tenant_id, "text": m["text"],
+                "tag": m.get("tag", "note"), "created_by": note["created_by"], "created_at": now_iso(),
+            })
+
+
+async def _create_meetings(tenant_id, note, decision_id, extracted):
+    """Schedule a real calendar event + a lightweight to-do per detected meeting; returns the list."""
+    meetings = extracted.get("meeting_events") or []
+    for mt in meetings:
+        when = (mt.get("when") or "").strip()
+        title = (mt.get("title") or "Meeting").strip()
+        mdate = _resolve_meeting_date(when, mt.get("due_in_days"))
+        await db.calendar_events.insert_one({
+            "id": new_id(), "tenant_id": tenant_id, "date": mdate, "title": title,
+            "when_text": when, "decision_id": decision_id, "source": "voice",
+            "created_by": note["created_by"], "created_at": now_iso(),
+        })
+        await db.tasks.insert_one({
+            "id": new_id(), "tenant_id": tenant_id,
+            "title": title + (f" ({when})" if when else ""),
+            "description": "", "assignee_role": None, "assignee_id": note["created_by"],
+            "priority": "medium", "status": "todo", "due_date": None, "decision_id": None,
+            "source": "meeting", "created_at": now_iso(),
+        })
+    return meetings
+
+
+async def _create_workflows(tenant_id, note, decision_id, extracted):
+    """Materialize each detected workflow_event into a real board card; returns the created ids."""
+    wf_ids = []
+    for ev in (extracted.get("workflow_events") or []):
+        wtype = ev.get("type")
+        if wtype not in WORKFLOW_STAGES:
+            continue
+        stages = WORKFLOW_STAGES[wtype]
+        title = (ev.get("title") or ev.get("action") or ("Purchase" if wtype == "purchase_payment" else "Order")).strip()
+        cp = (ev.get("counterparty") or "").strip()
+        contact_id = None
+        if cp:
+            c = await db.contacts.find_one({"tenant_id": tenant_id, "$or": [
+                {"name": {"$regex": f"^{re.escape(cp)}$", "$options": "i"}},
+                {"company": {"$regex": f"^{re.escape(cp)}$", "$options": "i"}}]}, {"_id": 0, "id": 1, "name": 1, "company": 1})
+            if c:
+                contact_id = c["id"]
+                cp = cp or c.get("company") or c.get("name") or ""
+        amount = ev.get("amount") if isinstance(ev.get("amount"), (int, float)) else None
+        wid = new_id()
+        await db.workflows.insert_one({
+            "id": wid, "tenant_id": tenant_id, "type": wtype, "title": title,
+            "detail": ev.get("detail", ""), "amount": amount, "counterparty": cp, "contact_id": contact_id,
+            "stage": stages[0], "stages": stages,
+            "history": [{"stage": stages[0], "note": "Auto-created from directive", "by": note["created_by"], "at": now_iso()}],
+            "source": "voice", "decision_id": decision_id,
+            "created_by": note["created_by"], "created_at": now_iso(),
+        })
+        wf_ids.append(wid)
+    return wf_ids
+
+
 async def process_voice_note(note_id: str):
     note = await db.voice_notes.find_one({"id": note_id})
     if not note:
@@ -725,31 +829,7 @@ async def process_voice_note(note_id: str):
             "created_by": note["created_by"], "created_at": now_iso(),
             "task_ids": [],
         }
-        task_ids = []
-        assignee_keys = set()
-        for t in extracted.get("tasks", []):
-            tid = new_id()
-            due = None
-            if isinstance(t.get("due_in_days"), int):
-                due = (datetime.now(timezone.utc) + timedelta(days=t["due_in_days"])).isoformat()
-            role = t.get("assignee_role") if t.get("assignee_role") in troles else None
-            assignee_id = None
-            member = match_member_by_name(members, t.get("assignee_name", ""))
-            if member:
-                assignee_id = member["id"]
-                role = member["role"]
-            if assignee_id:
-                assignee_keys.add(f"u:{assignee_id}")
-            elif role:
-                assignee_keys.add(f"r:{role}")
-            await db.tasks.insert_one({
-                "id": tid, "tenant_id": tenant_id, "title": t.get("title", "Untitled task"),
-                "description": t.get("description", ""), "assignee_role": role, "assignee_id": assignee_id,
-                "priority": t.get("priority", "medium") if t.get("priority") in ("low", "medium", "high") else "medium",
-                "status": "blocked", "due_date": due, "decision_id": decision_id,
-                "source": "voice", "created_at": now_iso(),
-            })
-            task_ids.append(tid)
+        task_ids, assignee_keys = await _create_decision_tasks(tenant_id, note, decision_id, extracted, troles, members)
         decision["task_ids"] = task_ids
         decision["timeline"] = [{"ts": now_iso(), "label": f"Decision captured from {note.get('kind') or 'voice'}", "actor": "Owner", "kind": "created"}]
         await db.decisions.insert_one(decision)
@@ -758,69 +838,9 @@ async def process_voice_note(note_id: str):
                              "voice" if note.get("kind") == "audio" else "text",
                              _icls, decision["title"], (decision.get("summary") or "")[:180],
                              "decision", decision_id, status="open")
-        # Voice shortcuts: lightweight reminders + company memory
-        for r in (extracted.get("reminders") or []):
-            due = None
-            if isinstance(r.get("due_in_days"), int):
-                due = (datetime.now(timezone.utc) + timedelta(days=r["due_in_days"])).isoformat()
-            await db.tasks.insert_one({
-                "id": new_id(), "tenant_id": tenant_id, "title": r.get("title", "Reminder"),
-                "description": "", "assignee_role": None, "assignee_id": note["created_by"],
-                "priority": "medium", "status": "todo", "due_date": due, "decision_id": None,
-                "source": "reminder", "created_at": now_iso(),
-            })
-        for m in (extracted.get("memory_notes") or []):
-            if m.get("text"):
-                await db.memory.insert_one({
-                    "id": new_id(), "tenant_id": tenant_id, "text": m["text"],
-                    "tag": m.get("tag", "note"), "created_by": note["created_by"], "created_at": now_iso(),
-                })
-        # Meetings: schedule a real calendar event + a lightweight (undated) to-do per detected meeting
-        meetings = extracted.get("meeting_events") or []
-        for mt in meetings:
-            when = (mt.get("when") or "").strip()
-            title = (mt.get("title") or "Meeting").strip()
-            mdate = _resolve_meeting_date(when, mt.get("due_in_days"))
-            await db.calendar_events.insert_one({
-                "id": new_id(), "tenant_id": tenant_id, "date": mdate, "title": title,
-                "when_text": when, "decision_id": decision_id, "source": "voice",
-                "created_by": note["created_by"], "created_at": now_iso(),
-            })
-            await db.tasks.insert_one({
-                "id": new_id(), "tenant_id": tenant_id,
-                "title": title + (f" ({when})" if when else ""),
-                "description": "", "assignee_role": None, "assignee_id": note["created_by"],
-                "priority": "medium", "status": "todo", "due_date": None, "decision_id": None,
-                "source": "meeting", "created_at": now_iso(),
-            })
-        # Workflows: materialize each detected workflow_event into a real board card
-        wf_ids = []
-        for ev in (extracted.get("workflow_events") or []):
-            wtype = ev.get("type")
-            if wtype not in WORKFLOW_STAGES:
-                continue
-            stages = WORKFLOW_STAGES[wtype]
-            title = (ev.get("title") or ev.get("action") or ("Purchase" if wtype == "purchase_payment" else "Order")).strip()
-            cp = (ev.get("counterparty") or "").strip()
-            contact_id = None
-            if cp:
-                c = await db.contacts.find_one({"tenant_id": tenant_id, "$or": [
-                    {"name": {"$regex": f"^{re.escape(cp)}$", "$options": "i"}},
-                    {"company": {"$regex": f"^{re.escape(cp)}$", "$options": "i"}}]}, {"_id": 0, "id": 1, "name": 1, "company": 1})
-                if c:
-                    contact_id = c["id"]
-                    cp = cp or c.get("company") or c.get("name") or ""
-            amount = ev.get("amount") if isinstance(ev.get("amount"), (int, float)) else None
-            wid = new_id()
-            await db.workflows.insert_one({
-                "id": wid, "tenant_id": tenant_id, "type": wtype, "title": title,
-                "detail": ev.get("detail", ""), "amount": amount, "counterparty": cp, "contact_id": contact_id,
-                "stage": stages[0], "stages": stages,
-                "history": [{"stage": stages[0], "note": "Auto-created from directive", "by": note["created_by"], "at": now_iso()}],
-                "source": "voice", "decision_id": decision_id,
-                "created_by": note["created_by"], "created_at": now_iso(),
-            })
-            wf_ids.append(wid)
+        await _create_reminders_and_memory(tenant_id, note, extracted)
+        meetings = await _create_meetings(tenant_id, note, decision_id, extracted)
+        wf_ids = await _create_workflows(tenant_id, note, decision_id, extracted)
         # Execution summary — real counts of what this directive produced
         execution_summary = {
             "tasks": len(task_ids),
@@ -1558,6 +1578,46 @@ def _clamp100(v):
     return max(0, min(100, int(round(v))))
 
 
+def _is_open_task(t):
+    return t.get("status") in ("todo", "in_progress", "blocked")
+
+
+def _score_execution(tasks, now):
+    """Task-execution score; returns (execution, done, open_tasks, overdue, actionable)."""
+    done = sum(1 for t in tasks if t.get("status") == "done")
+    open_tasks = [t for t in tasks if _is_open_task(t)]
+    overdue = sum(1 for t in open_tasks if t.get("due_date") and t["due_date"] < now)
+    actionable = done + len(open_tasks)
+    completion = (done / actionable) if actionable else 0.7
+    overdue_ratio = (overdue / len(open_tasks)) if open_tasks else 0
+    return _clamp100(completion * 100 - overdue_ratio * 40), done, open_tasks, overdue, actionable
+
+
+def _score_sales(decisions):
+    """Decision-approval score; returns (sales, total_dec, approved)."""
+    total_dec = len(decisions)
+    approved = sum(1 for d in decisions if d.get("status") == "approved")
+    approved_rate = (approved / total_dec) if total_dec else 0.7
+    return _clamp100(approved_rate * 100), total_dec, approved
+
+
+def _score_employees(tasks, members, now):
+    """Per-employee execution scores, sorted high to low."""
+    employees = []
+    for mbr in members:
+        mine = [t for t in tasks if t.get("assignee_id") == mbr["id"] or (not t.get("assignee_id") and t.get("assignee_role") == mbr["role"])]
+        m_done = sum(1 for t in mine if t.get("status") == "done")
+        m_open = [t for t in mine if _is_open_task(t)]
+        m_overdue = sum(1 for t in m_open if t.get("due_date") and t["due_date"] < now)
+        m_action = m_done + len(m_open)
+        m_comp = (m_done / m_action) if m_action else 0
+        m_score = _clamp100(m_comp * 100 - (m_overdue / len(m_open) if m_open else 0) * 40) if m_action else None
+        employees.append({"id": mbr["id"], "name": mbr["name"], "role": mbr["role"],
+                          "score": m_score, "done": m_done, "open": len(m_open), "overdue": m_overdue})
+    employees.sort(key=lambda e: (e["score"] if e["score"] is not None else -1), reverse=True)
+    return employees
+
+
 @api.get("/operating-score")
 async def operating_score(user: dict = Depends(require_role("owner"))):
     tid = user["tenant_id"]
@@ -1568,15 +1628,7 @@ async def operating_score(user: dict = Depends(require_role("owner"))):
     decisions = await db.decisions.find({"tenant_id": tid}, {"_id": 0, "status": 1}).to_list(2000)
     complaints = await db.complaints.find({"tenant_id": tid}, {"_id": 0, "status": 1}).to_list(500)
 
-    def is_open(t):
-        return t.get("status") in ("todo", "in_progress", "blocked")
-    done = sum(1 for t in tasks if t.get("status") == "done")
-    open_tasks = [t for t in tasks if is_open(t)]
-    overdue = sum(1 for t in open_tasks if t.get("due_date") and t["due_date"] < now)
-    actionable = done + len(open_tasks)
-    completion = (done / actionable) if actionable else 0.7
-    overdue_ratio = (overdue / len(open_tasks)) if open_tasks else 0
-    execution = _clamp100(completion * 100 - overdue_ratio * 40)
+    execution, done, open_tasks, overdue, actionable = _score_execution(tasks, now)
 
     total_billed = total_paid = 0.0
     overdue_inv = 0
@@ -1591,10 +1643,7 @@ async def operating_score(user: dict = Depends(require_role("owner"))):
     collected = (min(total_paid, total_billed) / total_billed) if total_billed else 0.7
     finance = _clamp100(collected * 100 - overdue_inv * 5) if can_finance else None
 
-    total_dec = len(decisions)
-    approved = sum(1 for d in decisions if d.get("status") == "approved")
-    approved_rate = (approved / total_dec) if total_dec else 0.7
-    sales = _clamp100(approved_rate * 100)
+    sales, total_dec, approved = _score_sales(decisions)
 
     open_complaints = sum(1 for c in complaints if c.get("status") != "resolved")
     responsiveness = _clamp100(100 - open_complaints * 12 - overdue * 3)
@@ -1608,20 +1657,8 @@ async def operating_score(user: dict = Depends(require_role("owner"))):
     # Gate: don't show a (misleading) score until there's meaningful activity.
     enough_data = actionable >= 3 or inv_count > 0
 
-    # Per-employee execution
     members = await db.users.find({"tenant_id": tid}, {"_id": 0, "id": 1, "name": 1, "role": 1}).to_list(200)
-    employees = []
-    for mbr in members:
-        mine = [t for t in tasks if t.get("assignee_id") == mbr["id"] or (not t.get("assignee_id") and t.get("assignee_role") == mbr["role"])]
-        m_done = sum(1 for t in mine if t.get("status") == "done")
-        m_open = [t for t in mine if is_open(t)]
-        m_overdue = sum(1 for t in m_open if t.get("due_date") and t["due_date"] < now)
-        m_action = m_done + len(m_open)
-        m_comp = (m_done / m_action) if m_action else 0
-        m_score = _clamp100(m_comp * 100 - (m_overdue / len(m_open) if m_open else 0) * 40) if m_action else None
-        employees.append({"id": mbr["id"], "name": mbr["name"], "role": mbr["role"],
-                          "score": m_score, "done": m_done, "open": len(m_open), "overdue": m_overdue})
-    employees.sort(key=lambda e: (e["score"] if e["score"] is not None else -1), reverse=True)
+    employees = _score_employees(tasks, members, now)
 
     return {
         "company": {"overall": overall if enough_data else None, "categories": categories, "enough_data": enough_data},
@@ -2072,6 +2109,53 @@ class TaskUpdateNoteInput(BaseModel):
     to_role: Optional[str] = None    # role key (handoff to a team)
 
 
+async def _resolve_task_handoff(user, t, task_id, action, text, step_text, inp):
+    """Resolve the target for a handoff/escalation and create the follow-up task."""
+    tenant_id = user["tenant_id"]
+    to_name = to_id = to_role = None
+    notify_level, notify_prefix = 2, "[Handoff]"
+    if action == "escalate":
+        owner = await db.users.find_one({"tenant_id": tenant_id, "role": "owner"}, {"_id": 0})
+        if not owner:
+            raise HTTPException(status_code=400, detail="No owner to escalate to")
+        to_id, to_name, to_role = owner["id"], owner.get("name"), "owner"
+        notify_level, notify_prefix = 3, "[Escalation]"
+    elif inp.to_id:
+        member = await db.users.find_one({"id": inp.to_id, "tenant_id": tenant_id}, {"_id": 0})
+        if not member:
+            raise HTTPException(status_code=404, detail="Team member not found")
+        to_id, to_name, to_role = member["id"], member.get("name"), member.get("role")
+    elif inp.to_role:
+        if inp.to_role not in await tenant_role_keys(tenant_id):
+            raise HTTPException(status_code=400, detail="Invalid role")
+        to_role, to_name = inp.to_role, inp.to_role
+    else:
+        raise HTTPException(status_code=400, detail="Choose a person or team to hand off to")
+
+    followup_task_id = new_id()
+    base = step_text or t.get("title", "task")
+    await db.tasks.insert_one({
+        "id": followup_task_id, "tenant_id": tenant_id,
+        "title": f"Follow-up: {base}"[:180],
+        "description": f"Handed off by {user['name']} on '{t.get('title')}'.\nContext: {text}",
+        "assignee_id": to_id if inp.to_id or action == "escalate" else None,
+        "assignee_role": to_role,
+        "priority": "high" if action == "escalate" else (t.get("priority") or "medium"),
+        "status": "todo", "due_date": t.get("due_date"),
+        "decision_id": t.get("decision_id"), "parent_task_id": task_id,
+        "raised_by": user["id"], "raised_by_name": user.get("name"),
+        "raised_step_text": step_text, "raised_note": text,
+        "source": "escalation" if action == "escalate" else "handoff", "created_at": now_iso(),
+    })
+    if to_id:
+        notify_ids = [to_id]
+    else:
+        role_members = await db.users.find({"tenant_id": tenant_id, "role": to_role}, {"_id": 0, "id": 1}).to_list(50)
+        notify_ids = [m["id"] for m in role_members]
+    return {"followup_task_id": followup_task_id, "to_id": to_id, "to_name": to_name, "to_role": to_role,
+            "notify_ids": notify_ids, "notify_level": notify_level, "notify_prefix": notify_prefix}
+
+
 @api.post("/tasks/{task_id}/updates")
 async def add_task_update(task_id: str, inp: TaskUpdateNoteInput, user: dict = Depends(get_current_user)):
     t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
@@ -2097,44 +2181,9 @@ async def add_task_update(task_id: str, inp: TaskUpdateNoteInput, user: dict = D
     notify_ids, notify_level, notify_prefix = [], 2, "[Handoff]"
 
     if action in ("handoff", "escalate"):
-        if action == "escalate":
-            owner = await db.users.find_one({"tenant_id": tenant_id, "role": "owner"}, {"_id": 0})
-            if not owner:
-                raise HTTPException(status_code=400, detail="No owner to escalate to")
-            to_id, to_name, to_role = owner["id"], owner.get("name"), "owner"
-            notify_level, notify_prefix = 3, "[Escalation]"
-        elif inp.to_id:
-            member = await db.users.find_one({"id": inp.to_id, "tenant_id": tenant_id}, {"_id": 0})
-            if not member:
-                raise HTTPException(status_code=404, detail="Team member not found")
-            to_id, to_name, to_role = member["id"], member.get("name"), member.get("role")
-        elif inp.to_role:
-            if inp.to_role not in await tenant_role_keys(tenant_id):
-                raise HTTPException(status_code=400, detail="Invalid role")
-            to_role, to_name = inp.to_role, inp.to_role
-        else:
-            raise HTTPException(status_code=400, detail="Choose a person or team to hand off to")
-
-        followup_task_id = new_id()
-        base = step_text or t.get("title", "task")
-        await db.tasks.insert_one({
-            "id": followup_task_id, "tenant_id": tenant_id,
-            "title": f"Follow-up: {base}"[:180],
-            "description": f"Handed off by {user['name']} on '{t.get('title')}'.\nContext: {text}",
-            "assignee_id": to_id if inp.to_id or action == "escalate" else None,
-            "assignee_role": to_role,
-            "priority": "high" if action == "escalate" else (t.get("priority") or "medium"),
-            "status": "todo", "due_date": t.get("due_date"),
-            "decision_id": t.get("decision_id"), "parent_task_id": task_id,
-            "raised_by": user["id"], "raised_by_name": user.get("name"),
-            "raised_step_text": step_text, "raised_note": text,
-            "source": "escalation" if action == "escalate" else "handoff", "created_at": now_iso(),
-        })
-        if to_id:
-            notify_ids = [to_id]
-        else:
-            role_members = await db.users.find({"tenant_id": tenant_id, "role": to_role}, {"_id": 0, "id": 1}).to_list(50)
-            notify_ids = [m["id"] for m in role_members]
+        h = await _resolve_task_handoff(user, t, task_id, action, text, step_text, inp)
+        followup_task_id, to_id, to_name, to_role = h["followup_task_id"], h["to_id"], h["to_name"], h["to_role"]
+        notify_ids, notify_level, notify_prefix = h["notify_ids"], h["notify_level"], h["notify_prefix"]
 
     entry = {
         "id": new_id(), "kind": action, "text": text,

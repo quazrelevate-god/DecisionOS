@@ -1,0 +1,43 @@
+{
+  "summary": "Frontend-only validation of (a) Team Roles management inside Company Details dialog and (b) Operating Score behaviour for the demo tenant. All 7 test cases from the review request PASSED. Roles add / duplicate-block / rename / delete-in-use-block / delete-unused all work end-to-end. Operating Score for the demo shows a numeric score (18) and all 4 category bars, no 'Not enough data yet' state. Demo tenant was cleaned up and left with only the original sales/production/finance roles.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Company Details dialog",
+        "issues": [
+          "A11y console warning: 'Missing Description or aria-describedby={undefined} for {DialogContent}'. Non-blocking but should add DialogDescription (or aria-describedby) for screen-reader compliance."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "(Optional a11y polish) Add a <DialogDescription> or aria-describedby to CompanyDialog's DialogContent to silence the Radix warning."
+  ],
+  "critical_code_review_comments": [
+    "CompanyDialog.js: after api.post/patch/delete, `data.roles` is used to hydrate local state — backend correctly returns the FULL tenant with a `roles` array, so setRoles((data.roles || [])) works. Verified in-network responses.",
+    "CompanyDialog renameRole: correctly short-circuits when label is unchanged (avoids no-op PATCH). Confirmed with 2nd run where label was already 'Growth' — no PATCH fired, no error surfaced.",
+    "PATCH /api/tenant/roles/{key} keeps the KEY stable on rename (only label changes). This is important because member assignments reference the key. Verified: label 'Growth' with key 'marketing_team' after rename.",
+    "OperatingScore.js correctly branches on company.enough_data !== false; not-ready block uses data-testid='operating-not-ready' and the score span still uses data-testid='operating-overall-score' (text becomes 'Not enough data yet' when disabled). Good — the same testid works for both cases.",
+    "CompanyDialog does not have a DialogDescription — Radix logs a warning on every open. Minor a11y issue."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "n/a (not in scope)", "frontend": "100%" },
+  "test_credentials": "owner@sharma.com / demo1234 (via data-testid=demo-login-owner)",
+  "seed_data_creation": "None. A test role ('Marketing Team' -> renamed 'Growth', key marketing_team) was temporarily created but was DELETED at the end of the run. Confirmed final demo roles are only sales, production, finance (verified in DELETE response body: roles: [{key:sales},{key:production},{key:finance}]).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend endpoints POST/PATCH/DELETE /api/tenant/roles are wired correctly and returning the full tenant object with a top-level `roles` array. Rename keeps the key stable — only label changes. Delete returns 400 with a friendly detail message when the role has members assigned; the frontend surfaces this via a sonner error toast. Operating Score demo shows numeric 18/100 with categories: execution 0, finance 0, sales 88, responsiveness 0 (may look low but the requirement only was NUMERIC and not the 'not enough data' state — passes).",
+  "test_evidence": {
+    "add_role_success": "POST /api/tenant/roles -> 200, row role-row-marketing_team appears, toast 'Role \"Marketing Team\" added'",
+    "duplicate_blocked": "POST /api/tenant/roles -> 400 'A role with this name already exists', no duplicate row, error toast shown",
+    "rename": "PATCH /api/tenant/roles/marketing_team -> 200, label persists as 'Growth' after dialog close+reopen, key remains 'marketing_team'",
+    "delete_in_use_blocked": "DELETE /api/tenant/roles/sales -> 400 'This role has 1 member(s) assigned. Reassign them to another role before deleting.' — row still present, error toast shown",
+    "delete_unused": "DELETE /api/tenant/roles/marketing_team -> 200 with response.roles = [sales, production, finance]; row removed; success toast 'Role deleted'",
+    "operating_score_demo": "score-text '18' (numeric int), operating-not-ready NOT present, all 4 category bars rendered"
+  },
+  "rca of the issue": "N/A — no bugs surfaced."
+}

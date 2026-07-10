@@ -1112,6 +1112,65 @@ async def update_tenant(inp: TenantUpdateInput, user: dict = Depends(require_per
     return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
 
 
+def _slug_role(label: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", (label or "").strip().lower()).strip("_")
+
+
+class RoleLabelInput(BaseModel):
+    label: str
+
+
+@api.post("/tenant/roles")
+async def add_role(inp: RoleLabelInput, user: dict = Depends(require_perm("team_manage"))):
+    label = (inp.label or "").strip()
+    key = _slug_role(label)
+    if not label or not key or key == "owner":
+        raise HTTPException(status_code=400, detail="Enter a valid role name")
+    t = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0, "roles": 1})
+    roles = (t or {}).get("roles") or []
+    if any(r.get("key") == key for r in roles):
+        raise HTTPException(status_code=400, detail="A role with this name already exists")
+    roles.append({"key": key, "label": label})
+    await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": {"roles": roles}})
+    await log_activity(user["tenant_id"], user["id"], "role_added", f"{user['name']} added the role '{label}'")
+    return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+
+
+@api.patch("/tenant/roles/{key}")
+async def rename_role(key: str, inp: RoleLabelInput, user: dict = Depends(require_perm("team_manage"))):
+    label = (inp.label or "").strip()
+    if not label:
+        raise HTTPException(status_code=400, detail="Enter a valid role name")
+    if key == "owner":
+        raise HTTPException(status_code=400, detail="The Owner role can't be renamed")
+    t = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0, "roles": 1})
+    roles = (t or {}).get("roles") or []
+    if not any(r.get("key") == key for r in roles):
+        raise HTTPException(status_code=404, detail="Role not found")
+    for r in roles:
+        if r.get("key") == key:
+            r["label"] = label
+    await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": {"roles": roles}})
+    await log_activity(user["tenant_id"], user["id"], "role_renamed", f"{user['name']} renamed a role to '{label}'")
+    return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+
+
+@api.delete("/tenant/roles/{key}")
+async def delete_role(key: str, user: dict = Depends(require_perm("team_manage"))):
+    if key == "owner":
+        raise HTTPException(status_code=400, detail="The Owner role can't be deleted")
+    t = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0, "roles": 1})
+    roles = (t or {}).get("roles") or []
+    if not any(r.get("key") == key for r in roles):
+        raise HTTPException(status_code=404, detail="Role not found")
+    in_use = await db.users.count_documents({"tenant_id": user["tenant_id"], "role": key})
+    if in_use:
+        raise HTTPException(status_code=400, detail=f"This role has {in_use} member(s) assigned. Reassign them to another role before deleting.")
+    new_roles = [r for r in roles if r.get("key") != key]
+    await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": {"roles": new_roles}})
+    await log_activity(user["tenant_id"], user["id"], "role_deleted", f"{user['name']} deleted a role")
+    return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+
 
 @api.get("/invites")
 async def list_invites(user: dict = Depends(get_current_user)):
@@ -1510,9 +1569,11 @@ async def operating_score(user: dict = Depends(require_role("owner"))):
 
     total_billed = total_paid = 0.0
     overdue_inv = 0
+    inv_count = 0
     if can_finance:
         invs = await db.invoices.find({"tenant_id": tid}, {"_id": 0, "amount": 1, "type": 1, "status": 1, "due_date": 1}).to_list(2000)
         pays = await db.payments.find({"tenant_id": tid}, {"_id": 0, "amount": 1}).to_list(2000)
+        inv_count = len(invs)
         total_billed = sum(float(i.get("amount") or 0) for i in invs if i.get("type") == "sales_invoice")
         total_paid = sum(float(p.get("amount") or 0) for p in pays)
         overdue_inv = sum(1 for i in invs if i.get("type") == "sales_invoice" and i.get("status") != "paid" and i.get("due_date") and i["due_date"] < now)
@@ -1533,6 +1594,9 @@ async def operating_score(user: dict = Depends(require_role("owner"))):
     wsum = sum(weights[k] for k in avail) or 1
     overall = _clamp100(sum(avail[k] * weights[k] for k in avail) / wsum)
 
+    # Gate: don't show a (misleading) score until there's meaningful activity.
+    enough_data = actionable >= 3 or inv_count > 0
+
     # Per-employee execution
     members = await db.users.find({"tenant_id": tid}, {"_id": 0, "id": 1, "name": 1, "role": 1}).to_list(200)
     employees = []
@@ -1549,7 +1613,7 @@ async def operating_score(user: dict = Depends(require_role("owner"))):
     employees.sort(key=lambda e: (e["score"] if e["score"] is not None else -1), reverse=True)
 
     return {
-        "company": {"overall": overall, "categories": categories},
+        "company": {"overall": overall if enough_data else None, "categories": categories, "enough_data": enough_data},
         "stats": {"done": done, "open": len(open_tasks), "overdue": overdue,
                   "total_decisions": total_dec, "approved": approved, "open_complaints": open_complaints,
                   "outstanding": round(total_billed - total_paid, 2) if can_finance else None},

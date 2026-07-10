@@ -29,12 +29,48 @@ export default function OperatingScore() {
 
   const { company, stats } = data;
   const overall = company.overall;
+  const enough = company.enough_data !== false;
 
   return (
     <div>
       <PageHeader eyebrow="How well the business is running" title="Operating Score" />
 
-      {/* Company overall */}
+      {!enough ? (
+        <div className="card-brutal p-8 mb-8 flex flex-col lg:flex-row items-center gap-8" data-testid="operating-overall">
+          <div className="flex flex-col items-center shrink-0">
+            <div className="w-36 h-36 flex flex-col items-center justify-center border-4 border-black bg-black/5 text-center px-3">
+              <Gauge size={30} weight="bold" className="text-muted-foreground mb-1" />
+              <span className="label-mono text-muted-foreground leading-tight" data-testid="operating-overall-score">Not enough data yet</span>
+            </div>
+            <div className="flex items-center gap-2 mt-3">
+              <Gauge size={16} weight="bold" className="text-brand-red" />
+              <span className="font-heading font-extrabold uppercase tracking-tight text-sm">Company Health</span>
+            </div>
+          </div>
+          <div className="flex-1 w-full" data-testid="operating-not-ready">
+            <p className="font-heading font-extrabold uppercase tracking-tight text-lg mb-2">We're still learning your business</p>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              The Operating Score kicks in once there's enough real activity to measure — roughly <strong>3+ actionable tasks</strong> or your <strong>first invoices</strong>.
+              Capture a few decisions on the Decision Desk and import or add invoices, and your score will start tracking automatically.
+            </p>
+            <div className="grid grid-cols-3 gap-3 mt-4">
+              <div className="border border-black/30 p-3 text-center">
+                <p className="font-heading text-2xl font-black">{stats.done + stats.open}</p>
+                <p className="label-mono text-muted-foreground">Actionable tasks</p>
+              </div>
+              <div className="border border-black/30 p-3 text-center">
+                <p className="font-heading text-2xl font-black">{stats.done}</p>
+                <p className="label-mono text-muted-foreground">Completed</p>
+              </div>
+              <div className="border border-black/30 p-3 text-center">
+                <p className="font-heading text-2xl font-black">{stats.total_decisions}</p>
+                <p className="label-mono text-muted-foreground">Decisions</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+      /* Company overall */
       <div className="card-brutal p-8 mb-8 flex flex-col lg:flex-row items-center gap-8" data-testid="operating-overall">
         <div className="flex flex-col items-center shrink-0">
           <div className="w-36 h-36 flex flex-col items-center justify-center border-4 border-black bg-white">
@@ -66,6 +102,7 @@ export default function OperatingScore() {
           })}
         </div>
       </div>
+      )}
 
       {/* Quick stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">

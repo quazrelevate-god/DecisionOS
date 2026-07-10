@@ -9,10 +9,14 @@ import uuid
 import json
 import hmac
 import random
+import asyncio
+import smtplib
+import ssl
 import secrets
 import hashlib
 import logging
 import httpx
+from email.message import EmailMessage
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 
@@ -2470,6 +2474,69 @@ async def dashboard(user: dict = Depends(get_current_user)):
     }
 
 
+# ---------------------------------------------------------------------------
+# Email delivery — Gmail SMTP (primary), Resend (fallback), else mock.
+# Sender/host/creds all come from .env so the account can be swapped anytime.
+# ---------------------------------------------------------------------------
+SMTP_HOST = os.environ.get("SMTP_HOST", "")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "465") or "465")
+SMTP_USER = os.environ.get("SMTP_USER", "")
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
+SMTP_FROM = os.environ.get("SMTP_FROM") or SMTP_USER
+SMTP_ENABLED = bool(SMTP_HOST and SMTP_USER and SMTP_PASSWORD)
+
+
+def _smtp_send_sync(to_list: list, subject: str, html: str) -> None:
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = SMTP_FROM
+    msg["To"] = ", ".join(to_list)
+    msg.set_content("This message requires an HTML-capable email client.")
+    msg.add_alternative(html, subtype="html")
+    ctx = ssl.create_default_context()
+    if SMTP_PORT == 465:
+        with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, context=ctx, timeout=25) as s:
+            s.login(SMTP_USER, SMTP_PASSWORD)
+            s.send_message(msg)
+    else:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=25) as s:
+            s.starttls(context=ctx)
+            s.login(SMTP_USER, SMTP_PASSWORD)
+            s.send_message(msg)
+
+
+async def send_email(to, subject: str, html: str) -> dict:
+    """Send an HTML email. Returns {sent, provider|mocked, to, [error]}."""
+    to_list = [to] if isinstance(to, str) else [t for t in to if t]
+    if not to_list:
+        return {"sent": False, "to": [], "error": "no recipients"}
+    if SMTP_ENABLED:
+        try:
+            await asyncio.to_thread(_smtp_send_sync, to_list, subject, html)
+            return {"sent": True, "provider": "gmail_smtp", "to": to_list}
+        except smtplib.SMTPAuthenticationError as e:
+            logger.error(f"SMTP auth failed (need a Gmail App Password?): {e}")
+            return {"sent": False, "to": to_list, "error": "smtp_auth_failed"}
+        except Exception as e:
+            logger.error(f"SMTP send failed: {e}")
+            return {"sent": False, "to": to_list, "error": "smtp_error"}
+    resend_key = os.environ.get("RESEND_API_KEY", "")
+    if resend_key:
+        try:
+            import resend
+            resend.api_key = resend_key
+            resend.Emails.send({
+                "from": os.environ.get("RESEND_FROM_EMAIL", "DecisionOS <onboarding@resend.dev>"),
+                "to": to_list, "subject": subject, "html": html,
+            })
+            return {"sent": True, "provider": "resend", "to": to_list}
+        except Exception as e:
+            logger.error(f"Resend send failed: {e}")
+            return {"sent": False, "to": to_list, "error": "resend_error"}
+    logger.info(f"[EMAIL MOCK] To {to_list}: {subject}")
+    return {"sent": False, "mocked": True, "to": to_list}
+
+
 @api.post("/brief/send-digest")
 async def send_digest(user: dict = Depends(require_role("owner"))):
     data = await dashboard(user)  # reuse
@@ -2483,22 +2550,13 @@ async def send_digest(user: dict = Depends(require_role("owner"))):
     <h3>Overdue Tasks</h3>
     <ul>{''.join(f"<li>{t['title']}</li>" for t in data['overdue_tasks']) or '<li>None</li>'}</ul>
     """
-    resend_key = os.environ.get("RESEND_API_KEY", "")
-    if resend_key:
-        try:
-            import resend
-            resend.api_key = resend_key
-            resend.Emails.send({
-                "from": os.environ.get("RESEND_FROM_EMAIL", "DecisionOS <onboarding@resend.dev>"),
-                "to": [user["email"]],
-                "subject": f"DecisionOS Daily Brief — {tenant['name']}",
-                "html": html,
-            })
-            return {"sent": True, "to": user["email"], "provider": "resend"}
-        except Exception as e:
-            logger.error(f"Resend send failed: {e}")
-            raise HTTPException(status_code=502, detail="Email provider error")
-    logger.info(f"[DIGEST MOCK] To {user['email']}:\n{html}")
+    result = await send_email(user["email"], f"DecisionOS Daily Brief — {tenant['name']}", html)
+    if result.get("sent"):
+        return {"sent": True, "to": user["email"], "provider": result["provider"]}
+    if result.get("error") == "smtp_auth_failed":
+        raise HTTPException(status_code=400, detail="Gmail rejected the sender login. The account needs a 16-character Gmail App Password (enable 2-Step Verification, then create an App Password) — the normal account password won't work for sending.")
+    if result.get("error"):
+        raise HTTPException(status_code=400, detail="Couldn't send the email. Please check the sender email settings.")
     return {"sent": False, "mocked": True, "to": user["email"], "preview_html": html}
 
 
@@ -2539,18 +2597,9 @@ async def push_notification(tenant_id, user_ids, level, message, entity_type=Non
 
 async def dispatch_owner_alert(tenant_id, message):
     owners = await db.users.find({"tenant_id": tenant_id, "role": "owner"}, {"_id": 0, "email": 1}).to_list(10)
-    resend_key = os.environ.get("RESEND_API_KEY", "")
-    if resend_key and owners:
-        try:
-            import resend
-            resend.api_key = resend_key
-            resend.Emails.send({"from": os.environ.get("RESEND_FROM_EMAIL", "DecisionOS <onboarding@resend.dev>"),
-                                "to": [o["email"] for o in owners], "subject": "DecisionOS — Owner Alert",
-                                "html": f"<p>{message}</p>"})
-        except Exception as e:
-            logger.error(f"owner email alert failed: {e}")
-    else:
-        logger.info(f"[EMAIL MOCK] Owner alert: {message}")
+    emails = [o["email"] for o in owners if o.get("email")]
+    if emails:
+        await send_email(emails, "DecisionOS — Owner Alert", f"<p>{message}</p>")
     # WhatsApp: ready-to-plug (requires WHATSAPP_API_KEY / provider)
     if not os.environ.get("WHATSAPP_API_KEY", ""):
         logger.info(f"[WHATSAPP MOCK] Owner alert: {message}")

@@ -49,6 +49,25 @@ app = FastAPI(title="DecisionOS")
 api = APIRouter(prefix="/api")
 security = HTTPBearer(auto_error=False)
 
+AUTH_COOKIE_NAME = "dos_token"
+AUTH_COOKIE_MAX_AGE = 7 * 24 * 60 * 60  # 7 days, matches token exp
+
+
+def set_auth_cookie(response: Response, token: str) -> None:
+    response.set_cookie(
+        key=AUTH_COOKIE_NAME,
+        value=token,
+        max_age=AUTH_COOKIE_MAX_AGE,
+        httponly=True,
+        secure=True,
+        samesite="none",
+        path="/",
+    )
+
+
+def clear_auth_cookie(response: Response) -> None:
+    response.delete_cookie(key=AUTH_COOKIE_NAME, path="/", samesite="none", secure=True, httponly=True)
+
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -83,11 +102,16 @@ def create_token(user_id: str, tenant_id: str, role: str) -> str:
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 
-async def get_current_user(creds: Optional[HTTPAuthorizationCredentials] = Depends(security)) -> dict:
-    if not creds:
+async def get_current_user(
+    request: Request,
+    creds: Optional[HTTPAuthorizationCredentials] = Depends(security),
+) -> dict:
+    # Prefer HttpOnly cookie; fall back to Bearer token for backward compatibility.
+    token = request.cookies.get(AUTH_COOKIE_NAME) or (creds.credentials if creds else None)
+    if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
     try:
-        payload = jwt.decode(creds.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Session expired, please log in again")
     except jwt.InvalidTokenError:
@@ -897,7 +921,7 @@ async def onboarding_suggest(inp: OnboardingSuggestInput):
 
 
 @api.post("/auth/register")
-async def register(inp: RegisterInput):
+async def register(inp: RegisterInput, response: Response):
     email = inp.email.lower()
     if await db.users.find_one({"email": email}):
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -935,11 +959,12 @@ async def register(inp: RegisterInput):
     token = create_token(user_id, tenant_id, "owner")
     user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
     tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0})
+    set_auth_cookie(response, token)
     return {"token": token, "user": user, "tenant": tenant}
 
 
 @api.post("/auth/login")
-async def login(inp: LoginInput):
+async def login(inp: LoginInput, response: Response):
     email = inp.email.lower()
     user = await db.users.find_one({"email": email})
     if not user or not verify_password(inp.password, user["password_hash"]):
@@ -948,7 +973,14 @@ async def login(inp: LoginInput):
     tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
     user.pop("_id", None)
     user.pop("password_hash", None)
+    set_auth_cookie(response, token)
     return {"token": token, "user": user, "tenant": tenant}
+
+
+@api.post("/auth/logout")
+async def logout(response: Response):
+    clear_auth_cookie(response)
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------------------
@@ -1091,7 +1123,7 @@ async def invite_start(token: str):
 
 
 @api.post("/auth/otp/verify")
-async def verify_otp(inp: OtpVerifyInput):
+async def verify_otp(inp: OtpVerifyInput, response: Response):
     norm = _norm_phone(inp.phone)
     rec = await db.otp_codes.find_one({"phone": norm}, {"_id": 0})
     if not rec:
@@ -1115,6 +1147,7 @@ async def verify_otp(inp: OtpVerifyInput):
     tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
     user.pop("_id", None)
     user.pop("password_hash", None)
+    set_auth_cookie(response, token)
     return {"token": token, "user": user, "tenant": tenant}
 
 
@@ -3840,13 +3873,14 @@ async def root():
 
 
 app.include_router(api)
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+_cors_env = os.environ.get('CORS_ORIGINS', '*').strip()
+_cors_kwargs = dict(allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+if _cors_env == '*':
+    # Reflect the request Origin (valid with credentials, unlike a literal '*').
+    _cors_kwargs["allow_origin_regex"] = ".*"
+else:
+    _cors_kwargs["allow_origins"] = _cors_env.split(',')
+app.add_middleware(CORSMiddleware, **_cors_kwargs)
 
 
 @app.on_event("shutdown")

@@ -9,11 +9,7 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem("dos_token");
-    if (!token) {
-      setLoading(false);
-      return;
-    }
+    // Session is restored from the HttpOnly cookie via /auth/me.
     api
       .get("/auth/me")
       .then(({ data }) => {
@@ -27,7 +23,9 @@ export function AuthProvider({ children }) {
   }, []);
 
   const persist = (data) => {
-    localStorage.setItem("dos_token", data.token);
+    // Token now lives in an HttpOnly cookie set by the server. Keep a copy for
+    // backward-compatible Bearer fallback during the migration window.
+    if (data.token) localStorage.setItem("dos_token", data.token);
     setUser(data.user);
     setTenant(data.tenant);
   };
@@ -50,7 +48,12 @@ export function AuthProvider({ children }) {
     return data;
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await api.post("/auth/logout");
+    } catch (e) {
+      // ignore network errors on logout
+    }
     localStorage.removeItem("dos_token");
     setUser(null);
     setTenant(null);

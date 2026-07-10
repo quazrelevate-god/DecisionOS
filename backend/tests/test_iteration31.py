@@ -30,8 +30,8 @@ def _load_frontend_backend_url():
 
 BASE_URL = (_load_frontend_backend_url() or "").rstrip("/")
 assert BASE_URL, "REACT_APP_BACKEND_URL missing (looked in env + frontend/.env)"
-OWNER_EMAIL = "owner@sharma.com"
-OWNER_PASSWORD = "demo1234"
+OWNER_EMAIL = os.environ.get("TEST_OWNER_EMAIL", "owner@sharma.com")
+OWNER_PASSWORD = os.environ.get("TEST_OWNER_PASSWORD", "demo1234")
 
 DEMO_DIRECTIVE = (
     "Follow up with all overdue customers. "

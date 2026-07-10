@@ -1,16 +1,16 @@
-"""Onboarding & Operating-System endpoints, extracted from server.py.
+"""Onboarding & Operating-System endpoints.
 
-Imports its foundation (db, LLM, auth deps, helpers) from `server` at import
-time — server.py includes this router at the very bottom, after all those
-names are defined, so there is no circular-import deadlock.
+Foundation (db, LLM config, auth deps, helpers) comes from `core` — this module
+does NOT import from `server`, so there is no circular dependency.
 """
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from emergentintegrations.llm.chat import LlmChat, UserMessage
 
-from server import (
-    db, EMERGENT_LLM_KEY, LLM_MODEL, LlmChat, UserMessage,
+from core import (
+    db, EMERGENT_LLM_KEY, LLM_MODEL,
     _extract_json, new_id, logger, DEFAULT_ROLES,
     normalize_os_blueprint, require_perm, log_activity,
 )

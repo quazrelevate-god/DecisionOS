@@ -143,6 +143,7 @@ export default function Login() {
   const [aiProgress, setAiProgress] = useState(0);
 
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const uid = () => Math.random().toString(36).slice(2, 9);
 
   // OTP resend cooldown ticker (30s, matches backend cooldown)
   const startResendTimer = () => setResendIn(30);
@@ -220,12 +221,12 @@ export default function Login() {
         api.post("/onboarding/suggest", { industry: eff, company_size: form.company_size }),
         api.post("/onboarding/os-blueprint", { industry: eff, company_size: form.company_size }),
       ]);
-      setProducts((sug.data.products || []).map((p) => ({ name: p.name, description: p.description || "", _key: Math.random().toString(36).slice(2, 9) })));
+      setProducts((sug.data.products || []).map((p) => ({ name: p.name, description: p.description || "", _key: uid() })));
       const d = bp.data || {};
       setRoles((d.departments && d.departments.length) ? d.departments : (sug.data.roles || []));
-      setWorkflows(d.workflows || []);
-      setOpTasks(d.operational_tasks || []);
-      setApprovalRules(d.approval_rules || []);
+      setWorkflows((d.workflows || []).map((w) => ({ ...w, _key: uid() })));
+      setOpTasks((d.operational_tasks || []).map((t) => ({ ...t, _key: uid() })));
+      setApprovalRules((d.approval_rules || []).map((r) => ({ ...r, _key: uid() })));
     } catch {
       toast.error("Couldn't generate your operating system — you can add items manually");
     } finally {
@@ -242,20 +243,20 @@ export default function Login() {
     setRoles([...roles, { key, label }]); setRoleInput("");
   };
   const removeRole = (key) => setRoles(roles.filter((r) => r.key !== key));
-  const addProduct = () => setProducts([...products, { name: "", description: "", _key: Math.random().toString(36).slice(2, 9) }]);
+  const addProduct = () => setProducts([...products, { name: "", description: "", _key: uid() }]);
   const updateProduct = (i, k, v) => setProducts(products.map((p, idx) => (idx === i ? { ...p, [k]: v } : p)));
   const removeProduct = (i) => setProducts(products.filter((_, idx) => idx !== i));
 
   const addWorkflow = () => {
     const name = wfInput.trim();
     if (!name || workflows.some((w) => w.name.toLowerCase() === name.toLowerCase())) { setWfInput(""); return; }
-    setWorkflows([...workflows, { name }]); setWfInput("");
+    setWorkflows([...workflows, { name, _key: uid() }]); setWfInput("");
   };
   const removeWorkflow = (i) => setWorkflows(workflows.filter((_, idx) => idx !== i));
-  const addOpTask = () => setOpTasks([...opTasks, { title: "", category: "Other" }]);
+  const addOpTask = () => setOpTasks([...opTasks, { title: "", category: "Other", _key: uid() }]);
   const updateOpTask = (i, k, v) => setOpTasks(opTasks.map((t, idx) => (idx === i ? { ...t, [k]: v } : t)));
   const removeOpTask = (i) => setOpTasks(opTasks.filter((_, idx) => idx !== i));
-  const addRule = () => setApprovalRules([...approvalRules, { name: "", description: "" }]);
+  const addRule = () => setApprovalRules([...approvalRules, { name: "", description: "", _key: uid() }]);
   const updateRule = (i, k, v) => setApprovalRules(approvalRules.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
   const removeRule = (i) => setApprovalRules(approvalRules.filter((_, idx) => idx !== i));
 

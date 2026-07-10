@@ -7,6 +7,7 @@ import { Buildings, Package, Plus, Trash, UsersThree, Kanban, ListChecks, Shield
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from "./ui/dialog";
 
 const inp = "w-full border border-black px-3 py-2 text-sm font-mono focus:outline-none focus:shadow-brutal-sm disabled:bg-black/5 disabled:text-muted-foreground";
+const uid = () => Math.random().toString(36).slice(2, 9);
 const FIELDS = [
   { key: "name", label: "Company name" },
   { key: "industry", label: "Industry" },
@@ -40,11 +41,11 @@ export function CompanyDialog({ trigger }) {
         name: tenant.name || "", industry: tenant.industry || "", company_size: tenant.company_size || "",
         phone: tenant.phone || "", region: tenant.region || "", currency: tenant.currency || "", gst: tenant.gst || "", branches: tenant.branches || "",
       });
-      setProducts((tenant.products || []).map((p) => ({ name: p.name || "", description: p.description || "" })));
+      setProducts((tenant.products || []).map((p) => ({ name: p.name || "", description: p.description || "", _key: uid() })));
       setRoles((tenant.roles || []).map((r) => ({ ...r })));
-      setWorkflows((tenant.workflow_templates || []).map((w) => ({ name: w.name || "" })));
-      setOpTasks((tenant.operational_task_templates || []).map((t) => ({ title: t.title || "", category: t.category || "Other" })));
-      setApprovalRules((tenant.approval_rules || []).map((r) => ({ name: r.name || "", description: r.description || "" })));
+      setWorkflows((tenant.workflow_templates || []).map((w) => ({ name: w.name || "", _key: uid() })));
+      setOpTasks((tenant.operational_task_templates || []).map((t) => ({ title: t.title || "", category: t.category || "Other", _key: uid() })));
+      setApprovalRules((tenant.approval_rules || []).map((r) => ({ name: r.name || "", description: r.description || "", _key: uid() })));
       setRoleInput("");
     }
   };
@@ -94,18 +95,18 @@ export function CompanyDialog({ trigger }) {
   };
 
   const setField = (k, v) => setForm((f) => ({ ...f, [k]: v }));
-  const addProduct = () => setProducts((p) => [...p, { name: "", description: "" }]);
+  const addProduct = () => setProducts((p) => [...p, { name: "", description: "", _key: uid() }]);
   const setProduct = (i, k, v) => setProducts((p) => p.map((it, idx) => (idx === i ? { ...it, [k]: v } : it)));
   const removeProduct = (i) => setProducts((p) => p.filter((_, idx) => idx !== i));
 
   const OP_CATS = ["Presentation","Meeting","Documentation","Proposal","Planning","Review","Administration","Compliance","Marketing","HR Activity","Travel","Event","IT Support","Other"];
-  const addWorkflow = () => setWorkflows((w) => [...w, { name: "" }]);
-  const setWorkflow = (i, v) => setWorkflows((w) => w.map((it, idx) => (idx === i ? { name: v } : it)));
+  const addWorkflow = () => setWorkflows((w) => [...w, { name: "", _key: uid() }]);
+  const setWorkflow = (i, v) => setWorkflows((w) => w.map((it, idx) => (idx === i ? { ...it, name: v } : it)));
   const removeWorkflow = (i) => setWorkflows((w) => w.filter((_, idx) => idx !== i));
-  const addOpTask = () => setOpTasks((t) => [...t, { title: "", category: "Other" }]);
+  const addOpTask = () => setOpTasks((t) => [...t, { title: "", category: "Other", _key: uid() }]);
   const setOpTaskField = (i, k, v) => setOpTasks((t) => t.map((it, idx) => (idx === i ? { ...it, [k]: v } : it)));
   const removeOpTask = (i) => setOpTasks((t) => t.filter((_, idx) => idx !== i));
-  const addRule = () => setApprovalRules((r) => [...r, { name: "", description: "" }]);
+  const addRule = () => setApprovalRules((r) => [...r, { name: "", description: "", _key: uid() }]);
   const setRuleField = (i, k, v) => setApprovalRules((r) => r.map((it, idx) => (idx === i ? { ...it, [k]: v } : it)));
   const removeRule = (i) => setApprovalRules((r) => r.filter((_, idx) => idx !== i));
 
@@ -130,7 +131,7 @@ export function CompanyDialog({ trigger }) {
     try {
       await api.patch("/tenant", {
         ...form,
-        products: products.filter((p) => p.name.trim()),
+        products: products.filter((p) => p.name.trim()).map(({ _key, ...r }) => r),
       });
       await refreshTenant();
       toast.success("Company details updated");
@@ -182,7 +183,7 @@ export function CompanyDialog({ trigger }) {
           {products.length === 0 && <p className="text-sm text-muted-foreground">No products or services yet.</p>}
           <div className="space-y-2">
             {products.map((p, i) => (
-              <div key={i} data-testid={`company-product-${i}`} className="border border-black/30 p-3 flex items-start gap-2">
+              <div key={p._key || i} data-testid={`company-product-${i}`} className="border border-black/30 p-3 flex items-start gap-2">
                 <div className="flex-1 space-y-2">
                   <input data-testid={`company-product-name-${i}`} className={inp} value={p.name} disabled={!canManage}
                     onChange={(e) => setProduct(i, "name", e.target.value)} placeholder="Name" />
@@ -252,7 +253,7 @@ export function CompanyDialog({ trigger }) {
             <label className="label-mono text-muted-foreground flex items-center gap-1.5"><Kanban size={13} weight="bold" /> Workflows</label>
             <div className="space-y-2 mt-1.5" data-testid="os-workflows-list">
               {workflows.map((w, i) => (
-                <div key={i} className="flex gap-2" data-testid={`os-workflow-${i}`}>
+                <div key={w._key || i} className="flex gap-2" data-testid={`os-workflow-${i}`}>
                   <input data-testid={`os-workflow-name-${i}`} className={inp} value={w.name} onChange={(e) => setWorkflow(i, e.target.value)} placeholder="Workflow name" />
                   <button onClick={() => removeWorkflow(i)} data-testid={`os-workflow-remove-${i}`} className="border border-black p-2 hover:bg-brand-red hover:text-white transition-colors shrink-0"><Trash size={14} weight="bold" /></button>
                 </div>
@@ -263,7 +264,7 @@ export function CompanyDialog({ trigger }) {
             <label className="label-mono text-muted-foreground flex items-center gap-1.5 mt-4"><ListChecks size={13} weight="bold" /> Operational tasks</label>
             <div className="space-y-2 mt-1.5" data-testid="os-optasks-list">
               {opTasks.map((t, i) => (
-                <div key={i} className="flex gap-2" data-testid={`os-optask-${i}`}>
+                <div key={t._key || i} className="flex gap-2" data-testid={`os-optask-${i}`}>
                   <input data-testid={`os-optask-title-${i}`} className={inp} value={t.title} onChange={(e) => setOpTaskField(i, "title", e.target.value)} placeholder="Task title" />
                   <select data-testid={`os-optask-cat-${i}`} className="border border-black px-1 py-2 text-xs font-mono focus:outline-none w-28 shrink-0" value={t.category} onChange={(e) => setOpTaskField(i, "category", e.target.value)}>
                     {OP_CATS.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -277,7 +278,7 @@ export function CompanyDialog({ trigger }) {
             <label className="label-mono text-muted-foreground flex items-center gap-1.5 mt-4"><ShieldCheck size={13} weight="bold" /> Approval rules</label>
             <div className="space-y-2 mt-1.5" data-testid="os-rules-list">
               {approvalRules.map((r, i) => (
-                <div key={i} className="border border-black/30 p-2" data-testid={`os-rule-${i}`}>
+                <div key={r._key || i} className="border border-black/30 p-2" data-testid={`os-rule-${i}`}>
                   <div className="flex gap-2">
                     <input data-testid={`os-rule-name-${i}`} className={inp} value={r.name} onChange={(e) => setRuleField(i, "name", e.target.value)} placeholder="Rule name" />
                     <button onClick={() => removeRule(i)} data-testid={`os-rule-remove-${i}`} className="border border-black p-2 hover:bg-brand-red hover:text-white transition-colors shrink-0"><Trash size={14} weight="bold" /></button>

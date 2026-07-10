@@ -33,8 +33,8 @@ BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 assert BASE_URL, "REACT_APP_BACKEND_URL must be set"
 API = f"{BASE_URL}/api"
 
-OWNER_EMAIL = "owner@sharma.com"
-OWNER_PASSWORD = "demo1234"
+OWNER_EMAIL = os.environ.get("TEST_OWNER_EMAIL", "owner@sharma.com")
+OWNER_PASSWORD = os.environ.get("TEST_OWNER_PASSWORD", "demo1234")
 OWNER_PHONE_RAW = "9820010001"
 PROD_PHONE_RAW = "9820010003"
 SALES_PHONE_RAW = "9820010002"

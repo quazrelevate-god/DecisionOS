@@ -28,8 +28,8 @@ def _load_backend_url():
 BASE_URL = _load_backend_url()
 API = f"{BASE_URL}/api"
 
-OWNER_EMAIL = "owner@sharma.com"
-OWNER_PASSWORD = "demo1234"
+OWNER_EMAIL = os.environ.get("TEST_OWNER_EMAIL", "owner@sharma.com")
+OWNER_PASSWORD = os.environ.get("TEST_OWNER_PASSWORD", "demo1234")
 
 
 # -------------------- fixtures --------------------

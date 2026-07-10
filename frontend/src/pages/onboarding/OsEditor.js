@@ -46,7 +46,7 @@ export function OsEditor(props) {
             <label className={`${labelCls} flex items-center gap-1.5`}><Kanban size={13} weight="bold" /> Workflows</label>
             <div className="flex flex-wrap gap-2 mt-2" data-testid="workflows-list">
               {workflows.map((w, i) => (
-                <span key={i} data-testid={`workflow-chip-${i}`} className="inline-flex items-center gap-1.5 border border-black bg-white px-2.5 py-1 text-xs font-semibold">
+                <span key={w._key || i} data-testid={`workflow-chip-${i}`} className="inline-flex items-center gap-1.5 border border-black bg-white px-2.5 py-1 text-xs font-semibold">
                   {w.name}<button onClick={() => removeWorkflow(i)} data-testid={`remove-workflow-${i}`} className="hover:text-brand-red"><X size={12} weight="bold" /></button>
                 </span>
               ))}
@@ -62,7 +62,7 @@ export function OsEditor(props) {
             <label className={`${labelCls} flex items-center gap-1.5`}><ListChecks size={13} weight="bold" /> Operational tasks (starter library)</label>
             <div className="space-y-2 mt-2 max-h-52 overflow-y-auto pr-1" data-testid="optasks-list">
               {opTasks.map((t, i) => (
-                <div key={i} data-testid={`optask-row-${i}`} className="flex gap-2">
+                <div key={t._key || i} data-testid={`optask-row-${i}`} className="flex gap-2">
                   <input data-testid={`optask-title-${i}`} className="flex-1 border border-black/40 px-2 py-1.5 text-sm font-mono focus:outline-none" placeholder="Task title" value={t.title} onChange={(e) => updateOpTask(i, "title", e.target.value)} />
                   <select data-testid={`optask-cat-${i}`} className="border border-black/40 px-1 py-1.5 text-xs font-mono focus:outline-none w-28" value={t.category} onChange={(e) => updateOpTask(i, "category", e.target.value)}>
                     {OP_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -78,7 +78,7 @@ export function OsEditor(props) {
             <label className={`${labelCls} flex items-center gap-1.5`}><ShieldCheck size={13} weight="bold" /> Approval rules</label>
             <div className="space-y-2 mt-2" data-testid="rules-list">
               {approvalRules.map((r, i) => (
-                <div key={i} data-testid={`rule-row-${i}`} className="border border-black p-2">
+                <div key={r._key || i} data-testid={`rule-row-${i}`} className="border border-black p-2">
                   <div className="flex gap-2">
                     <input data-testid={`rule-name-${i}`} className="flex-1 border border-black/40 px-2 py-1.5 text-sm font-mono focus:outline-none" placeholder="Rule name" value={r.name} onChange={(e) => updateRule(i, "name", e.target.value)} />
                     <button onClick={() => removeRule(i)} data-testid={`remove-rule-${i}`} className="px-2 border border-black hover:bg-brand-red hover:text-white transition-colors"><X size={14} weight="bold" /></button>
@@ -94,7 +94,7 @@ export function OsEditor(props) {
             <label className={labelCls}>Products / Services</label>
             <div className="space-y-2 mt-2" data-testid="products-list">
               {products.map((p, i) => (
-                <div key={i} data-testid={`product-row-${i}`} className="border border-black p-2">
+                <div key={p._key || i} data-testid={`product-row-${i}`} className="border border-black p-2">
                   <div className="flex gap-2">
                     <input data-testid={`product-name-${i}`} className="flex-1 border border-black/40 px-2 py-1.5 text-sm font-mono focus:outline-none" placeholder="Name" value={p.name} onChange={(e) => updateProduct(i, "name", e.target.value)} />
                     <button onClick={() => removeProduct(i)} data-testid={`remove-product-${i}`} className="px-2 border border-black hover:bg-brand-red hover:text-white transition-colors"><X size={14} weight="bold" /></button>

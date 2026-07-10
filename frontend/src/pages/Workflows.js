@@ -7,7 +7,7 @@ import { money } from "../lib/format";
 import { toast } from "sonner";
 import { Plus, ArrowRight, Trash } from "@phosphor-icons/react";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter,
 } from "../components/ui/dialog";
 
 const TABS = [
@@ -58,7 +58,9 @@ function NewWorkflowDialog({ type, onCreated }) {
         </button>
       </DialogTrigger>
       <DialogContent className="border border-black rounded-none">
-        <DialogHeader><DialogTitle className="font-heading uppercase tracking-tight">New {TABS.find(t=>t.key===type).label}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="font-heading uppercase tracking-tight">New {TABS.find(t=>t.key===type).label}</DialogTitle>
+          <DialogDescription className="text-sm text-muted-foreground">Add a card to track this {TABS.find(t=>t.key===type).label.toLowerCase()} process.</DialogDescription>
+        </DialogHeader>
         <div className="space-y-3">
           <input data-testid="wf-title-input" className={inp} placeholder="Title (e.g. Order #4823 — Retailer)" value={form.title} onChange={set("title")} />
           <div>

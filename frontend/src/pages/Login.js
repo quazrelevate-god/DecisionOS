@@ -166,6 +166,8 @@ export default function Login() {
         setError(formatApiError(err.response?.data?.detail) || "This invite link is invalid or expired");
       }
     })();
+    // Runs once on mount to handle the ?invite= deep-link; deps intentionally empty.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const doLogin = async (e) => {

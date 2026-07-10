@@ -22,6 +22,8 @@ export function AuthProvider({ children }) {
       })
       .catch(() => localStorage.removeItem("dos_token"))
       .finally(() => setLoading(false));
+    // Runs once on mount to restore the session; deps intentionally empty.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const persist = (data) => {

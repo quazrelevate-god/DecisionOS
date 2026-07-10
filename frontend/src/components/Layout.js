@@ -63,7 +63,10 @@ const Logo = () => (
 
 export default function Layout({ children }) {
   const { user, tenant, logout } = useAuth();
+  // NAV/BOTTOM_NAV/hasPerm are stable module-level refs; only `user` can change.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const navMain = useMemo(() => NAV.filter((n) => !n.perm || hasPerm(user, n.perm)), [user]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const navBottom = useMemo(() => BOTTOM_NAV.filter((n) => !n.perm || hasPerm(user, n.perm)), [user]);
   const navigate = useNavigate();
   const location = useLocation();

@@ -83,7 +83,7 @@ export default function Calendar() {
                   const t = TYPES[e.type] || TYPES.task;
                   return (
                     <div
-                      key={i}
+                      key={e.ref_id || `${e.type}-${i}`}
                       data-testid={`cal-event-${e.type}-${i}`}
                       onClick={() => e.contact_id && navigate(`/contacts/${e.contact_id}`)}
                       className={`card-brutal p-3 flex items-center gap-3 ${e.contact_id ? "cursor-pointer shadow-hover" : ""}`}

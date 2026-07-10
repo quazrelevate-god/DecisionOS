@@ -3550,8 +3550,8 @@ async def process_whatsapp_message(message: dict):
 # ---------------------------------------------------------------------------
 # Seed demo workspace
 # ---------------------------------------------------------------------------
-DEMO_EMAIL = "owner@sharma.com"
-DEMO_PASSWORD = "demo1234"
+DEMO_EMAIL = os.environ.get("DEMO_EMAIL", "owner@sharma.com")
+DEMO_PASSWORD = os.environ.get("DEMO_PASSWORD", "demo1234")
 
 
 async def seed_demo():

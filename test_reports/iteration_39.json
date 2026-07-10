@@ -1,0 +1,25 @@
+{
+  "summary": "Verified the non-blocking 'Structuring in process' banner on the Decision Desk. Logged in as demo owner, submitted the required __UITEST__ text directive, skipped clarify panel, and observed that the sticky banner (data-testid='structuring-banner') with status 'Structuring in process…' (data-testid='structuring-status') appeared, remained visible during processing, did NOT block interaction (scroll + inbox filter chip click succeeded while banner was showing), and cleared cleanly on completion. The Execution Summary dialog with real task/assignee/approval counts opened immediately after the banner disappeared.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Inbox.js is now 549 lines — approaching the recommended 700-line soft limit. Consider extracting EscalationCard, PendingApprovalCard, and the CaptureBox into their own components to keep the file focused (informational, not blocking).",
+    "procLabel derivation ternary chain is fine but could be a small map lookup for readability (minor)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100%"},
+  "test_credentials": "owner@sharma.com / demo1234 (used via data-testid='demo-login-owner')",
+  "seed_data_creation": "One __UITEST__ decision was created via the text-directive path (main agent will clean it up per instructions).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Non-blocking structuring banner works. Observed status sequence and timings: banner first became visible ~4.7s after clicking 'Structure it' (this delay is the clarify precheck + skip roundtrip), remained visible ~6.0s showing only 'Structuring in process…' (queued/transcribing stages were too fast to be captured for the text-directive path — which is expected since text directives skip transcription and the queued->structuring transition happens on the first poll), then disappeared and the Execution Summary dialog opened at ~10.7s from submit. Sticky banner sits right under the PageHeader with a yellow background, spinner, primary status line and helper text — it does NOT overlay/modal the page (page scroll and filter chips remained clickable while banner was visible). Execution Summary dialog reported '1 task created, 1 person assigned, 1 approval to review' for the __UITEST__ directive.",
+  "observed_sequence": ["Structuring in process…"],
+  "approx_total_time_seconds": {"banner_visible_duration_s": 6.0, "submit_to_summary_s": 10.7},
+  "non_blocking_verified": {"page_scroll_while_banner_visible": true, "inbox_filter_chip_clickable_while_banner_visible": true, "banner_is_sticky_not_modal": true}
+}

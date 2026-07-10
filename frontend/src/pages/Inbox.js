@@ -337,6 +337,14 @@ export default function Inbox() {
   const pending = (decisionsQ.data || []).filter((d) => d.status === "pending_approval");
   const escalations = (myTasksQ.data || []).filter((t) => (t.source === "escalation" || t.source === "handoff") && t.status !== "done");
 
+  // Live status of any voice/text note still being processed (non-blocking indicator)
+  const procNotes = (notesQ.data || []).filter((n) => PROCESSING.includes(n.status));
+  const procLabel = procNotes.some((n) => n.status === "structuring")
+    ? "Structuring in process…"
+    : procNotes.some((n) => n.status === "transcribing")
+    ? "Transcribing your voice note…"
+    : "Queued — starting…";
+
   // Deep-link from CEO Brief: ?focus=approval:<id> or attention:<id> — scroll to & highlight the card.
   const [params, setParams] = useSearchParams();
   const focus = params.get("focus");
@@ -371,6 +379,19 @@ export default function Inbox() {
           </button>
         )}
       </PageHeader>
+
+      {processing && (
+        <div data-testid="structuring-banner"
+          className="sticky top-2 z-30 mb-6 flex items-center gap-3 border border-black bg-brand-yellow/40 px-4 py-3 shadow-brutal-sm">
+          <Spinner size={20} weight="bold" className="animate-spin text-brand-red shrink-0" />
+          <div className="min-w-0">
+            <p className="font-heading font-bold uppercase tracking-tight text-sm" data-testid="structuring-status">
+              {procLabel}{procNotes.length > 1 ? ` (${procNotes.length})` : ""}
+            </p>
+            <p className="text-xs text-muted-foreground">Running in the background — you can keep working. We'll pop up the summary the moment it's ready.</p>
+          </div>
+        </div>
+      )}
 
       {/* Capture */}
       {canCapture ? (

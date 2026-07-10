@@ -320,14 +320,19 @@ class ContactUpdateInput(BaseModel):
 # Workflow definitions
 # ---------------------------------------------------------------------------
 WORKFLOW_STAGES = {
-    "sales_dispatch": ["order_received", "confirmed", "in_production", "ready", "dispatched", "delivered"],
+    "production": ["order_received", "confirmed", "in_production", "ready"],
+    "distribution": ["ready_to_dispatch", "dispatched", "in_transit", "delivered"],
     "purchase_payment": ["requested", "approved", "ordered", "received", "payment_pending", "paid"],
+    # legacy (kept so pre-split cards still render/advance); AI no longer creates these
+    "sales_dispatch": ["order_received", "confirmed", "in_production", "ready", "dispatched", "delivered"],
 }
 WORKFLOW_OWNER_ROLE = {
-    "sales_dispatch": {"order_received": "sales", "confirmed": "sales", "in_production": "production",
-                        "ready": "production", "dispatched": "sales", "delivered": "sales"},
+    "production": {"order_received": "sales", "confirmed": "sales", "in_production": "production", "ready": "production"},
+    "distribution": {"ready_to_dispatch": "production", "dispatched": "sales", "in_transit": "sales", "delivered": "sales"},
     "purchase_payment": {"requested": "production", "approved": "owner", "ordered": "production",
                          "received": "production", "payment_pending": "finance", "paid": "finance"},
+    "sales_dispatch": {"order_received": "sales", "confirmed": "sales", "in_production": "production",
+                        "ready": "production", "dispatched": "sales", "delivered": "sales"},
 }
 
 
@@ -405,14 +410,20 @@ async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[l
         "\"tasks\": [{\"title\": string, \"description\": string, \"assignee_role\": one of [" + roles_str + "], "
         "\"assignee_name\": string (a specific team member's name if one is explicitly mentioned, else empty), "
         "\"priority\": one of [low,medium,high], \"due_in_days\": integer or null}], "
-        "\"workflow_events\": [{\"type\": one of [sales_dispatch,purchase_payment], \"title\": string, \"detail\": string, \"counterparty\": string, \"amount\": number or null}], "
+        "\"workflow_events\": [{\"type\": one of [production,distribution,purchase_payment], \"title\": string, \"detail\": string, \"counterparty\": string, \"amount\": number or null}], "
         "\"reminders\": [{\"title\": string, \"due_in_days\": integer or null}], "
         "\"meeting_events\": [{\"title\": string, \"when\": string, \"due_in_days\": integer or null}], "
         "\"memory_notes\": [{\"text\": string, \"tag\": string}]}. "
         + members_line +
         "Use 'reminders' for simple personal follow-ups (e.g. 'call Kumar tomorrow', 'follow up with Toyota next Monday'). "
         "Use 'meeting_events' for meetings/reviews/calls to be scheduled (e.g. 'arrange a sales review on Friday', 'set up a vendor call Monday'). Keep meetings OUT of reminders. "
-        "Use 'workflow_events' ONLY for concrete order-fulfilment (sales_dispatch) or procurement (purchase_payment) items to track on the board — e.g. 'dispatch the Toyota order', 'raise a purchase for 50 spindles from Rajesh Traders'. Include the counterparty (customer/vendor name) and amount when mentioned. Do NOT put general rules/policies here — those belong in memory_notes. "
+        "Use 'workflow_events' ONLY for concrete multi-step operational pipelines to track on the board. Three types: "
+        "'production' = making/manufacturing a customer order (e.g. 'start production on the Toyota order', 'begin manufacturing 500 units for the Delhi retailer'); "
+        "'distribution' = dispatching/delivering/logistics of finished goods (e.g. 'dispatch the Delhi order', 'arrange delivery to the Mumbai boutique', 'ship the consignment'); "
+        "'purchase_payment' = procurement/buying from a vendor (e.g. 'raise a purchase for 50 spindles from Rajesh Traders'). "
+        "Include the counterparty (customer/vendor name) and amount when mentioned. "
+        "IMPORTANT: Following up on, chasing, or collecting PAYMENT for an invoice (money a customer owes us) is NOT a workflow — create a TASK for it instead (assignee_role 'finance' or the named accountant if one exists), e.g. 'uploaded an invoice, ask the accountant to follow up on payment' -> a finance task titled 'Follow up on invoice payment' with the customer in the description. "
+        "Do NOT put general rules/policies here — those belong in memory_notes. "
         "Use 'memory_notes' for lasting facts/policies the company should remember (e.g. 'don't purchase from XYZ again', 'salary increment for Arun from August'). "
         "The transcript may be in English, Tamil, or Tanglish (casual Tamil-English code-mix). Fully understand it regardless "
         "of language, and produce ALL output field values in clear English. "
@@ -789,7 +800,7 @@ async def process_voice_note(note_id: str):
             if wtype not in WORKFLOW_STAGES:
                 continue
             stages = WORKFLOW_STAGES[wtype]
-            title = (ev.get("title") or ev.get("action") or ("Order" if wtype == "sales_dispatch" else "Purchase")).strip()
+            title = (ev.get("title") or ev.get("action") or ("Purchase" if wtype == "purchase_payment" else "Order")).strip()
             cp = (ev.get("counterparty") or "").strip()
             contact_id = None
             if cp:
@@ -2294,6 +2305,16 @@ async def advance_workflow(workflow_id: str, inp: WorkflowAdvanceInput, user: di
     return await db.workflows.find_one({"id": workflow_id}, {"_id": 0})
 
 
+@api.delete("/workflows/{workflow_id}")
+async def delete_workflow(workflow_id: str, user: dict = Depends(require_role("owner"))):
+    wf = await db.workflows.find_one({"id": workflow_id, "tenant_id": user["tenant_id"]}, {"_id": 0, "title": 1})
+    if not wf:
+        raise HTTPException(status_code=404, detail="Not found")
+    await db.workflows.delete_one({"id": workflow_id, "tenant_id": user["tenant_id"]})
+    await log_activity(user["tenant_id"], user["id"], "workflow_deleted", f"Deleted workflow '{wf.get('title', '')}'", "workflow", workflow_id)
+    return {"ok": True}
+
+
 # ---------------------------------------------------------------------------
 # Company Brain search
 # ---------------------------------------------------------------------------
@@ -3344,9 +3365,9 @@ async def business_calendar(days: int = 45, user: dict = Depends(get_current_use
         add(t.get("due_date"), "task", t.get("title", "Task"),
             (t.get("assignee_role") or "team"), None, t.get("id"))
 
-    # Deliveries (open sales workflows)
+    # Deliveries (open distribution workflows; includes legacy sales_dispatch cards)
     wfs = await db.workflows.find(
-        {"tenant_id": tid, "type": "sales_dispatch", "stage": {"$nin": ["delivered", "paid"]}},
+        {"tenant_id": tid, "type": {"$in": ["distribution", "sales_dispatch"]}, "stage": {"$nin": ["delivered", "paid"]}},
         {"_id": 0}).to_list(300)
     for w in wfs:
         dt = w.get("expected_date") or w.get("due_date")
@@ -3614,20 +3635,21 @@ async def seed_demo():
     ])
 
     # Workflows
-    sd_stages = WORKFLOW_STAGES["sales_dispatch"]
+    prod_stages = WORKFLOW_STAGES["production"]
+    dist_stages = WORKFLOW_STAGES["distribution"]
     pp_stages = WORKFLOW_STAGES["purchase_payment"]
     await db.workflows.insert_many([
-        {"id": new_id(), "tenant_id": tid, "type": "sales_dispatch", "title": "Order #4821 — Delhi Retailer (500 units)",
+        {"id": new_id(), "tenant_id": tid, "type": "production", "title": "Order #4821 — Delhi Retailer (500 units)",
          "detail": "Cotton kurta sets, festive collection", "amount": 385000, "counterparty": "Kapoor Retail Pvt Ltd", "contact_id": c_kapoor,
-         "stage": "in_production", "stages": sd_stages,
+         "stage": "in_production", "stages": prod_stages,
          "history": [{"stage": "order_received", "note": "PO received", "by": sales_id, "at": now_iso()},
                      {"stage": "confirmed", "note": "Advance paid", "by": sales_id, "at": now_iso()},
                      {"stage": "in_production", "note": "Batch started", "by": prod_id, "at": now_iso()}],
          "created_by": sales_id, "created_at": now_iso()},
-        {"id": new_id(), "tenant_id": tid, "type": "sales_dispatch", "title": "Order #4822 — Mumbai Boutique (120 units)",
+        {"id": new_id(), "tenant_id": tid, "type": "distribution", "title": "Order #4822 — Mumbai Boutique (120 units)",
          "detail": "Silk dupattas", "amount": 96000, "counterparty": "Threads Boutique", "contact_id": c_threads,
-         "stage": "dispatched", "stages": sd_stages,
-         "history": [{"stage": "order_received", "note": "", "by": sales_id, "at": now_iso()},
+         "stage": "dispatched", "stages": dist_stages,
+         "history": [{"stage": "ready_to_dispatch", "note": "Packed", "by": prod_id, "at": now_iso()},
                      {"stage": "dispatched", "note": "Shipped via BlueDart", "by": sales_id, "at": now_iso()}],
          "created_by": sales_id, "created_at": now_iso()},
         {"id": new_id(), "tenant_id": tid, "type": "purchase_payment", "title": "PO #221 — Cotton yarn (2 tonnes)",

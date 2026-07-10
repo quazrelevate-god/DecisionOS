@@ -1,0 +1,37 @@
+{
+  "summary": "Frontend validation of the new Workflows page (3 boards + owner-only delete). 33 of 35 checks passed. All 7 review scenarios PASS functionally: tabs, columns, cards rendering, owner delete button visibility+action, non-owner (sales) cannot see delete, Advance still works, and the ZZTEST card was created + deleted successfully. The only 2 'failures' are demo-data drift, not code bugs: the sample cards 'Order #4821 — Delhi Retailer' and 'Order #4822 — Mumbai Boutique' currently sit in 'ready' and 'delivered' respectively (not 'in_production' / 'dispatched' as the review expected). The cards exist and the boards work — they've simply been advanced through the pipeline by prior activity.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Workflows > New Workflow dialog",
+        "issues": [
+          "React hydration warning: <span> cannot be a child of <option> inside <select data-testid='wf-contact-select'>. Emergent's dev-mode injected <span> wrapper is being rendered inside the <option> in Workflows.js line 67 (`{c.company || c.name}`). Non-blocking in prod (only fires in dev/preview), but produces a console error every time the dialog opens.",
+          "A11y warning (recurring): 'Missing Description or aria-describedby={undefined} for {DialogContent}' — NewWorkflowDialog has no <DialogDescription>."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "(Optional / cosmetic) Demo data drift — 'Order #4821' is now in 'ready' and 'Order #4822' is in 'delivered'. If the review script assumes fresh demo positions, add an idempotent stage-reset in the seed_demo/fixup_demo_tenant so demo cards land in the intended review columns.",
+    "(Optional a11y polish) Add DialogDescription to NewWorkflowDialog to silence Radix warning."
+  ],
+  "critical_code_review_comments": [
+    "Workflows.js: TABS correctly lists production / distribution / purchase_payment; STAGES map matches backend WORKFLOW_STAGES; default `useState('production')` — verified in UI (Production tab has bg-brand-ink class on load).",
+    "Delete button is correctly gated by `user?.role === 'owner'` — confirmed via cross-check: 2 delete buttons on owner's production tab, 0 delete buttons for sales user across all three tabs.",
+    "del() handler correctly uses window.confirm then DELETE /api/workflows/{id}, invalidates both `['workflows', tab]` and `['dashboard']` queries, and surfaces backend error via `e.response?.data?.detail`. Verified end-to-end: created 'ZZTEST Delete Me' -> deleted -> confirmed via API GET (count returned to 2, no ZZTEST title present).",
+    "advance() correctly guards against final-stage advance (`toast.info('Already at final stage')`) — the ready/delivered cards therefore correctly show a Chip instead of an Advance button.",
+    "NewWorkflowDialog.contactType branch (`type === 'purchase_payment' ? 'vendor' : 'customer'`) is wired but not verified end-to-end for vendor selection (out of scope for this review).",
+    "Console noise: <span> inside <option> hydration error in the wf-contact-select — Emergent's dev instrumentation is injecting a wrapper span into the option. If this can be surpressed by using a plain string child (which the code already does — {c.company || c.name}), then the instrumentation itself is the culprit. Worth flagging to main agent but is not a functional bug."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "n/a (skipped per request)", "frontend": "100% functional (33/35 assertions; 2 non-code demo-data drifts)" },
+  "test_credentials": "owner@sharma.com / demo1234 (via data-testid=demo-login-owner); sales@sharma.com / demo1234 (Email & Password tab)",
+  "seed_data_creation": "Created and DELETED one 'ZZTEST Delete Me' workflow card. Verified via backend GET /api/workflows?type=production that no ZZTEST card remains. Side effect (allowed by review): the 'Revised Quotation to Deli Retailer' card was advanced ONE step from order_received -> confirmed as part of the Advance test. Order #4821 and #4822 were NOT touched by this run.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "The three-tab Workflows page (production/distribution/purchase_payment) is fully functional. Owner-only delete is properly gated in the UI (verified with sales@sharma.com — no delete buttons rendered). If a future test expects 'Order #4821' in in_production and 'Order #4822' in dispatched, it will fail because those cards have been advanced further in the demo; the check should be by presence in ANY column, or the demo seed should reset stages on startup. New Workflow dialog has known non-blocking console noise (span-in-option + missing DialogDescription)."
+}

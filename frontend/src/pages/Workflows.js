@@ -5,22 +5,28 @@ import { useAuth } from "../context/AuthContext";
 import { PageHeader, Chip } from "../components/common";
 import { money } from "../lib/format";
 import { toast } from "sonner";
-import { Plus, ArrowRight } from "@phosphor-icons/react";
+import { Plus, ArrowRight, Trash } from "@phosphor-icons/react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter,
 } from "../components/ui/dialog";
 
 const TABS = [
-  { key: "sales_dispatch", label: "Order Fulfilment", sub: "Sales → Dispatch" },
+  { key: "production", label: "Production", sub: "Order → Ready" },
+  { key: "distribution", label: "Distribution", sub: "Dispatch → Deliver" },
   { key: "purchase_payment", label: "Procurement", sub: "Purchase → Payment" },
 ];
+const STAGES = {
+  production: ["order_received", "confirmed", "in_production", "ready"],
+  distribution: ["ready_to_dispatch", "dispatched", "in_transit", "delivered"],
+  purchase_payment: ["requested", "approved", "ordered", "received", "payment_pending", "paid"],
+};
 const STAGE_LABEL = (s) => s.replace(/_/g, " ");
 
 function NewWorkflowDialog({ type, onCreated }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ title: "", detail: "", amount: "", counterparty: "", contact_id: "" });
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
-  const contactType = type === "sales_dispatch" ? "customer" : "vendor";
+  const contactType = type === "purchase_payment" ? "vendor" : "customer";
   const { data: contacts } = useQuery({
     queryKey: ["contacts", contactType, "", ""],
     queryFn: () => api.get(`/contacts?type=${contactType}`).then((r) => r.data),
@@ -76,13 +82,11 @@ function NewWorkflowDialog({ type, onCreated }) {
 
 export default function Workflows() {
   const qc = useQueryClient();
-  const { tenant } = useAuth();
-  const [tab, setTab] = useState("sales_dispatch");
+  const { tenant, user } = useAuth();
+  const [tab, setTab] = useState("production");
   const { data } = useQuery({ queryKey: ["workflows", tab], queryFn: () => api.get(`/workflows?type=${tab}`).then((r) => r.data) });
 
-  const stages = tab === "sales_dispatch"
-    ? ["order_received", "confirmed", "in_production", "ready", "dispatched", "delivered"]
-    : ["requested", "approved", "ordered", "received", "payment_pending", "paid"];
+  const stages = STAGES[tab];
 
   const advance = async (wf) => {
     const idx = wf.stages.indexOf(wf.stage);
@@ -95,6 +99,18 @@ export default function Workflows() {
       qc.invalidateQueries({ queryKey: ["dashboard"] });
     } catch (e) {
       toast.error(e.response?.data?.detail || "Cannot advance");
+    }
+  };
+
+  const del = async (wf) => {
+    if (!window.confirm(`Delete "${wf.title}"? This removes the card permanently.`)) return;
+    try {
+      await api.delete(`/workflows/${wf.id}`);
+      toast.success("Workflow deleted");
+      qc.invalidateQueries({ queryKey: ["workflows", tab] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Delete failed");
     }
   };
 
@@ -130,7 +146,15 @@ export default function Workflows() {
                     const isLast = w.stages.indexOf(w.stage) >= w.stages.length - 1;
                     return (
                       <div key={w.id} data-testid={`workflow-card-${w.id}`} className="border border-black p-3 shadow-hover bg-white">
-                        <p className="font-semibold text-sm leading-tight">{w.title}</p>
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-semibold text-sm leading-tight">{w.title}</p>
+                          {user?.role === "owner" && (
+                            <button onClick={() => del(w)} data-testid={`delete-workflow-${w.id}`} title="Delete card"
+                              className="shrink-0 text-muted-foreground hover:text-brand-red transition-colors">
+                              <Trash size={14} weight="bold" />
+                            </button>
+                          )}
+                        </div>
                         {w.counterparty && <p className="text-xs text-muted-foreground mt-1">{w.counterparty}</p>}
                         {w.amount != null && <p className="font-mono text-xs mt-1">{money(w.amount, tenant?.currency)}</p>}
                         {!isLast && (

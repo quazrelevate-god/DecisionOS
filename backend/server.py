@@ -232,23 +232,6 @@ class InviteInput(BaseModel):
     phones: List[str]
 
 
-class OnboardingSuggestInput(BaseModel):
-    industry: str
-    company_size: Optional[str] = None
-    description: Optional[str] = None
-
-
-class OSBlueprintGenInput(BaseModel):
-    industry: str
-    company_size: Optional[str] = None
-
-
-class OSBlueprintInput(BaseModel):
-    workflow_templates: Optional[List[dict]] = None
-    operational_task_templates: Optional[List[dict]] = None
-    approval_rules: Optional[List[dict]] = None
-
-
 class LoginInput(BaseModel):
     email: EmailStr
     password: str
@@ -742,6 +725,25 @@ def _resolve_meeting_date(when: str, due_in_days) -> str:
     return (now + timedelta(days=2)).date().isoformat()
 
 
+async def pick_least_loaded_member(tenant_id: str, role: str) -> Optional[str]:
+    """Smart assignment: return the id of the role member with the fewest open
+    (not done/cancelled) tasks, or None if the role has no members."""
+    if not role:
+        return None
+    members = await db.users.find({"tenant_id": tenant_id, "role": role}, {"_id": 0, "id": 1}).to_list(200)
+    if not members:
+        return None
+    best_id, best_load = None, None
+    for m in members:
+        load = await db.tasks.count_documents({
+            "tenant_id": tenant_id, "assignee_id": m["id"],
+            "status": {"$nin": ["done", "cancelled"]},
+        })
+        if best_load is None or load < best_load:
+            best_load, best_id = load, m["id"]
+    return best_id
+
+
 async def _create_decision_tasks(tenant_id, note, decision_id, extracted, troles, members):
     """Create the blocked tasks for a decision; returns (task_ids, assignee_keys)."""
     task_ids = []
@@ -757,6 +759,9 @@ async def _create_decision_tasks(tenant_id, note, decision_id, extracted, troles
         if member:
             assignee_id = member["id"]
             role = member["role"]
+        elif role:
+            # Smart assignment: distribute role-level tasks to the least-loaded member.
+            assignee_id = await pick_least_loaded_member(tenant_id, role)
         if assignee_id:
             assignee_keys.add(f"u:{assignee_id}")
         elif role:
@@ -913,40 +918,6 @@ async def process_voice_note(note_id: str):
 # ---------------------------------------------------------------------------
 # Auth routes
 # ---------------------------------------------------------------------------
-@api.post("/onboarding/suggest")
-async def onboarding_suggest(inp: OnboardingSuggestInput):
-    system = (
-        "You are an onboarding assistant for DecisionOS, a business operations app. "
-        "Given an industry, propose the team roles/departments and example products or services a small business in that "
-        "industry would have. Return ONLY valid JSON, no prose: "
-        "{\"roles\": [{\"key\": lowercase_snake_case_slug, \"label\": Human Readable}], "
-        "\"products\": [{\"name\": string, \"description\": short string}]}. "
-        "Provide 3-6 roles (do NOT include 'owner' — it is implicit) and 3-5 example products/services. Keep it specific to the industry."
-    )
-    prompt = f"Industry: {inp.industry}\nCompany size: {inp.company_size or 'unspecified'}\nExtra notes: {inp.description or 'none'}\nSuggest roles and example products/services now."
-    chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=f"onboard-{new_id()}", system_message=system).with_model(*LLM_MODEL)
-    try:
-        resp = await chat.send_message(UserMessage(text=prompt))
-        data = _extract_json(resp)
-    except Exception as e:
-        logger.error(f"onboarding_suggest failed: {e}")
-        data = {}
-    roles = []
-    for r in (data.get("roles") or []):
-        label = (r.get("label") or r.get("key") or "").strip()
-        key = (r.get("key") or label).strip().lower().replace(" ", "_").replace("/", "_").replace("-", "_")
-        if key and key != "owner":
-            roles.append({"key": key, "label": label or key.replace("_", " ").title()})
-    products = []
-    for p in (data.get("products") or []):
-        name = (p.get("name") or "").strip()
-        if name:
-            products.append({"name": name, "description": (p.get("description") or "").strip()})
-    if not roles:
-        roles = DEFAULT_ROLES
-    return {"roles": roles[:6], "products": products[:5]}
-
-
 def _slugify_key(label: str) -> str:
     return (label or "").strip().lower().replace(" ", "_").replace("/", "_").replace("-", "_")
 
@@ -990,31 +961,6 @@ def normalize_os_blueprint(data: dict) -> dict:
         "operational_tasks": op_tasks[:20],
         "approval_rules": rules[:10],
     }
-
-
-@api.post("/onboarding/os-blueprint")
-async def onboarding_os_blueprint(inp: OSBlueprintGenInput):
-    system = (
-        "You are the onboarding architect for DecisionOS, an operating system for founder-led SMEs. "
-        "Given an industry, design a ready-to-use Business Operating System for a small/mid business. "
-        "Return ONLY valid JSON, no prose, with exactly these keys: "
-        "{\"departments\": [string department name], "
-        "\"workflows\": [{\"name\": string}], "
-        "\"operational_tasks\": [{\"title\": string, \"category\": one of "
-        "[Presentation,Meeting,Documentation,Proposal,Planning,Review,Administration,Compliance,Marketing,HR Activity,Travel,Event,IT Support,Other]}], "
-        "\"approval_rules\": [{\"name\": string, \"description\": short string}]}. "
-        "Provide 6-9 departments, 6-12 workflows, 10-15 recurring operational tasks, and 4-8 approval rules. "
-        "Make everything concrete and specific to the industry (use its real terminology). Do NOT include an 'Owner' department."
-    )
-    prompt = f"Industry: {inp.industry}\nCompany size: {inp.company_size or 'unspecified'}\nDesign the operating system now."
-    chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=f"osbp-{new_id()}", system_message=system).with_model(*LLM_MODEL)
-    try:
-        resp = await chat.send_message(UserMessage(text=prompt))
-        data = _extract_json(resp)
-    except Exception as e:
-        logger.error(f"os_blueprint generation failed: {e}")
-        raise HTTPException(status_code=503, detail="Couldn't generate your operating system. Please try again.")
-    return normalize_os_blueprint(data or {})
 
 
 @api.post("/auth/register")
@@ -1345,29 +1291,6 @@ async def delete_role(key: str, user: dict = Depends(require_perm("team_manage")
     await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": {"roles": new_roles}})
     await log_activity(user["tenant_id"], user["id"], "role_deleted", f"{user['name']} deleted a role")
     return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
-
-
-@api.patch("/tenant/os-blueprint")
-async def update_os_blueprint(inp: OSBlueprintInput, user: dict = Depends(require_perm("team_manage"))):
-    """Edit the generated Operating System templates (workflows, operational tasks, approval rules)."""
-    updates = {}
-    if inp.workflow_templates is not None:
-        updates["workflow_templates"] = [{"name": (w.get("name") or "").strip()} for w in inp.workflow_templates if (w.get("name") or "").strip()]
-    if inp.operational_task_templates is not None:
-        updates["operational_task_templates"] = [
-            {"title": (t.get("title") or "").strip(), "category": (t.get("category") or "Other").strip() or "Other"}
-            for t in inp.operational_task_templates if (t.get("title") or "").strip()
-        ]
-    if inp.approval_rules is not None:
-        updates["approval_rules"] = [
-            {"name": (r.get("name") or "").strip(), "description": (r.get("description") or "").strip()}
-            for r in inp.approval_rules if (r.get("name") or "").strip()
-        ]
-    if updates:
-        await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": updates})
-        await log_activity(user["tenant_id"], user["id"], "os_blueprint_updated", f"{user['name']} updated the operating system templates")
-    return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
-
 
 
 @api.get("/invites")
@@ -2166,6 +2089,9 @@ async def create_task(inp: TaskCreateInput, user: dict = Depends(get_current_use
             assignee_id = None
         elif not role:
             role = member["role"]
+    if not assignee_id and role:
+        # Smart assignment: route a role-level task to the least-loaded member of that role.
+        assignee_id = await pick_least_loaded_member(user["tenant_id"], role)
     task_type = inp.task_type if inp.task_type in TASK_TYPES else None
     support_id = inp.support_id if inp.support_id and await db.users.find_one({"id": inp.support_id, "tenant_id": user["tenant_id"]}, {"_id": 0}) else None
     approver_id = inp.approver_id if inp.approver_id and await db.users.find_one({"id": inp.approver_id, "tenant_id": user["tenant_id"]}, {"_id": 0}) else None
@@ -2194,6 +2120,14 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
         updates["progress"] = max(0, min(100, int(updates["progress"])))
     if updates.get("status") == "done":
         updates["progress"] = 100
+    # Enforced approval gate: a task requiring approval can't be self-completed —
+    # it goes Under Review and the approver must approve it explicitly.
+    approval_pending = False
+    if updates.get("status") == "done" and t.get("approval_required") and t.get("approval_status") != "approved":
+        updates["status"] = "review"
+        updates["approval_status"] = "pending"
+        updates.pop("progress", None)
+        approval_pending = True
     if "assignee_role" in updates and updates["assignee_role"] not in await tenant_role_keys(user["tenant_id"]):
         updates.pop("assignee_role")
     if updates.get("assignee_id"):
@@ -2204,7 +2138,12 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
             updates["assignee_role"] = member["role"]
     if updates:
         await db.tasks.update_one({"id": task_id}, {"$set": updates})
-        if updates.get("status") and t.get("decision_id"):
+        if approval_pending:
+            approvers = [t.get("approver_id")] if t.get("approver_id") else await _owner_ids(user["tenant_id"])
+            await push_notification(user["tenant_id"], approvers, 2,
+                                    f"Approval needed: '{t['title']}' was submitted by {user['name']}", "task", task_id)
+            await log_activity(user["tenant_id"], user["id"], "task_submitted", f"Submitted '{t['title']}' for approval", "task", task_id)
+        elif updates.get("status") and t.get("decision_id"):
             await add_decision_event(t["decision_id"], f"{t['title']} → {updates['status'].replace('_',' ')}", user["name"], "task")
         if updates.get("status") == "done":
             await log_activity(user["tenant_id"], user["id"], "task_done", f"Completed task '{t['title']}'", "task", task_id)
@@ -2212,6 +2151,54 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
             member = await db.users.find_one({"id": updates["assignee_id"]}, {"_id": 0, "name": 1})
             await log_activity(user["tenant_id"], user["id"], "task_assigned",
                                f"Assigned '{t['title']}' to {(member or {}).get('name', 'a member')}", "task", task_id)
+    return await enrich_task(await db.tasks.find_one({"id": task_id}, {"_id": 0}))
+
+
+class TaskRejectInput(BaseModel):
+    reason: Optional[str] = ""
+
+
+def _can_approve_task(user: dict, t: dict) -> bool:
+    return user["role"] == "owner" or user["id"] == t.get("approver_id")
+
+
+@api.post("/tasks/{task_id}/approve")
+async def approve_task(task_id: str, user: dict = Depends(get_current_user)):
+    t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]})
+    if not t:
+        raise HTTPException(status_code=404, detail="Not found")
+    if not t.get("approval_required"):
+        raise HTTPException(status_code=400, detail="This task doesn't require approval")
+    if not _can_approve_task(user, t):
+        raise HTTPException(status_code=403, detail="Only the assigned approver or an owner can approve this task")
+    await db.tasks.update_one({"id": task_id}, {"$set": {
+        "status": "done", "progress": 100, "approval_status": "approved",
+        "approved_by": user["id"], "approved_at": now_iso(),
+    }})
+    if t.get("assignee_id"):
+        await push_notification(user["tenant_id"], [t["assignee_id"]], 1, f"Approved: '{t['title']}' was approved by {user['name']}", "task", task_id)
+    await log_activity(user["tenant_id"], user["id"], "task_approved", f"Approved '{t['title']}'", "task", task_id)
+    return await enrich_task(await db.tasks.find_one({"id": task_id}, {"_id": 0}))
+
+
+@api.post("/tasks/{task_id}/reject")
+async def reject_task(task_id: str, inp: TaskRejectInput, user: dict = Depends(get_current_user)):
+    t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]})
+    if not t:
+        raise HTTPException(status_code=404, detail="Not found")
+    if not t.get("approval_required"):
+        raise HTTPException(status_code=400, detail="This task doesn't require approval")
+    if not _can_approve_task(user, t):
+        raise HTTPException(status_code=403, detail="Only the assigned approver or an owner can reject this task")
+    reason = (inp.reason or "").strip()
+    await db.tasks.update_one({"id": task_id}, {"$set": {
+        "status": "in_progress", "approval_status": "rejected",
+        "rejected_by": user["id"], "rejected_at": now_iso(), "rejection_reason": reason,
+    }})
+    msg = f"Changes requested on '{t['title']}' by {user['name']}" + (f": {reason}" if reason else "")
+    if t.get("assignee_id"):
+        await push_notification(user["tenant_id"], [t["assignee_id"]], 2, msg, "task", task_id)
+    await log_activity(user["tenant_id"], user["id"], "task_rejected", f"Requested changes on '{t['title']}'", "task", task_id)
     return await enrich_task(await db.tasks.find_one({"id": task_id}, {"_id": 0}))
 
 
@@ -4049,6 +4036,10 @@ async def root():
 
 
 app.include_router(api)
+# Extracted route modules (imported here at the bottom so all shared names above
+# are already defined — avoids circular-import issues).
+from routers.onboarding import router as onboarding_router  # noqa: E402
+app.include_router(onboarding_router)
 _cors_env = os.environ.get('CORS_ORIGINS', '*').strip()
 _cors_kwargs = dict(allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 if _cors_env == '*':

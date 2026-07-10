@@ -375,11 +375,23 @@ function PriorityScoreBars({ scores }) {
 }
 
 function TaskCard({ t, onChange, members = [], roleOptions = [], scores }) {
+  const { user } = useAuth();
   const [uploading, setUploading] = useState(false);
   const [recording, setRecording] = useState(false);
   const fileRef = useRef(null);
   const mediaRef = useRef(null);
   const chunksRef = useRef([]);
+  const canApprove = t.approval_required && (user?.role === "owner" || user?.id === t.approver_id);
+
+  const approveTask = async () => {
+    try { await api.post(`/tasks/${t.id}/approve`); toast.success("Task approved"); onChange(); }
+    catch (e) { toast.error(e.response?.data?.detail || "Could not approve"); }
+  };
+  const rejectTask = async () => {
+    const reason = window.prompt("What changes are needed? (optional)") ?? "";
+    try { await api.post(`/tasks/${t.id}/reject`, { reason }); toast.success("Changes requested"); onChange(); }
+    catch (e) { toast.error(e.response?.data?.detail || "Could not reject"); }
+  };
 
   const upload = async (file, kind) => {
     setUploading(true);
@@ -460,8 +472,8 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores }) {
           {t.assignee_name && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><UserCircle size={13} weight="bold" /> {t.assignee_name}</span>}
           {t.support_name && <span className="text-xs text-muted-foreground">+ {t.support_name}</span>}
           {t.approval_required && (
-            <span data-testid={`op-approval-${t.id}`} className="inline-flex items-center gap-1 border border-black px-2 py-0.5 text-xs font-semibold uppercase tracking-wider bg-brand-paper">
-              <ShieldCheck size={11} weight="bold" /> {t.status === "done" ? "Approved" : `${t.approver_name || "Approval"} required`}
+            <span data-testid={`op-approval-${t.id}`} className={`inline-flex items-center gap-1 border border-black px-2 py-0.5 text-xs font-semibold uppercase tracking-wider ${t.approval_status === "approved" ? "bg-green-600 text-white" : t.approval_status === "pending" ? "bg-brand-yellow" : t.approval_status === "rejected" ? "bg-brand-red text-white" : "bg-brand-paper"}`}>
+              <ShieldCheck size={11} weight="bold" /> {t.approval_status === "approved" ? "Approved" : t.approval_status === "pending" ? "Pending approval" : t.approval_status === "rejected" ? "Changes requested" : `${t.approver_name || "Approval"} required`}
             </span>
           )}
         </div>
@@ -507,10 +519,22 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores }) {
         </div>
       )}
 
-      {!isTerminal(t) && (
+      {canApprove && t.status === "review" && (
+        <div className="flex flex-wrap gap-2 mt-4 border border-black bg-brand-yellow/40 p-3" data-testid={`approval-actions-${t.id}`}>
+          <span className="w-full label-mono text-muted-foreground">Awaiting your approval</span>
+          <button onClick={approveTask} data-testid={`approve-${t.id}`} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">
+            <CheckCircle size={16} weight="bold" /> Approve
+          </button>
+          <button onClick={rejectTask} data-testid={`reject-${t.id}`} className="flex items-center gap-2 bg-brand-red text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">
+            <WarningCircle size={16} weight="bold" /> Request changes
+          </button>
+        </div>
+      )}
+
+      {!isTerminal(t) && !(canApprove && t.status === "review") && (
         <div className="flex flex-wrap gap-2 mt-4">
           <button onClick={complete} data-testid={`complete-${t.id}`} className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">
-            <CheckCircle size={16} weight="bold" /> Complete
+            <CheckCircle size={16} weight="bold" /> {t.approval_required && t.approval_status !== "approved" ? "Submit for approval" : "Complete"}
           </button>
           <button onClick={() => fileRef.current?.click()} disabled={uploading} data-testid={`photo-${t.id}`} className="flex items-center gap-2 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-black/5">
             <Camera size={16} weight="bold" /> Photo

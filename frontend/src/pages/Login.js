@@ -8,6 +8,7 @@ import {
   Microphone, Sparkle, X, Plus, ArrowRight, ArrowLeft, Buildings, ChartLineUp,
   Stack, UploadSimple, DeviceMobile, Check, CircleNotch, Table as TableIcon,
   Brain, CheckCircle, Files, Gauge, WhatsappLogo, Sun, MoonStars,
+  Kanban, ListChecks, ShieldCheck,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
@@ -128,6 +129,11 @@ export default function Login() {
   const [roles, setRoles] = useState([]);
   const [roleInput, setRoleInput] = useState("");
   const [products, setProducts] = useState([]);
+  const [workflows, setWorkflows] = useState([]);
+  const [opTasks, setOpTasks] = useState([]);
+  const [approvalRules, setApprovalRules] = useState([]);
+  const [wfInput, setWfInput] = useState("");
+  const [osReady, setOsReady] = useState(null);
   const [suggesting, setSuggesting] = useState(false);
   const [suggested, setSuggested] = useState(false);
   const [error, setError] = useState("");
@@ -204,16 +210,23 @@ export default function Login() {
 
   const toggleSoftware = (k) => setSoftware((s) => (s.includes(k) ? s.filter((x) => x !== k) : [...s, k]));
 
-  // Step 4 — fetch AI-suggested team roles & products/services for the chosen industry
+  // Step 4 — generate the full Industry Operating System (departments, workflows, tasks, approvals) + products
   const fetchSuggestions = async () => {
     const eff = form.industry === "Other" ? customIndustry.trim() : form.industry;
     setSuggesting(true);
     try {
-      const { data } = await api.post("/onboarding/suggest", { industry: eff, company_size: form.company_size });
-      setRoles(data.roles || []);
-      setProducts((data.products || []).map((p) => ({ name: p.name, description: p.description || "", _key: Math.random().toString(36).slice(2, 9) })));
+      const [sug, bp] = await Promise.all([
+        api.post("/onboarding/suggest", { industry: eff, company_size: form.company_size }),
+        api.post("/onboarding/os-blueprint", { industry: eff, company_size: form.company_size }),
+      ]);
+      setProducts((sug.data.products || []).map((p) => ({ name: p.name, description: p.description || "", _key: Math.random().toString(36).slice(2, 9) })));
+      const d = bp.data || {};
+      setRoles((d.departments && d.departments.length) ? d.departments : (sug.data.roles || []));
+      setWorkflows(d.workflows || []);
+      setOpTasks(d.operational_tasks || []);
+      setApprovalRules(d.approval_rules || []);
     } catch {
-      toast.error("Couldn't fetch AI suggestions — add your team & products manually");
+      toast.error("Couldn't generate your operating system — you can add items manually");
     } finally {
       setSuggesting(false);
       setSuggested(true);
@@ -232,14 +245,27 @@ export default function Login() {
   const updateProduct = (i, k, v) => setProducts(products.map((p, idx) => (idx === i ? { ...p, [k]: v } : p)));
   const removeProduct = (i) => setProducts(products.filter((_, idx) => idx !== i));
 
-  // Step 4 → create the workspace with reviewed team & products, then continue authenticated
+  const addWorkflow = () => {
+    const name = wfInput.trim();
+    if (!name || workflows.some((w) => w.name.toLowerCase() === name.toLowerCase())) { setWfInput(""); return; }
+    setWorkflows([...workflows, { name }]); setWfInput("");
+  };
+  const removeWorkflow = (i) => setWorkflows(workflows.filter((_, idx) => idx !== i));
+  const addOpTask = () => setOpTasks([...opTasks, { title: "", category: "Other" }]);
+  const updateOpTask = (i, k, v) => setOpTasks(opTasks.map((t, idx) => (idx === i ? { ...t, [k]: v } : t)));
+  const removeOpTask = (i) => setOpTasks(opTasks.filter((_, idx) => idx !== i));
+  const addRule = () => setApprovalRules([...approvalRules, { name: "", description: "" }]);
+  const updateRule = (i, k, v) => setApprovalRules(approvalRules.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const removeRule = (i) => setApprovalRules(approvalRules.filter((_, idx) => idx !== i));
+
+  // Step 4 → create the workspace + provision the Operating System, then show the "Ready" summary
   const createWorkspace = async () => {
     setError(""); setBusy(true);
     const eff = form.industry === "Other" ? customIndustry.trim() : form.industry;
     try {
       const sw = software.includes("Others") && otherSoftware.trim()
         ? [...software.filter((x) => x !== "Others"), otherSoftware.trim()] : software;
-      await register({
+      const data = await register({
         company_name: form.company_name, name: form.name, email: form.email, password: form.password, phone: form.phone,
         industry: eff || "General", gst: form.gst, branches: form.branches,
         company_size: form.company_size, region: form.region, currency: form.currency,
@@ -249,8 +275,17 @@ export default function Login() {
           monthly_purchases: form.monthly_purchases, customers: form.num_customers, suppliers: form.num_suppliers,
         },
         roles, products: products.filter((p) => p.name.trim()).map(({ _key, ...r }) => r),
+        os_blueprint: {
+          departments: roles,
+          workflows: workflows.filter((w) => w.name.trim()),
+          operational_tasks: opTasks.filter((t) => t.title.trim()),
+          approval_rules: approvalRules.filter((r) => r.name.trim()),
+        },
       });
-      setStep(5);
+      setOsReady(data.os_summary || {
+        departments: roles.length, workflows: workflows.length,
+        operational_tasks: opTasks.length, approval_rules: approvalRules.length,
+      });
     } catch (err) {
       setError(formatApiError(err.response?.data?.detail) || "Could not create workspace");
     } finally { setBusy(false); }
@@ -534,33 +569,111 @@ export default function Login() {
                 </div>
               )}
 
-              {/* STEP 4 — AI-suggested team & products */}
-              {step === 4 && (
+              {/* STEP 4 — Industry Operating System (AI-generated, editable) */}
+              {step === 4 && osReady && (
+                <div className="space-y-5" data-testid="onboarding-os-ready">
+                  <div className="border border-black bg-brand-ink text-white p-5">
+                    <CheckCircle size={28} weight="fill" className="text-brand-red mb-2" />
+                    <h3 className="font-heading text-2xl font-black uppercase tracking-tighter leading-tight" data-testid="os-ready-title">
+                      Your {(form.industry === "Other" ? customIndustry : form.industry) || "Business"} Operating System is Ready.
+                    </h3>
+                    <p className="text-white/70 text-sm mt-1">A ready-to-use workspace has been provisioned. Everything below is editable anytime.</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3" data-testid="os-summary">
+                    {[
+                      { icon: Buildings, n: osReady.departments, label: "Departments Created" },
+                      { icon: Kanban, n: osReady.workflows, label: "Workflows Installed" },
+                      { icon: ListChecks, n: osReady.operational_tasks, label: "Operational Tasks Added" },
+                      { icon: ShieldCheck, n: osReady.approval_rules, label: "Approval Rules Configured" },
+                    ].map((s) => (
+                      <div key={s.label} data-testid={`os-summary-${s.label.split(" ")[0].toLowerCase()}`} className="border border-black bg-white p-4">
+                        <s.icon size={20} weight="bold" className="text-brand-red mb-1.5" />
+                        <p className="font-heading text-3xl font-black leading-none">{s.n}</p>
+                        <p className="label-mono text-muted-foreground mt-1">{s.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <button data-testid="os-ready-continue" onClick={() => setStep(5)} className="w-full flex items-center justify-center gap-2 bg-brand-red text-white font-semibold uppercase tracking-wider py-3 border border-black hover:shadow-brutal transition-all">
+                    Continue <ArrowRight size={16} weight="bold" />
+                  </button>
+                </div>
+              )}
+
+              {step === 4 && !osReady && (
                 <div className="space-y-5" data-testid="onboarding-step-4">
                   <p className="text-sm text-muted-foreground flex items-center gap-1.5">
-                    <Sparkle size={16} weight="fill" className="text-brand-red" /> AI-suggested team & offerings for <strong>{(form.industry === "Other" ? customIndustry : form.industry) || "your business"}</strong>. Edit freely.
+                    <Sparkle size={16} weight="fill" className="text-brand-red" /> Your AI-generated operating system for <strong>{(form.industry === "Other" ? customIndustry : form.industry) || "your business"}</strong>. Edit freely.
                   </p>
                   {suggesting ? (
                     <div className="flex items-center gap-2 border border-black p-6 justify-center" data-testid="suggest-loading">
-                      <CircleNotch size={18} className="animate-spin" /> <span className="text-sm font-semibold uppercase tracking-wider">AI is building your team…</span>
+                      <CircleNotch size={18} className="animate-spin" /> <span className="text-sm font-semibold uppercase tracking-wider">Building your operating system…</span>
                     </div>
                   ) : (
                     <>
                       <div>
-                        <label className={labelCls}>Team roles (besides Owner)</label>
+                        <label className={labelCls}>Departments &amp; roles (besides Owner)</label>
                         <div className="flex flex-wrap gap-2 mt-2" data-testid="roles-list">
                           {roles.map((r) => (
                             <span key={r.key} data-testid={`role-chip-${r.key}`} className="inline-flex items-center gap-1.5 border border-black bg-white px-2.5 py-1 text-xs uppercase tracking-wider font-semibold">
                               {r.label}<button onClick={() => removeRole(r.key)} data-testid={`remove-role-${r.key}`} className="hover:text-brand-red"><X size={12} weight="bold" /></button>
                             </span>
                           ))}
-                          {roles.length === 0 && <span className="text-xs text-muted-foreground">No roles yet — add some below.</span>}
+                          {roles.length === 0 && <span className="text-xs text-muted-foreground">No departments yet — add some below.</span>}
                         </div>
                         <div className="flex gap-2 mt-2">
-                          <input data-testid="role-input" className={inputCls} placeholder="Add a role (e.g. Marketing)" value={roleInput} onChange={(e) => setRoleInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addRole(); } }} />
+                          <input data-testid="role-input" className={inputCls} placeholder="Add a department (e.g. Quality)" value={roleInput} onChange={(e) => setRoleInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addRole(); } }} />
                           <button onClick={addRole} data-testid="add-role-button" className="px-4 border border-black bg-brand-ink text-white hover:shadow-brutal-sm transition-all"><Plus size={16} weight="bold" /></button>
                         </div>
                       </div>
+
+                      <div>
+                        <label className={`${labelCls} flex items-center gap-1.5`}><Kanban size={13} weight="bold" /> Workflows</label>
+                        <div className="flex flex-wrap gap-2 mt-2" data-testid="workflows-list">
+                          {workflows.map((w, i) => (
+                            <span key={i} data-testid={`workflow-chip-${i}`} className="inline-flex items-center gap-1.5 border border-black bg-white px-2.5 py-1 text-xs font-semibold">
+                              {w.name}<button onClick={() => removeWorkflow(i)} data-testid={`remove-workflow-${i}`} className="hover:text-brand-red"><X size={12} weight="bold" /></button>
+                            </span>
+                          ))}
+                          {workflows.length === 0 && <span className="text-xs text-muted-foreground">No workflows yet.</span>}
+                        </div>
+                        <div className="flex gap-2 mt-2">
+                          <input data-testid="workflow-input" className={inputCls} placeholder="Add a workflow (e.g. Dispatch)" value={wfInput} onChange={(e) => setWfInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addWorkflow(); } }} />
+                          <button onClick={addWorkflow} data-testid="add-workflow-button" className="px-4 border border-black bg-brand-ink text-white hover:shadow-brutal-sm transition-all"><Plus size={16} weight="bold" /></button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className={`${labelCls} flex items-center gap-1.5`}><ListChecks size={13} weight="bold" /> Operational tasks (starter library)</label>
+                        <div className="space-y-2 mt-2 max-h-52 overflow-y-auto pr-1" data-testid="optasks-list">
+                          {opTasks.map((t, i) => (
+                            <div key={i} data-testid={`optask-row-${i}`} className="flex gap-2">
+                              <input data-testid={`optask-title-${i}`} className="flex-1 border border-black/40 px-2 py-1.5 text-sm font-mono focus:outline-none" placeholder="Task title" value={t.title} onChange={(e) => updateOpTask(i, "title", e.target.value)} />
+                              <select data-testid={`optask-cat-${i}`} className="border border-black/40 px-1 py-1.5 text-xs font-mono focus:outline-none w-28" value={t.category} onChange={(e) => updateOpTask(i, "category", e.target.value)}>
+                                {["Presentation","Meeting","Documentation","Proposal","Planning","Review","Administration","Compliance","Marketing","HR Activity","Travel","Event","IT Support","Other"].map((c) => <option key={c} value={c}>{c}</option>)}
+                              </select>
+                              <button onClick={() => removeOpTask(i)} data-testid={`remove-optask-${i}`} className="px-2 border border-black hover:bg-brand-red hover:text-white transition-colors"><X size={14} weight="bold" /></button>
+                            </div>
+                          ))}
+                        </div>
+                        <button onClick={addOpTask} data-testid="add-optask-button" className="mt-2 flex items-center gap-1.5 text-sm text-brand-blue font-semibold hover:underline"><Plus size={14} weight="bold" /> Add operational task</button>
+                      </div>
+
+                      <div>
+                        <label className={`${labelCls} flex items-center gap-1.5`}><ShieldCheck size={13} weight="bold" /> Approval rules</label>
+                        <div className="space-y-2 mt-2" data-testid="rules-list">
+                          {approvalRules.map((r, i) => (
+                            <div key={i} data-testid={`rule-row-${i}`} className="border border-black p-2">
+                              <div className="flex gap-2">
+                                <input data-testid={`rule-name-${i}`} className="flex-1 border border-black/40 px-2 py-1.5 text-sm font-mono focus:outline-none" placeholder="Rule name" value={r.name} onChange={(e) => updateRule(i, "name", e.target.value)} />
+                                <button onClick={() => removeRule(i)} data-testid={`remove-rule-${i}`} className="px-2 border border-black hover:bg-brand-red hover:text-white transition-colors"><X size={14} weight="bold" /></button>
+                              </div>
+                              <input data-testid={`rule-desc-${i}`} className="w-full border border-black/40 px-2 py-1.5 text-xs font-mono mt-2 focus:outline-none" placeholder="When does it apply?" value={r.description} onChange={(e) => updateRule(i, "description", e.target.value)} />
+                            </div>
+                          ))}
+                        </div>
+                        <button onClick={addRule} data-testid="add-rule-button" className="mt-2 flex items-center gap-1.5 text-sm text-brand-blue font-semibold hover:underline"><Plus size={14} weight="bold" /> Add approval rule</button>
+                      </div>
+
                       <div>
                         <label className={labelCls}>Products / Services</label>
                         <div className="space-y-2 mt-2" data-testid="products-list">
@@ -582,7 +695,7 @@ export default function Login() {
                   <div className="flex gap-2">
                     <button onClick={() => setStep(3)} className="flex items-center gap-2 px-4 py-3 border border-black text-sm font-semibold uppercase tracking-wider hover:bg-black/5"><ArrowLeft size={16} weight="bold" /></button>
                     <button disabled={busy || suggesting} data-testid="onboarding-create-button" onClick={createWorkspace} className="flex-1 flex items-center justify-center gap-2 bg-brand-red text-white font-semibold uppercase tracking-wider py-3 border border-black hover:shadow-brutal transition-all disabled:opacity-50">
-                      {busy ? <><CircleNotch size={16} className="animate-spin" /> Creating…</> : <>Create workspace <ArrowRight size={16} weight="bold" /></>}
+                      {busy ? <><CircleNotch size={16} className="animate-spin" /> Provisioning…</> : <>Provision Operating System <ArrowRight size={16} weight="bold" /></>}
                     </button>
                   </div>
                 </div>

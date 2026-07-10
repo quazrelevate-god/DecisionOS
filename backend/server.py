@@ -213,6 +213,7 @@ class RegisterInput(BaseModel):
     current_software: Optional[List[str]] = None
     roles: Optional[List[RoleItem]] = None
     products: Optional[List[ProductItem]] = None
+    os_blueprint: Optional[dict] = None
 
 
 class TenantUpdateInput(BaseModel):
@@ -235,6 +236,17 @@ class OnboardingSuggestInput(BaseModel):
     industry: str
     company_size: Optional[str] = None
     description: Optional[str] = None
+
+
+class OSBlueprintGenInput(BaseModel):
+    industry: str
+    company_size: Optional[str] = None
+
+
+class OSBlueprintInput(BaseModel):
+    workflow_templates: Optional[List[dict]] = None
+    operational_task_templates: Optional[List[dict]] = None
+    approval_rules: Optional[List[dict]] = None
 
 
 class LoginInput(BaseModel):
@@ -935,13 +947,88 @@ async def onboarding_suggest(inp: OnboardingSuggestInput):
     return {"roles": roles[:6], "products": products[:5]}
 
 
+def _slugify_key(label: str) -> str:
+    return (label or "").strip().lower().replace(" ", "_").replace("/", "_").replace("-", "_")
+
+
+def normalize_os_blueprint(data: dict) -> dict:
+    """Coerce a raw (AI or user) blueprint into clean, editable lists."""
+    departments = []
+    seen = set()
+    for d in (data.get("departments") or []):
+        label = (d if isinstance(d, str) else (d.get("label") or d.get("name") or "")).strip()
+        key = _slugify_key(label)
+        if key and key != "owner" and key not in seen:
+            seen.add(key)
+            departments.append({"key": key, "label": label})
+    workflows = []
+    for w in (data.get("workflows") or data.get("workflow_templates") or []):
+        name = (w if isinstance(w, str) else (w.get("name") or w.get("title") or "")).strip()
+        if name:
+            workflows.append({"name": name})
+    op_tasks = []
+    for t in (data.get("operational_tasks") or data.get("operational_task_templates") or []):
+        if isinstance(t, str):
+            title, cat = t.strip(), "Other"
+        else:
+            title = (t.get("title") or t.get("name") or "").strip()
+            cat = (t.get("category") or "Other").strip() or "Other"
+        if title:
+            op_tasks.append({"title": title, "category": cat})
+    rules = []
+    for r in (data.get("approval_rules") or []):
+        if isinstance(r, str):
+            name, desc = r.strip(), ""
+        else:
+            name = (r.get("name") or r.get("title") or "").strip()
+            desc = (r.get("description") or "").strip()
+        if name:
+            rules.append({"name": name, "description": desc})
+    return {
+        "departments": departments[:12],
+        "workflows": workflows[:16],
+        "operational_tasks": op_tasks[:20],
+        "approval_rules": rules[:10],
+    }
+
+
+@api.post("/onboarding/os-blueprint")
+async def onboarding_os_blueprint(inp: OSBlueprintGenInput):
+    system = (
+        "You are the onboarding architect for DecisionOS, an operating system for founder-led SMEs. "
+        "Given an industry, design a ready-to-use Business Operating System for a small/mid business. "
+        "Return ONLY valid JSON, no prose, with exactly these keys: "
+        "{\"departments\": [string department name], "
+        "\"workflows\": [{\"name\": string}], "
+        "\"operational_tasks\": [{\"title\": string, \"category\": one of "
+        "[Presentation,Meeting,Documentation,Proposal,Planning,Review,Administration,Compliance,Marketing,HR Activity,Travel,Event,IT Support,Other]}], "
+        "\"approval_rules\": [{\"name\": string, \"description\": short string}]}. "
+        "Provide 6-9 departments, 6-12 workflows, 10-15 recurring operational tasks, and 4-8 approval rules. "
+        "Make everything concrete and specific to the industry (use its real terminology). Do NOT include an 'Owner' department."
+    )
+    prompt = f"Industry: {inp.industry}\nCompany size: {inp.company_size or 'unspecified'}\nDesign the operating system now."
+    chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=f"osbp-{new_id()}", system_message=system).with_model(*LLM_MODEL)
+    try:
+        resp = await chat.send_message(UserMessage(text=prompt))
+        data = _extract_json(resp)
+    except Exception as e:
+        logger.error(f"os_blueprint generation failed: {e}")
+        raise HTTPException(status_code=503, detail="Couldn't generate your operating system. Please try again.")
+    return normalize_os_blueprint(data or {})
+
+
 @api.post("/auth/register")
 async def register(inp: RegisterInput, response: Response):
     email = inp.email.lower()
     if await db.users.find_one({"email": email}):
         raise HTTPException(status_code=400, detail="Email already registered")
     tenant_id = new_id()
-    roles = [r.model_dump() for r in (inp.roles or [])] or DEFAULT_ROLES
+    bp = normalize_os_blueprint(inp.os_blueprint) if inp.os_blueprint else None
+    # Departments from the generated OS become the tenant's roles (single source of truth for RBAC).
+    provided_roles = [r.model_dump() for r in (inp.roles or [])]
+    if not provided_roles and bp and bp["departments"]:
+        provided_roles = bp["departments"]
+    roles = provided_roles or DEFAULT_ROLES
     # de-dupe + drop any 'owner' role (implicit)
     seen, clean_roles = set(), []
     for r in roles:
@@ -962,6 +1049,9 @@ async def register(inp: RegisterInput, response: Response):
         "invited_employees": [],
         "roles": clean_roles or DEFAULT_ROLES,
         "products": [p.model_dump() for p in (inp.products or [])],
+        "workflow_templates": bp["workflows"] if bp else [],
+        "operational_task_templates": bp["operational_tasks"] if bp else [],
+        "approval_rules": bp["approval_rules"] if bp else [],
         "created_at": now_iso(),
     }
     await db.tenants.insert_one(tenant_doc)
@@ -975,7 +1065,13 @@ async def register(inp: RegisterInput, response: Response):
     user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
     tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0})
     set_auth_cookie(response, token)
-    return {"token": token, "user": user, "tenant": tenant}
+    os_summary = {
+        "departments": len(clean_roles),
+        "workflows": len(tenant_doc["workflow_templates"]),
+        "operational_tasks": len(tenant_doc["operational_task_templates"]),
+        "approval_rules": len(tenant_doc["approval_rules"]),
+    }
+    return {"token": token, "user": user, "tenant": tenant, "os_summary": os_summary}
 
 
 @api.post("/auth/login")
@@ -1249,6 +1345,29 @@ async def delete_role(key: str, user: dict = Depends(require_perm("team_manage")
     await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": {"roles": new_roles}})
     await log_activity(user["tenant_id"], user["id"], "role_deleted", f"{user['name']} deleted a role")
     return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+
+
+@api.patch("/tenant/os-blueprint")
+async def update_os_blueprint(inp: OSBlueprintInput, user: dict = Depends(require_perm("team_manage"))):
+    """Edit the generated Operating System templates (workflows, operational tasks, approval rules)."""
+    updates = {}
+    if inp.workflow_templates is not None:
+        updates["workflow_templates"] = [{"name": (w.get("name") or "").strip()} for w in inp.workflow_templates if (w.get("name") or "").strip()]
+    if inp.operational_task_templates is not None:
+        updates["operational_task_templates"] = [
+            {"title": (t.get("title") or "").strip(), "category": (t.get("category") or "Other").strip() or "Other"}
+            for t in inp.operational_task_templates if (t.get("title") or "").strip()
+        ]
+    if inp.approval_rules is not None:
+        updates["approval_rules"] = [
+            {"name": (r.get("name") or "").strip(), "description": (r.get("description") or "").strip()}
+            for r in inp.approval_rules if (r.get("name") or "").strip()
+        ]
+    if updates:
+        await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": updates})
+        await log_activity(user["tenant_id"], user["id"], "os_blueprint_updated", f"{user['name']} updated the operating system templates")
+    return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+
 
 
 @api.get("/invites")

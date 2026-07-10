@@ -29,6 +29,7 @@
 
     .dark {
         --background: 240 8% 8%;
+        color-scheme: dark;
         --foreground: 0 0% 96%;
         --card: 240 7% 12%;
         --card-foreground: 0 0% 96%;
@@ -99,6 +100,8 @@
     .dark ::-webkit-scrollbar-track { background: #16171c; }
     .dark ::-webkit-scrollbar-thumb { background: #52525b; border-color: #16171c; }
     .dark input::placeholder, .dark textarea::placeholder { color: #6b6b75; }
+    /* bare inputs/textareas (no bg class) would otherwise keep the UA white bg → light-on-white invisible text */
+    .dark textarea, .dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]) { background-color: #16171c; color: #f4f4f5; }
     .dark select:invalid, .dark select option { color: #f4f4f5; background-color: #16171c; }
 }
 

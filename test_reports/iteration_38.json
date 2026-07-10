@@ -1,0 +1,24 @@
+{
+  "summary": "Verified dark-mode fix for Decision Desk 'Type a directive' textarea and regression on other inputs. All checks PASS: dark bg + light text applied to bare textareas/inputs via new .dark rule in index.css, and light mode reverts cleanly to white/dark contrast.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "index.css rule `.dark textarea, .dark input:not([type=checkbox]):not([type=radio]):not([type=range]) { background-color:#16171c; color:#f4f4f5 }` is inside @layer utilities — Tailwind's utility layer emits AFTER the components layer used by other bg classes, which is correct here. This is a global override; any dark screens that intentionally use a non-#16171c input background will now be overridden. Consider scoping via a class if that becomes an issue.",
+    "color-scheme: dark is set on .dark selector so form controls (native selects, scrollbars, autofill) also render dark — good.",
+    "Only one text input found on /brain and none on /contacts search area — not a bug for this task, just a note."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "100%"},
+  "test_credentials": "owner@sharma.com / demo1234 via data-testid=demo-login-owner",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Verified dark-mode input visibility fix. Directive textarea (data-testid=text-directive-input) computed styles in dark: bg rgb(22,23,28), color rgb(244,244,245), color-scheme=dark. OTP phone input in dark: bg rgb(22,23,28), color rgb(244,244,245). /brain search input dark: bg rgb(22,23,28), color rgb(244,244,245). /contacts page had no matching text search input during dark check (may render differently). Light mode: directive textarea bg rgb(255,255,255) color rgb(10,10,11). Screenshots: /app/.screenshots/dark_directive.png and /app/.screenshots/light_directive.png confirm visibility. No fixes applied.",
+  "rca of the issue": "Root cause was that the directive textarea in /app/frontend/src/pages/Inbox.js had no bg/text-color class, so the browser default white background + Tailwind's inherited dark foreground produced light-on-white invisible text in .dark mode. Fix in index.css adds (a) color-scheme:dark on .dark, and (b) a global override `.dark textarea, .dark input:not([type=checkbox|radio|range]) { background:#16171c; color:#f4f4f5 }`. Verified via getComputedStyle on directive textarea and OTP/brain inputs."
+}

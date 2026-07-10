@@ -120,7 +120,7 @@ export default function Layout({ children }) {
       const { data } = await api.post("/brief/send-digest");
       toast.success(data.sent ? `Digest emailed to ${data.to}` : `Digest generated (email not configured — logged)`);
     } catch (e) {
-      toast.error("Could not send digest");
+      toast.error(e.response?.data?.detail || "Could not send digest");
     }
   };
 

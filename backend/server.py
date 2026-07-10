@@ -3685,6 +3685,16 @@ async def startup():
     await write_test_credentials()
 
 
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
+@api.get("/health")
+async def api_health():
+    return {"status": "ok"}
+
+
 @api.get("/")
 async def root():
     return {"message": "DecisionOS API"}

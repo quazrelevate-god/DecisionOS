@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<style>
+  @page { size: A4; margin: 0; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { -weasy-font-features: normal; }
+  body { font-family: "Helvetica Neue", Arial, sans-serif; color: #0A0A0B; }
+
+  .page {
+    position: relative;
+    width: 210mm; height: 297mm;
+    overflow: hidden;
+    page-break-after: always;
+    background: #F4F4F5;
+  }
+  .page:last-child { page-break-after: auto; }
+
+  /* type */
+  .eyebrow { font-size: 9pt; letter-spacing: 3px; text-transform: uppercase; font-weight: 800; }
+  h1 { font-size: 46pt; line-height: 0.95; font-weight: 900; letter-spacing: -1.5px; text-transform: uppercase; }
+  h2 { font-size: 26pt; line-height: 1; font-weight: 900; letter-spacing: -1px; text-transform: uppercase; }
+  h3 { font-size: 13pt; font-weight: 900; text-transform: uppercase; letter-spacing: -0.3px; }
+  p  { font-size: 10.5pt; line-height: 1.5; }
+  .mono { font-family: "Courier New", monospace; font-size: 8.5pt; letter-spacing: 1px; text-transform: uppercase; }
+
+  /* colors */
+  .ink { color: #0A0A0B; } .red { color: #FF3B30; } .blue { color: #002FA7; }
+  .bg-ink { background: #0A0A0B; color:#fff; } .bg-red { background: #FF3B30; color:#fff; }
+  .bg-blue { background: #002FA7; color:#fff; } .bg-yellow { background: #FFCC00; color:#0A0A0B; }
+  .bg-white { background: #fff; }
+
+  .brutal { border: 3px solid #0A0A0B; box-shadow: 7px 7px 0 #0A0A0B; }
+  .bord { border: 3px solid #0A0A0B; }
+
+  .pad { padding: 16mm; }
+
+  /* header bar */
+  .brandbar { display: flex; align-items: center; gap: 8px; }
+  .logo-badge { display:inline-block; background:#FF3B30; color:#fff; font-weight:900; font-size:12pt; padding:3px 9px; border:3px solid #0A0A0B; letter-spacing:-0.5px;}
+  .logo-word { font-weight:900; font-size:14pt; letter-spacing:-0.5px; text-transform:uppercase;}
+
+  .footer { position:absolute; bottom:0; left:0; right:0; height:12mm; display:flex; align-items:center; justify-content:space-between; padding:0 16mm; border-top:3px solid #0A0A0B; }
+
+  ul.clean { list-style:none; }
+  ul.clean li { position:relative; padding-left:16px; font-size:10.5pt; line-height:1.55; margin-bottom:5px; }
+  ul.clean li::before { content:""; position:absolute; left:0; top:6px; width:8px; height:8px; background:#FF3B30; }
+
+  .grid2 { display:flex; flex-wrap:wrap; gap:6mm; }
+  .col { flex:1 1 0; }
+
+  .stat-num { font-size:30pt; font-weight:900; line-height:1; letter-spacing:-1px; }
+</style>
+</head>
+<body>
+
+<!-- ============ PAGE 1 — COVER ============ -->
+<div class="page">
+  <div style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:0;">
+    <div style="position:absolute; top:-40mm; right:-40mm; width:120mm; height:120mm; background:#FFCC00; transform:rotate(15deg);"></div>
+    <div style="position:absolute; bottom:-30mm; left:-30mm; width:90mm; height:90mm; background:#002FA7;"></div>
+  </div>
+
+  <div class="pad" style="position:relative; z-index:2; height:100%; display:flex; flex-direction:column;">
+    <div class="brandbar" style="justify-content:space-between;">
+      <div class="brandbar">
+        <span class="logo-badge">D</span>
+        <span class="logo-word">DecisionOS</span>
+      </div>
+      <span class="mono">Investor Brochure · 2026</span>
+    </div>
+
+    <div style="margin-top:22mm;">
+      <span class="eyebrow bg-red" style="padding:5px 10px;">Seed Round — Now Open</span>
+      <h1 style="margin-top:10mm;">The AI<br/>Operating<br/>System for<br/><span class="red">Founder-Led</span><br/>Businesses.</h1>
+      <p style="margin-top:8mm; max-width:120mm; font-size:12pt; font-weight:600;">
+        DecisionOS turns every spoken decision, message, and document into structured tasks — giving small teams a shared operational brain that never forgets and never drops the ball.
+      </p>
+    </div>
+
+    <div style="margin-top:auto;">
+      <div class="grid2">
+        <div class="col brutal bg-white" style="padding:8mm 6mm;">
+          <div class="stat-num red">80%</div>
+          <p class="mono" style="margin-top:4mm;">of SME decisions are made verbally &amp; never tracked</p>
+        </div>
+        <div class="col brutal bg-white" style="padding:8mm 6mm;">
+          <div class="stat-num blue">$1.4T</div>
+          <p class="mono" style="margin-top:4mm;">global SME software &amp; operations spend</p>
+        </div>
+        <div class="col brutal bg-ink" style="padding:8mm 6mm;">
+          <div class="stat-num" style="color:#FFCC00;">1 Brain</div>
+          <p class="mono" style="margin-top:4mm; color:#fff;">capture · extract · execute · escalate</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer bg-ink">
+    <span class="mono">decisionos.ai</span>
+    <span class="mono">Confidential — For Investor Review Only</span>
+  </div>
+</div>
+
+<!-- ============ PAGE 2 — PROBLEM + SOLUTION ============ -->
+<div class="page">
+  <div class="pad" style="height:100%; display:flex; flex-direction:column;">
+    <div class="brandbar" style="justify-content:space-between;">
+      <span class="eyebrow">The Opportunity</span>
+      <span class="mono">02 / 04</span>
+    </div>
+
+    <h2 style="margin-top:8mm;">The founder<br/>is the <span class="red">bottleneck.</span></h2>
+
+    <div class="grid2" style="margin-top:8mm;">
+      <div class="col">
+        <div class="bord bg-white" style="padding:7mm;">
+          <h3 class="red">The Problem</h3>
+          <ul class="clean" style="margin-top:5mm;">
+            <li>Decisions are made on calls, in WhatsApp, and hallway chats — then lost.</li>
+            <li>Nothing gets tracked until the founder personally chases it.</li>
+            <li>Teams work from memory, not a shared source of truth.</li>
+            <li>Existing tools (CRM, PM, ERP) are too heavy and nobody adopts them.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="col">
+        <div class="bord bg-yellow" style="padding:7mm;">
+          <h3>The Cost</h3>
+          <ul class="clean" style="margin-top:5mm;">
+            <li>Dropped follow-ups &amp; missed payments.</li>
+            <li>Founders stuck in operations, not growth.</li>
+            <li>No institutional memory — everything lives in one head.</li>
+            <li>Scaling stalls the moment the founder steps away.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <h2 style="margin-top:12mm;">One system.<br/>Speak. It <span class="blue">executes.</span></h2>
+
+    <div class="grid2" style="margin-top:7mm; align-items:center;">
+      <div class="col" style="flex:1.1;">
+        <img src="brain.png" style="width:100%; border:3px solid #0A0A0B;" />
+      </div>
+      <div class="col">
+        <div class="bg-blue" style="padding:6mm; border:3px solid #0A0A0B;">
+          <h3 style="color:#fff;">The DecisionOS Loop</h3>
+          <p style="color:#fff; margin-top:4mm; font-size:10pt;">
+            <b>1. Capture</b> — voice, text, WhatsApp, CSV &amp; PDF.<br/><br/>
+            <b>2. Extract</b> — AI turns intent into decisions, tasks &amp; workflows.<br/><br/>
+            <b>3. Execute</b> — auto-assigned to the right person with due dates.<br/><br/>
+            <b>4. Escalate</b> — follow-ups &amp; alerts fire automatically.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer bg-white">
+    <span class="mono">DecisionOS · The Operational Brain</span>
+    <span class="mono">decisionos.ai</span>
+  </div>
+</div>
+
+<!-- ============ PAGE 3 — PRODUCT + MARKET + MODEL ============ -->
+<div class="page">
+  <div class="pad" style="height:100%; display:flex; flex-direction:column;">
+    <div class="brandbar" style="justify-content:space-between;">
+      <span class="eyebrow">The Product &amp; The Business</span>
+      <span class="mono">03 / 04</span>
+    </div>
+
+    <h2 style="margin-top:8mm;">A complete <span class="red">operational brain,</span> not another app.</h2>
+
+    <div class="grid2" style="margin-top:7mm;">
+      <div class="col brutal bg-white" style="padding:6mm; box-shadow:5px 5px 0 #0A0A0B;">
+        <h3 class="blue">Unified Inbox</h3>
+        <p style="font-size:9.5pt; margin-top:3mm;">Voice, text, WhatsApp &amp; documents — one intake stream, zero data entry.</p>
+      </div>
+      <div class="col brutal bg-white" style="padding:6mm; box-shadow:5px 5px 0 #0A0A0B;">
+        <h3 class="blue">Company Brain</h3>
+        <p style="font-size:9.5pt; margin-top:3mm;">Searchable memory of every decision, task &amp; contact across the company.</p>
+      </div>
+    </div>
+    <div class="grid2" style="margin-top:5mm;">
+      <div class="col brutal bg-white" style="padding:6mm; box-shadow:5px 5px 0 #0A0A0B;">
+        <h3 class="blue">Daily CEO Brief</h3>
+        <p style="font-size:9.5pt; margin-top:3mm;">An AI digest of what moved, what's stuck, and what needs the founder — every morning.</p>
+      </div>
+      <div class="col brutal bg-white" style="padding:6mm; box-shadow:5px 5px 0 #0A0A0B;">
+        <h3 class="blue">My Work + Workflows</h3>
+        <p style="font-size:9.5pt; margin-top:3mm;">Role-based task hubs, approval gates &amp; stage-gated pipelines with 360° contact profiles.</p>
+      </div>
+    </div>
+
+    <h2 style="margin-top:11mm;">Market &amp; <span class="blue">Model.</span></h2>
+
+    <div class="grid2" style="margin-top:6mm;">
+      <div class="col bord bg-ink" style="padding:6mm;">
+        <p class="mono" style="color:#FFCC00;">Target Market</p>
+        <div class="stat-num" style="color:#fff; margin-top:3mm;">400M+</div>
+        <p style="color:#fff; font-size:9pt;">founder-led SMEs worldwide — underserved by heavyweight ERPs.</p>
+      </div>
+      <div class="col bord bg-red" style="padding:6mm;">
+        <p class="mono" style="color:#fff;">Business Model</p>
+        <div class="stat-num" style="color:#fff; margin-top:3mm;">SaaS</div>
+        <p style="color:#fff; font-size:9pt;">per-seat subscription + AI usage tiers. Land with the founder, expand to the team.</p>
+      </div>
+      <div class="col bord bg-yellow" style="padding:6mm;">
+        <p class="mono">Pricing</p>
+        <div class="stat-num" style="margin-top:3mm;">$29+</div>
+        <p style="font-size:9pt;">per user / month · Starter, Growth &amp; Enterprise tiers with integrations.</p>
+      </div>
+    </div>
+
+    <div class="bord bg-white" style="margin-top:7mm; padding:6mm;">
+      <h3>Traction &amp; Product Status</h3>
+      <div class="grid2" style="margin-top:4mm;">
+        <ul class="clean col">
+          <li>Live multi-tenant platform with role-based access.</li>
+          <li>WhatsApp, CSV &amp; PDF ingestion pipelines shipped.</li>
+        </ul>
+        <ul class="clean col">
+          <li>AI extraction, execution plans &amp; smart assignment live.</li>
+          <li>Industry-template onboarding — value in minutes, not weeks.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer bg-white">
+    <span class="mono">DecisionOS · The Operational Brain</span>
+    <span class="mono">decisionos.ai</span>
+  </div>
+</div>
+
+<!-- ============ PAGE 4 — WHY NOW + ASK + CONTACT ============ -->
+<div class="page">
+  <div style="position:absolute; top:-30mm; left:-30mm; width:90mm; height:90mm; background:#FFCC00; transform:rotate(20deg);"></div>
+  <div class="pad" style="position:relative; z-index:2; height:100%; display:flex; flex-direction:column;">
+    <div class="brandbar" style="justify-content:space-between;">
+      <span class="eyebrow">Why Now &amp; The Ask</span>
+      <span class="mono">04 / 04</span>
+    </div>
+
+    <h2 style="margin-top:8mm;">Why <span class="red">now.</span></h2>
+    <div class="grid2" style="margin-top:6mm;">
+      <div class="col bord bg-white" style="padding:6mm;">
+        <h3 class="blue">AI is finally good enough</h3>
+        <p style="font-size:9.5pt; margin-top:3mm;">Frontier models can now reliably turn messy speech into structured, actionable operations.</p>
+      </div>
+      <div class="col bord bg-white" style="padding:6mm;">
+        <h3 class="blue">SMEs are digitizing</h3>
+        <p style="font-size:9.5pt; margin-top:3mm;">WhatsApp-first businesses want automation without enterprise complexity or cost.</p>
+      </div>
+    </div>
+
+    <div class="brutal bg-blue" style="margin-top:10mm; padding:9mm;">
+      <p class="mono" style="color:#FFCC00;">The Raise</p>
+      <h1 style="color:#fff; font-size:40pt; margin-top:4mm;">Seed Round</h1>
+      <p style="color:#fff; margin-top:5mm; font-size:11pt; max-width:120mm;">
+        We're raising to accelerate go-to-market, deepen integrations (Zoho, Tally, accounting), and scale the AI pipeline. Capital converts directly into activated SMEs and expanding seats.
+      </p>
+      <div class="grid2" style="margin-top:7mm;">
+        <div class="col bg-white bord" style="padding:5mm; color:#0A0A0B;">
+          <p class="mono" style="color:#0A0A0B;">Use of Funds</p>
+          <p style="font-size:9.5pt; margin-top:2mm; color:#0A0A0B;">40% GTM · 35% Product/AI · 25% Team</p>
+        </div>
+        <div class="col bg-yellow bord" style="padding:5mm;">
+          <p class="mono">The Vision</p>
+          <p style="font-size:9.5pt; margin-top:2mm;">The default operating system for every small business on earth.</p>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:auto;">
+      <div class="brutal bg-ink" style="padding:8mm; display:flex; align-items:center; justify-content:space-between;">
+        <div>
+          <div class="brandbar">
+            <span class="logo-badge">D</span>
+            <span class="logo-word" style="color:#fff;">DecisionOS</span>
+          </div>
+          <p style="color:#fff; margin-top:4mm; font-size:11pt; font-weight:700;">Let's build the operational brain for founders.</p>
+        </div>
+        <div style="text-align:right;">
+          <p class="mono" style="color:#FFCC00;">Get in touch</p>
+          <p style="color:#fff; margin-top:2mm; font-size:11pt; font-weight:800;">invest@decisionos.ai</p>
+          <p style="color:#fff; font-size:10pt;">decisionos.ai</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

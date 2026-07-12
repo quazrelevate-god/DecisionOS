@@ -2930,6 +2930,20 @@ async def get_file(fname: str):
     return FileResponse(str(path))
 
 
+@api.get("/brochure")
+async def download_brochure():
+    from fastapi.responses import FileResponse
+    path = UPLOAD_DIR / "DecisionOS-Investor-Brochure.pdf"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Not found")
+    return FileResponse(
+        str(path),
+        media_type="application/pdf",
+        filename="DecisionOS-Investor-Brochure.pdf",
+        headers={"Content-Disposition": 'attachment; filename="DecisionOS-Investor-Brochure.pdf"'},
+    )
+
+
 # ---------------------------------------------------------------------------
 # Data ingestion: PDF/Image OCR + CSV/Excel import (WhatsApp-ready pipeline)
 # ---------------------------------------------------------------------------

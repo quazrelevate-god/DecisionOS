@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import api from "../lib/api";
 import { PageHeader, Chip, EmptyState } from "../components/common";
 import { useAuth } from "../context/AuthContext";
@@ -374,7 +375,7 @@ function PriorityScoreBars({ scores }) {
   );
 }
 
-function TaskCard({ t, onChange, members = [], roleOptions = [], scores }) {
+function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAssignee = false }) {
   const { user } = useAuth();
   const [uploading, setUploading] = useState(false);
   const [recording, setRecording] = useState(false);
@@ -464,6 +465,12 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores }) {
         <Chip value={t.priority} />
       </div>
       {t.description && <p className="text-sm text-muted-foreground mt-1">{t.description}</p>}
+      {showAssignee && !isOp && (
+        <p className="label-mono text-muted-foreground mt-2 flex items-center gap-1" data-testid={`assignee-line-${t.id}`}>
+          <UserCircle size={13} weight="bold" />
+          {t.assignee_name ? t.assignee_name : (t.assignee_role ? `${t.assignee_role} team` : "Unassigned")}
+        </p>
+      )}
       {scores && <PriorityScoreBars scores={scores} />}
 
       {isOp && (
@@ -554,11 +561,16 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores }) {
 
 export default function MyWork() {
   const qc = useQueryClient();
-  const { tenant } = useAuth();
-  const [view, setView] = useState("mywork");
+  const { tenant, user } = useAuth();
+  const [params] = useSearchParams();
+  const isOwner = user?.role === "owner";
+  const [view, setView] = useState(params.get("view") === "board" ? "board" : "mywork");
+  const [scope, setScope] = useState("mine");
   const [tab, setTab] = useState("all");
   const [aiPriority, setAiPriority] = useState(false);
-  const tasksQ = useQuery({ queryKey: ["tasks", true], queryFn: () => api.get("/tasks?mine=true").then((r) => r.data) });
+  const mine = !(isOwner && scope === "all");
+  const showAssignee = isOwner && scope === "all";
+  const tasksQ = useQuery({ queryKey: ["tasks", mine], queryFn: () => api.get(`/tasks?mine=${mine}`).then((r) => r.data) });
   const notifQ = useQuery({ queryKey: ["notifications"], queryFn: () => api.get("/notifications").then((r) => r.data) });
   const usersQ = useQuery({ queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data) });
   const prioritiesQ = useQuery({ queryKey: ["priorities"], queryFn: () => api.post("/tasks/prioritize").then((r) => r.data), enabled: aiPriority });
@@ -566,7 +578,7 @@ export default function MyWork() {
   const roleOptions = [{ key: "owner", label: "Owner" }, ...(tenant?.roles || [])];
 
   const refresh = () => {
-    qc.invalidateQueries({ queryKey: ["tasks", true] });
+    qc.invalidateQueries({ queryKey: ["tasks"] });
     qc.invalidateQueries({ queryKey: ["notifications"] });
   };
 
@@ -600,6 +612,14 @@ export default function MyWork() {
           {view === "mywork" && (
             <>
               <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members} />
+              {isOwner && (
+                <div className="flex border border-black" data-testid="work-scope-toggle">
+                  <button onClick={() => setScope("mine")} data-testid="work-scope-mine"
+                    className={`px-4 py-2 text-sm font-semibold uppercase tracking-wider border-r border-black transition-colors ${scope === "mine" ? "bg-brand-blue text-white" : "bg-white hover:bg-black/5"}`}>My Tasks</button>
+                  <button onClick={() => setScope("all")} data-testid="work-scope-all"
+                    className={`px-4 py-2 text-sm font-semibold uppercase tracking-wider transition-colors ${scope === "all" ? "bg-brand-blue text-white" : "bg-white hover:bg-black/5"}`}>All Tasks</button>
+                </div>
+              )}
               <button onClick={() => setAiPriority((v) => !v)} data-testid="ai-priority-toggle"
                 className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black transition-all ${aiPriority ? "bg-brand-red text-white shadow-brutal-sm" : "bg-brand-yellow hover:shadow-brutal-sm"}`}>
                 <Sparkle size={16} weight="bold" /> {scoring ? "Scoring…" : aiPriority ? "AI Priority: On" : "AI Priority"}
@@ -635,7 +655,7 @@ export default function MyWork() {
           </div>
           {list.length === 0 && <EmptyState title={tab === "completed" ? "Nothing completed yet" : "Nothing here"} hint={tab === "all" ? "You're all caught up!" : "No tasks in this category."} />}
           <div className="space-y-4">
-            {list.map((t) => <TaskCard key={t.id} t={t} onChange={refresh} members={members} roleOptions={roleOptions} scores={aiPriority && tab !== "completed" ? scoreMap[t.id] : undefined} />)}
+            {list.map((t) => <TaskCard key={t.id} t={t} onChange={refresh} members={members} roleOptions={roleOptions} showAssignee={showAssignee} scores={aiPriority && tab !== "completed" ? scoreMap[t.id] : undefined} />)}
           </div>
         </div>
 

@@ -334,6 +334,8 @@ export default function Inbox() {
   const inbox = inboxQ.data || { items: [], counts: {}, open_total: 0 };
   const items = (inbox.items || []).filter((i) => i.status !== "dismissed" && (filter === "all" || i.classification === filter));
   const pending = (decisionsQ.data || []).filter((d) => d.status === "pending_approval");
+  const decMap = {};
+  (decisionsQ.data || []).forEach((d) => { decMap[d.id] = d; });
   const escalations = (myTasksQ.data || []).filter((t) => (t.source === "escalation" || t.source === "handoff") && t.status !== "done");
 
   // Live status of any voice/text note still being processed (non-blocking indicator)
@@ -519,6 +521,9 @@ export default function Inbox() {
           const meta = CLASS_META[it.classification] || CLASS_META.task;
           const Icon = meta.icon;
           const done = it.status === "done";
+          const dec = it.ref_type === "decision" ? decMap[it.ref_id] : null;
+          const decTasks = dec?.tasks || [];
+          const pendingApproval = dec?.status === "pending_approval";
           return (
             <div key={it.id} data-testid={`inbox-item-${it.id}`} className={`border border-black bg-white p-3 flex items-center gap-3 flex-wrap ${done ? "opacity-60" : ""}`}>
               <div className={`w-9 h-9 shrink-0 flex items-center justify-center border border-black ${meta.color}`}><Icon size={18} weight="bold" /></div>
@@ -527,11 +532,27 @@ export default function Inbox() {
                   <Chip value={meta.label} className={meta.color} data-testid={`inbox-class-${it.id}`} />
                   <span className="label-mono text-muted-foreground">{it.source}</span>
                   {it.amount != null && <span className="text-xs font-semibold">{money(it.amount)}</span>}
+                  {decTasks.length > 0 && (
+                    <span data-testid={`inbox-tasks-badge-${it.id}`}
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-black ${pendingApproval ? "bg-brand-yellow" : "bg-white"}`}>
+                      <CheckSquare size={11} weight="bold" /> {decTasks.length} task{decTasks.length > 1 ? "s" : ""}{pendingApproval ? " · Pending your approval" : ""}
+                    </span>
+                  )}
                 </div>
                 <p className="text-sm font-semibold mt-1 truncate">{it.title}</p>
                 {it.preview && <p className="text-xs text-muted-foreground truncate">{it.preview}</p>}
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
+                {pendingApproval && user?.role === "owner" && (
+                  <button onClick={() => decide(dec.id, "approve")} data-testid={`inbox-approve-tasks-${it.id}`}
+                    className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-black px-2 py-1 bg-green-600 text-white hover:shadow-brutal-sm transition-all">
+                    <CheckCircle size={13} weight="bold" /> Approve
+                  </button>
+                )}
+                {decTasks.length > 0 && (
+                  <button onClick={() => navigate("/my-work?view=board")} data-testid={`inbox-view-board-${it.id}`}
+                    className="text-xs font-semibold uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-ink hover:text-white transition-colors">Board</button>
+                )}
                 {(it.ref_type === "ingestion" || it.classification === "complaint") && (
                   <button onClick={() => openItem(it)} data-testid={`inbox-open-${it.id}`} className="text-xs font-semibold uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-ink hover:text-white transition-colors">View</button>
                 )}

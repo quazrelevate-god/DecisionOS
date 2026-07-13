@@ -124,3 +124,10 @@ Implemented all 4 phases of the user's 8-point "operational brain" expansion. Al
 - **P1 (needs user keys)**: Real SMS employee invites (Twilio) — wire into `POST /api/invites`. Zoho Books connector (customers/invoices/payments/bills) — needs Zoho Client ID/Secret.
 - **P2**: Tally connector (read-only, local agent bridge). Real Resend digest send. Retry/backoff for transient LLM budget errors. Cursor pagination; split server.py (now ~2730 lines) into routers. Auto-mark invoices paid when payments reconcile against them. Backfill 'created' timeline events on pre-timeline decisions.
 
+
+## Inbox → Task visibility improvements (2026-07-13)
+User confusion: a "TASK" card in the Decision Desk (Inbox) wasn't visible in My Work / Board / Workflows. Root cause (not a bug): Inbox task cards point to a Decision; the generated tasks start `blocked` (Pending Approval) and are assigned to the relevant team (e.g. Sales/Finance), so the owner's personal "My Work" list (mine=true) never showed them. Shipped 3 UX fixes:
+- (a) `Inbox.js`: task-type inbox cards (ref_type=="decision") now show a **Board** button → navigates to `/my-work?view=board`.
+- (b) `Inbox.js`: a **task-count badge** ("N tasks", yellow "· Pending your approval" when decision status==pending_approval) + inline **Approve** button (owner only) reusing `decide(id,'approve')` → `/api/decisions/{id}/approve`. Joins inbox item to decision via new `decMap` from `decisionsQ`.
+- (c) `MyWork.js`: owner-only **My Tasks / All Tasks** scope toggle (`work-scope-toggle`). "All Tasks" calls `/tasks?mine=false` (owner sees all 114 tenant tasks vs 25 personal); each non-operational card shows the assignee line when in All-Tasks mode. Also reads `?view=board` param to deep-link straight to the Board.
+Verified e2e via screenshots: All Tasks 25→114 with assignee names; Inbox shows "4 TASKS" badges + Board buttons (22 each). Pending/Approve branch relies on existing verified approval plumbing (no pending decisions in demo data to display live).

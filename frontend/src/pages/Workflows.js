@@ -3,9 +3,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { PageHeader, Chip } from "../components/common";
-import { money } from "../lib/format";
+import { money, timeAgo, fullTime } from "../lib/format";
 import { toast } from "sonner";
-import { Plus, ArrowRight, Trash } from "@phosphor-icons/react";
+import { Plus, ArrowRight, Trash, ClockCounterClockwise } from "@phosphor-icons/react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter,
 } from "../components/ui/dialog";
@@ -146,6 +146,9 @@ export default function Workflows() {
                 <div className="p-2 space-y-2 min-h-[300px] bg-white">
                   {cards.map((w) => {
                     const isLast = w.stages.indexOf(w.stage) >= w.stages.length - 1;
+                    const lastEv = (w.history || [])[(w.history || []).length - 1];
+                    const updAt = lastEv?.at || w.created_at;
+                    const updLabel = lastEv?.note || "Created";
                     return (
                       <div key={w.id} data-testid={`workflow-card-${w.id}`} className="border border-black p-3 shadow-hover bg-white">
                         <div className="flex items-start justify-between gap-2">
@@ -159,6 +162,11 @@ export default function Workflows() {
                         </div>
                         {w.counterparty && <p className="text-xs text-muted-foreground mt-1">{w.counterparty}</p>}
                         {w.amount != null && <p className="font-mono text-xs mt-1">{money(w.amount, tenant?.currency)}</p>}
+                        {updAt && (
+                          <p className="label-mono text-muted-foreground mt-2 flex items-center gap-1" data-testid={`workflow-updated-${w.id}`} title={fullTime(updAt)}>
+                            <ClockCounterClockwise size={11} weight="bold" /> {updLabel} · {timeAgo(updAt)}
+                          </p>
+                        )}
                         {!isLast && (
                           <button onClick={() => advance(w)} data-testid={`advance-workflow-${w.id}`}
                             className="mt-3 w-full flex items-center justify-center gap-1 border border-black py-1.5 text-xs font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors">

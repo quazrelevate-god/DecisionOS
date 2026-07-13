@@ -2,6 +2,7 @@ import { useRef, useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import api from "../lib/api";
+import { timeAgo, fullTime } from "../lib/format";
 import { PageHeader, Chip, EmptyState } from "../components/common";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
@@ -10,7 +11,7 @@ import {
   CheckCircle, Camera, Microphone, Stop, ChatCircleText,
   Sparkle, Plus, Trash, ArrowUp, ArrowDown, Robot, PencilSimple, ListChecks, CaretDown,
   ArrowBendUpRight, WarningCircle, ChatText, ArrowRight, Kanban, ListChecks as ListIcon,
-  Paperclip, UserCircle, ShieldCheck, Tag,
+  Paperclip, UserCircle, ShieldCheck, Tag, ClockCounterClockwise,
 } from "@phosphor-icons/react";
 
 const WORK_TABS = [
@@ -494,6 +495,13 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
         {(t.attachment_count || 0) > 0 && <span data-testid={`att-count-${t.id}`} className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Paperclip size={12} weight="bold" /> {t.attachment_count}</span>}
         {t.due_date && <span className="text-xs text-muted-foreground">due {new Date(t.due_date).toLocaleString(undefined, { day: "numeric", month: "short", ...(t.due_date.includes("T") ? { hour: "2-digit", minute: "2-digit" } : {}) })}</span>}
       </div>
+
+      {t.updated_at && (
+        <p className="label-mono text-muted-foreground mt-2 flex items-center gap-1" data-testid={`task-updated-${t.id}`} title={fullTime(t.updated_at)}>
+          <ClockCounterClockwise size={12} weight="bold" />
+          {t.last_action || "Updated"} · {timeAgo(t.updated_at)}
+        </p>
+      )}
 
       <div className="mt-3">
         <div className="flex items-center justify-between mb-1">

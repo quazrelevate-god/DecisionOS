@@ -4,7 +4,8 @@ import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { Chip } from "../components/common";
 import { toast } from "sonner";
-import { Plus, User, Paperclip } from "@phosphor-icons/react";
+import { timeAgo, fullTime } from "../lib/format";
+import { Plus, User, Paperclip, ClockCounterClockwise } from "@phosphor-icons/react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from "../components/ui/dialog";
 
 const COLUMNS = [
@@ -259,6 +260,11 @@ export function TaskBoard() {
                       )}
                       {overdue(t) && <Chip value="overdue" className="bg-brand-red text-white" />}
                     </div>
+                    {t.updated_at && (
+                      <p className="label-mono text-muted-foreground mt-2 flex items-center gap-1" data-testid={`task-updated-${t.id}`} title={fullTime(t.updated_at)}>
+                        <ClockCounterClockwise size={11} weight="bold" /> {t.last_action || "Updated"} · {timeAgo(t.updated_at)}
+                      </p>
+                    )}
                     <select
                       data-testid={`reassign-task-${t.id}`}
                       value={t.assignee_id || ""}

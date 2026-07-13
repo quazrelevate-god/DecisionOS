@@ -604,6 +604,7 @@ async def _create_decision_tasks(tenant_id, note, decision_id, extracted, troles
             "priority": t.get("priority", "medium") if t.get("priority") in ("low", "medium", "high") else "medium",
             "status": "blocked", "due_date": due, "decision_id": decision_id,
             "source": "voice", "created_at": now_iso(),
+            "updated_at": now_iso(), "last_action": "Created",
         })
         task_ids.append(tid)
     return task_ids, assignee_keys
@@ -1805,6 +1806,33 @@ def _derive_task_type(t: dict) -> str:
     return "other"
 
 
+def _task_activity(t: dict):
+    """Return (updated_at_iso, human_label) — persisted values if present, else derived from history."""
+    if t.get("updated_at") and t.get("last_action"):
+        return t["updated_at"], t["last_action"]
+    cand = []
+    if t.get("created_at"):
+        cand.append((t["created_at"], "Created"))
+    for u in (t.get("updates") or []):
+        lbl = {"note": "Note added", "handoff": "Handed off", "escalate": "Escalated"}.get(u.get("kind"), "Updated")
+        if u.get("created_at"):
+            cand.append((u["created_at"], lbl))
+    ep = t.get("execution_plan") or {}
+    if ep.get("updated_at"):
+        cand.append((ep["updated_at"], "Execution plan updated"))
+    for a in (t.get("attachments") or []):
+        if a.get("at"):
+            cand.append((a["at"], "Attachment added"))
+    if t.get("approved_at"):
+        cand.append((t["approved_at"], "Approved"))
+    if t.get("rejected_at"):
+        cand.append((t["rejected_at"], "Changes requested"))
+    if not cand:
+        return t.get("created_at"), "Created"
+    cand.sort(key=lambda x: x[0])
+    return cand[-1]
+
+
 async def enrich_task(t: dict) -> dict:
     if not t:
         return t
@@ -1819,6 +1847,8 @@ async def enrich_task(t: dict) -> dict:
     t["created_by_name"] = umap.get(t.get("created_by"))
     t["attachment_count"] = len(t.get("attachments") or [])
     t["task_type"] = _derive_task_type(t)
+    at, action = _task_activity(t)
+    t["updated_at"], t["last_action"] = at, action
     return t
 
 
@@ -1839,6 +1869,8 @@ async def enrich_tasks(tasks: list) -> list:
         t["created_by_name"] = umap.get(t.get("created_by"))
         t["attachment_count"] = len(t.get("attachments") or [])
         t["task_type"] = _derive_task_type(t)
+        at, action = _task_activity(t)
+        t["updated_at"], t["last_action"] = at, action
     return tasks
 
 
@@ -1890,6 +1922,7 @@ async def create_task(inp: TaskCreateInput, user: dict = Depends(get_current_use
         "task_type": task_type, "op_category": inp.op_category or None, "support_id": support_id,
         "expected_output": inp.expected_output or None, "approval_required": bool(inp.approval_required),
         "approver_id": approver_id, "progress": progress, "created_by": user["id"],
+        "updated_at": now_iso(), "last_action": "Created",
     })
     await log_activity(user["tenant_id"], user["id"], "task_created", f"Created task '{inp.title}'", "task", tid)
     return await enrich_task(await db.tasks.find_one({"id": tid}, {"_id": 0}))
@@ -1924,6 +1957,17 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
         else:
             updates["assignee_role"] = member["role"]
     if updates:
+        if approval_pending:
+            updates["last_action"] = "Submitted for approval"
+        elif "status" in updates:
+            updates["last_action"] = f"Status → {updates['status'].replace('_', ' ')}"
+        elif updates.get("assignee_id"):
+            updates["last_action"] = "Reassigned"
+        elif "progress" in updates:
+            updates["last_action"] = f"Progress {updates['progress']}%"
+        else:
+            updates["last_action"] = "Updated"
+        updates["updated_at"] = now_iso()
         await db.tasks.update_one({"id": task_id}, {"$set": updates})
         if approval_pending:
             approvers = [t.get("approver_id")] if t.get("approver_id") else await _owner_ids(user["tenant_id"])
@@ -1961,6 +2005,7 @@ async def approve_task(task_id: str, user: dict = Depends(get_current_user)):
     await db.tasks.update_one({"id": task_id}, {"$set": {
         "status": "done", "progress": 100, "approval_status": "approved",
         "approved_by": user["id"], "approved_at": now_iso(),
+        "updated_at": now_iso(), "last_action": "Approved",
     }})
     if t.get("assignee_id"):
         await push_notification(user["tenant_id"], [t["assignee_id"]], 1, f"Approved: '{t['title']}' was approved by {user['name']}", "task", task_id)
@@ -1981,6 +2026,7 @@ async def reject_task(task_id: str, inp: TaskRejectInput, user: dict = Depends(g
     await db.tasks.update_one({"id": task_id}, {"$set": {
         "status": "in_progress", "approval_status": "rejected",
         "rejected_by": user["id"], "rejected_at": now_iso(), "rejection_reason": reason,
+        "updated_at": now_iso(), "last_action": "Changes requested",
     }})
     msg = f"Changes requested on '{t['title']}' by {user['name']}" + (f": {reason}" if reason else "")
     if t.get("assignee_id"):
@@ -2917,7 +2963,7 @@ async def upload_task_attachment(task_id: str, file: UploadFile = File(...), kin
     with open(UPLOAD_DIR / fname, "wb") as f:
         f.write(await file.read())
     att = {"kind": kind, "filename": fname, "url": f"/api/files/{fname}", "at": now_iso()}
-    await db.tasks.update_one({"id": task_id}, {"$push": {"attachments": att}})
+    await db.tasks.update_one({"id": task_id}, {"$push": {"attachments": att}, "$set": {"updated_at": now_iso(), "last_action": "Attachment added"}})
     return att
 
 

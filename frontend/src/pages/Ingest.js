@@ -19,11 +19,54 @@ import {
   CurrencyCircleDollar,
   ListChecks,
   Sparkle,
+  ArrowsLeftRight,
+  WarningCircle,
 } from "@phosphor-icons/react";
 
 const inp = "w-full border border-black px-2.5 py-1.5 text-sm font-mono focus:outline-none focus:shadow-brutal-sm bg-white";
 
 const EMPTY = { contacts: [], invoices: [], payments: [], tasks: [] };
+
+const CONTACT_TYPE_OPTS = ["customer", "vendor", "dealer"];
+const INVOICE_TYPE_OPTS = ["sales_invoice", "purchase_bill"];
+const DIRECTION_OPTS = ["in", "out"];
+
+const DOC_HINT = {
+  sales_invoice: { label: "Sales Invoice", desc: "Money a CUSTOMER owes you. The other party is your customer." },
+  purchase_bill: { label: "Purchase Bill", desc: "Money you owe a SUPPLIER. The other party is your supplier." },
+  payment: { label: "Payment", desc: "A payment record. 'In' = you received money; 'Out' = you paid." },
+  purchase_order: { label: "Purchase Order", desc: "An order you placed with a supplier." },
+  other: { label: "Document", desc: "Review the detected records below before filing." },
+};
+
+const CO_SUFFIXES = ["private limited", "pvt ltd", "pvt", "private ltd", "limited", "ltd", "llp", "inc", "corporation", "corp", "co", "company", "technologies", "enterprises", "industries", "traders"];
+const normCo = (s) => {
+  let t = String(s || "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(Boolean);
+  while (t.length && CO_SUFFIXES.includes(t[t.length - 1])) t.pop();
+  return t.join(" ").trim();
+};
+const isOwnCompany = (name, ownNorm) => {
+  const n = normCo(name);
+  return !!ownNorm && !!n && (n === ownNorm || n.includes(ownNorm) || ownNorm.includes(n));
+};
+
+const OPT_LABELS = {
+  customer: "Customer", vendor: "Supplier", dealer: "Dealer",
+  sales_invoice: "Sales invoice", purchase_bill: "Purchase bill",
+  in: "Received (in)", out: "Paid (out)",
+};
+
+function SelectField({ label, value, onChange, options }) {
+  return (
+    <label className="block">
+      <span className="label-mono text-muted-foreground text-[10px]">{label}</span>
+      <select className={inp} value={value ?? ""} onChange={(e) => onChange(e.target.value)}>
+        {!options.includes(value) && <option value={value || ""}>{value || "—"}</option>}
+        {options.map((o) => <option key={o} value={o}>{OPT_LABELS[o] || o}</option>)}
+      </select>
+    </label>
+  );
+}
 
 const withKeys = (recs) => {
   const out = { ...EMPTY, ...(recs || {}) };
@@ -45,8 +88,15 @@ function Field({ label, value, onChange, placeholder }) {
 function ReviewPanel({ ingestion, onFiled, onCancel }) {
   const { tenant } = useAuth();
   const currency = tenant?.currency || "INR";
+  const ownNorm = normCo(tenant?.name);
   const [records, setRecords] = useState(() => withKeys(ingestion.records));
   const [filing, setFiling] = useState(false);
+  const hint = DOC_HINT[ingestion.doc_type] || DOC_HINT.other;
+  const ownHits = [
+    ...(records.contacts || []).map((c) => c.name),
+    ...(records.invoices || []).map((i) => i.contact_name),
+    ...(records.payments || []).map((p) => p.contact_name),
+  ].filter((n) => isOwnCompany(n, ownNorm));
 
   const setItem = (bucket, idx, key, val) => {
     setRecords((r) => {
@@ -111,14 +161,31 @@ function ReviewPanel({ ingestion, onFiled, onCancel }) {
 
       {total === 0 && <EmptyState title="Nothing detected" hint="The AI couldn't pull structured records from this file." />}
 
+      {total > 0 && (
+        <div className="border-l-4 border-brand-red bg-brand-paper p-3 mb-5 flex items-start gap-2" data-testid="ingest-direction-banner">
+          <ArrowsLeftRight size={18} weight="bold" className="text-brand-red shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-bold uppercase tracking-tight">{hint.label}</p>
+            <p className="text-xs text-muted-foreground">{hint.desc} Use the dropdowns below to flip a party between <b>customer</b> and <b>supplier</b>, or the invoice between <b>sales</b> and <b>purchase</b>, before filing.</p>
+          </div>
+        </div>
+      )}
+
+      {ownHits.length > 0 && (
+        <div className="border border-black bg-brand-yellow p-3 mb-5 flex items-start gap-2" data-testid="ingest-owncompany-warning">
+          <WarningCircle size={18} weight="bold" className="shrink-0 mt-0.5" />
+          <p className="text-xs font-semibold">Heads up: “{ownHits[0]}” looks like <b>your own company</b>, so it will be skipped and not saved as a contact. Only the other party is filed.</p>
+        </div>
+      )}
+
       {/* Contacts */}
       {(records.contacts || []).length > 0 && (
         <div className="mb-5" data-testid="review-contacts">
-          <p className="label-mono text-brand-red mb-2 flex items-center gap-1"><UsersThree size={14} weight="bold" /> Customers & Vendors ({records.contacts.length})</p>
+          <p className="label-mono text-brand-red mb-2 flex items-center gap-1"><UsersThree size={14} weight="bold" /> Customers & Suppliers ({records.contacts.length})</p>
           <div className="space-y-2">
             {records.contacts.map((c, i) => (
-              <div key={c._key} className="border border-black/20 p-3 grid grid-cols-2 md:grid-cols-4 gap-2 relative" data-testid={`review-contact-${i}`}>
-                <Field label="Type" value={c.type} onChange={(v) => setItem("contacts", i, "type", v)} />
+              <div key={c._key} className={`border p-3 grid grid-cols-2 md:grid-cols-4 gap-2 relative ${isOwnCompany(c.name, ownNorm) ? "border-brand-yellow bg-brand-yellow/20" : "border-black/20"}`} data-testid={`review-contact-${i}`}>
+                <SelectField label="Type" value={c.type} onChange={(v) => setItem("contacts", i, "type", v)} options={CONTACT_TYPE_OPTS} />
                 <Field label="Name" value={c.name} onChange={(v) => setItem("contacts", i, "name", v)} />
                 <Field label="Phone" value={c.phone} onChange={(v) => setItem("contacts", i, "phone", v)} />
                 <Field label="Email" value={c.email} onChange={(v) => setItem("contacts", i, "email", v)} />
@@ -136,7 +203,7 @@ function ReviewPanel({ ingestion, onFiled, onCancel }) {
           <div className="space-y-2">
             {records.invoices.map((inv, i) => (
               <div key={inv._key} className="border border-black/20 p-3 grid grid-cols-2 md:grid-cols-5 gap-2 relative" data-testid={`review-invoice-${i}`}>
-                <Field label="Type" value={inv.type} onChange={(v) => setItem("invoices", i, "type", v)} />
+                <SelectField label="Type" value={inv.type} onChange={(v) => setItem("invoices", i, "type", v)} options={INVOICE_TYPE_OPTS} />
                 <Field label="Number" value={inv.number} onChange={(v) => setItem("invoices", i, "number", v)} />
                 <Field label="Party" value={inv.contact_name} onChange={(v) => setItem("invoices", i, "contact_name", v)} />
                 <Field label="Amount" value={inv.amount} onChange={(v) => setItem("invoices", i, "amount", v)} />
@@ -155,7 +222,7 @@ function ReviewPanel({ ingestion, onFiled, onCancel }) {
           <div className="space-y-2">
             {records.payments.map((p, i) => (
               <div key={p._key} className="border border-black/20 p-3 grid grid-cols-2 md:grid-cols-5 gap-2 relative" data-testid={`review-payment-${i}`}>
-                <Field label="Direction" value={p.direction} onChange={(v) => setItem("payments", i, "direction", v)} />
+                <SelectField label="Direction" value={p.direction} onChange={(v) => setItem("payments", i, "direction", v)} options={DIRECTION_OPTS} />
                 <Field label="Amount" value={p.amount} onChange={(v) => setItem("payments", i, "amount", v)} />
                 <Field label="Party" value={p.contact_name} onChange={(v) => setItem("payments", i, "contact_name", v)} />
                 <Field label="Method" value={p.method} onChange={(v) => setItem("payments", i, "method", v)} />
@@ -251,7 +318,7 @@ export default function Ingest() {
           <label data-testid="upload-csv-zone" className={`card-brutal p-6 flex flex-col items-center justify-center text-center cursor-pointer shadow-hover ${uploading ? "opacity-60 pointer-events-none" : ""}`}>
             <TableIcon size={36} weight="bold" className="text-brand-blue mb-2" />
             <span className="font-heading font-bold uppercase tracking-tight">CSV / Excel</span>
-            <span className="text-sm text-muted-foreground mt-1">Customer, vendor, sales or payment list — columns auto-detected</span>
+            <span className="text-sm text-muted-foreground mt-1">Customer, supplier, sales or payment list — columns auto-detected</span>
             <input type="file" data-testid="upload-csv-input" accept=".csv,.xlsx,.xls" className="hidden" onChange={(e) => { upload("/ingest/csv", e.target.files); e.target.value = ""; }} />
           </label>
         </div>

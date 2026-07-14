@@ -4,7 +4,7 @@ import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
 import { Chip, EmptyState } from "../components/common";
-import { money } from "../lib/format";
+import { money, typeLabel } from "../lib/format";
 import { toast } from "sonner";
 import {
   ArrowLeft, Phone, EnvelopeSimple, MapPin, Receipt, CurrencyCircleDollar,
@@ -96,7 +96,7 @@ export default function ContactProfile() {
       {/* Header */}
       <div className="card-brutal p-6 mb-6" data-testid="profile-header">
         <div className="flex items-center gap-2 mb-2">
-          <Chip value={c.type} className={c.type === "customer" ? "bg-brand-blue text-white" : "bg-brand-yellow text-black"} />
+          <Chip value={typeLabel(c.type)} className={c.type === "customer" ? "bg-brand-blue text-white" : "bg-brand-yellow text-black"} />
           <Chip value={c.status} />
         </div>
         <h1 className="font-heading text-4xl font-black uppercase tracking-tighter">{c.name}</h1>

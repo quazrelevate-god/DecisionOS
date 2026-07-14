@@ -14,12 +14,12 @@ export default function People() {
   const TABS = [
     ...(canTeam ? [{ key: "employees", label: "Employees", icon: UsersThree }] : []),
     { key: "customers", label: "Customers", icon: AddressBook },
-    { key: "vendors", label: "Vendors", icon: Truck },
+    { key: "vendors", label: "Suppliers", icon: Truck },
   ];
 
   return (
     <div>
-      <PageHeader eyebrow="Your people — team, customers & vendors" title="People">
+      <PageHeader eyebrow="Your people — team, customers & suppliers" title="People">
         <div className="flex border border-black" data-testid="people-tabs">
           {TABS.map((t) => (
             <button key={t.key} onClick={() => setTab(t.key)} data-testid={`people-tab-${t.key}`}
@@ -32,7 +32,7 @@ export default function People() {
 
       {tab === "employees" && <TeamPanel />}
       {tab === "customers" && <ContactsPanel types={["customer", "dealer"]} addLabel="Add Customer" />}
-      {tab === "vendors" && <ContactsPanel types={["vendor"]} addLabel="Add Vendor" />}
+      {tab === "vendors" && <ContactsPanel types={["vendor"]} addLabel="Add Supplier" />}
     </div>
   );
 }

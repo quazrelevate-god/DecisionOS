@@ -36,6 +36,9 @@ export function fullTime(iso) {
   return dt.toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+export const CONTACT_TYPE_LABELS = { customer: "Customer", vendor: "Supplier", dealer: "Dealer" };
+export const typeLabel = (t) => CONTACT_TYPE_LABELS[t] || (t ? String(t).charAt(0).toUpperCase() + String(t).slice(1) : "");
+
 export const INDUSTRIES = [
   "Manufacturing",
   "Textile & Apparel",

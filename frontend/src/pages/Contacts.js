@@ -5,6 +5,7 @@ import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
 import { Chip, EmptyState } from "../components/common";
+import { typeLabel } from "../lib/format";
 import { toast } from "sonner";
 import { Plus, MagnifyingGlass, PencilSimple, Trash, Phone, EnvelopeSimple, MapPin, Warning, Eye } from "@phosphor-icons/react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../components/ui/dialog";
@@ -90,7 +91,7 @@ function ContactDialog({ trigger, initial, onSaved, users, defaultType }) {
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <select data-testid="contact-type-select" className={inp} value={form.type} onChange={set("type")}>
-              {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+              {TYPES.map((t) => <option key={t} value={t}>{typeLabel(t)}</option>)}
             </select>
             <select data-testid="contact-status-select" className={inp} value={form.status} onChange={set("status")}>
               {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -189,7 +190,7 @@ export function ContactsPanel({ types, addLabel = "Add Contact" }) {
           <div key={c.id} data-testid={`contact-card-${c.id}`} className="card-brutal p-5 shadow-hover">
             <div className="flex items-start justify-between gap-2 mb-2">
               <div className="flex items-center gap-2">
-                <Chip value={c.type} className={c.type === "customer" ? "bg-brand-blue text-white" : "bg-brand-yellow text-black"} />
+                <Chip value={typeLabel(c.type)} className={c.type === "customer" ? "bg-brand-blue text-white" : "bg-brand-yellow text-black"} />
                 <Chip value={c.status} className={c.status === "active" ? "bg-brand-ink text-white" : c.status === "lead" ? "bg-brand-yellow text-black" : "bg-black/10 text-black"} />
               </div>
               {canManage && (

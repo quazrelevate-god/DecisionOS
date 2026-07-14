@@ -3,7 +3,7 @@ import api, { formatApiError } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
 import { toast } from "sonner";
-import { Buildings, Package, Plus, Trash, UsersThree, Kanban, ListChecks, ShieldCheck } from "@phosphor-icons/react";
+import { Buildings, Package, Plus, Trash, UsersThree, Kanban, ListChecks, ShieldCheck, Copy, WhatsappLogo } from "@phosphor-icons/react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from "./ui/dialog";
 
 const inp = "w-full border border-black px-3 py-2 text-sm font-mono focus:outline-none focus:shadow-brutal-sm disabled:bg-black/5 disabled:text-muted-foreground";
@@ -165,6 +165,21 @@ export function CompanyDialog({ trigger }) {
             </div>
           ))}
         </div>
+
+        {canManage && tenant?.id && (
+          <div className="mt-4 border border-black/40 bg-brand-paper p-3" data-testid="workspace-id-block">
+            <label className="label-mono text-muted-foreground flex items-center gap-1.5"><WhatsappLogo size={13} weight="bold" className="text-green-600" /> Workspace ID <span className="normal-case">(WhatsApp routing fallback — set as WA_TENANT_ID)</span></label>
+            <div className="flex gap-2 mt-1.5">
+              <input data-testid="workspace-id-value" readOnly value={tenant.id} className={`${inp} bg-white cursor-text`} onFocus={(e) => e.target.select()} />
+              <button data-testid="workspace-id-copy"
+                onClick={() => { navigator.clipboard?.writeText(tenant.id); toast.success("Workspace ID copied"); }}
+                className="flex items-center gap-1 border border-black px-3 text-sm font-semibold uppercase hover:bg-brand-ink hover:text-white transition-colors shrink-0">
+                <Copy size={14} weight="bold" /> Copy
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1.5">Messages from unregistered numbers fall back to this workspace. Paste this into your production <span className="font-mono">WA_TENANT_ID</span> env variable.</p>
+          </div>
+        )}
 
         <div className="mt-4">
           <div className="flex items-center justify-between mb-2">

@@ -64,7 +64,7 @@ function NewWorkflowDialog({ type, onCreated }) {
         <div className="space-y-3">
           <input data-testid="wf-title-input" className={inp} placeholder="Title (e.g. Order #4823 — Retailer)" value={form.title} onChange={set("title")} />
           <div>
-            <label className="label-mono text-muted-foreground">{contactType === "customer" ? "Customer" : "Vendor"}</label>
+            <label className="label-mono text-muted-foreground">{contactType === "customer" ? "Customer" : "Supplier"}</label>
             <select data-testid="wf-contact-select" className={`${inp} mt-1`} value={form.contact_id} onChange={pickContact}>
               <option value="">Select {contactType}… (or type below)</option>
               {(contacts || []).map((c) => <option key={c.id} value={c.id}>{c.company || c.name}</option>)}

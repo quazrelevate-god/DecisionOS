@@ -3007,8 +3007,13 @@ _DOC_SYSTEM = (
     "\"invoices\": [{\"type\": one of [sales_invoice, purchase_bill], \"number\": string, \"contact_name\": string, \"date\": string, \"due_date\": string, \"amount\": number, \"currency\": string, \"line_items\": [{\"description\": string, \"qty\": number, \"rate\": number, \"amount\": number}]}], "
     "\"payments\": [{\"direction\": one of [in, out], \"amount\": number, \"date\": string, \"method\": string, \"reference\": string, \"contact_name\": string, \"invoice_number\": string}], "
     "\"tasks\": [{\"title\": string, \"priority\": one of [low,medium,high], \"due_in_days\": integer or null}]}. "
-    "Rules: A sales invoice is money owed TO the company by a customer (party type=customer). "
-    "A purchase bill is money the company owes a vendor (party type=vendor). "
+    "Rules: Our own company (the DecisionOS user filing this) is \"{company}\". "
+    "NEVER create a contact for our own company — only ever extract the OTHER party (the counterparty). "
+    "Decide direction by WHO ISSUED the document: if our company is the seller/issuer (the 'from'/'billed by' party), it is a sales_invoice and the counterparty is the buyer (type=customer); "
+    "if our company is the buyer/recipient (the 'bill to'/'ship to' party), it is a purchase_bill and the counterparty is the issuer/seller (type=vendor). "
+    "The contact_name on every invoice and payment MUST be the counterparty, never our own company. "
+    "A sales invoice is money owed TO us by a customer (party type=customer). "
+    "A purchase bill is money we owe a vendor/supplier (party type=vendor). "
     "For every unpaid invoice or bill, add ONE follow-up task (e.g. 'Collect payment for invoice #123 from Acme' or 'Pay vendor bill #45 to XYZ'). "
     "A payment 'in' reduces a customer receivable; 'out' settles a vendor bill. "
     "Dates as YYYY-MM-DD when readable else empty string. Amounts are plain numbers without currency symbols. "
@@ -3025,6 +3030,7 @@ _CSV_SYSTEM = (
     "\"payments\": [{\"direction\": one of [in, out], \"amount\": number, \"date\": string, \"method\": string, \"reference\": string, \"contact_name\": string, \"invoice_number\": string}], "
     "\"tasks\": [{\"title\": string, \"priority\": one of [low,medium,high], \"due_in_days\": integer or null}]}. "
     "If the file is a customer/vendor list, fill 'contacts'. If it lists invoices/bills, fill 'invoices' (and add a follow-up task per unpaid row). "
+    "Our own company is \"{company}\" — NEVER map our own company as a contact; only extract the other parties. "
     "If it lists payments/receipts, fill 'payments'. Map each spreadsheet row to exactly one record. Amounts are plain numbers. "
     "Default currency to {currency}. Use empty arrays for the entities that do not apply."
 )
@@ -3037,10 +3043,11 @@ def _normalise_records(data: dict) -> dict:
     return out
 
 
-async def ai_extract_document(file_path: str, mime_type: str, session_id: str, currency: str = "INR") -> dict:
+async def ai_extract_document(file_path: str, mime_type: str, session_id: str, currency: str = "INR", company: str = "") -> dict:
     fc = FileContentWithMimeType(file_path=file_path, mime_type=mime_type)
+    system = _DOC_SYSTEM.replace("{currency}", currency).replace("{company}", company or "our company")
     chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=session_id,
-                   system_message=_DOC_SYSTEM.replace("{currency}", currency)).with_model(*VISION_MODEL)
+                   system_message=system).with_model(*VISION_MODEL)
     resp = await chat.send_message(UserMessage(text="Extract the structured JSON from this document now.", file_contents=[fc]))
     data = _extract_json(resp)
     return {
@@ -3051,10 +3058,11 @@ async def ai_extract_document(file_path: str, mime_type: str, session_id: str, c
     }
 
 
-async def ai_map_spreadsheet(headers: list, rows: list, session_id: str, currency: str = "INR") -> dict:
+async def ai_map_spreadsheet(headers: list, rows: list, session_id: str, currency: str = "INR", company: str = "") -> dict:
     payload = {"headers": headers, "rows": rows[:300]}
+    system = _CSV_SYSTEM.replace("{currency}", currency).replace("{company}", company or "our company")
     chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=session_id,
-                   system_message=_CSV_SYSTEM.replace("{currency}", currency)).with_model(*LLM_MODEL)
+                   system_message=system).with_model(*LLM_MODEL)
     resp = await chat.send_message(UserMessage(text=f"Spreadsheet data:\n{json.dumps(payload)}\n\nClassify and map to JSON now."))
     data = _extract_json(resp)
     return {
@@ -3069,16 +3077,44 @@ async def _tenant_currency(tenant_id: str) -> str:
     return (t or {}).get("currency", "INR")
 
 
+async def _tenant_name(tenant_id: str) -> str:
+    t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "name": 1})
+    return (t or {}).get("name", "") or ""
+
+
+_CO_SUFFIXES = ("private limited", "pvt ltd", "pvt. ltd.", "pvt", "private ltd", "limited",
+                "ltd", "llp", "inc", "incorporated", "corporation", "corp", "co", "company",
+                "technologies", "enterprises", "industries", "and sons", "traders")
+
+
+def _norm_company(s: str) -> str:
+    s = re.sub(r"[^a-z0-9 ]", " ", (s or "").lower())
+    tokens = [t for t in s.split() if t]
+    while tokens and " ".join(tokens[-1:]) in _CO_SUFFIXES:
+        tokens.pop()
+    # also drop 2-word suffixes like "private limited"
+    joined = " ".join(tokens)
+    for suf in _CO_SUFFIXES:
+        if joined.endswith(" " + suf):
+            joined = joined[: -(len(suf) + 1)]
+    return joined.strip()
+
+
 async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, ingestion_id: str, source: str) -> dict:
     created = {"contacts": 0, "invoices": 0, "payments": 0, "tasks": 0}
     currency = await _tenant_currency(tenant_id)
+    own_norm = _norm_company(await _tenant_name(tenant_id))
     troles = await tenant_role_keys(tenant_id)
     followup_role = "finance" if "finance" in troles else ("sales" if "sales" in troles else None)
     name_to_id = {}
 
+    def _is_own(name: str) -> bool:
+        n = _norm_company(name)
+        return bool(own_norm) and bool(n) and (n == own_norm or n in own_norm or own_norm in n)
+
     async def resolve_contact(name: str, ctype: str = "customer"):
         name = (name or "").strip()
-        if not name:
+        if not name or _is_own(name):
             return None
         key = name.lower()
         if key in name_to_id:
@@ -3103,7 +3139,7 @@ async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, 
 
     for c in records.get("contacts", []):
         name = (c.get("name") or "").strip()
-        if not name:
+        if not name or _is_own(name):
             continue
         ctype = c.get("type") if c.get("type") in CONTACT_TYPES else ("vendor" if c.get("type") == "supplier" else "customer")
         key = name.lower()
@@ -3230,7 +3266,8 @@ async def ingest_document(file: UploadFile = File(...), source: str = Form("uplo
     }
     try:
         currency = await _tenant_currency(user["tenant_id"])
-        result = await ai_extract_document(str(path), DOC_MIME[ext], f"ingest-{ing_id}", currency)
+        company = await _tenant_name(user["tenant_id"])
+        result = await ai_extract_document(str(path), DOC_MIME[ext], f"ingest-{ing_id}", currency, company)
         doc.update({"summary": result["summary"], "doc_type": result["doc_type"],
                     "confidence": result["confidence"], "records": result["records"]})
     except Exception as e:
@@ -3272,7 +3309,8 @@ async def ingest_csv(file: UploadFile = File(...), user: dict = Depends(require_
     }
     try:
         currency = await _tenant_currency(user["tenant_id"])
-        result = await ai_map_spreadsheet(headers, rows, f"ingest-{ing_id}", currency)
+        company = await _tenant_name(user["tenant_id"])
+        result = await ai_map_spreadsheet(headers, rows, f"ingest-{ing_id}", currency, company)
         doc.update({"summary": result["summary"], "entity": result["entity"], "records": result["records"]})
     except Exception as e:
         logger.exception("ingest_csv mapping failed")
@@ -3650,7 +3688,8 @@ async def process_whatsapp_message(message: dict):
             with open(UPLOAD_DIR / fname, "wb") as f:
                 f.write(data)
             currency = await _tenant_currency(tenant_id)
-            result = await ai_extract_document(str(UPLOAD_DIR / fname), mime, f"ingest-{ing_id}", currency)
+            company = await _tenant_name(tenant_id)
+            result = await ai_extract_document(str(UPLOAD_DIR / fname), mime, f"ingest-{ing_id}", currency, company)
             doc = {
                 "id": ing_id, "tenant_id": tenant_id, "created_by": owner_id, "source": "whatsapp",
                 "kind": "pdf" if ext == "pdf" else "image", "filename": media.get("filename") or fname,

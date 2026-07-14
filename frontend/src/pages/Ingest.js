@@ -326,12 +326,12 @@ export default function Ingest() {
         <EmptyState title="View-only" hint="Your role can browse filed records but not import new data." />
       )}
 
-      {/* WhatsApp coming soon */}
-      <div className="border border-dashed border-black/40 p-4 flex items-center gap-3 mb-8" data-testid="whatsapp-soon-banner">
+      {/* WhatsApp live */}
+      <div className="border border-black bg-green-50 p-4 flex items-center gap-3 mb-8" data-testid="whatsapp-live-banner">
         <WhatsappLogo size={24} weight="bold" className="text-green-600" />
         <div className="flex-1">
-          <p className="font-semibold text-sm">WhatsApp forwarding <span className="label-mono text-muted-foreground ml-1">coming soon</span></p>
-          <p className="text-xs text-muted-foreground">Soon your team can forward an invoice or payment screenshot to DecisionOS on WhatsApp and it files itself — powered by this same pipeline.</p>
+          <p className="font-semibold text-sm">WhatsApp forwarding <span className="label-mono text-green-700 ml-1">live</span></p>
+          <p className="text-xs text-muted-foreground">Forward an invoice or payment screenshot to your DecisionOS WhatsApp number and it files itself — powered by this same pipeline.</p>
         </div>
       </div>
 

@@ -4553,16 +4553,28 @@ async def fixup_demo_tenant():
     logger.info("Demo contacts seeded & linked.")
 
 
+async def _bootstrap():
+    """Idempotent bootstrap (indexes, migrations, demo seed). Runs in the background so it
+    never blocks the app from becoming ready, and never crashes the process on failure."""
+    try:
+        await db.users.create_index("email", unique=True)
+        await db.decisions.create_index("tenant_id")
+        await db.tasks.create_index("tenant_id")
+        await db.workflows.create_index("tenant_id")
+        await seed_demo()
+        await migrate_tenants()
+        await fixup_demo_tenant()
+        await write_test_credentials()
+        logger.info("Bootstrap complete.")
+    except Exception as e:
+        logger.error(f"Bootstrap error (non-fatal, app stays up): {e}")
+
+
 @app.on_event("startup")
 async def startup():
-    await db.users.create_index("email", unique=True)
-    await db.decisions.create_index("tenant_id")
-    await db.tasks.create_index("tenant_id")
-    await db.workflows.create_index("tenant_id")
-    await seed_demo()
-    await migrate_tenants()
-    await fixup_demo_tenant()
-    await write_test_credentials()
+    # Fire-and-forget so uvicorn binds the port and answers /health immediately —
+    # otherwise slow remote-Atlas seeding would block readiness and fail the deploy health check.
+    asyncio.create_task(_bootstrap())
 
 
 @app.get("/health")

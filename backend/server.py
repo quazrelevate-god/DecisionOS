@@ -3822,6 +3822,12 @@ async def whatsapp_status(user: dict = Depends(get_current_user)):
                 out["verified_name"] = d.get("verified_name")
         except Exception as e:
             out["token_error"] = str(e)[:150]
+    # Fallback so the QR/number still renders if the live Graph check fails or is misconfigured.
+    if not out["wa_number"]:
+        fb = os.environ.get("WA_DISPLAY_NUMBER")
+        if fb:
+            out["display_number"] = fb
+            out["wa_number"] = re.sub(r"\D", "", fb)
     return out
 
 
@@ -3838,11 +3844,34 @@ async def whatsapp_logs(user: dict = Depends(get_current_user)):
 
 async def resolve_wa_tenant(sender: str):
     sp = _norm_phone(sender)
-    if sp:
-        async for t in db.tenants.find({"invited_employees.0": {"$exists": True}}, {"_id": 0, "id": 1, "invited_employees": 1}):
-            for inv in t.get("invited_employees", []):
-                if _norm_phone(inv.get("phone")) == sp:
-                    return t["id"]
+    if not sp:
+        return os.environ.get("WA_TENANT_ID") or None
+    # Primary: match a registered teammate by their phone (same normalization as OTP login).
+    candidates = await db.users.find(
+        {"phone": {"$exists": True, "$ne": ""}},
+        {"_id": 0, "id": 1, "tenant_id": 1, "phone": 1, "name": 1, "created_at": 1, "wa_phone_obsolete": 1},
+    ).to_list(5000)
+    matches = [u for u in candidates if not u.get("wa_phone_obsolete") and _norm_phone(u.get("phone", "")) == sp]
+    if matches:
+        if len(matches) > 1:
+            # Same number on multiple people: route to the most recently added, mark the
+            # older records obsolete so they stop claiming the number, and alert the owner.
+            matches.sort(key=lambda u: u.get("created_at") or "", reverse=True)
+            latest, older = matches[0], matches[1:]
+            await db.users.update_many({"id": {"$in": [u["id"] for u in older]}},
+                                       {"$set": {"wa_phone_obsolete": True, "updated_at": now_iso()}})
+            await push_notification(
+                latest["tenant_id"], await _owner_ids(latest["tenant_id"]), 2,
+                f"WhatsApp number {sender} was linked to {len(matches)} people. Routing to the latest — {latest.get('name')}. {len(older)} older record(s) marked obsolete; please review in People.",
+                "user", latest["id"], ntype="reminder",
+                title="Duplicate WhatsApp number resolved", sender="System")
+            return latest["tenant_id"]
+        return matches[0]["tenant_id"]
+    # Secondary: legacy invited_employees list on the tenant document.
+    async for t in db.tenants.find({"invited_employees.0": {"$exists": True}}, {"_id": 0, "id": 1, "invited_employees": 1}):
+        for inv in t.get("invited_employees", []):
+            if _norm_phone(inv.get("phone")) == sp:
+                return t["id"]
     return os.environ.get("WA_TENANT_ID") or None
 
 

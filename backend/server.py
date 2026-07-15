@@ -1796,6 +1796,14 @@ async def approve_decision(decision_id: str, user: dict = Depends(require_role("
     await db.decisions.update_one({"id": decision_id}, {"$set": {"status": "approved", "decided_at": now_iso()}})
     await db.tasks.update_many({"decision_id": decision_id, "status": "blocked"}, {"$set": {"status": "todo"}})
     await add_decision_event(decision_id, "Approved — tasks unblocked", user["name"], "approved")
+    # Auto-advance any Procurement (purchase_payment) workflows spawned by this decision from requested → approved.
+    wf_advanced = 0
+    async for wf in db.workflows.find({"tenant_id": user["tenant_id"], "decision_id": decision_id, "type": "purchase_payment", "stage": "requested"}):
+        entry = {"stage": "approved", "note": f"Auto-approved with decision by {user['name']}", "by": user["id"], "at": now_iso()}
+        await db.workflows.update_one({"id": wf["id"]}, {"$set": {"stage": "approved"}, "$push": {"history": entry}})
+        wf_advanced += 1
+    if wf_advanced:
+        await add_decision_event(decision_id, f"{wf_advanced} procurement workflow(s) advanced to Approved", user["name"], "workflow")
     for t in await db.tasks.find({"decision_id": decision_id}, {"_id": 0}).to_list(100):
         who = None
         if t.get("assignee_id"):

@@ -163,3 +163,9 @@ Frontend: new `/review` page (`Captures.js`) — Review Queue with status tabs (
 Tested (iteration_46): backend 15/15 PASS, frontend 5/5 PASS, retest not needed.
 Phase 2 backlog: configurable routing-rules UI, WhatsApp voice-note transcription, clarification round-trip capture, shadcn dialogs instead of window.prompt, drive roles from tenant.roles, extract captures/whatsapp into routers.
 All in preview — REDEPLOY to push to production.
+
+## Decision approval auto-advances Procurement workflows (2026-07-15)
+User report: two Procurement (purchase_payment) cards stayed in REQUESTED even after approving the decision in Decision Desk. Expected behavior: approving the decision should move its linked procurement workflows requested→approved automatically.
+Fix (`approve_decision` in server.py): after unblocking tasks, find all `type=purchase_payment`, `stage=requested` workflows with this `decision_id` and advance them to `approved` (pushes history entry "Auto-approved with decision by {name}") + adds a decision timeline event "{n} procurement workflow(s) advanced to Approved".
+Verified via curl: seeded decision+linked purchase_payment workflow → POST /decisions/{id}/approve → workflow stage became `approved`. Backend-only change.
+NOTE: existing 2 stuck cards on production were approved BEFORE this fix — they must be advanced once manually (ADVANCE button works). Future approvals auto-advance. REDEPLOY to production to activate.

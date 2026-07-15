@@ -6,13 +6,14 @@ import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
 import { PageHeader, Chip, EmptyState } from "../components/common";
 import ExecutionSummary from "../components/ExecutionSummary";
+import { DecisionDialog, raisedByLabel, RaisedByIcon } from "../components/DecisionDialog";
 import { money } from "../lib/format";
 import { toast } from "sonner";
 import {
   Microphone, Stop, PaperPlaneTilt, CheckCircle, XCircle, Spinner,
   UsersThree, Truck, Receipt, CurrencyCircleDollar, Warning, CheckSquare,
   SealCheck, Bell, Brain, Gauge, Check, X, ArrowClockwise, User, UserPlus, Question,
-  WarningCircle, ArrowBendUpRight,
+  WarningCircle, ArrowBendUpRight, ChatCircleText,
 } from "@phosphor-icons/react";
 
 function EscalationCard({ t, onRespond, highlight }) {
@@ -66,7 +67,7 @@ function EscalationCard({ t, onRespond, highlight }) {
   );
 }
 
-function PendingApprovalCard({ d, members, roleOptions, onApprove, onReject, onRefresh, highlight }) {
+function PendingApprovalCard({ d, members, roleOptions, onApprove, onReject, onRefresh, onDiscuss, highlight }) {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ title: "", assignee_id: "", assignee_role: "", priority: "medium" });
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -96,6 +97,9 @@ function PendingApprovalCard({ d, members, roleOptions, onApprove, onReject, onR
         {d.dtype && <Chip value={d.dtype} className="bg-brand-blue text-white" />}
       </div>
       <p className="font-heading font-bold text-lg leading-tight">{d.title}</p>
+      <p className="label-mono text-muted-foreground mt-1 flex items-center gap-1.5" data-testid={`decision-raised-by-${d.id}`}>
+        <RaisedByIcon d={d} size={13} weight="bold" /> {raisedByLabel(d)}
+      </p>
       {d.summary && <p className="text-sm text-muted-foreground mt-2">{d.summary}</p>}
       {d.tasks?.length > 0 && (
         <ul className="mt-3 space-y-2" data-testid={`decision-tasks-${d.id}`}>
@@ -149,6 +153,10 @@ function PendingApprovalCard({ d, members, roleOptions, onApprove, onReject, onR
           <XCircle size={16} weight="bold" /> Reject
         </button>
       </div>
+      <button onClick={() => onDiscuss(d.id)} data-testid={`decision-discuss-${d.id}`}
+        className="mt-2 w-full flex items-center justify-center gap-2 border border-dashed border-black/50 py-2 text-xs font-semibold uppercase tracking-wider hover:bg-black/5 transition-colors">
+        <ChatCircleText size={15} weight="bold" /> Discuss / who raised this
+      </button>
     </div>
   );
 }
@@ -354,6 +362,11 @@ export default function Inbox() {
   const [params, setParams] = useSearchParams();
   const focus = params.get("focus");
   const [highlightId, setHighlightId] = useState(null);
+  const [openDecision, setOpenDecision] = useState(null);
+  useEffect(() => {
+    const dq = params.get("decision");
+    if (dq) setOpenDecision(dq);
+  }, [params]);
   const dataReady = (decisionsQ.data || myTasksQ.data) ? true : false;
   useEffect(() => {
     if (!focus) return;
@@ -376,6 +389,8 @@ export default function Inbox() {
   return (
     <div>
       <ExecutionSummary data={execPanel} onClose={() => setExecPanel(null)} onReview={reviewFromSummary} />
+      <DecisionDialog decisionId={openDecision} open={!!openDecision}
+        onClose={() => { setOpenDecision(null); if (params.get("decision")) setParams({}, { replace: true }); }} />
       <PageHeader eyebrow="Your day in one place" title="Decision Desk">
         {user?.role === "owner" && (
           <button data-testid="inbox-operating-score-button" onClick={() => navigate("/operating-score")}
@@ -483,6 +498,7 @@ export default function Inbox() {
                 onApprove={(id) => decide(id, "approve")}
                 onReject={(id) => decide(id, "reject")}
                 onRefresh={refresh}
+                onDiscuss={setOpenDecision}
                 highlight={highlightId === d.id}
               />
             ))}

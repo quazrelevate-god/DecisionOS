@@ -17,5 +17,6 @@ export function notifMeta(n) {
 // Where does clicking a notification take the user?
 export function notifLink(n) {
   if (n?.entity_type === "task" && n?.entity_id) return `/my-work?task=${n.entity_id}`;
+  if (n?.entity_type === "decision" && n?.entity_id) return `/?decision=${n.entity_id}`;
   return null;
 }

@@ -716,11 +716,13 @@ async def process_voice_note(note_id: str):
             "dtype": dtype, "confidence": round(max(0.0, min(1.0, conf)), 2),
             "status": "pending_approval",
             "created_by": note["created_by"], "created_at": now_iso(),
+            "source": note.get("source") or ("voice" if note.get("kind") == "audio" else "text"),
+            "wa_from": note.get("wa_from"), "raised_by_name": note.get("raised_by_name"),
             "task_ids": [],
         }
         task_ids, assignee_keys = await _create_decision_tasks(tenant_id, note, decision_id, extracted, troles, members)
         decision["task_ids"] = task_ids
-        decision["timeline"] = [{"ts": now_iso(), "label": f"Decision captured from {note.get('kind') or 'voice'}", "actor": "Owner", "kind": "created"}]
+        decision["timeline"] = [{"ts": now_iso(), "label": f"Decision captured via {note.get('source') or note.get('kind') or 'voice'}", "actor": note.get("raised_by_name") or "Owner", "kind": "created"}]
         await db.decisions.insert_one(decision)
         _icls = "approval" if dtype == "approval" else ("task" if task_ids else "reminder")
         await add_inbox_item(tenant_id, note["created_by"],
@@ -1791,6 +1793,43 @@ async def reject_decision(decision_id: str, user: dict = Depends(require_role("o
     await db.inbox.update_many({"tenant_id": user["tenant_id"], "ref_type": "decision", "ref_id": decision_id}, {"$set": {"status": "dismissed"}})
     await add_decision_event(decision_id, f"Rejected — removed {tasks_del.deleted_count} task(s), {wf_del.deleted_count} workflow(s)", user["name"], "rejected")
     await log_activity(user["tenant_id"], user["id"], "decision_rejected", f"Rejected '{d['title']}' — removed {tasks_del.deleted_count} task(s), {wf_del.deleted_count} workflow(s)", "decision", decision_id)
+    return await enrich_decision(await db.decisions.find_one({"id": decision_id}, {"_id": 0}))
+
+
+class DecisionCommentInput(BaseModel):
+    text: str
+
+
+async def _decision_participants(tenant_id: str, d: dict) -> set:
+    """Everyone involved with a decision: creator, task assignees, and owners."""
+    ids = set(await _owner_ids(tenant_id))
+    if d.get("created_by"):
+        ids.add(d["created_by"])
+    async for t in db.tasks.find({"decision_id": d["id"]}, {"_id": 0, "assignee_id": 1}):
+        if t.get("assignee_id"):
+            ids.add(t["assignee_id"])
+    return ids
+
+
+@api.post("/decisions/{decision_id}/comment")
+async def comment_decision(decision_id: str, inp: DecisionCommentInput, user: dict = Depends(get_current_user)):
+    d = await db.decisions.find_one({"id": decision_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
+    if not d:
+        raise HTTPException(status_code=404, detail="Not found")
+    participants = await _decision_participants(user["tenant_id"], d)
+    if user["id"] not in participants:
+        raise HTTPException(status_code=403, detail="You don't have access to this decision")
+    text = (inp.text or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Comment can't be empty")
+    entry = {"ts": now_iso(), "label": text, "actor": user.get("name"), "actor_id": user["id"], "kind": "comment"}
+    await db.decisions.update_one({"id": decision_id}, {"$push": {"timeline": entry}})
+    recipients = [p for p in participants if p != user["id"]]
+    if recipients:
+        await push_notification(user["tenant_id"], recipients, 1,
+                                f"New comment on '{d['title']}' from {user['name']}: {text[:100]}",
+                                "decision", decision_id, ntype="comment", title=d["title"], sender=user["name"])
+    await log_activity(user["tenant_id"], user["id"], "decision_comment", f"Commented on '{d['title']}'", "decision", decision_id)
     return await enrich_decision(await db.decisions.find_one({"id": decision_id}, {"_id": 0}))
 
 
@@ -4103,7 +4142,8 @@ async def execute_capture(d: dict, user: dict):
     await db.voice_notes.insert_one({
         "id": note_id, "tenant_id": tenant_id, "created_by": user["id"], "kind": "text",
         "audio_path": None, "transcript": d.get("text") or d.get("summary") or "", "language": "auto",
-        "status": "queued", "source": "whatsapp", "created_at": now_iso(),
+        "status": "queued", "source": "whatsapp", "wa_from": d.get("wa_from"),
+        "raised_by_name": d.get("wa_from"), "created_at": now_iso(),
     })
     await process_voice_note(note_id)
     vn = await db.voice_notes.find_one({"id": note_id}, {"_id": 0, "decision_id": 1})

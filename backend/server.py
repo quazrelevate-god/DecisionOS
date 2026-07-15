@@ -3772,21 +3772,61 @@ async def process_whatsapp_message(message: dict):
                     pass
             cls = DOC_CLASS.get(result.get("doc_type"), "invoice")
             dept = "finance" if cls in ("invoice", "payment") else ("purchase" if cls == "purchase" else "sales")
+            confidence = float(result.get("confidence") or 0.7)
+            policy = cls in ("approval", "decision")
+            needs_owner = _needs_owner_review(cls, amt or None, policy)
+            has_records = bool(recs.get("invoices") or recs.get("payments"))
+            dup = await _find_duplicate_invoice(tenant_id, recs)
+            level, reason = _decide_processing_level(cls, confidence, amt or None, needs_owner,
+                                                     bool(dup), has_records, is_document=True)
             tri = {"classification": cls, "intent": result.get("doc_type", "document"),
                    "summary": result.get("summary", ""), "department": dept,
                    "priority": "medium", "amount": amt or None}
-            did = await persist_capture_draft(tenant_id, sender, ("pdf" if ext == "pdf" else "image"),
-                                              {"file_url": f"/api/files/{fname}", "filename": media.get("filename") or fname},
-                                              tri, troles, records=recs)
-            await update_wa_event(ev_id, status="draft", summary=result.get("summary") or fname)
-            await send_wa_reply(sender, "📎 Received — your document is being reviewed by the right team before it's filed.")
+            status = "needs_attention" if level == "attention" else "pending_review"
+            did = await persist_capture_draft(
+                tenant_id, sender, ("pdf" if ext == "pdf" else "image"),
+                {"file_url": f"/api/files/{fname}", "filename": media.get("filename") or fname},
+                tri, troles, records=recs, status=status, confidence=confidence,
+                processing_level=level, duplicate_of=(dup["id"] if dup else None), attention_reason=reason)
+            summary = result.get("summary") or fname
+            if level == "auto":
+                draft = await db.capture_drafts.find_one({"id": did}, {"_id": 0})
+                res = await execute_capture(draft, {"id": owner_id, "tenant_id": tenant_id, "role": "owner"})
+                await db.capture_drafts.update_one({"id": did}, {"$set": {
+                    "status": "executed", "review_action": "auto", "auto_processed": True,
+                    "reviewed_at": now_iso(), "result_ref": res}})
+                await update_wa_event(ev_id, status="filed", summary=summary)
+                await send_wa_reply(sender, "✅ Filed automatically — high confidence, low risk. Reply here if anything looks off and the team will fix it.")
+            elif level == "attention":
+                await update_wa_event(ev_id, status="attention", summary=summary)
+                await send_wa_reply(sender, "📎 Received — this one needs a quick check by the team before it's filed. We'll follow up if anything's unclear.")
+            else:
+                await update_wa_event(ev_id, status="draft", summary=summary)
+                await send_wa_reply(sender, "📎 Received — your document is being reviewed by the right team before it's filed.")
 
         elif mtype == "text":
             text = message["text"]["body"]
             tri = await ai_capture_triage(text, sorted(troles))
-            did = await persist_capture_draft(tenant_id, sender, "text", {"text": text}, tri, troles)
-            await update_wa_event(ev_id, status="draft", summary=text[:140])
-            await send_wa_reply(sender, "✅ Received — your message is being reviewed by the right team before action.")
+            if tri.get("unrelated"):
+                await update_wa_event(ev_id, status="ignored", reason="Unrelated / not a business instruction")
+                await send_wa_reply(sender, "🤔 I couldn't tell what to do with this. If it's a task, invoice or a note for your team, send it again with a short instruction and I'll route it to the right department.")
+                return
+            confidence = tri.get("confidence", 0.7)
+            amount = tri.get("amount") if isinstance(tri.get("amount"), (int, float)) else None
+            cls = tri.get("classification", "other")
+            needs_owner = _needs_owner_review(cls, amount, tri.get("policy_or_high_risk"))
+            level, reason = _decide_processing_level(cls, confidence, amount, needs_owner,
+                                                     False, False, is_document=False)
+            status = "needs_attention" if level == "attention" else "pending_review"
+            did = await persist_capture_draft(tenant_id, sender, "text", {"text": text}, tri, troles,
+                                              status=status, confidence=confidence,
+                                              processing_level=level, attention_reason=reason)
+            if level == "attention":
+                await update_wa_event(ev_id, status="attention", summary=text[:140])
+                await send_wa_reply(sender, "📎 Received — this needs a quick check by the team before we action it.")
+            else:
+                await update_wa_event(ev_id, status="draft", summary=text[:140])
+                await send_wa_reply(sender, "✅ Received — your message is being reviewed by the right team before action.")
         else:
             await update_wa_event(ev_id, status="ignored", reason=f"Unsupported message type: {mtype}")
     except Exception as e:
@@ -3808,6 +3848,56 @@ CAPTURE_ROUTING = {
 DOC_CLASS = {"sales_invoice": "invoice", "purchase_bill": "purchase", "payment": "payment",
              "purchase_order": "purchase", "quotation": "sales", "receipt": "payment"}
 CAPTURE_THRESHOLD = float(os.environ.get("CAPTURE_OWNER_THRESHOLD", "50000"))
+# Confidence gating for the WhatsApp Smart Capture processing-level decision.
+AUTO_CONFIDENCE = float(os.environ.get("CAPTURE_AUTO_CONFIDENCE", "0.90"))
+ATTENTION_CONFIDENCE = float(os.environ.get("CAPTURE_ATTENTION_CONFIDENCE", "0.60"))
+
+
+def _needs_owner_review(cls: str, amount, policy: bool) -> bool:
+    return bool(policy) or cls in ("approval", "decision") or (amount is not None and amount >= CAPTURE_THRESHOLD)
+
+
+async def _find_duplicate_invoice(tenant_id: str, records: dict):
+    """Return an already-filed invoice that looks like a duplicate of one in `records`, else None."""
+    for inv in (records or {}).get("invoices", []):
+        num = str(inv.get("number") or "").strip()
+        if num:
+            hit = await db.invoices.find_one(
+                {"tenant_id": tenant_id, "number": {"$regex": f"^{re.escape(num)}$", "$options": "i"}},
+                {"_id": 0, "id": 1, "number": 1})
+            if hit:
+                return hit
+        try:
+            amt = float(inv.get("amount") or 0)
+        except (TypeError, ValueError):
+            amt = 0.0
+        cname = (inv.get("contact_name") or "").strip()
+        if amt and cname:
+            hit = await db.invoices.find_one(
+                {"tenant_id": tenant_id, "amount": amt,
+                 "contact_name": {"$regex": f"^{re.escape(cname)}$", "$options": "i"}},
+                {"_id": 0, "id": 1, "number": 1})
+            if hit:
+                return hit
+    return None
+
+
+def _decide_processing_level(cls, confidence, amount, needs_owner, is_duplicate, has_records, is_document):
+    """Map an AI-triaged capture to one of: auto | confirm | attention.
+    Returns (level, reason)."""
+    if is_duplicate:
+        return "attention", "Possible duplicate of an already-filed invoice — please verify before saving."
+    if confidence is not None and confidence < ATTENTION_CONFIDENCE:
+        return "attention", "Low confidence extraction — please double-check the details."
+    if is_document and not has_records:
+        return "attention", "Couldn't read clear structured data from this document — please review."
+    if needs_owner:
+        return "confirm", ""
+    if (is_document and confidence is not None and confidence >= AUTO_CONFIDENCE
+            and amount is not None and 0 < amount < CAPTURE_THRESHOLD
+            and cls in ("invoice", "payment", "purchase", "sales")):
+        return "auto", ""
+    return "confirm", ""
 
 _CAPTURE_SYS = (
     "You are an operations triage AI for a business that receives instructions on WhatsApp. "
@@ -3817,6 +3907,8 @@ _CAPTURE_SYS = (
     "department (one of [sales, finance, purchase, hr, operations, owner]), "
     "priority (one of [low, medium, high]), due_in_days (integer or null), "
     "amount (number if a monetary value is mentioned, else null), "
+    "confidence (number between 0 and 1 — how sure you are this is a genuine, clearly actionable business instruction), "
+    "unrelated (boolean — true if this is NOT a business instruction, e.g. a greeting, spam, or personal chit-chat), "
     "policy_or_high_risk (boolean — true for policy changes, contracts, legal, layoffs, big commitments). "
     "Choose the department that should review this. Available team roles: {roles}."
 )
@@ -3837,10 +3929,17 @@ async def ai_capture_triage(text: str, roles: list) -> dict:
     if d.get("priority") not in ("low", "medium", "high"):
         d["priority"] = "medium"
     d.setdefault("department", "owner")
+    try:
+        d["confidence"] = max(0.0, min(1.0, float(d.get("confidence"))))
+    except (TypeError, ValueError):
+        d["confidence"] = 0.7
+    d["unrelated"] = bool(d.get("unrelated"))
     return d
 
 
-async def persist_capture_draft(tenant_id, wa_from, kind, payload, tri, troles, records=None):
+async def persist_capture_draft(tenant_id, wa_from, kind, payload, tri, troles, records=None,
+                                status="pending_review", confidence=None, processing_level="confirm",
+                                duplicate_of=None, attention_reason=""):
     cls = tri.get("classification", "other")
     amount = tri.get("amount") if isinstance(tri.get("amount"), (int, float)) else None
     dept = tri.get("department")
@@ -3872,7 +3971,9 @@ async def persist_capture_draft(tenant_id, wa_from, kind, payload, tri, troles, 
         "department": dept, "reviewer_role": reviewer, "assignee_id": None,
         "priority": tri.get("priority", "medium"), "due_date": due, "amount": amount, "records": records,
         "needs_owner": needs_owner, "escalate_reason": escalate_reason,
-        "status": "pending_review", "review_action": None, "clarification_note": None,
+        "confidence": confidence, "processing_level": processing_level,
+        "duplicate_of": duplicate_of, "attention_reason": attention_reason, "auto_processed": False,
+        "status": status, "review_action": None, "clarification_note": None,
         "created_at": now_iso(), "reviewed_by": None, "reviewed_at": None, "result_ref": None,
     })
     return did
@@ -3971,7 +4072,7 @@ async def list_captures(status: str = "pending_review", user: dict = Depends(get
 
 @api.get("/captures/pending-count")
 async def captures_pending_count(user: dict = Depends(get_current_user)):
-    q = {"tenant_id": user["tenant_id"], "status": "pending_review"}
+    q = {"tenant_id": user["tenant_id"], "status": {"$in": ["pending_review", "needs_attention"]}}
     if user["role"] != "owner":
         q["reviewer_role"] = user["role"]
     return {"count": await db.capture_drafts.count_documents(q)}
@@ -4024,7 +4125,7 @@ async def clarify_capture(cid: str, inp: CaptureActionInput, user: dict = Depend
 @api.post("/captures/{cid}/approve")
 async def approve_capture(cid: str, user: dict = Depends(get_current_user)):
     d = await _get_draft(cid, user)
-    if d["status"] not in ("pending_review", "clarification_requested"):
+    if d["status"] not in ("pending_review", "clarification_requested", "needs_attention"):
         raise HTTPException(status_code=400, detail="Already processed")
     if d.get("needs_owner") and user["role"] != "owner":
         raise HTTPException(status_code=403, detail="This item requires Owner approval")

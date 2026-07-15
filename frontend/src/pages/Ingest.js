@@ -80,6 +80,8 @@ const withKeys = (recs) => {
 
 const WA_STATUS_STYLE = {
   received: "bg-brand-yellow text-black",
+  draft: "bg-brand-blue text-white",
+  attention: "bg-amber-500 text-black",
   filed: "bg-green-600 text-white",
   structured: "bg-green-600 text-white",
   ignored: "bg-black/10 text-black",

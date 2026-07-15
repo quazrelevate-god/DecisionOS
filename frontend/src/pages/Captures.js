@@ -22,8 +22,9 @@ const CLASS_STYLE = {
 };
 const STATUS_TABS = [
   { key: "pending_review", label: "Pending" },
+  { key: "needs_attention", label: "Needs Attention" },
   { key: "clarification_requested", label: "Clarification" },
-  { key: "executed", label: "Approved" },
+  { key: "executed", label: "Filed" },
   { key: "rejected", label: "Rejected" },
 ];
 const ROLE_OPTS = ["sales", "finance", "purchase", "hr", "operations", "owner"];
@@ -86,7 +87,7 @@ function CaptureCard({ c, user, onChange }) {
   });
   const [busy, setBusy] = useState(false);
   const isOwner = user?.role === "owner";
-  const isPending = c.status === "pending_review" || c.status === "clarification_requested";
+  const isPending = c.status === "pending_review" || c.status === "clarification_requested" || c.status === "needs_attention";
   const blockedByEscalation = c.needs_owner && !isOwner;
 
   const members = useQuery({
@@ -145,6 +146,10 @@ function CaptureCard({ c, user, onChange }) {
             <Chip value={`review: ${c.reviewer_role}`} className="bg-white border-black" />
             <Chip value={c.priority} className={c.priority === "high" ? "bg-brand-red text-white" : "bg-white border-black"} />
             {c.needs_owner && <span data-testid={`capture-escalated-${c.id}`} className="inline-flex items-center gap-1 text-xs font-bold uppercase text-brand-red"><ShieldWarning size={13} weight="bold" /> Owner approval</span>}
+            {c.status === "needs_attention" && <Chip value="needs attention" className="bg-amber-500 text-black" />}
+            {c.auto_processed && <Chip value="auto-filed" className="bg-green-600 text-white" />}
+            {c.duplicate_of && <Chip value="possible duplicate" className="bg-amber-500 text-black" />}
+            {c.confidence != null && <span className="label-mono text-muted-foreground">conf {Math.round(c.confidence * 100)}%</span>}
             <span className="label-mono text-muted-foreground ml-auto flex items-center gap-1" title={fullTime(c.created_at)}><WhatsappLogo size={12} weight="bold" /> {c.wa_from || "whatsapp"} · {timeAgo(c.created_at)}</span>
           </div>
           <p className="text-sm font-semibold mt-2">{c.summary}</p>
@@ -152,6 +157,7 @@ function CaptureCard({ c, user, onChange }) {
           {c.text && <p className="text-xs text-muted-foreground mt-1 italic">“{c.text.slice(0, 200)}”</p>}
           {recCounts && <p className="label-mono text-muted-foreground mt-1">Extracted: {recCounts}{c.amount ? ` · ₹${Number(c.amount).toLocaleString()}` : ""}</p>}
           {!recCounts && c.amount ? <p className="label-mono text-muted-foreground mt-1">Amount: ₹{Number(c.amount).toLocaleString()}</p> : null}
+          {c.attention_reason && <p className="text-xs text-amber-700 mt-1">⚠ {c.attention_reason}</p>}
           {c.escalate_reason && <p className="text-xs text-brand-red mt-1">⚠ {c.escalate_reason}</p>}
           {c.clarification_note && <p className="text-xs text-amber-700 mt-1">Note: {c.clarification_note}</p>}
         </div>
@@ -207,7 +213,7 @@ function CaptureCard({ c, user, onChange }) {
         </div>
       )}
 
-      {c.status === "executed" && <p className="text-xs text-green-700 mt-2 flex items-center gap-1"><CheckCircle size={13} weight="bold" /> Approved & created ({c.result_ref?.type})</p>}
+      {c.status === "executed" && <p className="text-xs text-green-700 mt-2 flex items-center gap-1"><CheckCircle size={13} weight="bold" /> {c.auto_processed ? "Auto-filed" : "Approved"} & created ({c.result_ref?.type})</p>}
       {c.status === "rejected" && <p className="text-xs text-brand-red mt-2 flex items-center gap-1"><XCircle size={13} weight="bold" /> Rejected</p>}
     </div>
   );

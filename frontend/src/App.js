@@ -8,7 +8,6 @@ import { LockKey } from "@phosphor-icons/react";
 import Layout from "./components/Layout";
 import Login from "./pages/Login";
 import Inbox from "./pages/Inbox";
-import Workflows from "./pages/Workflows";
 import Brain from "./pages/Brain";
 import People from "./pages/People";
 import CEOBrief from "./pages/CEOBrief";
@@ -67,7 +66,7 @@ function App() {
             <Route path="/review" element={<Navigate to="/ingest" replace />} />
             <Route path="/notifications" element={<Protected><Notifications /></Protected>} />
             <Route path="/inbox" element={<Protected perm="inbox"><Inbox /></Protected>} />
-            <Route path="/workflows" element={<Protected perm="workflows"><Workflows /></Protected>} />
+            <Route path="/workflows" element={<Navigate to="/my-work?view=workflows" replace />} />
             <Route path="/contacts" element={<Protected perm="people"><People /></Protected>} />
             <Route path="/contacts/:id" element={<Protected perm="people"><ContactProfile /></Protected>} />
             <Route path="/ingest" element={<Protected perm="data_input"><Ingest /></Protected>} />

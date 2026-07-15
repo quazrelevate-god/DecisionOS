@@ -17,7 +17,6 @@ import {
 import {
   Microphone,
   Brain as BrainIcon,
-  Kanban,
   AddressBook,
   SignOut,
   EnvelopeSimple,
@@ -39,7 +38,6 @@ const NAV = [
   { to: "/contacts", label: "People", icon: AddressBook, testid: "nav-contacts", perm: "people" },
   { to: "/brain", label: "Company Brain", icon: BrainIcon, testid: "nav-brain", perm: "brain" },
   { to: "/ingest", label: "Capture", icon: FileArrowUp, testid: "nav-ingest", perm: "data_input" },
-  { to: "/workflows", label: "Workflows", icon: Kanban, testid: "nav-workflows", perm: "workflows" },
   { to: "/meetings", label: "Meeting Notes", icon: MicrophoneStage, testid: "nav-meetings" },
 ];
 

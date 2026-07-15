@@ -111,7 +111,7 @@ def require_role(*roles):
 
 
 # --- Module-level access permissions ---------------------------------------
-PERMISSION_KEYS = ["inbox", "voice_capture", "data_input", "people", "finance", "workflows", "tasks", "brain", "ask", "team_manage"]
+PERMISSION_KEYS = ["inbox", "voice_capture", "data_input", "people", "finance", "workflows", "tasks", "brain", "ask", "approvals", "team_manage"]
 _BASE_PERMS = {"inbox", "data_input", "people", "workflows", "tasks", "brain", "ask"}
 ROLE_DEFAULT_PERMS = {
     "sales": _BASE_PERMS,

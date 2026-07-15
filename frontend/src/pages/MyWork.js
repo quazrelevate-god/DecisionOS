@@ -5,13 +5,16 @@ import api from "../lib/api";
 import { timeAgo, fullTime } from "../lib/format";
 import { PageHeader, Chip, EmptyState } from "../components/common";
 import { useAuth } from "../context/AuthContext";
+import { userPerms } from "../lib/perms";
 import { toast } from "sonner";
 import { TaskBoard, NewTaskDialog } from "./Tasks";
+import Workflows from "./Workflows";
 import {
   CheckCircle, Camera, Microphone, Stop, ChatCircleText,
   Sparkle, Plus, Trash, ArrowUp, ArrowDown, Robot, PencilSimple, ListChecks, CaretDown,
   ArrowBendUpRight, WarningCircle, ChatText, ArrowRight, Kanban, ListChecks as ListIcon,
   Paperclip, UserCircle, ShieldCheck, Tag, ClockCounterClockwise,
+  ArrowClockwise, XCircle, LockKey, X,
 } from "@phosphor-icons/react";
 
 const WORK_TABS = [
@@ -182,6 +185,23 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
     finally { setBusy(false); }
   };
 
+  const startManual = () => {
+    setSteps([{ id: `new-${Date.now()}`, text: "", done: false }]);
+    setEditing(true);
+  };
+
+  const cancelAIPlan = async () => {
+    setBusy(true);
+    try {
+      await api.delete(`/tasks/${t.id}/execution-plan`);
+      setSteps([]);
+      setEditing(false);
+      toast.success("Plan cleared");
+      onChange();
+    } catch (e) { toast.error(e.response?.data?.detail || "Could not clear plan"); }
+    finally { setBusy(false); }
+  };
+
   const persist = async (nextSteps, status) => {
     const { data } = await api.patch(`/tasks/${t.id}/execution-plan`, {
       steps: nextSteps.map((s) => ({ id: s.id, text: s.text, done: !!s.done })), status,
@@ -235,10 +255,16 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
 
   if (!plan && !steps.length) {
     return (
-      <button onClick={generate} disabled={busy} data-testid={`generate-plan-${t.id}`}
-        className="mt-4 w-full flex items-center justify-center gap-2 border border-dashed border-brand-red text-brand-red py-2.5 text-sm font-semibold uppercase tracking-wider hover:bg-brand-red hover:text-white transition-colors disabled:opacity-50">
-        <Sparkle size={16} weight="bold" /> {busy ? "Thinking…" : "Generate AI execution plan"}
-      </button>
+      <div className="mt-4 flex flex-col sm:flex-row gap-2" data-testid={`exec-plan-empty-${t.id}`}>
+        <button onClick={generate} disabled={busy} data-testid={`generate-plan-${t.id}`}
+          className="flex-1 flex items-center justify-center gap-2 border border-dashed border-brand-red text-brand-red py-2.5 text-sm font-semibold uppercase tracking-wider hover:bg-brand-red hover:text-white transition-colors disabled:opacity-50">
+          <Sparkle size={16} weight="bold" /> {busy ? "Thinking…" : "Generate AI plan"}
+        </button>
+        <button onClick={startManual} disabled={busy} data-testid={`manual-plan-${t.id}`}
+          className="flex-1 flex items-center justify-center gap-2 border border-dashed border-black text-brand-ink py-2.5 text-sm font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors disabled:opacity-50">
+          <PencilSimple size={16} weight="bold" /> Manual execution plan
+        </button>
+      </div>
     );
   }
 
@@ -321,15 +347,21 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
         </div>
       )}
 
-      <div className="flex gap-2 mt-4">
+      <div className="flex flex-wrap gap-2 mt-4">
         {editing ? (
           <>
             <button onClick={() => save("accepted")} disabled={busy} data-testid={`exec-accept-${t.id}`}
-              className="flex-1 flex items-center justify-center gap-2 bg-brand-blue text-white py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-50">
-              <CheckCircle size={16} weight="bold" /> Accept &amp; start
+              className="flex-1 min-w-[140px] flex items-center justify-center gap-2 bg-brand-blue text-white py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-50">
+              <CheckCircle size={16} weight="bold" /> Accept plan
             </button>
-            <button onClick={() => save("draft")} disabled={busy} data-testid={`exec-save-${t.id}`}
-              className="px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:bg-black/5">Save</button>
+            <button onClick={generate} disabled={busy} data-testid={`exec-regenerate-${t.id}`}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:bg-brand-yellow transition-colors disabled:opacity-50">
+              <ArrowClockwise size={15} weight="bold" /> Regenerate
+            </button>
+            <button onClick={cancelAIPlan} disabled={busy} data-testid={`exec-cancel-plan-${t.id}`}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black text-brand-red hover:bg-brand-red hover:text-white transition-colors disabled:opacity-50">
+              <XCircle size={15} weight="bold" /> Cancel plan
+            </button>
           </>
         ) : (
           t.status !== "done" && (
@@ -383,7 +415,10 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
   const fileRef = useRef(null);
   const mediaRef = useRef(null);
   const chunksRef = useRef([]);
-  const canApprove = t.approval_required && (user?.role === "owner" || user?.id === t.approver_id);
+  const cancelledRef = useRef(false);
+  const canApprove = t.approval_required && (user?.role === "owner" || user?.id === t.approver_id || (!t.approver_id && userPerms(user).includes("approvals")));
+  const awaitingApproval = t.approval_required && t.approval_status !== "approved";
+  const lockedForAssignee = awaitingApproval && !canApprove;
 
   const approveTask = async () => {
     try { await api.post(`/tasks/${t.id}/approve`); toast.success("Task approved"); onChange(); }
@@ -418,6 +453,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
 
   const toggleVoice = async () => {
     if (recording) {
+      cancelledRef.current = false;
       mediaRef.current?.stop();
       setRecording(false);
       return;
@@ -426,9 +462,11 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mr = new MediaRecorder(stream);
       chunksRef.current = [];
+      cancelledRef.current = false;
       mr.ondataavailable = (e) => e.data.size && chunksRef.current.push(e.data);
       mr.onstop = () => {
         stream.getTracks().forEach((x) => x.stop());
+        if (cancelledRef.current) { chunksRef.current = []; return; }
         const blob = new Blob(chunksRef.current, { type: "audio/webm" });
         upload(new File([blob], "voice.webm"), "voice");
       };
@@ -438,6 +476,13 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
     } catch {
       toast.error("Mic access denied");
     }
+  };
+
+  const cancelVoice = () => {
+    cancelledRef.current = true;
+    mediaRef.current?.stop();
+    setRecording(false);
+    toast("Recording discarded");
   };
 
   const complete = async () => {
@@ -511,7 +556,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
         <div className="h-2 bg-black/10 border border-black"><div className="h-full bg-brand-blue transition-all" style={{ width: `${t.progress || 0}%` }} /></div>
       </div>
 
-      {!isTerminal(t) && (
+      {!isTerminal(t) && !awaitingApproval && (
         <div className="flex flex-wrap items-center gap-2 mt-3">
           <label className="label-mono text-muted-foreground">Status</label>
           <select data-testid={`status-select-${t.id}`} value={t.status === "blocked" ? "todo" : t.status} onChange={(e) => setStatus(e.target.value)} className={selCls}>
@@ -534,9 +579,10 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
         </div>
       )}
 
-      {canApprove && t.status === "review" && (
+      {canApprove && awaitingApproval && (
         <div className="flex flex-wrap gap-2 mt-4 border border-black bg-brand-yellow/40 p-3" data-testid={`approval-actions-${t.id}`}>
-          <span className="w-full label-mono text-muted-foreground">Awaiting your approval</span>
+          <span className="w-full label-mono text-muted-foreground">This task needs your approval before {t.assignee_name || "the assignee"} can start work.</span>
+          {t.approval_status === "rejected" && t.rejection_reason && <span className="w-full text-xs text-brand-red">Previously requested: {t.rejection_reason}</span>}
           <button onClick={approveTask} data-testid={`approve-${t.id}`} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">
             <CheckCircle size={16} weight="bold" /> Approve
           </button>
@@ -546,22 +592,38 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
         </div>
       )}
 
-      {!isTerminal(t) && !(canApprove && t.status === "review") && (
+      {lockedForAssignee && (
+        <div className="flex items-start gap-2 mt-4 border border-black bg-brand-paper p-3" data-testid={`approval-locked-${t.id}`}>
+          <LockKey size={18} weight="bold" className="text-brand-red shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-bold uppercase tracking-tight">{t.approval_status === "rejected" ? "Changes requested" : "Awaiting approval"}</p>
+            <p className="text-xs text-muted-foreground">You can start once {t.approver_name || "the approver"} approves this task. Status, progress and the execution plan are locked until then.</p>
+            {t.approval_status === "rejected" && t.rejection_reason && <p className="text-xs text-brand-red mt-1">Note: {t.rejection_reason}</p>}
+          </div>
+        </div>
+      )}
+
+      {!isTerminal(t) && !awaitingApproval && (
         <div className="flex flex-wrap gap-2 mt-4">
           <button onClick={complete} data-testid={`complete-${t.id}`} className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">
-            <CheckCircle size={16} weight="bold" /> {t.approval_required && t.approval_status !== "approved" ? "Submit for approval" : "Complete"}
+            <CheckCircle size={16} weight="bold" /> Complete
           </button>
           <button onClick={() => fileRef.current?.click()} disabled={uploading} data-testid={`photo-${t.id}`} className="flex items-center gap-2 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-black/5">
             <Camera size={16} weight="bold" /> Photo
           </button>
           <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onPhoto} />
           <button onClick={toggleVoice} data-testid={`voice-${t.id}`} className={`flex items-center gap-2 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider transition-colors ${recording ? "bg-brand-red text-white" : "hover:bg-black/5"}`}>
-            {recording ? <Stop size={16} weight="fill" /> : <Microphone size={16} weight="bold" />} {recording ? "Stop" : "Voice reply"}
+            {recording ? <Stop size={16} weight="fill" /> : <Microphone size={16} weight="bold" />} {recording ? "Stop & send" : "Voice reply"}
           </button>
+          {recording && (
+            <button onClick={cancelVoice} data-testid={`voice-cancel-${t.id}`} className="flex items-center gap-2 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-black/5">
+              <X size={16} weight="bold" /> Cancel
+            </button>
+          )}
         </div>
       )}
 
-      {t.status !== "blocked" && <ExecutionPlan t={t} onChange={onChange} members={members} roleOptions={roleOptions} />}
+      {!awaitingApproval && <ExecutionPlan t={t} onChange={onChange} members={members} roleOptions={roleOptions} />}
       <TaskTrail t={t} onChange={onChange} members={members} roleOptions={roleOptions} />
     </div>
   );
@@ -572,7 +634,9 @@ export default function MyWork() {
   const { tenant, user } = useAuth();
   const [params] = useSearchParams();
   const isOwner = user?.role === "owner";
-  const [view, setView] = useState(params.get("view") === "board" ? "board" : "mywork");
+  const initialView = params.get("view") === "board" ? "board" : params.get("view") === "workflows" ? "workflows" : "mywork";
+  const [view, setView] = useState(initialView);
+  const canSeeWorkflows = isOwner || userPerms(user).includes("workflows");
   const [scope, setScope] = useState("mine");
   const [tab, setTab] = useState("all");
   const [aiPriority, setAiPriority] = useState(false);
@@ -640,15 +704,23 @@ export default function MyWork() {
               <ListIcon size={16} weight="bold" /> My Work
             </button>
             <button onClick={() => setView("board")} data-testid="work-view-board"
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider transition-colors ${view === "board" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border-r border-black transition-colors ${view === "board" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
               <Kanban size={16} weight="bold" /> Board
             </button>
+            {canSeeWorkflows && (
+              <button onClick={() => setView("workflows")} data-testid="work-view-workflows"
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider transition-colors ${view === "workflows" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+                <ArrowRight size={16} weight="bold" /> Workflows
+              </button>
+            )}
           </div>
         </div>
       </PageHeader>
 
       {view === "board" ? (
         <TaskBoard />
+      ) : view === "workflows" ? (
+        <Workflows embedded />
       ) : (
       <div className="grid lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2">

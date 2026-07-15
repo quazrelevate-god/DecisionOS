@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { Chip } from "../components/common";
 import { toast } from "sonner";
 import { timeAgo, fullTime } from "../lib/format";
+import { userPerms } from "../lib/perms";
 import { Plus, User, Paperclip, ClockCounterClockwise } from "@phosphor-icons/react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from "../components/ui/dialog";
 
@@ -162,9 +163,10 @@ export function NewTaskDialog({ onCreated, roleOptions, members, defaultType }) 
             <div data-testid="task-approver-wrap">
               <label className="label-mono text-muted-foreground">Approver</label>
               <select data-testid="task-approver-select" className={`${inp} mt-1`} value={form.approver_id} onChange={set("approver_id")}>
-                <option value="">— Pick an approver —</option>
-                {members.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
+                <option value="">— Anyone with approval access —</option>
+                {members.filter((m) => m.role === "owner" || userPerms(m).includes("approvals")).map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
               </select>
+              <p className="label-mono text-muted-foreground mt-1">Grant approval access to a user in People → Access Control.</p>
             </div>
           )}
           <div>

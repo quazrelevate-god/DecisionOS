@@ -1915,15 +1915,22 @@ async def create_task(inp: TaskCreateInput, user: dict = Depends(get_current_use
     support_id = inp.support_id if inp.support_id and await db.users.find_one({"id": inp.support_id, "tenant_id": user["tenant_id"]}, {"_id": 0}) else None
     approver_id = inp.approver_id if inp.approver_id and await db.users.find_one({"id": inp.approver_id, "tenant_id": user["tenant_id"]}, {"_id": 0}) else None
     progress = max(0, min(100, inp.progress)) if isinstance(inp.progress, int) else 0
+    needs_approval = bool(inp.approval_required)
     await db.tasks.insert_one({
         "id": tid, "tenant_id": user["tenant_id"], "title": inp.title, "description": inp.description or "",
         "assignee_role": role, "assignee_id": assignee_id, "priority": inp.priority or "medium",
-        "status": "todo", "due_date": due, "decision_id": None, "source": "manual", "created_at": now_iso(),
+        "status": "blocked" if needs_approval else "todo", "due_date": due, "decision_id": None,
+        "source": "manual", "created_at": now_iso(),
         "task_type": task_type, "op_category": inp.op_category or None, "support_id": support_id,
-        "expected_output": inp.expected_output or None, "approval_required": bool(inp.approval_required),
+        "expected_output": inp.expected_output or None, "approval_required": needs_approval,
+        "approval_status": "pending" if needs_approval else None,
         "approver_id": approver_id, "progress": progress, "created_by": user["id"],
         "updated_at": now_iso(), "last_action": "Created",
     })
+    if needs_approval:
+        approvers = [approver_id] if approver_id else await _owner_ids(user["tenant_id"])
+        await push_notification(user["tenant_id"], approvers, 2,
+                                f"Approval needed before work starts: '{inp.title}'", "task", tid)
     await log_activity(user["tenant_id"], user["id"], "task_created", f"Created task '{inp.title}'", "task", tid)
     return await enrich_task(await db.tasks.find_one({"id": tid}, {"_id": 0}))
 
@@ -1940,14 +1947,11 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
         updates["progress"] = max(0, min(100, int(updates["progress"])))
     if updates.get("status") == "done":
         updates["progress"] = 100
-    # Enforced approval gate: a task requiring approval can't be self-completed —
-    # it goes Under Review and the approver must approve it explicitly.
-    approval_pending = False
-    if updates.get("status") == "done" and t.get("approval_required") and t.get("approval_status") != "approved":
-        updates["status"] = "review"
-        updates["approval_status"] = "pending"
-        updates.pop("progress", None)
-        approval_pending = True
+    # Pre-execution approval gate: a task requiring approval is locked (status "blocked")
+    # until the approver approves it. The assignee cannot change status/progress before then.
+    if t.get("approval_required") and t.get("approval_status") != "approved":
+        if any(k in updates for k in ("status", "progress")):
+            raise HTTPException(status_code=403, detail="This task is awaiting approval before work can begin.")
     if "assignee_role" in updates and updates["assignee_role"] not in await tenant_role_keys(user["tenant_id"]):
         updates.pop("assignee_role")
     if updates.get("assignee_id"):
@@ -1957,9 +1961,7 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
         else:
             updates["assignee_role"] = member["role"]
     if updates:
-        if approval_pending:
-            updates["last_action"] = "Submitted for approval"
-        elif "status" in updates:
+        if "status" in updates:
             updates["last_action"] = f"Status → {updates['status'].replace('_', ' ')}"
         elif updates.get("assignee_id"):
             updates["last_action"] = "Reassigned"
@@ -1969,12 +1971,7 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
             updates["last_action"] = "Updated"
         updates["updated_at"] = now_iso()
         await db.tasks.update_one({"id": task_id}, {"$set": updates})
-        if approval_pending:
-            approvers = [t.get("approver_id")] if t.get("approver_id") else await _owner_ids(user["tenant_id"])
-            await push_notification(user["tenant_id"], approvers, 2,
-                                    f"Approval needed: '{t['title']}' was submitted by {user['name']}", "task", task_id)
-            await log_activity(user["tenant_id"], user["id"], "task_submitted", f"Submitted '{t['title']}' for approval", "task", task_id)
-        elif updates.get("status") and t.get("decision_id"):
+        if updates.get("status") and t.get("decision_id"):
             await add_decision_event(t["decision_id"], f"{t['title']} → {updates['status'].replace('_',' ')}", user["name"], "task")
         if updates.get("status") == "done":
             await log_activity(user["tenant_id"], user["id"], "task_done", f"Completed task '{t['title']}'", "task", task_id)
@@ -1990,7 +1987,12 @@ class TaskRejectInput(BaseModel):
 
 
 def _can_approve_task(user: dict, t: dict) -> bool:
-    return user["role"] == "owner" or user["id"] == t.get("approver_id")
+    if user["role"] == "owner":
+        return True
+    if t.get("approver_id"):
+        return user["id"] == t.get("approver_id")
+    # No specific approver assigned → anyone granted the "approvals" access can approve.
+    return "approvals" in user_perms(user)
 
 
 @api.post("/tasks/{task_id}/approve")
@@ -2002,13 +2004,15 @@ async def approve_task(task_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="This task doesn't require approval")
     if not _can_approve_task(user, t):
         raise HTTPException(status_code=403, detail="Only the assigned approver or an owner can approve this task")
+    # Pre-execution approval: unlock the task so the assignee can start working on it.
+    new_status = "todo" if t.get("status") == "blocked" else t.get("status")
     await db.tasks.update_one({"id": task_id}, {"$set": {
-        "status": "done", "progress": 100, "approval_status": "approved",
+        "status": new_status, "approval_status": "approved",
         "approved_by": user["id"], "approved_at": now_iso(),
-        "updated_at": now_iso(), "last_action": "Approved",
+        "updated_at": now_iso(), "last_action": "Approved — work can start",
     }})
     if t.get("assignee_id"):
-        await push_notification(user["tenant_id"], [t["assignee_id"]], 1, f"Approved: '{t['title']}' was approved by {user['name']}", "task", task_id)
+        await push_notification(user["tenant_id"], [t["assignee_id"]], 1, f"Approved: you can start '{t['title']}'", "task", task_id)
     await log_activity(user["tenant_id"], user["id"], "task_approved", f"Approved '{t['title']}'", "task", task_id)
     return await enrich_task(await db.tasks.find_one({"id": task_id}, {"_id": 0}))
 
@@ -2023,8 +2027,9 @@ async def reject_task(task_id: str, inp: TaskRejectInput, user: dict = Depends(g
     if not _can_approve_task(user, t):
         raise HTTPException(status_code=403, detail="Only the assigned approver or an owner can reject this task")
     reason = (inp.reason or "").strip()
+    # Keep the task locked (blocked) so work still cannot start until it's approved.
     await db.tasks.update_one({"id": task_id}, {"$set": {
-        "status": "in_progress", "approval_status": "rejected",
+        "status": "blocked", "approval_status": "rejected",
         "rejected_by": user["id"], "rejected_at": now_iso(), "rejection_reason": reason,
         "updated_at": now_iso(), "last_action": "Changes requested",
     }})
@@ -2078,6 +2083,8 @@ async def generate_execution_plan(task_id: str, user: dict = Depends(get_current
         raise HTTPException(status_code=404, detail="Not found")
     if not _can_work_task(user, t):
         raise HTTPException(status_code=403, detail="Only the assignee or owner can plan this task")
+    if t.get("approval_required") and t.get("approval_status") != "approved":
+        raise HTTPException(status_code=403, detail="This task must be approved before you can plan it.")
     industry = await _tenant_industry(user["tenant_id"])
     currency = await _tenant_currency(user["tenant_id"])
     gen = await ai_execution_plan(t, industry, currency, session_id=f"exec-{task_id}")
@@ -2095,6 +2102,8 @@ async def save_execution_plan(task_id: str, inp: ExecPlanInput, user: dict = Dep
         raise HTTPException(status_code=404, detail="Not found")
     if not _can_work_task(user, t):
         raise HTTPException(status_code=403, detail="Only the assignee or owner can edit this plan")
+    if t.get("approval_required") and t.get("approval_status") != "approved":
+        raise HTTPException(status_code=403, detail="This task must be approved before you can plan it.")
     steps = [{"id": s.id or new_id(), "text": s.text.strip(), "done": bool(s.done)}
              for s in inp.steps if s.text.strip()]
     existing = t.get("execution_plan") or {}
@@ -2116,6 +2125,17 @@ async def save_execution_plan(task_id: str, inp: ExecPlanInput, user: dict = Dep
         await log_activity(user["tenant_id"], user["id"], "task_done", f"Completed task '{t['title']}'", "task", task_id)
         if t.get("decision_id"):
             await add_decision_event(t["decision_id"], f"{t['title']} → done", user["name"], "task")
+    return await enrich_task(await db.tasks.find_one({"id": task_id}, {"_id": 0}))
+
+
+@api.delete("/tasks/{task_id}/execution-plan")
+async def delete_execution_plan(task_id: str, user: dict = Depends(get_current_user)):
+    t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
+    if not t:
+        raise HTTPException(status_code=404, detail="Not found")
+    if not _can_work_task(user, t):
+        raise HTTPException(status_code=403, detail="Only the assignee or owner can clear this plan")
+    await db.tasks.update_one({"id": task_id}, {"$unset": {"execution_plan": ""}, "$set": {"updated_at": now_iso()}})
     return await enrich_task(await db.tasks.find_one({"id": task_id}, {"_id": 0}))
 
 

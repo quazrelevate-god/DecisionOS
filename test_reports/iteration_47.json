@@ -1,0 +1,71 @@
+{
+  "summary": "Iteration 47 — Role-Based Approval Gate + Execution Plan Options + Workflows-in-MyWork + Voice Cancel. Backend pytest 12/12 PASS (test_iteration47_approval.py): cookie-based login sets dos_token httponly cookie, /api/users PATCH permissions accepts 'approvals' key, task with approval_required→status=blocked/approval_status=pending, PATCH status/progress blocked with 403 while pending, plan generate/save blocked with 403 while pending, role-based approver (finance with 'approvals' perm can approve when no approver_id; sales without perm cannot; specific approver_id restricts approval to that user + owner), approve→status blocked→todo/approval_status=approved, status/progress/done work after approve (no 2nd approval), reject keeps blocked with rejection_reason. Execution plan generate→draft, save→accepted, DELETE clears plan. Non-approval task path normal. No _id leak. Frontend Playwright: /workflows redirects to /my-work?view=workflows; sidebar has no nav-workflows; MyWork view toggle exposes work-view-workflows tab rendering kanban board; NewTaskDialog has task-approval-required + task-approver-select (filtered to owner + users with 'approvals' perm — 'Sunita Rao · finance' appeared after granting perm); created task shows Pending approval chip + approval-actions block with approve/reject buttons; approve→approval-actions removed, status-select + generate-plan + manual-plan buttons appear, chip flips to Approved; Board view has PENDING APPROVAL column; Access Control modal renders perm-approvals ('Approve Tasks') via Team.js code+ dropdown filter evidence; voice-cancel-button (Decision Desk) + voice-cancel-<taskId> (task card) both gated correctly behind `recording` state.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Layout header", "issues": ["Notification bell badge shows '99+' — capped correctly (was '180' in iter 46 without cap); still slightly cramped on 1920 viewport but acceptable."]},
+      {"screen": "MyWork > Messages panel", "issues": ["'Approval needed before work starts' notifications for TEST_* tasks pile up in the right-hand Messages panel — visible clutter from testing artifacts. Not a bug."]}
+    ]
+  },
+  "tests_executed": [
+    {"case": "POST /api/auth/login sets httponly dos_token cookie and returns user/tenant", "result": "PASS"},
+    {"case": "POST /api/auth/logout works via cookie session", "result": "PASS"},
+    {"case": "PATCH /api/users/{id} accepts permissions=[...'approvals'...] and reads back", "result": "PASS"},
+    {"case": "POST /api/tasks with approval_required=true → status='blocked', approval_status='pending', _id stripped", "result": "PASS"},
+    {"case": "PATCH /api/tasks/{id} status/progress while pending → 403 'awaiting approval before work can begin'", "result": "PASS"},
+    {"case": "POST /api/tasks/{id}/execution-plan/generate while pending → 403 'must be approved'", "result": "PASS"},
+    {"case": "PATCH /api/tasks/{id}/execution-plan while pending → 403", "result": "PASS"},
+    {"case": "Sales (no 'approvals' perm, no approver_id) → 403 on approve", "result": "PASS"},
+    {"case": "Finance (with 'approvals' perm, no approver_id) → 200 on approve; status blocked→todo; approval_status=approved; approved_by set", "result": "PASS"},
+    {"case": "Task with approver_id=owner: finance (with 'approvals' perm) → 403 (specific approver takes precedence)", "result": "PASS"},
+    {"case": "Task with approver_id=finance: sales → 403; finance → 200", "result": "PASS"},
+    {"case": "POST /api/tasks/{id}/reject → status=blocked, approval_status=rejected, rejection_reason stored; subsequent status change still 403", "result": "PASS"},
+    {"case": "Post-approve: PATCH status=in_progress/done, PATCH progress=60 → 200; done sets progress=100 with NO second approval", "result": "PASS"},
+    {"case": "POST execution-plan/generate → draft with steps; PATCH status=accepted → 200; DELETE clears execution_plan", "result": "PASS"},
+    {"case": "Non-approval task: created status=todo; PATCH status=in_progress → 200 immediately", "result": "PASS"},
+    {"case": "GET /api/tasks → no _id in any row", "result": "PASS"},
+    {"case": "FE: Sidebar has no nav-workflows testid; /workflows redirects to /my-work?view=workflows", "result": "PASS"},
+    {"case": "FE: MyWork view toggle exposes work-view-mywork / work-view-board / work-view-workflows; workflows tab renders kanban (Production/Distribution/Procurement)", "result": "PASS"},
+    {"case": "FE: NewTaskDialog task-approval-required checkbox toggles visibility of task-approver-select; dropdown filtered to owner + users with 'approvals' perm ('Sunita Rao · finance' appeared)", "result": "PASS"},
+    {"case": "FE: Created approval-required task shows op-approval chip='Pending approval' + approval-actions-<id> block with approve-<id>/reject-<id> buttons; no status/progress selects, no complete btn, no exec-plan buttons", "result": "PASS"},
+    {"case": "FE: Owner clicks Approve → approval-actions removed, status-select-<id> appears, generate-plan-<id> + manual-plan-<id> appear, op-approval chip becomes 'Approved'", "result": "PASS"},
+    {"case": "FE: Voice cancel — Decision Desk `voice-cancel-button` conditionally rendered inside `{recording && ...}` (Inbox.js:411-416); task card `voice-cancel-<id>` gated by `recording` (MyWork.js:618-622). Handlers cancelRec/cancelVoice exist. Cannot fully e2e without mic.", "result": "PASS (code verified)"},
+    {"case": "FE: Board view has new 'PENDING APPROVAL' column (approval-blocked tasks separated from To Do)", "result": "PASS"}
+  ],
+  "critical_code_review_comments": [
+    "server.py now 4423 lines — the same file-size concern flagged in iterations 44/45/46 continues. Task approval + execution-plan (~200 lines from 1900-2140) is a clean extraction candidate to routers/tasks.py.",
+    "test_credentials.md still documents 'Auth: JWT Bearer token' as the primary auth mechanism, but the app is now cookie-first (httponly dos_token via set_auth_cookie). Bearer is a fallback via get_current_user. Update the file to reflect cookie-first auth so future testers don't hardcode Authorization headers.",
+    "Consistency: _can_approve_task allows owner OR approver_id OR (no approver_id AND 'approvals' perm). However, delete_execution_plan uses _can_work_task (assignee OR owner OR same-role) but is NOT blocked by 'approval_required && status!=approved'. That means an assignee could DELETE a plan (or one may not even exist) on a not-yet-approved task. Low-severity since the plan didn't exist yet in that state anyway, but consider mirroring the generate/save guard on delete for consistency.",
+    "MyWork.js file is 761 lines (multiple concerns: task card, execution plan sub-component, view toggle, voice recording). Consider extracting <TaskCard>, <ExecutionPlan>, <VoiceRecorder> into their own files.",
+    "Board view shows 'PENDING APPROVAL' as a first-class column (not just a status filter). That's great UX but note: PENDING APPROVAL is derived from status='blocked' + approval_status='pending' — if a blocked task exists without approval_required=true it may appear here incorrectly. Verify the derivation logic guards against this in Tasks.js columns definition.",
+    "Approver dropdown text 'Grant approval access to a user in People → Access Control' (Tasks.js:169) is helpful, but if no non-owner has the 'approvals' perm the dropdown shows only owner. Consider a warning banner when the current tenant has zero users with 'approvals' perm.",
+    "Notification storm — every approval-required task creates a level-2 notification to all owners. Over the course of testing this iteration alone, the Messages panel accumulated 10+ 'Approval needed…' rows. Consider dedup/collapse for the same approver over a short window.",
+    "reject stores 'rejection_reason' as a distinct field (good — fixes the iter-46 concern about clarify/reject overloading clarification_note). Kudos."
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_iteration47_approval.py",
+    "/app/test_reports/pytest/iteration_47.xml"
+  ],
+  "action_items": [
+    "Update /app/memory/test_credentials.md to reflect cookie-first auth (dos_token httponly cookie) — currently says 'Auth: JWT Bearer token' which is misleading for the current codebase.",
+    "(Optional) Add the same approval guard to DELETE /api/tasks/{id}/execution-plan for consistency (low priority — no real leak).",
+    "(Optional/UX) Warn in NewTaskDialog when the tenant has no non-owner user with 'approvals' perm so the approver dropdown isn't just 'owner + anyone'."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration47_approval.py (created)",
+    "/app/test_reports/iteration_47.json (this file)",
+    "/app/test_reports/pytest/iteration_47.xml (generated)"
+  ],
+  "success_rate": {"backend": "100% (12/12 pytest)", "frontend": "100% on visible flows; voice-cancel verified via code inspection (mic unavailable in headless)"},
+  "test_credentials": "owner@sharma.com / demo1234 (owner), finance@sharma.com / demo1234 (used as approvals-granted approver), sales@sharma.com / demo1234 (used as no-approvals denial case). All existing perms were mutated during tests — finance now has {inbox,tasks,approvals,finance}; sales now has {inbox,tasks}. Restore before further UX testing if needed.",
+  "seed_data_creation": "Created multiple TEST_ tasks in Sharma tenant: TEST_APPRV_NOAPP_*, TEST_APPRV_OWN_*, TEST_APPRV_FIN_*, TEST_REJECT_*, TEST_EXECPLAN_*, TEST_MANUAL_*, TEST_NORMAL_*, TEST_UI_APPROVAL_TASK, TEST_UI_LOCK_FLOW_*. Some approved, some rejected, some in various plan states. No delete endpoint exists — main agent can clean up via db.tasks.deleteMany({title:{$regex:/^TEST_/}}) if desired.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 47 (Role-Based Approval + Execution Plan Options + Workflows-in-MyWork + Voice Cancel) is fully working. Key rules: (1) Auth is cookie-first (dos_token httponly, samesite=none, secure=true). Bearer fallback still works. Test /api/auth/login returns both {token, user, tenant} AND sets cookie — use requests.Session() and it 'just works'. (2) approval-required task flow: status starts 'blocked', approval_status 'pending'; PATCH status/progress → 403; plan generate/save → 403; only _can_approve_task users (owner OR approver_id OR no-approver_id+approvals-perm) can approve; approve unlocks (blocked→todo, approval_status=approved); no 2nd approval needed. (3) reject writes rejection_reason (distinct from clarification_note — iter-46 concern was addressed). (4) Board view (MyWork ?view=board) now has 4 columns including PENDING APPROVAL. (5) /workflows is now a 301-style Navigate to /my-work?view=workflows. (6) Voice-cancel buttons are conditional on recording state — code paths exist but mic isn't available in headless testing. (7) test_credentials.md still says 'JWT Bearer' — update it to note cookie-first auth for next agent.",
+  "rca of the issue": "N/A — no issues found. All 12 backend tests and all visible UI flows passed. Two low-priority action items surfaced for main agent: update test_credentials.md doc, and (optional) mirror the approval guard on DELETE execution-plan."
+}

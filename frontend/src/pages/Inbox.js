@@ -197,6 +197,7 @@ export default function Inbox() {
   languageRef.current = language;
   const mediaRef = useRef(null);
   const chunksRef = useRef([]);
+  const cancelledRef = useRef(false);
   const elapsed = useElapsed(recording);
 
   const notesQ = useQuery({
@@ -229,9 +230,11 @@ export default function Inbox() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mr = new MediaRecorder(stream);
       chunksRef.current = [];
+      cancelledRef.current = false;
       mr.ondataavailable = (e) => e.data.size && chunksRef.current.push(e.data);
       mr.onstop = async () => {
         stream.getTracks().forEach((t) => t.stop());
+        if (cancelledRef.current) { chunksRef.current = []; toast("Recording discarded"); return; }
         const blob = new Blob(chunksRef.current, { type: "audio/webm" });
         const fd = new FormData();
         fd.append("file", blob, "note.webm");
@@ -249,7 +252,8 @@ export default function Inbox() {
       setRecording(true);
     } catch { toast.error("Microphone access denied"); }
   };
-  const stopRec = () => { mediaRef.current?.stop(); setRecording(false); };
+  const stopRec = () => { cancelledRef.current = false; mediaRef.current?.stop(); setRecording(false); };
+  const cancelRec = () => { cancelledRef.current = true; mediaRef.current?.stop(); setRecording(false); };
 
   const runCapture = async (finalText) => {
     setBusy(true);
@@ -404,6 +408,12 @@ export default function Inbox() {
             </button>
             <p className="mt-4 font-heading font-bold uppercase tracking-tight">{recording ? "Recording…" : busy ? "Uploading…" : "Tap to speak a decision"}</p>
             <p className="font-mono text-sm text-muted-foreground mt-1" data-testid="record-timer">{recording ? mmss : "AI structures it into tasks"}</p>
+            {recording && (
+              <button onClick={cancelRec} data-testid="voice-cancel-button"
+                className="mt-3 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:bg-black/5 transition-colors">
+                Cancel
+              </button>
+            )}
             <div className="flex border border-black mt-4" data-testid="language-selector">
               {[{ key: "auto", label: "Auto" }, { key: "en", label: "EN" }, { key: "ta", label: "தமிழ்" }, { key: "tanglish", label: "Tanglish" }].map((l) => (
                 <button key={l.key} onClick={() => setLanguage(l.key)} data-testid={`lang-${l.key}`}

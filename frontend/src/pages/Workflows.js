@@ -82,7 +82,7 @@ function NewWorkflowDialog({ type, onCreated }) {
   );
 }
 
-export default function Workflows() {
+export default function Workflows({ embedded = false }) {
   const qc = useQueryClient();
   const { tenant, user } = useAuth();
   const [tab, setTab] = useState("production");
@@ -118,9 +118,15 @@ export default function Workflows() {
 
   return (
     <div>
-      <PageHeader eyebrow="Flagship operational flows" title="Workflows">
-        <NewWorkflowDialog type={tab} onCreated={() => qc.invalidateQueries({ queryKey: ["workflows", tab] })} />
-      </PageHeader>
+      {embedded ? (
+        <div className="flex justify-end mb-4">
+          <NewWorkflowDialog type={tab} onCreated={() => qc.invalidateQueries({ queryKey: ["workflows", tab] })} />
+        </div>
+      ) : (
+        <PageHeader eyebrow="Flagship operational flows" title="Workflows">
+          <NewWorkflowDialog type={tab} onCreated={() => qc.invalidateQueries({ queryKey: ["workflows", tab] })} />
+        </PageHeader>
+      )}
 
       <div className="flex border border-black mb-6 w-fit">
         {TABS.map((t) => (

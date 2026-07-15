@@ -1,0 +1,71 @@
+{
+  "summary": "Iteration 49 — Decision 'Raised by' + Discussion/Comment thread. Backend pytest 10/10 PASS (test_iteration49_decision_comments.py): GET /api/decisions returns enriched created_by_name + source; GET /api/decisions/{id} returns full doc with tasks/timeline (no _id leak); POST /api/decisions/{id}/comment 200 for owner appends timeline entry kind='comment' actor/actor_id/ts, 400 for empty text, 404 for missing id, 403 for non-participant (sales user against an owner-only decision). Participant (finance as task assignee) receives notification with type='comment', entity_type='decision', entity_id=<did>. Commenter is excluded from recipients (no self-notification). Frontend Playwright — all owner flows work: (1) /?decision=<id> deep-link opens decision-dialog on approved decisions; (2) inside dialog decision-raised-by shows 'RAISED BY RAJESH SHARMA · MANUAL · 2 HRS AGO', decision-timeline renders comments (owner/actor/ts), decision-comment-input + decision-comment-send both present and functional; (3) owner posts a comment via UI → immediately appears in timeline with author + 'just now' + persists across reload/re-open; (4) status chip + dtype chip render. **CRITICAL SECURITY ISSUE FOUND**: GET /api/decisions/{id} does NOT enforce participant access — only tenant scoping. Sales user (not a participant of decision cf8147f5) receives 200 + full timeline including internal comments; only POST comment is gated at 403. The frontend renders the whole dialog (raised-by, summary, discussion thread with all comments) to sales, and only when they attempt to send does the 403 toast show. The decision-access-restricted UI panel (frontend/src/components/DecisionDialog.js:52) is unreachable because the query is never in isError state. Per PRD this GET should also 403 non-participants so the dialog shows access-restricted.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "GET /api/decisions/{id}", "issue": "Does NOT enforce participant access — any tenant user can read the full decision detail (title, summary, timeline with all internal comments) even for decisions they have no involvement in. Only tenant scoping is checked (server.py:1688-1693). Per PRD, non-participants should get 403 so the frontend can show decision-access-restricted. Currently POST /comment correctly 403s but GET is a data-leak backdoor. Add: `participants = await _decision_participants(...); if user['id'] not in participants: raise HTTPException(403, ...)` mirroring the POST /comment guard.", "priority": "CRITICAL"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Access-restricted panel", "issue": "decision-access-restricted branch is dead code — the backend GET always returns 200 within tenant so the query never enters isError state. Once backend GET is fixed to 403 non-participants, this UI path will automatically activate.", "affected_selectors": ["decision-access-restricted"]}
+    ],
+    "design_issues": [
+      {"screen": "DecisionDialog", "issues": ["Radix DialogContent console warning: 'DialogContent requires a DialogTitle for screen reader users' — the access-restricted branch (isError) renders no <DialogTitle>, only a plain <p>. Wrap with <VisuallyHidden><DialogTitle>Access restricted</DialogTitle></VisuallyHidden> or move the heading into a DialogTitle. Missing aria-describedby too. Cosmetic but shows up on every open."]},
+      {"screen": "DecisionDialog raised-by", "issues": ["When d.source is falsy (older decisions), the label falls back to 'Manual'. This is acceptable but for the seeded demo decisions (cf8147f5, d5a39089, etc.) source is null in DB — so every existing decision looks 'Manual' in the UI. Consider backfilling source='voice'/'text' on migration, or hiding the source segment when unknown."]}
+    ]
+  },
+  "tests_executed": [
+    {"case": "GET /decisions list enriches created_by_name, no _id leak", "result": "PASS"},
+    {"case": "GET /decisions/{id} returns tasks[], timeline[], no _id leak", "result": "PASS"},
+    {"case": "GET /decisions/{nonexistent} → 404", "result": "PASS"},
+    {"case": "POST /decisions/{id}/comment as owner → 200, timeline appended with kind=comment, actor, actor_id, ts", "result": "PASS"},
+    {"case": "POST /decisions/{id}/comment with empty text → 400", "result": "PASS"},
+    {"case": "POST /decisions/{nonexistent}/comment → 404", "result": "PASS"},
+    {"case": "POST /decisions/{id}/comment as sales (non-participant) → 403", "result": "PASS"},
+    {"case": "Comment persists — re-GET returns it in timeline with matching actor/ts", "result": "PASS"},
+    {"case": "After owner comments, finance (task assignee, participant) receives notification with type='comment', entity_type='decision', entity_id=<did>", "result": "PASS"},
+    {"case": "Commenter (owner) does NOT receive notification for their own comment", "result": "PASS"},
+    {"case": "FE: /?decision=<approved-id> opens decision-dialog for owner", "result": "PASS"},
+    {"case": "FE: decision-raised-by inside dialog shows 'RAISED BY RAJESH SHARMA · MANUAL · 2 HRS AGO'", "result": "PASS"},
+    {"case": "FE: decision-timeline renders existing comments with author + timeAgo", "result": "PASS"},
+    {"case": "FE: owner types in decision-comment-input + clicks decision-comment-send → new entry appears in timeline immediately", "result": "PASS"},
+    {"case": "FE: comment persists after full page reload + re-open of dialog", "result": "PASS"},
+    {"case": "FE: sales user posts comment → 403 toast 'You don't have access to this decision', comment NOT added to timeline", "result": "PASS"},
+    {"case": "FE: sales user visits /?decision=<owner-decision> → decision-access-restricted panel is NOT shown; instead the entire dialog with raised-by, summary, and full timeline (including internal comments) IS shown (LEAKS DATA)", "result": "FAIL (backend GET doesn't 403)"},
+    {"case": "FE: no pending-approval decisions in Sharma tenant so decision-raised-by-<id> + decision-discuss-<id> on Decision Desk PendingApprovalCard could not be exercised on live data — verified in Inbox.js code (lines 100-101, 156-159)", "result": "PASS (code inspection)"}
+  ],
+  "critical_code_review_comments": [
+    "server.py:1688-1693 GET /decisions/{id} tenant-only check is the data-leak root cause. Should mirror POST /comment's `_decision_participants` gate — or explicitly permit owner role while requiring participant membership for non-owners. Given the PRD says 'owner can access all; test the 403 primarily at the API level with sales credentials', the required behaviour is: owner bypass OR user_id in _decision_participants. Fix is 3 lines.",
+    "server.py:1696-1703 GET /decisions/{id}/timeline suffers the exact same tenant-only check — sales user can hit the timeline endpoint directly and see every comment. Same fix needed there.",
+    "DecisionDialog access-restricted branch renders a bare <p> heading; Radix Dialog requires a <DialogTitle> child. Wrap with <VisuallyHidden><DialogTitle>Access restricted</DialogTitle></VisuallyHidden> to silence the a11y console error (see console output on every dialog open).",
+    "raisedByLabel treats missing source as 'Manual'. For the seeded demo tenant every existing decision has source=null so they all display 'MANUAL' — including ones actually captured by voice. Consider backfilling `source` on process_voice_note (~server.py:710) at migration time, or hiding the segment when d.source is null.",
+    "server.py is 4544 lines — decisions block (~1650-1833) is a clean extraction candidate to routers/decisions.py alongside the analogous notification router extraction called out in iter 48.",
+    "_decision_participants includes ALL tenant owners — good, but on tenants with many owners this pushes N notifications on every comment. Consider deduping on a short window (see notif storm concern from iter 47/48).",
+    "GET /api/decisions returns full doc for every row (no _id but includes everything). This is fine now, but the list endpoint returns up to 200 decisions with tasks pre-enriched — payload could grow. Consider a leaner list projection (id, title, status, dtype, source, wa_from, created_by_name, created_at) and only fetch the full doc via /decisions/{id}.",
+    "The comment endpoint records actor+actor_id but no `edited_at` / `deleted` / `id` per comment. If any future feature needs to delete/edit comments, there's no per-entry id — timeline entries are anonymous inside a $push. Consider tagging each entry with `id: new_id()` at insert time so edit/delete-by-id becomes trivial."
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_iteration49_decision_comments.py",
+    "/app/test_reports/pytest/iteration_49.xml"
+  ],
+  "action_items": [
+    "**CRITICAL**: Fix GET /api/decisions/{id} (server.py ~1688) AND GET /api/decisions/{id}/timeline (~1696) to enforce participant membership — currently non-participant tenant users can read the full decision (title/summary/timeline including internal comments). Mirror POST /comment's `_decision_participants` gate: allow owner role OR user['id'] in participants, else HTTPException(403). This will also activate the decision-access-restricted frontend panel that is currently unreachable dead code.",
+    "Wrap the decision-access-restricted heading with <DialogTitle> (or VisuallyHidden > DialogTitle) to silence the Radix a11y console warning that fires on every dialog open.",
+    "(Optional/Data hygiene) Backfill decisions.source for existing rows (all seeded demo decisions currently show as 'MANUAL' because source is null). One-off: db.decisions.updateMany({source: {$exists: false}}, {$set: {source: 'voice'}}) for decisions with voice_note_id, else 'manual'.",
+    "(Optional) Clean up QA test data: db.decisions.updateMany({}, {$pull: {timeline: {label: {$regex: '^QA_'}}}}). All test comments are prefixed with QA_DEC_COMMENT_ / QA_UI_TEST_COMMENT."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration49_decision_comments.py (created)",
+    "/app/test_reports/iteration_49.json (this file)",
+    "/app/test_reports/pytest/iteration_49.xml (generated by pytest)"
+  ],
+  "success_rate": {"backend": "100% (10/10 pytest)", "frontend": "83% (5/6 owner flows PASS; 1 non-participant access-control flow FAILS due to backend GET leak)"},
+  "test_credentials": "owner@sharma.com/demo1234 (Rajesh Sharma), finance@sharma.com/demo1234 (Sunita Rao, task assignee on many decisions — participant), sales@sharma.com/demo1234 (Priya Nair, non-participant on decision cf8147f5). Cookie-first auth (dos_token httponly); Bearer fallback also works.",
+  "seed_data_creation": "Appended ~10 QA_-prefixed timeline comments to a handful of decisions in Sharma tenant during backend + frontend tests. Cleanup: db.decisions.updateMany({tenant_id:'ae79cf8b-d407-494b-94b9-32daf017bb7a'}, {$pull: {timeline: {label: {$regex: '^QA_'}}}}). No new decisions or tasks were created.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iteration 49 core (raised-by display + comment thread + comment notifications) works end-to-end for participants. Backend GET /decisions/{id} + GET /decisions/{id}/timeline both need a participant-membership check added (server.py:1688 and 1696) — currently they only tenant-scope, which leaks internal decision timelines to any tenant user. Frontend decision-access-restricted branch is READY but unreachable until backend is fixed. Test cf8147f5-2393-4f90-8713-214217bb8808 as the canonical non-sales decision. Auth is cookie-first (dos_token). Owner is Rajesh Sharma; use finance@sharma.com to verify participant path (many decisions have finance as task assignee). The Sharma tenant currently has ZERO pending_approval decisions so decision-discuss-<id> / decision-raised-by-<id> cannot be exercised on the Decision Desk without either creating one via 'Type a directive' (15-30s AI processing) or seeding a pending decision directly. Timeline entries currently have no per-entry id — flag if edit/delete comments are added later.",
+  "rca of the issue": "Root cause of the GET data-leak: when adding POST /decisions/{id}/comment (server.py:1814), the author correctly wrote _decision_participants() helper and gated POST — but forgot to apply the same gate to the pre-existing GET /decisions/{id} (line 1688) and GET /decisions/{id}/timeline (line 1696). Both still use only `{'id': decision_id, 'tenant_id': user['tenant_id']}` in the query, which lets any authenticated tenant user read the entire doc including the newly-added comment thread. Reproduction: login as sales@sharma.com (not owner, not creator, not task assignee) and GET /api/decisions/cf8147f5-2393-4f90-8713-214217bb8808 → 200 with full timeline. Verified in both curl and browser. Frontend cannot compensate because it relies on isError state which never fires. Mitigation is a 3-line fix in server.py: add `if user.get('role') != 'owner' and user['id'] not in await _decision_participants(user['tenant_id'], d): raise HTTPException(403, ...)` after the doc-fetch in both get_decision and decision_timeline."
+}

@@ -50,11 +50,18 @@ export function DecisionDialog({ decisionId, open, onClose }) {
       <DialogContent className="max-w-lg border border-black" data-testid="decision-dialog">
         {isError ? (
           <div className="py-2" data-testid="decision-access-restricted">
-            <p className="font-heading font-bold uppercase tracking-tight">Access restricted</p>
-            <p className="text-sm text-muted-foreground">You don't have access to this decision.</p>
+            <DialogHeader>
+              <DialogTitle className="text-left">Access restricted</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground mt-1">You don't have access to this decision.</p>
           </div>
         ) : !d ? (
-          <p className="py-4 text-sm text-muted-foreground">Loading…</p>
+          <>
+            <DialogHeader>
+              <DialogTitle className="text-left sr-only">Decision</DialogTitle>
+            </DialogHeader>
+            <p className="py-4 text-sm text-muted-foreground">Loading…</p>
+          </>
         ) : (
           <>
             <DialogHeader>

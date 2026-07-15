@@ -1690,15 +1690,19 @@ async def get_decision(decision_id: str, user: dict = Depends(get_current_user))
     d = await db.decisions.find_one({"id": decision_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
     if not d:
         raise HTTPException(status_code=404, detail="Not found")
+    if user["id"] not in await _decision_participants(user["tenant_id"], d):
+        raise HTTPException(status_code=403, detail="You don't have access to this decision")
     return await enrich_decision(d)
 
 
 @api.get("/decisions/{decision_id}/timeline")
 async def decision_timeline(decision_id: str, user: dict = Depends(get_current_user)):
     d = await db.decisions.find_one({"id": decision_id, "tenant_id": user["tenant_id"]},
-                                    {"_id": 0, "title": 1, "status": 1, "timeline": 1})
+                                    {"_id": 0, "id": 1, "title": 1, "status": 1, "timeline": 1, "created_by": 1})
     if not d:
         raise HTTPException(status_code=404, detail="Not found")
+    if user["id"] not in await _decision_participants(user["tenant_id"], d):
+        raise HTTPException(status_code=403, detail="You don't have access to this decision")
     tl = sorted(d.get("timeline", []), key=lambda e: e.get("ts", ""))
     return {"title": d.get("title"), "status": d.get("status"), "timeline": tl}
 

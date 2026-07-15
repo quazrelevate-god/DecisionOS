@@ -4,13 +4,6 @@ export const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const api = axios.create({ baseURL: API, withCredentials: true });
 
-api.interceptors.request.use((config) => {
-  // HttpOnly cookie is the primary auth; keep Bearer as a fallback for older sessions.
-  const token = localStorage.getItem("dos_token");
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
-
 export function formatApiError(detail) {
   if (detail == null) return "Something went wrong. Please try again.";
   if (typeof detail === "string") return detail;

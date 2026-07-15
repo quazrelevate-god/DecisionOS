@@ -15,12 +15,12 @@ import requests
 BASE_URL = os.environ["REACT_APP_BACKEND_URL"].rstrip("/")
 LOCAL_URL = "http://localhost:8001"
 
-OWNER_EMAIL = "owner@sharma.com"
-OWNER_PASSWORD = "demo1234"
-SALES_EMAIL = "sales@sharma.com"
-SALES_PASSWORD = "demo1234"
-FINANCE_EMAIL = "finance@sharma.com"
-FINANCE_PASSWORD = "demo1234"
+OWNER_EMAIL = os.getenv("DEMO_EMAIL", "owner@sharma.com")
+OWNER_PASSWORD = os.getenv("DEMO_PASSWORD", "demo1234")
+SALES_EMAIL = os.getenv("DEMO_SALES_EMAIL", "sales@sharma.com")
+SALES_PASSWORD = os.getenv("DEMO_PASSWORD", "demo1234")
+FINANCE_EMAIL = os.getenv("DEMO_FINANCE_EMAIL", "finance@sharma.com")
+FINANCE_PASSWORD = os.getenv("DEMO_PASSWORD", "demo1234")
 
 AI_WAIT = 10   # seconds allowed for the LLM triage + persist_capture_draft
 

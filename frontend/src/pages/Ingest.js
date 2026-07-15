@@ -160,7 +160,7 @@ function WhatsAppCard() {
               ) : (
                 <div className="space-y-1.5 max-h-72 overflow-y-auto" data-testid="whatsapp-logs-list">
                   {logs.map((l, i) => (
-                    <div key={i} data-testid={`whatsapp-log-${i}`} className="border border-black/20 p-2 flex items-start gap-2 flex-wrap">
+                    <div key={`${l.created_at || ""}-${l.from || ""}-${i}`} data-testid={`whatsapp-log-${i}`} className="border border-black/20 p-2 flex items-start gap-2 flex-wrap">
                       <Chip value={l.status} className={WA_STATUS_STYLE[l.status] || "bg-black/10 text-black"} />
                       <span className="label-mono text-muted-foreground">{l.mtype || "—"}</span>
                       <span className="text-xs font-mono">{l.from || "unknown"}</span>

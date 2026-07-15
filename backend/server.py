@@ -1787,7 +1787,7 @@ async def reject_decision(decision_id: str, user: dict = Depends(require_role("o
     # Remove everything this decision spawned so it disappears from all tasks & processes.
     tasks_del = await db.tasks.delete_many({"tenant_id": user["tenant_id"], "decision_id": decision_id})
     wf_del = await db.workflows.delete_many({"tenant_id": user["tenant_id"], "decision_id": decision_id})
-    cal_del = await db.calendar_events.delete_many({"tenant_id": user["tenant_id"], "decision_id": decision_id})
+    await db.calendar_events.delete_many({"tenant_id": user["tenant_id"], "decision_id": decision_id})
     await db.inbox.update_many({"tenant_id": user["tenant_id"], "ref_type": "decision", "ref_id": decision_id}, {"$set": {"status": "dismissed"}})
     await add_decision_event(decision_id, f"Rejected — removed {tasks_del.deleted_count} task(s), {wf_del.deleted_count} workflow(s)", user["name"], "rejected")
     await log_activity(user["tenant_id"], user["id"], "decision_rejected", f"Rejected '{d['title']}' — removed {tasks_del.deleted_count} task(s), {wf_del.deleted_count} workflow(s)", "decision", decision_id)

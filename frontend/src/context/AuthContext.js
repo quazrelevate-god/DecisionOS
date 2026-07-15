@@ -16,16 +16,14 @@ export function AuthProvider({ children }) {
         setUser(data.user);
         setTenant(data.tenant);
       })
-      .catch(() => localStorage.removeItem("dos_token"))
+      .catch(() => {})
       .finally(() => setLoading(false));
     // Runs once on mount to restore the session; deps intentionally empty.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const persist = (data) => {
-    // Token now lives in an HttpOnly cookie set by the server. Keep a copy for
-    // backward-compatible Bearer fallback during the migration window.
-    if (data.token) localStorage.setItem("dos_token", data.token);
+    // Auth token lives in a secure HttpOnly cookie set by the server.
     setUser(data.user);
     setTenant(data.tenant);
   };
@@ -54,7 +52,6 @@ export function AuthProvider({ children }) {
     } catch (e) {
       // ignore network errors on logout
     }
-    localStorage.removeItem("dos_token");
     setUser(null);
     setTenant(null);
   };

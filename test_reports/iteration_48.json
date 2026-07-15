@@ -1,0 +1,69 @@
+{
+  "summary": "Iteration 48 — Notifications + Deep Linking. Backend pytest 16/16 PASS (test_iteration48_notifications.py): All 7 notification types (assigned/approval/approved/rejected/clarification/status/comment) push structured payload {type, work_title, sender_name, entity_type='task', entity_id}. Assigned goes to assignee when no approval, approval goes to owners (or specific approver_id), approved/rejected/clarification go to assignee, status goes to creator+owners on assignee-driven change, comment goes to counterpart (creator+approver) on assignee note. Empty clarify reason → 400, non-approver clarify → 403. GET /api/tasks/{id} returns 200 for owner/assignee/creator, 403 for unrelated user, 404 for missing id, no _id leak. Per-notification read and mark-all-read persist. Frontend Playwright: (1) notif-bell + notif-count + notif-dropdown with 7 preview items + notif-view-all all render for owner and finance; (2) Notifications page shows APPROVAL REQUESTED / NEW COMMENT / STATUS UPDATE type badges, unread red dot, work_title, sender_name, timeAgo, mark-all-read button; (3) clicking a notif-item in finance dropdown navigates to /my-work?task=<id>, switches to My Work view, target mywork-task-<id> is scrolled into view with ring-4 ring-brand-red class (verified in screenshot); (4) sales user visiting /my-work?task=nonexistent-... shows access-restricted-banner with 'ACCESS RESTRICTED' text (backend GET /tasks/{id} 404 in this case; 403 path was covered by backend test). Regression not re-verified — no changes to approval gate / exec plan / workflows since iter47.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Layout / My Work console", "issues": ["React DOM nesting console warning: '<span> cannot be a child of <option>' — repeated hydration warning firing on My Work page (likely a Chip/label rendered inside a native <option> in a role/status <select>). Cosmetic, doesn't block interaction, but should be cleaned up."]},
+      {"screen": "Layout header (sales user)", "issues": ["notif-count shows '99+' from accumulated legacy reminders + prior iteration test artifacts. Working as designed (cap at 99+) but consider a 'clear reminders older than N days' hygiene job."]},
+      {"screen": "Notifications page — legacy items", "issues": ["Notifications created before this feature carry no 'type' field on the DB row; frontend notifMeta falls back to 'reminder'. Consider a one-time migration to backfill type='reminder' explicitly, or filter them out of the bell preview so only new-schema notifs surface."]}
+    ]
+  },
+  "tests_executed": [
+    {"case": "GET /notifications returns {notifications, unread}, no _id leak", "result": "PASS"},
+    {"case": "POST /notifications/read-all zeroes unread", "result": "PASS"},
+    {"case": "POST /tasks (no approval) → assignee gets type='assigned' with work_title + sender_name", "result": "PASS"},
+    {"case": "POST /tasks (approval_required=true) → owners get type='approval'", "result": "PASS"},
+    {"case": "POST /tasks/{id}/clarify → assignee gets type='clarification', task stays blocked/pending", "result": "PASS"},
+    {"case": "POST /tasks/{id}/clarify with empty reason → 400", "result": "PASS"},
+    {"case": "POST /tasks/{id}/clarify by non-approver (sales) → 403", "result": "PASS"},
+    {"case": "POST /tasks/{id}/reject → assignee gets type='rejected'", "result": "PASS"},
+    {"case": "PATCH /tasks/{id} status by assignee → creator gets type='status'", "result": "PASS"},
+    {"case": "POST /tasks/{id}/updates action='note' by assignee → creator gets type='comment'", "result": "PASS"},
+    {"case": "POST /tasks/{id}/approve → assignee gets type='approved'", "result": "PASS"},
+    {"case": "GET /tasks/{id} by assignee → 200 no _id", "result": "PASS"},
+    {"case": "GET /tasks/{id} by unrelated sales user → 403", "result": "PASS"},
+    {"case": "GET /tasks/{id} missing id → 404", "result": "PASS"},
+    {"case": "GET /tasks/{id} by owner → 200", "result": "PASS"},
+    {"case": "POST /notifications/{id}/read persists read=true", "result": "PASS"},
+    {"case": "FE: notif-bell + notif-count badge + notif-dropdown + notif-view-all all render in Layout", "result": "PASS"},
+    {"case": "FE: Notifications page renders notifications-list, mark-all-read, notification-<id>, read-<id>, notif-unread-dot-<id>, type-specific chips (APPROVAL REQUESTED / NEW COMMENT / STATUS UPDATE)", "result": "PASS"},
+    {"case": "FE: Deep-link — finance clicks bell notif → /my-work?task=<id>; target mywork-task-<id> has ring-4 ring-brand-red highlight; scrollIntoView triggered", "result": "PASS"},
+    {"case": "FE: Access-restricted banner (data-testid=access-restricted-banner) shown when visiting /my-work?task=<bogus> as sales user", "result": "PASS"}
+  ],
+  "critical_code_review_comments": [
+    "server.py is now 4488 lines — same file-size concern flagged in iters 44–47 continues; the notifications module (~push_notification + list/read/read-all + run_followup, ~110 lines around 2695–2795) is a clean extraction candidate to routers/notifications.py.",
+    "run_followup() is invoked on every GET /notifications (server.py:2779). It scans up to 500 overdue tasks per request. Under polling (every 20s from Layout + Notifications page), this multiplies DB reads sharply for tenants with many overdue tasks. Move to a scheduler (APScheduler) or throttle to once/minute per tenant.",
+    "push_notification does no deduping. The Iteration 47 report already flagged 'notification storm'. In this iter's tests we accumulated 100+ notifications on the sales user in a short session (visible '99+' badge). Consider (a) collapsing duplicates by (entity_id, type, user_id) inside a window, or (b) a soft cap per tenant.",
+    "Legacy notification rows have no 'type' field, so any code path that hard-requires n.type will break. Frontend notifMeta falls back gracefully, but a one-time migration `db.notifications.updateMany({type: {$exists:false}}, {$set: {type: 'reminder'}})` is a good hygiene step.",
+    "React hydration warning: '<span> cannot be a child of <option>' in the console on My Work. Likely a <select><option><span>...</span></option></select> pattern in role/status dropdown (Chip/label wrapped in span). Not a functional bug but produces console noise on every render.",
+    "Consistency: create_task pushes 'approval' notif to owners when approver_id is absent (line 1931 uses `_owner_ids`) — good. But `_can_approve_task` also allows any user with 'approvals' perm when approver_id is absent — those users do NOT receive the 'approval' notif because the code only notifies owners. Consider extending recipients to users with 'approvals' perm too, otherwise the 'approvals' perm is invisible in the notification flow.",
+    "notifLink() only builds a link for entity_type='task'. Follow-up escalations (line 2314) push notifications with entity_id=followup_task_id (a task id) and entity_type='task' — good, those will deep-link correctly. But add_task_update handoff notifications and dispatch_owner_alert don't set 'type' — they default to 'reminder'. Consider ntype='comment' for handoffs and ntype='rejected' or similar for owner alerts so the UI badge is informative.",
+    "GET /tasks/{id} allows access if user is owner OR _can_work_task OR approver_id OR created_by OR support_id. Great. Confirm _can_work_task's role-match logic doesn't leak tasks to same-role users the assignee doesn't want visible (existing behavior, not new)."
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_iteration48_notifications.py",
+    "/app/test_reports/pytest/iteration_48.xml"
+  ],
+  "action_items": [
+    "(Nice-to-have) Extend approval-notification recipients to include users with 'approvals' perm when approver_id is absent (currently only owners get notified; approvals-perm users can approve but don't see the notification).",
+    "(Nice-to-have) Add ntype to handoff/escalate notifications in add_task_update (currently default to 'reminder' — no type badge shown).",
+    "(Hygiene) Backfill db.notifications.updateMany({type:{$exists:false}}, {$set:{type:'reminder'}}) so all rows have consistent shape.",
+    "(Hygiene) Clean up QA_NOTIF_TEST_* tasks + related notifications after test suite: db.tasks.deleteMany({title:{$regex:/^QA_NOTIF_TEST/}}); db.notifications.deleteMany({work_title:{$regex:/^QA_NOTIF_TEST/}}). Also TEST_* rows from iter47 still present.",
+    "(Perf) Move run_followup out of GET /notifications into a scheduler or throttle; currently runs on every 20s poll from every session.",
+    "(Cosmetic) Fix the React DOM nesting console warning '<span> cannot be a child of <option>' on My Work (likely a Chip inside a <select><option>)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration48_notifications.py (created)",
+    "/app/test_reports/iteration_48.json (this file)",
+    "/app/test_reports/pytest/iteration_48.xml (generated)"
+  ],
+  "success_rate": {"backend": "100% (16/16 pytest)", "frontend": "100% on tested flows (bell dropdown, notifications page, deep-link highlight, access-restricted banner)"},
+  "test_credentials": "owner@sharma.com / demo1234 (Rajesh Sharma, owner). finance@sharma.com / demo1234 (Sunita Rao, finance, has 'approvals' perm from iter47). sales@sharma.com / demo1234 (Priya Nair, sales, no 'approvals' perm). Auth is cookie-first (dos_token httponly) — requests.Session()+Bearer both work.",
+  "seed_data_creation": "Created ~15 QA_NOTIF_TEST_* tasks in Sharma tenant (one per class per test run). All are assigned to finance; some are approval_required, some approved, some rejected. Notifications for each linger — visible in owner/finance/sales notification lists (sales shows 99+ from legacy + reminders). No DELETE /api/tasks endpoint — main agent can drop via `db.tasks.deleteMany({title:{$regex:/^QA_NOTIF_TEST/}})` and `db.notifications.deleteMany({work_title:{$regex:/^QA_NOTIF_TEST/}})`.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 48 (Notifications + Deep Linking) is fully working. Key facts: (1) push_notification signature: push_notification(tenant_id, user_ids, level, message, entity_type=None, entity_id=None, ntype=None, title=None, sender=None). All 7 event sites (create_task assigned/approval, update_task assigned/status, approve_task, reject_task, clarify_task, add_task_update note) now pass ntype+title+sender. (2) notifLink(n) returns /my-work?task=<entity_id> only when entity_type='task'. (3) MyWork.js reads ?task=<id>, calls GET /tasks/{id} via focusQ; on 403/404 shows access-restricted-banner; on 200 scrolls to task-card-<id> and adds ring-4 ring-brand-red. (4) The notif-item click handler auto-marks-read then navigates. (5) Auth is cookie-first (dos_token httponly). (6) Legacy notifications lack 'type' — treat missing 'type' as 'reminder' fallback. (7) Sales user got flooded to '99+' — mostly overdue reminders from run_followup during polling, plus 7 new-type notifs from tests. (8) Regression areas (approval gate, exec plan, workflows in-MyWork) were NOT re-tested this iteration — they're covered by test_iteration47_approval.py and were untouched.",
+  "rca of the issue": "N/A — all 16 backend + 4 frontend flows verified. No blocking issues. Action items are enhancement-tier (dedup, scheduler, missing ntype on handoffs, DOM-nesting warning cleanup)."
+}

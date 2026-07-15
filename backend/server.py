@@ -1930,7 +1930,12 @@ async def create_task(inp: TaskCreateInput, user: dict = Depends(get_current_use
     if needs_approval:
         approvers = [approver_id] if approver_id else await _owner_ids(user["tenant_id"])
         await push_notification(user["tenant_id"], approvers, 2,
-                                f"Approval needed before work starts: '{inp.title}'", "task", tid)
+                                f"Approval needed before work starts: '{inp.title}'", "task", tid,
+                                ntype="approval", title=inp.title, sender=user["name"])
+    elif assignee_id and assignee_id != user["id"]:
+        await push_notification(user["tenant_id"], [assignee_id], 1,
+                                f"New work assigned: '{inp.title}'", "task", tid,
+                                ntype="assigned", title=inp.title, sender=user["name"])
     await log_activity(user["tenant_id"], user["id"], "task_created", f"Created task '{inp.title}'", "task", tid)
     return await enrich_task(await db.tasks.find_one({"id": tid}, {"_id": 0}))
 
@@ -1971,6 +1976,15 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
             updates["last_action"] = "Updated"
         updates["updated_at"] = now_iso()
         await db.tasks.update_one({"id": task_id}, {"$set": updates})
+        if updates.get("assignee_id") and updates["assignee_id"] != user["id"]:
+            await push_notification(user["tenant_id"], [updates["assignee_id"]], 1,
+                                    f"Work assigned to you: '{t['title']}'", "task", task_id,
+                                    ntype="assigned", title=t["title"], sender=user["name"])
+        if updates.get("status") and updates["status"] != t.get("status"):
+            watchers = [w for w in ([t.get("created_by")] + await _owner_ids(user["tenant_id"])) if w and w != user["id"]]
+            await push_notification(user["tenant_id"], watchers, 1,
+                                    f"Status update on '{t['title']}': {updates['status'].replace('_', ' ')}", "task", task_id,
+                                    ntype="status", title=t["title"], sender=user["name"])
         if updates.get("status") and t.get("decision_id"):
             await add_decision_event(t["decision_id"], f"{t['title']} → {updates['status'].replace('_',' ')}", user["name"], "task")
         if updates.get("status") == "done":
@@ -2012,7 +2026,8 @@ async def approve_task(task_id: str, user: dict = Depends(get_current_user)):
         "updated_at": now_iso(), "last_action": "Approved — work can start",
     }})
     if t.get("assignee_id"):
-        await push_notification(user["tenant_id"], [t["assignee_id"]], 1, f"Approved: you can start '{t['title']}'", "task", task_id)
+        await push_notification(user["tenant_id"], [t["assignee_id"]], 1, f"Approved: you can start '{t['title']}'", "task", task_id,
+                                ntype="approved", title=t["title"], sender=user["name"])
     await log_activity(user["tenant_id"], user["id"], "task_approved", f"Approved '{t['title']}'", "task", task_id)
     return await enrich_task(await db.tasks.find_one({"id": task_id}, {"_id": 0}))
 
@@ -2035,9 +2050,49 @@ async def reject_task(task_id: str, inp: TaskRejectInput, user: dict = Depends(g
     }})
     msg = f"Changes requested on '{t['title']}' by {user['name']}" + (f": {reason}" if reason else "")
     if t.get("assignee_id"):
-        await push_notification(user["tenant_id"], [t["assignee_id"]], 2, msg, "task", task_id)
+        await push_notification(user["tenant_id"], [t["assignee_id"]], 2, msg, "task", task_id,
+                                ntype="rejected", title=t["title"], sender=user["name"])
     await log_activity(user["tenant_id"], user["id"], "task_rejected", f"Requested changes on '{t['title']}'", "task", task_id)
     return await enrich_task(await db.tasks.find_one({"id": task_id}, {"_id": 0}))
+
+
+@api.post("/tasks/{task_id}/clarify")
+async def clarify_task(task_id: str, inp: TaskRejectInput, user: dict = Depends(get_current_user)):
+    """Approver/owner asks the assignee a clarifying question; the task stays locked until approved."""
+    t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]})
+    if not t:
+        raise HTTPException(status_code=404, detail="Not found")
+    if not _can_approve_task(user, t):
+        raise HTTPException(status_code=403, detail="Only the assigned approver or an owner can request clarification")
+    note = (inp.reason or "").strip()
+    if not note:
+        raise HTTPException(status_code=400, detail="Add what you need clarified")
+    await db.tasks.update_one({"id": task_id}, {"$set": {"updated_at": now_iso(), "last_action": "Clarification requested"}})
+    await db.tasks.update_one({"id": task_id}, {"$push": {"updates": {
+        "id": new_id(), "kind": "note", "text": f"Clarification requested: {note}",
+        "step_id": None, "step_text": None, "author_id": user["id"], "author_name": user.get("name"),
+        "to_id": t.get("assignee_id"), "to_role": None, "to_name": t.get("assignee_name"),
+        "followup_task_id": None, "created_at": now_iso(),
+    }}})
+    if t.get("assignee_id"):
+        await push_notification(user["tenant_id"], [t["assignee_id"]], 2,
+                                f"Clarification needed on '{t['title']}': {note[:120]}", "task", task_id,
+                                ntype="clarification", title=t["title"], sender=user["name"])
+    await log_activity(user["tenant_id"], user["id"], "task_clarify", f"Requested clarification on '{t['title']}'", "task", task_id)
+    return await enrich_task(await db.tasks.find_one({"id": task_id}, {"_id": 0}))
+
+
+@api.get("/tasks/{task_id}")
+async def get_task(task_id: str, user: dict = Depends(get_current_user)):
+    t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
+    if not t:
+        raise HTTPException(status_code=404, detail="Task not found")
+    allowed = (user.get("role") == "owner" or _can_work_task(user, t)
+               or t.get("approver_id") == user["id"] or t.get("created_by") == user["id"]
+               or t.get("support_id") == user["id"])
+    if not allowed:
+        raise HTTPException(status_code=403, detail="You don't have access to this work")
+    return await enrich_task(t)
 
 
 # ---------------------------------------------------------------------------
@@ -2245,6 +2300,13 @@ async def add_task_update(task_id: str, inp: TaskUpdateNoteInput, user: dict = D
 
     if action == "note":
         await log_activity(tenant_id, user["id"], "task_note", f"Note on '{t.get('title')}': {text[:80]}", "task", task_id)
+        # Notify the counterpart on this task (assignee <-> creator/approver), excluding the author.
+        counterparts = [w for w in (t.get("assignee_id"), t.get("created_by"), t.get("approver_id"))
+                        if w and w != user["id"]]
+        if counterparts:
+            await push_notification(tenant_id, counterparts, 1,
+                                    f"New comment on '{t.get('title')}' from {user['name']}: {text[:100]}", "task", task_id,
+                                    ntype="comment", title=t.get("title"), sender=user["name"])
     else:
         verb = "escalated to" if action == "escalate" else "handed off to"
         await log_activity(tenant_id, user["id"], f"task_{action}",
@@ -2656,11 +2718,14 @@ async def _owner_ids(tenant_id: str) -> list:
     return [u["id"] for u in await db.users.find({"tenant_id": tenant_id, "role": "owner"}, {"_id": 0, "id": 1}).to_list(50)]
 
 
-async def push_notification(tenant_id, user_ids, level, message, entity_type=None, entity_id=None):
+async def push_notification(tenant_id, user_ids, level, message, entity_type=None, entity_id=None,
+                            ntype=None, title=None, sender=None):
     for uid in set(u for u in user_ids if u):
         await db.notifications.insert_one({
             "id": new_id(), "tenant_id": tenant_id, "user_id": uid, "level": NOTIF_LEVELS.get(level, "reminder"),
-            "message": message, "entity_type": entity_type, "entity_id": entity_id, "read": False, "created_at": now_iso(),
+            "message": message, "entity_type": entity_type, "entity_id": entity_id,
+            "type": ntype or "reminder", "work_title": title, "sender_name": sender,
+            "read": False, "created_at": now_iso(),
         })
 
 

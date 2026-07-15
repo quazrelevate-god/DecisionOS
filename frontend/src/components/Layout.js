@@ -1,12 +1,16 @@
 import { useState, useMemo } from "react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../hooks/useTheme";
 import { hasPerm } from "../lib/perms";
 import { CompanyDialog } from "./CompanyDialog";
 import { toast } from "sonner";
 import api from "../lib/api";
+import { timeAgo } from "../lib/format";
+import { notifMeta, notifLink } from "../lib/notif";
+import { Chip } from "./common";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import {
   Sheet,
   SheetContent,
@@ -72,22 +76,68 @@ export default function Layout({ children }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { data: notif } = useQuery({ queryKey: ["notifications"], queryFn: () => api.get("/notifications").then((r) => r.data), refetchInterval: 30000 });
   const unread = notif?.unread || 0;
+  const qc = useQueryClient();
   const { data: brief } = useQuery({ queryKey: ["fires-count"], queryFn: () => api.get("/brief?period=morning").then((r) => r.data), refetchInterval: 60000, enabled: user?.role === "owner" });
   const fires = brief?.counters?.fires || 0;
   const { data: capPending } = useQuery({ queryKey: ["captures-pending"], queryFn: () => api.get("/captures/pending-count").then((r) => r.data), refetchInterval: 30000 });
   const captureCount = capPending?.count || 0;
 
-  const Bellicon = () => (
-    <button onClick={() => navigate("/notifications")} data-testid="notif-bell"
-      className="relative w-10 h-10 flex items-center justify-center border border-black hover:bg-brand-ink hover:text-white transition-colors">
-      <Bell size={18} weight="bold" />
-      {unread > 0 && (
-        <span data-testid="notif-count" className="absolute -top-2 -right-2 bg-brand-red text-white text-[10px] min-w-5 h-5 px-1 flex items-center justify-center border border-black font-bold">
-          {unread}
-        </span>
-      )}
-    </button>
-  );
+  const openNotif = async (n) => {
+    if (!n.read) {
+      try { await api.post(`/notifications/${n.id}/read`); qc.invalidateQueries({ queryKey: ["notifications"] }); } catch { /* non-blocking */ }
+    }
+    const to = notifLink(n);
+    if (to) navigate(to);
+  };
+
+  const Bellicon = () => {
+    const items = (notif?.notifications || []).slice(0, 7);
+    return (
+      <Popover>
+        <PopoverTrigger asChild>
+          <button data-testid="notif-bell"
+            className="relative w-10 h-10 flex items-center justify-center border border-black hover:bg-brand-ink hover:text-white transition-colors">
+            <Bell size={18} weight="bold" />
+            {unread > 0 && (
+              <span data-testid="notif-count" className="absolute -top-2 -right-2 bg-brand-red text-white text-[10px] min-w-5 h-5 px-1 flex items-center justify-center border border-black font-bold">
+                {unread > 99 ? "99+" : unread}
+              </span>
+            )}
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-80 p-0 border border-black shadow-brutal" data-testid="notif-dropdown">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-black">
+            <p className="text-sm font-bold uppercase tracking-tight">Notifications</p>
+            {unread > 0 && <span className="label-mono text-brand-red">{unread} new</span>}
+          </div>
+          <div className="max-h-96 overflow-y-auto divide-y divide-black/10">
+            {items.length === 0 && <p className="p-6 text-center text-sm text-muted-foreground">You're all caught up.</p>}
+            {items.map((n) => {
+              const meta = notifMeta(n);
+              return (
+                <button key={n.id} data-testid={`notif-item-${n.id}`} onClick={() => openNotif(n)}
+                  className={`w-full text-left px-4 py-3 flex items-start gap-2 hover:bg-black/[0.03] transition-colors ${n.read ? "opacity-60" : ""}`}>
+                  {!n.read && <span className="mt-1.5 w-2 h-2 rounded-full bg-brand-red shrink-0" />}
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Chip value={meta.label} className={`${meta.cls} text-[9px]`} />
+                      <span className="label-mono text-muted-foreground">{timeAgo(n.created_at)}</span>
+                    </div>
+                    <p className="text-sm font-semibold mt-1 truncate">{n.work_title || n.message}</p>
+                    {n.sender_name && <p className="label-mono text-muted-foreground truncate">{n.sender_name}</p>}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          <button onClick={() => navigate("/notifications")} data-testid="notif-view-all"
+            className="w-full px-4 py-3 border-t border-black text-sm font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors">
+            View all
+          </button>
+        </PopoverContent>
+      </Popover>
+    );
+  };
 
   const ProfileButton = () => (
     <CompanyDialog trigger={

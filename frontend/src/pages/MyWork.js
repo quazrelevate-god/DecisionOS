@@ -408,7 +408,7 @@ function PriorityScoreBars({ scores }) {
   );
 }
 
-function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAssignee = false }) {
+function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAssignee = false, highlight = false }) {
   const { user } = useAuth();
   const [uploading, setUploading] = useState(false);
   const [recording, setRecording] = useState(false);
@@ -428,6 +428,12 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
     const reason = window.prompt("What changes are needed? (optional)") ?? "";
     try { await api.post(`/tasks/${t.id}/reject`, { reason }); toast.success("Changes requested"); onChange(); }
     catch (e) { toast.error(e.response?.data?.detail || "Could not reject"); }
+  };
+  const clarifyTask = async () => {
+    const reason = window.prompt("What do you need clarified?") ?? "";
+    if (!reason.trim()) return;
+    try { await api.post(`/tasks/${t.id}/clarify`, { reason }); toast.success("Clarification requested"); onChange(); }
+    catch (e) { toast.error(e.response?.data?.detail || "Could not request clarification"); }
   };
 
   const upload = async (file, kind) => {
@@ -505,7 +511,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
   const selCls = "border border-black px-2 py-1 text-xs font-mono bg-white focus:outline-none";
 
   return (
-    <div data-testid={`mywork-task-${t.id}`} className="card-brutal p-5">
+    <div id={`task-card-${t.id}`} data-testid={`mywork-task-${t.id}`} className={`card-brutal p-5 transition-all ${highlight ? "ring-4 ring-brand-red ring-offset-2 ring-offset-brand-paper" : ""}`}>
       <div className="flex items-start justify-between gap-2">
         <p className="font-heading font-bold text-lg leading-tight">{t.title}</p>
         <Chip value={t.priority} />
@@ -589,6 +595,9 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
           <button onClick={rejectTask} data-testid={`reject-${t.id}`} className="flex items-center gap-2 bg-brand-red text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">
             <WarningCircle size={16} weight="bold" /> Request changes
           </button>
+          <button onClick={clarifyTask} data-testid={`clarify-${t.id}`} className="flex items-center gap-2 bg-orange-500 text-black px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">
+            <ChatText size={16} weight="bold" /> Ask clarification
+          </button>
         </div>
       )}
 
@@ -634,8 +643,9 @@ export default function MyWork() {
   const { tenant, user } = useAuth();
   const [params] = useSearchParams();
   const isOwner = user?.role === "owner";
+  const focusTaskId = params.get("task");
   const initialView = params.get("view") === "board" ? "board" : params.get("view") === "workflows" ? "workflows" : "mywork";
-  const [view, setView] = useState(initialView);
+  const [view, setView] = useState(focusTaskId ? "mywork" : initialView);
   const canSeeWorkflows = isOwner || userPerms(user).includes("workflows");
   const [scope, setScope] = useState("mine");
   const [tab, setTab] = useState("all");
@@ -643,6 +653,12 @@ export default function MyWork() {
   const mine = !(isOwner && scope === "all");
   const showAssignee = isOwner && scope === "all";
   const tasksQ = useQuery({ queryKey: ["tasks", mine], queryFn: () => api.get(`/tasks?mine=${mine}`).then((r) => r.data) });
+  const focusQ = useQuery({
+    queryKey: ["task", focusTaskId],
+    queryFn: () => api.get(`/tasks/${focusTaskId}`).then((r) => r.data),
+    enabled: !!focusTaskId, retry: false,
+  });
+  const focusDenied = !!focusTaskId && focusQ.isError && [403, 404].includes(focusQ.error?.response?.status);
   const notifQ = useQuery({ queryKey: ["notifications"], queryFn: () => api.get("/notifications").then((r) => r.data) });
   const usersQ = useQuery({ queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data) });
   const prioritiesQ = useQuery({ queryKey: ["priorities"], queryFn: () => api.post("/tasks/prioritize").then((r) => r.data), enabled: aiPriority });
@@ -653,6 +669,19 @@ export default function MyWork() {
     qc.invalidateQueries({ queryKey: ["tasks"] });
     qc.invalidateQueries({ queryKey: ["notifications"] });
   };
+
+  useEffect(() => {
+    if (!focusTaskId || !focusQ.data) return;
+    const ft = focusQ.data;
+    setView("mywork");
+    if (isOwner && ft.assignee_id !== user?.id && scope !== "all") { setScope("all"); return; }
+    setTab(isTerminal(ft) ? "completed" : "all");
+    const timer = setTimeout(() => {
+      document.getElementById(`task-card-${focusTaskId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 400);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusTaskId, focusQ.data, scope]);
 
   const scoreMap = {};
   (prioritiesQ.data?.tasks || []).forEach((pt) => { if (pt.ai_scores) scoreMap[pt.id] = pt.ai_scores; });
@@ -717,6 +746,16 @@ export default function MyWork() {
         </div>
       </PageHeader>
 
+      {focusDenied && (
+        <div data-testid="access-restricted-banner" className="card-brutal p-4 mb-6 bg-brand-red text-white flex items-center gap-3">
+          <LockKey size={22} weight="bold" className="shrink-0" />
+          <div>
+            <p className="font-bold uppercase tracking-tight">Access restricted</p>
+            <p className="text-sm opacity-90">You don't have access to open this work item. Ask an owner if you think this is a mistake.</p>
+          </div>
+        </div>
+      )}
+
       {view === "board" ? (
         <TaskBoard />
       ) : view === "workflows" ? (
@@ -735,7 +774,7 @@ export default function MyWork() {
           </div>
           {list.length === 0 && <EmptyState title={tab === "completed" ? "Nothing completed yet" : "Nothing here"} hint={tab === "all" ? "You're all caught up!" : "No tasks in this category."} />}
           <div className="space-y-4">
-            {list.map((t) => <TaskCard key={t.id} t={t} onChange={refresh} members={members} roleOptions={roleOptions} showAssignee={showAssignee} scores={aiPriority && tab !== "completed" ? scoreMap[t.id] : undefined} />)}
+            {list.map((t) => <TaskCard key={t.id} t={t} onChange={refresh} members={members} roleOptions={roleOptions} showAssignee={showAssignee} highlight={t.id === focusTaskId} scores={aiPriority && tab !== "completed" ? scoreMap[t.id] : undefined} />)}
           </div>
         </div>
 

@@ -27,7 +27,6 @@ import {
   MoonStars,
   Briefcase,
   MicrophoneStage,
-  ClipboardText,
   List as ListIcon,
   FileArrowUp,
   Tray,
@@ -40,7 +39,6 @@ const NAV = [
   { to: "/contacts", label: "People", icon: AddressBook, testid: "nav-contacts", perm: "people" },
   { to: "/brain", label: "Company Brain", icon: BrainIcon, testid: "nav-brain", perm: "brain" },
   { to: "/ingest", label: "Capture", icon: FileArrowUp, testid: "nav-ingest", perm: "data_input" },
-  { to: "/review", label: "Review Queue", icon: ClipboardText, testid: "nav-review" },
   { to: "/workflows", label: "Workflows", icon: Kanban, testid: "nav-workflows", perm: "workflows" },
   { to: "/meetings", label: "Meeting Notes", icon: MicrophoneStage, testid: "nav-meetings" },
 ];
@@ -153,7 +151,7 @@ export default function Layout({ children }) {
               {fires}
             </span>
           )}
-          {to === "/review" && captureCount > 0 && (
+          {to === "/ingest" && captureCount > 0 && (
             <span data-testid="nav-review-badge" title={`${captureCount} item(s) to review`}
               className="ml-auto bg-brand-red text-white text-[10px] min-w-5 h-5 px-1 flex items-center justify-center border border-black font-bold rounded-full">
               {captureCount}

@@ -15,7 +15,6 @@ import CEOBrief from "./pages/CEOBrief";
 import Notifications from "./pages/Notifications";
 import MyWork from "./pages/MyWork";
 import Ingest from "./pages/Ingest";
-import Captures from "./pages/Captures";
 import ContactProfile from "./pages/ContactProfile";
 import Journal from "./pages/Journal";
 import Calendar from "./pages/Calendar";
@@ -65,7 +64,7 @@ function App() {
             <Route path="/brief" element={<Protected><CEOBrief /></Protected>} />
             <Route path="/journal" element={<Protected ownerOnly><Journal /></Protected>} />
             <Route path="/my-work" element={<Protected><MyWork /></Protected>} />
-            <Route path="/review" element={<Protected><Captures /></Protected>} />
+            <Route path="/review" element={<Navigate to="/ingest" replace />} />
             <Route path="/notifications" element={<Protected><Notifications /></Protected>} />
             <Route path="/inbox" element={<Protected perm="inbox"><Inbox /></Protected>} />
             <Route path="/workflows" element={<Protected perm="workflows"><Workflows /></Protected>} />

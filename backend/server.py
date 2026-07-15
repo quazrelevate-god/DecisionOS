@@ -1928,7 +1928,7 @@ async def create_task(inp: TaskCreateInput, user: dict = Depends(get_current_use
         "updated_at": now_iso(), "last_action": "Created",
     })
     if needs_approval:
-        approvers = [approver_id] if approver_id else await _owner_ids(user["tenant_id"])
+        approvers = [approver_id] if approver_id else await _approver_ids(user["tenant_id"])
         await push_notification(user["tenant_id"], approvers, 2,
                                 f"Approval needed before work starts: '{inp.title}'", "task", tid,
                                 ntype="approval", title=inp.title, sender=user["name"])
@@ -2718,6 +2718,14 @@ async def _owner_ids(tenant_id: str) -> list:
     return [u["id"] for u in await db.users.find({"tenant_id": tenant_id, "role": "owner"}, {"_id": 0, "id": 1}).to_list(50)]
 
 
+async def _approver_ids(tenant_id: str) -> list:
+    """Owners plus any user granted the 'approvals' access — they can approve unassigned items."""
+    ids = set(await _owner_ids(tenant_id))
+    async for u in db.users.find({"tenant_id": tenant_id, "permissions": "approvals"}, {"_id": 0, "id": 1}):
+        ids.add(u["id"])
+    return list(ids)
+
+
 async def push_notification(tenant_id, user_ids, level, message, entity_type=None, entity_id=None,
                             ntype=None, title=None, sender=None):
     for uid in set(u for u in user_ids if u):
@@ -2739,8 +2747,16 @@ async def dispatch_owner_alert(tenant_id, message):
         logger.info(f"[WHATSAPP MOCK] Owner alert: {message}")
 
 
+_followup_last_run: dict = {}
+
+
 async def run_followup(tenant_id: str):
     now = datetime.now(timezone.utc)
+    # Throttle: this scan runs on every notifications poll — cap it to once per 60s per tenant.
+    last = _followup_last_run.get(tenant_id)
+    if last and (now - last).total_seconds() < 60:
+        return
+    _followup_last_run[tenant_id] = now
     tasks = await db.tasks.find(
         {"tenant_id": tenant_id, "status": {"$in": ["todo", "in_progress"]}, "due_date": {"$ne": None, "$lt": now.isoformat()}},
         {"_id": 0}

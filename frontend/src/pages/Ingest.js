@@ -479,6 +479,11 @@ export default function Ingest() {
                 {h.status === "review" && !active && (
                   <button data-testid={`resume-ingestion-${h.id}`} onClick={() => setActive(h)} className="text-xs font-semibold uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-ink hover:text-white transition-colors">Review</button>
                 )}
+                {h.status === "failed" && (
+                  <p data-testid={`ingestion-error-${h.id}`} className="basis-full text-xs text-brand-red font-mono break-words">
+                    Failed: {h.error || "The file couldn't be read or understood. Check it's a valid .xlsx/.csv with a header row and data, then try again."}
+                  </p>
+                )}
               </div>
             ))}
           </div>

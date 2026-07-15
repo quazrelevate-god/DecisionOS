@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
 import { PageHeader, Chip, EmptyState } from "../components/common";
 import { money, timeAgo } from "../lib/format";
+import { CaptureReview } from "./Captures";
 import { toast } from "sonner";
 import { QRCodeSVG } from "qrcode.react";
 import {
@@ -360,7 +361,10 @@ export default function Ingest() {
   const [uploading, setUploading] = useState(false);
   const [active, setActive] = useState(null);
   const [tab, setTab] = useState("invoices");
+  const [mainTab, setMainTab] = useState("import");
   const canIngest = hasPerm(user, "data_input");
+  const { data: capPending } = useQuery({ queryKey: ["captures-pending"], queryFn: () => api.get("/captures/pending-count").then((r) => r.data), refetchInterval: 30000 });
+  const pendingCount = capPending?.count || 0;
 
   const { data: history } = useQuery({ queryKey: ["ingestions"], queryFn: () => api.get("/ingest").then((r) => r.data) });
   const { data: invoices } = useQuery({ queryKey: ["invoices"], queryFn: () => api.get("/invoices").then((r) => r.data) });
@@ -408,6 +412,23 @@ export default function Ingest() {
         </a>
       </PageHeader>
 
+      <div className="flex gap-2 mb-6" data-testid="capture-main-tabs">
+        <button data-testid="capture-maintab-import" onClick={() => setMainTab("import")}
+          className={`px-4 py-2 text-sm font-semibold uppercase tracking-wider border-2 border-black transition-all ${mainTab === "import" ? "bg-brand-ink text-white shadow-brutal-sm" : "bg-white hover:bg-black/5"}`}>
+          Import
+        </button>
+        <button data-testid="capture-maintab-review" onClick={() => setMainTab("review")}
+          className={`px-4 py-2 text-sm font-semibold uppercase tracking-wider border-2 border-black transition-all flex items-center gap-2 ${mainTab === "review" ? "bg-brand-ink text-white shadow-brutal-sm" : "bg-white hover:bg-black/5"}`}>
+          Review Queue
+          {pendingCount > 0 && (
+            <span data-testid="review-tab-badge" className="bg-brand-red text-white text-[10px] min-w-5 h-5 px-1 flex items-center justify-center border border-black font-bold rounded-full">{pendingCount}</span>
+          )}
+        </button>
+      </div>
+
+      {mainTab === "review" && <CaptureReview />}
+
+      {mainTab === "import" && (<>
       {canIngest ? (
         <div className="grid md:grid-cols-2 gap-4 mb-4">
           <label data-testid="upload-document-zone" className={`card-brutal p-6 flex flex-col items-center justify-center text-center cursor-pointer shadow-hover ${uploading ? "opacity-60 pointer-events-none" : ""}`}>

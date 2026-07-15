@@ -30,6 +30,15 @@ const ROLE_OPTS = ["sales", "finance", "purchase", "hr", "operations", "owner"];
 const PRIORITY_OPTS = ["low", "medium", "high"];
 
 export default function Captures() {
+  return (
+    <div>
+      <PageHeader eyebrow="WhatsApp Smart Capture — review before it becomes work" title="Review Queue" />
+      <CaptureReview />
+    </div>
+  );
+}
+
+export function CaptureReview() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [tab, setTab] = useState("pending_review");
@@ -46,8 +55,6 @@ export default function Captures() {
 
   return (
     <div data-testid="captures-page">
-      <PageHeader eyebrow="WhatsApp Smart Capture — review before it becomes work" title="Review Queue" />
-
       <div className="flex flex-wrap gap-2 mb-6">
         {STATUS_TABS.map((t) => (
           <button key={t.key} data-testid={`capture-tab-${t.key}`} onClick={() => setTab(t.key)}

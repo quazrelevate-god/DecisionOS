@@ -27,8 +27,9 @@ function EscalationCard({ t, onRespond, highlight }) {
     try {
       await onRespond(t.id, text.trim());
       setText("");
-    } catch {
+    } catch (e) {
       // toast already shown by onRespond; keep the typed text so the user can retry
+      console.debug("task response failed (toast already shown)", e);
     } finally {
       setSending(false);
     }

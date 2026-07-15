@@ -321,7 +321,7 @@ export default function Login() {
     if (phones.length === 0) { setStep(7); return; }
     setBusy(true);
     try { await api.post("/invites", { phones }); toast.success(`${phones.length} invite(s) queued`); }
-    catch { /* invite send is non-blocking; continue onboarding regardless */ }
+    catch (e) { console.debug("invite send failed (non-blocking, continuing onboarding)", e); }
     finally { setBusy(false); setStep(7); }
   };
 

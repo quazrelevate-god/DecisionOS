@@ -84,7 +84,7 @@ export default function Layout({ children }) {
 
   const openNotif = async (n) => {
     if (!n.read) {
-      try { await api.post(`/notifications/${n.id}/read`); qc.invalidateQueries({ queryKey: ["notifications"] }); } catch { /* non-blocking */ }
+      try { await api.post(`/notifications/${n.id}/read`); qc.invalidateQueries({ queryKey: ["notifications"] }); } catch (e) { console.debug("notif mark-read failed (non-blocking)", e); }
     }
     const to = notifLink(n);
     if (to) navigate(to);

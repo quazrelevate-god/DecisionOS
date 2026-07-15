@@ -21,7 +21,7 @@ export default function Notifications() {
   };
 
   const open = async (n) => {
-    if (!n.read) { try { await markRead(n.id); } catch { /* non-blocking */ } }
+    if (!n.read) { try { await markRead(n.id); } catch (e) { console.debug("notif mark-read failed (non-blocking)", e); } }
     const to = notifLink(n);
     if (to) navigate(to);
   };

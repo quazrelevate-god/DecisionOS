@@ -4,8 +4,9 @@ import api, { formatApiError } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
 import { PageHeader, Chip, EmptyState } from "../components/common";
-import { money } from "../lib/format";
+import { money, timeAgo } from "../lib/format";
 import { toast } from "sonner";
+import { QRCodeSVG } from "qrcode.react";
 import {
   FileArrowUp,
   FilePdf,
@@ -75,6 +76,106 @@ const withKeys = (recs) => {
   });
   return out;
 };
+
+const WA_STATUS_STYLE = {
+  received: "bg-brand-yellow text-black",
+  filed: "bg-green-600 text-white",
+  structured: "bg-green-600 text-white",
+  ignored: "bg-black/10 text-black",
+  rejected: "bg-brand-red text-white",
+  signature_mismatch: "bg-orange-500 text-white",
+  error: "bg-brand-red text-white",
+};
+
+function WhatsAppCard() {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const isOwner = user?.role === "owner";
+  const { data: st } = useQuery({ queryKey: ["wa-status"], queryFn: () => api.get("/whatsapp/status").then((r) => r.data) });
+  const { data: logs } = useQuery({
+    queryKey: ["wa-logs"], enabled: isOwner, refetchInterval: 15000,
+    queryFn: () => api.get("/whatsapp/logs").then((r) => r.data),
+  });
+  const waNum = st?.wa_number;
+  const waLink = waNum ? `https://wa.me/${waNum}?text=${encodeURIComponent("Hi DecisionOS")}` : null;
+
+  return (
+    <div className="card-brutal p-5 mb-8" data-testid="whatsapp-card">
+      <div className="flex items-center gap-2 mb-4">
+        <WhatsappLogo size={22} weight="bold" className="text-green-600" />
+        <span className="font-heading font-black uppercase tracking-tight text-lg">Forward on WhatsApp</span>
+        {st?.configured
+          ? <Chip value="live" className="bg-green-600 text-white" />
+          : <Chip value="not connected" className="bg-brand-red text-white" />}
+      </div>
+
+      <div className="grid md:grid-cols-[auto_1fr] gap-6">
+        <div className="flex flex-col items-center text-center">
+          {waLink ? (
+            <>
+              <a href={waLink} target="_blank" rel="noreferrer" data-testid="whatsapp-qr-link"
+                className="border-4 border-black p-3 bg-white shadow-brutal hover:shadow-brutal-sm transition-all">
+                <QRCodeSVG value={waLink} size={188} level="M" />
+              </a>
+              <p className="text-sm font-bold mt-3">Scan to send a message</p>
+              <p className="label-mono text-muted-foreground mt-1" data-testid="whatsapp-number">{st.display_number}</p>
+              {st.verified_name && <p className="text-xs text-muted-foreground">{st.verified_name}</p>}
+            </>
+          ) : (
+            <div className="border-2 border-dashed border-black/40 p-6 w-full">
+              <p className="text-sm font-semibold">WhatsApp not connected yet</p>
+              <p className="text-xs text-muted-foreground mt-1">{st?.token_error || "Add the WhatsApp credentials in your environment to enable forwarding."}</p>
+            </div>
+          )}
+        </div>
+
+        <div>
+          {isOwner && st && (
+            <div className="flex flex-wrap gap-1.5 mb-3" data-testid="whatsapp-config-chips">
+              <Chip value={`token ${st.has_token ? "✓" : "✗"}`} className={st.has_token ? "bg-green-600 text-white" : "bg-brand-red text-white"} />
+              <Chip value={`phone id ${st.has_phone_id ? "✓" : "✗"}`} className={st.has_phone_id ? "bg-green-600 text-white" : "bg-brand-red text-white"} />
+              <Chip value={`verify token ${st.has_verify_token ? "✓" : "✗"}`} className={st.has_verify_token ? "bg-green-600 text-white" : "bg-black/10 text-black"} />
+              <Chip value={`app secret ${st.has_app_secret ? "✓" : "✗"}`} className={st.has_app_secret ? "bg-green-600 text-white" : "bg-black/10 text-black"} />
+              <Chip value={`fallback ${st.has_fallback_tenant ? "✓" : "✗"}`} className={st.has_fallback_tenant ? "bg-green-600 text-white" : "bg-black/10 text-black"} />
+              {st.token_error && <Chip value="token error" className="bg-brand-red text-white" />}
+            </div>
+          )}
+
+          {isOwner ? (
+            <>
+              <div className="flex items-center justify-between mb-2">
+                <p className="label-mono text-brand-red">Recent WhatsApp activity</p>
+                <button data-testid="whatsapp-logs-refresh" onClick={() => qc.invalidateQueries({ queryKey: ["wa-logs"] })}
+                  className="flex items-center gap-1 text-xs uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-ink hover:text-white transition-colors">
+                  <ArrowClockwise size={12} weight="bold" /> Refresh
+                </button>
+              </div>
+              {(logs || []).length === 0 ? (
+                <div className="border border-black/20 p-3 text-xs text-muted-foreground" data-testid="whatsapp-logs-empty">
+                  No inbound messages logged yet. Scan the QR and send a test message — it will appear here within seconds. If nothing shows after sending, the webhook isn't reaching the app (check Meta → WhatsApp → Configuration: callback URL, <span className="font-mono">messages</span> field subscribed, and app published).
+                </div>
+              ) : (
+                <div className="space-y-1.5 max-h-72 overflow-y-auto" data-testid="whatsapp-logs-list">
+                  {logs.map((l, i) => (
+                    <div key={i} data-testid={`whatsapp-log-${i}`} className="border border-black/20 p-2 flex items-start gap-2 flex-wrap">
+                      <Chip value={l.status} className={WA_STATUS_STYLE[l.status] || "bg-black/10 text-black"} />
+                      <span className="label-mono text-muted-foreground">{l.mtype || "—"}</span>
+                      <span className="text-xs font-mono">{l.from || "unknown"}</span>
+                      <span className="text-xs text-muted-foreground flex-1 min-w-[120px]">{l.summary || l.reason || ""}</span>
+                      <span className="label-mono text-muted-foreground">{timeAgo(l.updated_at || l.created_at)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">Scan the code to forward an invoice, receipt or a quick note. It files itself into DecisionOS.</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function Field({ label, value, onChange, placeholder }) {
   return (
@@ -326,14 +427,8 @@ export default function Ingest() {
         <EmptyState title="View-only" hint="Your role can browse filed records but not import new data." />
       )}
 
-      {/* WhatsApp live */}
-      <div className="border border-black bg-green-50 p-4 flex items-center gap-3 mb-8" data-testid="whatsapp-live-banner">
-        <WhatsappLogo size={24} weight="bold" className="text-green-600" />
-        <div className="flex-1">
-          <p className="font-semibold text-sm">WhatsApp forwarding <span className="label-mono text-green-700 ml-1">live</span></p>
-          <p className="text-xs text-muted-foreground">Forward an invoice or payment screenshot to your DecisionOS WhatsApp number and it files itself — powered by this same pipeline.</p>
-        </div>
-      </div>
+      {/* WhatsApp */}
+      <WhatsAppCard />
 
       {uploading && (
         <div className="card-brutal p-8 mb-8 flex items-center justify-center gap-3" data-testid="ingest-loading">

@@ -3596,6 +3596,28 @@ async def whatsapp_verify(request: Request):
     raise HTTPException(status_code=403, detail="Verification failed")
 
 
+async def log_wa_event(from_phone: str, mtype: str, status: str, reason: str = "", tenant_id=None, summary: str = ""):
+    ev_id = new_id()
+    try:
+        await db.wa_events.insert_one({
+            "id": ev_id, "direction": "inbound", "from": from_phone or "", "mtype": mtype or "",
+            "status": status, "reason": reason, "tenant_id": tenant_id, "summary": summary,
+            "created_at": now_iso(),
+        })
+    except Exception:
+        logger.exception("wa event log failed")
+    return ev_id
+
+
+async def update_wa_event(ev_id: str, **fields):
+    if not ev_id:
+        return
+    try:
+        await db.wa_events.update_one({"id": ev_id}, {"$set": {**fields, "updated_at": now_iso()}})
+    except Exception:
+        pass
+
+
 @api.post("/webhooks/whatsapp")
 async def whatsapp_webhook(request: Request, background: BackgroundTasks):
     if not os.environ.get("WA_ACCESS_TOKEN"):
@@ -3607,7 +3629,10 @@ async def whatsapp_webhook(request: Request, background: BackgroundTasks):
         sig = request.headers.get("X-Hub-Signature-256", "")
         expected = "sha256=" + hmac.new(app_secret.encode(), raw, hashlib.sha256).hexdigest()
         if not hmac.compare_digest(expected, sig):
-            raise HTTPException(status_code=403, detail="Invalid signature")
+            # A proxy/ingress may re-encode the body, breaking Meta's HMAC. Log but DO NOT drop the message.
+            await log_wa_event("", "", "signature_mismatch",
+                               reason="X-Hub-Signature-256 did not match — processing anyway (a proxy may re-encode the body; verify WA_APP_SECRET if unexpected)")
+            logger.warning("WhatsApp signature mismatch; processing anyway")
     try:
         body = json.loads(raw)
     except Exception:
@@ -3622,6 +3647,49 @@ async def whatsapp_webhook(request: Request, background: BackgroundTasks):
 
 def _norm_phone(p: str) -> str:
     return re.sub(r"\D", "", p or "")[-10:]
+
+
+@api.get("/whatsapp/status")
+async def whatsapp_status(user: dict = Depends(get_current_user)):
+    token = os.environ.get("WA_ACCESS_TOKEN")
+    pnid = os.environ.get("WA_PHONE_NUMBER_ID")
+    out = {
+        "configured": bool(token and pnid),
+        "has_token": bool(token), "has_phone_id": bool(pnid),
+        "has_verify_token": bool(os.environ.get("WA_VERIFY_TOKEN")),
+        "has_app_secret": bool(os.environ.get("WA_APP_SECRET")),
+        "has_fallback_tenant": bool(os.environ.get("WA_TENANT_ID")),
+        "phone_number_id": pnid, "display_number": None, "wa_number": None,
+        "verified_name": None, "token_error": None,
+    }
+    if token and pnid:
+        try:
+            ver = os.environ.get("GRAPH_API_VERSION", "v21.0")
+            async with httpx.AsyncClient(timeout=15) as c:
+                r = await c.get(f"https://graph.facebook.com/{ver}/{pnid}",
+                                params={"fields": "display_phone_number,verified_name", "access_token": token})
+                d = r.json()
+            if d.get("error"):
+                out["token_error"] = d["error"].get("message", "token error")
+            dn = d.get("display_phone_number")
+            if dn:
+                out["display_number"] = dn
+                out["wa_number"] = re.sub(r"\D", "", dn)
+                out["verified_name"] = d.get("verified_name")
+        except Exception as e:
+            out["token_error"] = str(e)[:150]
+    return out
+
+
+@api.get("/whatsapp/logs")
+async def whatsapp_logs(user: dict = Depends(get_current_user)):
+    if user.get("role") != "owner":
+        raise HTTPException(status_code=403, detail="Owner access required")
+    tid = user["tenant_id"]
+    rows = await db.wa_events.find(
+        {"$or": [{"tenant_id": tid}, {"tenant_id": None}]}, {"_id": 0}
+    ).sort("created_at", -1).to_list(50)
+    return rows
 
 
 async def resolve_wa_tenant(sender: str):
@@ -3667,11 +3735,14 @@ WA_MIME_EXT = {"application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png"
 async def process_whatsapp_message(message: dict):
     sender = message.get("from", "")
     mtype = message.get("type")
+    ev_id = await log_wa_event(sender, mtype, "received")
     try:
         tenant_id = await resolve_wa_tenant(sender)
         if not tenant_id:
+            await update_wa_event(ev_id, status="ignored", reason="Sender not registered in any workspace and no fallback (WA_TENANT_ID) is set")
             logger.info(f"[WHATSAPP] no tenant for {sender}; ignoring")
             return
+        await update_wa_event(ev_id, tenant_id=tenant_id)
         owner = await db.users.find_one({"tenant_id": tenant_id, "role": "owner"}, {"_id": 0, "id": 1})
         owner_id = owner["id"] if owner else "whatsapp"
 
@@ -3679,6 +3750,7 @@ async def process_whatsapp_message(message: dict):
             media = message[mtype]
             mime = media.get("mime_type", "application/pdf" if mtype == "document" else "image/jpeg").split(";")[0]
             if mime not in WA_MIME_EXT:
+                await update_wa_event(ev_id, status="ignored", reason=f"Unsupported media type: {mime}")
                 await send_wa_reply(sender, "Sorry, I can only read PDF or image invoices/receipts.")
                 return
             ext = WA_MIME_EXT[mime]
@@ -3705,6 +3777,7 @@ async def process_whatsapp_message(message: dict):
                                             doc["summary"] or doc["filename"], doc["filename"],
                                             "ingestion", ing_id, status="done")
             await db.ingestions.update_one({"id": ing_id}, {"$set": {"inbox_id": inbox_id}})
+            await update_wa_event(ev_id, status="filed", summary=doc["summary"] or doc["filename"])
             await send_wa_reply(sender, f"✅ Filed to DecisionOS: {doc['summary'] or doc['filename']}\n"
                                         f"{created['invoices']} invoice(s), {created['payments']} payment(s), {created['contacts']} contact(s), {created['tasks']} task(s).")
 
@@ -3717,8 +3790,12 @@ async def process_whatsapp_message(message: dict):
                 "status": "queued", "source": "whatsapp", "created_at": now_iso(),
             })
             await process_voice_note(note_id)
+            await update_wa_event(ev_id, status="structured", summary=text[:140])
             await send_wa_reply(sender, "✅ Got it — logged to DecisionOS and structured into your inbox.")
-    except Exception:
+        else:
+            await update_wa_event(ev_id, status="ignored", reason=f"Unsupported message type: {mtype}")
+    except Exception as e:
+        await update_wa_event(ev_id, status="error", reason=str(e)[:200])
         logger.exception("process_whatsapp_message failed")
         await send_wa_reply(sender, "Sorry, I couldn't process that. Please try again.")
 

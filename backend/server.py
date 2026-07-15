@@ -4091,7 +4091,7 @@ def _decide_processing_level(cls, confidence, amount, needs_owner, is_duplicate,
         return "confirm", ""
     if (is_document and confidence is not None and confidence >= AUTO_CONFIDENCE
             and amount is not None and 0 < amount < CAPTURE_THRESHOLD
-            and cls in ("invoice", "payment", "purchase", "sales")):
+            and cls in ("purchase", "sales")):
         return "auto", ""
     return "confirm", ""
 
@@ -4144,16 +4144,26 @@ async def persist_capture_draft(tenant_id, wa_from, kind, payload, tri, troles, 
         reviewer = dept if dept in troles else None
     if reviewer not in troles:
         reviewer = None
-    needs_owner = bool(tri.get("policy_or_high_risk")) or cls in ("approval", "decision") or (amount is not None and amount >= CAPTURE_THRESHOLD)
+    money_item = cls in ("invoice", "payment")
+    high_value = amount is not None and amount >= CAPTURE_THRESHOLD
     escalate_reason = ""
-    if needs_owner:
-        if amount is not None and amount >= CAPTURE_THRESHOLD:
-            escalate_reason = f"High-value item ({amount:,.0f})"
-        elif cls in ("approval", "decision"):
-            escalate_reason = f"{cls.title()}-level item"
-        else:
-            escalate_reason = "Policy / high-risk"
-        reviewer = "owner"
+    if money_item:
+        # Invoice/payment always flow to finance directly — finance owns them and can
+        # escalate/hand off afterward. High-value ones are tagged, not re-routed to the owner.
+        reviewer = "finance"
+        needs_owner = False
+        if high_value:
+            escalate_reason = f"High value ({amount:,.0f}) — verify before approving"
+    else:
+        needs_owner = bool(tri.get("policy_or_high_risk")) or cls in ("approval", "decision") or high_value
+        if needs_owner:
+            if high_value:
+                escalate_reason = f"High-value item ({amount:,.0f})"
+            elif cls in ("approval", "decision"):
+                escalate_reason = f"{cls.title()}-level item"
+            else:
+                escalate_reason = "Policy / high-risk"
+            reviewer = "owner"
     if not reviewer:
         reviewer = "owner"
     due = None

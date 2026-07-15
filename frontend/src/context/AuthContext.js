@@ -62,8 +62,15 @@ export function AuthProvider({ children }) {
     return data.tenant;
   };
 
+  const refreshMe = async () => {
+    const { data } = await api.get("/auth/me");
+    setUser(data.user);
+    setTenant(data.tenant);
+    return data.user;
+  };
+
   return (
-    <AuthContext.Provider value={{ user, tenant, loading, login, register, logout, refreshTenant, loginWithOtp }}>
+    <AuthContext.Provider value={{ user, tenant, loading, login, register, logout, refreshTenant, refreshMe, loginWithOtp }}>
       {children}
     </AuthContext.Provider>
   );

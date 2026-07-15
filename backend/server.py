@@ -1005,6 +1005,29 @@ async def me(user: dict = Depends(get_current_user)):
     return {"user": user, "tenant": tenant}
 
 
+class ProfileUpdateInput(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = None
+
+
+@api.patch("/auth/profile")
+async def update_profile(inp: ProfileUpdateInput, user: dict = Depends(get_current_user)):
+    updates = {}
+    if inp.name is not None and inp.name.strip():
+        updates["name"] = inp.name.strip()
+    if inp.phone is not None:
+        # Changing your number should re-enable WhatsApp matching for it.
+        updates["phone"] = inp.phone.strip()
+        updates["wa_phone_obsolete"] = False
+    if not updates:
+        raise HTTPException(status_code=400, detail="Nothing to update")
+    updates["updated_at"] = now_iso()
+    await db.users.update_one({"id": user["id"]}, {"$set": updates})
+    fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0, "password_hash": 0, "password": 0})
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    return {"user": fresh, "tenant": tenant}
+
+
 @api.patch("/tenant")
 async def update_tenant(inp: TenantUpdateInput, user: dict = Depends(require_perm("team_manage"))):
     updates = {}

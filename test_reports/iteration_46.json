@@ -1,0 +1,71 @@
+{
+  "summary": "Iteration 46 — WhatsApp Smart Capture (Phase 1) end-to-end validation. Backend pytest 15/15 PASS: /api/whatsapp/status + owner-only /api/whatsapp/logs (403 for non-owner), inbound webhook (localhost:8001) creates capture drafts via AI triage (sales, invoice, meeting, and high-value >=50000 escalated correctly with needs_owner=true), GET /api/captures with role-based visibility (owner sees all, sales sees only reviewer_role=sales), GET /api/captures/pending-count, PATCH edit, /reassign, /clarify (moves to clarification_requested), /reject (moves to rejected), /approve (executes → creates a decision, status→executed, result_ref populated), and 403 when a non-owner tries to approve a needs_owner=true draft. Frontend Playwright: owner login → sidebar 'Review Queue' with pending-count badge → /review page renders 4 status tabs and all pending cards with classification/reviewer/priority chips + escalation warning + all 5 action buttons; approving a non-escalated card synchronously executes and the card moves from Pending → Approved (executed) tab. No auto-execution observed anywhere.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Layout header (top-right)", "issues": ["Notification bell badge showed '180' — larger than the 20px pill can visually cap without overflow; consider capping display as '99+' for readability (unrelated to this iteration but visible while testing)."]}
+    ]
+  },
+  "tests_executed": [
+    {"case": "GET /api/whatsapp/status returns configured=true with display_number + all config booleans", "result": "PASS"},
+    {"case": "GET /api/whatsapp/logs owner=200 (list); sales=403", "result": "PASS"},
+    {"case": "POST /api/webhooks/whatsapp (localhost) with 'sales follow-up with Kapoor Retail' → pending draft with reviewer_role in sales/owner/... and needs_owner=false", "result": "PASS"},
+    {"case": "Webhook with 'invoice for 32000 from Gujarat Cotton Mills' → draft with classification in (invoice/purchase/payment) and reviewer_role in (finance/purchase/owner), needs_owner=false", "result": "PASS"},
+    {"case": "Webhook with 'approve purchase for 85000' (>=CAPTURE_THRESHOLD 50000) → draft with needs_owner=true, reviewer_role=owner, escalate_reason='High-value item (85,000)'", "result": "PASS"},
+    {"case": "Webhook with 'arrange sales review meeting next Friday' → draft with reviewer_role=owner (CAPTURE_ROUTING['meeting']='owner')", "result": "PASS"},
+    {"case": "GET /api/captures?status=pending_review as owner returns rows with all required fields (classification, reviewer_role, priority, summary, needs_owner) and NO _id leak", "result": "PASS"},
+    {"case": "GET /api/captures?status=pending_review as sales returns only reviewer_role='sales' rows", "result": "PASS"},
+    {"case": "GET /api/captures/pending-count returns {count:int}", "result": "PASS"},
+    {"case": "PATCH /api/captures/{id} with priority=high + summary=TEST_EDITED_SUMMARY persists (verified via subsequent GET)", "result": "PASS"},
+    {"case": "POST /api/captures/{id}/reassign {reviewer_role:'finance'} → reviewer_role updated (verified via GET)", "result": "PASS"},
+    {"case": "POST /api/captures/{id}/clarify {note:'…'} → status='clarification_requested', clarification_note stored", "result": "PASS"},
+    {"case": "POST /api/captures/{id}/reject {reason:'…'} → status='rejected', reason stored in clarification_note", "result": "PASS"},
+    {"case": "POST /api/captures/{id}/approve (owner, non-escalated text draft) → ok=true, result.type='decision', result.id present; draft moves to status='executed' with result_ref.type='decision'", "result": "PASS"},
+    {"case": "POST /api/captures/{id}/approve (finance user on needs_owner=true draft that was reassigned to finance) → 403 'This item requires Owner approval'", "result": "PASS"},
+    {"case": "FE: owner@sharma.com/demo1234 login → sidebar shows 'Review Queue' with nav-review-badge count matching /api/captures/pending-count", "result": "PASS"},
+    {"case": "FE: /review page has 4 status tabs (pending_review, clarification_requested, executed, rejected) and lists pending capture cards", "result": "PASS"},
+    {"case": "FE: Each pending card shows classification chip + reviewer_role chip + priority chip + (when needs_owner) 'Owner approval' escalation label + all 5 action buttons (approve/edit-btn/reassign/clarify/reject)", "result": "PASS"},
+    {"case": "FE: Approve a non-escalated pending card → card leaves Pending within ~6s and appears on Approved (executed) tab", "result": "PASS"},
+    {"case": "FE: Escalated (needs_owner) cards remain approve-enabled for owner (blockedByEscalation = needs_owner && !isOwner)", "result": "PASS"}
+  ],
+  "critical_code_review_comments": [
+    "server.py is now 4302 lines — WhatsApp + Smart Capture (~700 lines from 3590→4038) is a self-contained slice ideal for extraction into routers/whatsapp.py and routers/captures.py. Continues the same file-size concern flagged in iteration 44/45.",
+    "persist_capture_draft() forces reviewer_role='owner' when the routed department doesn't exist as a tenant role (line 3862-3863). For tenants without a 'finance' role, all invoice/payment drafts pile onto the owner. Consider surfacing this in the UI (e.g. a warning banner 'invoice drafts have no finance reviewer configured — routing to owner') or letting the tenant map classifications→roles in settings.",
+    "ai_capture_triage() has no timeout/retry on the LLM call. If the LLM stalls or returns malformed JSON the fallback is 'other'+medium priority — which is safe, but a stale/hanging LLM call blocks the background task and blocks the sender's confirmation reply. Consider wrapping in asyncio.wait_for(…, timeout=20).",
+    "CAPTURE_ROUTING (line 3802) hard-codes 'operations' as a possible department in the LLM prompt (line 3817) but 'operations' is not in the routing map and not part of the Sharma demo roles (sales/production/finance). The fallback re-routes to owner cleanly, but tightening the LLM prompt roles to the actual tenant roles would produce fewer owner-escalations for large tenants.",
+    "reject_capture stores the reason under 'clarification_note' (line 4007) — same field used by clarify. That's a naming collision and shows up in the UI as 'Note: <reject reason>' on rejected rows. Consider a separate 'rejection_reason' field.",
+    "The Approve action on the Review Queue synchronously waits for execute_capture → process_voice_note → LLM extraction, which took ~5-6s in the test. The FE has no loading indicator on the Approve button beyond a disabled state. Consider adding a spinner + 'Executing…' label; and possibly enqueue this as a background task and use polling like voice_notes so the button feels snappy.",
+    "The FE Captures page uses window.prompt() for reassign role, reject reason, and clarify note (Captures.js lines 111-122). This is jarring and inconsistent with the rest of the app (shadcn dialogs). Same UX concern raised in iteration 45 for task rejection.",
+    "ROLE_OPTS in Captures.js is hard-coded to ['sales','finance','purchase','hr','operations','owner'] instead of using the tenant's actual roles list from AuthContext.tenant.roles. On a tenant with custom roles ('production' etc.), reassignment via the built-in dropdown/prompt suggests roles the tenant doesn't have.",
+    "No pagination on GET /api/captures (to_list(100)) — will silently drop older drafts on a busy tenant. Add limit/offset.",
+    "GET /api/captures response doesn't currently include reviewer_role's members list, so the FE loads /api/users separately every time the Edit form opens. Fine for now, but a single joined response would remove a round-trip."
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_iteration46_capture.py",
+    "/app/test_reports/pytest/iteration_46.xml"
+  ],
+  "action_items": [
+    "(Enhancement) Add a rejection_reason field distinct from clarification_note (currently overloaded).",
+    "(Enhancement) Replace window.prompt() usage in Captures.js with shadcn Dialog for reassign / reject / clarify (consistency with rest of app).",
+    "(Enhancement) Drive ROLE_OPTS from tenant.roles instead of a hard-coded list.",
+    "(Enhancement) Add loading indicator on Approve button while execute_capture runs (~5-8s).",
+    "(Enhancement) Continue server.py extraction — move captures + whatsapp into their own routers."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration46_capture.py (created)",
+    "/app/test_reports/iteration_46.json (this file)",
+    "/app/test_reports/pytest/iteration_46.xml (generated)"
+  ],
+  "success_rate": {"backend": "100% (15/15 pytest)", "frontend": "100% (5/5 UI checkpoints)"},
+  "test_credentials": "owner@sharma.com / demo1234 (owner). sales@sharma.com / demo1234 used to verify role-scoped listing. finance@sharma.com / demo1234 used to verify 403 on escalated approve.",
+  "seed_data_creation": "Sent 8 synthetic WhatsApp text webhooks (all prefixed TEST_CAP_*): TEST_CAP_SALES, TEST_CAP_INVOICE, TEST_CAP_HIGHVAL, TEST_CAP_MEETING, TEST_CAP_ACTIONS_<ts>, TEST_CAP_REJECT_<ts>, TEST_CAP_APPROVE_<ts>, TEST_CAP_OWNER_ONLY_<ts>. All landed in the WA_TENANT_ID Sharma workspace via resolve_wa_tenant fallback. One draft was approved (creates a decision + tasks in Sharma tenant), one moved to clarification_requested, one to rejected. Remaining drafts left pending for main-agent visibility. UI also approved 1 additional non-escalated draft.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 46 WhatsApp Smart Capture (Phase 1) is fully working end-to-end. Key rules to preserve: (1) POST /api/webhooks/whatsapp NEVER auto-creates a decision/task — it only stores a capture_draft with status='pending_review'. (2) resolve_wa_tenant matches on invited_employees[].phone (last-10-digits) and falls back to WA_TENANT_ID env; the Sharma demo tenant WA_TENANT_ID=ae79cf8b-... is set so any sender is routed to Sharma unless matched to another tenant. (3) needs_owner is set when classification in (approval, decision), OR amount >= CAPTURE_THRESHOLD (50000 INR), OR policy_or_high_risk=true from the LLM. (4) POST /api/captures/{id}/approve is SYNCHRONOUS — it runs execute_capture which awaits process_voice_note (LLM call) → creates a decision + unblocked tasks and returns the result_ref. On the FE this is a 5-8s wait. (5) POST from Python must go to http://localhost:8001 not the external URL (Cloudflare WAF returns 403 for non-browser UAs on the webhook path). (6) reject/clarify both write to 'clarification_note' field — this is currently overloaded (minor concern flagged for main agent). (7) The FE nav badge (nav-review-badge) uses /api/captures/pending-count with refetchInterval=30s; the Review Queue itself refetches every 20s.",
+  "rca of the issue": "N/A — no issues found. All 15 backend tests and 5 UI checkpoints passed."
+}

@@ -3745,6 +3745,7 @@ async def process_whatsapp_message(message: dict):
         await update_wa_event(ev_id, tenant_id=tenant_id)
         owner = await db.users.find_one({"tenant_id": tenant_id, "role": "owner"}, {"_id": 0, "id": 1})
         owner_id = owner["id"] if owner else "whatsapp"
+        troles = await tenant_role_keys(tenant_id)
 
         if mtype in ("image", "document"):
             media = message[mtype]
@@ -3762,42 +3763,280 @@ async def process_whatsapp_message(message: dict):
             currency = await _tenant_currency(tenant_id)
             company = await _tenant_name(tenant_id)
             result = await ai_extract_document(str(UPLOAD_DIR / fname), mime, f"ingest-{ing_id}", currency, company)
-            doc = {
-                "id": ing_id, "tenant_id": tenant_id, "created_by": owner_id, "source": "whatsapp",
-                "kind": "pdf" if ext == "pdf" else "image", "filename": media.get("filename") or fname,
-                "file_url": f"/api/files/{fname}", "status": "review", "created_at": now_iso(),
-                "summary": result["summary"], "doc_type": result["doc_type"],
-                "confidence": result["confidence"], "records": result["records"],
-                "wa_from": sender,
-            }
-            created = await commit_ingestion_records(tenant_id, owner_id, result["records"], ing_id, "whatsapp")
-            doc.update({"status": "filed", "created_counts": created, "filed_at": now_iso()})
-            await db.ingestions.insert_one(dict(doc))
-            inbox_id = await add_inbox_item(tenant_id, owner_id, "whatsapp", _classify_ingestion(doc),
-                                            doc["summary"] or doc["filename"], doc["filename"],
-                                            "ingestion", ing_id, status="done")
-            await db.ingestions.update_one({"id": ing_id}, {"$set": {"inbox_id": inbox_id}})
-            await update_wa_event(ev_id, status="filed", summary=doc["summary"] or doc["filename"])
-            await send_wa_reply(sender, f"✅ Filed to DecisionOS: {doc['summary'] or doc['filename']}\n"
-                                        f"{created['invoices']} invoice(s), {created['payments']} payment(s), {created['contacts']} contact(s), {created['tasks']} task(s).")
+            recs = result.get("records", {})
+            amt = 0
+            for it in (recs.get("invoices", []) + recs.get("payments", [])):
+                try:
+                    amt = max(amt, float(it.get("amount") or 0))
+                except Exception:
+                    pass
+            cls = DOC_CLASS.get(result.get("doc_type"), "invoice")
+            dept = "finance" if cls in ("invoice", "payment") else ("purchase" if cls == "purchase" else "sales")
+            tri = {"classification": cls, "intent": result.get("doc_type", "document"),
+                   "summary": result.get("summary", ""), "department": dept,
+                   "priority": "medium", "amount": amt or None}
+            did = await persist_capture_draft(tenant_id, sender, ("pdf" if ext == "pdf" else "image"),
+                                              {"file_url": f"/api/files/{fname}", "filename": media.get("filename") or fname},
+                                              tri, troles, records=recs)
+            await update_wa_event(ev_id, status="draft", summary=result.get("summary") or fname)
+            await send_wa_reply(sender, "📎 Received — your document is being reviewed by the right team before it's filed.")
 
         elif mtype == "text":
             text = message["text"]["body"]
-            note_id = new_id()
-            await db.voice_notes.insert_one({
-                "id": note_id, "tenant_id": tenant_id, "created_by": owner_id, "kind": "text",
-                "audio_path": None, "transcript": text, "language": "auto",
-                "status": "queued", "source": "whatsapp", "created_at": now_iso(),
-            })
-            await process_voice_note(note_id)
-            await update_wa_event(ev_id, status="structured", summary=text[:140])
-            await send_wa_reply(sender, "✅ Got it — logged to DecisionOS and structured into your inbox.")
+            tri = await ai_capture_triage(text, sorted(troles))
+            did = await persist_capture_draft(tenant_id, sender, "text", {"text": text}, tri, troles)
+            await update_wa_event(ev_id, status="draft", summary=text[:140])
+            await send_wa_reply(sender, "✅ Received — your message is being reviewed by the right team before action.")
         else:
             await update_wa_event(ev_id, status="ignored", reason=f"Unsupported message type: {mtype}")
     except Exception as e:
         await update_wa_event(ev_id, status="error", reason=str(e)[:200])
         logger.exception("process_whatsapp_message failed")
         await send_wa_reply(sender, "Sorry, I couldn't process that. Please try again.")
+
+
+# ---------------------------------------------------------------------------
+# WhatsApp Smart Capture — AI triage → Capture Draft → role review → execute
+# ---------------------------------------------------------------------------
+CAPTURE_CLASSES = ["operational_task", "invoice", "payment", "purchase", "sales", "hr", "meeting", "decision", "approval", "workflow", "other"]
+CAPTURE_ROUTING = {
+    "invoice": "finance", "payment": "finance",
+    "sales": "sales", "purchase": "purchase", "hr": "hr",
+    "meeting": "owner", "decision": "owner", "approval": "owner",
+    "workflow": None, "operational_task": None, "other": None,
+}
+DOC_CLASS = {"sales_invoice": "invoice", "purchase_bill": "purchase", "payment": "payment",
+             "purchase_order": "purchase", "quotation": "sales", "receipt": "payment"}
+CAPTURE_THRESHOLD = float(os.environ.get("CAPTURE_OWNER_THRESHOLD", "50000"))
+
+_CAPTURE_SYS = (
+    "You are an operations triage AI for a business that receives instructions on WhatsApp. "
+    "Classify ONE incoming message and return ONLY JSON with keys: "
+    "classification (one of [operational_task, invoice, payment, purchase, sales, hr, meeting, decision, approval, workflow, other]), "
+    "intent (short phrase), summary (one clear sentence), "
+    "department (one of [sales, finance, purchase, hr, operations, owner]), "
+    "priority (one of [low, medium, high]), due_in_days (integer or null), "
+    "amount (number if a monetary value is mentioned, else null), "
+    "policy_or_high_risk (boolean — true for policy changes, contracts, legal, layoffs, big commitments). "
+    "Choose the department that should review this. Available team roles: {roles}."
+)
+
+
+async def ai_capture_triage(text: str, roles: list) -> dict:
+    system = _CAPTURE_SYS.replace("{roles}", ", ".join(roles) or "owner")
+    chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=f"capture-{new_id()}", system_message=system).with_model(*LLM_MODEL)
+    resp = await chat.send_message(UserMessage(text=(text or "")[:4000]))
+    try:
+        d = _extract_json(resp)
+    except Exception:
+        d = {}
+    if d.get("classification") not in CAPTURE_CLASSES:
+        d["classification"] = "other"
+    d.setdefault("intent", "")
+    d.setdefault("summary", (text or "")[:160])
+    if d.get("priority") not in ("low", "medium", "high"):
+        d["priority"] = "medium"
+    d.setdefault("department", "owner")
+    return d
+
+
+async def persist_capture_draft(tenant_id, wa_from, kind, payload, tri, troles, records=None):
+    cls = tri.get("classification", "other")
+    amount = tri.get("amount") if isinstance(tri.get("amount"), (int, float)) else None
+    dept = tri.get("department")
+    reviewer = CAPTURE_ROUTING.get(cls)
+    if reviewer is None:
+        reviewer = dept if dept in troles else None
+    if reviewer not in troles:
+        reviewer = None
+    needs_owner = bool(tri.get("policy_or_high_risk")) or cls in ("approval", "decision") or (amount is not None and amount >= CAPTURE_THRESHOLD)
+    escalate_reason = ""
+    if needs_owner:
+        if amount is not None and amount >= CAPTURE_THRESHOLD:
+            escalate_reason = f"High-value item ({amount:,.0f})"
+        elif cls in ("approval", "decision"):
+            escalate_reason = f"{cls.title()}-level item"
+        else:
+            escalate_reason = "Policy / high-risk"
+        reviewer = "owner"
+    if not reviewer:
+        reviewer = "owner"
+    due = None
+    if isinstance(tri.get("due_in_days"), int):
+        due = (datetime.now(timezone.utc) + timedelta(days=tri["due_in_days"])).isoformat()
+    did = new_id()
+    await db.capture_drafts.insert_one({
+        "id": did, "tenant_id": tenant_id, "source": "whatsapp", "wa_from": wa_from, "kind": kind,
+        "text": payload.get("text", ""), "file_url": payload.get("file_url"), "filename": payload.get("filename"),
+        "classification": cls, "intent": tri.get("intent", ""), "summary": tri.get("summary", ""),
+        "department": dept, "reviewer_role": reviewer, "assignee_id": None,
+        "priority": tri.get("priority", "medium"), "due_date": due, "amount": amount, "records": records,
+        "needs_owner": needs_owner, "escalate_reason": escalate_reason,
+        "status": "pending_review", "review_action": None, "clarification_note": None,
+        "created_at": now_iso(), "reviewed_by": None, "reviewed_at": None, "result_ref": None,
+    })
+    return did
+
+
+async def execute_capture(d: dict, user: dict):
+    tenant_id = d["tenant_id"]
+    # Document-based drafts → file the extracted financial records.
+    if d.get("records") and d.get("kind") in ("pdf", "image", "document"):
+        ing_id = new_id()
+        created = await commit_ingestion_records(tenant_id, user["id"], d["records"], ing_id, "whatsapp")
+        doc = {
+            "id": ing_id, "tenant_id": tenant_id, "created_by": user["id"], "source": "whatsapp",
+            "kind": d.get("kind"), "filename": d.get("filename") or f"{ing_id}", "file_url": d.get("file_url"),
+            "status": "filed", "created_at": now_iso(), "summary": d.get("summary", ""),
+            "doc_type": d.get("classification"), "records": d["records"], "created_counts": created,
+            "filed_at": now_iso(), "wa_from": d.get("wa_from"),
+        }
+        await db.ingestions.insert_one(dict(doc))
+        inbox_id = await add_inbox_item(tenant_id, user["id"], "whatsapp", _classify_ingestion(doc),
+                                        doc["summary"] or doc["filename"], doc["filename"], "ingestion", ing_id, status="done")
+        await db.ingestions.update_one({"id": ing_id}, {"$set": {"inbox_id": inbox_id}})
+        return {"type": "ingestion", "id": ing_id, "created": created}
+    # Text / instruction drafts → run the structuring pipeline, then apply reviewer overrides + release.
+    note_id = new_id()
+    await db.voice_notes.insert_one({
+        "id": note_id, "tenant_id": tenant_id, "created_by": user["id"], "kind": "text",
+        "audio_path": None, "transcript": d.get("text") or d.get("summary") or "", "language": "auto",
+        "status": "queued", "source": "whatsapp", "created_at": now_iso(),
+    })
+    await process_voice_note(note_id)
+    vn = await db.voice_notes.find_one({"id": note_id}, {"_id": 0, "decision_id": 1})
+    decision_id = (vn or {}).get("decision_id")
+    if decision_id:
+        overrides = {}
+        if d.get("assignee_id"):
+            overrides["assignee_id"] = d["assignee_id"]
+        if d.get("priority"):
+            overrides["priority"] = d["priority"]
+        if d.get("due_date"):
+            overrides["due_date"] = d["due_date"]
+        if overrides:
+            overrides["updated_at"] = now_iso()
+            overrides["last_action"] = "Set by reviewer"
+            await db.tasks.update_many({"decision_id": decision_id}, {"$set": overrides})
+        # Reviewer approved the capture → release the decision's blocked tasks.
+        await db.decisions.update_one({"id": decision_id}, {"$set": {"status": "approved"}})
+        await db.tasks.update_many({"decision_id": decision_id, "status": "blocked"},
+                                   {"$set": {"status": "todo", "updated_at": now_iso(), "last_action": "Approved via capture"}})
+    return {"type": "decision", "id": decision_id}
+
+
+class CaptureEditInput(BaseModel):
+    classification: Optional[str] = None
+    reviewer_role: Optional[str] = None
+    assignee_id: Optional[str] = None
+    priority: Optional[str] = None
+    due_date: Optional[str] = None
+    summary: Optional[str] = None
+    text: Optional[str] = None
+
+
+class CaptureActionInput(BaseModel):
+    note: Optional[str] = ""
+    reason: Optional[str] = ""
+    reviewer_role: Optional[str] = None
+    assignee_id: Optional[str] = None
+
+
+async def _get_draft(cid, user):
+    d = await db.capture_drafts.find_one({"id": cid, "tenant_id": user["tenant_id"]}, {"_id": 0})
+    if not d:
+        raise HTTPException(status_code=404, detail="Capture not found")
+    if user["role"] != "owner" and d["reviewer_role"] != user["role"]:
+        raise HTTPException(status_code=403, detail="Not your review queue")
+    return d
+
+
+@api.get("/captures")
+async def list_captures(status: str = "pending_review", user: dict = Depends(get_current_user)):
+    q = {"tenant_id": user["tenant_id"]}
+    if status and status != "all":
+        q["status"] = status
+    if user["role"] != "owner":
+        q["reviewer_role"] = user["role"]
+    rows = await db.capture_drafts.find(q, {"_id": 0}).sort("created_at", -1).to_list(100)
+    ids = [r["assignee_id"] for r in rows if r.get("assignee_id")]
+    umap = {}
+    if ids:
+        for u in await db.users.find({"id": {"$in": ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(100):
+            umap[u["id"]] = u["name"]
+    for r in rows:
+        r["assignee_name"] = umap.get(r.get("assignee_id"))
+    return rows
+
+
+@api.get("/captures/pending-count")
+async def captures_pending_count(user: dict = Depends(get_current_user)):
+    q = {"tenant_id": user["tenant_id"], "status": "pending_review"}
+    if user["role"] != "owner":
+        q["reviewer_role"] = user["role"]
+    return {"count": await db.capture_drafts.count_documents(q)}
+
+
+@api.patch("/captures/{cid}")
+async def edit_capture(cid: str, inp: CaptureEditInput, user: dict = Depends(get_current_user)):
+    await _get_draft(cid, user)
+    updates = {k: v for k, v in inp.dict().items() if v is not None}
+    if updates:
+        await db.capture_drafts.update_one({"id": cid}, {"$set": updates})
+    return await db.capture_drafts.find_one({"id": cid}, {"_id": 0})
+
+
+@api.post("/captures/{cid}/reassign")
+async def reassign_capture(cid: str, inp: CaptureActionInput, user: dict = Depends(get_current_user)):
+    await _get_draft(cid, user)
+    updates = {}
+    if inp.reviewer_role:
+        updates["reviewer_role"] = inp.reviewer_role
+    if inp.assignee_id is not None:
+        updates["assignee_id"] = inp.assignee_id or None
+    if updates:
+        await db.capture_drafts.update_one({"id": cid}, {"$set": updates})
+    return {"ok": True}
+
+
+@api.post("/captures/{cid}/reject")
+async def reject_capture(cid: str, inp: CaptureActionInput, user: dict = Depends(get_current_user)):
+    await _get_draft(cid, user)
+    await db.capture_drafts.update_one({"id": cid}, {"$set": {
+        "status": "rejected", "review_action": "rejected", "reviewed_by": user["id"],
+        "reviewed_at": now_iso(), "clarification_note": inp.reason or "",
+    }})
+    return {"ok": True}
+
+
+@api.post("/captures/{cid}/clarify")
+async def clarify_capture(cid: str, inp: CaptureActionInput, user: dict = Depends(get_current_user)):
+    d = await _get_draft(cid, user)
+    await db.capture_drafts.update_one({"id": cid}, {"$set": {
+        "status": "clarification_requested", "review_action": "clarify",
+        "reviewed_by": user["id"], "reviewed_at": now_iso(), "clarification_note": inp.note or "",
+    }})
+    if d.get("wa_from") and inp.note:
+        await send_wa_reply(d["wa_from"], f"❓ Clarification needed on your message: {inp.note}")
+    return {"ok": True}
+
+
+@api.post("/captures/{cid}/approve")
+async def approve_capture(cid: str, user: dict = Depends(get_current_user)):
+    d = await _get_draft(cid, user)
+    if d["status"] not in ("pending_review", "clarification_requested"):
+        raise HTTPException(status_code=400, detail="Already processed")
+    if d.get("needs_owner") and user["role"] != "owner":
+        raise HTTPException(status_code=403, detail="This item requires Owner approval")
+    result = await execute_capture(d, user)
+    await db.capture_drafts.update_one({"id": cid}, {"$set": {
+        "status": "executed", "review_action": "approved", "reviewed_by": user["id"],
+        "reviewed_at": now_iso(), "result_ref": result,
+    }})
+    if d.get("wa_from"):
+        await send_wa_reply(d["wa_from"], "✅ Approved and actioned in DecisionOS.")
+    return {"ok": True, "result": result}
+
 
 
 # ---------------------------------------------------------------------------

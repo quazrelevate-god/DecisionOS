@@ -27,6 +27,7 @@ import {
   MoonStars,
   Briefcase,
   MicrophoneStage,
+  ClipboardText,
   List as ListIcon,
   FileArrowUp,
   Tray,
@@ -39,6 +40,7 @@ const NAV = [
   { to: "/contacts", label: "People", icon: AddressBook, testid: "nav-contacts", perm: "people" },
   { to: "/brain", label: "Company Brain", icon: BrainIcon, testid: "nav-brain", perm: "brain" },
   { to: "/ingest", label: "Capture", icon: FileArrowUp, testid: "nav-ingest", perm: "data_input" },
+  { to: "/review", label: "Review Queue", icon: ClipboardText, testid: "nav-review" },
   { to: "/workflows", label: "Workflows", icon: Kanban, testid: "nav-workflows", perm: "workflows" },
   { to: "/meetings", label: "Meeting Notes", icon: MicrophoneStage, testid: "nav-meetings" },
 ];
@@ -76,6 +78,8 @@ export default function Layout({ children }) {
   const unread = notif?.unread || 0;
   const { data: brief } = useQuery({ queryKey: ["fires-count"], queryFn: () => api.get("/brief?period=morning").then((r) => r.data), refetchInterval: 60000, enabled: user?.role === "owner" });
   const fires = brief?.counters?.fires || 0;
+  const { data: capPending } = useQuery({ queryKey: ["captures-pending"], queryFn: () => api.get("/captures/pending-count").then((r) => r.data), refetchInterval: 30000 });
+  const captureCount = capPending?.count || 0;
 
   const Bellicon = () => (
     <button onClick={() => navigate("/notifications")} data-testid="notif-bell"
@@ -147,6 +151,12 @@ export default function Layout({ children }) {
             <span data-testid="nav-fires-badge" title={`${fires} fire(s) to put out`}
               className="ml-auto bg-brand-red text-white text-[10px] min-w-5 h-5 px-1 flex items-center justify-center border border-black font-bold rounded-full animate-pulse">
               {fires}
+            </span>
+          )}
+          {to === "/review" && captureCount > 0 && (
+            <span data-testid="nav-review-badge" title={`${captureCount} item(s) to review`}
+              className="ml-auto bg-brand-red text-white text-[10px] min-w-5 h-5 px-1 flex items-center justify-center border border-black font-bold rounded-full">
+              {captureCount}
             </span>
           )}
         </NavLink>

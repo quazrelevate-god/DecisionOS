@@ -208,3 +208,12 @@ User request: owner can promote a partner/employee to Owner. Confirmed: CO-OWNER
 Backend (server.py): create_user + update_user now allow role 'owner' ONLY when acting user.role=='owner' (else 403 'Only an owner can grant the Owner role'); owner role forces permissions=list(PERMISSION_KEYS) (full access); demoting an owner checks owner count and returns 400 'Cannot demote the last owner…' if <=1; imported PERMISSION_KEYS from core.
 Frontend (Team.js): roleOptions includes {key:'owner'} only when acting user is owner; member 'Access' edit button shown for owner rows only to acting owners; MemberDialog setRole(owner)=>full perms, hides permission grid + shows owner-access-note for owner role; save() shows window.confirm on promote ('co-owner with FULL control') and demote ('at least one owner must remain').
 Verified: curl (promote/co-owner/demote/last-owner 400/non-owner 403) + iteration_53 frontend 17/17 PASS. REDEPLOY to production.
+
+## Fix: WhatsApp payment/invoice captures only visible to owner (2026-07-17)
+Bug (user): a bank payment screenshot sent via WhatsApp showed only in the OWNER's review queue, not the finance/accounts role's.
+Root cause: persist_capture_draft hardcoded reviewer_role="finance" for money items, but list_captures shows a draft to a non-owner ONLY if their role key == reviewer_role. Tenants whose finance person has a differently-keyed role (e.g. "accounts") → nobody but the owner (who sees all) saw it.
+Fix (server.py):
+1. Added _finance_role_key(tenant_id, troles): resolves money-item reviewer to the tenant's real finance/accounts role by key/label hints (financ|account|accts|treasur|billing|audit); falls back to owner if none. Money items now route to reviewer = _finance_role_key(...) or "owner".
+2. Added reviewer_perm field (="finance" for money items). list_captures + captures/pending-count now show a draft to non-owners where reviewer_role==user.role OR reviewer_perm in user's permissions — so anyone with the FINANCE permission sees finance captures regardless of role-key naming.
+Verified: curl (owner + sales-with-finance-perm see it; production-without-perm doesn't) and _finance_role_key unit checks (accounts->accounts, finance->finance, none->None). Backend-only.
+NOTE: the user's already-sent capture (created before this fix) lacks reviewer_perm — owner can Reassign it to the finance/accounts person. Future captures auto-route correctly. REDEPLOY to production.

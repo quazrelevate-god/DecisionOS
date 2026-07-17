@@ -4315,6 +4315,19 @@ CAPTURE_ROUTING = {
     "meeting": "owner", "decision": "owner", "approval": "owner",
     "workflow": None, "operational_task": None, "other": None,
 }
+FINANCE_ROLE_HINTS = ("financ", "account", "accts", "treasur", "billing", "audit")
+
+
+async def _finance_role_key(tenant_id: str, troles: set) -> Optional[str]:
+    """Find the tenant's finance/accounts role key (role names vary by industry)."""
+    if "finance" in troles:
+        return "finance"
+    t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "roles": 1})
+    for r in ((t.get("roles") if t else None) or []):
+        blob = f"{r.get('key', '')} {r.get('label', '')}".lower()
+        if any(h in blob for h in FINANCE_ROLE_HINTS):
+            return r.get("key")
+    return None
 DOC_CLASS = {"sales_invoice": "invoice", "purchase_bill": "purchase", "payment": "payment",
              "purchase_order": "purchase", "quotation": "sales", "receipt": "payment"}
 CAPTURE_THRESHOLD = float(os.environ.get("CAPTURE_OWNER_THRESHOLD", "50000"))
@@ -4419,12 +4432,14 @@ async def persist_capture_draft(tenant_id, wa_from, kind, payload, tri, troles, 
     if reviewer not in troles:
         reviewer = None
     money_item = cls in ("invoice", "payment")
+    reviewer_perm = "finance" if money_item else None
     high_value = amount is not None and amount >= CAPTURE_THRESHOLD
     escalate_reason = ""
     if money_item:
-        # Invoice/payment always flow to finance directly — finance owns them and can
-        # escalate/hand off afterward. High-value ones are tagged, not re-routed to the owner.
-        reviewer = "finance"
+        # Invoice/payment always flow to finance directly — routed to the tenant's actual
+        # finance/accounts role (role names vary by industry). reviewer_perm ensures anyone
+        # with the finance permission sees it even if their role key differs.
+        reviewer = await _finance_role_key(tenant_id, troles) or "owner"
         needs_owner = False
         if high_value:
             escalate_reason = f"High value ({amount:,.0f}) — verify before approving"
@@ -4448,7 +4463,7 @@ async def persist_capture_draft(tenant_id, wa_from, kind, payload, tri, troles, 
         "id": did, "tenant_id": tenant_id, "source": "whatsapp", "wa_from": wa_from, "kind": kind,
         "text": payload.get("text", ""), "file_url": payload.get("file_url"), "filename": payload.get("filename"),
         "classification": cls, "intent": tri.get("intent", ""), "summary": tri.get("summary", ""),
-        "department": dept, "reviewer_role": reviewer, "assignee_id": None,
+        "department": dept, "reviewer_role": reviewer, "reviewer_perm": reviewer_perm, "assignee_id": None,
         "priority": tri.get("priority", "medium"), "due_date": due, "amount": amount, "records": records,
         "needs_owner": needs_owner, "escalate_reason": escalate_reason,
         "confidence": confidence, "processing_level": processing_level,
@@ -4539,7 +4554,7 @@ async def list_captures(status: str = "pending_review", user: dict = Depends(get
     if status and status != "all":
         q["status"] = status
     if user["role"] != "owner":
-        q["reviewer_role"] = user["role"]
+        q["$or"] = [{"reviewer_role": user["role"]}, {"reviewer_perm": {"$in": list(user_perms(user))}}]
     rows = await db.capture_drafts.find(q, {"_id": 0}).sort("created_at", -1).to_list(100)
     ids = [r["assignee_id"] for r in rows if r.get("assignee_id")]
     umap = {}
@@ -4555,7 +4570,7 @@ async def list_captures(status: str = "pending_review", user: dict = Depends(get
 async def captures_pending_count(user: dict = Depends(get_current_user)):
     q = {"tenant_id": user["tenant_id"], "status": {"$in": ["pending_review", "needs_attention"]}}
     if user["role"] != "owner":
-        q["reviewer_role"] = user["role"]
+        q["$or"] = [{"reviewer_role": user["role"]}, {"reviewer_perm": {"$in": list(user_perms(user))}}]
     return {"count": await db.capture_drafts.count_documents(q)}
 
 

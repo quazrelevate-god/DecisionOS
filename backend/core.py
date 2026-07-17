@@ -27,6 +27,8 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 EMERGENT_LLM_KEY = os.environ['EMERGENT_LLM_KEY']
+# All Claude Sonnet 4.6 calls use the user's own Anthropic key when set, else the Emergent universal key.
+CLAUDE_KEY = os.environ.get('ANTHROPIC_API_KEY', '').strip() or EMERGENT_LLM_KEY
 JWT_SECRET = os.environ['JWT_SECRET']
 JWT_ALGORITHM = "HS256"
 LLM_MODEL = ("anthropic", "claude-sonnet-4-6")

@@ -1,125 +1,102 @@
 {
-  "theme": "LIGHT",
-  "archetype": "4 (Swiss & High-Contrast)",
-  "design_philosophy": {
-    "identity": "E1 The Anti-AI Designer",
-    "core_principles": [
-      "Color is function. 95% monochrome with highly intentional accent colors.",
-      "Tension over harmony. Asymmetry and harsh contrast replace safe AI templates.",
-      "The OS is the brain. Utilitarian, modular, raw structures with exposed borders."
-    ],
-    "anti_patterns": [
-      "No gradients over 20%.",
-      "No center-everything layouts.",
-      "No Inter, Roboto, Open Sans for headings.",
-      "No soft, muddy shadows."
-    ]
-  },
+  "app_name": "DecisionOS",
+  "theme_strategy": "Dual-theme (Light/Dark) modern 2026 SaaS aesthetic. Transitioning from heavy Brutalism to 'Optical Clarity' and precision (Vercel/Linear style). Retaining the core Red/Black identity as the hero signature.",
   "colors": {
-    "base": {
-      "background": "#F4F4F5",
-      "surface": "#FFFFFF",
-      "foreground": "#0A0A0B"
+    "primary_red": "#FF3B30",
+    "base_dark": "#0A0A0B",
+    "base_light": "#F4F4F5",
+    "semantic": "Demote the existing vibrant blue/yellow to pure semantic states (info/warning) to maintain a calm, premium 'ink/paper/red' dominance.",
+    "css_variables_light": {
+      "--background": "0 0% 100%",
+      "--foreground": "240 10% 4%",
+      "--card": "0 0% 100%",
+      "--card-foreground": "240 10% 4%",
+      "--popover": "0 0% 100%",
+      "--popover-foreground": "240 10% 4%",
+      "--primary": "359 100% 59%",
+      "--primary-foreground": "0 0% 100%",
+      "--secondary": "240 5% 96%",
+      "--secondary-foreground": "240 10% 4%",
+      "--muted": "240 5% 96%",
+      "--muted-foreground": "240 4% 46%",
+      "--accent": "240 5% 96%",
+      "--accent-foreground": "240 10% 4%",
+      "--border": "240 6% 90%",
+      "--input": "240 6% 90%",
+      "--ring": "359 100% 59%",
+      "--radius": "0.5rem"
     },
-    "accents": {
-      "primary": "#FF3B30",
-      "secondary": "#002FA7",
-      "warning": "#FFCC00"
-    },
-    "borders": {
-      "default": "#18181B",
-      "subtle": "rgba(0, 0, 0, 0.1)"
-    },
-    "states": {
-      "hover": "rgba(0, 0, 0, 0.05)",
-      "active": "rgba(0, 0, 0, 0.1)"
+    "css_variables_dark": {
+      "--background": "240 5% 4%",
+      "--foreground": "0 0% 98%",
+      "--card": "240 5% 4%",
+      "--card-foreground": "0 0% 98%",
+      "--popover": "240 5% 4%",
+      "--popover-foreground": "0 0% 98%",
+      "--primary": "359 100% 59%",
+      "--primary-foreground": "0 0% 100%",
+      "--secondary": "240 4% 16%",
+      "--secondary-foreground": "0 0% 98%",
+      "--muted": "240 4% 16%",
+      "--muted-foreground": "240 5% 65%",
+      "--accent": "240 4% 16%",
+      "--accent-foreground": "0 0% 98%",
+      "--border": "240 4% 16%",
+      "--input": "240 4% 16%",
+      "--ring": "359 100% 59%",
+      "--radius": "0.5rem"
     }
   },
   "typography": {
-    "headings": {
-      "family": "Chivo, sans-serif",
-      "weights": ["800", "900"],
-      "tracking": "tracking-tighter"
-    },
-    "body": {
-      "family": "IBM Plex Mono, monospace",
-      "weights": ["400", "500"]
-    },
-    "hierarchy": {
-      "h1": "text-4xl sm:text-5xl lg:text-6xl font-black uppercase tracking-tighter text-foreground",
-      "h2": "text-2xl sm:text-3xl lg:text-4xl font-extrabold uppercase tracking-tight text-foreground",
-      "h3": "text-xl sm:text-2xl font-bold uppercase text-foreground",
-      "body": "text-base leading-relaxed text-foreground",
-      "labels": "text-xs uppercase tracking-[0.2em] font-medium text-foreground"
+    "heading_font": "Geist Sans (or Satoshi)",
+    "body_font": "Geist Sans (or Satoshi)",
+    "mono_font": "IBM Plex Mono",
+    "rationale": "Geist Sans (or Satoshi) provides the razor-sharp 2026 tech aesthetic required for the upgrade, stripping away the heavy 'chunkiness' of Chivo. Retaining IBM Plex Mono for technical/data/OS outputs maintains the established 'DecisionOS brain' character.",
+    "scales": {
+      "h1": "text-4xl sm:text-5xl font-semibold tracking-tight",
+      "h2": "text-2xl sm:text-3xl font-semibold tracking-tight",
+      "h3": "text-xl font-medium tracking-tight",
+      "body": "text-base font-normal text-muted-foreground",
+      "labels": "font-mono text-xs uppercase tracking-[0.1em]"
     }
   },
-  "spacing_and_layout": {
-    "strategy": "The Control Room Grid",
-    "grid_system": "grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6",
-    "containers": "border-collapse style layout, sharp edges, 1px solid borders.",
-    "padding": "Generous internal padding for cards (p-6 or p-8).",
-    "radii": "rounded-none (Brutalist strictness)"
+  "elevation_and_depth": {
+    "brutalism_replacement": "Completely remove 'shadow-brutal' (hard black offsets). Move to 'layered subtle depth'.",
+    "light_mode": "Use hairline borders (`border-border`) combined with incredibly subtle layered shadows (`shadow-sm` or custom `shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)]`).",
+    "dark_mode": "Zero outer drop shadows. Rely entirely on 1px borders (`border-white/10` or `border-border`) and subtle inner highlights (`shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)]`) to create crisp depth without mud.",
+    "glassmorphism": "Use heavily saturated glass for sticky headers/nav overlays: `bg-background/70 backdrop-blur-xl border-b border-border`. NEVER use a fully transparent background."
   },
-  "components": {
-    "buttons": "Square edges, solid primary color or transparent with 1px black border. High contrast text.",
-    "cards": "Flat background, 1px solid border-[#18181B], no shadow. Hover: slight lift (-translate-y-1) and sharp black shadow (shadow-[4px_4px_0px_#000]).",
-    "voice_recorder": "Large, immersive button (Safe Zone enabled) with solid primary color. Z-axis 3D waveform or visual breath ring. Real-time mono-spaced captions below it.",
-    "workflow_boards": "Kanban style but brutalist. Exposed borders. Background white, columns separated by 1px solid border. No gaps between columns.",
-    "chat_interface": "Command-line aesthetic for 'Ask AI'. Monospace inputs, system-like prompt prefixes (>) instead of chat bubbles.",
-    "shadcn_overrides": [
-      "Override all border-radius to 0 (rounded-none).",
-      "Replace soft box-shadows with hard 1px borders or solid offset shadows.",
-      "Use IBM Plex Mono for form inputs and table cells."
-    ]
+  "radii_and_spacing": {
+    "radius": "Move from `rounded-none` to `rounded-lg` (8px) and `rounded-xl` (12px) to soften the aggressive edge while staying precise. Buttons: `rounded-md`. Cards: `rounded-xl`.",
+    "density": "High density for Data/Dashboard sections. Use `gap-4` or `gap-6` between bento grid items. Internal card padding must be at least `p-6` to avoid cramped data. Use 'The Bento Grid Protocol'."
   },
-  "motion": {
-    "philosophy": "Micro-interactions for feedback only. Snappy, mechanical.",
-    "hover": "transition-transform duration-200 ease-out",
-    "voice_active": "Pulse animation for recording state, dynamic scaling for waveform.",
-    "accessibility": "Must respect prefers-reduced-motion."
+  "component_treatments": {
+    "sidebar_nav_shell": "Solid muted background (`bg-muted/30` or `bg-zinc-950`). Active menu items should have a subtle red left-border indicator (`border-l-2 border-primary`) with an extremely subtle red background tint.",
+    "cards": "Remove brutalist boxes. Use `bg-card border border-border rounded-xl`. Focus on the 'Grid Borders' concept where adjacent cards align beautifully with consistent 1px borders.",
+    "buttons": {
+      "primary": "Solid `#FF3B30` (`bg-primary`), white text. On hover, do NOT lighten color; instead use an interaction lift: `hover:-translate-y-[1px] transition-transform` and `active:scale-[0.98]`.",
+      "secondary": "Outline or soft fill. `bg-secondary text-secondary-foreground border border-border`. Hover: `bg-secondary/80`.",
+      "ghost": "Transparent background, hover `bg-accent text-accent-foreground`."
+    },
+    "inputs": "Flat surfaces. `bg-background border border-input rounded-md`. Focus state MUST use the brand red ring: `focus-visible:ring-1 focus-visible:ring-primary focus-visible:border-primary`.",
+    "chips_badges": "Use `IBM Plex Mono` for text. Light background tint with solid border (e.g., `bg-primary/10 text-primary border border-primary/20` for red tags).",
+    "tables": "Edge-to-edge inside a rounded-xl container. `border-b border-border` on rows. Hover: `bg-muted/50`. Align numeric metrics to the right."
   },
-  "icons": {
-    "library": "@phosphor-icons/react",
-    "style": "Regular or Bold weight (no duotone or light for brutalist theme).",
-    "installation": "yarn add @phosphor-icons/react"
+  "motion_and_interactions": {
+    "tactile_clicks": "Add `active:scale-[0.98]` to all buttons and actionable cards for a premium tactile feel.",
+    "color_fades": "Fade background colors smoothly using `transition-colors duration-200`.",
+    "entrances": "Staggered fade-up for feed items/dashboard cards (e.g., `opacity-0 translate-y-2` fading into `opacity-100 translate-y-0`).",
+    "strict_rule": "NEVER use `transition-all`. Specify exact properties (e.g., `transition-[transform,color]`)."
   },
-  "media": {
-    "images": [
-      {
-        "category": "texture",
-        "description": "Background noise for active voice recording state or brutalist accents",
-        "url": "https://images.pexels.com/photos/18599094/pexels-photo-18599094.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
-      },
-      {
-        "category": "avatar_owner",
-        "description": "Sharma - Owner Avatar",
-        "url": "https://images.pexels.com/photos/26872232/pexels-photo-26872232.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
-      },
-      {
-        "category": "avatar_team",
-        "description": "Sales/Finance Lead Avatar",
-        "url": "https://images.pexels.com/photos/31869537/pexels-photo-31869537.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
-      },
-      {
-        "category": "logo_placeholder",
-        "description": "DecisionOS Minimalist Logo Element",
-        "url": "https://images.pexels.com/photos/5477692/pexels-photo-5477692.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
-      }
-    ]
+  "tailwind_config_tokens": {
+    "theme_extend_snippet": "colors: { brand: { red: '#FF3B30', ink: '#0A0A0B', paper: '#F4F4F5' } }, fontFamily: { sans: ['Geist Sans', 'Satoshi', 'sans-serif'], mono: ['IBM Plex Mono', 'monospace'] }, boxShadow: { subtle: '0 2px 8px -2px rgba(0,0,0,0.05)', 'glass-dark': 'inset 0 1px 0 0 rgba(255,255,255,0.05)' }"
   },
-  "accessibility_and_testing": {
-    "contrast": "Minimum 4.5:1 ratio enforced everywhere.",
-    "testing_attributes": "All interactive elements MUST include data-testid attribute. Format: kebab-case, role-based. Examples: data-testid='voice-record-button', data-testid='approve-task-button', data-testid='owner-inbox-tab'."
-  },
-  "instructions_to_main_agent": [
-    "Install Google Fonts 'Chivo' and 'IBM Plex Mono' via index.css or index.html.",
-    "Install @phosphor-icons/react.",
-    "Configure tailwind.config.js with the specified custom colors, font families, and extend box-shadow for the brutalist shadow-[4px_4px_0px_#000] effect.",
-    "Build the dashboard using pure HTML/Tailwind for the structural grid. Use Shadcn components for complex interactive elements (Dialog, Select, Tabs).",
-    "CRITICAL: Strip out any rounded corners from Shadcn components using 'rounded-none'. Replace any soft shadows with 1px black borders.",
-    "Implement the 'Voice-first owner inbox' with the brutalist aesthetic: high-contrast recording button, real-time mono-spaced captions.",
-    "Ensure all components use the '.js' extension instead of '.tsx' since this environment requires JavaScript.",
-    "For the 'Company Brain' and 'Ask AI' interfaces, implement a clean, data-dense layout using 'IBM Plex Mono' to evoke a command-center/technical feel.",
-    "Ensure ALL interactive items (buttons, inputs, workflow cards) have data-testid attributes for testing."
+  "universal_guidelines_for_main_agent": [
+    "CRITICAL: You are working with `.js` files, not `.tsx`. Do not include TypeScript types or interfaces.",
+    "CRITICAL: All interactive and key informational elements MUST include a `data-testid` attribute (e.g., `data-testid=\"decision-desk-submit\"`).",
+    "DO NOT use complete `transparent` background in headers, dropdowns, overlays, or any surface over content. Always use solid colors or glassmorphism (`backdrop-blur-xl bg-background/80`).",
+    "Replace ALL old brutalist classes (`shadow-brutal`, `rounded-none`, `label-mono`, `card-brutal`) with the new precise 2026 tokens.",
+    "Apply 'Optical Alignment' - adjust padding slightly if icons make text look misaligned inside buttons or lists.",
+    "Use Phosphor icons consistently to match the premium tech aesthetic."
   ]
 }

@@ -48,9 +48,9 @@ const MENU_PREVIEW = [
   { label: "Meeting Notes", perm: null },
 ];
 
-function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite }) {
+function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite, members = [] }) {
   const [open, setOpen] = useState(false);
-  const blank = { name: "", email: "", password: "", phone: "", passwordless: false, role: roleOptions[0]?.key || "", permissions: defaultPermsForRole(roleOptions[0]?.key) };
+  const blank = { name: "", email: "", password: "", phone: "", passwordless: false, role: roleOptions[0]?.key || "", permissions: defaultPermsForRole(roleOptions[0]?.key), reporting_manager_id: "" };
   const [form, setForm] = useState(blank);
   const editing = !!initial;
 
@@ -61,6 +61,7 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite }) {
         setForm({
           name: initial.name, email: initial.email, password: "", phone: initial.phone || "", passwordless: false, role: initial.role,
           permissions: Array.isArray(initial.permissions) && initial.permissions.length ? [...initial.permissions] : defaultPermsForRole(initial.role),
+          reporting_manager_id: initial.reporting_manager_id || "",
         });
       } else setForm(blank);
     }
@@ -72,17 +73,18 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite }) {
   const save = async () => {
     try {
       if (editing) {
-        await api.patch(`/users/${initial.id}`, { role: form.role, permissions: form.permissions, phone: form.phone });
+        await api.patch(`/users/${initial.id}`, { role: form.role, permissions: form.permissions, phone: form.phone, reporting_manager_id: form.reporting_manager_id || null });
         toast.success(`${initial.name}'s access updated`);
       } else {
         if (!form.name.trim() || !form.email.trim()) return toast.error("Name and email are required");
         let res;
+        const base = { name: form.name, email: form.email, role: form.role, permissions: form.permissions, phone: form.phone, reporting_manager_id: form.reporting_manager_id || null };
         if (form.passwordless) {
           if (form.phone.replace(/\D/g, "").length < 10) return toast.error("A valid mobile number is required for OTP login");
-          res = await api.post("/users", { name: form.name, email: form.email, role: form.role, permissions: form.permissions, phone: form.phone });
+          res = await api.post("/users", base);
         } else {
           if (form.password.length < 6) return toast.error("Set a 6+ char password, or switch to mobile OTP login");
-          res = await api.post("/users", { name: form.name, email: form.email, password: form.password, role: form.role, permissions: form.permissions, phone: form.phone });
+          res = await api.post("/users", { ...base, password: form.password });
         }
         toast.success(`${form.name} added`);
         setOpen(false); onSaved();
@@ -125,6 +127,13 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite }) {
             <label className="label-mono text-muted-foreground">Role</label>
             <select data-testid="member-role-select" className={`${inp} mt-1`} value={form.role} onChange={(e) => setRole(e.target.value)}>
               {roleOptions.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="label-mono text-muted-foreground">Reporting Manager (for leave approvals)</label>
+            <select data-testid="member-manager-select" className={`${inp} mt-1`} value={form.reporting_manager_id} onChange={(e) => setForm({ ...form, reporting_manager_id: e.target.value })}>
+              <option value="">None (use department approver)</option>
+              {members.filter((m) => m.id !== initial?.id).map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
             </select>
           </div>
           <div>
@@ -202,7 +211,7 @@ export function TeamPanel() {
       <InviteLinkModal info={invite} onClose={() => setInvite(null)} />
       {canManageTeam && (
         <div className="flex justify-end mb-6">
-          <MemberDialog roleOptions={roleOptions} onSaved={refresh} onInvite={setInvite}
+          <MemberDialog roleOptions={roleOptions} members={data || []} onSaved={refresh} onInvite={setInvite}
             trigger={<button data-testid="add-user-button" className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all"><UserPlus size={16} weight="bold" /> Add Member</button>} />
         </div>
       )}
@@ -228,7 +237,7 @@ export function TeamPanel() {
               {absentIds.has(u.id) && <Chip value="absent" className="bg-black text-white" data-testid={`absent-badge-${u.id}`} />}
               {canManageTeam && u.role !== "owner" && (
                 <>
-                  <MemberDialog roleOptions={roleOptions} initial={u} onSaved={refresh}
+                  <MemberDialog roleOptions={roleOptions} initial={u} members={data || []} onSaved={refresh}
                     trigger={<button data-testid={`edit-access-${u.id}`} className="flex items-center gap-1 text-xs uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-blue hover:text-white transition-colors"><PencilSimple size={12} weight="bold" /> Access</button>} />
                   {u.phone && (
                     <button onClick={() => getInviteLink(u)} data-testid={`invite-link-${u.id}`} className="flex items-center gap-1 text-xs uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-red hover:text-white transition-colors"><LinkSimple size={12} weight="bold" /> Invite</button>

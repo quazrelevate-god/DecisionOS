@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { PageHeader, EmptyState } from "../components/common";
 import {
-  CurrencyCircleDollar, CheckSquare, Truck, Warning, Cake, CalendarBlank, UsersThree,
+  CurrencyCircleDollar, CheckSquare, Truck, Warning, Cake, CalendarBlank, UsersThree, AirplaneTakeoff,
 } from "@phosphor-icons/react";
 
 const TYPES = {
@@ -14,6 +14,7 @@ const TYPES = {
   delivery: { label: "Deliveries", icon: Truck, color: "bg-green-600", text: "text-green-600" },
   complaint: { label: "Complaints", icon: Warning, color: "bg-purple-600", text: "text-purple-600" },
   birthday: { label: "Birthdays", icon: Cake, color: "bg-brand-red", text: "text-brand-red" },
+  leave: { label: "Leave", icon: AirplaneTakeoff, color: "bg-teal-600", text: "text-teal-600" },
 };
 
 function fmtDay(iso) {

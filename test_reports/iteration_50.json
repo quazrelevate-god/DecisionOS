@@ -1,0 +1,93 @@
+{
+  "summary": "Iteration 50 — Leave & Absence Management (Phase 1). Backend pytest 22/22 PASS (test_iteration50_leave.py): create-leave validation (bad type, end<start, bad absence reason all 400), approver resolution priority (owner-fallback → dept-mapping → reporting-manager override — all 3 paths verified with distinct users), approve/reject/request-info workflow (owner acts, status transitions correctly, info_note persisted, employee receives leave-typed notification 'approved'/'rejected'/'clarification'), RBAC (production without 'leave_approve' gets 403 on GET/approve for someone else's leave; granting leave_approve enables acting), emergency absence creates today+today leave with is_emergency=true, on-leave/dashboard/calendar/brief integrations all show approved leaves correctly. Frontend Playwright: (1) Owner /leave shows all 3 tabs (mine/approvals/settings), Request Leave dialog submits successfully, request appears in My Leave with 'PENDING'/'CASUAL' chips + approver name; (2) Approvals tab renders 41 pending cards, owner can Approve/Reject (with note)/Request Info (with note) — all persist and remove card from approvals; (3) Settings tab lists approver dropdowns for sales/production/finance roles (owner default fallback in first option), Save Approvers works with toast; (4) Report Absence Today dialog with reason select + note submits + shows EMERGENCY chip on card; (5) Sales user's /leave shows ONLY 'My Leave' tab — no approvals/settings — RBAC verified; (6) People → Employees → Access dialog shows 'REPORTING MANAGER (FOR LEAVE APPROVALS)' dropdown with 'None (use department approver)' + all non-owner users, plus 'Approve Leave' permission toggle; (7) /calendar shows 'LEAVE (6)' filter with teal leave events; (8) /brief brief-row-on_leave + brief-count-on_leave render for owner with counter='4', clicking opens 'ON APPROVED LEAVE TODAY' modal listing Priya Nair × 4 with 'Casual until 2026-07-17' subtitle. **Bug found**: PATCH /api/users/{id} with `reporting_manager_id: null` silently no-ops due to `if inp.reporting_manager_id is not None` guard (server.py:1219). Frontend Team.js:76 sends `form.reporting_manager_id || null`, so 'None (use department approver)' selection can never CLEAR an existing RM — only overwrite it with another user. Empty string works as a workaround.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "PATCH /api/users/{id}",
+        "issue": "Setting `reporting_manager_id: null` is a no-op — server.py:1219 short-circuits on `if inp.reporting_manager_id is not None`. Frontend Team.js:76 sends `form.reporting_manager_id || null`, so selecting 'None (use department approver)' in member-manager-select cannot CLEAR a previously-set RM. Confirmed in test_null_does_not_clear. Fix: use `payload.model_dump(exclude_unset=True)` semantics (only update fields explicitly present in the request), OR treat null as an explicit clear. Empty string works as a workaround but the UI sends null."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Team.js MemberDialog (member-manager-select)",
+        "issue": "Selecting 'None (use department approver)' in the Reporting Manager dropdown submits `reporting_manager_id: null` which the backend ignores (see backend minor issue above). Net effect: user cannot clear a manager once assigned via the UI — Save Access appears to succeed but the RM stays. Change onSubmit to send '' instead of null (or fix backend).",
+        "selector": "[data-testid=\"member-manager-select\"]",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "My Work / general",
+        "issues": [
+          "React DOM nesting console warning: '<span> cannot be a child of <option>' (pre-existing, flagged in iter48 report) — still repeating during Leave page renders too because Layout/nav is shared. Cosmetic, not blocking."
+        ]
+      },
+      {
+        "screen": "CEO Brief on_leave detail modal",
+        "issues": [
+          "brief/details?key=on_leave returns one item PER approved leave row (not per user), so a user with two approved leaves for the same day appears twice in the modal. During testing we ended up with 4 Priya Nair entries because tests created 4 approved leaves for today. Consider deduping by user_id in the aggregation at server.py:3067-3073."
+        ]
+      }
+    ]
+  },
+  "tests_executed": [
+    {"case": "TestSmoke — owner login + /leaves endpoint", "result": "PASS"},
+    {"case": "TestCreateValidation — bad type / end<start / bad absence reason → 400", "result": "PASS (3/3)"},
+    {"case": "TestApproverResolution.test_owner_fallback (no RM, no mapping → owner)", "result": "PASS"},
+    {"case": "TestApproverResolution.test_department_mapping (sales→finance mapping)", "result": "PASS"},
+    {"case": "TestApproverResolution.test_reporting_manager_priority (RM overrides mapping)", "result": "PASS"},
+    {"case": "TestApprovalWorkflow.test_approve_and_notify (owner approves + employee gets ntype='approved')", "result": "PASS"},
+    {"case": "TestApprovalWorkflow.test_reject_and_notify (owner rejects + employee gets ntype='rejected')", "result": "PASS"},
+    {"case": "TestApprovalWorkflow.test_request_info_and_notify (info_note persisted + ntype='clarification')", "result": "PASS"},
+    {"case": "TestRBAC.test_non_approver_cannot_approve (production without leave_approve → 403 on approve + 403 on GET)", "result": "PASS"},
+    {"case": "TestRBAC.test_permission_grant_enables_approve (granting leave_approve unlocks action)", "result": "PASS"},
+    {"case": "TestAbsence.test_absence_creates_today_leave (is_emergency=true, from==to==today, visible in scope=mine)", "result": "PASS"},
+    {"case": "TestIntegrations.on_leave_and_calendar (leaves/on-leave, /dashboard.stats.on_leave_today, /brief.counters.on_leave, /brief/details key=on_leave, /calendar type='leave' event on today)", "result": "PASS"},
+    {"case": "TestScopes.mine|approvals|approvals-scope-non-approver", "result": "PASS (3/3)"},
+    {"case": "TestApproverConfigRBAC.non_team_manage cannot PATCH /tenant/leave-approvers → 403; owner can", "result": "PASS (2/2)"},
+    {"case": "TestReportingManagerClearBug.null_does_not_clear (bug reproduction)", "result": "PASS (bug confirmed)"},
+    {"case": "FE: Owner /leave page — 3 tabs (mine/approvals/settings) + Request Leave dialog + submit → card in My Leave with PENDING/CASUAL chips", "result": "PASS"},
+    {"case": "FE: Owner Approvals tab — leave-approve/leave-reject/leave-info + leave-note + leave-confirm all work; status updates + card removed from pending", "result": "PASS"},
+    {"case": "FE: Owner Settings tab — leave-approver-<role> dropdowns for sales/production/finance + save-leave-approvers works with toast", "result": "PASS"},
+    {"case": "FE: report-absence-button opens dialog with absence-reason-select + absence-note-input + absence-submit → creates EMERGENCY chip card", "result": "PASS"},
+    {"case": "FE: Sales user /leave shows ONLY 'My Leave' tab — no approvals/settings (RBAC)", "result": "PASS"},
+    {"case": "FE: People → Employees → Access dialog — member-manager-select has 4 options ('None' + 3 non-self users) + perm-leave_approve toggle visible", "result": "PASS"},
+    {"case": "FE: /calendar renders 'LEAVE (6)' filter + 6 teal leave events", "result": "PASS"},
+    {"case": "FE: /brief brief-row-on_leave + brief-count-on_leave='4' render for owner; clicking opens 'ON APPROVED LEAVE TODAY' modal with 4 Priya Nair entries", "result": "PASS"}
+  ],
+  "critical_code_review_comments": [
+    "server.py:1219 `if inp.reporting_manager_id is not None:` is the root cause of the 'can't clear RM' bug. Fix by either (a) using Pydantic's request-body-only-fields pattern (`__fields_set__` / `exclude_unset` at deserialization) so callers can distinguish 'not provided' from 'explicit null', or (b) treat None as 'clear' since a defined-but-null value in HTTP requests conventionally means 'clear this field'. Same pattern exists for `phone` and `permissions` fields (also guarded by `is not None`), and should be reviewed for consistency.",
+    "server.py:3067-3073 brief/details on_leave lists one item per LEAVE row, not per user. If a user has 2 approved leaves overlapping today, they appear twice. Consider `db.leaves.aggregate([{$match: ...}, {$group: {_id: '$user_id', ...}}])` or a Python-side dedupe on user_id before returning.",
+    "server.py:3798 push_notification on new leave uses `push_notification(tenant, [approver_id], ...)`. If approver_id resolves to None (edge case — tenant with no owner), this pushes to a [None] list. `_resolve_leave_approver` can return (None, None) when no owner exists — the push helper should defensively drop falsy user_ids.",
+    "server.py:3853 GET /leaves/{leave_id} — access check is `lv.user_id != user.id and not _can_approve_leave(user, lv)`. This is correct for the leave feature but note that a user with `leave_approve` perm can read ANY leave in the tenant (even ones for which they are not the routed approver). This is the intended design per RBAC (leave_approve = 'can approve leave' = 'can see all leave'), but the wording in perms.js ('Approve Leave') doesn't hint at the read-all side-effect. Consider labeling it 'Approve & View All Leave' to set expectations.",
+    "server.py is now 4859 lines — leave module (~3715-3897) is a clean 180-line extraction candidate to routers/leave.py.",
+    "The Approvals tab shows ALL pending leaves for an approver, even for the approver themselves if someone accidentally set an approver=themselves loop. `_resolve_leave_approver` doesn't guard against `approver_id == requester['id']` (though the RM setter at server.py:1221 does guard `rm != user_id` — good). Consider adding the same guard when reading from `leave_approvers` mapping so a role manager can't be routed their own leave.",
+    "Leave.js:239-240 shows both non-owner AND owner options in Settings approver dropdown; if user picks an owner, it works but 'Owner (default)' semantics may confuse. Consider grouping / dividing owners from non-owners in the <select>."
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_iteration50_leave.py",
+    "/app/test_reports/pytest/iteration_50.xml"
+  ],
+  "action_items": [
+    "**MEDIUM**: Fix reporting_manager_id null-no-op bug. Choose one: (a) Backend server.py:1219 — accept JSON null as an explicit clear (`if 'reporting_manager_id' in inp.model_fields_set: updates['reporting_manager_id'] = inp.reporting_manager_id or None`), or (b) Frontend Team.js:76 — send `reporting_manager_id: form.reporting_manager_id || ''` (empty string) instead of null. Verified with test_null_does_not_clear reproduction. Same pattern exists for phone/permissions — audit those too.",
+    "(Nice-to-have) Dedupe brief/details on_leave items by user_id at server.py:3067-3073 so a user with multiple approved leaves for today shows once.",
+    "(Cosmetic) Fix pre-existing React DOM warning '<span> cannot be a child of <option>' (Layout/select somewhere; carried over from iter48).",
+    "(Cleanup) Sharma tenant now has ~50+ QA50_LEAVE test leaves. Cleanup: `db.leaves.deleteMany({reason: /^QA50/})` and `db.notifications.deleteMany({title: /leave/i, ts: {$gt: ISODate('2026-07-17T00:00:00Z')}})`. Also production user's permissions were toggled during tests — verify final state matches expected (should be back to original set)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration50_leave.py (created — 22 tests)",
+    "/app/test_reports/iteration_50.json (this file)",
+    "/app/test_reports/pytest/iteration_50.xml (pytest generated)"
+  ],
+  "success_rate": {"backend": "100% (22/22 pytest)", "frontend": "100% (all owner + sales + settings + team + calendar + brief flows PASS)"},
+  "test_credentials": "owner@sharma.com/demo1234 (Rajesh Sharma), sales@sharma.com/demo1234 (Priya Nair), production@sharma.com/demo1234 (Amit Verma), finance@sharma.com/demo1234 (Sunita Rao). Auth is cookie-first (dos_token httponly); Bearer token works too.",
+  "seed_data_creation": "Created ~30+ QA50_LEAVE-prefixed leaves in Sharma tenant across the 4 test users (mostly Priya Nair). ~10 are approved (visible in /calendar, /brief on_leave, /dashboard on_leave_today). ~7 rejected, ~4 info_requested, remaining pending. Emergency absences for today created too. Cleanup query: `db.leaves.deleteMany({tenant_id:'ae79cf8b-d407-494b-94b9-32daf017bb7a', reason: /^QA50/})`. Also 30+ leave-typed notifications on sales user's list (all with entity_type='leave').",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 50 (Leave & Absence Phase 1) is fully working end-to-end. Only one non-critical bug: reporting_manager_id cannot be cleared via JSON null through PATCH /api/users/{id} because of the `is not None` guard at server.py:1219; frontend workaround = send empty string. Approver resolution priority (RM > dept-mapping > owner) verified with 3 distinct code paths. RBAC (leave_approve perm) verified. Emergency absence, /calendar leave events, /brief on_leave counter, /dashboard stats.on_leave_today, /brief/details key=on_leave all work. Auth cookie-first. Sharma tenant is heavily polluted with QA50_ prefixed test leaves — run the cleanup query above before next test cycle. Production user's permissions were temporarily granted 'leave_approve' during test then revoked; verify final state if permission-sensitive tests follow.",
+  "rca of the issue": "Reporting-manager-clear bug RCA: When the user opens People → Employees → Access, sets a Reporting Manager, saves — the RM is persisted correctly. When the user reopens the same dialog, changes the dropdown back to 'None (use department approver)' (value=''), and clicks Save Access, Team.js:76 fires `api.patch('/users/'+id, {..., reporting_manager_id: form.reporting_manager_id || null})`. Since form.reporting_manager_id is '' (empty), `'' || null` evaluates to `null`, so the payload contains `reporting_manager_id: null`. On the backend, `UserUpdateInput.reporting_manager_id: Optional[str] = None` deserializes JSON null to Python None. The subsequent guard `if inp.reporting_manager_id is not None:` at server.py:1219 evaluates FALSE (because inp.reporting_manager_id IS None), so no `updates['reporting_manager_id']` line runs. The `update_one({..., '$set': updates})` therefore never touches the RM field, and the previously-stored value remains. Reproduction: test_null_does_not_clear (PASS = bug reproduced). Mitigation: swap `form.reporting_manager_id || null` for `form.reporting_manager_id || ''` in Team.js:76 (line 81 as well for create path), OR change server.py:1219 to treat None as clear intent (best done via `if 'reporting_manager_id' in inp.__fields_set__:` or Pydantic's `model_dump(exclude_unset=True)`)."
+}

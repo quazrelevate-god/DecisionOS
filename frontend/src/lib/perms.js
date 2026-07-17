@@ -10,6 +10,7 @@ export const PERMISSIONS = [
   { key: "ask", label: "Ask AI" },
   { key: "approvals", label: "Approve Tasks" },
   { key: "decisions_approve", label: "Approve Decisions" },
+  { key: "leave_approve", label: "Approve Leave" },
   { key: "team_manage", label: "Manage Team" },
 ];
 

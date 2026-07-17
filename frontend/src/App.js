@@ -13,6 +13,7 @@ import People from "./pages/People";
 import CEOBrief from "./pages/CEOBrief";
 import Notifications from "./pages/Notifications";
 import MyWork from "./pages/MyWork";
+import Leave from "./pages/Leave";
 import Ingest from "./pages/Ingest";
 import ContactProfile from "./pages/ContactProfile";
 import Journal from "./pages/Journal";
@@ -63,6 +64,7 @@ function App() {
             <Route path="/brief" element={<Protected><CEOBrief /></Protected>} />
             <Route path="/journal" element={<Protected ownerOnly><Journal /></Protected>} />
             <Route path="/my-work" element={<Protected><MyWork /></Protected>} />
+            <Route path="/leave" element={<Protected><Leave /></Protected>} />
             <Route path="/review" element={<Navigate to="/ingest" replace />} />
             <Route path="/notifications" element={<Protected><Notifications /></Protected>} />
             <Route path="/inbox" element={<Protected perm="inbox"><Inbox /></Protected>} />

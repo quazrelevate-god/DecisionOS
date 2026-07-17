@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DecisionOS — User Manual</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Chivo:wght@400;700;800;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --red:#FF3B30; --blue:#002FA7; --yellow:#FFCC00; --ink:#0A0A0B; --paper:#F4F4F5;
+    --line:#0A0A0B;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'IBM Plex Mono',monospace;line-height:1.6;}
+  h1,h2,h3,h4{font-family:'Chivo',sans-serif;font-weight:900;text-transform:uppercase;letter-spacing:-0.02em;line-height:1.05;margin:0;}
+  a{color:var(--blue);}
+  .wrap{display:flex;max-width:1500px;margin:0 auto;}
+
+  /* Sidebar TOC */
+  .toc{position:sticky;top:0;align-self:flex-start;width:290px;height:100vh;overflow-y:auto;background:#fff;border-right:2px solid var(--line);padding:24px 18px;flex-shrink:0;}
+  .brandmark{display:flex;align-items:center;gap:10px;margin-bottom:6px;}
+  .brandmark .box{width:38px;height:38px;background:var(--red);display:flex;align-items:center;justify-content:center;}
+  .brandmark .box span{color:#fff;font-family:'Chivo';font-weight:900;font-size:22px;line-height:1;}
+  .brandmark .name{font-family:'Chivo';font-weight:900;font-size:22px;letter-spacing:-0.03em;}
+  .toc .sub{font-size:11px;color:#6b6b75;text-transform:uppercase;letter-spacing:.14em;margin:2px 0 20px;}
+  .toc a{display:block;color:var(--ink);text-decoration:none;font-size:13px;padding:7px 10px;border-left:3px solid transparent;}
+  .toc a:hover{background:#0000000a;border-left-color:var(--red);}
+  .toc .grp{font-size:10px;color:#6b6b75;text-transform:uppercase;letter-spacing:.16em;margin:18px 0 4px 10px;font-weight:600;}
+
+  /* Content */
+  .content{flex:1;min-width:0;padding:56px 64px 120px;max-width:1000px;}
+  .eyebrow{color:var(--red);font-size:12px;letter-spacing:.2em;text-transform:uppercase;font-weight:600;}
+  .hero-title{font-size:60px;margin:6px 0 12px;}
+  .hero-title .r{color:var(--red);}
+  .lead{font-size:16px;max-width:70ch;color:#333;}
+
+  section{margin-top:64px;scroll-margin-top:24px;padding-top:8px;}
+  section > h2{font-size:34px;border-bottom:3px solid var(--line);padding-bottom:10px;margin-bottom:22px;}
+  section h3{font-size:20px;margin:34px 0 12px;}
+  p{font-size:14.5px;}
+
+  .badges{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 0;}
+  .badge{font-size:10px;text-transform:uppercase;letter-spacing:.12em;font-weight:600;padding:4px 9px;border:2px solid var(--line);}
+  .b-owner{background:var(--red);color:#fff;}
+  .b-team{background:var(--blue);color:#fff;}
+  .b-all{background:var(--yellow);color:var(--ink);}
+
+  figure{margin:22px 0;border:2px solid var(--line);box-shadow:6px 6px 0 var(--ink);background:#fff;}
+  figure img{display:block;width:100%;height:auto;border-bottom:2px solid var(--line);}
+  figcaption{font-size:12px;padding:9px 14px;color:#333;background:#fff;}
+  figure.mobile{max-width:340px;}
+  .mobrow{display:flex;gap:22px;flex-wrap:wrap;}
+  .mobrow figure{flex:1;min-width:230px;max-width:300px;}
+
+  ol.steps{counter-reset:s;list-style:none;padding:0;margin:14px 0;}
+  ol.steps li{position:relative;padding:12px 14px 12px 52px;border:2px solid var(--line);margin-bottom:10px;background:#fff;font-size:14px;}
+  ol.steps li::before{counter-increment:s;content:counter(s);position:absolute;left:-2px;top:-2px;bottom:-2px;width:38px;background:var(--ink);color:#fff;font-family:'Chivo';font-weight:900;display:flex;align-items:center;justify-content:center;font-size:16px;}
+  ol.steps li b{font-weight:600;}
+
+  ul.plain{padding-left:18px;} ul.plain li{margin-bottom:6px;font-size:14px;}
+
+  .tip{border:2px solid var(--line);border-left:8px solid var(--yellow);background:#fff;padding:12px 16px;margin:16px 0;font-size:13.5px;}
+  .tip.red{border-left-color:var(--red);}
+  .tip.blue{border-left-color:var(--blue);}
+  .tip b{text-transform:uppercase;font-size:11px;letter-spacing:.1em;}
+
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:13px;background:#fff;}
+  th,td{border:2px solid var(--line);padding:9px 12px;text-align:left;vertical-align:top;}
+  th{background:var(--ink);color:#fff;text-transform:uppercase;font-size:11px;letter-spacing:.08em;}
+
+  .kbd{border:1.5px solid var(--line);padding:1px 7px;font-size:12px;background:#fff;box-shadow:2px 2px 0 var(--ink);}
+  .divider{height:2px;background:var(--line);margin:0;}
+
+  .print-btn{position:fixed;right:22px;bottom:22px;z-index:50;background:var(--red);color:#fff;border:2px solid var(--line);box-shadow:4px 4px 0 var(--ink);font-family:'Chivo';font-weight:800;text-transform:uppercase;letter-spacing:.05em;font-size:13px;padding:12px 18px;cursor:pointer;}
+  .print-btn:active{transform:translate(2px,2px);box-shadow:2px 2px 0 var(--ink);}
+
+  footer{margin-top:80px;border-top:3px solid var(--line);padding-top:22px;font-size:13px;color:#333;}
+
+  @media (max-width:900px){
+    .toc{display:none;}
+    .content{padding:32px 20px 90px;}
+    .hero-title{font-size:38px;}
+  }
+  @media print{
+    .toc,.print-btn{display:none !important;}
+    body{background:#fff;}
+    .content{max-width:100%;padding:0 8px;}
+    figure{box-shadow:none;break-inside:avoid;}
+    section{break-inside:avoid-page;}
+    ol.steps li{break-inside:avoid;}
+    .hero-title{font-size:44px;}
+    a{color:var(--ink);text-decoration:none;}
+  }
+</style>
+</head>
+<body>
+<button class="print-btn" onclick="window.print()">⎙ Print / Save as PDF</button>
+<div class="wrap">
+
+  <!-- ============ TABLE OF CONTENTS ============ -->
+  <nav class="toc">
+    <div class="brandmark"><div class="box"><span>D</span></div><div class="name">DecisionOS</div></div>
+    <div class="sub">User Manual</div>
+    <div class="grp">Start here</div>
+    <a href="#welcome">1 · Welcome</a>
+    <a href="#getting-started">2 · Getting Started (Login)</a>
+    <a href="#roles">3 · Roles &amp; Access</a>
+    <a href="#layout">4 · Getting Around</a>
+    <div class="grp">Everyday use</div>
+    <a href="#desk">5 · Decision Desk</a>
+    <a href="#approvals">6 · Approving Decisions</a>
+    <a href="#mywork">7 · My Work &amp; Tasks</a>
+    <a href="#execution">8 · AI Execution Guide</a>
+    <a href="#proof">9 · Proof of Work</a>
+    <a href="#leave">10 · Leave &amp; Absence</a>
+    <div class="grp">Owner tools</div>
+    <a href="#brief">11 · CEO Brief</a>
+    <a href="#people">12 · People</a>
+    <a href="#brain">13 · Company Brain</a>
+    <a href="#capture">14 · Capture &amp; WhatsApp</a>
+    <a href="#review">15 · Review Queue</a>
+    <a href="#meetings">16 · Meeting Notes</a>
+    <a href="#settings">17 · Settings</a>
+    <div class="grp">More</div>
+    <a href="#mobile">18 · Mobile App</a>
+    <a href="#faq">19 · FAQ &amp; Support</a>
+  </nav>
+
+  <!-- ============ CONTENT ============ -->
+  <main class="content">
+
+    <div class="eyebrow">The operational brain for founder-led SMEs</div>
+    <h1 class="hero-title">DecisionOS<br><span class="r">User Manual.</span></h1>
+    <p class="lead">Everything you need to run your company on DecisionOS — from capturing a spoken decision to tracking it through to done. This guide covers both the <b>web</b> and <b>mobile</b> app, with clearly marked sections for <b>Owners</b> and <b>Team Members</b>.</p>
+    <div class="badges" style="margin-top:16px;">
+      <span class="badge b-owner">For Owners</span>
+      <span class="badge b-team">For Team Members</span>
+      <span class="badge b-all">For Everyone</span>
+    </div>
+
+    <!-- 1. WELCOME -->
+    <section id="welcome">
+      <h2>1 · Welcome to DecisionOS</h2>
+      <p>DecisionOS turns the way you already work — talking, messaging, forwarding documents — into a structured, shared operating system for your business. You <b>speak or type a decision</b>, and the AI turns it into tasks assigned to the right people, tracks progress, and keeps a company-wide memory.</p>
+      <h3>What DecisionOS does for you</h3>
+      <ul class="plain">
+        <li><b>Captures decisions</b> — by voice, text, or WhatsApp — and structures them into tasks automatically.</li>
+        <li><b>Assigns work</b> to the right person or department and guides them step-by-step.</li>
+        <li><b>Keeps a Company Brain</b> — every customer, supplier, invoice, and decision, searchable and ask-able in plain English.</li>
+        <li><b>Gives the owner a daily brief</b> of what needs attention — approvals, overdue work, and “fires to put out”.</li>
+        <li><b>Handles routine ops</b> — leave requests, document filing, meeting notes — so nothing slips.</li>
+      </ul>
+      <div class="tip"><b>New here?</b> &nbsp;Read sections 2–4 first. Then jump to the section for your role. Owners should also read 11–17.</div>
+    </section>
+
+    <!-- 2. GETTING STARTED -->
+    <section id="getting-started">
+      <h2>2 · Getting Started — Signing In</h2>
+      <div class="badges"><span class="badge b-all">For Everyone</span></div>
+      <p>Open your workspace link in any browser (works on phone too). You can sign in two ways:</p>
+      <figure>
+        <img src="./01-login.png" alt="DecisionOS sign-in screen" />
+        <figcaption>The sign-in screen — choose <b>Email &amp; Password</b> or <b>Mobile OTP</b>.</figcaption>
+      </figure>
+      <h3>Option A — Email &amp; Password</h3>
+      <ol class="steps">
+        <li>Make sure the <b>Email &amp; Password</b> tab is selected.</li>
+        <li>Enter your <b>email</b> and <b>password</b>.</li>
+        <li>Tap <span class="kbd">Sign In</span>.</li>
+      </ol>
+      <h3>Option B — Mobile OTP (no password)</h3>
+      <ol class="steps">
+        <li>Tap the <b>Mobile OTP</b> tab.</li>
+        <li>Enter your registered <b>mobile number</b> and tap to send the code.</li>
+        <li>Type the <b>6-digit code</b> from the SMS and verify. You’re in.</li>
+      </ol>
+      <div class="tip blue"><b>Invited by your owner?</b> &nbsp;Open the invite link they sent you — it pre-fills your details and signs you in with a one-time code. No password needed.</div>
+      <div class="tip red"><b>Dark mode</b> &nbsp;Use the sun/moon icon (top-right) to switch between light and dark themes anytime.</div>
+    </section>
+
+    <!-- 3. ROLES -->
+    <section id="roles">
+      <h2>3 · Roles &amp; Access</h2>
+      <div class="badges"><span class="badge b-all">For Everyone</span></div>
+      <p>What you can see and do depends on your <b>role</b> and the <b>access</b> your owner granted you. Every workspace has one or more <b>Owners</b> plus team members in departments (Sales, Finance, Production, etc. — named to fit your business).</p>
+      <table>
+        <tr><th>You are…</th><th>You can typically…</th></tr>
+        <tr><td><b>Owner</b></td><td>Capture &amp; approve decisions, see the CEO Brief &amp; all tasks, manage people &amp; settings, review WhatsApp captures, approve leave.</td></tr>
+        <tr><td><b>Team Member</b></td><td>See <b>My Work</b> (your tasks), run the AI Execution Guide, upload proof, request leave, and use whatever modules the owner enabled for you (People, Capture, Company Brain, etc.).</td></tr>
+      </table>
+      <div class="tip"><b>Can’t see a menu?</b> &nbsp;That module isn’t enabled for your access. Ask an owner to grant it under <b>People → Employees → (your name) → Access</b>.</div>
+    </section>
+
+    <!-- 4. LAYOUT -->
+    <section id="layout">
+      <h2>4 · Getting Around</h2>
+      <div class="badges"><span class="badge b-all">For Everyone</span></div>
+      <p>On the <b>web</b>, the menu lives in the left sidebar. On <b>mobile</b>, use the bottom tab bar and the ☰ menu (see section 18). The bell icon (top-right) shows your <b>notifications</b>; your profile and sign-out are at the bottom-left.</p>
+      <table>
+        <tr><th>Menu</th><th>What it’s for</th></tr>
+        <tr><td>Decision Desk</td><td>Capture new decisions &amp; see your incoming feed.</td></tr>
+        <tr><td>CEO Brief</td><td>Owner’s daily command centre (owner-focused).</td></tr>
+        <tr><td>My Work</td><td>Your tasks, execution guides, and leave.</td></tr>
+        <tr><td>People</td><td>Team members, customers &amp; suppliers.</td></tr>
+        <tr><td>Company Brain</td><td>Ask questions &amp; search all your records.</td></tr>
+        <tr><td>Capture</td><td>Upload documents / connect WhatsApp / review queue.</td></tr>
+        <tr><td>Meeting Notes</td><td>Turn a meeting into minutes &amp; action items.</td></tr>
+        <tr><td>Settings</td><td>Company details &amp; workspace rules (owner).</td></tr>
+      </table>
+    </section>
+
+    <!-- 5. DECISION DESK -->
+    <section id="desk">
+      <h2>5 · Decision Desk — Capturing a Decision</h2>
+      <div class="badges"><span class="badge b-owner">For Owners</span><span class="badge b-team">Team (if enabled)</span></div>
+      <p>This is the heart of DecisionOS. Speak or type what you’ve decided, and the AI structures it into tasks for the right people.</p>
+      <figure>
+        <img src="./02-desk.png" alt="Decision Desk with voice capture and directive box" />
+        <figcaption>Decision Desk — tap the mic to speak, or type in “Type a Directive”. Below is your live Tasks &amp; Activity feed.</figcaption>
+      </figure>
+      <h3>Speak a decision</h3>
+      <ol class="steps">
+        <li>Pick a language chip: <b>Auto</b>, <b>EN</b>, <b>தமிழ்</b>, or <b>Tanglish</b> (casual Tamil-English).</li>
+        <li>Tap <b>the microphone</b> and speak naturally — e.g. “Tell Priya to follow up with the Bangalore retailer today.”</li>
+        <li>Tap again to stop. The AI transcribes and structures it — you’ll see a short “structuring in process” note.</li>
+        <li>When it’s ready, an <b>Execution Summary</b> shows what was created — tasks, people assigned, meetings, reminders.</li>
+      </ol>
+      <h3>Type a decision</h3>
+      <ol class="steps">
+        <li>Type your instruction in the <b>Type a Directive</b> box.</li>
+        <li>Tap <span class="kbd">Structure It</span>.</li>
+        <li>If the instruction is vague, DecisionOS may ask a couple of quick <b>clarifying questions</b> first — answer or skip.</li>
+      </ol>
+      <div class="tip"><b>One person = one task.</b> &nbsp;If a decision is for one person, DecisionOS creates a single task for them (the step-by-step breakdown lives inside that task’s <b>AI Execution Guide</b>). If it involves several people, each gets their own task.</div>
+      <div class="tip blue"><b>Filter the feed</b> &nbsp;Use the chips (Customer, Supplier, Invoice, Payment, Complaint, Task, Approval, Reminder) to focus your Tasks &amp; Activity list.</div>
+    </section>
+
+    <!-- 6. APPROVALS -->
+    <section id="approvals">
+      <h2>6 · Approving Decisions &amp; Assigning Work</h2>
+      <div class="badges"><span class="badge b-owner">For Owners</span><span class="badge b-team">Team with “Approve Decisions”</span></div>
+      <p>Decisions captured from a directive start as <b>Pending Approval</b> — their tasks stay blocked until approved. This gives you a checkpoint before work goes live.</p>
+      <ol class="steps">
+        <li>On the Decision Desk, find the decision card marked <b>Pending your approval</b>.</li>
+        <li>Review the auto-created tasks and who they’re assigned to.</li>
+        <li>Need to add someone? Use <b>Add team member / task</b> to attach another task.</li>
+        <li>Tap <span class="kbd">Approve</span> to release the work (tasks unblock and appear in each person’s My Work), or <b>Reject</b> to cancel everything it created.</li>
+      </ol>
+      <div class="tip"><b>Delegate approvals.</b> &nbsp;Owners can grant the <b>“Approve Decisions”</b> access to a trusted team member so they can approve and assign without you.</div>
+    </section>
+
+    <!-- 7. MY WORK -->
+    <section id="mywork">
+      <h2>7 · My Work &amp; Tasks</h2>
+      <div class="badges"><span class="badge b-all">For Everyone</span></div>
+      <p>My Work is your personal to-do list. Tasks are grouped by type, and each card shows priority, due date, progress and the latest update.</p>
+      <figure>
+        <img src="./04-mywork.png" alt="My Work task list with tabs and execution guide" />
+        <figcaption>My Work — tabs (All, Operational, Sales, Purchase, Production, Finance, Completed) and rich task cards.</figcaption>
+      </figure>
+      <ol class="steps">
+        <li>Use the <b>tabs</b> to filter by category, or <b>Completed</b> to review finished work.</li>
+        <li>Set a task’s <b>Status</b> and <b>Progress</b> from the dropdowns on the card.</li>
+        <li>Tap <b>Complete</b> when done (you’ll be asked to confirm). Completed by mistake? Use <b>Reopen</b>.</li>
+        <li>Turn on <b>AI Priority</b> to re-order tasks by impact, revenue, risk and urgency.</li>
+      </ol>
+      <div class="tip blue"><b>Owners:</b> toggle <b>My Tasks / All Tasks</b> to switch between your own list and every task in the company (with assignee names).</div>
+      <h3>Hand off or escalate</h3>
+      <p>Open a task’s <b>Activity &amp; Handoffs</b> to log a note, <b>hand off</b> to a colleague, or <b>escalate</b> to the owner. The original task stays and a linked follow-up is created and notified.</p>
+    </section>
+
+    <!-- 8. EXECUTION GUIDE -->
+    <section id="execution">
+      <h2>8 · AI Execution Guide</h2>
+      <div class="badges"><span class="badge b-all">For Everyone</span></div>
+      <p>Not sure how to do a task? Let the AI break it into a checklist and coach you through each step.</p>
+      <ol class="steps">
+        <li>On a task, tap <span class="kbd">Generate AI Plan</span>. The AI drafts a step-by-step checklist tailored to the task.</li>
+        <li>Edit if needed — add, remove or reorder steps — then <b>Accept &amp; start</b>.</li>
+        <li>Tick steps off as you go; the task’s progress bar updates automatically (and moves to Done at 100%).</li>
+        <li>Stuck on a step? Tap <b>Ask AI</b> on that step for a suggestion, script, or how to handle an objection.</li>
+      </ol>
+      <div class="tip"><b>Why single tasks?</b> &nbsp;Because the guide already breaks the work into steps, DecisionOS keeps one person’s job as a <b>single task</b> instead of many confusing cards.</div>
+    </section>
+
+    <!-- 9. PROOF -->
+    <section id="proof">
+      <h2>9 · Proof of Work (Photos &amp; Voice)</h2>
+      <div class="badges"><span class="badge b-all">For Everyone</span></div>
+      <p>Attach evidence to a task — a photo of completed work or a quick voice note.</p>
+      <ol class="steps">
+        <li>On an active task, tap <b>Photo</b> to snap/upload an image, or <b>Voice Reply</b> to record.</li>
+        <li>The attachments appear on the task as a <b>“Proof of work”</b> block.</li>
+        <li>Anyone viewing the task — the assignee <b>and the owner</b> (in All Tasks) — can <b>click a photo to view it full-size</b> and <b>play the voice note</b> inline.</li>
+      </ol>
+      <div class="tip blue"><b>Owners:</b> proof also shows up in the <b>CEO Brief</b> completed drill-down, so you can review work at a glance.</div>
+    </section>
+
+    <!-- 10. LEAVE -->
+    <section id="leave">
+      <h2>10 · Leave &amp; Absence</h2>
+      <div class="badges"><span class="badge b-all">For Everyone</span></div>
+      <p>Request time off and get it approved — all inside My Work.</p>
+      <figure>
+        <img src="./05-leave.png" alt="Leave tab inside My Work" />
+        <figcaption>My Work → <b>Leave</b> — request leave, log an emergency absence, and (for approvers) review requests.</figcaption>
+      </figure>
+      <h3>For Team Members</h3>
+      <ol class="steps">
+        <li>Go to <b>My Work</b> and open the <b>Leave</b> view.</li>
+        <li>Tap <b>Request Leave</b>, pick dates &amp; reason, and submit. Your approver is notified.</li>
+        <li>Out sick today? Use <b>Emergency Absence</b> to flag it immediately.</li>
+      </ol>
+      <h3>For Owners / Approvers</h3>
+      <ol class="steps">
+        <li>Open the <b>Approvals</b> tab in Leave to see pending requests.</li>
+        <li><b>Approve</b>, <b>Reject</b>, or <b>Request info</b>. Approved leave shows on the calendar and in staffing counts.</li>
+        <li>Owners can map who approves whom under the Leave <b>Settings</b> (or per-member Reporting Manager).</li>
+      </ol>
+    </section>
+
+    <!-- 11. CEO BRIEF -->
+    <section id="brief">
+      <h2>11 · CEO Brief</h2>
+      <div class="badges"><span class="badge b-owner">For Owners</span><span class="badge b-team">Personal brief for team</span></div>
+      <p>Your daily command centre. Owners see a company-wide brief with counters and a red <b>“Fires to put out today”</b> banner; team members see a personal version of their own work.</p>
+      <figure>
+        <img src="./03-ceo-brief.png" alt="CEO Brief dashboard" />
+        <figcaption>CEO Brief — clickable counters (delayed, completed, awaiting approval, absent, complaints, overdue payments) that drill into details.</figcaption>
+      </figure>
+      <ol class="steps">
+        <li>Switch periods (Morning / Evening / Weekly / Monthly) to change the view.</li>
+        <li><b>Click any counter</b> to open its list and act right there — approve decisions, review purchases, resolve complaints.</li>
+        <li>Use <span class="kbd">Send Daily Digest</span> (top bar) to email yourself the summary.</li>
+      </ol>
+    </section>
+
+    <!-- 12. PEOPLE -->
+    <section id="people">
+      <h2>12 · People — Team, Customers &amp; Suppliers</h2>
+      <div class="badges"><span class="badge b-owner">Team tab: Owners</span><span class="badge b-team">Contacts: as enabled</span></div>
+      <figure>
+        <img src="./06-people.png" alt="People page with Employees tab" />
+        <figcaption>People — tabs for <b>Employees</b>, <b>Customers</b> and <b>Suppliers</b>.</figcaption>
+      </figure>
+      <h3>Add &amp; manage team members (Owners)</h3>
+      <ol class="steps">
+        <li>On the <b>Employees</b> tab, tap <b>Add Member</b>. Enter name, role, mobile/email.</li>
+        <li>Choose <b>Password Login</b> or <b>Mobile OTP</b> (passwordless) sign-in.</li>
+        <li>Tap <b>Access</b> on any member to grant/revoke modules (Inbox, People, Finance, Company Brain, Approve Decisions, Approve Leave, etc.).</li>
+        <li>Use <b>Invite</b> to generate a one-tap link (share via WhatsApp).</li>
+      </ol>
+      <h3>Customers &amp; Suppliers</h3>
+      <p>Add contacts with company, phone, GST, tags and notes. Click any contact for a <b>360° profile</b> — bills, payments, outstanding balance, follow-ups, complaints and relationship intelligence.</p>
+    </section>
+
+    <!-- 13. BRAIN -->
+    <section id="brain">
+      <h2>13 · Company Brain</h2>
+      <div class="badges"><span class="badge b-all">As enabled</span></div>
+      <p>Ask your business anything in plain English, or search your records directly.</p>
+      <figure>
+        <img src="./07-brain.png" alt="Company Brain — Ask AI and Search" />
+        <figcaption>Company Brain — <b>Ask</b> (AI chat with citations) and <b>Search</b> (browse records).</figcaption>
+      </figure>
+      <ol class="steps">
+        <li>On the <b>Ask</b> tab, type a question — e.g. “Who owes us the most?”, “What did we decide about the Delhi order?”</li>
+        <li>Read the AI answer with links to the source records.</li>
+        <li>Switch to <b>Search</b> to look up a specific customer, invoice or decision.</li>
+      </ol>
+      <div class="tip red"><b>Money answers</b> (outstanding, payments) are only shown to Owners and Finance access.</div>
+    </section>
+
+    <!-- 14. CAPTURE -->
+    <section id="capture">
+      <h2>14 · Capture — Documents &amp; WhatsApp</h2>
+      <div class="badges"><span class="badge b-owner">For Owners</span><span class="badge b-team">Team with Capture access</span></div>
+      <p>Get invoices, bills and instructions into DecisionOS — by uploading a file or forwarding on WhatsApp.</p>
+      <figure>
+        <img src="./08-capture.png" alt="Capture page with upload and WhatsApp QR" />
+        <figcaption>Capture — upload a PDF/photo or spreadsheet, or scan the QR to forward on WhatsApp.</figcaption>
+      </figure>
+      <h3>Upload a document</h3>
+      <ol class="steps">
+        <li>Tap <b>PDF / Photo</b> (invoice, bill, receipt) or <b>CSV / Excel</b> (contact/sales lists).</li>
+        <li>The AI reads it and shows an editable <b>review panel</b> — check the type, party and amounts.</li>
+        <li>Tap <b>View</b> to open the original attachment, then <b>File it</b> to save the records.</li>
+      </ol>
+      <h3>WhatsApp Smart Capture</h3>
+      <ol class="steps">
+        <li>Scan the QR (or save the number) and <b>forward</b> an invoice, photo or a quick instruction on WhatsApp.</li>
+        <li>DecisionOS reads it and creates a <b>Capture Draft</b> — nothing auto-executes.</li>
+        <li>It’s routed to the right <b>department’s Review Queue</b> (see section 15) for approval.</li>
+      </ol>
+      <div class="tip blue"><b>Smart routing.</b> &nbsp;A message like “prepare an estimate” goes to the relevant department (e.g. Sales/Finance), not the owner — unless it’s high-value or a policy/approval item.</div>
+    </section>
+
+    <!-- 15. REVIEW QUEUE -->
+    <section id="review">
+      <h2>15 · Review Queue</h2>
+      <div class="badges"><span class="badge b-owner">Owners see all</span><span class="badge b-team">Dept. members see theirs</span></div>
+      <figure>
+        <img src="./11-review-queue.png" alt="Review Queue of WhatsApp captures" />
+        <figcaption>Review Queue — incoming WhatsApp/document captures waiting for a decision.</figcaption>
+      </figure>
+      <ol class="steps">
+        <li>Open <b>Capture → Review Queue</b>. Filter by Pending / Clarification / Approved / Rejected.</li>
+        <li>Review each card’s AI classification, amount and any escalation warning.</li>
+        <li><b>Approve</b> (files/creates the work &amp; assigns it), <b>Edit</b>, <b>Reassign</b>, <b>Clarify</b> (asks the sender back on WhatsApp), or <b>Reject</b>.</li>
+      </ol>
+      <div class="tip"><b>High-value &amp; policy</b> items are escalated to the <b>Owner</b> for sign-off automatically, based on your threshold in Settings.</div>
+    </section>
+
+    <!-- 16. MEETINGS -->
+    <section id="meetings">
+      <h2>16 · Meeting Notes</h2>
+      <div class="badges"><span class="badge b-all">As enabled</span></div>
+      <figure>
+        <img src="./09-meetings.png" alt="Meeting Notes page" />
+        <figcaption>Meeting Notes — record audio or paste a transcript to get instant minutes.</figcaption>
+      </figure>
+      <ol class="steps">
+        <li>Tap the mic to <b>record</b> the meeting, or paste a <b>transcript</b>.</li>
+        <li>DecisionOS produces a title, summary, key points, decisions and <b>action items</b>.</li>
+        <li>Action items are auto-created as tasks and assigned to the named people.</li>
+      </ol>
+    </section>
+
+    <!-- 17. SETTINGS -->
+    <section id="settings">
+      <h2>17 · Settings (Owner)</h2>
+      <div class="badges"><span class="badge b-owner">For Owners</span></div>
+      <p>Configure your workspace — company profile and the rules that drive routing &amp; approvals.</p>
+      <figure>
+        <img src="./10-settings.png" alt="Settings page with Company Details and Money & Approvals" />
+        <figcaption>Settings — <b>Company Details</b> (profile, products, team roles, operating system) and <b>Money &amp; Approvals</b>.</figcaption>
+      </figure>
+      <ol class="steps">
+        <li><b>Company Details:</b> edit your profile, products/services, and add/rename/remove team roles.</li>
+        <li><b>Currency &amp; High-value threshold:</b> set the amount above which payments/invoices are flagged “verify before approving”.</li>
+        <li><b>Owner sign-off:</b> turn on to route high-value items to the owner for approval; off lets finance handle them with a verify flag.</li>
+        <li><b>Workspace ID:</b> copy this for WhatsApp routing setup.</li>
+      </ol>
+    </section>
+
+    <!-- 18. MOBILE -->
+    <section id="mobile">
+      <h2>18 · Using the Mobile App</h2>
+      <div class="badges"><span class="badge b-all">For Everyone</span></div>
+      <p>DecisionOS works right in your phone’s browser — no install needed. The layout adapts: a bottom tab bar for the main screens and a ☰ menu for everything else.</p>
+      <div class="mobrow">
+        <figure class="mobile"><img src="./12-mobile-desk.png" alt="Mobile Decision Desk" /><figcaption>Decision Desk on mobile with bottom tabs.</figcaption></figure>
+        <figure class="mobile"><img src="./13-mobile-mywork.png" alt="Mobile My Work" /><figcaption>My Work — swipe rows to view or dismiss.</figcaption></figure>
+        <figure class="mobile"><img src="./14-mobile-menu.png" alt="Mobile slide-out menu" /><figcaption>Tap ☰ for the full menu &amp; profile.</figcaption></figure>
+      </div>
+      <ul class="plain">
+        <li><b>Bottom tabs:</b> Desk, Brief, Work, People, Brain.</li>
+        <li><b>Swipe gestures:</b> in the feed, swipe <b>right</b> to view, <b>left</b> to dismiss.</li>
+        <li><b>Tap-to-read:</b> long execution-guide steps open in a readable popup.</li>
+        <li><b>Add to Home Screen:</b> use your browser’s “Add to Home Screen” for an app-like icon.</li>
+      </ul>
+    </section>
+
+    <!-- 19. FAQ -->
+    <section id="faq">
+      <h2>19 · FAQ &amp; Support</h2>
+      <div class="badges"><span class="badge b-all">For Everyone</span></div>
+      <h3>Common questions</h3>
+      <table>
+        <tr><th>Question</th><th>Answer</th></tr>
+        <tr><td>I don’t see a menu I expect.</td><td>That module isn’t enabled for your access. Ask an owner to grant it in People → Employees → Access.</td></tr>
+        <tr><td>My voice note came out garbled.</td><td>Pick the right language chip (EN / தமிழ் / Tanglish) and speak close to the mic. You can re-record.</td></tr>
+        <tr><td>A task I completed by mistake.</td><td>Open the task and tap <b>Reopen</b> — it returns to your active work.</td></tr>
+        <tr><td>My WhatsApp capture went to the owner.</td><td>Only high-value or policy/approval items go to the owner. Everything else routes to the relevant department queue.</td></tr>
+        <tr><td>A new feature isn’t showing.</td><td>Do a hard refresh (Ctrl/Cmd + Shift + R). If it’s a fresh update, your admin may need to redeploy.</td></tr>
+      </table>
+      <h3>Need help?</h3>
+      <p>Contact your workspace <b>Owner/Admin</b> first for access and account questions. For product support, reach out to the DecisionOS support team via your account contact.</p>
+      <footer>
+        <div class="brandmark" style="margin-bottom:8px;"><div class="box"><span>D</span></div><div class="name">DecisionOS</div></div>
+        The operational brain for founder-led SMEs · User Manual · Speak the decision. We run the company.
+      </footer>
+    </section>
+
+  </main>
+</div>
+</body>
+</html>

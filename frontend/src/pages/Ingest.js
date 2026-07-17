@@ -23,9 +23,35 @@ import {
   Sparkle,
   ArrowsLeftRight,
   WarningCircle,
+  Eye,
 } from "@phosphor-icons/react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 
 const inp = "w-full border border-black px-2.5 py-1.5 text-sm font-mono focus:outline-none focus:shadow-brutal-sm bg-white";
+
+function FilePreview({ fileUrl, kind, filename, testid }) {
+  const [open, setOpen] = useState(false);
+  if (!fileUrl) return null;
+  const src = `${process.env.REACT_APP_BACKEND_URL}${fileUrl}`;
+  const isImage = kind === "image" || /\.(png|jpe?g|webp|gif)$/i.test(filename || "");
+  const view = () => { if (isImage) setOpen(true); else window.open(src, "_blank", "noopener"); };
+  return (
+    <>
+      <button type="button" data-testid={testid} onClick={view} title="View attachment"
+        className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider border border-black px-3 py-1.5 hover:bg-brand-ink hover:text-white transition-colors">
+        <Eye size={14} weight="bold" /> View
+      </button>
+      {isImage && (
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogContent className="border border-black rounded-none max-w-3xl p-2" data-testid={`${testid}-lightbox`}>
+            <DialogHeader><DialogTitle className="font-heading uppercase tracking-tight text-sm truncate">{filename || "Attachment"}</DialogTitle></DialogHeader>
+            <img src={src} alt="attachment" className="w-full h-auto max-h-[80vh] object-contain" />
+          </DialogContent>
+        </Dialog>
+      )}
+    </>
+  );
+}
 
 const EMPTY = { contacts: [], invoices: [], payments: [], tasks: [] };
 
@@ -253,6 +279,7 @@ function ReviewPanel({ ingestion, onFiled, onCancel }) {
           </div>
         </div>
         <div className="flex gap-2">
+          <FilePreview fileUrl={ingestion.file_url} kind={ingestion.kind} filename={ingestion.filename} testid="ingest-review-view-file" />
           <button data-testid="ingest-cancel-button" onClick={onCancel} className="px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:bg-black/5 transition-colors">
             Discard
           </button>
@@ -473,6 +500,7 @@ export default function Ingest() {
                 <span className="text-sm font-semibold truncate max-w-[220px]">{h.filename}</span>
                 <span className="text-xs text-muted-foreground truncate flex-1 min-w-[120px]">{h.summary || h.entity || h.doc_type || ""}</span>
                 <Chip value={h.status} className={statusChip(h.status)} />
+                <FilePreview fileUrl={h.file_url} kind={h.kind} filename={h.filename} testid={`ingestion-view-${h.id}`} />
                 {h.status === "filed" && h.created_counts && (
                   <span className="label-mono text-muted-foreground">{h.created_counts.contacts}C · {h.created_counts.invoices}I · {h.created_counts.payments}P · {h.created_counts.tasks}T</span>
                 )}

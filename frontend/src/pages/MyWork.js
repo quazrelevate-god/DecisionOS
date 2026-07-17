@@ -16,7 +16,7 @@ import {
   Sparkle, Plus, Trash, ArrowUp, ArrowDown, Robot, PencilSimple, ListChecks, CaretDown, ArrowsOutSimple,
   ArrowBendUpRight, WarningCircle, ChatText, ArrowRight, Kanban, ListChecks as ListIcon,
   Paperclip, UserCircle, ShieldCheck, Tag, ClockCounterClockwise,
-  ArrowClockwise, XCircle, LockKey, X, AirplaneTakeoff,
+  ArrowClockwise, XCircle, LockKey, X, AirplaneTakeoff, MagnifyingGlassPlus,
 } from "@phosphor-icons/react";
 
 const WORK_TABS = [
@@ -432,6 +432,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
   const { user } = useAuth();
   const [uploading, setUploading] = useState(false);
   const [recording, setRecording] = useState(false);
+  const [lightbox, setLightbox] = useState(null);
   const fileRef = useRef(null);
   const mediaRef = useRef(null);
   const chunksRef = useRef([]);
@@ -603,14 +604,35 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
       )}
 
       {(t.attachments || []).length > 0 && (
-        <div className="flex flex-wrap gap-2 mt-3">
-          {t.attachments.map((a) => (
-            a.kind === "photo"
-              ? <img key={a.url} src={`${process.env.REACT_APP_BACKEND_URL}${a.url}`} alt="proof" className="w-16 h-16 object-cover border border-black" data-testid={`att-photo-${t.id}-${a.url}`} />
-              : <audio key={a.url} controls src={`${process.env.REACT_APP_BACKEND_URL}${a.url}`} className="h-8" data-testid={`att-voice-${t.id}-${a.url}`} />
-          ))}
+        <div className="mt-3 border border-black/15 bg-black/[0.02] p-3" data-testid={`proof-block-${t.id}`}>
+          <p className="label-mono text-muted-foreground flex items-center gap-1.5 mb-2">
+            <Paperclip size={13} weight="bold" /> Proof of work · {t.attachments.length}
+          </p>
+          <div className="flex flex-wrap gap-2 items-center">
+            {t.attachments.map((a) => (
+              a.kind === "photo"
+                ? <button key={a.url} type="button" onClick={() => setLightbox(`${process.env.REACT_APP_BACKEND_URL}${a.url}`)}
+                    className="relative w-20 h-20 border border-black overflow-hidden group" title="Click to view full photo"
+                    data-testid={`att-photo-${t.id}-${a.url}`}>
+                    <img src={`${process.env.REACT_APP_BACKEND_URL}${a.url}`} alt="proof" className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                    <span className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
+                      <MagnifyingGlassPlus size={20} weight="bold" className="text-white" />
+                    </span>
+                  </button>
+                : <audio key={a.url} controls preload="none" src={`${process.env.REACT_APP_BACKEND_URL}${a.url}`} className="h-9" data-testid={`att-voice-${t.id}-${a.url}`} />
+            ))}
+          </div>
         </div>
       )}
+
+      <Dialog open={!!lightbox} onOpenChange={(o) => !o && setLightbox(null)}>
+        <DialogContent className="border border-black rounded-none max-w-3xl p-2" data-testid={`photo-lightbox-${t.id}`}>
+          <DialogHeader>
+            <DialogTitle className="sr-only">Proof photo</DialogTitle>
+          </DialogHeader>
+          {lightbox && <img src={lightbox} alt="proof full" className="w-full h-auto max-h-[80vh] object-contain" />}
+        </DialogContent>
+      </Dialog>
 
       {canApprove && awaitingApproval && (
         <div className="flex flex-wrap gap-2 mt-4 border border-black bg-brand-yellow/40 p-3" data-testid={`approval-actions-${t.id}`}>
@@ -695,7 +717,6 @@ export default function MyWork() {
     enabled: !!focusTaskId, retry: false,
   });
   const focusDenied = !!focusTaskId && focusQ.isError && [403, 404].includes(focusQ.error?.response?.status);
-  const notifQ = useQuery({ queryKey: ["notifications"], queryFn: () => api.get("/notifications").then((r) => r.data) });
   const usersQ = useQuery({ queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data) });
   const prioritiesQ = useQuery({ queryKey: ["priorities"], queryFn: () => api.post("/tasks/prioritize").then((r) => r.data), enabled: aiPriority });
   const members = usersQ.data || [];
@@ -803,8 +824,8 @@ export default function MyWork() {
       ) : view === "leave" ? (
         <Leave embedded />
       ) : (
-      <div className="grid lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2">
+      <div data-testid="mywork-list">
+        <div>
           <div className="flex flex-wrap gap-1.5 mb-5 border-b border-black/10 pb-3" data-testid="work-tabs">
             {WORK_TABS.map((tb) => (
               <button key={tb.key} onClick={() => setTab(tb.key)} data-testid={`work-tab-${tb.key}`}
@@ -817,21 +838,6 @@ export default function MyWork() {
           {list.length === 0 && <EmptyState title={tab === "completed" ? "Nothing completed yet" : "Nothing here"} hint={tab === "all" ? "You're all caught up!" : "No tasks in this category."} />}
           <div className="space-y-4">
             {list.map((t) => <TaskCard key={t.id} t={t} onChange={refresh} members={members} roleOptions={roleOptions} showAssignee={showAssignee} highlight={t.id === focusTaskId} scores={aiPriority && tab !== "completed" ? scoreMap[t.id] : undefined} />)}
-          </div>
-        </div>
-
-        <div>
-          <h2 className="font-heading text-2xl font-extrabold uppercase tracking-tight mb-4 flex items-center gap-2">
-            <ChatCircleText size={22} weight="bold" /> Messages
-          </h2>
-          <div className="card-brutal divide-y divide-black/10" data-testid="mywork-messages">
-            {(notifQ.data?.notifications || []).length === 0 && <p className="p-4 text-sm text-muted-foreground">No messages.</p>}
-            {(notifQ.data?.notifications || []).slice(0, 15).map((n) => (
-              <div key={n.id} className="p-4">
-                <p className="text-sm">{n.message}</p>
-                <Chip value={n.level} className="mt-2" />
-              </div>
-            ))}
           </div>
         </div>
       </div>

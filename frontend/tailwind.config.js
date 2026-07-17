@@ -5,7 +5,9 @@ module.exports = {
     theme: {
         extend: {
             fontFamily: {
-                heading: ['Chivo', 'sans-serif'],
+                sans: ['Geist', 'system-ui', 'sans-serif'],
+                heading: ['Geist', 'system-ui', 'sans-serif'],
+                logo: ['Chivo', 'sans-serif'],
                 mono: ['IBM Plex Mono', 'monospace'],
             },
             borderRadius: {
@@ -29,9 +31,9 @@ module.exports = {
                 brand: { red: '#FF3B30', blue: '#002FA7', yellow: '#FFCC00', ink: '#0A0A0B', paper: '#F4F4F5' },
             },
             boxShadow: {
-                brutal: '4px 4px 0px #0A0A0B',
-                'brutal-sm': '2px 2px 0px #0A0A0B',
-                'brutal-lg': '6px 6px 0px #0A0A0B',
+                brutal: '0 1px 2px rgba(10,10,11,0.04), 0 4px 16px -6px rgba(10,10,11,0.08)',
+                'brutal-sm': '0 1px 2px rgba(10,10,11,0.06)',
+                'brutal-lg': '0 12px 32px -12px rgba(10,10,11,0.16)',
             },
             keyframes: {
                 'accordion-down': { from: { height: '0' }, to: { height: 'var(--radix-accordion-content-height)' } },

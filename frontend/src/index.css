@@ -1,108 +1,112 @@
-@import url('https://fonts.googleapis.com/css2?family=Chivo:wght@400;700;800;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Chivo:wght@700;800;900&family=Geist:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
     :root {
-        --background: 240 5% 96%;
-        --foreground: 240 6% 4%;
+        --background: 240 6% 98%;
+        --foreground: 240 10% 4%;
         --card: 0 0% 100%;
-        --card-foreground: 240 6% 4%;
+        --card-foreground: 240 10% 4%;
         --popover: 0 0% 100%;
-        --popover-foreground: 240 6% 4%;
+        --popover-foreground: 240 10% 4%;
         --primary: 4 100% 59%;
         --primary-foreground: 0 0% 100%;
         --secondary: 240 5% 96%;
-        --secondary-foreground: 240 6% 4%;
-        --muted: 240 5% 92%;
-        --muted-foreground: 240 4% 40%;
-        --accent: 223 100% 33%;
-        --accent-foreground: 0 0% 100%;
+        --secondary-foreground: 240 10% 4%;
+        --muted: 240 5% 96%;
+        --muted-foreground: 240 4% 44%;
+        --accent: 240 5% 95%;
+        --accent-foreground: 240 10% 4%;
         --destructive: 4 100% 59%;
         --destructive-foreground: 0 0% 100%;
-        --border: 240 6% 10%;
-        --input: 240 6% 10%;
+        --border: 240 6% 90%;
+        --input: 240 6% 90%;
         --ring: 4 100% 59%;
-        --radius: 0rem;
+        --radius: 0.625rem;
     }
 
     .dark {
-        --background: 240 8% 8%;
+        --background: 240 6% 7%;
         color-scheme: dark;
         --foreground: 0 0% 96%;
-        --card: 240 7% 12%;
+        --card: 240 5% 10%;
         --card-foreground: 0 0% 96%;
-        --popover: 240 7% 11%;
+        --popover: 240 6% 9%;
         --popover-foreground: 0 0% 96%;
         --primary: 4 100% 62%;
         --primary-foreground: 0 0% 100%;
-        --secondary: 240 6% 16%;
+        --secondary: 240 4% 15%;
         --secondary-foreground: 0 0% 96%;
-        --muted: 240 6% 18%;
-        --muted-foreground: 240 5% 65%;
-        --accent: 223 90% 62%;
-        --accent-foreground: 0 0% 100%;
+        --muted: 240 4% 15%;
+        --muted-foreground: 240 5% 64%;
+        --accent: 240 4% 16%;
+        --accent-foreground: 0 0% 98%;
         --destructive: 4 100% 62%;
         --destructive-foreground: 0 0% 100%;
-        --border: 0 0% 82%;
-        --input: 0 0% 82%;
+        --border: 240 4% 18%;
+        --input: 240 4% 18%;
         --ring: 4 100% 62%;
     }
 }
 
-/* Dark-mode remap of the neo-brutalist utility classes (specificity 0,2,0 beats 0,1,0) */
+/* Modernize the legacy neo-brutalist utility usages centrally (both themes) */
 @layer utilities {
-    /* ---- Surfaces ---- */
-    .dark .bg-white { background-color: #16171c; }
-    .dark .bg-brand-paper { background-color: #0d0e12; }
-    .dark .bg-brand-cream, .dark .bg-\[\#F4F4F5\], .dark .bg-gray-50, .dark .bg-slate-50 { background-color: #1c1d23; }
-    /* brand-ink doubles as primary buttons + active states: use a charcoal so it stands out on dark cards (fixes mic button + active tabs) */
-    .dark .bg-brand-ink { background-color: #2b2c33; }
-    .dark .hover\:bg-brand-ink:hover { background-color: #2b2c33; }
+    /* Hard black frames -> theme hairline borders everywhere */
+    .border-black { border-color: hsl(var(--border)); }
+    /* Soften every hardcoded square corner into a crisp modern radius */
+    .rounded-none { border-radius: 0.5rem; }
+
+    /* ---- Dark surfaces ---- */
+    .dark .bg-white { background-color: hsl(var(--card)); }
+    .dark .bg-brand-paper { background-color: hsl(240 6% 6%); }
+    .dark .bg-brand-cream, .dark .bg-\[\#F4F4F5\], .dark .bg-gray-50, .dark .bg-slate-50 { background-color: hsl(240 4% 13%); }
+    .dark .bg-brand-ink { background-color: hsl(240 4% 22%); }
+    .dark .hover\:bg-brand-ink:hover { background-color: hsl(240 4% 26%); }
     .dark .bg-black { background-color: #000; }
-    .dark .bg-black\/5 { background-color: rgba(255,255,255,0.06); }
-    .dark .bg-black\/10 { background-color: rgba(255,255,255,0.10); }
-    .dark .bg-black\/20 { background-color: rgba(255,255,255,0.14); }
+    .dark .bg-black\/5 { background-color: rgba(255,255,255,0.05); }
+    .dark .bg-black\/10 { background-color: rgba(255,255,255,0.09); }
+    .dark .bg-black\/20 { background-color: rgba(255,255,255,0.13); }
     .dark .bg-black\/80 { background-color: rgba(0,0,0,0.8); }
-    .dark .hover\:bg-black\/5:hover { background-color: rgba(255,255,255,0.08); }
+    .dark .hover\:bg-black\/5:hover { background-color: rgba(255,255,255,0.07); }
     .dark .bg-brand-yellow\/40 { background-color: rgba(250, 204, 21, 0.14); }
 
-    /* ---- Borders (neo-brutalist frame stays visible) ---- */
-    .dark .border-black { border-color: #4a4b54; }
-    .dark .border-black\/10 { border-color: rgba(228,228,231,0.12); }
-    .dark .border-black\/15 { border-color: rgba(228,228,231,0.16); }
-    .dark .border-black\/20 { border-color: rgba(228,228,231,0.20); }
-    .dark .border-black\/30 { border-color: rgba(228,228,231,0.26); }
-    .dark .border-black\/40 { border-color: rgba(228,228,231,0.32); }
-    .dark .border-black\/50 { border-color: rgba(228,228,231,0.40); }
+    /* ---- Borders ---- */
+    .dark .border-black { border-color: hsl(var(--border)); }
+    .dark .border-black\/10 { border-color: rgba(228,228,231,0.10); }
+    .dark .border-black\/15 { border-color: rgba(228,228,231,0.13); }
+    .dark .border-black\/20 { border-color: rgba(228,228,231,0.16); }
+    .dark .border-black\/30 { border-color: rgba(228,228,231,0.22); }
+    .dark .border-black\/40 { border-color: rgba(228,228,231,0.28); }
+    .dark .border-black\/50 { border-color: rgba(228,228,231,0.34); }
 
     /* ---- Text ---- */
     .dark .text-black { color: #f4f4f5; }
     .dark .text-brand-ink { color: #f4f4f5; }
     .dark .text-black\/30 { color: rgba(244,244,245,0.38); }
     .dark .text-black\/40 { color: rgba(244,244,245,0.48); }
-    .dark .text-muted-foreground { color: #a1a1aa; }
-    /* brand-blue is intentionally dark (#002FA7) for light-mode contrast — lift it on dark surfaces */
+    .dark .text-muted-foreground { color: hsl(240 5% 64%); }
     .dark .text-brand-blue { color: #6ea8ff; }
     .dark .hover\:text-brand-red:hover { color: #ff6b62; }
-    /* status accents — brighten for dark bg contrast */
     .dark .text-green-600 { color: #4ade80; }
     .dark .text-amber-600 { color: #fbbf24; }
     .dark .text-orange-600, .dark .text-orange-500 { color: #fb923c; }
 
-    /* ---- Accent surfaces keep readable (dark) text — MUST come after text flips above ---- */
+    /* accent surfaces keep readable dark text */
     .dark .bg-brand-yellow { color: #0A0A0B !important; }
 
     /* ---- Components / chrome ---- */
-    .dark .card-brutal { background-color: #16171c; border-color: #4a4b54; }
-    .dark .shadow-brutal, .dark .shadow-brutal-sm, .dark .shadow-hover:hover { box-shadow: 4px 4px 0px #000 !important; }
-    .dark ::-webkit-scrollbar-track { background: #16171c; }
-    .dark ::-webkit-scrollbar-thumb { background: #52525b; border-color: #16171c; }
-    .dark input::placeholder, .dark textarea::placeholder { color: #6b6b75; }
-    /* bare inputs/textareas (no bg class) would otherwise keep the UA white bg → light-on-white invisible text */
-    .dark textarea, .dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]) { background-color: #16171c; color: #f4f4f5; }
-    .dark select:invalid, .dark select option { color: #f4f4f5; background-color: #16171c; }
+    .dark .card-brutal { background-color: hsl(var(--card)); border-color: hsl(var(--border)); }
+    .dark .shadow-brutal, .dark .shadow-brutal-sm, .dark .shadow-brutal-lg {
+        box-shadow: inset 0 1px 0 0 rgba(255,255,255,0.04), 0 8px 24px -12px rgba(0,0,0,0.7) !important;
+    }
+    .dark .shadow-hover:hover { box-shadow: 0 10px 28px -12px rgba(0,0,0,0.75) !important; }
+    .dark ::-webkit-scrollbar-track { background: transparent; }
+    .dark ::-webkit-scrollbar-thumb { background: hsl(240 4% 24%); border-color: transparent; }
+    .dark input::placeholder, .dark textarea::placeholder { color: hsl(240 5% 50%); }
+    .dark textarea, .dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]) { background-color: hsl(var(--card)); color: #f4f4f5; }
+    .dark select:invalid, .dark select option { color: #f4f4f5; background-color: hsl(var(--card)); }
 }
 
 @layer base {
@@ -111,10 +115,15 @@
     }
     body {
         @apply bg-background text-foreground;
-        font-family: 'IBM Plex Mono', monospace;
+        font-family: 'Geist', system-ui, sans-serif;
         -webkit-font-smoothing: antialiased;
+        letter-spacing: -0.006em;
     }
     h1, h2, h3, h4, .font-heading {
+        font-family: 'Geist', system-ui, sans-serif;
+        letter-spacing: -0.02em;
+    }
+    .font-logo {
         font-family: 'Chivo', sans-serif;
     }
     ::selection {
@@ -124,24 +133,26 @@
 }
 
 @layer components {
+    /* Modern card: hairline border + soft layered depth (was hard brutalist box) */
     .card-brutal {
-        @apply bg-white border border-black;
+        @apply bg-card border border-border rounded-xl;
+        box-shadow: 0 1px 2px rgba(10,10,11,0.04), 0 4px 16px -6px rgba(10,10,11,0.06);
     }
     .shadow-hover {
-        @apply transition-transform duration-200 ease-out;
+        @apply transition-[transform,box-shadow] duration-200 ease-out;
     }
     .shadow-hover:hover {
         transform: translateY(-2px);
-        box-shadow: 4px 4px 0px #0A0A0B;
+        box-shadow: 0 10px 28px -12px rgba(10,10,11,0.18);
     }
     .label-mono {
-        @apply text-xs uppercase tracking-[0.2em] font-medium;
+        @apply font-mono text-xs uppercase tracking-[0.12em] font-medium;
     }
 }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-track { background: #F4F4F5; }
-::-webkit-scrollbar-thumb { background: #0A0A0B; border: 2px solid #F4F4F5; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: hsl(240 6% 82%); border: 2px solid transparent; background-clip: padding-box; border-radius: 8px; }
 
 @keyframes pulse-ring {
     0% { box-shadow: 0 0 0 0 rgba(255,59,48,0.5); }

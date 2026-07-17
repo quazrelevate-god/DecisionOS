@@ -58,10 +58,10 @@ const BOTTOM_NAV = [
 
 const Logo = () => (
   <div className="flex items-center gap-2">
-    <div className="w-9 h-9 bg-brand-red flex items-center justify-center">
-      <span className="font-heading font-black text-white text-xl leading-none">D</span>
+    <div className="w-9 h-9 bg-brand-red rounded-lg flex items-center justify-center">
+      <span className="font-logo font-black text-white text-xl leading-none">D</span>
     </div>
-    <span className="font-heading font-black text-2xl tracking-tighter uppercase">DecisionOS</span>
+    <span className="font-logo font-black text-2xl tracking-tighter uppercase">DecisionOS</span>
   </div>
 );
 
@@ -178,10 +178,10 @@ export default function Layout({ children }) {
           data-testid={testid}
           onClick={onNavigate}
           className={({ isActive }) =>
-            `flex items-center gap-3 px-6 py-3 text-sm border-l-4 transition-colors ${
+            `flex items-center gap-3 mx-3 px-3 py-2.5 text-sm rounded-lg border-l-2 transition-[background-color,color,border-color] duration-200 ${
               isActive
-                ? "border-brand-red bg-brand-ink text-white font-semibold"
-                : "border-transparent hover:bg-black/5"
+                ? "border-brand-red bg-brand-red/[0.08] text-brand-red font-semibold"
+                : "border-transparent text-foreground/70 hover:bg-accent hover:text-foreground"
             }`
           }
         >

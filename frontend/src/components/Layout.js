@@ -144,15 +144,6 @@ export default function Layout({ children }) {
     );
   };
 
-  const ProfileButton = () => (
-    <CompanyDialog trigger={
-      <button data-testid="company-profile-button" title="Company details"
-        className="w-10 h-10 flex items-center justify-center border border-black hover:bg-brand-ink hover:text-white transition-colors">
-        <Buildings size={18} weight="bold" />
-      </button>
-    } />
-  );
-
   const ThemeToggle = () => (
     <button
       onClick={toggleTheme}
@@ -274,14 +265,12 @@ export default function Layout({ children }) {
                 <EnvelopeSimple size={16} weight="bold" /> Send Daily Digest
               </button>
               <ThemeToggle />
-              <ProfileButton />
               <Bellicon />
             </div>
           )}
           {user?.role !== "owner" && (
             <div className="flex items-center gap-3">
               <ThemeToggle />
-              <ProfileButton />
               <Bellicon />
             </div>
           )}
@@ -292,7 +281,6 @@ export default function Layout({ children }) {
           <Logo />
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <ProfileButton />
             <Bellicon />
             <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
             <SheetTrigger asChild>

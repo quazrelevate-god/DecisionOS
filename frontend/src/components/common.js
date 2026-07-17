@@ -5,15 +5,6 @@ export function PageHeader({ eyebrow, title, children }) {
     <div className="mb-8">
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div className="min-w-0">
-          {eyebrow && (
-            <div className="flex items-center gap-2 mb-3">
-              <span className="relative flex h-1.5 w-1.5" aria-hidden>
-                <span className="absolute inline-flex h-full w-full rounded-full bg-brand-red opacity-60 animate-ping"></span>
-                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-brand-red"></span>
-              </span>
-              <p className="label-mono text-muted-foreground">{eyebrow}</p>
-            </div>
-          )}
           <h1 className="font-heading text-3xl sm:text-[2.25rem] lg:text-[2.6rem] font-bold tracking-[-0.035em] leading-[1.05] text-foreground">
             {title}
           </h1>

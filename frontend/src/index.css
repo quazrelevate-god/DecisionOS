@@ -161,6 +161,16 @@
 }
 .recording-pulse { animation: pulse-ring 1.5s infinite; }
 
+/* Futuristic ambient canvas: soft red glow + faint dot-grid, theme-aware */
+.app-canvas {
+    background-color: hsl(var(--background));
+    background-image:
+        radial-gradient(70% 45% at 50% -6%, rgba(255,59,48,0.06), transparent 62%),
+        radial-gradient(hsl(var(--border)) 0.6px, transparent 0.6px);
+    background-size: 100% 100%, 24px 24px;
+    background-position: 0 0, 0 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
     .recording-pulse { animation: none; }
     .shadow-hover { transition: none; }

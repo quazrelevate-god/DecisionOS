@@ -243,11 +243,11 @@ export default function Layout({ children }) {
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Desktop top bar */}
-        <header className="hidden lg:flex h-16 border-b border-black bg-white items-center justify-between px-8 sticky top-0 z-10">
+        <header className="hidden lg:flex h-16 border-b border-border bg-background/70 backdrop-blur-xl items-center justify-between px-8 sticky top-0 z-10">
           <div className="flex items-center gap-3">
             <span className="label-mono text-muted-foreground">Signed in as</span>
             <span className="font-semibold text-sm" data-testid="current-user-name">{user?.name}</span>
-            <span className="px-2 py-0.5 text-xs uppercase tracking-wider bg-brand-blue text-white font-semibold" data-testid="current-user-role">
+            <span className="px-2 py-0.5 text-[11px] rounded-md uppercase tracking-wider bg-brand-red/10 text-brand-red border border-brand-red/20 font-semibold" data-testid="current-user-role">
               {user?.role}
             </span>
           </div>
@@ -256,7 +256,7 @@ export default function Layout({ children }) {
               <button
                 onClick={sendDigest}
                 data-testid="send-digest-button"
-                className="flex items-center gap-2 px-4 py-2 text-sm border border-black bg-brand-yellow font-semibold hover:shadow-brutal-sm transition-all"
+                className="flex items-center gap-2 px-4 py-2 text-sm rounded-lg bg-foreground text-background font-semibold hover:opacity-90 transition-opacity"
               >
                 <EnvelopeSimple size={16} weight="bold" /> Send Daily Digest
               </button>
@@ -273,7 +273,7 @@ export default function Layout({ children }) {
         </header>
 
         {/* Mobile top app bar */}
-        <header className="lg:hidden h-14 border-b border-black bg-white flex items-center justify-between px-4 sticky top-0 z-20">
+        <header className="lg:hidden h-14 border-b border-border bg-background/80 backdrop-blur-xl flex items-center justify-between px-4 sticky top-0 z-20">
           <Logo />
           <div className="flex items-center gap-2">
             <ThemeToggle />
@@ -296,7 +296,7 @@ export default function Layout({ children }) {
                 <p className="mt-2 label-mono text-muted-foreground truncate">{tenant?.name}</p>
                 <div className="mt-3 flex items-center gap-2">
                   <span className="font-semibold text-sm">{user?.name}</span>
-                  <span className="px-2 py-0.5 text-xs uppercase tracking-wider bg-brand-blue text-white font-semibold">
+                  <span className="px-2 py-0.5 text-[11px] rounded-md uppercase tracking-wider bg-brand-red/10 text-brand-red border border-brand-red/20 font-semibold">
                     {user?.role}
                   </span>
                 </div>
@@ -309,7 +309,7 @@ export default function Layout({ children }) {
                   <button
                     onClick={() => { setDrawerOpen(false); sendDigest(); }}
                     data-testid="mobile-send-digest-button"
-                    className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm border border-black bg-brand-yellow font-semibold"
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm rounded-lg bg-foreground text-background font-semibold"
                   >
                     <EnvelopeSimple size={16} weight="bold" /> Send Daily Digest
                   </button>
@@ -334,7 +334,7 @@ export default function Layout({ children }) {
           </div>
         </header>
 
-        <main className="flex-1 p-4 lg:p-8 pb-24 lg:pb-8 overflow-x-hidden">{children}</main>
+        <main className="flex-1 p-4 lg:p-8 pb-24 lg:pb-8 overflow-x-hidden app-canvas">{children}</main>
       </div>
 
       <ProfileDialog open={profileOpen} onClose={() => setProfileOpen(false)} />

@@ -2,12 +2,25 @@ import { cn } from "../lib/utils";
 
 export function PageHeader({ eyebrow, title, children }) {
   return (
-    <div className="flex items-end justify-between mb-8 flex-wrap gap-4">
-      <div>
-        {eyebrow && <p className="label-mono text-brand-red mb-2">{eyebrow}</p>}
-        <h1 className="font-heading text-4xl lg:text-5xl font-black uppercase tracking-tighter">{title}</h1>
+    <div className="mb-8">
+      <div className="flex items-start justify-between flex-wrap gap-4">
+        <div className="min-w-0">
+          {eyebrow && (
+            <div className="flex items-center gap-2 mb-3">
+              <span className="relative flex h-1.5 w-1.5" aria-hidden>
+                <span className="absolute inline-flex h-full w-full rounded-full bg-brand-red opacity-60 animate-ping"></span>
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-brand-red"></span>
+              </span>
+              <p className="label-mono text-muted-foreground">{eyebrow}</p>
+            </div>
+          )}
+          <h1 className="font-heading text-3xl sm:text-[2.25rem] lg:text-[2.6rem] font-bold tracking-[-0.035em] leading-[1.05] text-foreground">
+            {title}
+          </h1>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">{children}</div>
       </div>
-      {children}
+      <div className="mt-5 h-px w-full bg-gradient-to-r from-brand-red/50 via-border to-transparent"></div>
     </div>
   );
 }
@@ -62,8 +75,8 @@ export function Chip({ value, className = "", ...rest }) {
 
 export function EmptyState({ title, hint }) {
   return (
-    <div className="border border-dashed border-black/40 p-12 text-center">
-      <p className="font-heading font-bold uppercase tracking-tight text-lg">{title}</p>
+    <div className="border border-dashed border-border rounded-xl p-12 text-center bg-card/40">
+      <p className="font-heading font-semibold tracking-tight text-lg">{title}</p>
       {hint && <p className="text-sm text-muted-foreground mt-2">{hint}</p>}
     </div>
   );

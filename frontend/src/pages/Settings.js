@@ -56,7 +56,7 @@ export default function Settings() {
                 value={threshold} onChange={(e) => setThreshold(e.target.value)} />
               <p className="text-xs text-muted-foreground mt-1.5 flex items-start gap-1.5">
                 <Info size={13} weight="bold" className="mt-0.5 shrink-0" />
-                Payments/invoices at or above this amount are flagged <span className="font-semibold">"verify before approving"</span> in the Review Queue.
+                <span>Payments/invoices at or above this amount are flagged <span className="font-semibold">"verify before approving"</span> in the Review Queue.</span>
               </p>
             </div>
 

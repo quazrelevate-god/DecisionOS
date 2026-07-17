@@ -296,6 +296,12 @@ async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[l
         "Use 'memory_notes' for lasting facts/policies the company should remember (e.g. 'don't purchase from XYZ again', 'salary increment for Arun from August'). "
         "The transcript may be in English, Tamil, or Tanglish (casual Tamil-English code-mix). Fully understand it regardless "
         "of language, and produce ALL output field values in clear English. "
+        "TASK GRANULARITY (important): create exactly ONE task per distinct assignee (person or role). Do NOT split one "
+        "person's single goal into several task cards — a directive like 'install and onboard all users using Ramesh's list' "
+        "is ONE task for the responsible person, not one task per sub-step. The individual sub-steps (install, get the list, "
+        "onboard each user, etc.) are handled later inside that task's AI execution guide, so keep them OUT of separate tasks. "
+        "Only create multiple tasks when the work genuinely goes to DIFFERENT people/roles, or is a clearly separate deliverable "
+        "for the same person that cannot be part of the same guided checklist. Put the fuller scope in the task's \"description\". "
         "Pick assignee_role ONLY from the provided role list. Infer sensible owners and due dates. If nothing applies, use empty arrays."
     )
     prompt = f"Founder directive transcript:\n\"\"\"\n{transcript}\n\"\"\"\nExtract the structured JSON now."
@@ -417,6 +423,9 @@ async def ai_meeting_notes(transcript: str, members: list, session_id: str) -> d
         "\"key_points\": [string], \"decisions\": [string], "
         "\"action_items\": [{\"title\": string, \"assignee_name\": string, \"due_in_days\": integer or null}]}. "
         + members_line +
+        "ACTION-ITEM GRANULARITY (important): create exactly ONE action item per distinct assignee for a single goal. "
+        "Do NOT split one person's task into several items — the sub-steps are handled inside that task's execution guide later. "
+        "Only create multiple items when they go to DIFFERENT people or are clearly separate deliverables. "
         "The transcript may be English, Tamil or Tanglish — understand it and output all values in clear English."
     )
     prompt = f"Meeting transcript:\n\"\"\"\n{(transcript or '')[:40000]}\n\"\"\"\nExtract the structured minutes now."

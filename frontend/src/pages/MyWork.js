@@ -768,9 +768,9 @@ export default function MyWork() {
   return (
     <div>
       <PageHeader eyebrow="Your day, simplified" title="My Work">
-        <div className="grid grid-cols-4 gap-2 w-full lg:flex lg:flex-wrap lg:w-auto lg:items-center" data-testid="mywork-controls">
+        <div className="w-full lg:w-auto flex flex-col lg:flex-row lg:items-center gap-2" data-testid="mywork-controls">
           {view === "mywork" && (
-            <>
+            <div className="order-2 lg:order-1 grid grid-cols-4 gap-2 lg:flex lg:flex-wrap lg:items-center" data-testid="mywork-actions">
               <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members}
                 triggerClassName={`${CTRL} bg-brand-ink text-white hover:shadow-brutal-sm`} />
               {isOwner && (
@@ -785,26 +785,28 @@ export default function MyWork() {
                 className={`${CTRL} ${aiPriority ? "bg-brand-red text-white shadow-brutal-sm" : "bg-brand-yellow hover:shadow-brutal-sm"}`}>
                 <Sparkle size={15} weight="bold" /> {scoring ? "Scoring…" : aiPriority ? "AI Priority: On" : "AI Priority"}
               </button>
-            </>
+            </div>
           )}
-          <button onClick={() => setView("mywork")} data-testid="work-view-mywork"
-            className={`${CTRL} ${view === "mywork" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
-            <ListIcon size={15} weight="bold" /> My Work
-          </button>
-          <button onClick={() => setView("board")} data-testid="work-view-board"
-            className={`${CTRL} ${view === "board" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
-            <Kanban size={15} weight="bold" /> Board
-          </button>
-          {canSeeWorkflows && (
-            <button onClick={() => setView("workflows")} data-testid="work-view-workflows"
-              className={`${CTRL} ${view === "workflows" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
-              <ArrowRight size={15} weight="bold" /> Workflows
+          <div className="order-1 lg:order-2 grid grid-cols-4 gap-2 lg:flex lg:items-center" data-testid="work-view-toggle">
+            <button onClick={() => setView("mywork")} data-testid="work-view-mywork"
+              className={`${CTRL} ${view === "mywork" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+              <ListIcon size={15} weight="bold" /> My Work
             </button>
-          )}
-          <button onClick={() => setView("leave")} data-testid="work-view-leave"
-            className={`${CTRL} ${view === "leave" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
-            <AirplaneTakeoff size={15} weight="bold" /> Leave
-          </button>
+            <button onClick={() => setView("board")} data-testid="work-view-board"
+              className={`${CTRL} ${view === "board" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+              <Kanban size={15} weight="bold" /> Board
+            </button>
+            {canSeeWorkflows && (
+              <button onClick={() => setView("workflows")} data-testid="work-view-workflows"
+                className={`${CTRL} ${view === "workflows" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+                <ArrowRight size={15} weight="bold" /> Workflows
+              </button>
+            )}
+            <button onClick={() => setView("leave")} data-testid="work-view-leave"
+              className={`${CTRL} ${view === "leave" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+              <AirplaneTakeoff size={15} weight="bold" /> Leave
+            </button>
+          </div>
         </div>
       </PageHeader>
 

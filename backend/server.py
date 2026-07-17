@@ -508,17 +508,52 @@ async def ai_step_assist(task: dict, step_text: str, industry: str, session_id: 
 
 
 
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "").strip()
+OPENAI_STT_MODEL = os.environ.get("OPENAI_STT_MODEL", "gpt-4o-transcribe").strip() or "gpt-4o-transcribe"
+_openai_stt_client = None
+if OPENAI_API_KEY:
+    try:
+        from openai import AsyncOpenAI
+        _openai_stt_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+        logger.info(f"OpenAI transcription enabled with model '{OPENAI_STT_MODEL}' (user key).")
+    except Exception as _e:
+        logger.warning(f"Could not init OpenAI client, will fall back to Whisper via Emergent key: {_e}")
+
+
+def _stt_lang_prompt(language: str):
+    lang, prompt = None, None
+    if language == "en":
+        lang = "en"
+    elif language == "ta":
+        lang = "ta"
+    elif language == "tanglish":
+        prompt = ("This is Tanglish — casual code-mixed Tamil and English speech from an Indian "
+                  "small-business owner. Keep English words in English.")
+    return lang, prompt
+
+
 async def transcribe_audio(path: str, language: str = "auto") -> str:
+    lang, prompt = _stt_lang_prompt(language)
+    # Prefer the user's own OpenAI key + newer transcription model (gpt-4o-transcribe).
+    if _openai_stt_client is not None:
+        try:
+            kwargs = {"model": OPENAI_STT_MODEL, "response_format": "json"}
+            if lang:
+                kwargs["language"] = lang
+            if prompt:
+                kwargs["prompt"] = prompt
+            with open(path, "rb") as f:
+                resp = await _openai_stt_client.audio.transcriptions.create(file=f, **kwargs)
+            return resp.text
+        except Exception as e:
+            logger.warning(f"OpenAI STT ({OPENAI_STT_MODEL}) failed; falling back to Whisper (Emergent key): {e}")
+    # Fallback: Whisper via the Emergent universal key (keeps voice capture working if the key is missing/invalid).
     stt = OpenAISpeechToText(api_key=EMERGENT_LLM_KEY)
     kwargs = {"model": "whisper-1", "response_format": "json"}
-    if language == "en":
-        kwargs["language"] = "en"
-    elif language == "ta":
-        kwargs["language"] = "ta"
-    elif language == "tanglish":
-        # Code-mixed Tamil-English: let Whisper auto-detect, bias with a prompt
-        kwargs["prompt"] = ("This is Tanglish — casual code-mixed Tamil and English speech from an Indian "
-                            "small-business owner. Keep English words in English.")
+    if lang:
+        kwargs["language"] = lang
+    if prompt:
+        kwargs["prompt"] = prompt
     with open(path, "rb") as f:
         resp = await stt.transcribe(file=f, **kwargs)
     return resp.text

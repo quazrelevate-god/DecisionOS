@@ -48,7 +48,7 @@ const MENU_PREVIEW = [
   { label: "Meeting Notes", perm: null },
 ];
 
-function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite, members = [] }) {
+function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite, members = [], isOwner = false }) {
   const [open, setOpen] = useState(false);
   const blank = { name: "", email: "", password: "", phone: "", passwordless: false, role: roleOptions[0]?.key || "", permissions: defaultPermsForRole(roleOptions[0]?.key), reporting_manager_id: "" };
   const [form, setForm] = useState(blank);
@@ -67,11 +67,20 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite, member
     }
   };
 
-  const setRole = (role) => setForm((f) => ({ ...f, role, permissions: editing ? f.permissions : defaultPermsForRole(role) }));
+  const setRole = (role) => setForm((f) => ({
+    ...f, role,
+    permissions: role === "owner" ? PERMISSIONS.map((p) => p.key)
+      : (editing && f.role !== "owner") ? f.permissions
+      : defaultPermsForRole(role),
+  }));
   const togglePerm = (key) => setForm((f) => ({ ...f, permissions: f.permissions.includes(key) ? f.permissions.filter((k) => k !== key) : [...f.permissions, key] }));
 
   const save = async () => {
     try {
+      const promotingToOwner = form.role === "owner" && (!editing || initial.role !== "owner");
+      if (promotingToOwner && !window.confirm("This makes them a co-owner with FULL control of the company account — including managing team, finances and all data. Continue?")) return;
+      const demotingOwner = editing && initial.role === "owner" && form.role !== "owner";
+      if (demotingOwner && !window.confirm(`Remove Owner access from ${initial.name}? They will lose full control. At least one owner must remain.`)) return;
       if (editing) {
         await api.patch(`/users/${initial.id}`, { role: form.role, permissions: form.permissions, phone: form.phone, reporting_manager_id: form.reporting_manager_id });
         toast.success(`${initial.name}'s access updated`);
@@ -141,6 +150,13 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite, member
               <ShieldCheck size={16} weight="bold" className="text-brand-red" />
               <label className="label-mono text-muted-foreground">Access — pick what this member can open & use</label>
             </div>
+            {form.role === "owner" ? (
+              <div className="border border-brand-red bg-brand-red/5 px-3 py-3 text-sm" data-testid="owner-access-note">
+                <p className="font-semibold flex items-center gap-1.5"><ShieldCheck size={15} weight="bold" className="text-brand-red" /> Full company access</p>
+                <p className="text-xs text-muted-foreground mt-1">Owners can open and manage everything — team, finances, workflows and all data. Individual permissions don't apply.</p>
+              </div>
+            ) : (
+            <>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" data-testid="permission-list">
               {PERMISSIONS.map((p) => {
                 const on = form.permissions.includes(p.key);
@@ -169,6 +185,8 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite, member
               </div>
               <p className="text-[11px] text-muted-foreground mt-2 italic">CEO Brief shows their personal brief. Everyone always has CEO Brief, My Work & Meeting Notes.</p>
             </div>
+            </>
+            )}
           </div>
         </div>
         <DialogFooter>
@@ -182,7 +200,8 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite, member
 export function TeamPanel() {
   const { user, tenant } = useAuth();
   const qc = useQueryClient();
-  const roleOptions = tenant?.roles || [];
+  const isOwner = user?.role === "owner";
+  const roleOptions = [...(tenant?.roles || []), ...(isOwner ? [{ key: "owner", label: "Owner" }] : [])];
   const [invite, setInvite] = useState(null);
   const { data } = useQuery({ queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data) });
   const { data: attendance } = useQuery({ queryKey: ["attendance"], queryFn: () => api.get("/attendance").then((r) => r.data) });
@@ -211,7 +230,7 @@ export function TeamPanel() {
       <InviteLinkModal info={invite} onClose={() => setInvite(null)} />
       {canManageTeam && (
         <div className="flex justify-end mb-6">
-          <MemberDialog roleOptions={roleOptions} members={data || []} onSaved={refresh} onInvite={setInvite}
+          <MemberDialog roleOptions={roleOptions} members={data || []} isOwner={isOwner} onSaved={refresh} onInvite={setInvite}
             trigger={<button data-testid="add-user-button" className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all"><UserPlus size={16} weight="bold" /> Add Member</button>} />
         </div>
       )}
@@ -235,10 +254,12 @@ export function TeamPanel() {
               )}
               <Chip value={u.role} className={u.role === "owner" ? "bg-brand-red text-white" : "bg-brand-blue text-white"} />
               {absentIds.has(u.id) && <Chip value="absent" className="bg-black text-white" data-testid={`absent-badge-${u.id}`} />}
+              {canManageTeam && (u.role !== "owner" || isOwner) && (
+                <MemberDialog roleOptions={roleOptions} initial={u} members={data || []} isOwner={isOwner} onSaved={refresh}
+                  trigger={<button data-testid={`edit-access-${u.id}`} className="flex items-center gap-1 text-xs uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-blue hover:text-white transition-colors"><PencilSimple size={12} weight="bold" /> Access</button>} />
+              )}
               {canManageTeam && u.role !== "owner" && (
                 <>
-                  <MemberDialog roleOptions={roleOptions} initial={u} members={data || []} onSaved={refresh}
-                    trigger={<button data-testid={`edit-access-${u.id}`} className="flex items-center gap-1 text-xs uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-blue hover:text-white transition-colors"><PencilSimple size={12} weight="bold" /> Access</button>} />
                   {u.phone && (
                     <button onClick={() => getInviteLink(u)} data-testid={`invite-link-${u.id}`} className="flex items-center gap-1 text-xs uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-red hover:text-white transition-colors"><LinkSimple size={12} weight="bold" /> Invite</button>
                   )}

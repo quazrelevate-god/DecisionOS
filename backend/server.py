@@ -33,6 +33,7 @@ from core import (
     set_auth_cookie, clear_auth_cookie,
     get_current_user, require_role, require_perm, user_perms, clean_perms,
     tenant_role_keys, log_activity, add_decision_event, normalize_os_blueprint,
+    PERMISSION_KEYS,
 )
 
 # ---------------------------------------------------------------------------
@@ -1143,7 +1144,11 @@ async def list_users(user: dict = Depends(get_current_user)):
 
 @api.post("/users")
 async def create_user(inp: UserCreateInput, user: dict = Depends(require_perm("team_manage"))):
-    if inp.role not in await tenant_role_keys(user["tenant_id"]):
+    role_keys = await tenant_role_keys(user["tenant_id"])
+    if inp.role == "owner":
+        if user.get("role") != "owner":
+            raise HTTPException(status_code=403, detail="Only an owner can create another owner")
+    elif inp.role not in role_keys:
         raise HTTPException(status_code=400, detail="Invalid role")
     email = inp.email.lower()
     if await db.users.find_one({"email": email}):
@@ -1205,15 +1210,31 @@ async def update_user(user_id: str, inp: UserUpdateInput, user: dict = Depends(r
     target = await db.users.find_one({"id": user_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
     if not target:
         raise HTTPException(status_code=404, detail="Member not found")
-    if target["role"] == "owner":
-        raise HTTPException(status_code=400, detail="Owner access cannot be changed")
+    acting_is_owner = user.get("role") == "owner"
+    # Only an owner may change another owner's access (e.g. to demote them).
+    if target["role"] == "owner" and not acting_is_owner:
+        raise HTTPException(status_code=403, detail="Only an owner can change another owner's access")
     updates = {}
-    if inp.role is not None:
-        if inp.role not in await tenant_role_keys(user["tenant_id"]) or inp.role == "owner":
-            raise HTTPException(status_code=400, detail="Invalid role")
+    new_role = target["role"]
+    if inp.role is not None and inp.role != target["role"]:
+        role_keys = await tenant_role_keys(user["tenant_id"])
+        if inp.role == "owner":
+            if not acting_is_owner:
+                raise HTTPException(status_code=403, detail="Only an owner can grant the Owner role")
+        else:
+            if inp.role not in role_keys:
+                raise HTTPException(status_code=400, detail="Invalid role")
+            # Never leave the company without an owner.
+            if target["role"] == "owner":
+                owner_count = await db.users.count_documents({"tenant_id": user["tenant_id"], "role": "owner"})
+                if owner_count <= 1:
+                    raise HTTPException(status_code=400, detail="Cannot demote the last owner — assign another owner first")
+        new_role = inp.role
         updates["role"] = inp.role
     if inp.permissions is not None:
         updates["permissions"] = clean_perms(inp.permissions)
+    if new_role == "owner":
+        updates["permissions"] = list(PERMISSION_KEYS)
     if inp.phone is not None:
         updates["phone"] = inp.phone.strip()
     if inp.reporting_manager_id is not None:

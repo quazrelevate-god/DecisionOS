@@ -354,8 +354,8 @@ export default function Login() {
       {/* Left brand panel */}
       <div className="hidden lg:flex flex-col justify-between bg-brand-ink text-white p-12 border-r border-black">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-brand-red flex items-center justify-center"><span className="font-heading font-black text-xl">D</span></div>
-          <span className="font-heading font-black text-2xl tracking-tighter uppercase">DecisionOS</span>
+          <div className="w-10 h-10 bg-brand-red rounded-lg flex items-center justify-center"><span className="font-logo font-black text-white text-xl">D</span></div>
+          <span className="font-logo font-black text-2xl tracking-tight uppercase leading-none"><span className="text-white">Decision</span><span className="text-brand-red">OS</span></span>
         </div>
         <div>
           <p className="label-mono text-brand-red mb-4">The operational brain for founder-led SMEs</p>
@@ -375,8 +375,8 @@ export default function Login() {
       <div className="flex items-center justify-center p-6 lg:p-12">
         <div className="w-full max-w-md">
           <div className="lg:hidden flex items-center gap-2 mb-8">
-            <div className="w-8 h-8 bg-brand-red flex items-center justify-center"><span className="font-heading font-black text-white">D</span></div>
-            <span className="font-heading font-black text-xl tracking-tighter uppercase">DecisionOS</span>
+            <div className="w-8 h-8 bg-brand-red rounded-lg flex items-center justify-center"><span className="font-logo font-black text-white">D</span></div>
+            <span className="font-logo font-black text-xl tracking-tight uppercase leading-none"><span className="text-foreground">Decision</span><span className="text-brand-red">OS</span></span>
           </div>
 
           {mode === "login" && (

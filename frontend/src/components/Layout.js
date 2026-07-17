@@ -57,11 +57,13 @@ const BOTTOM_NAV = [
 ];
 
 const Logo = () => (
-  <div className="flex items-center gap-2">
-    <div className="w-9 h-9 bg-brand-red rounded-lg flex items-center justify-center">
+  <div className="flex items-center gap-2.5">
+    <div className="w-9 h-9 bg-brand-red rounded-lg flex items-center justify-center shrink-0">
       <span className="font-logo font-black text-white text-xl leading-none">D</span>
     </div>
-    <span className="font-logo font-black text-2xl tracking-tighter uppercase">DecisionOS</span>
+    <span className="font-logo font-black text-2xl tracking-tight uppercase leading-none">
+      <span className="text-foreground">Decision</span><span className="text-brand-red">OS</span>
+    </span>
   </div>
 );
 

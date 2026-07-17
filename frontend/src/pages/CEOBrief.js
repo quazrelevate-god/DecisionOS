@@ -7,7 +7,7 @@ import { PageHeader, Chip } from "../components/common";
 import { money } from "../lib/format";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
-import { Clock, CheckCircle, Stamp, UserMinus, Warning, CurrencyInr, XCircle, ArrowClockwise, CaretRight, Fire, BookOpen, ListChecks, WarningCircle, ArrowBendUpRight, Sparkle, AirplaneTakeoff } from "@phosphor-icons/react";
+import { Clock, CheckCircle, Stamp, UserMinus, Warning, CurrencyInr, XCircle, ArrowClockwise, CaretRight, Fire, BookOpen, ListChecks, WarningCircle, ArrowBendUpRight, Sparkle } from "@phosphor-icons/react";
 
 const PERIODS = [
   { key: "morning", label: "Morning" },
@@ -21,7 +21,6 @@ const ROWS = [
   { key: "completed", label: "completed", bg: "bg-green-600", on: "text-white", accent: "text-green-600", icon: CheckCircle },
   { key: "awaiting_approval", label: "waiting for your approval", bg: "bg-brand-yellow", on: "text-black", accent: "text-amber-600", icon: Stamp },
   { key: "absent", label: "employees absent", bg: "bg-brand-blue", on: "text-white", accent: "text-brand-blue", icon: UserMinus },
-  { key: "on_leave", label: "on approved leave today", bg: "bg-teal-600", on: "text-white", accent: "text-teal-600", icon: AirplaneTakeoff },
   { key: "complaints", label: "customer complaint(s)", bg: "bg-purple-600", on: "text-white", accent: "text-purple-600", icon: Warning },
   { key: "payment_overdue", label: "payment(s) overdue", bg: "bg-orange-500", on: "text-white", accent: "text-orange-500", icon: CurrencyInr },
 ];
@@ -79,7 +78,6 @@ function DetailDialog({ row, period, open, onClose }) {
     task: () => `/my-work`,
     complaint: () => `/contacts`,
     absent: () => `/contacts`,
-    leave: () => `/leave`,
     activity: () => `/my-work`,
   };
   const go = (it) => {

@@ -18,6 +18,6 @@ export function notifMeta(n) {
 export function notifLink(n) {
   if (n?.entity_type === "task" && n?.entity_id) return `/my-work?task=${n.entity_id}`;
   if (n?.entity_type === "decision" && n?.entity_id) return `/?decision=${n.entity_id}`;
-  if (n?.entity_type === "leave" && n?.entity_id) return `/leave?leave=${n.entity_id}`;
+  if (n?.entity_type === "leave" && n?.entity_id) return `/my-work?view=leave&leave=${n.entity_id}`;
   return null;
 }

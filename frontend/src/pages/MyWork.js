@@ -9,12 +9,13 @@ import { userPerms } from "../lib/perms";
 import { toast } from "sonner";
 import { TaskBoard, NewTaskDialog } from "./Tasks";
 import Workflows from "./Workflows";
+import Leave from "./Leave";
 import {
   CheckCircle, Camera, Microphone, Stop, ChatCircleText,
   Sparkle, Plus, Trash, ArrowUp, ArrowDown, Robot, PencilSimple, ListChecks, CaretDown,
   ArrowBendUpRight, WarningCircle, ChatText, ArrowRight, Kanban, ListChecks as ListIcon,
   Paperclip, UserCircle, ShieldCheck, Tag, ClockCounterClockwise,
-  ArrowClockwise, XCircle, LockKey, X,
+  ArrowClockwise, XCircle, LockKey, X, AirplaneTakeoff,
 } from "@phosphor-icons/react";
 
 const WORK_TABS = [
@@ -492,8 +493,15 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
   };
 
   const complete = async () => {
+    if (!window.confirm(`Mark "${t.title}" as complete? You can reopen it later if needed.`)) return;
     await api.patch(`/tasks/${t.id}`, { status: "done" });
     toast.success("Task completed");
+    onChange();
+  };
+
+  const reopen = async () => {
+    await api.patch(`/tasks/${t.id}`, { status: "in_progress", progress: 0 });
+    toast.success("Task reopened — back in your work");
     onChange();
   };
 
@@ -632,6 +640,15 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
         </div>
       )}
 
+      {isTerminal(t) && !awaitingApproval && (
+        <div className="flex flex-wrap gap-2 mt-4" data-testid={`reopen-actions-${t.id}`}>
+          <button onClick={reopen} data-testid={`reopen-${t.id}`} className="flex items-center gap-2 bg-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:bg-brand-ink hover:text-white transition-colors">
+            <ArrowClockwise size={16} weight="bold" /> Reopen
+          </button>
+          <span className="flex items-center text-xs text-muted-foreground">Completed by mistake? Reopen brings it back to your active work.</span>
+        </div>
+      )}
+
       {!awaitingApproval && <ExecutionPlan t={t} onChange={onChange} members={members} roleOptions={roleOptions} />}
       <TaskTrail t={t} onChange={onChange} members={members} roleOptions={roleOptions} />
     </div>
@@ -644,7 +661,7 @@ export default function MyWork() {
   const [params] = useSearchParams();
   const isOwner = user?.role === "owner";
   const focusTaskId = params.get("task");
-  const initialView = params.get("view") === "board" ? "board" : params.get("view") === "workflows" ? "workflows" : "mywork";
+  const initialView = params.get("view") === "board" ? "board" : params.get("view") === "workflows" ? "workflows" : params.get("view") === "leave" ? "leave" : "mywork";
   const [view, setView] = useState(focusTaskId ? "mywork" : initialView);
   const canSeeWorkflows = isOwner || userPerms(user).includes("workflows");
   const [scope, setScope] = useState("mine");
@@ -738,10 +755,14 @@ export default function MyWork() {
             </button>
             {canSeeWorkflows && (
               <button onClick={() => setView("workflows")} data-testid="work-view-workflows"
-                className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider transition-colors ${view === "workflows" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border-r border-black transition-colors ${view === "workflows" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
                 <ArrowRight size={16} weight="bold" /> Workflows
               </button>
             )}
+            <button onClick={() => setView("leave")} data-testid="work-view-leave"
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider transition-colors ${view === "leave" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+              <AirplaneTakeoff size={16} weight="bold" /> Leave
+            </button>
           </div>
         </div>
       </PageHeader>
@@ -760,6 +781,8 @@ export default function MyWork() {
         <TaskBoard />
       ) : view === "workflows" ? (
         <Workflows embedded />
+      ) : view === "leave" ? (
+        <Leave embedded />
       ) : (
       <div className="grid lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2">

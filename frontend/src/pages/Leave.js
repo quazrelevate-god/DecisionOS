@@ -247,7 +247,7 @@ function ApproverConfig({ roleOptions, members }) {
   );
 }
 
-export default function Leave() {
+export default function Leave({ embedded = false }) {
   const { user, tenant } = useAuth();
   const qc = useQueryClient();
   const [params] = useSearchParams();
@@ -272,14 +272,20 @@ export default function Leave() {
     ...(canManage ? [{ key: "settings", label: "Settings" }] : []),
   ];
 
+  const actions = (
+    <div className="flex items-center gap-3 flex-wrap">
+      <AbsenceDialog onDone={refresh} />
+      <RequestLeaveDialog onDone={refresh} />
+    </div>
+  );
+
   return (
     <div>
-      <PageHeader eyebrow="Time off & availability" title="Leave & Absence">
-        <div className="flex items-center gap-3 flex-wrap">
-          <AbsenceDialog onDone={refresh} />
-          <RequestLeaveDialog onDone={refresh} />
-        </div>
-      </PageHeader>
+      {embedded ? (
+        <div className="flex justify-end mb-4">{actions}</div>
+      ) : (
+        <PageHeader eyebrow="Time off & availability" title="Leave & Absence">{actions}</PageHeader>
+      )}
 
       <div className="flex border border-black mb-6 w-fit" data-testid="leave-tabs">
         {TABS.map((t) => (

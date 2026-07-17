@@ -73,7 +73,7 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite, member
   const save = async () => {
     try {
       if (editing) {
-        await api.patch(`/users/${initial.id}`, { role: form.role, permissions: form.permissions, phone: form.phone, reporting_manager_id: form.reporting_manager_id || null });
+        await api.patch(`/users/${initial.id}`, { role: form.role, permissions: form.permissions, phone: form.phone, reporting_manager_id: form.reporting_manager_id });
         toast.success(`${initial.name}'s access updated`);
       } else {
         if (!form.name.trim() || !form.email.trim()) return toast.error("Name and email are required");

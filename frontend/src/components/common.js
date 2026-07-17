@@ -5,7 +5,7 @@ export function PageHeader({ eyebrow, title, children }) {
     <div className="mb-8">
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div className="min-w-0">
-          <h1 className="font-heading text-3xl sm:text-[2.25rem] lg:text-[2.6rem] font-bold tracking-[-0.035em] leading-[1.05] text-foreground">
+          <h1 className="font-heading text-xl sm:text-2xl lg:text-[1.75rem] font-bold tracking-[-0.03em] leading-[1.1] text-foreground">
             {title}
           </h1>
         </div>

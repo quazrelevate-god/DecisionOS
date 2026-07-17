@@ -8,11 +8,12 @@ import { useAuth } from "../context/AuthContext";
 import { userPerms } from "../lib/perms";
 import { toast } from "sonner";
 import { TaskBoard, NewTaskDialog } from "./Tasks";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import Workflows from "./Workflows";
 import Leave from "./Leave";
 import {
   CheckCircle, Camera, Microphone, Stop, ChatCircleText,
-  Sparkle, Plus, Trash, ArrowUp, ArrowDown, Robot, PencilSimple, ListChecks, CaretDown,
+  Sparkle, Plus, Trash, ArrowUp, ArrowDown, Robot, PencilSimple, ListChecks, CaretDown, ArrowsOutSimple,
   ArrowBendUpRight, WarningCircle, ChatText, ArrowRight, Kanban, ListChecks as ListIcon,
   Paperclip, UserCircle, ShieldCheck, Tag, ClockCounterClockwise,
   ArrowClockwise, XCircle, LockKey, X, AirplaneTakeoff,
@@ -164,6 +165,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
   const [newStep, setNewStep] = useState("");
   const [ask, setAsk] = useState({});
   const [updStep, setUpdStep] = useState(null);
+  const [viewStep, setViewStep] = useState(null);
 
   useEffect(() => {
     setSteps(t.execution_plan?.steps || []);
@@ -290,6 +292,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
                   <textarea value={s.text} onChange={(e) => editStep(i, e.target.value)} rows={2}
                     className={`${inp} w-full resize-y leading-snug`} />
                   <div className="flex gap-1 shrink-0 self-end sm:self-start">
+                    <button onClick={() => setViewStep(s)} data-testid={`exec-expand-${t.id}-${i}`} className="p-2 sm:p-1 border border-black hover:bg-brand-blue hover:text-white" title="View full"><ArrowsOutSimple size={14} weight="bold" /></button>
                     <button onClick={() => moveStep(i, -1)} className="p-2 sm:p-1 border border-black hover:bg-black/5" title="Up"><ArrowUp size={14} weight="bold" /></button>
                     <button onClick={() => moveStep(i, 1)} className="p-2 sm:p-1 border border-black hover:bg-black/5" title="Down"><ArrowDown size={14} weight="bold" /></button>
                     <button onClick={() => removeStep(i)} data-testid={`exec-remove-${t.id}-${i}`} className="p-2 sm:p-1 border border-black hover:bg-brand-red hover:text-white" title="Remove"><Trash size={14} weight="bold" /></button>
@@ -301,7 +304,8 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
                     className={`w-5 h-5 shrink-0 mt-0.5 border border-black flex items-center justify-center ${s.done ? "bg-brand-ink text-white" : "bg-white"}`}>
                     {s.done && <CheckCircle size={13} weight="bold" />}
                   </button>
-                  <span className={`text-sm flex-1 min-w-0 break-words ${s.done ? "line-through text-muted-foreground" : ""}`}>{s.text}</span>
+                  <button onClick={() => setViewStep(s)} data-testid={`exec-view-${t.id}-${i}`}
+                    className={`text-sm flex-1 min-w-0 text-left break-words hover:underline decoration-dotted ${s.done ? "line-through text-muted-foreground" : ""}`}>{s.text}</button>
                   <div className="flex gap-1 shrink-0">
                     <button onClick={() => askAI(s)} data-testid={`exec-ask-${t.id}-${i}`}
                       className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-yellow transition-colors">
@@ -378,6 +382,16 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
           )
         )}
       </div>
+
+      <Dialog open={!!viewStep} onOpenChange={(o) => !o && setViewStep(null)}>
+        <DialogContent className="border border-black rounded-none">
+          <DialogHeader>
+            <DialogTitle className="font-heading uppercase tracking-tight text-base flex items-center gap-2"><ListChecks size={18} weight="bold" className="text-brand-red" /> Execution Step</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm leading-relaxed whitespace-pre-wrap break-words" data-testid={`exec-step-detail-${t.id}`}>{viewStep?.text}</p>
+          <p className="label-mono text-muted-foreground mt-1">Tap outside to close</p>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

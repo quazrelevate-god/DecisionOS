@@ -4344,11 +4344,21 @@ async def process_whatsapp_message(message: dict):
 # WhatsApp Smart Capture — AI triage → Capture Draft → role review → execute
 # ---------------------------------------------------------------------------
 CAPTURE_CLASSES = ["operational_task", "invoice", "payment", "purchase", "sales", "hr", "meeting", "decision", "approval", "workflow", "other"]
-CAPTURE_ROUTING = {
-    "invoice": "finance", "payment": "finance",
+# Classification → department "intent". invoice/payment are handled as money items (finance).
+# operational_task/workflow/meeting/other fall back to the AI-suggested department.
+INTENT_BY_CLASS = {
     "sales": "sales", "purchase": "purchase", "hr": "hr",
-    "meeting": "owner", "decision": "owner", "approval": "owner",
-    "workflow": None, "operational_task": None, "other": None,
+}
+# Hint substrings used to map a department intent to a tenant's ACTUAL role key
+# (role names vary by industry, e.g. finance may be keyed 'accounts_and_admin').
+DEPT_HINTS = {
+    "finance": ("financ", "account", "accts", "treasur", "billing", "audit", "insurance"),
+    "sales": ("sales", "estimat", "quotation", "quote", "business_development", "customer_relation", "boutique", "retail", "consultant", "customer"),
+    "purchase": ("purchas", "procure", "buying", "supply_chain", "vendor", "inventory", "merchandis", "acquisition"),
+    "hr": ("human_resource", "talent", "recruit", "payroll", "administrator"),
+    "operations": ("operation", "logistics", "warehouse", "workshop", "fulfillment", "supply", "office_manager", "admin"),
+    "marketing": ("marketing", "content", "communication", "events", "listings"),
+    "production": ("production", "kitchen", "manufactur", "quality", "detailing", "technician", "back_of_house", "assembly"),
 }
 FINANCE_ROLE_HINTS = ("financ", "account", "accts", "treasur", "billing", "audit")
 
@@ -4361,6 +4371,28 @@ async def _finance_role_key(tenant_id: str, troles: set) -> Optional[str]:
     for r in ((t.get("roles") if t else None) or []):
         blob = f"{r.get('key', '')} {r.get('label', '')}".lower()
         if any(h in blob for h in FINANCE_ROLE_HINTS):
+            return r.get("key")
+    return None
+
+
+async def _resolve_reviewer_role(tenant_id: str, troles: set, intent: Optional[str]) -> Optional[str]:
+    """Map a department 'intent' (finance/sales/purchase/hr/operations/marketing/production, or a
+    literal role name) to the tenant's ACTUAL role key. Returns None when nothing matches (so the
+    caller can decide the fallback). This is what keeps departmental captures OUT of the owner queue."""
+    intent = (intent or "").strip().lower()
+    if not intent or intent == "owner":
+        return None
+    if intent in troles:
+        return intent
+    t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "roles": 1})
+    roles = (t.get("roles") if t else None) or []
+    for r in roles:  # exact key match first
+        if r.get("key") == intent:
+            return r.get("key")
+    hints = DEPT_HINTS.get(intent, (intent,))
+    for r in roles:  # then fuzzy hint match against key + label
+        blob = f"{r.get('key', '')} {r.get('label', '')}".lower()
+        if any(h in blob for h in hints):
             return r.get("key")
     return None
 DOC_CLASS = {"sales_invoice": "invoice", "purchase_bill": "purchase", "payment": "payment",
@@ -4430,7 +4462,8 @@ _CAPTURE_SYS = (
     "Classify ONE incoming message and return ONLY JSON with keys: "
     "classification (one of [operational_task, invoice, payment, purchase, sales, hr, meeting, decision, approval, workflow, other]), "
     "intent (short phrase), summary (one clear sentence), "
-    "department (one of [sales, finance, purchase, hr, operations, owner]), "
+    "department (one of [sales, finance, purchase, hr, operations, production, marketing, owner]) — pick the department that should OWN and act on this. "
+    "Use 'owner' ONLY for company-wide policy changes, formal approvals/decisions, or big/high-value commitments; routine work (estimates, quotations, follow-ups, operational tasks) goes to the relevant department, NOT owner. "
     "priority (one of [low, medium, high]), due_in_days (integer or null), "
     "amount (number if a monetary value is mentioned, else null), "
     "confidence (number between 0 and 1 — how sure you are this is a genuine, clearly actionable business instruction), "
@@ -4469,22 +4502,20 @@ async def persist_capture_draft(tenant_id, wa_from, kind, payload, tri, troles, 
     cls = tri.get("classification", "other")
     amount = tri.get("amount") if isinstance(tri.get("amount"), (int, float)) else None
     dept = tri.get("department")
-    reviewer = CAPTURE_ROUTING.get(cls)
-    if reviewer is None:
-        reviewer = dept if dept in troles else None
-    if reviewer not in troles:
-        reviewer = None
     money_item = cls in ("invoice", "payment")
     reviewer_perm = "finance" if money_item else None
     threshold, require_signoff = await _capture_settings(tenant_id)
     high_value = amount is not None and amount >= threshold
     escalate_reason = ""
+    needs_owner = False
+    # Department intent: money items → finance; sales/purchase/hr fixed; everything else uses
+    # the AI-suggested department. Resolved against the tenant's REAL role keys below.
+    intent = INTENT_BY_CLASS.get(cls) or dept
+
     if money_item:
         # Invoice/payment always flow to finance directly — routed to the tenant's actual
-        # finance/accounts role (role names vary by industry). reviewer_perm ensures anyone
-        # with the finance permission sees it even if their role key differs.
+        # finance/accounts role. reviewer_perm ensures anyone with the finance permission sees it.
         reviewer = await _finance_role_key(tenant_id, troles) or "owner"
-        needs_owner = False
         if high_value:
             escalate_reason = f"High value ({amount:,.0f}) — verify before approving"
             if require_signoff:
@@ -4492,16 +4523,20 @@ async def persist_capture_draft(tenant_id, wa_from, kind, payload, tri, troles, 
                 needs_owner = True
                 reviewer = "owner"
                 escalate_reason = f"High value ({amount:,.0f}) — owner sign-off required"
+    elif cls in ("approval", "decision") or bool(tri.get("policy_or_high_risk")) or high_value:
+        # Genuinely owner-level: formal approvals/decisions, policy/high-risk, or high-value commitments.
+        needs_owner = True
+        reviewer = "owner"
+        if high_value:
+            escalate_reason = f"High-value item ({amount:,.0f})"
+        elif cls in ("approval", "decision"):
+            escalate_reason = f"{cls.title()}-level item"
+        else:
+            escalate_reason = "Policy / high-risk"
     else:
-        needs_owner = bool(tri.get("policy_or_high_risk")) or cls in ("approval", "decision") or high_value
-        if needs_owner:
-            if high_value:
-                escalate_reason = f"High-value item ({amount:,.0f})"
-            elif cls in ("approval", "decision"):
-                escalate_reason = f"{cls.title()}-level item"
-            else:
-                escalate_reason = "Policy / high-risk"
-            reviewer = "owner"
+        # Routine departmental work (tasks, sales, purchase, hr, meetings, workflows) → the
+        # relevant department's Review Queue, NOT the owner. Owner still sees all captures.
+        reviewer = await _resolve_reviewer_role(tenant_id, troles, intent) or "owner"
     if not reviewer:
         reviewer = "owner"
     due = None

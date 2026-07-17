@@ -9,6 +9,7 @@ export const PERMISSIONS = [
   { key: "brain", label: "Company Brain" },
   { key: "ask", label: "Ask AI" },
   { key: "approvals", label: "Approve Tasks" },
+  { key: "decisions_approve", label: "Approve Decisions" },
   { key: "team_manage", label: "Manage Team" },
 ];
 

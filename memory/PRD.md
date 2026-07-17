@@ -169,3 +169,11 @@ User report: two Procurement (purchase_payment) cards stayed in REQUESTED even a
 Fix (`approve_decision` in server.py): after unblocking tasks, find all `type=purchase_payment`, `stage=requested` workflows with this `decision_id` and advance them to `approved` (pushes history entry "Auto-approved with decision by {name}") + adds a decision timeline event "{n} procurement workflow(s) advanced to Approved".
 Verified via curl: seeded decision+linked purchase_payment workflow → POST /decisions/{id}/approve → workflow stage became `approved`. Backend-only change.
 NOTE: existing 2 stuck cards on production were approved BEFORE this fix — they must be advanced once manually (ADVANCE button works). Future approvals auto-advance. REDEPLOY to production to activate.
+
+## Role-based Decision Approval permission (2026-07-17)
+User request: decision approval (Decision Desk) should be grantable to employees, not owner-only.
+Added new granular permission `decisions_approve` ("Approve Decisions"):
+- Backend: added to `PERMISSION_KEYS` (core.py). Changed `approve_decision`, `reject_decision`, and `add_decision_task` from `require_role("owner")` → `require_perm("decisions_approve")`. Owner still passes (owner gets all perms via user_perms).
+- Frontend: added to PERMISSIONS list (perms.js) so it appears as a toggle in Team member editor (TeamPanel auto-renders). Inbox.js Decision Desk gating changed from `user?.role === "owner"` → `hasPerm(user, "decisions_approve")` for both the "Decision Approvals" section and the inline approve button.
+Verified via curl: employee WITH decisions_approve → approve returns 200; employee WITHOUT → approve/reject return 403. Frontend compiles clean.
+REDEPLOY to push to production. Owner grants this per-employee in People → Employees → edit member → permissions.

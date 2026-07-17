@@ -1752,7 +1752,7 @@ async def ceo_journal(q: str = "", user: dict = Depends(require_perm("brain"))):
 
 
 @api.post("/decisions/{decision_id}/tasks")
-async def add_decision_task(decision_id: str, inp: TaskCreateInput, user: dict = Depends(require_role("owner"))):
+async def add_decision_task(decision_id: str, inp: TaskCreateInput, user: dict = Depends(require_perm("decisions_approve"))):
     d = await db.decisions.find_one({"id": decision_id, "tenant_id": user["tenant_id"]})
     if not d:
         raise HTTPException(status_code=404, detail="Not found")
@@ -1789,7 +1789,7 @@ async def add_decision_task(decision_id: str, inp: TaskCreateInput, user: dict =
 
 
 @api.post("/decisions/{decision_id}/approve")
-async def approve_decision(decision_id: str, user: dict = Depends(require_role("owner"))):
+async def approve_decision(decision_id: str, user: dict = Depends(require_perm("decisions_approve"))):
     d = await db.decisions.find_one({"id": decision_id, "tenant_id": user["tenant_id"]})
     if not d:
         raise HTTPException(status_code=404, detail="Not found")
@@ -1816,7 +1816,7 @@ async def approve_decision(decision_id: str, user: dict = Depends(require_role("
 
 
 @api.post("/decisions/{decision_id}/reject")
-async def reject_decision(decision_id: str, user: dict = Depends(require_role("owner"))):
+async def reject_decision(decision_id: str, user: dict = Depends(require_perm("decisions_approve"))):
     d = await db.decisions.find_one({"id": decision_id, "tenant_id": user["tenant_id"]})
     if not d:
         raise HTTPException(status_code=404, detail="Not found")

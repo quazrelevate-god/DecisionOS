@@ -486,7 +486,7 @@ export default function Inbox() {
       )}
 
       {/* Pending approvals (owner) */}
-      {user?.role === "owner" && pending.length > 0 && (
+      {hasPerm(user, "decisions_approve") && pending.length > 0 && (
         <div className="mb-10">
           <h2 className="font-heading text-2xl font-extrabold uppercase tracking-tight mb-4">Decision Approvals</h2>
           <div className="grid md:grid-cols-2 gap-4">
@@ -570,7 +570,7 @@ export default function Inbox() {
                 {it.preview && <p className="text-xs text-muted-foreground truncate">{it.preview}</p>}
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
-                {pendingApproval && user?.role === "owner" && (
+                {pendingApproval && hasPerm(user, "decisions_approve") && (
                   <button onClick={() => decide(dec.id, "approve")} data-testid={`inbox-approve-tasks-${it.id}`}
                     className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-black px-2 py-1 bg-green-600 text-white hover:shadow-brutal-sm transition-all">
                     <CheckCircle size={13} weight="bold" /> Approve

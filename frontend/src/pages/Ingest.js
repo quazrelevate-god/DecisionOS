@@ -132,7 +132,6 @@ function WhatsAppCard() {
     <div className="card-brutal p-5 mb-8" data-testid="whatsapp-card">
       <div className="flex items-center gap-2 mb-4">
         <WhatsappLogo size={22} weight="bold" className="text-green-600" />
-        <span className="font-heading font-black uppercase tracking-tight text-lg">Forward on WhatsApp</span>
         {!st?.configured && <Chip value="not connected" className="bg-brand-red text-white" />}
       </div>
 

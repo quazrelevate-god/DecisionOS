@@ -131,10 +131,10 @@ function DetailDialog({ row, period, open, onClose }) {
                     <div className="flex flex-wrap gap-2 items-center">
                       {it.proof.map((a, idx) => (
                         a.kind === "photo"
-                          ? <a key={idx} href={`${process.env.REACT_APP_BACKEND_URL}${a.url}`} target="_blank" rel="noreferrer" data-testid={`brief-proof-photo-${it.id}-${idx}`}>
+                          ? <a key={a.url || idx} href={`${process.env.REACT_APP_BACKEND_URL}${a.url}`} target="_blank" rel="noreferrer" data-testid={`brief-proof-photo-${it.id}-${idx}`}>
                               <img src={`${process.env.REACT_APP_BACKEND_URL}${a.url}`} alt="proof" className="w-16 h-16 object-cover border border-black hover:shadow-brutal-sm transition-all" />
                             </a>
-                          : <audio key={idx} controls src={`${process.env.REACT_APP_BACKEND_URL}${a.url}`} className="h-8" data-testid={`brief-proof-voice-${it.id}-${idx}`} />
+                          : <audio key={a.url || idx} controls src={`${process.env.REACT_APP_BACKEND_URL}${a.url}`} className="h-8" data-testid={`brief-proof-voice-${it.id}-${idx}`} />
                       ))}
                     </div>
                   </div>

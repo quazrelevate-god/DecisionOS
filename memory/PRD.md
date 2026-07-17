@@ -182,3 +182,14 @@ REDEPLOY to push to production. Owner grants this per-employee in People → Emp
 Follow-up to decisions_approve: the "Assign to a team member" dropdown in the Decision Desk approval card was empty for non-owner approvers because the members query (`usersQ`) was gated to `user?.role === "owner"`. Backend `GET /users` already allows any authenticated user, and `add_decision_task` already uses `require_perm("decisions_approve")`.
 Fix (Inbox.js): `usersQ.enabled` now = `hasPerm(user,"decisions_approve") || hasPerm(user,"team_manage")` so decision approvers get the populated member/role dropdowns and can assign tasks while approving.
 Verified via curl: approver employee GET /users → 200 (5 members); POST /decisions/{id}/tasks with assignee_id → 200. REDEPLOY to production.
+
+## Leave & Absence Management — Phase 1 (2026-07-17)
+Full leave system. Backend (server.py): `leaves` collection + endpoints POST /api/leaves, POST /api/leaves/absence (emergency today), GET /api/leaves?scope=mine|approvals|all, GET /api/leaves/on-leave, GET /api/leaves/{id}, POST /api/leaves/{id}/approve|reject|request-info, PATCH /api/tenant/leave-approvers. Approver resolution priority: reporting_manager_id → tenant.leave_approvers[role] → owner (_resolve_leave_approver). New permission `leave_approve`. Per-employee `reporting_manager_id` added to UserCreate/Update. Notifications fire to approver on submit and to employee on decision (entity_type 'leave'). Approved leaves appear in /api/calendar (type 'leave') and dashboard on_leave_today.
+Frontend: Leave.js (Request/Absence dialogs, My Leave/Approvals/Settings tabs, ApproverConfig owner mapping). Team.js MemberDialog got a Reporting Manager dropdown (member-manager-select) + 'Approve Leave' permission toggle.
+DESIGN CHANGE (per user): Leave is NOT a sidebar item — it lives inside My Work as a 'Leave' view tab (work-view-leave); /leave redirects to /my-work?view=leave. CEO Brief 'on leave' block removed (employees-absent already covers staffing).
+Tested: iteration_50 (22/22 backend, full UI) + iteration_51 (My Work Leave tab + reopen, 100%). Bug fixed: PATCH /users clearing reporting_manager_id (frontend now sends "" not null).
+Phase 2 backlog (deferred): AI Impact Analysis on approval (reassign/extend/keep suggestions), SLA reminders to approver, owner daily digest of who's on leave + low-staffing departments, leave attachments (medical certs).
+
+## Task Reopen fix (2026-07-17)
+Bug: employees accidentally clicked a task's 'Complete' button and could not bring the task back (all controls were gated on !isTerminal). Fix (MyWork.js TaskCard): Complete now shows a window.confirm; completed/terminal tasks show a 'Reopen' button (reopen-<id>) that PATCHes status→in_progress, progress→0. Verified via curl + iteration_51.
+REDEPLOY to production to activate all the above.

@@ -13,7 +13,7 @@ import {
   Microphone, Stop, PaperPlaneTilt, CheckCircle, XCircle, Spinner,
   UsersThree, Truck, Receipt, CurrencyCircleDollar, Warning, CheckSquare,
   SealCheck, Bell, Brain, Check, X, ArrowClockwise, User, UserPlus, Question,
-  WarningCircle, ArrowBendUpRight, ChatCircleText, Eye,
+  WarningCircle, ArrowBendUpRight, ChatCircleText, Eye, Pause, Play,
 } from "@phosphor-icons/react";
 
 function SwipeRow({ children, onLeft, onRight, rightLabel = "View", testid }) {
@@ -223,13 +223,14 @@ const CLASS_META = {
 };
 const FILTERS = ["all", "customer", "supplier", "invoice", "payment", "complaint", "task", "approval", "reminder"];
 
-function useElapsed(active) {
+function useElapsed(ticking, running) {
   const [t, setT] = useState(0);
+  useEffect(() => { if (!running) setT(0); }, [running]);
   useEffect(() => {
-    if (!active) return setT(0);
+    if (!ticking) return;
     const i = setInterval(() => setT((x) => x + 1), 1000);
     return () => clearInterval(i);
-  }, [active]);
+  }, [ticking]);
   return t;
 }
 
@@ -239,6 +240,7 @@ export default function Inbox() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [recording, setRecording] = useState(false);
+  const [paused, setPaused] = useState(false);
   const [text, setText] = useState("");
   const [clarify, setClarify] = useState(null);
   const [answers, setAnswers] = useState({});
@@ -253,7 +255,7 @@ export default function Inbox() {
   const mediaRef = useRef(null);
   const chunksRef = useRef([]);
   const cancelledRef = useRef(false);
-  const elapsed = useElapsed(recording);
+  const elapsed = useElapsed(recording && !paused, recording);
 
   const notesQ = useQuery({
     queryKey: ["voice-notes"],
@@ -304,11 +306,14 @@ export default function Inbox() {
       };
       mediaRef.current = mr;
       mr.start();
+      setPaused(false);
       setRecording(true);
     } catch { toast.error("Microphone access denied"); }
   };
-  const stopRec = () => { cancelledRef.current = false; mediaRef.current?.stop(); setRecording(false); };
-  const cancelRec = () => { cancelledRef.current = true; mediaRef.current?.stop(); setRecording(false); };
+  const stopRec = () => { cancelledRef.current = false; mediaRef.current?.stop(); setRecording(false); setPaused(false); };
+  const cancelRec = () => { cancelledRef.current = true; mediaRef.current?.stop(); setRecording(false); setPaused(false); };
+  const pauseRec = () => { if (mediaRef.current?.state === "recording") { mediaRef.current.pause(); setPaused(true); } };
+  const resumeRec = () => { if (mediaRef.current?.state === "paused") { mediaRef.current.resume(); setPaused(false); } };
 
   const runCapture = async (finalText) => {
     setBusy(true);
@@ -458,16 +463,33 @@ export default function Inbox() {
         <div className="grid lg:grid-cols-2 gap-4 mb-8">
           <div className="card-brutal p-6 flex flex-col items-center justify-center text-center">
             <button onClick={recording ? stopRec : startRec} disabled={busy} data-testid="voice-record-button"
-              className={`w-24 h-24 flex items-center justify-center border border-black transition-all ${recording ? "bg-brand-red text-white recording-pulse" : "bg-brand-ink text-white hover:shadow-brutal"}`}>
+              className={`w-24 h-24 flex items-center justify-center border border-black transition-all ${recording ? (paused ? "bg-brand-ink text-white" : "bg-brand-red text-white recording-pulse") : "bg-brand-ink text-white hover:shadow-brutal"}`}>
               {recording ? <Stop size={38} weight="fill" /> : <Microphone size={38} weight="fill" />}
             </button>
-            <p className="mt-4 font-heading font-bold uppercase tracking-tight">{recording ? "Recording…" : busy ? "Uploading…" : "Tap to speak a decision"}</p>
+            <p className="mt-4 font-heading font-bold uppercase tracking-tight">{recording ? (paused ? "Paused" : "Recording…") : busy ? "Uploading…" : "Tap to speak a decision"}</p>
             <p className="font-mono text-sm text-muted-foreground mt-1" data-testid="record-timer">{recording ? mmss : "AI structures it into tasks"}</p>
             {recording && (
-              <button onClick={cancelRec} data-testid="voice-cancel-button"
-                className="mt-3 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:bg-black/5 transition-colors">
-                Cancel
-              </button>
+              <div className="flex flex-wrap items-center justify-center gap-2 mt-3">
+                {paused ? (
+                  <button onClick={resumeRec} data-testid="voice-resume-button"
+                    className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black bg-brand-ink text-white hover:shadow-brutal-sm transition-all">
+                    <Play size={15} weight="fill" /> Resume
+                  </button>
+                ) : (
+                  <button onClick={pauseRec} data-testid="voice-pause-button"
+                    className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black bg-white hover:bg-black/5 transition-colors">
+                    <Pause size={15} weight="fill" /> Pause
+                  </button>
+                )}
+                <button onClick={stopRec} data-testid="voice-finalise-button"
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black bg-brand-red text-white hover:shadow-brutal-sm transition-all">
+                  <CheckCircle size={15} weight="bold" /> Finalise
+                </button>
+                <button onClick={cancelRec} data-testid="voice-cancel-button"
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:bg-black/5 transition-colors">
+                  <X size={15} weight="bold" /> Cancel
+                </button>
+              </div>
             )}
             <div className="flex border border-black mt-4" data-testid="language-selector">
               {[{ key: "auto", label: "Auto" }, { key: "en", label: "EN" }, { key: "ta", label: "தமிழ்" }, { key: "tanglish", label: "Tanglish" }].map((l) => (

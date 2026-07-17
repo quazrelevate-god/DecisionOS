@@ -7,7 +7,7 @@ import { PageHeader, Chip } from "../components/common";
 import { money } from "../lib/format";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
-import { Clock, CheckCircle, Stamp, UserMinus, Warning, CurrencyInr, XCircle, ArrowClockwise, CaretRight, Fire, BookOpen, ListChecks, WarningCircle, ArrowBendUpRight, Sparkle, Paperclip } from "@phosphor-icons/react";
+import { Clock, CheckCircle, Stamp, UserMinus, Warning, CurrencyInr, XCircle, ArrowClockwise, CaretRight, Fire, BookOpen, ListChecks, WarningCircle, ArrowBendUpRight, Sparkle, Paperclip, Gauge } from "@phosphor-icons/react";
 
 const PERIODS = [
   { key: "morning", label: "Morning" },
@@ -194,17 +194,25 @@ export default function CEOBrief() {
   return (
     <div>
       <PageHeader eyebrow={isOwner ? "Your company at a glance" : "Your day at a glance"} title={isOwner ? "CEO Brief" : "My Brief"}>
-        {isOwner ? (
-          <button onClick={() => navigate("/journal")} data-testid="brief-open-journal"
-            className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
-            <BookOpen size={16} weight="bold" /> CEO Journal
-          </button>
-        ) : (
-          <button onClick={() => navigate("/coach")} data-testid="brief-open-coach"
-            className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
-            <Sparkle size={16} weight="bold" /> AI Coach
-          </button>
-        )}
+        <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:w-auto sm:items-center">
+          {isOwner ? (
+            <>
+              <button onClick={() => navigate("/operating-score")} data-testid="brief-operating-score"
+                className="flex items-center justify-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
+                <Gauge size={16} weight="bold" /> Operating Score
+              </button>
+              <button onClick={() => navigate("/journal")} data-testid="brief-open-journal"
+                className="flex items-center justify-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
+                <BookOpen size={16} weight="bold" /> CEO Journal
+              </button>
+            </>
+          ) : (
+            <button onClick={() => navigate("/coach")} data-testid="brief-open-coach"
+              className="flex items-center justify-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
+              <Sparkle size={16} weight="bold" /> AI Coach
+            </button>
+          )}
+        </div>
       </PageHeader>
 
       <div className="flex border border-black mb-8 w-fit">

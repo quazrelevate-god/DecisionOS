@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import {
   Microphone, Stop, PaperPlaneTilt, CheckCircle, XCircle, Spinner,
   UsersThree, Truck, Receipt, CurrencyCircleDollar, Warning, CheckSquare,
-  SealCheck, Bell, Brain, Gauge, Check, X, ArrowClockwise, User, UserPlus, Question,
+  SealCheck, Bell, Brain, Check, X, ArrowClockwise, User, UserPlus, Question,
   WarningCircle, ArrowBendUpRight, ChatCircleText, Eye,
 } from "@phosphor-icons/react";
 
@@ -438,14 +438,7 @@ export default function Inbox() {
       <ExecutionSummary data={execPanel} onClose={() => setExecPanel(null)} onReview={reviewFromSummary} />
       <DecisionDialog decisionId={openDecision} open={!!openDecision}
         onClose={() => { setOpenDecision(null); if (params.get("decision")) setParams({}, { replace: true }); }} />
-      <PageHeader eyebrow="Your day in one place" title="Decision Desk">
-        {user?.role === "owner" && (
-          <button data-testid="inbox-operating-score-button" onClick={() => navigate("/operating-score")}
-            className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
-            <Gauge size={16} weight="bold" /> Operating Score
-          </button>
-        )}
-      </PageHeader>
+      <PageHeader eyebrow="Your day in one place" title="Decision Desk" />
 
       {processing && (
         <div data-testid="structuring-banner"

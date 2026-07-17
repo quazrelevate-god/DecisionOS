@@ -7,7 +7,7 @@ import { PageHeader, Chip } from "../components/common";
 import { money } from "../lib/format";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
-import { Clock, CheckCircle, Stamp, UserMinus, Warning, CurrencyInr, XCircle, ArrowClockwise, CaretRight, Fire, BookOpen, ListChecks, WarningCircle, ArrowBendUpRight, Sparkle } from "@phosphor-icons/react";
+import { Clock, CheckCircle, Stamp, UserMinus, Warning, CurrencyInr, XCircle, ArrowClockwise, CaretRight, Fire, BookOpen, ListChecks, WarningCircle, ArrowBendUpRight, Sparkle, Paperclip } from "@phosphor-icons/react";
 
 const PERIODS = [
   { key: "morning", label: "Morning" },
@@ -124,6 +124,21 @@ function DetailDialog({ row, period, open, onClose }) {
                     {clickable && <CaretRight size={16} weight="bold" className="text-black/40" />}
                   </div>
                 </div>
+
+                {Array.isArray(it.proof) && it.proof.length > 0 && (
+                  <div className="mt-3 border-t border-black/10 pt-3" data-testid={`brief-proof-${it.id}`} onClick={(e) => e.stopPropagation()}>
+                    <p className="label-mono text-muted-foreground mb-2 flex items-center gap-1"><Paperclip size={12} weight="bold" /> Proof of work · {it.proof.length}</p>
+                    <div className="flex flex-wrap gap-2 items-center">
+                      {it.proof.map((a, idx) => (
+                        a.kind === "photo"
+                          ? <a key={idx} href={`${process.env.REACT_APP_BACKEND_URL}${a.url}`} target="_blank" rel="noreferrer" data-testid={`brief-proof-photo-${it.id}-${idx}`}>
+                              <img src={`${process.env.REACT_APP_BACKEND_URL}${a.url}`} alt="proof" className="w-16 h-16 object-cover border border-black hover:shadow-brutal-sm transition-all" />
+                            </a>
+                          : <audio key={idx} controls src={`${process.env.REACT_APP_BACKEND_URL}${a.url}`} className="h-8" data-testid={`brief-proof-voice-${it.id}-${idx}`} />
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {it.kind === "decision" && (
                   <>

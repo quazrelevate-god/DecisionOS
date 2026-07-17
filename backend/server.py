@@ -3109,8 +3109,23 @@ async def brief_details(key: str, period: str = "morning", user: dict = Depends(
         if not is_owner:
             aq["actor"] = user["id"]
         acts = await db.activity.find(aq, {"_id": 0}).sort("created_at", -1).to_list(200)
+        tids = [a.get("entity_id") for a in acts if a.get("entity_id")]
+        tmap = {}
+        if tids:
+            for tk in await db.tasks.find({"tenant_id": tid, "id": {"$in": tids}},
+                                          {"_id": 0, "id": 1, "attachments": 1, "assignee_id": 1}).to_list(300):
+                tmap[tk["id"]] = tk
+        aids = list({tk.get("assignee_id") for tk in tmap.values() if tk.get("assignee_id")})
+        umap = {}
+        if aids:
+            for u in await db.users.find({"id": {"$in": aids}}, {"_id": 0, "id": 1, "name": 1}).to_list(300):
+                umap[u["id"]] = u["name"]
         for a in acts:
-            items.append({"id": a["id"], "title": a.get("message"), "subtitle": "", "kind": "activity"})
+            tk = tmap.get(a.get("entity_id"))
+            proof = [{"kind": at.get("kind"), "url": at.get("url")} for at in ((tk or {}).get("attachments") or [])]
+            sub = umap.get((tk or {}).get("assignee_id")) or ""
+            items.append({"id": a.get("entity_id") or a["id"], "title": a.get("message"),
+                          "subtitle": sub, "kind": "task" if tk else "activity", "proof": proof})
 
     elif key == "awaiting_approval":
         actionable = True

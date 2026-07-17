@@ -193,3 +193,7 @@ Phase 2 backlog (deferred): AI Impact Analysis on approval (reassign/extend/keep
 ## Task Reopen fix (2026-07-17)
 Bug: employees accidentally clicked a task's 'Complete' button and could not bring the task back (all controls were gated on !isTerminal). Fix (MyWork.js TaskCard): Complete now shows a window.confirm; completed/terminal tasks show a 'Reopen' button (reopen-<id>) that PATCHes status→in_progress, progress→0. Verified via curl + iteration_51.
 REDEPLOY to production to activate all the above.
+
+## Proof-of-work gallery in CEO Brief completed view (2026-07-17)
+User (option b): surface task photo/voice proof for review at a glance. Backend brief_details key 'completed' now joins each task_done activity to its task and returns a `proof` array [{kind,url}] + assignee name as subtitle (kind 'task' so item deep-links to My Work). Frontend CEOBrief.js DetailDialog renders a 'Proof of work · N' gallery per completed item — photo thumbnails (click opens full image in new tab) + inline audio players (clicks stopPropagation so they don't trigger navigation). Reminder of existing behavior: attachments already show on the task card in My Work (My Tasks + All Tasks), attachment-count badge, task trail, and Operating Score proof-rate.
+Verified via curl (completed drilldown returns proof url) + compile. REDEPLOY to production.

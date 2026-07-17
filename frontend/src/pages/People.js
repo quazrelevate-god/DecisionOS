@@ -6,6 +6,9 @@ import { UsersThree, AddressBook, Truck } from "@phosphor-icons/react";
 import { TeamPanel } from "./Team";
 import { ContactsPanel } from "./Contacts";
 
+const CUSTOMER_TYPES = ["customer", "dealer"];
+const VENDOR_TYPES = ["vendor"];
+
 export default function People() {
   const { user } = useAuth();
   const canTeam = hasPerm(user, "team_manage");
@@ -31,8 +34,8 @@ export default function People() {
       </PageHeader>
 
       {tab === "employees" && <TeamPanel />}
-      {tab === "customers" && <ContactsPanel types={["customer", "dealer"]} addLabel="Add Customer" />}
-      {tab === "vendors" && <ContactsPanel types={["vendor"]} addLabel="Add Supplier" />}
+      {tab === "customers" && <ContactsPanel types={CUSTOMER_TYPES} addLabel="Add Customer" />}
+      {tab === "vendors" && <ContactsPanel types={VENDOR_TYPES} addLabel="Add Supplier" />}
     </div>
   );
 }

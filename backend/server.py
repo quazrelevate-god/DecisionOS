@@ -519,6 +519,33 @@ if OPENAI_API_KEY:
     except Exception as _e:
         logger.warning(f"Could not init OpenAI client, will fall back to Whisper via Emergent key: {_e}")
 
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
+_gemini_client = None
+_gtypes = None
+if GEMINI_API_KEY:
+    try:
+        from google import genai as _genai
+        from google.genai import types as _gtypes
+        _gemini_client = _genai.Client(api_key=GEMINI_API_KEY)
+        logger.info(f"Gemini document-OCR enabled with user key (model '{VISION_MODEL[1]}').")
+    except Exception as _e:
+        logger.warning(f"Could not init Gemini client, will fall back to Emergent key: {_e}")
+
+
+def _gemini_doc_sync(file_path: str, mime_type: str, system: str, user_text: str) -> str:
+    import pathlib
+    resp = _gemini_client.models.generate_content(
+        model=VISION_MODEL[1],
+        contents=[
+            _gtypes.Part.from_bytes(data=pathlib.Path(file_path).read_bytes(), mime_type=mime_type),
+            user_text,
+        ],
+        config=_gtypes.GenerateContentConfig(system_instruction=system, response_mime_type="application/json"),
+    )
+    return resp.text or ""
+
+
+
 
 def _stt_lang_prompt(language: str):
     lang, prompt = None, None
@@ -3356,11 +3383,22 @@ def _normalise_records(data: dict) -> dict:
 
 
 async def ai_extract_document(file_path: str, mime_type: str, session_id: str, currency: str = "INR", company: str = "") -> dict:
-    fc = FileContentWithMimeType(file_path=file_path, mime_type=mime_type)
     system = _DOC_SYSTEM.replace("{currency}", currency).replace("{company}", company or "our company")
-    chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=session_id,
-                   system_message=system).with_model(*VISION_MODEL)
-    resp = await chat.send_message(UserMessage(text="Extract the structured JSON from this document now.", file_contents=[fc]))
+    user_text = "Extract the structured JSON from this document now."
+    resp = None
+    # Prefer the user's own Gemini key via the official google-genai SDK.
+    if _gemini_client is not None:
+        try:
+            resp = await asyncio.to_thread(_gemini_doc_sync, file_path, mime_type, system, user_text)
+        except Exception as e:
+            logger.warning(f"Gemini OCR (user key) failed; falling back to Emergent key: {e}")
+            resp = None
+    # Fallback: Gemini via the Emergent universal key (keeps document capture working).
+    if not resp:
+        fc = FileContentWithMimeType(file_path=file_path, mime_type=mime_type)
+        chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=session_id,
+                       system_message=system).with_model(*VISION_MODEL)
+        resp = await chat.send_message(UserMessage(text=user_text, file_contents=[fc]))
     data = _extract_json(resp)
     return {
         "summary": data.get("summary", ""),

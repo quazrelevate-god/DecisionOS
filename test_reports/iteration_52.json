@@ -1,0 +1,51 @@
+{
+  "summary": "Iteration 52 — Frontend-only validation of the new SwipeRow gesture on Decision Desk 'Tasks & Activity' feed (Inbox.js). Logged in as owner (owner@sharma.com/demo1234). All 5 sub-flows validated end-to-end using dispatched synthetic TouchEvents on the SwipeRow's inner draggable div: (1) MOBILE 414x896 — inbox-swipe-hint IS visible (getComputedStyle 'block'), and the on-row action cluster '.hidden.sm:flex' has computedStyle display='none' (offsetParent null) for every row → buttons correctly hidden. (2) SWIPE LEFT (start_x=250, dir=-1, distance=180, 8 steps of touchmove) on first feed row dispatched → PATCH status='dismissed' fired → feed rows dropped 52→51, [data-testid=inbox-filter-all] badge 42→41, target testid gone from DOM. (3) SWIPE RIGHT on an ingestion invoice row → navigated to /ingest (openItem branch for ref_type='ingestion'). (4) SWIPE RIGHT on a decision-with-tasks row (has inbox-tasks-badge-<id>) → navigated to /my-work?view=board (Board branch). (5) SWIPE RIGHT on a plain task/reminder (no tasks-badge, not ingestion) → row got opacity-60 and status='done' — done branch fired. (6) Vertical scroll: window.scrollY 2933→3333 after scrollBy(400), and first 3 rows' transform stayed 'translateX(0px)' → touchAction:pan-y works, no horizontal jump. (7) DESKTOP 1280x800 — inbox-swipe-hint display='none' (hidden), action cluster display='flex' (visible), all button variants visible: 24/24 board, 5/5 open, 40/40 done, 50/50 dismiss. Clicking inbox-dismiss-<id> on desktop removed the row from DOM (row_gone=true). No regressions to on-row buttons. No console errors related to the swipe change (only the pre-existing dev-only Emergent Visual Editor injection warning '<span> cannot be a child of <option>' from Tasks.js reassign-select, unchanged from iter50/iter51).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Inbox (Decision Desk) — mobile",
+        "issues": [
+          "Nice-to-have: after a successful swipe-left dismiss on mobile, the row snaps back to translateX(0) before disappearing on refetch (~1s). Users may briefly see the item pop back before it fades out. Consider optimistic-hide (locally filter dismissed id until refetch resolves) or animate translateX(-100%) on release-past-threshold before firing PATCH."
+        ]
+      },
+      {
+        "screen": "Inbox — swipe threshold",
+        "issues": [
+          "THRESH=70 and MAX=110 with pan-y touchAction works well, but with slow drags below ~10px the engaged flag never flips (guard at Inbox.js:31) — that's the intended dead-zone. However there is no haptic/visual cue crossing the 70px threshold (colors are constant); users can't feel when they've committed. Nice-to-have: bump text weight or invert the zone bg once |dx| >= THRESH."
+        ]
+      }
+    ]
+  },
+  "tests_executed": [
+    {"case": "MOBILE 414x896 — inbox-swipe-hint visible + action cluster display:none for every row", "result": "PASS"},
+    {"case": "MOBILE swipe LEFT (touchstart/8×touchmove/touchend) on first row → feed 52→51, all-count 42→41, target row removed from DOM", "result": "PASS"},
+    {"case": "MOBILE swipe RIGHT on ingestion invoice row → openItem() navigates to /ingest", "result": "PASS"},
+    {"case": "MOBILE swipe RIGHT on decision-with-tasks row (inbox-tasks-badge present) → navigate('/my-work?view=board')", "result": "PASS"},
+    {"case": "MOBILE swipe RIGHT on task/reminder without tasks → setStatus(id,'done'), row gets opacity-60", "result": "PASS"},
+    {"case": "MOBILE vertical scroll: scrollY 2933→3333 after scrollBy(400); first 3 row transforms stayed translateX(0px) (no horizontal jump)", "result": "PASS"},
+    {"case": "DESKTOP 1280x800 — inbox-swipe-hint computed display='none' (hidden)", "result": "PASS"},
+    {"case": "DESKTOP — .hidden.sm:flex cluster display='flex'; buttons visible: 24/24 board, 5/5 open, 40/40 done, 50/50 dismiss", "result": "PASS"},
+    {"case": "DESKTOP — click inbox-dismiss-<id> removes row from DOM (row_gone=true)", "result": "PASS"}
+  ],
+  "critical_code_review_comments": [
+    "Inbox.js SwipeRow (lines 19-62): end() reads dx from closure. Because the component re-renders on every setDx(), the latest end closure captures the current dx — this works reliably in Chromium (verified). If you ever memoize the SwipeRow with React.memo, watch out for stale-dx: switch to a useRef for dx to be safe.",
+    "Inbox.js:31 dead-zone `Math.abs(d) < 10` blocks very small horizontal intents — good, but combined with the dominant-axis check `Math.abs(d) < Math.abs(dy)` a diagonal drag with dy slightly greater than dx never engages, leaving the row static. Consider engaging when dx/dy ratio > 1.2 rather than strict >.",
+    "Inbox.js line 44 wraps the row in a border-black div; when the swipe reveals the colored zone under the row you can still see the top/bottom borders — visually the zone appears letterboxed. Minor: consider bg-brand-blue/red on the WRAPPER (line 44) rather than on the absolute-positioned children, so the zone bleeds fully edge-to-edge.",
+    "Missing swipe recovery UX: if PATCH /inbox/<id>/status fails (network error), the row snaps back to dx=0 and stays in the list, but there's no toast/error — the user thinks the swipe was ignored. Wire an onError from setStatus() to toast.error('Could not dismiss — try again') at Inbox.js:38-42.",
+    "Inbox.js is now 651 lines. TaskListView + EscalationCard + SwipeRow + Inbox itself would benefit from splitting SwipeRow into /components/inbox/SwipeRow.js (~45 lines) and EscalationCard into /components/inbox/EscalationCard.js — keeps Inbox.js under 500 lines and makes SwipeRow reusable for e.g. Notifications page.",
+    "Accessibility: SwipeRow has no keyboard equivalent. Screen-reader / keyboard-only users on mobile web get no way to trigger dismiss/view since desktop buttons are display:none on <sm. Consider ARIA role='button' on the row with keyboard handlers for Enter/Delete, OR keep the sm:flex cluster visible via `sm:hidden` toggle only when a media query matches TOUCH capability, not viewport width. As shipped, iPad in Safari (portrait ~768px) shows desktop buttons — good — but a tablet at 640px+ non-touch is also 'desktop' UI."
+  ],
+  "test_report_links": ["/app/test_reports/iteration_52.json"],
+  "action_items": [],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend-only per review_request)", "frontend": "100% (9/9 tests PASS)"},
+  "test_credentials": "owner@sharma.com / demo1234 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "MUTATIONS: dismissed 2 inbox items on mobile (via swipe-left AND desktop button click), marked 1 reminder task as 'done' via mobile swipe-right, and navigated an invoice via swipe-right (no mutation). All items are Sharma tenant inbox items (feed dropped 52→~48). Owner feed still healthy with ~40 open items remaining post-test.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 52 fully validated the mobile-first SwipeRow gesture on Inbox 'Tasks & Activity' feed. All 3 swipe-right branches (openItem→/ingest for ingestion, navigate→/my-work?view=board for decision-with-tasks, setStatus→done for plain task) work. Swipe-left dismisses. Vertical scroll preserved (touchAction:pan-y). Desktop >=640px still shows on-row buttons and works via click — no regression. To simulate touch in Playwright without hasTouch context, dispatch synthetic new TouchEvent('touchstart'/'touchmove'/'touchend') via page.evaluate with new Touch(...) constructors — see script in this iteration's captured logs. React's onTouch* handlers pick them up correctly in Chromium. NOTE: The pre-existing DOM-warning '<span> cannot be a child of <option>' still appears in console (Emergent Visual Editor injection into Tasks.js reassign-select) — unrelated to this change and unchanged for 4 iterations now.",
+  "rca of the issue": "N/A — all requested flows worked as designed on first testing pass. Only observations are minor UX polish (no snap-back animation before dismiss refetch, no threshold-cross haptic/visual cue, no keyboard equivalent for accessibility) — reported as design_issues for E1's discretion."
+}

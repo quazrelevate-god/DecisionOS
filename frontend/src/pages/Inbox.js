@@ -13,8 +13,53 @@ import {
   Microphone, Stop, PaperPlaneTilt, CheckCircle, XCircle, Spinner,
   UsersThree, Truck, Receipt, CurrencyCircleDollar, Warning, CheckSquare,
   SealCheck, Bell, Brain, Gauge, Check, X, ArrowClockwise, User, UserPlus, Question,
-  WarningCircle, ArrowBendUpRight, ChatCircleText,
+  WarningCircle, ArrowBendUpRight, ChatCircleText, Eye,
 } from "@phosphor-icons/react";
+
+function SwipeRow({ children, onLeft, onRight, rightLabel = "View", testid }) {
+  const [dx, setDx] = useState(0);
+  const s = useRef(null);
+  const engaged = useRef(false);
+  const THRESH = 70, MAX = 110;
+  const start = (e) => { const t = e.touches[0]; s.current = { x: t.clientX, y: t.clientY }; engaged.current = false; };
+  const move = (e) => {
+    if (!s.current) return;
+    const t = e.touches[0];
+    let d = t.clientX - s.current.x;
+    const dy = t.clientY - s.current.y;
+    if (!engaged.current) {
+      if (Math.abs(d) < Math.abs(dy) || Math.abs(d) < 10) return;
+      engaged.current = true;
+    }
+    if (!onRight && d > 0) d = 0;
+    if (!onLeft && d < 0) d = 0;
+    setDx(Math.max(-MAX, Math.min(MAX, d)));
+  };
+  const end = () => {
+    if (dx >= THRESH && onRight) onRight();
+    else if (dx <= -THRESH && onLeft) onLeft();
+    setDx(0); s.current = null; engaged.current = false;
+  };
+  return (
+    <div className="relative overflow-hidden border border-black" data-testid={testid}>
+      {onRight && (
+        <div className="absolute inset-y-0 left-0 flex items-center gap-1 px-5 bg-brand-blue text-white text-xs font-semibold uppercase tracking-wider" style={{ opacity: dx > 8 ? 1 : 0 }}>
+          <Eye size={16} weight="bold" /> {rightLabel}
+        </div>
+      )}
+      {onLeft && (
+        <div className="absolute inset-y-0 right-0 flex items-center gap-1 px-5 bg-brand-red text-white text-xs font-semibold uppercase tracking-wider" style={{ opacity: dx < -8 ? 1 : 0 }}>
+          Dismiss <X size={16} weight="bold" />
+        </div>
+      )}
+      <div onTouchStart={start} onTouchMove={move} onTouchEnd={end}
+        className="relative bg-white"
+        style={{ transform: `translateX(${dx}px)`, transition: dx === 0 ? "transform .2s ease" : "none", touchAction: "pan-y" }}>
+        {children}
+      </div>
+    </div>
+  );
+}
 
 function EscalationCard({ t, onRespond, highlight }) {
   const [text, setText] = useState("");
@@ -542,6 +587,9 @@ export default function Inbox() {
       </div>
 
       {/* Unified feed */}
+      <p className="sm:hidden text-[11px] text-muted-foreground mb-2 flex items-center gap-2" data-testid="inbox-swipe-hint">
+        <Eye size={12} weight="bold" /> Swipe right to view · swipe left to dismiss
+      </p>
       <div className="space-y-2 mb-10" data-testid="inbox-feed">
         {items.length === 0 && <EmptyState title="Inbox zero" hint="Captured voice notes, uploads, invoices, payments and complaints will appear here — classified automatically." />}
         {items.map((it) => {
@@ -551,42 +599,49 @@ export default function Inbox() {
           const dec = it.ref_type === "decision" ? decMap[it.ref_id] : null;
           const decTasks = dec?.tasks || [];
           const pendingApproval = dec?.status === "pending_approval";
+          let onRight = null, rightLabel = "View";
+          if (it.ref_type === "ingestion" || it.classification === "complaint") { onRight = () => openItem(it); rightLabel = "View"; }
+          else if (decTasks.length > 0) { onRight = () => navigate("/my-work?view=board"); rightLabel = "Board"; }
+          else if (!done) { onRight = () => setStatus(it.id, "done"); rightLabel = "Done"; }
           return (
-            <div key={it.id} data-testid={`inbox-item-${it.id}`} className={`border border-black bg-white p-3 flex items-center gap-3 flex-wrap ${done ? "opacity-60" : ""}`}>
-              <div className={`w-9 h-9 shrink-0 flex items-center justify-center border border-black ${meta.color}`}><Icon size={18} weight="bold" /></div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Chip value={meta.label} className={meta.color} data-testid={`inbox-class-${it.id}`} />
-                  <span className="label-mono text-muted-foreground">{it.source}</span>
-                  {it.amount != null && <span className="text-xs font-semibold">{money(it.amount)}</span>}
-                  {decTasks.length > 0 && (
-                    <span data-testid={`inbox-tasks-badge-${it.id}`}
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-black ${pendingApproval ? "bg-brand-yellow" : "bg-white"}`}>
-                      <CheckSquare size={11} weight="bold" /> {decTasks.length} task{decTasks.length > 1 ? "s" : ""}{pendingApproval ? " · Pending your approval" : ""}
-                    </span>
-                  )}
+            <SwipeRow key={it.id} testid={`inbox-swipe-${it.id}`} onRight={onRight} rightLabel={rightLabel}
+              onLeft={() => setStatus(it.id, "dismissed")}>
+              <div data-testid={`inbox-item-${it.id}`} className={`p-3 flex items-center gap-3 flex-wrap ${done ? "opacity-60" : ""}`}>
+                <div className={`w-9 h-9 shrink-0 flex items-center justify-center border border-black ${meta.color}`}><Icon size={18} weight="bold" /></div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Chip value={meta.label} className={meta.color} data-testid={`inbox-class-${it.id}`} />
+                    <span className="label-mono text-muted-foreground">{it.source}</span>
+                    {it.amount != null && <span className="text-xs font-semibold">{money(it.amount)}</span>}
+                    {decTasks.length > 0 && (
+                      <span data-testid={`inbox-tasks-badge-${it.id}`}
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-black ${pendingApproval ? "bg-brand-yellow" : "bg-white"}`}>
+                        <CheckSquare size={11} weight="bold" /> {decTasks.length} task{decTasks.length > 1 ? "s" : ""}{pendingApproval ? " · Pending your approval" : ""}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm font-semibold mt-1 truncate">{it.title}</p>
+                  {it.preview && <p className="text-xs text-muted-foreground truncate">{it.preview}</p>}
                 </div>
-                <p className="text-sm font-semibold mt-1 truncate">{it.title}</p>
-                {it.preview && <p className="text-xs text-muted-foreground truncate">{it.preview}</p>}
+                <div className="hidden sm:flex items-center gap-1.5 shrink-0">
+                  {pendingApproval && hasPerm(user, "decisions_approve") && (
+                    <button onClick={() => decide(dec.id, "approve")} data-testid={`inbox-approve-tasks-${it.id}`}
+                      className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-black px-2 py-1 bg-green-600 text-white hover:shadow-brutal-sm transition-all">
+                      <CheckCircle size={13} weight="bold" /> Approve
+                    </button>
+                  )}
+                  {decTasks.length > 0 && (
+                    <button onClick={() => navigate("/my-work?view=board")} data-testid={`inbox-view-board-${it.id}`}
+                      className="text-xs font-semibold uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-ink hover:text-white transition-colors">Board</button>
+                  )}
+                  {(it.ref_type === "ingestion" || it.classification === "complaint") && (
+                    <button onClick={() => openItem(it)} data-testid={`inbox-open-${it.id}`} className="text-xs font-semibold uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-ink hover:text-white transition-colors">View</button>
+                  )}
+                  {!done && <button onClick={() => setStatus(it.id, "done")} data-testid={`inbox-done-${it.id}`} title="Mark done" className="w-8 h-8 flex items-center justify-center border border-black hover:bg-green-600 hover:text-white transition-colors"><Check size={14} weight="bold" /></button>}
+                  <button onClick={() => setStatus(it.id, "dismissed")} data-testid={`inbox-dismiss-${it.id}`} title="Dismiss" className="w-8 h-8 flex items-center justify-center border border-black hover:bg-brand-red hover:text-white transition-colors"><X size={14} weight="bold" /></button>
+                </div>
               </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                {pendingApproval && hasPerm(user, "decisions_approve") && (
-                  <button onClick={() => decide(dec.id, "approve")} data-testid={`inbox-approve-tasks-${it.id}`}
-                    className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-black px-2 py-1 bg-green-600 text-white hover:shadow-brutal-sm transition-all">
-                    <CheckCircle size={13} weight="bold" /> Approve
-                  </button>
-                )}
-                {decTasks.length > 0 && (
-                  <button onClick={() => navigate("/my-work?view=board")} data-testid={`inbox-view-board-${it.id}`}
-                    className="text-xs font-semibold uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-ink hover:text-white transition-colors">Board</button>
-                )}
-                {(it.ref_type === "ingestion" || it.classification === "complaint") && (
-                  <button onClick={() => openItem(it)} data-testid={`inbox-open-${it.id}`} className="text-xs font-semibold uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-ink hover:text-white transition-colors">View</button>
-                )}
-                {!done && <button onClick={() => setStatus(it.id, "done")} data-testid={`inbox-done-${it.id}`} title="Mark done" className="w-8 h-8 flex items-center justify-center border border-black hover:bg-green-600 hover:text-white transition-colors"><Check size={14} weight="bold" /></button>}
-                <button onClick={() => setStatus(it.id, "dismissed")} data-testid={`inbox-dismiss-${it.id}`} title="Dismiss" className="w-8 h-8 flex items-center justify-center border border-black hover:bg-brand-red hover:text-white transition-colors"><X size={14} weight="bold" /></button>
-              </div>
-            </div>
+            </SwipeRow>
           );
         })}
       </div>

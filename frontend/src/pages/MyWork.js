@@ -769,24 +769,22 @@ export default function MyWork() {
     <div>
       <PageHeader eyebrow="Your day, simplified" title="My Work">
         <div className="w-full lg:w-auto flex flex-col lg:flex-row lg:items-center gap-2" data-testid="mywork-controls">
-          {view === "mywork" && (
-            <div className="order-2 lg:order-1 grid grid-cols-4 gap-2 lg:flex lg:flex-wrap lg:items-center" data-testid="mywork-actions">
-              <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members}
-                triggerClassName={`${CTRL} bg-brand-ink text-white hover:shadow-brutal-sm`} />
-              {isOwner && (
-                <>
-                  <button onClick={() => setScope("mine")} data-testid="work-scope-mine"
-                    className={`${CTRL} ${scope === "mine" ? "bg-brand-blue text-white" : "bg-white hover:bg-black/5"}`}>My Tasks</button>
-                  <button onClick={() => setScope("all")} data-testid="work-scope-all"
-                    className={`${CTRL} ${scope === "all" ? "bg-brand-blue text-white" : "bg-white hover:bg-black/5"}`}>All Tasks</button>
-                </>
-              )}
-              <button onClick={() => setAiPriority((v) => !v)} data-testid="ai-priority-toggle"
-                className={`${CTRL} ${aiPriority ? "bg-brand-red text-white shadow-brutal-sm" : "bg-brand-yellow hover:shadow-brutal-sm"}`}>
-                <Sparkle size={15} weight="bold" /> {scoring ? "Scoring…" : aiPriority ? "AI Priority: On" : "AI Priority"}
-              </button>
-            </div>
-          )}
+          <div className="order-2 lg:order-1 grid grid-cols-4 gap-2 lg:flex lg:flex-wrap lg:items-center" data-testid="mywork-actions">
+            <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members}
+              triggerClassName={`${CTRL} bg-brand-ink text-white hover:shadow-brutal-sm`} />
+            {isOwner && (
+              <>
+                <button onClick={() => { setScope("mine"); setView("mywork"); }} data-testid="work-scope-mine"
+                  className={`${CTRL} ${view === "mywork" && scope === "mine" ? "bg-brand-blue text-white" : "bg-white hover:bg-black/5"}`}>My Tasks</button>
+                <button onClick={() => { setScope("all"); setView("mywork"); }} data-testid="work-scope-all"
+                  className={`${CTRL} ${view === "mywork" && scope === "all" ? "bg-brand-blue text-white" : "bg-white hover:bg-black/5"}`}>All Tasks</button>
+              </>
+            )}
+            <button onClick={() => { setAiPriority((v) => !v); setView("mywork"); }} data-testid="ai-priority-toggle"
+              className={`${CTRL} ${view === "mywork" && aiPriority ? "bg-brand-red text-white shadow-brutal-sm" : "bg-brand-yellow hover:shadow-brutal-sm"}`}>
+              <Sparkle size={15} weight="bold" /> {scoring ? "Scoring…" : aiPriority ? "AI Priority: On" : "AI Priority"}
+            </button>
+          </div>
           <div className="order-1 lg:order-2 grid grid-cols-4 gap-2 lg:flex lg:items-center" data-testid="work-view-toggle">
             <button onClick={() => setView("mywork")} data-testid="work-view-mywork"
               className={`${CTRL} ${view === "mywork" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>

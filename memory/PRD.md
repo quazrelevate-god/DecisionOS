@@ -177,3 +177,8 @@ Added new granular permission `decisions_approve` ("Approve Decisions"):
 - Frontend: added to PERMISSIONS list (perms.js) so it appears as a toggle in Team member editor (TeamPanel auto-renders). Inbox.js Decision Desk gating changed from `user?.role === "owner"` → `hasPerm(user, "decisions_approve")` for both the "Decision Approvals" section and the inline approve button.
 Verified via curl: employee WITH decisions_approve → approve returns 200; employee WITHOUT → approve/reject return 403. Frontend compiles clean.
 REDEPLOY to push to production. Owner grants this per-employee in People → Employees → edit member → permissions.
+
+## Decision approver can assign tasks to team members (2026-07-17)
+Follow-up to decisions_approve: the "Assign to a team member" dropdown in the Decision Desk approval card was empty for non-owner approvers because the members query (`usersQ`) was gated to `user?.role === "owner"`. Backend `GET /users` already allows any authenticated user, and `add_decision_task` already uses `require_perm("decisions_approve")`.
+Fix (Inbox.js): `usersQ.enabled` now = `hasPerm(user,"decisions_approve") || hasPerm(user,"team_manage")` so decision approvers get the populated member/role dropdowns and can assign tasks while approving.
+Verified via curl: approver employee GET /users → 200 (5 members); POST /decisions/{id}/tasks with assignee_id → 200. REDEPLOY to production.

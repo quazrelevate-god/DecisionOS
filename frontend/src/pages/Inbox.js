@@ -222,7 +222,7 @@ export default function Inbox() {
   });
   const decisionsQ = useQuery({ queryKey: ["decisions"], queryFn: () => api.get("/decisions").then((r) => r.data) });
   const myTasksQ = useQuery({ queryKey: ["tasks", true], queryFn: () => api.get("/tasks?mine=true").then((r) => r.data) });
-  const usersQ = useQuery({ queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data), enabled: user?.role === "owner" });
+  const usersQ = useQuery({ queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data), enabled: hasPerm(user, "decisions_approve") || hasPerm(user, "team_manage") });
   const members = usersQ.data || [];
   const roleOptions = [{ key: "owner", label: "Owner" }, ...(tenant?.roles || [])];
 

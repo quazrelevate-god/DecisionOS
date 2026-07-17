@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import api from "../lib/api";
@@ -9,6 +9,7 @@ import { timeAgo } from "../lib/format";
 import { toast } from "sonner";
 import {
   AirplaneTakeoff, Plus, WarningOctagon, CheckCircle, XCircle, ChatCircleText, Gear, Clock,
+  Sparkle, ArrowsClockwise, CalendarPlus, Eye, CircleNotch,
 } from "@phosphor-icons/react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter,
@@ -140,9 +141,160 @@ function AbsenceDialog({ onDone }) {
   );
 }
 
+const ACTION_META = {
+  reassign: { label: "Reassign", cls: "bg-brand-blue text-white", Icon: ArrowsClockwise },
+  extend: { label: "Extend due date", cls: "bg-orange-500 text-white", Icon: CalendarPlus },
+  monitor: { label: "Monitor", cls: "bg-white", Icon: Eye },
+};
+
+function ImpactDialog({ leaveId, open, onOpenChange, onApplied }) {
+  const [loading, setLoading] = useState(false);
+  const [data, setData] = useState(null);
+  const [applied, setApplied] = useState({});
+  const [edits, setEdits] = useState({});
+
+  useEffect(() => {
+    if (!open) { setData(null); setApplied({}); setEdits({}); return; }
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const res = await api.get(`/leaves/${leaveId}/impact`);
+        if (cancelled) return;
+        setData(res.data);
+        const e = {};
+        (res.data.tasks || []).forEach((t) => {
+          e[t.id] = { assignee_id: t.assignee_id || "", due_date: t.suggested_due_date || "" };
+        });
+        setEdits(e);
+      } catch (err) {
+        if (!cancelled) toast.error(err.response?.data?.detail || "Could not analyze impact");
+      } finally { if (!cancelled) setLoading(false); }
+    })();
+    return () => { cancelled = true; };
+  }, [open, leaveId]);
+
+  const applyOne = async (t) => {
+    const e = edits[t.id] || {};
+    try {
+      if (t.action === "reassign") {
+        if (!e.assignee_id) return toast.error("Pick a teammate to reassign to");
+        await api.patch(`/tasks/${t.id}`, { assignee_id: e.assignee_id });
+      } else if (t.action === "extend") {
+        if (!e.due_date) return toast.error("Pick a new due date");
+        await api.patch(`/tasks/${t.id}`, { due_date: e.due_date });
+      } else { return; }
+      setApplied((a) => ({ ...a, [t.id]: true }));
+      toast.success(t.action === "reassign" ? "Task reassigned" : "Due date extended");
+      onApplied?.();
+    } catch (err) { toast.error(err.response?.data?.detail || "Could not apply"); }
+  };
+
+  const applyAll = async () => {
+    const pending = (data?.tasks || []).filter((t) => (t.action === "reassign" || t.action === "extend") && !applied[t.id]);
+    for (const t of pending) { await applyOne(t); }  // eslint-disable-line no-await-in-loop
+  };
+
+  const tasks = data?.tasks || [];
+  const members = data?.available_members || [];
+  const recCount = tasks.filter((t) => t.action === "reassign" || t.action === "extend").length;
+  const allApplied = recCount > 0 && tasks.filter((t) => t.action === "reassign" || t.action === "extend").every((t) => applied[t.id]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="border border-black rounded-none max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="leave-impact-dialog">
+        <DialogHeader>
+          <DialogTitle className="font-heading uppercase tracking-tight flex items-center gap-2">
+            <Sparkle size={18} weight="fill" className="text-brand-red" /> AI Impact Analysis
+          </DialogTitle>
+          <DialogDescription className="text-sm text-muted-foreground">
+            {data ? `What ${data.person}'s leave affects, and how to keep work on track.` : "Checking active tasks affected by this leave…"}
+          </DialogDescription>
+        </DialogHeader>
+
+        {loading && (
+          <div className="flex flex-col items-center justify-center py-12 text-muted-foreground" data-testid="impact-loading">
+            <CircleNotch size={34} weight="bold" className="animate-spin text-brand-red" />
+            <p className="text-sm mt-3">Analyzing workload &amp; suggesting cover…</p>
+          </div>
+        )}
+
+        {!loading && data && (
+          <div className="space-y-3" data-testid="impact-content">
+            {data.summary && (
+              <div className="border border-black/20 bg-brand-paper p-3 text-sm" data-testid="impact-summary">{data.summary}</div>
+            )}
+            {tasks.length === 0 && (
+              <EmptyState title="No tasks at risk" hint="This person has no active tasks due during their absence. You're all set." />
+            )}
+            {tasks.map((t) => {
+              const m = ACTION_META[t.action] || ACTION_META.monitor;
+              const e = edits[t.id] || {};
+              const done = applied[t.id];
+              return (
+                <div key={t.id} data-testid={`impact-task-${t.id}`} className="border border-black p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-sm leading-tight">{t.title}</p>
+                      <p className="label-mono text-muted-foreground mt-1">
+                        {t.priority} · {(t.status || "").replace("_", " ")}{t.due_date ? ` · due ${t.due_date}` : ""}
+                      </p>
+                    </div>
+                    <Chip value={m.label} className={`${m.cls} shrink-0`} />
+                  </div>
+                  {t.reason && <p className="text-xs text-muted-foreground mt-2">{t.reason}</p>}
+
+                  {t.action === "reassign" && !done && (
+                    <div className="flex gap-2 mt-2.5">
+                      <select data-testid={`impact-assignee-${t.id}`} className={`${inp} text-sm`}
+                        value={e.assignee_id} onChange={(ev) => setEdits((s) => ({ ...s, [t.id]: { ...s[t.id], assignee_id: ev.target.value } }))}>
+                        <option value="">Select teammate…</option>
+                        {members.map((mm) => <option key={mm.id} value={mm.id}>{mm.name} · {mm.role}</option>)}
+                      </select>
+                      <button onClick={() => applyOne(t)} data-testid={`impact-apply-${t.id}`}
+                        className="shrink-0 flex items-center gap-1 bg-brand-blue text-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">
+                        <ArrowsClockwise size={13} weight="bold" /> Reassign
+                      </button>
+                    </div>
+                  )}
+                  {t.action === "extend" && !done && (
+                    <div className="flex gap-2 mt-2.5">
+                      <input type="date" data-testid={`impact-date-${t.id}`} className={`${inp} text-sm`}
+                        value={e.due_date} onChange={(ev) => setEdits((s) => ({ ...s, [t.id]: { ...s[t.id], due_date: ev.target.value } }))} />
+                      <button onClick={() => applyOne(t)} data-testid={`impact-apply-${t.id}`}
+                        className="shrink-0 flex items-center gap-1 bg-orange-500 text-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">
+                        <CalendarPlus size={13} weight="bold" /> Extend
+                      </button>
+                    </div>
+                  )}
+                  {done && (
+                    <p className="mt-2.5 flex items-center gap-1 text-xs font-semibold text-green-700" data-testid={`impact-done-${t.id}`}>
+                      <CheckCircle size={14} weight="fill" /> Applied
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+
+            {recCount > 0 && (
+              <DialogFooter className="pt-1">
+                <button onClick={applyAll} disabled={allApplied} data-testid="impact-apply-all"
+                  className="flex items-center gap-2 bg-brand-ink text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-50">
+                  <Sparkle size={15} weight="fill" /> {allApplied ? "All applied" : `Apply all recommended (${recCount})`}
+                </button>
+              </DialogFooter>
+            )}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function LeaveCard({ lv, canAct, onRefresh, highlight }) {
   const [action, setAction] = useState(null); // reject | info
   const [note, setNote] = useState("");
+  const [impactOpen, setImpactOpen] = useState(false);
   const st = STATUS_META[lv.status] || STATUS_META.pending;
 
   const decide = async (kind) => {
@@ -150,6 +302,7 @@ function LeaveCard({ lv, canAct, onRefresh, highlight }) {
       await api.post(`/leaves/${lv.id}/${kind}`, { note });
       toast.success(kind === "approve" ? "Approved" : kind === "reject" ? "Rejected" : "Info requested");
       setAction(null); setNote("");
+      if (kind === "approve") setImpactOpen(true);  // auto-run AI impact analysis
       onRefresh();
     } catch (e) { toast.error(e.response?.data?.detail || "Action failed"); }
   };
@@ -173,6 +326,14 @@ function LeaveCard({ lv, canAct, onRefresh, highlight }) {
           <span className="font-semibold">Info requested:</span> {lv.info_note}
         </div>
       )}
+
+      {canAct && lv.status === "approved" && (
+        <button onClick={() => setImpactOpen(true)} data-testid={`leave-impact-btn-${lv.id}`}
+          className="mt-3 w-full flex items-center justify-center gap-1.5 bg-brand-ink text-white py-1.5 text-xs font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">
+          <Sparkle size={14} weight="fill" /> AI Impact Analysis
+        </button>
+      )}
+      {canAct && <ImpactDialog leaveId={lv.id} open={impactOpen} onOpenChange={setImpactOpen} onApplied={onRefresh} />}
 
       {canAct && lv.status !== "approved" && lv.status !== "rejected" && (
         <div className="mt-3">

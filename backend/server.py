@@ -4040,6 +4040,88 @@ async def request_leave_info(leave_id: str, inp: LeaveDecisionInput, user: dict 
                                f"{user.get('name')} needs more info on your leave request" + (f": {inp.note}" if inp.note else ""))
 
 
+# --- Leave & Absence Phase 2: AI Impact Analysis on approval ---
+async def ai_leave_impact(person_name: str, from_date: str, to_date: str, tasks: list, members: list) -> dict:
+    if not tasks:
+        return {"summary": "No active tasks are affected by this leave.", "suggestions": []}
+    system = (
+        "You are an operations manager for an Indian SME. A team member is going on leave and their active tasks are "
+        "at risk. For EACH task, recommend exactly ONE action to keep work on track:\n"
+        "- 'reassign': hand it to an available teammate — prefer someone with the same or adjacent role and the LOWEST "
+        "current workload (active_task_count). Only choose an assignee_id from the available_members list.\n"
+        "- 'extend': push the due date to shortly AFTER the person returns (a day or two after leave_to), only when the "
+        "task can safely wait and shouldn't move to someone else.\n"
+        "- 'monitor': leave as-is (low priority, almost done, or nothing to do now).\n"
+        "Return STRICT JSON: {\"summary\": string (one plain-English sentence), \"suggestions\": [{\"task_id\": string, "
+        "\"action\": \"reassign\"|\"extend\"|\"monitor\", \"assignee_id\": string (required only if reassign, must be from "
+        "available_members), \"assignee_name\": string, \"due_date\": \"YYYY-MM-DD\" (required only if extend), "
+        "\"reason\": string (short)}]}. Every input task_id MUST appear exactly once. If there are no available_members, "
+        "do not use 'reassign'."
+    )
+    payload = {
+        "person_on_leave": person_name, "leave_from": from_date, "leave_to": to_date,
+        "at_risk_tasks": [{"task_id": t["id"], "title": t.get("title"), "priority": t.get("priority"),
+                           "status": t.get("status"), "due_date": (t.get("due_date") or "")[:10]} for t in tasks],
+        "available_members": [{"id": m["id"], "name": m["name"], "role": m["role"],
+                               "active_task_count": m["load"]} for m in members],
+    }
+    chat = LlmChat(api_key=CLAUDE_KEY, session_id=f"leave-impact-{new_id()}", system_message=system).with_model(*LLM_MODEL)
+    resp = await chat.send_message(UserMessage(text=json.dumps(payload)))
+    data = _extract_json(resp)
+    return data if isinstance(data, dict) else {"summary": "", "suggestions": []}
+
+
+@api.get("/leaves/{leave_id}/impact")
+async def leave_impact(leave_id: str, user: dict = Depends(get_current_user)):
+    tid = user["tenant_id"]
+    lv = await db.leaves.find_one({"id": leave_id, "tenant_id": tid})
+    if not lv:
+        raise HTTPException(status_code=404, detail="Not found")
+    if not _can_approve_leave(user, lv) and lv["user_id"] != user["id"]:
+        raise HTTPException(status_code=403, detail="You don't have access to this leave request")
+    from_date, to_date = lv["from_date"][:10], lv["to_date"][:10]
+    # Active tasks of the person on leave that are at risk during the absence.
+    all_tasks = await db.tasks.find(
+        {"tenant_id": tid, "assignee_id": lv["user_id"], "status": {"$nin": ["done", "cancelled"]}},
+        {"_id": 0}).to_list(300)
+    at_risk = [t for t in all_tasks
+               if ((t.get("due_date") or "")[:10] and (t.get("due_date") or "")[:10] <= to_date)
+               or t.get("status") == "in_progress"]
+    # Available teammates: everyone except the person on leave and anyone else on approved overlapping leave.
+    users = await db.users.find({"tenant_id": tid}, {"_id": 0, "id": 1, "name": 1, "role": 1}).to_list(500)
+    overlapping = await db.leaves.find(
+        {"tenant_id": tid, "status": "approved", "from_date": {"$lte": to_date}, "to_date": {"$gte": from_date}},
+        {"_id": 0, "user_id": 1}).to_list(300)
+    busy = {o["user_id"] for o in overlapping} | {lv["user_id"]}
+    members = []
+    for u in users:
+        if u["id"] in busy:
+            continue
+        load = await db.tasks.count_documents(
+            {"tenant_id": tid, "assignee_id": u["id"], "status": {"$nin": ["done", "cancelled"]}})
+        members.append({"id": u["id"], "name": u["name"], "role": u["role"], "load": load})
+    analysis = await ai_leave_impact(lv["user_name"], from_date, to_date, at_risk, members)
+    sug = {s.get("task_id"): s for s in (analysis.get("suggestions") or []) if isinstance(s, dict)}
+    valid_ids = {m["id"] for m in members}
+    tasks_out = []
+    for t in at_risk:
+        s = sug.get(t["id"], {})
+        action = s.get("action") if s.get("action") in ("reassign", "extend", "monitor") else "monitor"
+        aid = s.get("assignee_id") if s.get("assignee_id") in valid_ids else None
+        if action == "reassign" and not aid:
+            action = "monitor"
+        tasks_out.append({
+            "id": t["id"], "title": t.get("title"), "priority": t.get("priority"),
+            "status": t.get("status"), "due_date": (t.get("due_date") or "")[:10],
+            "action": action, "assignee_id": aid, "assignee_name": s.get("assignee_name"),
+            "suggested_due_date": (s.get("due_date") or "")[:10] if action == "extend" else None,
+            "reason": s.get("reason", ""),
+        })
+    return {"leave_id": leave_id, "person": lv["user_name"], "from_date": from_date, "to_date": to_date,
+            "summary": analysis.get("summary", ""), "tasks": tasks_out,
+            "available_members": [{"id": m["id"], "name": m["name"], "role": m["role"]} for m in members]}
+
+
 @api.get("/calendar")
 async def business_calendar(days: int = 45, user: dict = Depends(get_current_user)):
     """Unified business calendar: upcoming payments due, task deadlines, deliveries, complaints, birthdays."""

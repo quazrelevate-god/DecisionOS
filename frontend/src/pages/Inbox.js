@@ -40,16 +40,17 @@ function SwipeRow({ children, onLeft, onRight, rightLabel = "View", testid }) {
     else if (dx <= -THRESH && onLeft) onLeft();
     setDx(0); s.current = null; engaged.current = false;
   };
+  const committedR = dx >= THRESH, committedL = dx <= -THRESH;
   return (
     <div className="relative overflow-hidden border border-black" data-testid={testid}>
       {onRight && (
-        <div className="absolute inset-y-0 left-0 flex items-center gap-1 px-5 bg-brand-blue text-white text-xs font-semibold uppercase tracking-wider" style={{ opacity: dx > 8 ? 1 : 0 }}>
-          <Eye size={16} weight="bold" /> {rightLabel}
+        <div className={`absolute inset-y-0 left-0 flex items-center gap-1 px-5 text-white text-xs font-semibold uppercase tracking-wider transition-colors ${committedR ? "bg-brand-blue brightness-125" : "bg-brand-blue/70"}`} style={{ opacity: dx > 8 ? 1 : 0 }}>
+          <Eye size={16} weight="bold" /> {committedR ? `Release · ${rightLabel}` : rightLabel}
         </div>
       )}
       {onLeft && (
-        <div className="absolute inset-y-0 right-0 flex items-center gap-1 px-5 bg-brand-red text-white text-xs font-semibold uppercase tracking-wider" style={{ opacity: dx < -8 ? 1 : 0 }}>
-          Dismiss <X size={16} weight="bold" />
+        <div className={`absolute inset-y-0 right-0 flex items-center gap-1 px-5 text-white text-xs font-semibold uppercase tracking-wider transition-colors ${committedL ? "bg-brand-red brightness-125" : "bg-brand-red/70"}`} style={{ opacity: dx < -8 ? 1 : 0 }}>
+          {committedL ? "Release · Dismiss" : "Dismiss"} <X size={16} weight="bold" />
         </div>
       )}
       <div onTouchStart={start} onTouchMove={move} onTouchEnd={end}

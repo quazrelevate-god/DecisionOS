@@ -18,7 +18,7 @@ export function PageHeader({ eyebrow, title, children }) {
             {title}
           </h1>
         </div>
-        <div className="flex items-center gap-2 shrink-0">{children}</div>
+        <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto lg:justify-end">{children}</div>
       </div>
       <div className="mt-5 h-px w-full bg-gradient-to-r from-brand-red/50 via-border to-transparent"></div>
     </div>

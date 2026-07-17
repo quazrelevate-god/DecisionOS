@@ -226,13 +226,6 @@ export default function Layout({ children }) {
             <p className="label-mono text-muted-foreground truncate">{user?.email}</p>
           </div>
           <button
-            onClick={() => setProfileOpen(true)}
-            data-testid="edit-profile-button"
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 mb-2 text-sm font-semibold uppercase tracking-wider bg-white border border-black hover:bg-brand-ink hover:text-white transition-colors"
-          >
-            <UserCircle size={16} weight="bold" /> Edit profile
-          </button>
-          <button
             onClick={doLogout}
             data-testid="logout-button"
             className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold uppercase tracking-wider bg-white text-brand-red border-2 border-brand-red hover:bg-brand-red hover:text-white transition-colors"
@@ -317,13 +310,6 @@ export default function Layout({ children }) {
                   </button>
                 )}
                 <button
-                  onClick={() => { setDrawerOpen(false); setProfileOpen(true); }}
-                  data-testid="mobile-edit-profile-button"
-                  className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-semibold uppercase tracking-wider bg-white border border-black hover:bg-brand-ink hover:text-white transition-colors"
-                >
-                  <UserCircle size={16} weight="bold" /> Edit profile
-                </button>
-                <button
                   onClick={doLogout}
                   data-testid="mobile-logout-button"
                   className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold uppercase tracking-wider bg-white text-brand-red border-2 border-brand-red hover:bg-brand-red hover:text-white transition-colors"
@@ -338,8 +324,6 @@ export default function Layout({ children }) {
 
         <main className="flex-1 p-4 lg:p-8 pb-24 lg:pb-8 overflow-x-hidden app-canvas">{children}</main>
       </div>
-
-      <ProfileDialog open={profileOpen} onClose={() => setProfileOpen(false)} />
 
       {/* Mobile bottom tab bar */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 border-t border-black bg-white flex z-[10000]" data-testid="mobile-bottom-nav">

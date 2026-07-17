@@ -133,9 +133,7 @@ function WhatsAppCard() {
       <div className="flex items-center gap-2 mb-4">
         <WhatsappLogo size={22} weight="bold" className="text-green-600" />
         <span className="font-heading font-black uppercase tracking-tight text-lg">Forward on WhatsApp</span>
-        {st?.configured
-          ? <Chip value="live" className="bg-green-600 text-white" />
-          : <Chip value="not connected" className="bg-brand-red text-white" />}
+        {!st?.configured && <Chip value="not connected" className="bg-brand-red text-white" />}
       </div>
 
       <div className="grid md:grid-cols-[auto_1fr] gap-6">
@@ -143,12 +141,9 @@ function WhatsAppCard() {
           {waLink ? (
             <>
               <a href={waLink} target="_blank" rel="noreferrer" data-testid="whatsapp-qr-link"
-                className="border-4 border-black p-3 bg-white shadow-brutal hover:shadow-brutal-sm transition-all">
-                <QRCodeSVG value={waLink} size={188} level="M" />
+                className="border border-border rounded-xl p-2.5 bg-white shadow-brutal-sm hover:shadow-brutal transition-all">
+                <QRCodeSVG value={waLink} size={132} level="M" />
               </a>
-              <p className="text-sm font-bold mt-3">Scan to send a message</p>
-              <p className="label-mono text-muted-foreground mt-1" data-testid="whatsapp-number">{st.display_number}</p>
-              {st.verified_name && <p className="text-xs text-muted-foreground">{st.verified_name}</p>}
             </>
           ) : (
             <div className="border-2 border-dashed border-black/40 p-6 w-full">
@@ -159,21 +154,17 @@ function WhatsAppCard() {
         </div>
 
         <div>
-          {isOwner && st && (
-            <div className="flex flex-wrap gap-1.5 mb-3" data-testid="whatsapp-config-chips">
-              <Chip value={`token ${st.has_token ? "✓" : "✗"}`} className={st.has_token ? "bg-green-600 text-white" : "bg-brand-red text-white"} />
-              <Chip value={`phone id ${st.has_phone_id ? "✓" : "✗"}`} className={st.has_phone_id ? "bg-green-600 text-white" : "bg-brand-red text-white"} />
-              <Chip value={`verify token ${st.has_verify_token ? "✓" : "✗"}`} className={st.has_verify_token ? "bg-green-600 text-white" : "bg-black/10 text-black"} />
-              <Chip value={`app secret ${st.has_app_secret ? "✓" : "✗"}`} className={st.has_app_secret ? "bg-green-600 text-white" : "bg-black/10 text-black"} />
-              <Chip value={`fallback ${st.has_fallback_tenant ? "✓" : "✗"}`} className={st.has_fallback_tenant ? "bg-green-600 text-white" : "bg-black/10 text-black"} />
-              {st.token_error && <Chip value="token error" className="bg-brand-red text-white" />}
+          {isOwner && st && st.token_error && (
+            <div className="flex items-center gap-2 mb-3 border border-brand-red/30 bg-brand-red/5 rounded-lg px-3 py-2" data-testid="whatsapp-token-error">
+              <Chip value="connection issue" className="bg-brand-red text-white" />
+              <span className="text-xs text-muted-foreground">{st.token_error}</span>
             </div>
           )}
 
           {isOwner ? (
             <>
               <div className="flex items-center justify-between mb-2">
-                <p className="label-mono text-brand-red">Recent WhatsApp activity</p>
+                <p className="label-mono font-bold text-green-600">Recent WhatsApp activity</p>
                 <button data-testid="whatsapp-logs-refresh" onClick={() => qc.invalidateQueries({ queryKey: ["wa-logs"] })}
                   className="flex items-center gap-1 text-xs uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-ink hover:text-white transition-colors">
                   <ArrowClockwise size={12} weight="bold" /> Refresh

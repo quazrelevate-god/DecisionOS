@@ -130,10 +130,11 @@ function WhatsAppCard() {
 
   return (
     <div className="card-brutal p-5 mb-8" data-testid="whatsapp-card">
-      <div className="flex items-center gap-2 mb-4">
-        <WhatsappLogo size={22} weight="bold" className="text-green-600" />
-        {!st?.configured && <Chip value="not connected" className="bg-brand-red text-white" />}
-      </div>
+      {!st?.configured && (
+        <div className="flex items-center gap-2 mb-4">
+          <Chip value="not connected" className="bg-brand-red text-white" />
+        </div>
+      )}
 
       <div className="grid md:grid-cols-[auto_1fr] gap-6">
         <div className="flex flex-col items-center text-center">
@@ -163,7 +164,9 @@ function WhatsAppCard() {
           {isOwner ? (
             <>
               <div className="flex items-center justify-between mb-2">
-                <p className="label-mono font-bold text-green-600">Recent WhatsApp activity</p>
+                <p className="label-mono font-bold text-green-600 flex items-center gap-1.5">
+                  <WhatsappLogo size={16} weight="bold" className="text-green-600" /> Recent WhatsApp activity
+                </p>
                 <button data-testid="whatsapp-logs-refresh" onClick={() => qc.invalidateQueries({ queryKey: ["wa-logs"] })}
                   className="flex items-center gap-1 text-xs uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-ink hover:text-white transition-colors">
                   <ArrowClockwise size={12} weight="bold" /> Refresh

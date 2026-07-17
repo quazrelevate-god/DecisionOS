@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import api from "../lib/api";
 import { PageHeader } from "../components/common";
+import { CompanyDetails } from "../components/CompanyDetails";
 import { toast } from "sonner";
 import { CurrencyCircleDollar, ShieldCheck, FloppyDisk, Info } from "@phosphor-icons/react";
 
@@ -35,6 +36,8 @@ export default function Settings() {
       <PageHeader eyebrow="Workspace configuration" title="Settings" />
 
       <div className="max-w-2xl space-y-6">
+        <CompanyDetails />
+
         <div className="card-brutal p-5" data-testid="settings-money-card">
           <div className="flex items-center gap-2 mb-1">
             <CurrencyCircleDollar size={20} weight="bold" className="text-brand-red" />

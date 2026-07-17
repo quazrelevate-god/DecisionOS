@@ -4,7 +4,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../hooks/useTheme";
 import { hasPerm } from "../lib/perms";
-import { CompanyDialog } from "./CompanyDialog";
 import { toast } from "sonner";
 import api from "../lib/api";
 import { timeAgo } from "../lib/format";
@@ -25,7 +24,6 @@ import {
   SignOut,
   EnvelopeSimple,
   Bell,
-  Buildings,
   Sun,
   MoonStars,
   Briefcase,
@@ -212,11 +210,9 @@ export default function Layout({ children }) {
       <aside className="hidden lg:flex w-64 shrink-0 border-r border-black bg-white flex-col sticky top-0 h-screen">
         <div className="px-6 py-6 border-b border-black">
           <Logo />
-          <CompanyDialog trigger={
-            <button data-testid="tenant-name" className="mt-3 label-mono text-muted-foreground truncate block text-left hover:text-brand-red transition-colors w-full">
-              {tenant?.name}
-            </button>
-          } />
+          <p data-testid="tenant-name" className="mt-3 label-mono text-muted-foreground truncate">
+            {tenant?.name}
+          </p>
           {tenant?.industry && <p className="label-mono text-brand-red truncate mt-1">{tenant.industry}</p>}
         </div>
         <nav className="flex-1 min-h-0 overflow-y-auto py-4">
@@ -297,9 +293,7 @@ export default function Layout({ children }) {
               <SheetDescription className="sr-only">Main navigation menu</SheetDescription>
               <div className="px-6 py-5 border-b border-black">
                 <Logo />
-                <CompanyDialog trigger={
-                  <button className="mt-2 label-mono text-muted-foreground truncate block text-left hover:text-brand-red transition-colors w-full">{tenant?.name}</button>
-                } />
+                <p className="mt-2 label-mono text-muted-foreground truncate">{tenant?.name}</p>
                 <div className="mt-3 flex items-center gap-2">
                   <span className="font-semibold text-sm">{user?.name}</span>
                   <span className="px-2 py-0.5 text-xs uppercase tracking-wider bg-brand-blue text-white font-semibold">

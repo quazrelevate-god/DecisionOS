@@ -284,29 +284,34 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
       <div className="space-y-2">
         {steps.map((s, i) => (
           <div key={s.id} data-testid={`exec-step-${t.id}-${i}`}>
-            <div className="flex items-center gap-2">
+            <div className={editing ? "flex flex-col sm:flex-row sm:items-start gap-2" : "flex items-start gap-2"}>
               {editing ? (
                 <>
-                  <input value={s.text} onChange={(e) => editStep(i, e.target.value)} className={inp} />
-                  <button onClick={() => moveStep(i, -1)} className="p-1 border border-black hover:bg-black/5" title="Up"><ArrowUp size={12} weight="bold" /></button>
-                  <button onClick={() => moveStep(i, 1)} className="p-1 border border-black hover:bg-black/5" title="Down"><ArrowDown size={12} weight="bold" /></button>
-                  <button onClick={() => removeStep(i)} data-testid={`exec-remove-${t.id}-${i}`} className="p-1 border border-black hover:bg-brand-red hover:text-white" title="Remove"><Trash size={12} weight="bold" /></button>
+                  <textarea value={s.text} onChange={(e) => editStep(i, e.target.value)} rows={2}
+                    className={`${inp} w-full resize-y leading-snug`} />
+                  <div className="flex gap-1 shrink-0 self-end sm:self-start">
+                    <button onClick={() => moveStep(i, -1)} className="p-2 sm:p-1 border border-black hover:bg-black/5" title="Up"><ArrowUp size={14} weight="bold" /></button>
+                    <button onClick={() => moveStep(i, 1)} className="p-2 sm:p-1 border border-black hover:bg-black/5" title="Down"><ArrowDown size={14} weight="bold" /></button>
+                    <button onClick={() => removeStep(i)} data-testid={`exec-remove-${t.id}-${i}`} className="p-2 sm:p-1 border border-black hover:bg-brand-red hover:text-white" title="Remove"><Trash size={14} weight="bold" /></button>
+                  </div>
                 </>
               ) : (
                 <>
                   <button onClick={() => toggle(i)} data-testid={`exec-toggle-${t.id}-${i}`}
-                    className={`w-5 h-5 shrink-0 border border-black flex items-center justify-center ${s.done ? "bg-brand-ink text-white" : "bg-white"}`}>
+                    className={`w-5 h-5 shrink-0 mt-0.5 border border-black flex items-center justify-center ${s.done ? "bg-brand-ink text-white" : "bg-white"}`}>
                     {s.done && <CheckCircle size={13} weight="bold" />}
                   </button>
-                  <span className={`text-sm flex-1 ${s.done ? "line-through text-muted-foreground" : ""}`}>{s.text}</span>
-                  <button onClick={() => askAI(s)} data-testid={`exec-ask-${t.id}-${i}`}
-                    className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-yellow transition-colors">
-                    <Sparkle size={12} weight="bold" /> Ask AI
-                  </button>
-                  <button onClick={() => setUpdStep(updStep === s.id ? null : s.id)} data-testid={`exec-update-${t.id}-${i}`}
-                    className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-blue hover:text-white transition-colors">
-                    <ArrowBendUpRight size={12} weight="bold" /> Update
-                  </button>
+                  <span className={`text-sm flex-1 min-w-0 break-words ${s.done ? "line-through text-muted-foreground" : ""}`}>{s.text}</span>
+                  <div className="flex gap-1 shrink-0">
+                    <button onClick={() => askAI(s)} data-testid={`exec-ask-${t.id}-${i}`}
+                      className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-yellow transition-colors">
+                      <Sparkle size={12} weight="bold" /> Ask AI
+                    </button>
+                    <button onClick={() => setUpdStep(updStep === s.id ? null : s.id)} data-testid={`exec-update-${t.id}-${i}`}
+                      className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-blue hover:text-white transition-colors">
+                      <ArrowBendUpRight size={12} weight="bold" /> Update
+                    </button>
+                  </div>
                 </>
               )}
             </div>

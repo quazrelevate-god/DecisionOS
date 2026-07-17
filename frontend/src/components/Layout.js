@@ -29,6 +29,7 @@ import {
   Sun,
   MoonStars,
   Briefcase,
+  GearSix,
   MicrophoneStage,
   List as ListIcon,
   FileArrowUp,
@@ -45,6 +46,7 @@ const NAV = [
   { to: "/brain", label: "Company Brain", icon: BrainIcon, testid: "nav-brain", perm: "brain" },
   { to: "/ingest", label: "Capture", icon: FileArrowUp, testid: "nav-ingest", perm: "data_input" },
   { to: "/meetings", label: "Meeting Notes", icon: MicrophoneStage, testid: "nav-meetings" },
+  { to: "/settings", label: "Settings", icon: GearSix, testid: "nav-settings", ownerOnly: true },
 ];
 
 // Primary items for the mobile bottom tab bar
@@ -69,7 +71,7 @@ export default function Layout({ children }) {
   const { user, tenant, logout } = useAuth();
   // NAV/BOTTOM_NAV/hasPerm are stable module-level refs; only `user` can change.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const navMain = useMemo(() => NAV.filter((n) => !n.perm || hasPerm(user, n.perm)), [user]);
+  const navMain = useMemo(() => NAV.filter((n) => (!n.perm || hasPerm(user, n.perm)) && (!n.ownerOnly || user?.role === "owner")), [user]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const navBottom = useMemo(() => BOTTOM_NAV.filter((n) => !n.perm || hasPerm(user, n.perm)), [user]);
   const navigate = useNavigate();

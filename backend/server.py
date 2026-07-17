@@ -1049,6 +1049,31 @@ async def update_tenant(inp: TenantUpdateInput, user: dict = Depends(require_per
     return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
 
 
+class TenantSettingsInput(BaseModel):
+    high_value_threshold: Optional[float] = None
+    require_owner_signoff: Optional[bool] = None
+    currency: Optional[str] = None
+
+
+@api.patch("/tenant/settings")
+async def update_tenant_settings(inp: TenantSettingsInput, user: dict = Depends(require_role("owner"))):
+    updates = {}
+    if inp.high_value_threshold is not None:
+        if inp.high_value_threshold < 0:
+            raise HTTPException(status_code=400, detail="Threshold must be a positive amount")
+        updates["high_value_threshold"] = float(inp.high_value_threshold)
+    if inp.require_owner_signoff is not None:
+        updates["require_owner_signoff"] = bool(inp.require_owner_signoff)
+    if inp.currency is not None:
+        updates["currency"] = inp.currency.strip().upper()
+    if not updates:
+        raise HTTPException(status_code=400, detail="Nothing to update")
+    await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": updates})
+    await log_activity(user["tenant_id"], user["id"], "settings_updated", f"{user['name']} updated workspace settings")
+    return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+
+
+
 def _slug_role(label: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", (label or "").strip().lower()).strip("_")
 
@@ -4216,6 +4241,7 @@ async def process_whatsapp_message(message: dict):
         owner = await db.users.find_one({"tenant_id": tenant_id, "role": "owner"}, {"_id": 0, "id": 1})
         owner_id = owner["id"] if owner else "whatsapp"
         troles = await tenant_role_keys(tenant_id)
+        cap_threshold, _cap_signoff = await _capture_settings(tenant_id)
 
         if mtype in ("image", "document"):
             media = message[mtype]
@@ -4244,7 +4270,7 @@ async def process_whatsapp_message(message: dict):
             dept = "finance" if cls in ("invoice", "payment") else ("purchase" if cls == "purchase" else "sales")
             confidence = float(result.get("confidence") or 0.7)
             policy = cls in ("approval", "decision")
-            needs_owner = _needs_owner_review(cls, amt or None, policy)
+            needs_owner = _needs_owner_review(cls, amt or None, policy, cap_threshold)
             has_records = bool(recs.get("invoices") or recs.get("payments"))
             dup = await _find_duplicate_invoice(tenant_id, recs)
             level, reason = _decide_processing_level(cls, confidence, amt or None, needs_owner,
@@ -4284,7 +4310,7 @@ async def process_whatsapp_message(message: dict):
             confidence = tri.get("confidence", 0.7)
             amount = tri.get("amount") if isinstance(tri.get("amount"), (int, float)) else None
             cls = tri.get("classification", "other")
-            needs_owner = _needs_owner_review(cls, amount, tri.get("policy_or_high_risk"))
+            needs_owner = _needs_owner_review(cls, amount, tri.get("policy_or_high_risk"), cap_threshold)
             level, reason = _decide_processing_level(cls, confidence, amount, needs_owner,
                                                      False, False, is_document=False)
             status = "needs_attention" if level == "attention" else "pending_review"
@@ -4336,8 +4362,16 @@ AUTO_CONFIDENCE = float(os.environ.get("CAPTURE_AUTO_CONFIDENCE", "0.90"))
 ATTENTION_CONFIDENCE = float(os.environ.get("CAPTURE_ATTENTION_CONFIDENCE", "0.60"))
 
 
-def _needs_owner_review(cls: str, amount, policy: bool) -> bool:
-    return bool(policy) or cls in ("approval", "decision") or (amount is not None and amount >= CAPTURE_THRESHOLD)
+def _needs_owner_review(cls: str, amount, policy: bool, threshold: float = CAPTURE_THRESHOLD) -> bool:
+    return bool(policy) or cls in ("approval", "decision") or (amount is not None and amount >= threshold)
+
+
+async def _capture_settings(tenant_id: str):
+    """Owner-configurable capture settings: (high_value_threshold, require_owner_signoff)."""
+    t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "high_value_threshold": 1, "require_owner_signoff": 1})
+    thr = (t or {}).get("high_value_threshold")
+    thr = float(thr) if isinstance(thr, (int, float)) and thr > 0 else CAPTURE_THRESHOLD
+    return thr, bool((t or {}).get("require_owner_signoff"))
 
 
 async def _find_duplicate_invoice(tenant_id: str, records: dict):
@@ -4433,7 +4467,8 @@ async def persist_capture_draft(tenant_id, wa_from, kind, payload, tri, troles, 
         reviewer = None
     money_item = cls in ("invoice", "payment")
     reviewer_perm = "finance" if money_item else None
-    high_value = amount is not None and amount >= CAPTURE_THRESHOLD
+    threshold, require_signoff = await _capture_settings(tenant_id)
+    high_value = amount is not None and amount >= threshold
     escalate_reason = ""
     if money_item:
         # Invoice/payment always flow to finance directly — routed to the tenant's actual
@@ -4443,6 +4478,11 @@ async def persist_capture_draft(tenant_id, wa_from, kind, payload, tri, troles, 
         needs_owner = False
         if high_value:
             escalate_reason = f"High value ({amount:,.0f}) — verify before approving"
+            if require_signoff:
+                # Owner sign-off required above the configured threshold.
+                needs_owner = True
+                reviewer = "owner"
+                escalate_reason = f"High value ({amount:,.0f}) — owner sign-off required"
     else:
         needs_owner = bool(tri.get("policy_or_high_risk")) or cls in ("approval", "decision") or high_value
         if needs_owner:

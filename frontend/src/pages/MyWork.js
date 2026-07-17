@@ -19,6 +19,8 @@ import {
   ArrowClockwise, XCircle, LockKey, X, AirplaneTakeoff, MagnifyingGlassPlus,
 } from "@phosphor-icons/react";
 
+const CTRL = "flex items-center justify-center gap-1.5 px-2 lg:px-4 py-2 text-[11px] lg:text-sm font-semibold uppercase tracking-wider border border-black transition-all text-center leading-tight";
+
 const WORK_TABS = [
   { key: "all", label: "All" },
   { key: "operational", label: "Operational" },
@@ -766,44 +768,43 @@ export default function MyWork() {
   return (
     <div>
       <PageHeader eyebrow="Your day, simplified" title="My Work">
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="grid grid-cols-4 gap-2 w-full lg:flex lg:flex-wrap lg:w-auto lg:items-center" data-testid="mywork-controls">
           {view === "mywork" && (
             <>
-              <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members} />
+              <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members}
+                triggerClassName={`${CTRL} bg-brand-ink text-white hover:shadow-brutal-sm`} />
               {isOwner && (
-                <div className="flex border border-black" data-testid="work-scope-toggle">
+                <>
                   <button onClick={() => setScope("mine")} data-testid="work-scope-mine"
-                    className={`px-4 py-2 text-sm font-semibold uppercase tracking-wider border-r border-black transition-colors ${scope === "mine" ? "bg-brand-blue text-white" : "bg-white hover:bg-black/5"}`}>My Tasks</button>
+                    className={`${CTRL} ${scope === "mine" ? "bg-brand-blue text-white" : "bg-white hover:bg-black/5"}`}>My Tasks</button>
                   <button onClick={() => setScope("all")} data-testid="work-scope-all"
-                    className={`px-4 py-2 text-sm font-semibold uppercase tracking-wider transition-colors ${scope === "all" ? "bg-brand-blue text-white" : "bg-white hover:bg-black/5"}`}>All Tasks</button>
-                </div>
+                    className={`${CTRL} ${scope === "all" ? "bg-brand-blue text-white" : "bg-white hover:bg-black/5"}`}>All Tasks</button>
+                </>
               )}
               <button onClick={() => setAiPriority((v) => !v)} data-testid="ai-priority-toggle"
-                className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black transition-all ${aiPriority ? "bg-brand-red text-white shadow-brutal-sm" : "bg-brand-yellow hover:shadow-brutal-sm"}`}>
-                <Sparkle size={16} weight="bold" /> {scoring ? "Scoring…" : aiPriority ? "AI Priority: On" : "AI Priority"}
+                className={`${CTRL} ${aiPriority ? "bg-brand-red text-white shadow-brutal-sm" : "bg-brand-yellow hover:shadow-brutal-sm"}`}>
+                <Sparkle size={15} weight="bold" /> {scoring ? "Scoring…" : aiPriority ? "AI Priority: On" : "AI Priority"}
               </button>
             </>
           )}
-          <div className="flex border border-black" data-testid="work-view-toggle">
-            <button onClick={() => setView("mywork")} data-testid="work-view-mywork"
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border-r border-black transition-colors ${view === "mywork" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
-              <ListIcon size={16} weight="bold" /> My Work
+          <button onClick={() => setView("mywork")} data-testid="work-view-mywork"
+            className={`${CTRL} ${view === "mywork" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+            <ListIcon size={15} weight="bold" /> My Work
+          </button>
+          <button onClick={() => setView("board")} data-testid="work-view-board"
+            className={`${CTRL} ${view === "board" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+            <Kanban size={15} weight="bold" /> Board
+          </button>
+          {canSeeWorkflows && (
+            <button onClick={() => setView("workflows")} data-testid="work-view-workflows"
+              className={`${CTRL} ${view === "workflows" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+              <ArrowRight size={15} weight="bold" /> Workflows
             </button>
-            <button onClick={() => setView("board")} data-testid="work-view-board"
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border-r border-black transition-colors ${view === "board" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
-              <Kanban size={16} weight="bold" /> Board
-            </button>
-            {canSeeWorkflows && (
-              <button onClick={() => setView("workflows")} data-testid="work-view-workflows"
-                className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border-r border-black transition-colors ${view === "workflows" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
-                <ArrowRight size={16} weight="bold" /> Workflows
-              </button>
-            )}
-            <button onClick={() => setView("leave")} data-testid="work-view-leave"
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider transition-colors ${view === "leave" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
-              <AirplaneTakeoff size={16} weight="bold" /> Leave
-            </button>
-          </div>
+          )}
+          <button onClick={() => setView("leave")} data-testid="work-view-leave"
+            className={`${CTRL} ${view === "leave" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+            <AirplaneTakeoff size={15} weight="bold" /> Leave
+          </button>
         </div>
       </PageHeader>
 

@@ -38,7 +38,7 @@ const EMPTY_FORM = {
   due_date: "", due_time: "", expected_output: "", approval_required: false, approver_id: "",
 };
 
-export function NewTaskDialog({ onCreated, roleOptions, members, defaultType }) {
+export function NewTaskDialog({ onCreated, roleOptions, members, defaultType, triggerClassName }) {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM, task_type: defaultType || "operational" });
@@ -85,7 +85,7 @@ export function NewTaskDialog({ onCreated, roleOptions, members, defaultType }) 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <button data-testid="new-task-button" className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
+        <button data-testid="new-task-button" className={triggerClassName || "flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all"}>
           <Plus size={16} weight="bold" /> New Task
         </button>
       </DialogTrigger>

@@ -300,7 +300,7 @@ export default function Inbox() {
         try {
           const { data } = await api.post("/voice-notes", fd, { headers: { "Content-Type": "multipart/form-data" } });
           if (data?.id) setSubmittedNoteId(data.id);
-          toast.success("Voice note uploaded — structuring…");
+          toast.success("Got it — thinking…");
           refresh();
         } catch { toast.error("Upload failed"); } finally { setBusy(false); }
       };
@@ -321,7 +321,7 @@ export default function Inbox() {
       const { data } = await api.post("/voice-notes/text", { text: finalText, language });
       if (data?.id) setSubmittedNoteId(data.id);
       setText(""); setClarify(null); setAnswers({});
-      toast.success("Directive submitted — structuring…");
+      toast.success("Got it — thinking…");
       refresh();
     } catch { toast.error("Submit failed"); } finally { setBusy(false); }
   };
@@ -404,11 +404,7 @@ export default function Inbox() {
 
   // Live status of any voice/text note still being processed (non-blocking indicator)
   const procNotes = (notesQ.data || []).filter((n) => PROCESSING.includes(n.status));
-  const procLabel = procNotes.some((n) => n.status === "structuring")
-    ? "Structuring in process…"
-    : procNotes.some((n) => n.status === "transcribing")
-    ? "Transcribing your voice note…"
-    : "Queued — starting…";
+  const procLabel = "Thinking…";
 
   // Deep-link from CEO Brief: ?focus=approval:<id> or attention:<id> — scroll to & highlight the card.
   const [params, setParams] = useSearchParams();
@@ -452,7 +448,7 @@ export default function Inbox() {
             <p className="font-heading font-bold uppercase tracking-tight text-sm" data-testid="structuring-status">
               {procLabel}{procNotes.length > 1 ? ` (${procNotes.length})` : ""}
             </p>
-            <p className="text-xs text-muted-foreground">Running in the background — you can keep working. We'll pop up the summary the moment it's ready.</p>
+            <p className="text-xs text-muted-foreground">DecisionOS is working through it for you — you can keep going. We'll pop up the summary the moment it's ready.</p>
           </div>
         </div>
       )}
@@ -465,7 +461,7 @@ export default function Inbox() {
               className={`w-24 h-24 flex items-center justify-center border border-black transition-all ${recording ? (paused ? "bg-brand-ink text-white" : "bg-brand-red text-white recording-pulse") : "bg-brand-ink text-white hover:shadow-brutal"}`}>
               {recording ? <Stop size={38} weight="fill" /> : <Microphone size={38} weight="fill" />}
             </button>
-            <p className="mt-4 font-heading font-bold uppercase tracking-tight">{recording ? (paused ? "Paused" : "Recording…") : busy ? "Uploading…" : "Tap to speak a decision"}</p>
+            <p className="mt-4 font-heading font-bold uppercase tracking-tight">{recording ? (paused ? "Paused" : "Recording…") : busy ? "Thinking…" : "Tap to speak a decision"}</p>
             <p className="font-mono text-sm text-muted-foreground mt-1" data-testid="record-timer">{recording ? mmss : "AI structures it into tasks"}</p>
             {recording && (
               <div className="flex flex-wrap items-center justify-center gap-2 mt-3">
@@ -521,7 +517,7 @@ export default function Inbox() {
                 <div className="flex flex-wrap gap-2 mt-3">
                   <button onClick={submitWithDetails} disabled={busy} data-testid="clarify-submit"
                     className="flex items-center gap-2 bg-brand-red text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all disabled:opacity-50">
-                    <PaperPlaneTilt size={15} weight="bold" /> {busy ? "Structuring…" : "Submit with details"}
+                    <PaperPlaneTilt size={15} weight="bold" /> {busy ? "Thinking…" : "Submit with details"}
                   </button>
                   <button onClick={() => runCapture(text)} disabled={busy} data-testid="clarify-skip"
                     className="px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:bg-black/5 disabled:opacity-50">

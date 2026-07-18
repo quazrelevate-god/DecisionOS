@@ -213,16 +213,23 @@ const PROCESSING = ["queued", "transcribing", "structuring"];
 const CONSTELLATION_URL = "https://static.prod-images.emergentagent.com/jobs/d7f8ecb5-3065-4d2b-9c8d-24e3557f160a/images/e270a88e4a2e3367707450d47e0d131ae39cbd41e3aae548120fd0872cedcdbe.png";
 
 function ThinkingOverlay({ show }) {
-  if (!show) return null;
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black animate-[fadeIn_0.4s_ease]" data-testid="thinking-overlay">
-      <p className="thinking-text font-heading font-black uppercase tracking-[0.35em] text-white text-4xl sm:text-5xl z-10">Thinking</p>
-      <div className="relative w-[min(82vw,540px)] aspect-square -mt-2">
-        <div className="absolute inset-[18%] rounded-full bg-brand-red/25 blur-[80px] animate-pulse" aria-hidden />
-        <img src={CONSTELLATION_URL} alt="" draggable="false"
-          className="constellation-spin relative w-full h-full object-contain select-none pointer-events-none [mask-image:radial-gradient(circle,black_50%,transparent_72%)] [-webkit-mask-image:radial-gradient(circle,black_50%,transparent_72%)]" />
+    <div aria-hidden={!show} data-testid="thinking-overlay"
+      className={`fixed inset-0 z-[100] flex flex-col items-center justify-center transition-opacity duration-[600ms] ease-out ${show ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
+      {/* frosted application backdrop */}
+      <div className="absolute inset-0 bg-background/60 backdrop-blur-2xl app-canvas opacity-90" />
+      {/* soft dark portal so the constellation stays vibrant on the light app bg */}
+      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(92vw,660px)] aspect-square rounded-full"
+        style={{ background: "radial-gradient(circle, rgba(8,8,12,0.96) 26%, rgba(8,8,12,0.55) 46%, transparent 68%)" }} aria-hidden />
+      <div className="relative flex flex-col items-center">
+        <p className="thinking-text font-heading font-black uppercase tracking-[0.35em] text-white text-4xl sm:text-5xl">Thinking</p>
+        <div className="relative w-[min(78vw,500px)] aspect-square -mt-2">
+          <div className="absolute inset-[20%] rounded-full bg-brand-red/25 blur-[80px] animate-pulse" aria-hidden />
+          <img src={CONSTELLATION_URL} alt="" draggable="false"
+            className="constellation-spin relative w-full h-full object-contain select-none pointer-events-none [mask-image:radial-gradient(circle,black_50%,transparent_72%)] [-webkit-mask-image:radial-gradient(circle,black_50%,transparent_72%)]" />
+        </div>
+        <p className="text-sm text-white/70 font-mono -mt-2 tracking-wide [text-shadow:0_1px_8px_rgba(0,0,0,0.9)]">DecisionOS is structuring your decision…</p>
       </div>
-      <p className="text-sm text-white/50 font-mono z-10 -mt-2 tracking-wide">DecisionOS is structuring your decision…</p>
     </div>
   );
 }

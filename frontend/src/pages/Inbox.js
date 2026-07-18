@@ -329,7 +329,7 @@ export default function Inbox() {
       setRecording(true);
     } catch { toast.error("Microphone access denied"); }
   };
-  const stopRec = () => { cancelledRef.current = false; mediaRef.current?.stop(); setRecording(false); setPaused(false); };
+  const stopRec = () => { cancelledRef.current = false; setBusy(true); mediaRef.current?.stop(); setRecording(false); setPaused(false); };
   const cancelRec = () => { cancelledRef.current = true; mediaRef.current?.stop(); setRecording(false); setPaused(false); };
   const pauseRec = () => { if (mediaRef.current?.state === "recording") { mediaRef.current.pause(); setPaused(true); } };
   const resumeRec = () => { if (mediaRef.current?.state === "paused") { mediaRef.current.resume(); setPaused(false); } };
@@ -455,7 +455,7 @@ export default function Inbox() {
 
   return (
     <div>
-      <ThinkingOverlay show={!!submittedNoteId} />
+      <ThinkingOverlay show={busy || !!submittedNoteId} />
       <ExecutionSummary data={execPanel} onClose={() => setExecPanel(null)} onReview={reviewFromSummary} />
       <DecisionDialog decisionId={openDecision} open={!!openDecision}
         onClose={() => { setOpenDecision(null); if (params.get("decision")) setParams({}, { replace: true }); }} />

@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
-import { PageHeader, Chip, EmptyState } from "../components/common";
+import { Chip, EmptyState } from "../components/common";
 import ExecutionSummary from "../components/ExecutionSummary";
 import { DecisionDialog, raisedByLabel, RaisedByIcon } from "../components/DecisionDialog";
 import { money } from "../lib/format";
@@ -443,7 +443,6 @@ export default function Inbox() {
       <ExecutionSummary data={execPanel} onClose={() => setExecPanel(null)} onReview={reviewFromSummary} />
       <DecisionDialog decisionId={openDecision} open={!!openDecision}
         onClose={() => { setOpenDecision(null); if (params.get("decision")) setParams({}, { replace: true }); }} />
-      <PageHeader eyebrow="Your day in one place" title="Decision Desk" />
 
       {processing && (
         <div data-testid="structuring-banner"

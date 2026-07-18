@@ -210,6 +210,23 @@ function PendingApprovalCard({ d, members, roleOptions, onApprove, onReject, onR
 
 const PROCESSING = ["queued", "transcribing", "structuring"];
 
+const CONSTELLATION_URL = "https://static.prod-images.emergentagent.com/jobs/d7f8ecb5-3065-4d2b-9c8d-24e3557f160a/images/e270a88e4a2e3367707450d47e0d131ae39cbd41e3aae548120fd0872cedcdbe.png";
+
+function ThinkingOverlay({ show }) {
+  if (!show) return null;
+  return (
+    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black animate-[fadeIn_0.4s_ease]" data-testid="thinking-overlay">
+      <p className="thinking-text font-heading font-black uppercase tracking-[0.35em] text-white text-4xl sm:text-5xl z-10">Thinking</p>
+      <div className="relative w-[min(82vw,540px)] aspect-square -mt-2">
+        <div className="absolute inset-[18%] rounded-full bg-brand-red/25 blur-[80px] animate-pulse" aria-hidden />
+        <img src={CONSTELLATION_URL} alt="" draggable="false"
+          className="constellation-spin relative w-full h-full object-contain select-none pointer-events-none [mask-image:radial-gradient(circle,black_50%,transparent_72%)] [-webkit-mask-image:radial-gradient(circle,black_50%,transparent_72%)]" />
+      </div>
+      <p className="text-sm text-white/50 font-mono z-10 -mt-2 tracking-wide">DecisionOS is structuring your decision…</p>
+    </div>
+  );
+}
+
 const CLASS_META = {
   customer: { icon: UsersThree, color: "bg-brand-blue text-white", label: "Customer" },
   supplier: { icon: Truck, color: "bg-brand-yellow text-black", label: "Supplier" },
@@ -436,11 +453,12 @@ export default function Inbox() {
 
   return (
     <div>
+      <ThinkingOverlay show={!!submittedNoteId} />
       <ExecutionSummary data={execPanel} onClose={() => setExecPanel(null)} onReview={reviewFromSummary} />
       <DecisionDialog decisionId={openDecision} open={!!openDecision}
         onClose={() => { setOpenDecision(null); if (params.get("decision")) setParams({}, { replace: true }); }} />
 
-      {processing && (
+      {processing && !submittedNoteId && (
         <div data-testid="structuring-banner"
           className="sticky top-2 z-30 mb-6 flex items-center gap-3 border border-black bg-brand-yellow/40 px-4 py-3 shadow-brutal-sm">
           <Spinner size={20} weight="bold" className="animate-spin text-brand-red shrink-0" />

@@ -5,6 +5,7 @@ import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
 import { Chip, EmptyState } from "../components/common";
+import { ThinkingCanvas } from "../components/ThinkingCanvas";
 import ExecutionSummary from "../components/ExecutionSummary";
 import { DecisionDialog, raisedByLabel, RaisedByIcon } from "../components/DecisionDialog";
 import { money } from "../lib/format";
@@ -210,8 +211,6 @@ function PendingApprovalCard({ d, members, roleOptions, onApprove, onReject, onR
 
 const PROCESSING = ["queued", "transcribing", "structuring"];
 
-const CONSTELLATION_URL = "/neural-constellation.png";
-
 function ThinkingOverlay({ show }) {
   return (
     <div aria-hidden={!show} data-testid="thinking-overlay"
@@ -220,12 +219,11 @@ function ThinkingOverlay({ show }) {
       <div className="absolute inset-0 bg-background/70 backdrop-blur-2xl app-canvas opacity-95" />
       <div className="relative flex flex-col items-center">
         <p className="thinking-text font-heading font-black uppercase tracking-[0.35em] text-foreground text-4xl sm:text-5xl">Thinking</p>
-        <div className="relative w-[min(82vw,540px)] aspect-square -mt-4">
-          <div className="absolute inset-[26%] rounded-full bg-brand-red/20 blur-[70px] animate-pulse" aria-hidden />
-          <img src={CONSTELLATION_URL} alt="" draggable="false"
-            className="constellation-spin relative w-full h-full object-contain select-none pointer-events-none" />
+        <div className="relative w-[min(82vw,520px)] aspect-square -mt-2">
+          <div className="absolute inset-[28%] rounded-full bg-brand-red/15 blur-[70px] animate-pulse" aria-hidden />
+          <ThinkingCanvas active={show} />
         </div>
-        <p className="text-sm text-muted-foreground font-mono -mt-4 tracking-wide">DecisionOS is structuring your decision…</p>
+        <p className="text-sm text-muted-foreground font-mono -mt-4 tracking-wide">DecisionOS is connecting the dots…</p>
       </div>
     </div>
   );

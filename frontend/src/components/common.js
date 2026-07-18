@@ -1,18 +1,9 @@
 import { cn } from "../lib/utils";
 
 export function PageHeader({ eyebrow, title, children }) {
+  if (!children) return null;
   return (
-    <div className="mb-8">
-      <div className="flex items-start justify-between flex-wrap gap-4">
-        <div className="min-w-0">
-          <h1 className="font-heading text-xl sm:text-2xl lg:text-[1.75rem] font-bold tracking-[-0.03em] leading-[1.1] text-foreground">
-            {title}
-          </h1>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto lg:justify-end">{children}</div>
-      </div>
-      <div className="mt-5 h-px w-full bg-gradient-to-r from-brand-red/50 via-border to-transparent"></div>
-    </div>
+    <div className="mb-6 flex flex-wrap items-center gap-2 w-full">{children}</div>
   );
 }
 

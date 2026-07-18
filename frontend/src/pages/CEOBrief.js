@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-import { PageHeader, Chip } from "../components/common";
+import { Chip } from "../components/common";
 import { money } from "../lib/format";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
@@ -192,91 +192,90 @@ export default function CEOBrief() {
   });
 
   return (
-    <div>
-      <PageHeader eyebrow={isOwner ? "Your company at a glance" : "Your day at a glance"} title={isOwner ? "CEO Brief" : "My Brief"}>
-        <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:w-auto sm:items-center">
+    <div className="flex flex-col">
+      {/* Controls: period tabs + action buttons — top on desktop, bottom on mobile */}
+      <div className="order-2 lg:order-1 mt-8 lg:mt-0 lg:mb-8 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between" data-testid="brief-controls">
+        <div className="flex border border-black w-full lg:w-fit">
+          {PERIODS.map((p) => (
+            <button key={p.key} onClick={() => setPeriod(p.key)} data-testid={`brief-period-${p.key}`}
+              className={`flex-1 lg:flex-none px-4 lg:px-5 py-2.5 text-sm font-semibold uppercase tracking-wider border-r border-black last:border-r-0 transition-colors ${period === p.key ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+              {p.label}
+            </button>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 gap-2 lg:flex lg:items-center">
           {isOwner ? (
             <>
               <button onClick={() => navigate("/operating-score")} data-testid="brief-operating-score"
-                className="flex items-center justify-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
+                className="flex items-center justify-center gap-2 bg-brand-ink text-white px-4 py-2.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
                 <Gauge size={16} weight="bold" /> Operating Score
               </button>
               <button onClick={() => navigate("/journal")} data-testid="brief-open-journal"
-                className="flex items-center justify-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
+                className="flex items-center justify-center gap-2 bg-brand-ink text-white px-4 py-2.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
                 <BookOpen size={16} weight="bold" /> CEO Journal
               </button>
             </>
           ) : (
             <button onClick={() => navigate("/coach")} data-testid="brief-open-coach"
-              className="flex items-center justify-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
+              className="col-span-2 flex items-center justify-center gap-2 bg-brand-ink text-white px-4 py-2.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
               <Sparkle size={16} weight="bold" /> AI Coach
             </button>
           )}
         </div>
-      </PageHeader>
-
-      <div className="flex border border-black mb-8 w-fit">
-        {PERIODS.map((p) => (
-          <button key={p.key} onClick={() => setPeriod(p.key)} data-testid={`brief-period-${p.key}`}
-            className={`px-5 py-2.5 text-sm font-semibold uppercase tracking-wider border-r border-black last:border-r-0 transition-colors ${period === p.key ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
-            {p.label}
-          </button>
-        ))}
       </div>
 
-      {isLoading || !data ? (
-        <p className="font-mono text-sm">Loading brief…</p>
-      ) : (
-        <div data-testid="ceo-brief-card">
-          <h2 className="font-heading text-3xl font-black tracking-tighter">{data.greeting}</h2>
-          <p className="text-sm text-muted-foreground mt-1 mb-6">Tap any block to see the details{isOwner ? " and act on them." : "."}</p>
-
-          {isOwner && data.counters.fires > 0 && (
-            <button type="button" onClick={() => setActiveRow(FIRES)} data-testid="brief-row-fires"
-              className="w-full card-brutal p-5 mb-6 bg-brand-red text-white flex items-center justify-between gap-4 text-left transition-all hover:-translate-y-0.5 focus:outline-none">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 flex items-center justify-center border border-white/60 bg-white/10 shrink-0">
-                  <Fire size={26} weight="fill" />
-                </div>
-                <div>
-                  <p className="font-heading text-4xl font-black tracking-tighter" data-testid="brief-count-fires">{data.counters.fires}</p>
-                  <p className="text-sm font-semibold uppercase tracking-wider mt-0.5">Fires to put out today</p>
-                </div>
-              </div>
-              <span className="inline-flex items-center gap-1 text-sm font-semibold uppercase tracking-wider shrink-0">
-                Handle now <CaretRight size={16} weight="bold" />
-              </span>
-            </button>
-          )}
-
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-            {rows.map((r) => {
-              const val = data.counters[r.key] ?? 0;
-              const label = r.key === "completed" ? (data.completed_label || "completed") : r.label;
-              return (
-                <button key={r.key} type="button" onClick={() => setActiveRow(r)} data-testid={`brief-row-${r.key}`}
-                  className="card-brutal p-6 shadow-hover text-left transition-all hover:-translate-y-0.5 focus:outline-none">
-                  <div className="flex items-center justify-between">
-                    <div className={`w-11 h-11 flex items-center justify-center border border-black ${r.bg} ${r.on}`}>
-                      <r.icon size={22} weight="bold" />
-                    </div>
-                    <CaretRight size={18} weight="bold" className="text-black/40" />
+      <div className="order-1 lg:order-2">
+        {isLoading || !data ? (
+          <p className="font-mono text-sm">Loading brief…</p>
+        ) : (
+          <div data-testid="ceo-brief-card">
+            {isOwner && data.counters.fires > 0 && (
+              <button type="button" onClick={() => setActiveRow(FIRES)} data-testid="brief-row-fires"
+                className="w-full card-brutal p-5 mb-6 bg-brand-red text-white flex items-center justify-between gap-4 text-left transition-all hover:-translate-y-0.5 focus:outline-none">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 flex items-center justify-center border border-white/60 bg-white/10 shrink-0">
+                    <Fire size={26} weight="fill" />
                   </div>
-                  <p className={`font-heading text-5xl font-black tracking-tighter mt-4 ${r.accent}`} data-testid={`brief-count-${r.key}`}>{val}</p>
-                  <p className="text-sm text-muted-foreground mt-1 leading-tight">{label}</p>
-                  <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-brand-blue">
-                    View details <CaretRight size={12} weight="bold" />
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+                  <div>
+                    <p className="font-heading text-4xl font-black tracking-tighter" data-testid="brief-count-fires">{data.counters.fires}</p>
+                    <p className="text-sm font-semibold uppercase tracking-wider mt-0.5">Fires to put out today</p>
+                  </div>
+                </div>
+                <span className="inline-flex items-center gap-1 text-sm font-semibold uppercase tracking-wider shrink-0">
+                  Handle now <CaretRight size={16} weight="bold" />
+                </span>
+              </button>
+            )}
 
-          <p className="mt-8 text-sm text-muted-foreground italic flex items-center gap-2">
-            <ArrowClockwise size={14} /> Auto-refreshes every 30s.{isOwner ? " That's it. Exactly like a CEO." : ""}
-          </p>
-        </div>
-      )}
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+              {rows.map((r) => {
+                const val = data.counters[r.key] ?? 0;
+                const label = r.key === "completed" ? (data.completed_label || "completed") : r.label;
+                return (
+                  <button key={r.key} type="button" onClick={() => setActiveRow(r)} data-testid={`brief-row-${r.key}`}
+                    className="card-brutal p-6 shadow-hover text-left transition-all hover:-translate-y-0.5 focus:outline-none">
+                    <div className="flex items-center justify-between">
+                      <div className={`w-11 h-11 flex items-center justify-center border border-black ${r.bg} ${r.on}`}>
+                        <r.icon size={22} weight="bold" />
+                      </div>
+                      <CaretRight size={18} weight="bold" className="text-black/40" />
+                    </div>
+                    <p className={`font-heading text-5xl font-black tracking-tighter mt-4 ${r.accent}`} data-testid={`brief-count-${r.key}`}>{val}</p>
+                    <p className="text-sm text-muted-foreground mt-1 leading-tight">{label}</p>
+                    <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-brand-blue">
+                      View details <CaretRight size={12} weight="bold" />
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <p className="mt-8 text-sm text-muted-foreground italic flex items-center gap-2">
+              <ArrowClockwise size={14} /> Auto-refreshes every 30s.{isOwner ? " That's it. Exactly like a CEO." : ""}
+            </p>
+          </div>
+        )}
+      </div>
 
       <DetailDialog row={activeRow} period={period} open={!!activeRow} onClose={() => setActiveRow(null)} />
     </div>

@@ -426,6 +426,22 @@ export default function Ingest() {
 
   const statusChip = (s) => s === "filed" ? "bg-brand-ink text-white" : s === "failed" ? "bg-brand-red text-white" : "bg-brand-yellow text-black";
 
+  const tabsEl = (
+    <div className="flex gap-2 mb-6" data-testid="capture-main-tabs">
+      <button data-testid="capture-maintab-import" onClick={() => setMainTab("import")}
+        className={`px-4 py-2 text-sm font-semibold uppercase tracking-wider border-2 border-black transition-all ${mainTab === "import" ? "bg-brand-ink text-white shadow-brutal-sm" : "bg-white hover:bg-black/5"}`}>
+        Import
+      </button>
+      <button data-testid="capture-maintab-review" onClick={() => setMainTab("review")}
+        className={`px-4 py-2 text-sm font-semibold uppercase tracking-wider border-2 border-black transition-all flex items-center gap-2 ${mainTab === "review" ? "bg-brand-ink text-white shadow-brutal-sm" : "bg-white hover:bg-black/5"}`}>
+        Review Queue
+        {pendingCount > 0 && (
+          <span data-testid="review-tab-badge" className="bg-brand-red text-white text-[10px] min-w-5 h-5 px-1 flex items-center justify-center border border-black font-bold rounded-full">{pendingCount}</span>
+        )}
+      </button>
+    </div>
+  );
+
   return (
     <div>
       <PageHeader eyebrow="Data Input" title="Ingest">
@@ -434,21 +450,7 @@ export default function Ingest() {
         </a>
       </PageHeader>
 
-      <div className="flex gap-2 mb-6" data-testid="capture-main-tabs">
-        <button data-testid="capture-maintab-import" onClick={() => setMainTab("import")}
-          className={`px-4 py-2 text-sm font-semibold uppercase tracking-wider border-2 border-black transition-all ${mainTab === "import" ? "bg-brand-ink text-white shadow-brutal-sm" : "bg-white hover:bg-black/5"}`}>
-          Import
-        </button>
-        <button data-testid="capture-maintab-review" onClick={() => setMainTab("review")}
-          className={`px-4 py-2 text-sm font-semibold uppercase tracking-wider border-2 border-black transition-all flex items-center gap-2 ${mainTab === "review" ? "bg-brand-ink text-white shadow-brutal-sm" : "bg-white hover:bg-black/5"}`}>
-          Review Queue
-          {pendingCount > 0 && (
-            <span data-testid="review-tab-badge" className="bg-brand-red text-white text-[10px] min-w-5 h-5 px-1 flex items-center justify-center border border-black font-bold rounded-full">{pendingCount}</span>
-          )}
-        </button>
-      </div>
-
-      {mainTab === "review" && <CaptureReview />}
+      {mainTab === "review" && (<>{tabsEl}<CaptureReview /></>)}
 
       {mainTab === "import" && (<>
       {canIngest ? (
@@ -472,6 +474,8 @@ export default function Ingest() {
 
       {/* WhatsApp */}
       <WhatsAppCard />
+
+      {tabsEl}
 
       {uploading && (
         <div className="card-brutal p-8 mb-8 flex items-center justify-center gap-3" data-testid="ingest-loading">

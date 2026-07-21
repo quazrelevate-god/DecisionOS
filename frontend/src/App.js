@@ -21,6 +21,7 @@ import Calendar from "./pages/Calendar";
 import Meetings from "./pages/Meetings";
 import OperatingScore from "./pages/OperatingScore";
 import WorkCoach from "./pages/WorkCoach";
+import Ledger from "./pages/Ledger";
 
 function AccessDenied() {
   const navigate = useNavigate();
@@ -39,7 +40,7 @@ function AccessDenied() {
   );
 }
 
-function Protected({ children, perm, ownerOnly }) {
+function Protected({ children, perm, perms, ownerOnly }) {
   const { user, loading } = useAuth();
   if (loading)
     return (
@@ -48,7 +49,10 @@ function Protected({ children, perm, ownerOnly }) {
       </div>
     );
   if (!user) return <Navigate to="/login" replace />;
-  const denied = ownerOnly ? user.role !== "owner" : (perm && !hasPerm(user, perm));
+  let denied = false;
+  if (ownerOnly) denied = user.role !== "owner";
+  else if (perms) denied = !perms.some((p) => hasPerm(user, p));
+  else if (perm) denied = !hasPerm(user, perm);
   return <Layout>{denied ? <AccessDenied /> : children}</Layout>;
 }
 
@@ -80,6 +84,8 @@ function App() {
             <Route path="/operating-score" element={<Protected ownerOnly><OperatingScore /></Protected>} />
             <Route path="/coach" element={<Protected><WorkCoach /></Protected>} />
             <Route path="/brain" element={<Protected perm="brain"><Brain /></Protected>} />
+            <Route path="/ledger" element={<Protected perms={["ledger", "finance"]}><Ledger /></Protected>} />
+            <Route path="/finance" element={<Navigate to="/ledger" replace />} />
             <Route path="/ask" element={<Navigate to="/brain" replace />} />
             <Route path="/team" element={<Navigate to="/contacts" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />

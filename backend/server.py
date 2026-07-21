@@ -2693,6 +2693,9 @@ async def brain_search(q: str = "", user: dict = Depends(require_perm("brain")))
     contacts = await db.contacts.find({"tenant_id": tid, "$or": [{"name": rx}, {"company": rx}, {"email": rx}, {"phone": rx}, {"notes": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
     memory = await db.memory.find({"tenant_id": tid, "text": rx}, {"_id": 0}).sort("created_at", -1).to_list(50)
     invoices = await db.invoices.find({"tenant_id": tid, "$or": [{"number": rx}, {"contact_name": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    expenses = await db.expenses.find({"tenant_id": tid, "$or": [{"title": rx}, {"vendor_name": rx}, {"category": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    assets = await db.assets.find({"tenant_id": tid, "$or": [{"name": rx}, {"vendor_name": rx}, {"category": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    inventory = await db.inventory.find({"tenant_id": tid, "$or": [{"item": rx}, {"sku": rx}, {"vendor_name": rx}, {"category": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
     return {
         "decisions": await enrich_decisions(decisions),
         "tasks": await enrich_tasks(tasks),
@@ -2700,6 +2703,9 @@ async def brain_search(q: str = "", user: dict = Depends(require_perm("brain")))
         "contacts": await enrich_contacts(contacts),
         "memory": memory,
         "invoices": invoices,
+        "expenses": expenses,
+        "assets": assets,
+        "inventory": inventory,
     }
 
 
@@ -3451,7 +3457,8 @@ def _norm_company(s: str) -> str:
 
 
 async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, ingestion_id: str, source: str) -> dict:
-    created = {"contacts": 0, "invoices": 0, "payments": 0, "tasks": 0}
+    from routers.ledger import create_expense
+    created = {"contacts": 0, "invoices": 0, "payments": 0, "tasks": 0, "expenses": 0}
     currency = await _tenant_currency(tenant_id)
     own_norm = _norm_company(await _tenant_name(tenant_id))
     troles = await tenant_role_keys(tenant_id)
@@ -3518,8 +3525,9 @@ async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, 
             amount = float(inv.get("amount") or 0)
         except (TypeError, ValueError):
             amount = 0.0
+        inv_id = new_id()
         await db.invoices.insert_one({
-            "id": new_id(), "tenant_id": tenant_id, "type": itype,
+            "id": inv_id, "tenant_id": tenant_id, "type": itype,
             "number": str(inv.get("number") or ""), "contact_id": cid,
             "contact_name": (inv.get("contact_name") or "").strip(),
             "date": inv.get("date", "") or "", "due_date": inv.get("due_date", "") or "",
@@ -3528,6 +3536,17 @@ async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, 
             "source": source, "ingestion_id": ingestion_id, "created_by": user_id, "created_at": now_iso(),
         })
         created["invoices"] += 1
+        # Money we OWE a vendor (purchase bill) rolls up into the spend Ledger + Company Brain.
+        if itype == "purchase_bill":
+            li_text = " ".join(str(li.get("description", "")) for li in (inv.get("line_items") or []) if isinstance(li, dict))
+            await create_expense(tenant_id, user_id, {
+                "title": f"{(inv.get('contact_name') or 'Vendor').strip()} — Bill {inv.get('number') or ''}".strip(),
+                "amount": amount, "currency": inv.get("currency") or currency,
+                "vendor_name": (inv.get("contact_name") or "").strip(), "vendor_id": cid,
+                "date": inv.get("date") or "", "status": "unpaid",
+                "invoice_id": inv_id, "ingestion_id": ingestion_id, "notes": li_text[:200],
+            }, source=source)
+            created["expenses"] += 1
 
     for p in records.get("payments", []):
         direction = p.get("direction") if p.get("direction") in ("in", "out") else "in"
@@ -3537,8 +3556,9 @@ async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, 
             amount = float(p.get("amount") or 0)
         except (TypeError, ValueError):
             amount = 0.0
+        pay_id = new_id()
         await db.payments.insert_one({
-            "id": new_id(), "tenant_id": tenant_id, "direction": direction, "amount": amount,
+            "id": pay_id, "tenant_id": tenant_id, "direction": direction, "amount": amount,
             "date": p.get("date", "") or "", "method": p.get("method", "") or "",
             "reference": p.get("reference", "") or "", "contact_id": cid,
             "contact_name": (p.get("contact_name") or "").strip(),
@@ -3546,6 +3566,16 @@ async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, 
             "source": source, "ingestion_id": ingestion_id, "created_by": user_id, "created_at": now_iso(),
         })
         created["payments"] += 1
+        # Money going OUT to a vendor rolls up into the spend Ledger (paid) + Company Brain.
+        if direction == "out":
+            await create_expense(tenant_id, user_id, {
+                "title": f"Payment to {(p.get('contact_name') or 'Vendor').strip()}".strip(),
+                "amount": amount, "currency": currency,
+                "vendor_name": (p.get("contact_name") or "").strip(), "vendor_id": cid,
+                "date": p.get("date") or "", "status": "paid",
+                "payment_id": pay_id, "ingestion_id": ingestion_id, "notes": p.get("reference") or "",
+            }, source=source)
+            created["expenses"] += 1
 
     for t in records.get("tasks", []):
         title = (t.get("title") or "").strip()
@@ -5134,6 +5164,8 @@ app.include_router(api)
 # Extracted route modules (import foundation from core; no circular dependency).
 from routers.onboarding import router as onboarding_router  # noqa: E402
 app.include_router(onboarding_router)
+from routers.ledger import router as ledger_router  # noqa: E402
+app.include_router(ledger_router)
 _cors_env = os.environ.get('CORS_ORIGINS', '*').strip()
 _cors_kwargs = dict(allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 if _cors_env == '*':

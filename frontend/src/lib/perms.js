@@ -4,6 +4,7 @@ export const PERMISSIONS = [
   { key: "data_input", label: "Data Input" },
   { key: "people", label: "People / Contacts" },
   { key: "finance", label: "Finance (invoices, payments, 360°)" },
+  { key: "ledger", label: "Finance Ledger (expenses, assets, inventory)" },
   { key: "workflows", label: "Workflows" },
   { key: "tasks", label: "Tasks" },
   { key: "brain", label: "Company Brain" },
@@ -19,7 +20,7 @@ export const PERMISSION_KEYS = PERMISSIONS.map((p) => p.key);
 const BASE = ["inbox", "data_input", "people", "workflows", "tasks", "brain", "ask"];
 export const ROLE_DEFAULT_PERMS = {
   sales: [...BASE],
-  finance: [...BASE, "finance"],
+  finance: [...BASE, "finance", "ledger"],
 };
 
 export function defaultPermsForRole(role) {

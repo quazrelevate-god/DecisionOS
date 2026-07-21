@@ -33,6 +33,7 @@ import {
   FileArrowUp,
   Tray,
   UserCircle,
+  Wallet,
 } from "@phosphor-icons/react";
 import { ProfileDialog } from "./ProfileDialog";
 
@@ -42,6 +43,7 @@ const NAV = [
   { to: "/my-work", label: "My Work", icon: Briefcase, testid: "nav-my-work" },
   { to: "/contacts", label: "People", icon: AddressBook, testid: "nav-contacts", perm: "people" },
   { to: "/brain", label: "Company Brain", icon: BrainIcon, testid: "nav-brain", perm: "brain" },
+  { to: "/ledger", label: "Finance", icon: Wallet, testid: "nav-ledger", perms: ["ledger", "finance"] },
   { to: "/ingest", label: "Capture", icon: FileArrowUp, testid: "nav-ingest", perm: "data_input" },
   { to: "/meetings", label: "Meeting Notes", icon: MicrophoneStage, testid: "nav-meetings" },
   { to: "/settings", label: "Settings", icon: GearSix, testid: "nav-settings", ownerOnly: true },
@@ -71,7 +73,11 @@ export default function Layout({ children }) {
   const { user, tenant, logout } = useAuth();
   // NAV/BOTTOM_NAV/hasPerm are stable module-level refs; only `user` can change.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const navMain = useMemo(() => NAV.filter((n) => (!n.perm || hasPerm(user, n.perm)) && (!n.ownerOnly || user?.role === "owner")), [user]);
+  const navMain = useMemo(() => NAV.filter((n) => {
+    if (n.ownerOnly && user?.role !== "owner") return false;
+    if (n.perms) return n.perms.some((p) => hasPerm(user, p));
+    return !n.perm || hasPerm(user, n.perm);
+  }), [user]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const navBottom = useMemo(() => BOTTOM_NAV.filter((n) => !n.perm || hasPerm(user, n.perm)), [user]);
   const navigate = useNavigate();

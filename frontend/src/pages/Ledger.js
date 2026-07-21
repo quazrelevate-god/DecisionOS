@@ -470,7 +470,7 @@ function OverviewTab({ summary }) {
               <ResponsiveContainer width="55%" height={220}>
                 <PieChart>
                   <Pie data={summary.by_category} dataKey="amount" nameKey="category" cx="50%" cy="50%" outerRadius={80} innerRadius={45}>
-                    {summary.by_category.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
+                    {summary.by_category.map((c, i) => <Cell key={c.category || i} fill={PALETTE[i % PALETTE.length]} />)}
                   </Pie>
                   <Tooltip formatter={(v) => f(v)} />
                 </PieChart>

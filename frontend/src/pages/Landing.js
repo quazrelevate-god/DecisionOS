@@ -4,10 +4,26 @@ import {
   Storefront, UsersThree, Gear, ArrowRight, CheckCircle, WarningCircle, Lightning,
 } from "@phosphor-icons/react";
 
+const Logo = ({ size = "md" }) => {
+  const box = size === "sm" ? "w-8 h-8" : "w-9 h-9";
+  const dtext = size === "sm" ? "text-lg" : "text-xl";
+  const word = size === "sm" ? "text-xl" : "text-2xl";
+  return (
+    <div className="flex items-center gap-2.5">
+      <div className={`${box} bg-brand-red rounded-lg flex items-center justify-center shrink-0`}>
+        <span className={`font-logo font-black text-white ${dtext} leading-none`}>D</span>
+      </div>
+      <span className={`font-logo font-black ${word} tracking-tight uppercase leading-none`}>
+        <span className="text-white">Decision</span><span className="text-brand-red">OS</span>
+      </span>
+    </div>
+  );
+};
+
 const NavBar = () => (
   <header className="sticky top-0 z-50 bg-[#16161a]/90 backdrop-blur-md border-b border-white/10">
     <div className="max-w-6xl mx-auto px-5 sm:px-8 h-16 flex items-center justify-between">
-      <div className="font-heading font-black text-xl tracking-tight text-white">DECISION<span className="text-brand-red">OS</span></div>
+      <Logo />
       <div className="flex items-center gap-2 sm:gap-3">
         <Link to="/login" data-testid="landing-login-btn"
           className="text-white/90 hover:text-white text-sm font-semibold uppercase tracking-wider px-3 sm:px-4 py-2 transition-colors">
@@ -214,7 +230,7 @@ export default function Landing() {
       {/* FOOTER */}
       <footer className="bg-[#16161a] text-white/50">
         <div className="max-w-6xl mx-auto px-5 sm:px-8 py-10 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="font-heading font-black text-lg tracking-tight text-white">DECISION<span className="text-brand-red">OS</span></div>
+          <Logo size="sm" />
           <div className="flex items-center gap-6 text-sm">
             <a href="/DecisionOS-Vision.pdf" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Vision doc</a>
             <Link to="/login" className="hover:text-white transition-colors">Log in</Link>

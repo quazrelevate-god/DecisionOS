@@ -6,19 +6,25 @@ bills / outgoing payments auto-create Expenses, and every record ingested from a
 API/document source is also written into the Company Brain (memory) so finance is
 queryable alongside decisions.
 """
+import asyncio
+import json
+from pathlib import Path
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, File, Form, UploadFile
 from pydantic import BaseModel
 
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
 
 from core import (
-    db, CLAUDE_KEY, LLM_MODEL,
+    db, CLAUDE_KEY, LLM_MODEL, EMERGENT_LLM_KEY, VISION_MODEL,
     _extract_json, new_id, now_iso, logger,
     get_current_user, user_perms, log_activity,
 )
 
 router = APIRouter(prefix="/api")
+
+UPLOAD_DIR = Path(__file__).resolve().parent.parent / "uploads"
+UPLOAD_DIR.mkdir(exist_ok=True)
 
 EXPENSE_CATEGORIES = [
     "Raw Material", "Salary & Wages", "Rent", "Utilities", "Logistics & Freight",
@@ -90,6 +96,71 @@ async def _write_brain(tenant_id: str, user_id: str, text: str, tag: str) -> Non
     })
 
 
+# --- Attachment + AI vision extraction from an uploaded bill/photo ----------
+def _save_upload_sync(content: bytes, filename: str) -> dict:
+    ext = (filename.rsplit(".", 1)[-1] if "." in (filename or "") else "bin").lower()
+    fname = f"ledger-{new_id()}.{ext}"
+    (UPLOAD_DIR / fname).write_bytes(content)
+    return {"fname": fname, "path": str(UPLOAD_DIR / fname), "url": f"/api/files/{fname}",
+            "filename": filename or fname}
+
+
+_LEDGER_FIELDS = {
+    "expense": (
+        "an EXPENSE (a bill, invoice, receipt, or a payment the company made)",
+        '{"title": str, "amount": number, "vendor_name": str, "date": "YYYY-MM-DD", '
+        '"category": one of [' + ", ".join(EXPENSE_CATEGORIES) + '], "notes": str}',
+    ),
+    "asset": (
+        "a company ASSET purchase (machinery, equipment, vehicle, furniture, IT/electronics, building)",
+        '{"name": str, "purchase_amount": number, "vendor_name": str, "purchase_date": "YYYY-MM-DD", '
+        '"category": one of [' + ", ".join(ASSET_CATEGORIES) + '], "notes": str}',
+    ),
+    "inventory": (
+        "an INVENTORY / stock item purchase",
+        '{"item": str, "sku": str, "quantity": number, "unit": str, "unit_cost": number, '
+        '"category": str, "vendor_name": str, "notes": str}',
+    ),
+}
+
+
+async def ai_extract_ledger_file(file_path: str, mime_type: str, kind: str, currency: str, typed: dict) -> dict:
+    """Read an uploaded bill/photo/PDF and return the fields for `kind`, honouring what the user already typed."""
+    desc, shape = _LEDGER_FIELDS[kind]
+    typed_clean = {k: v for k, v in (typed or {}).items() if v not in (None, "", 0, "0", 0.0)}
+    system = (
+        f"You read a business document (image or PDF) and extract the details of {desc}. "
+        f"Amounts are in {currency}. The user already typed these values: {json.dumps(typed_clean)}. "
+        "PREFER the user's typed values when present and non-empty; fill every MISSING field from the document. "
+        f"Reply with ONLY compact JSON in exactly this shape: {shape}. "
+        "Use an empty string or 0 for anything you cannot determine. Never invent data."
+    )
+    resp = None
+    # Prefer the user's own Gemini key (same client server.py configures), else the Emergent vision key.
+    try:
+        from server import _gemini_client, _gemini_doc_sync
+        if _gemini_client is not None:
+            resp = await asyncio.to_thread(_gemini_doc_sync, file_path, mime_type, system, "Extract the JSON now.")
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"Ledger OCR (user gemini) failed, falling back to Emergent key: {e}")
+        resp = None
+    if not resp:
+        fc = FileContentWithMimeType(file_path=file_path, mime_type=mime_type)
+        chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=f"ledger-ocr-{kind}-{new_id()}",
+                       system_message=system).with_model(*VISION_MODEL)
+        resp = await chat.send_message(UserMessage(text="Extract the JSON now.", file_contents=[fc]))
+    return _extract_json(resp) or {}
+
+
+def _merge_typed(ai: dict, typed: dict) -> dict:
+    """AI-extracted fields as the base; any non-empty typed value wins."""
+    out = dict(ai or {})
+    for k, v in (typed or {}).items():
+        if v not in (None, "", 0, "0", 0.0):
+            out[k] = v
+    return out
+
+
 # --- Create helpers (also used by the ingestion roll-up in server.py) -------
 async def create_expense(tenant_id: str, user_id: str, data: dict, source: str = "manual", write_brain: Optional[bool] = None) -> dict:
     currency = data.get("currency") or await _currency(tenant_id)
@@ -106,6 +177,7 @@ async def create_expense(tenant_id: str, user_id: str, data: dict, source: str =
         "notes": (data.get("notes") or "").strip(), "source": source,
         "invoice_id": data.get("invoice_id"), "payment_id": data.get("payment_id"),
         "ingestion_id": data.get("ingestion_id"),
+        "attachment": data.get("attachment"),
         "created_by": user_id, "created_at": now_iso(),
     }
     await db.expenses.insert_one(dict(doc))
@@ -135,6 +207,7 @@ async def create_asset(tenant_id: str, user_id: str, data: dict, source: str = "
         "vendor_name": (data.get("vendor_name") or "").strip(),
         "status": data.get("status") if data.get("status") in ("active", "disposed", "maintenance") else "active",
         "notes": (data.get("notes") or "").strip(), "source": source, "expense_id": data.get("expense_id"),
+        "attachment": data.get("attachment"),
         "created_by": user_id, "created_at": now_iso(),
     }
     await db.assets.insert_one(dict(doc))

@@ -545,10 +545,10 @@ export default function Ledger() {
     <div>
       <PageHeader eyebrow="Money in one place" title="Finance">
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto" data-testid="ledger-controls">
-          <div className="flex border border-black overflow-hidden w-full sm:w-auto">
+          <div className="grid grid-cols-2 gap-2 sm:gap-0 sm:flex sm:border sm:border-black sm:overflow-hidden w-full sm:w-auto">
             {TABS.map((t) => (
               <button key={t.key} onClick={() => setTab(t.key)} data-testid={`ledger-tab-${t.key}`}
-                className={`flex items-center justify-center gap-1.5 flex-1 sm:flex-none px-3 py-2 text-xs sm:text-sm font-semibold uppercase tracking-wider border-r border-black last:border-r-0 transition-colors ${tab === t.key ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+                className={`flex items-center justify-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-semibold uppercase tracking-wider border border-black sm:border-0 sm:border-r sm:border-black sm:last:border-r-0 transition-colors ${tab === t.key ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
                 <t.icon size={15} weight="bold" /> {t.label}
               </button>
             ))}

@@ -13,6 +13,7 @@ import {
 } from "recharts";
 
 const PALETTE = ["#E63946", "#1E1E24", "#F4A261", "#457B9D", "#2A9D8F", "#E76F51", "#8D99AE", "#A8DADC", "#6D6875", "#B5838D", "#264653", "#E9C46A"];
+const CHART_MARGIN = { top: 5, right: 5, left: 5, bottom: 5 };
 const inp = "w-full border border-border rounded-lg px-3 py-2 text-sm bg-card focus:outline-none focus:ring-2 focus:ring-ring/40";
 const label = "label-mono text-muted-foreground text-xs";
 
@@ -293,7 +294,7 @@ function AiPanel({ scope, variant = "inline" }) {
               <div className="flex items-center gap-1.5 mb-2 text-muted-foreground"><WarningCircle size={15} weight="bold" /><span className="label-mono text-xs">Priority Alerts</span></div>
               <div className="space-y-2">
                 {data.alerts.map((a, i) => (
-                  <div key={i} className="flex items-start gap-2.5 border border-border rounded-lg p-3" data-testid={`ai-alert-${scope}-${i}`}>
+                  <div key={`alert-${a.title || ""}-${i}`} className="flex items-start gap-2.5 border border-border rounded-lg p-3" data-testid={`ai-alert-${scope}-${i}`}>
                     <Chip value={a.level || "info"} className={`${LEVEL_STYLE[a.level] || "bg-black/5 text-foreground"} shrink-0`} />
                     <div className="min-w-0"><p className="font-semibold text-sm">{a.title}</p>{a.detail && <p className="text-xs text-muted-foreground mt-0.5">{a.detail}</p>}</div>
                   </div>
@@ -307,7 +308,7 @@ function AiPanel({ scope, variant = "inline" }) {
               <div className="flex items-center gap-1.5 mb-2 text-muted-foreground"><Lightbulb size={15} weight="bold" /><span className="label-mono text-xs">Recommended Actions</span></div>
               <div className="space-y-2.5">
                 {data.recommendations.map((r, i) => (
-                  <div key={i} className="flex items-start gap-2" data-testid={`ai-rec-${scope}-${i}`}>
+                  <div key={`rec-${r.title || ""}-${i}`} className="flex items-start gap-2" data-testid={`ai-rec-${scope}-${i}`}>
                     <CheckCircle size={16} weight="bold" className="text-brand-red mt-0.5 shrink-0" />
                     <div><p className="font-semibold text-sm">{r.title}</p>{r.detail && <p className="text-xs text-muted-foreground mt-0.5">{r.detail}</p>}</div>
                   </div>
@@ -367,7 +368,7 @@ function OverviewTab({ summary }) {
           <h3 className="font-heading font-extrabold uppercase tracking-tight text-sm mb-4">Monthly spend</h3>
           {summary.by_month.length ? (
             <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={summary.by_month} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+              <BarChart data={summary.by_month} margin={CHART_MARGIN}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#00000010" vertical={false} />
                 <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} width={48} tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />

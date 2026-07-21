@@ -2144,6 +2144,17 @@ async def create_task(inp: TaskCreateInput, user: dict = Depends(get_current_use
     return await enrich_task(await db.tasks.find_one({"id": tid}, {"_id": 0}))
 
 
+@api.delete("/tasks/{task_id}")
+async def delete_task(task_id: str, user: dict = Depends(get_current_user)):
+    if user.get("role") != "owner":
+        raise HTTPException(status_code=403, detail="Only the owner can delete tasks")
+    t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]}, {"_id": 0, "id": 1})
+    if not t:
+        raise HTTPException(status_code=404, detail="Not found")
+    await db.tasks.delete_one({"id": task_id, "tenant_id": user["tenant_id"]})
+    return {"ok": True, "deleted": task_id}
+
+
 @api.patch("/tasks/{task_id}")
 async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(get_current_user)):
     t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]})
@@ -3549,7 +3560,8 @@ async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, 
             created["expenses"] += 1
 
     for p in records.get("payments", []):
-        direction = p.get("direction") if p.get("direction") in ("in", "out") else "in"
+        _raw_dir = str(p.get("direction") or "").strip().lower()
+        direction = "out" if _raw_dir in ("out", "outgoing", "outbound", "debit", "paid", "sent") else "in"
         ctype = "customer" if direction == "in" else "vendor"
         cid = await resolve_contact(p.get("contact_name"), ctype)
         try:

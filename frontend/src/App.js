@@ -22,6 +22,7 @@ import Meetings from "./pages/Meetings";
 import OperatingScore from "./pages/OperatingScore";
 import WorkCoach from "./pages/WorkCoach";
 import Ledger from "./pages/Ledger";
+import Landing from "./pages/Landing";
 
 function AccessDenied() {
   const navigate = useNavigate();
@@ -56,6 +57,18 @@ function Protected({ children, perm, perms, ownerOnly }) {
   return <Layout>{denied ? <AccessDenied /> : children}</Layout>;
 }
 
+function Home() {
+  const { user, loading } = useAuth();
+  if (loading)
+    return (
+      <div className="min-h-screen flex items-center justify-center font-mono text-sm uppercase tracking-widest">
+        Loading…
+      </div>
+    );
+  if (user) return <Navigate to={hasPerm(user, "inbox") ? "/inbox" : "/my-work"} replace />;
+  return <Landing />;
+}
+
 function App() {
   return (
     <div className="App">
@@ -63,7 +76,7 @@ function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<Login />} />
-            <Route path="/" element={<Protected perm="inbox"><Inbox /></Protected>} />
+            <Route path="/" element={<Home />} />
             <Route path="/dashboard" element={<Navigate to="/brief" replace />} />
             <Route path="/brief" element={<Protected><CEOBrief /></Protected>} />
             <Route path="/journal" element={<Protected ownerOnly><Journal /></Protected>} />

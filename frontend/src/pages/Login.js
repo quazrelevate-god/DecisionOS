@@ -153,6 +153,15 @@ export default function Login() {
     return () => clearTimeout(t);
   }, [resendIn]);
 
+  // Signup deep-link: /?signup=1 or /login?signup=1 opens the registration flow.
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get("signup") === "1" || sp.get("mode") === "signup") {
+      setMode("register");
+      setStep(1);
+    }
+  }, []);
+
   // Invite deep-link: /?invite=<token> — auto-switch to OTP and text the code.
   const inviteStarted = useRef(false);
   useEffect(() => {

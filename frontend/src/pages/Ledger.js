@@ -34,7 +34,12 @@ function FileField({ file, setFile }) {
       <label className="flex items-center gap-2 border border-dashed border-border rounded-lg px-3 py-2.5 text-sm cursor-pointer hover:bg-black/[0.02]">
         <Paperclip size={15} weight="bold" />
         <span className="truncate flex-1 text-muted-foreground">{file ? file.name : "Choose image or PDF — AI will read it & fill the rest"}</span>
-        <input type="file" accept="image/*,application/pdf" className="hidden" data-testid="ledger-file-input" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+        <input type="file" accept="image/*,application/pdf" className="hidden" data-testid="ledger-file-input" onChange={(e) => {
+          const sel = e.target.files?.[0] || null;
+          if (sel && sel.size > 15 * 1024 * 1024) { toast.error("File is too large (max 15 MB)"); return; }
+          if (sel && !/^image\//.test(sel.type) && sel.type !== "application/pdf") { toast.error("Only image or PDF bills are supported"); return; }
+          setFile(sel);
+        }} />
       </label>
       {file && <button type="button" onClick={() => setFile(null)} className="mt-1 text-xs text-brand-red hover:underline">Remove attachment</button>}
     </Field>

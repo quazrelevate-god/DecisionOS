@@ -313,17 +313,26 @@ async def add_expense(inp: ExpenseInput, user: dict = Depends(require_ledger)):
     return doc
 
 
+ALLOWED_UPLOAD_MIMES = ("image/", "application/pdf")
+MAX_UPLOAD_BYTES = 15 * 1024 * 1024  # 15 MB
+
+
 async def _read_attachment(file: Optional[UploadFile], kind: str, tenant_id: str, typed: dict) -> tuple:
     """Save an optional upload and, when present, AI-extract fields from it. Returns (data, attachment)."""
     data = dict(typed)
     attachment = None
     if file is not None and (file.filename or ""):
+        mime = file.content_type or ""
+        if not any(mime.startswith(m) for m in ALLOWED_UPLOAD_MIMES):
+            raise HTTPException(status_code=415, detail="Only image or PDF bills are supported")
         content = await file.read()
+        if len(content) > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="File is too large (max 15 MB)")
         saved = await asyncio.to_thread(_save_upload_sync, content, file.filename)
-        attachment = {"filename": saved["filename"], "url": saved["url"], "mime": file.content_type or ""}
+        attachment = {"filename": saved["filename"], "url": saved["url"], "mime": mime}
         try:
             currency = await _currency(tenant_id)
-            ai = await ai_extract_ledger_file(saved["path"], file.content_type or "application/octet-stream", kind, currency, typed)
+            ai = await ai_extract_ledger_file(saved["path"], mime or "application/octet-stream", kind, currency, typed)
             data = _merge_typed(ai, typed)
         except Exception as e:  # noqa: BLE001
             logger.warning(f"Ledger {kind} OCR failed, using typed values: {e}")

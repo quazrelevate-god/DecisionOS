@@ -1,0 +1,45 @@
+{
+  "summary": "Iteration 59 — Industry Operating Model (pipelines + task categories). Backend: 13/13 pytest tests PASS (auth/me shape, salon-vs-textile industry check, POST /workflows create + 400 on invalid type, dynamic advance approval_stage gate 403 non-owner / 200 owner, PATCH & POST regenerate RBAC + persistence + restore, plus a LIVE Claude AI directive test on salon that verified real routing into Appointments/Procurement pipeline keys and tasks tagged with tenant task_category keys). Frontend: Workflows tabs, stage columns, Settings Operating Model editor (label edit + add stage + op-save + reload persistence + restore + op-add-pipeline + op-add-cat + op-regenerate), and New Task dialog task-type dropdown all PASS. Discovered a REGRESSION affecting the existing manufacturing demo: legacy workflows and tasks are orphaned from the new AI-backfilled operating model (see backend_issues / rca).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/workflows + Workflows UI", "issue": "Legacy demo workflows (types production/purchase_payment/distribution) are not surfaced by the Workflows board after auto-backfill because the AI-generated operating_model pipeline keys for the textile tenant are order_fulfillment/raw_material_procurement/production_run. The board tabs render 0 cards for all pipelines. Backend advance still works via API (verified in test_regression_advance_existing_purchase_payment_card) but the UI never lists these cards. Consider (a) migrating legacy workflow.type to the closest new pipeline key at backfill time, or (b) merging legacy keys into the new pipelines, or (c) adding a fallback tab for orphaned cards."},
+      {"endpoint": "GET /api/tasks + MyWork tabs", "issue": "Same class of regression for tasks. Existing tasks were created with legacy task_type values (or none), so all industry-driven category tabs (Sales/Production/Quality Control/Procurement/Warehouse/Finance/HR) show 0 while the 'All' tab shows 27. Category filtering effectively empty for pre-existing tasks."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Workflows board (existing manufacturing demo)", "issue": "Board correctly reads tenant.operating_model.pipelines and renders order_fulfillment/raw_material_procurement/production_run tabs + all stage columns, but every column has 0 cards because legacy workflow.type values weren't migrated to the new keys. Users cannot advance legacy cards via the UI.", "affected_selectors": ["[data-testid^=workflow-tab-]", "[data-testid^=stage-column-]", "[data-testid^=workflow-card-]"]},
+      {"flow": "My Work industry task-category tabs", "issue": "Tabs render correctly from operating_model.task_categories but existing tasks live only in 'All' / 'Completed' — none categorize into the new industry tabs.", "affected_selectors": ["[data-testid^=work-tab-]"]}
+    ],
+    "design_issues": [
+      {"screen": "Global (all authenticated pages)", "issues": ["Console hydration warning: 'In HTML, <span> cannot be a child of <option>'. Not blocking, but should be fixed — a select somewhere is rendering non-text children inside <option>."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration59_operating_model.py",
+    "/app/test_reports/pytest/pytest_iteration59.xml"
+  ],
+  "action_items": [
+    "Fix REGRESSION: migrate legacy workflow.type values (production/purchase_payment/distribution) to the AI-backfilled pipeline keys during the same one-shot backfill in GET /api/auth/me (map by label similarity or by seeded intent). Otherwise legacy demo cards are orphaned in the UI.",
+    "Fix REGRESSION: migrate legacy task.task_type values to the tenant's new operating_model.task_categories keys at backfill time; otherwise industry tabs stay empty for pre-existing tasks.",
+    "Optional: fix hydration warning caused by <span> inside a <select><option> (screens with a category select likely) to avoid the console error on every authenticated page."
+  ],
+  "critical_code_review_comments": [
+    "server.py is now ~5.4k lines — split routers (workflows, tenant/settings, voice-notes, tasks) out into /app/backend/routers similar to ledger.py/onboarding.py.",
+    "advance_workflow approval-gate fallback in server.py:2847 still hardcodes 'approved' for wf.type=='purchase_payment'. Fine as a legacy shim but delete once you migrate legacy workflows to the new pipeline keys.",
+    "core.normalize_operating_model silently drops pipelines with no stages, no keys, or with duplicate keys — good, but a save with only invalid pipelines silently falls back to DEFAULT_OPERATING_MODEL which is a manufacturing default; consider returning 400 so the editor can surface the error instead of secretly resetting the user's model.",
+    "ai_generate_operating_model catches all exceptions and returns {} which then falls back to DEFAULT_OPERATING_MODEL (manufacturing). For a salon that means silent manufacturing-language fallback. Consider surfacing the failure to the caller or retrying once with a smaller prompt.",
+    "In /auth/me, backfill runs on every fetch until stored — which is fine — but you're firing an AI call for anyone whose tenant hasn't been touched yet; add a short-circuit or a 'backfill_attempted_at' flag to avoid duplicate AI spend under concurrency.",
+    "OperatingModelEditor.js sends stage.key: undefined for newly-added stages, which is fine because the backend re-slugifies from label; document that or the reader will assume keys are stable."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (13/13 pytest, including live AI directive routing)", "frontend": "100% of testable UI flows in scope (tabs, stage columns, editor edit/save/reload, add pipeline, add cat, New Task type-select)"},
+  "test_credentials": "owner@sharma.com/demo1234, sales@sharma.com/demo1234, production@sharma.com/demo1234, salon_1784655690@test.com/demo1234",
+  "seed_data_creation": "No permanent users created. Test used the existing throwaway salon tenant (salon_1784655690@test.com) and cleaned up its TESTIT59-prefixed workflows/tasks. Demo tenant's operating_model was captured at start and restored via PATCH after every mutation, matching the iteration58 pattern.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend suite lives at /app/backend/tests/test_iteration59_operating_model.py — run with REACT_APP_BACKEND_URL=... to exercise the live AI directive test. Two known regressions from the operating-model backfill affect the manufacturing demo only: (1) legacy workflow.type values don't map to the new pipeline keys, so the Workflows board renders empty stages; (2) legacy task.task_type values don't map to the new categories, so MyWork industry tabs are empty. Backend advance/route logic itself is fine — the gap is data migration during the /auth/me backfill.",
+  "rca of the issue": "Root cause: the auto-backfill in GET /api/auth/me (server.py:1191-1195) generates a fresh AI operating_model for pre-existing tenants but does NOT migrate the tenant's existing workflows.type or tasks.task_type onto the new pipeline/category keys. So the Workflows UI (Workflows.js:86 -> api.get('/workflows?type=' + activeKey)) and MyWork task-category filter (MyWork.js:893 -> t.task_type === tab) return zero matches for legacy rows. Reproduction: log in as owner@sharma.com, open My Work → Workflows (all tabs show 0 cards); My Work tabs show 27 under 'All' but 0 under every industry category. Mitigation: in the same backfill transaction, either (a) call an AI 'reclassify' step that maps each legacy workflow/task onto the closest new pipeline/category key, or (b) keep the legacy DEFAULT_OPERATING_MODEL for tenants whose existing workflows use those keys, or (c) merge legacy keys into the new pipelines by adding synonyms."
+}

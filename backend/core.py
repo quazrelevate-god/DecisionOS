@@ -302,3 +302,96 @@ def normalize_lexicon(data: dict) -> dict:
     for k, dv in base["task_types"].items():
         out["task_types"][k] = _s(tt_in.get(k), dv)
     return out
+
+
+# ---------------------------------------------------------------------------
+# Operating Model: industry-specific pipelines + task categories.
+# The board & My Work are driven by this per-tenant structure (not hardcoded).
+# Defaults mirror the original manufacturing model so existing tenants backfill
+# to exactly what they had before.
+# ---------------------------------------------------------------------------
+def _st(key, label):
+    return {"key": key, "label": label}
+
+
+DEFAULT_OPERATING_MODEL = {
+    "pipelines": [
+        {
+            "key": "production", "label": "Production", "sub": "Order → Ready", "approval_stage": None,
+            "stages": [_st("order_received", "Order Received"), _st("confirmed", "Confirmed"),
+                       _st("in_production", "In Production"), _st("ready", "Ready")],
+        },
+        {
+            "key": "distribution", "label": "Distribution", "sub": "Dispatch → Deliver", "approval_stage": None,
+            "stages": [_st("ready_to_dispatch", "Ready To Dispatch"), _st("dispatched", "Dispatched"),
+                       _st("in_transit", "In Transit"), _st("delivered", "Delivered")],
+        },
+        {
+            "key": "purchase_payment", "label": "Procurement", "sub": "Purchase → Payment", "approval_stage": "approved",
+            "stages": [_st("requested", "Requested"), _st("approved", "Approved"), _st("ordered", "Ordered"),
+                       _st("received", "Received"), _st("payment_pending", "Payment Pending"), _st("paid", "Paid")],
+        },
+    ],
+    "task_categories": [
+        _st("operational", "Operational"), _st("sales", "Sales"), _st("purchase", "Purchase"),
+        _st("production", "Production"), _st("finance", "Finance"), _st("hr", "HR"),
+    ],
+}
+
+
+def _norm_stage(s, used):
+    label = (s if isinstance(s, str) else (s.get("label") or s.get("name") or "")).strip()
+    key = (s.get("key") if isinstance(s, dict) else "") or _slugify_key(label)
+    key = _slugify_key(key)
+    if not key or not label or key in used:
+        return None
+    used.add(key)
+    return {"key": key, "label": label}
+
+
+def normalize_operating_model(data: dict) -> dict:
+    """Coerce a raw (AI or user) operating model into a clean, editable structure."""
+    d = data or {}
+    pipelines, seen_p = [], set()
+    for p in (d.get("pipelines") or []):
+        if not isinstance(p, dict):
+            continue
+        label = (p.get("label") or p.get("name") or "").strip()
+        key = _slugify_key(p.get("key") or label)
+        if not key or not label or key in seen_p:
+            continue
+        used_st = set()
+        stages = []
+        for s in (p.get("stages") or []):
+            ns = _norm_stage(s, used_st)
+            if ns:
+                stages.append(ns)
+            if len(stages) >= 8:
+                break
+        if not stages:
+            continue
+        stage_keys = {s["key"] for s in stages}
+        appr = p.get("approval_stage")
+        appr = appr if appr in stage_keys else None
+        seen_p.add(key)
+        pipelines.append({
+            "key": key, "label": label,
+            "sub": (p.get("sub") or "").strip() or f"{stages[0]['label']} → {stages[-1]['label']}",
+            "stages": stages, "approval_stage": appr,
+        })
+        if len(pipelines) >= 6:
+            break
+    cats, seen_c = [], set()
+    for c in (d.get("task_categories") or []):
+        label = (c if isinstance(c, str) else (c.get("label") or c.get("name") or "")).strip()
+        key = _slugify_key(c.get("key") if isinstance(c, dict) else label) or _slugify_key(label)
+        if key and label and key not in seen_c:
+            seen_c.add(key)
+            cats.append({"key": key, "label": label})
+        if len(cats) >= 10:
+            break
+    if not pipelines:
+        pipelines = DEFAULT_OPERATING_MODEL["pipelines"]
+    if not cats:
+        cats = DEFAULT_OPERATING_MODEL["task_categories"]
+    return {"pipelines": pipelines, "task_categories": cats}

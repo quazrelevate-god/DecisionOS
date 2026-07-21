@@ -5,6 +5,7 @@ import { hasPerm } from "../lib/perms";
 import { PageHeader } from "../components/common";
 import { CompanyDetails } from "../components/CompanyDetails";
 import { BusinessVocabulary } from "../components/BusinessVocabulary";
+import { OperatingModelEditor } from "../components/OperatingModelEditor";
 import { ProfileForm } from "../components/ProfileDialog";
 import { toast } from "sonner";
 import { CurrencyCircleDollar, ShieldCheck, FloppyDisk, Info, UserCircle } from "@phosphor-icons/react";
@@ -67,6 +68,8 @@ export default function Settings() {
         <CompanyDetails />
 
         <BusinessVocabulary />
+
+        <OperatingModelEditor />
 
         <ProfileCard />
 

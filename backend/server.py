@@ -34,6 +34,7 @@ from core import (
     get_current_user, require_role, require_perm, user_perms, clean_perms,
     tenant_role_keys, log_activity, add_decision_event, normalize_os_blueprint,
     normalize_lexicon, DEFAULT_LEXICON,
+    normalize_operating_model, DEFAULT_OPERATING_MODEL,
     PERMISSION_KEYS,
 )
 
@@ -260,9 +261,20 @@ async def add_inbox_item(tenant_id, created_by, source, classification, title,
 # ---------------------------------------------------------------------------
 # AI helpers
 # ---------------------------------------------------------------------------
-async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[list] = None, members: Optional[list] = None) -> dict:
+async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[list] = None, members: Optional[list] = None,
+                     pipelines: Optional[list] = None, task_categories: Optional[list] = None) -> dict:
     roles = allowed_roles or ["owner", "sales", "operations", "finance"]
     roles_str = ",".join(roles)
+    pipelines = pipelines or DEFAULT_OPERATING_MODEL["pipelines"]
+    task_categories = task_categories or DEFAULT_OPERATING_MODEL["task_categories"]
+    pipe_keys = [p["key"] for p in pipelines]
+    pipe_keys_str = ",".join(pipe_keys)
+    cat_keys_str = ",".join([c["key"] for c in task_categories])
+    pipe_desc = " ".join(
+        f"'{p['key']}' = the '{p['label']}' pipeline ({' → '.join(s['label'] for s in p['stages'])});"
+        for p in pipelines
+    )
+    cat_desc = ", ".join(f"'{c['key']}' ({c['label']})" for c in task_categories)
     names = [m.get("name") for m in (members or []) if m.get("name")]
     members_line = (
         "Team members you can assign to by name: " + ", ".join(names) + ". "
@@ -279,19 +291,20 @@ async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[l
         "\"type\": one of [directive,approval,policy,observation]}], "
         "\"tasks\": [{\"title\": string, \"description\": string, \"assignee_role\": one of [" + roles_str + "], "
         "\"assignee_name\": string (a specific team member's name if one is explicitly mentioned, else empty), "
+        "\"task_category\": one of [" + cat_keys_str + "] (the department this task belongs to), "
         "\"priority\": one of [low,medium,high], \"due_in_days\": integer or null}], "
-        "\"workflow_events\": [{\"type\": one of [production,distribution,purchase_payment], \"title\": string, \"detail\": string, \"counterparty\": string, \"amount\": number or null}], "
+        "\"workflow_events\": [{\"type\": one of [" + pipe_keys_str + "], \"title\": string, \"detail\": string, \"counterparty\": string, \"amount\": number or null}], "
         "\"reminders\": [{\"title\": string, \"due_in_days\": integer or null}], "
         "\"meeting_events\": [{\"title\": string, \"when\": string, \"due_in_days\": integer or null}], "
         "\"memory_notes\": [{\"text\": string, \"tag\": string}]}. "
         + members_line +
         "Use 'reminders' for simple personal follow-ups (e.g. 'call Kumar tomorrow', 'follow up with Toyota next Monday'). "
         "Use 'meeting_events' for meetings/reviews/calls to be scheduled (e.g. 'arrange a sales review on Friday', 'set up a vendor call Monday'). Keep meetings OUT of reminders. "
-        "Use 'workflow_events' ONLY for concrete multi-step operational pipelines to track on the board. Three types: "
-        "'production' = making/manufacturing a customer order (e.g. 'start production on the Toyota order', 'begin manufacturing 500 units for the Delhi retailer'); "
-        "'distribution' = dispatching/delivering/logistics of finished goods (e.g. 'dispatch the Delhi order', 'arrange delivery to the Mumbai boutique', 'ship the consignment'); "
-        "'purchase_payment' = procurement/buying from a vendor (e.g. 'raise a purchase for 50 spindles from Rajesh Traders'). "
-        "Include the counterparty (customer/vendor name) and amount when mentioned. "
+        "Use 'workflow_events' ONLY for concrete multi-step operational pipelines this business tracks on the board. "
+        "Pick the \"type\" from the business's ACTUAL pipelines: " + pipe_desc + " "
+        "Create a workflow_event only when the directive clearly starts/advances one of these pipelines; "
+        "include the counterparty (customer/vendor name) and amount when mentioned. "
+        "For every task, set \"task_category\" to the single best-fitting department from: " + cat_desc + ". "
         "IMPORTANT: Following up on, chasing, or collecting PAYMENT for an invoice (money a customer owes us) is NOT a workflow — create a TASK for it instead (assignee_role 'finance' or the named accountant if one exists), e.g. 'uploaded an invoice, ask the accountant to follow up on payment' -> a finance task titled 'Follow up on invoice payment' with the customer in the description. "
         "Do NOT put general rules/policies here — those belong in memory_notes. "
         "Use 'memory_notes' for lasting facts/policies the company should remember (e.g. 'don't purchase from XYZ again', 'salary increment for Arun from August'). "
@@ -651,8 +664,9 @@ async def pick_least_loaded_member(tenant_id: str, role: str) -> Optional[str]:
     return best_id
 
 
-async def _create_decision_tasks(tenant_id, note, decision_id, extracted, troles, members):
+async def _create_decision_tasks(tenant_id, note, decision_id, extracted, troles, members, cat_keys=None):
     """Create the blocked tasks for a decision; returns (task_ids, assignee_keys)."""
+    cat_keys = cat_keys or set()
     task_ids = []
     assignee_keys = set()
     for t in extracted.get("tasks", []):
@@ -673,11 +687,13 @@ async def _create_decision_tasks(tenant_id, note, decision_id, extracted, troles
             assignee_keys.add(f"u:{assignee_id}")
         elif role:
             assignee_keys.add(f"r:{role}")
+        task_cat = t.get("task_category") if t.get("task_category") in cat_keys else None
         await db.tasks.insert_one({
             "id": tid, "tenant_id": tenant_id, "title": t.get("title", "Untitled task"),
             "description": t.get("description", ""), "assignee_role": role, "assignee_id": assignee_id,
             "priority": t.get("priority", "medium") if t.get("priority") in ("low", "medium", "high") else "medium",
             "status": "blocked", "due_date": due, "decision_id": decision_id,
+            "task_type": task_cat,
             "source": "voice", "created_at": now_iso(),
             "updated_at": now_iso(), "last_action": "Created",
         })
@@ -730,12 +746,15 @@ async def _create_meetings(tenant_id, note, decision_id, extracted):
 async def _create_workflows(tenant_id, note, decision_id, extracted):
     """Materialize each detected workflow_event into a real board card; returns the created ids."""
     wf_ids = []
+    om = await tenant_operating_model(tenant_id)
+    pmap = {p["key"]: p for p in om["pipelines"]}
     for ev in (extracted.get("workflow_events") or []):
         wtype = ev.get("type")
-        if wtype not in WORKFLOW_STAGES:
+        pipeline = pmap.get(wtype)
+        if not pipeline:
             continue
-        stages = WORKFLOW_STAGES[wtype]
-        title = (ev.get("title") or ev.get("action") or ("Purchase" if wtype == "purchase_payment" else "Order")).strip()
+        stages = [s["key"] for s in pipeline["stages"]]
+        title = (ev.get("title") or ev.get("action") or pipeline["label"]).strip()
         cp = (ev.get("counterparty") or "").strip()
         contact_id = None
         if cp:
@@ -774,7 +793,10 @@ async def process_voice_note(note_id: str):
         await db.voice_notes.update_one({"id": note_id}, {"$set": {"status": "structuring"}})
         troles = await tenant_role_keys(tenant_id)
         members = await db.users.find({"tenant_id": tenant_id}, {"_id": 0, "id": 1, "name": 1, "role": 1}).to_list(200)
-        extracted = await ai_extract(transcript or "", session_id=f"extract-{note_id}", allowed_roles=sorted(troles), members=members)
+        om = await tenant_operating_model(tenant_id)
+        cat_keys = {c["key"] for c in om["task_categories"]}
+        extracted = await ai_extract(transcript or "", session_id=f"extract-{note_id}", allowed_roles=sorted(troles),
+                                     members=members, pipelines=om["pipelines"], task_categories=om["task_categories"])
 
         decision_id = new_id()
         dlist = extracted.get("decisions", [])
@@ -795,7 +817,7 @@ async def process_voice_note(note_id: str):
             "wa_from": note.get("wa_from"), "raised_by_name": note.get("raised_by_name"),
             "task_ids": [],
         }
-        task_ids, assignee_keys = await _create_decision_tasks(tenant_id, note, decision_id, extracted, troles, members)
+        task_ids, assignee_keys = await _create_decision_tasks(tenant_id, note, decision_id, extracted, troles, members, cat_keys)
         decision["task_ids"] = task_ids
         decision["timeline"] = [{"ts": now_iso(), "label": f"Decision captured via {note.get('source') or note.get('kind') or 'voice'}", "actor": note.get("raised_by_name") or "Owner", "kind": "created"}]
         await db.decisions.insert_one(decision)
@@ -867,6 +889,49 @@ async def ai_generate_lexicon(industry: str, company_size: str = "", roles=None)
     return normalize_lexicon(data or {})
 
 
+async def ai_generate_operating_model(industry: str, company_size: str = "", roles=None) -> dict:
+    """AI-design the industry's operating model: workflow pipelines (with stages) + task categories."""
+    role_labels = ", ".join([r.get("label") for r in (roles or []) if r.get("label")]) or "not specified"
+    system = (
+        "You design the OPERATING MODEL for a business inside DecisionOS. The model has two parts and MUST fit "
+        "the specific industry — a salon has NO 'production' or 'dispatch'; it has a service/appointment flow. "
+        "Return ONLY valid JSON, no prose, EXACTLY this shape: "
+        "{\"pipelines\": [{\"key\": lowercase_snake_case, \"label\": str, \"sub\": short 'A → B' subtitle, "
+        "\"stages\": [{\"key\": lowercase_snake_case, \"label\": str}], "
+        "\"approval_stage\": key of the stage that needs owner sign-off or null}], "
+        "\"task_categories\": [{\"key\": lowercase_snake_case, \"label\": str}]}. "
+        "PIPELINES = the core multi-step operational flows this business tracks on a kanban board, from start to finish. "
+        "Design 2-4 pipelines that genuinely match how THIS industry operates. Each pipeline has 3-6 ordered stages "
+        "(the real steps work moves through). Examples: a SALON → 'Appointments' (Booked→Confirmed→In Service→Completed) "
+        "and 'Procurement' (Requested→Approved→Received→Paid); a COACHING INSTITUTE → 'Enrollment' "
+        "(Inquiry→Counselling→Enrolled→Onboarded) and 'Course Delivery' (Scheduled→Ongoing→Completed); a RESTAURANT → "
+        "'Orders' and 'Procurement'. Set approval_stage only where an owner must sign off (e.g. procurement 'approved'), else null. "
+        "TASK_CATEGORIES = 4-7 department buckets that a task in this business belongs to (e.g. salon → Front Desk, Service, "
+        "Inventory, Finance, HR; coaching → Admissions, Academic, Operations, Finance, HR). Always keep the categories relevant to the industry. "
+        "Keep every label 1-3 words, Title Case. Use the industry's real terminology; never force manufacturing terms onto a service business."
+    )
+    prompt = (
+        f"Industry: {industry or 'general business'}\n"
+        f"Company size: {company_size or 'unspecified'}\n"
+        f"Departments: {role_labels}\n"
+        "Design the operating model now."
+    )
+    chat = LlmChat(api_key=CLAUDE_KEY, session_id=f"opmodel-{new_id()}", system_message=system).with_model(*LLM_MODEL)
+    try:
+        resp = await chat.send_message(UserMessage(text=prompt))
+        data = _extract_json(resp)
+    except Exception as e:
+        logger.error(f"ai_generate_operating_model failed: {e}")
+        data = {}
+    return normalize_operating_model(data or {})
+
+
+async def tenant_operating_model(tenant_id: str) -> dict:
+    t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "operating_model": 1})
+    om = (t or {}).get("operating_model")
+    return om if om and om.get("pipelines") else DEFAULT_OPERATING_MODEL
+
+
 @api.post("/auth/register")
 async def register(inp: RegisterInput, response: Response):
     email = inp.email.lower()
@@ -903,6 +968,7 @@ async def register(inp: RegisterInput, response: Response):
         "operational_task_templates": bp["operational_tasks"] if bp else [],
         "approval_rules": bp["approval_rules"] if bp else [],
         "lexicon": await ai_generate_lexicon(inp.industry, inp.company_size, clean_roles),
+        "operating_model": await ai_generate_operating_model(inp.industry, inp.company_size, clean_roles),
         "created_at": now_iso(),
     }
     await db.tenants.insert_one(tenant_doc)
@@ -1122,6 +1188,11 @@ async def me(user: dict = Depends(get_current_user)):
         lex = await ai_generate_lexicon(tenant.get("industry"), tenant.get("company_size"), tenant.get("roles"))
         await db.tenants.update_one({"id": tenant["id"]}, {"$set": {"lexicon": lex}})
         tenant["lexicon"] = lex
+    if tenant and not (tenant.get("operating_model") or {}).get("pipelines"):
+        # Backfill the industry operating model (pipelines + task categories) once.
+        om = await ai_generate_operating_model(tenant.get("industry"), tenant.get("company_size"), tenant.get("roles"))
+        await db.tenants.update_one({"id": tenant["id"]}, {"$set": {"operating_model": om}})
+        tenant["operating_model"] = om
     return {"user": user, "tenant": tenant}
 
 
@@ -1147,6 +1218,31 @@ async def regenerate_lexicon(user: dict = Depends(require_perm("team_manage"))):
     lex = await ai_generate_lexicon(tenant.get("industry"), tenant.get("company_size"), tenant.get("roles"))
     await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": {"lexicon": lex}})
     await log_activity(user["tenant_id"], user["id"], "lexicon_regenerated", f"{user['name']} regenerated the business vocabulary")
+    return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+
+
+class OperatingModelInput(BaseModel):
+    operating_model: dict
+
+
+@api.patch("/tenant/operating-model")
+async def update_operating_model(inp: OperatingModelInput, user: dict = Depends(require_perm("team_manage"))):
+    """Owner-edit the operating model (workflow pipelines + stages + task categories)."""
+    om = normalize_operating_model(inp.operating_model or {})
+    await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": {"operating_model": om}})
+    await log_activity(user["tenant_id"], user["id"], "operating_model_updated", f"{user['name']} updated the operating model")
+    return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+
+
+@api.post("/tenant/operating-model/regenerate")
+async def regenerate_operating_model(user: dict = Depends(require_perm("team_manage"))):
+    """Re-run AI to regenerate the operating model from the workspace's industry."""
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    om = await ai_generate_operating_model(tenant.get("industry"), tenant.get("company_size"), tenant.get("roles"))
+    await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": {"operating_model": om}})
+    await log_activity(user["tenant_id"], user["id"], "operating_model_regenerated", f"{user['name']} regenerated the operating model")
     return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
 
 
@@ -2073,7 +2169,8 @@ async def comment_decision(decision_id: str, inp: DecisionCommentInput, user: di
 # Tasks
 # ---------------------------------------------------------------------------
 def _derive_task_type(t: dict) -> str:
-    if t.get("task_type") in TASK_TYPES:
+    # Any stored category key (dynamic per tenant) passes through; else fall back to role, else 'other'.
+    if t.get("task_type"):
         return t["task_type"]
     r = t.get("assignee_role")
     if r in ("sales", "finance", "production", "purchase"):
@@ -2186,7 +2283,7 @@ async def create_task(inp: TaskCreateInput, user: dict = Depends(get_current_use
     if not assignee_id and role:
         # Smart assignment: route a role-level task to the least-loaded member of that role.
         assignee_id = await pick_least_loaded_member(user["tenant_id"], role)
-    task_type = inp.task_type if inp.task_type in TASK_TYPES else None
+    task_type = (inp.task_type or "").strip() or None
     support_id = inp.support_id if inp.support_id and await db.users.find_one({"id": inp.support_id, "tenant_id": user["tenant_id"]}, {"_id": 0}) else None
     approver_id = inp.approver_id if inp.approver_id and await db.users.find_one({"id": inp.approver_id, "tenant_id": user["tenant_id"]}, {"_id": 0}) else None
     progress = max(0, min(100, inp.progress)) if isinstance(inp.progress, int) else 0
@@ -2706,10 +2803,12 @@ async def list_workflows(type: Optional[str] = None, user: dict = Depends(get_cu
 
 @api.post("/workflows")
 async def create_workflow(inp: WorkflowCreateInput, user: dict = Depends(get_current_user)):
-    if inp.type not in WORKFLOW_STAGES:
+    om = await tenant_operating_model(user["tenant_id"])
+    pipeline = next((p for p in om["pipelines"] if p["key"] == inp.type), None)
+    if not pipeline:
         raise HTTPException(status_code=400, detail="Invalid workflow type")
     wid = new_id()
-    stages = WORKFLOW_STAGES[inp.type]
+    stages = [s["key"] for s in pipeline["stages"]]
     counterparty = inp.counterparty or ""
     contact_id = inp.contact_id
     if contact_id:
@@ -2742,9 +2841,12 @@ async def advance_workflow(workflow_id: str, inp: WorkflowAdvanceInput, user: di
     tgt_idx = wf["stages"].index(inp.stage)
     if tgt_idx != cur_idx + 1:
         raise HTTPException(status_code=400, detail="Can only advance to the next stage")
-    # purchase approval gate: only owner may move to 'approved'
-    if wf["type"] == "purchase_payment" and inp.stage == "approved" and user["role"] != "owner":
-        raise HTTPException(status_code=403, detail="Only the owner can approve purchases")
+    # dynamic approval gate: only owner may advance to a pipeline's approval_stage
+    om = await tenant_operating_model(user["tenant_id"])
+    pipeline = next((p for p in om["pipelines"] if p["key"] == wf["type"]), None)
+    appr_stage = pipeline.get("approval_stage") if pipeline else ("approved" if wf["type"] == "purchase_payment" else None)
+    if appr_stage and inp.stage == appr_stage and user["role"] != "owner":
+        raise HTTPException(status_code=403, detail="Only the owner can approve this stage")
     entry = {"stage": inp.stage, "note": inp.note or "", "by": user["id"], "at": now_iso()}
     await db.workflows.update_one({"id": workflow_id}, {"$set": {"stage": inp.stage}, "$push": {"history": entry}})
     await log_activity(user["tenant_id"], user["id"], "workflow_advanced", f"'{wf['title']}' → {inp.stage}", "workflow", workflow_id)

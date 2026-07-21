@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { lex } from "../lib/lexicon";
+import { opModel } from "../lib/operatingModel";
 import { PageHeader, Chip } from "../components/common";
 import { money, timeAgo, fullTime } from "../lib/format";
 import { toast } from "sonner";
@@ -11,13 +12,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter,
 } from "../components/ui/dialog";
 
-const TAB_KEYS = ["production", "distribution", "purchase_payment"];
-const STAGES = {
-  production: ["order_received", "confirmed", "in_production", "ready"],
-  distribution: ["ready_to_dispatch", "dispatched", "in_transit", "delivered"],
-  purchase_payment: ["requested", "approved", "ordered", "received", "payment_pending", "paid"],
-};
-const STAGE_LABEL = (s) => s.replace(/_/g, " ");
+const STAGE_LABEL = (s) => (s || "").replace(/_/g, " ");
 
 function NewWorkflowDialog({ type, typeLabel, custLabel, vendLabel, onCreated }) {
   const [open, setOpen] = useState(false);
@@ -84,16 +79,21 @@ export default function Workflows({ embedded = false }) {
   const qc = useQueryClient();
   const { tenant, user } = useAuth();
   const L = lex(tenant);
-  const TABS = TAB_KEYS.map((k) => ({ key: k, label: L.workflows[k].label, sub: L.workflows[k].sub }));
-  const [tab, setTab] = useState("production");
-  const { data } = useQuery({ queryKey: ["workflows", tab], queryFn: () => api.get(`/workflows?type=${tab}`).then((r) => r.data) });
+  const om = opModel(tenant);
+  const pipelines = om.pipelines;
+  const [tab, setTab] = useState(pipelines[0]?.key);
+  const activeKey = pipelines.some((p) => p.key === tab) ? tab : pipelines[0]?.key;
+  const { data } = useQuery({ queryKey: ["workflows", activeKey], queryFn: () => api.get(`/workflows?type=${activeKey}`).then((r) => r.data) });
 
-  const stages = STAGES[tab];
-  const tabLabel = L.workflows[tab].label;
+  const pipeline = pipelines.find((p) => p.key === activeKey) || pipelines[0];
+  const stages = pipeline?.stages || [];
+  const stageLabelMap = Object.fromEntries(stages.map((s) => [s.key, s.label]));
+  const labelOf = (k) => stageLabelMap[k] || STAGE_LABEL(k);
+  const tabLabel = pipeline?.label || "";
   const newWfDialog = (
     <NewWorkflowDialog
-      type={tab} typeLabel={tabLabel} custLabel={L.customer_singular} vendLabel={L.vendor_singular}
-      onCreated={() => qc.invalidateQueries({ queryKey: ["workflows", tab] })} />
+      type={activeKey} typeLabel={tabLabel} custLabel={L.customer_singular} vendLabel={L.vendor_singular}
+      onCreated={() => qc.invalidateQueries({ queryKey: ["workflows", activeKey] })} />
   );
 
   const advance = async (wf) => {
@@ -101,9 +101,9 @@ export default function Workflows({ embedded = false }) {
     if (idx >= wf.stages.length - 1) return toast.info("Already at final stage");
     const next = wf.stages[idx + 1];
     try {
-      await api.patch(`/workflows/${wf.id}/advance`, { stage: next, note: `Moved to ${STAGE_LABEL(next)}` });
-      toast.success(`→ ${STAGE_LABEL(next)}`);
-      qc.invalidateQueries({ queryKey: ["workflows", tab] });
+      await api.patch(`/workflows/${wf.id}/advance`, { stage: next, note: `Moved to ${labelOf(next)}` });
+      toast.success(`→ ${labelOf(next)}`);
+      qc.invalidateQueries({ queryKey: ["workflows", activeKey] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
     } catch (e) {
       toast.error(e.response?.data?.detail || "Cannot advance");
@@ -115,7 +115,7 @@ export default function Workflows({ embedded = false }) {
     try {
       await api.delete(`/workflows/${wf.id}`);
       toast.success("Workflow deleted");
-      qc.invalidateQueries({ queryKey: ["workflows", tab] });
+      qc.invalidateQueries({ queryKey: ["workflows", activeKey] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
     } catch (e) {
       toast.error(e.response?.data?.detail || "Delete failed");
@@ -134,12 +134,12 @@ export default function Workflows({ embedded = false }) {
         </PageHeader>
       )}
 
-      <div className="flex border border-black mb-6 w-fit">
-        {TABS.map((t) => (
+      <div className="flex flex-wrap border border-black mb-6 w-fit">
+        {pipelines.map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)} data-testid={`workflow-tab-${t.key}`}
-            className={`px-5 py-2.5 text-left border-r border-black last:border-r-0 transition-colors ${tab === t.key ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+            className={`px-5 py-2.5 text-left border-r border-black last:border-r-0 transition-colors ${activeKey === t.key ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
             <span className="block text-sm font-semibold uppercase tracking-wider">{t.label}</span>
-            <span className={`block text-[10px] uppercase tracking-widest ${tab === t.key ? "text-white/60" : "text-muted-foreground"}`}>{t.sub}</span>
+            <span className={`block text-[10px] uppercase tracking-widest ${activeKey === t.key ? "text-white/60" : "text-muted-foreground"}`}>{t.sub}</span>
           </button>
         ))}
       </div>
@@ -147,12 +147,12 @@ export default function Workflows({ embedded = false }) {
       {/* Brutalist kanban */}
       <div className="border border-black overflow-x-auto">
         <div className="flex min-w-max">
-          {stages.map((st) => {
-            const cards = (data || []).filter((w) => w.stage === st);
+          {stages.map((stg) => {
+            const cards = (data || []).filter((w) => w.stage === stg.key);
             return (
-              <div key={st} className="w-64 shrink-0 border-r border-black last:border-r-0" data-testid={`stage-column-${st}`}>
+              <div key={stg.key} className="w-64 shrink-0 border-r border-black last:border-r-0" data-testid={`stage-column-${stg.key}`}>
                 <div className="px-3 py-2 border-b border-black bg-brand-paper sticky top-0">
-                  <p className="label-mono">{STAGE_LABEL(st)}</p>
+                  <p className="label-mono">{stg.label}</p>
                   <p className="font-heading font-black text-lg">{cards.length}</p>
                 </div>
                 <div className="p-2 space-y-2 min-h-[300px] bg-white">
@@ -185,7 +185,7 @@ export default function Workflows({ embedded = false }) {
                             Advance <ArrowRight size={12} weight="bold" />
                           </button>
                         )}
-                        {isLast && <Chip value={w.stage} className="mt-3" />}
+                        {isLast && <Chip value={labelOf(w.stage)} className="mt-3" />}
                       </div>
                     );
                   })}

@@ -6,6 +6,7 @@ import { timeAgo, fullTime } from "../lib/format";
 import { PageHeader, Chip, EmptyState } from "../components/common";
 import { useAuth } from "../context/AuthContext";
 import { userPerms } from "../lib/perms";
+import { lex } from "../lib/lexicon";
 import { toast } from "sonner";
 import { TaskBoard, NewTaskDialog } from "./Tasks";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
@@ -21,15 +22,7 @@ import {
 
 const CTRL = "flex items-center justify-center gap-1.5 px-2 lg:px-4 py-2 text-[11px] lg:text-sm font-semibold uppercase tracking-wider border border-black transition-all text-center leading-tight";
 
-const WORK_TABS = [
-  { key: "all", label: "All" },
-  { key: "operational", label: "Operational" },
-  { key: "sales", label: "Sales" },
-  { key: "purchase", label: "Purchase" },
-  { key: "production", label: "Production" },
-  { key: "finance", label: "Finance" },
-  { key: "completed", label: "Completed" },
-];
+const WORK_TAB_KEYS = ["all", "operational", "sales", "purchase", "production", "finance", "completed"];
 
 const STATUS_OPTIONS = [
   { key: "todo", label: "Not Started" },
@@ -835,6 +828,11 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
 export default function MyWork() {
   const qc = useQueryClient();
   const { tenant, user } = useAuth();
+  const L = lex(tenant);
+  const WORK_TABS = WORK_TAB_KEYS.map((k) => ({
+    key: k,
+    label: k === "all" ? "All" : k === "completed" ? "Completed" : (L.task_types[k] || k),
+  }));
   const [params] = useSearchParams();
   const isOwner = user?.role === "owner";
   const focusTaskId = params.get("task");

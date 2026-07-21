@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api, { formatApiError } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
+import { lex } from "../lib/lexicon";
 import { PageHeader, Chip, EmptyState } from "../components/common";
 import { money, timeAgo } from "../lib/format";
 import { CaptureReview } from "./Captures";
@@ -84,13 +85,14 @@ const OPT_LABELS = {
   in: "Received (in)", out: "Paid (out)",
 };
 
-function SelectField({ label, value, onChange, options }) {
+function SelectField({ label, value, onChange, options, optLabels }) {
+  const LB = optLabels || OPT_LABELS;
   return (
     <label className="block">
       <span className="label-mono text-muted-foreground text-[10px]">{label}</span>
       <select className={inp} value={value ?? ""} onChange={(e) => onChange(e.target.value)}>
         {!options.includes(value) && <option value={value || ""}>{value || "—"}</option>}
-        {options.map((o) => <option key={o} value={o}>{OPT_LABELS[o] || o}</option>)}
+        {options.map((o) => <option key={o} value={o}>{LB[o] || o}</option>)}
       </select>
     </label>
   );
@@ -210,6 +212,8 @@ function Field({ label, value, onChange, placeholder }) {
 
 function ReviewPanel({ ingestion, onFiled, onCancel }) {
   const { tenant } = useAuth();
+  const L = lex(tenant);
+  const optLabels = { ...OPT_LABELS, customer: L.customer_singular, vendor: L.vendor_singular };
   const currency = tenant?.currency || "INR";
   const ownNorm = normCo(tenant?.name);
   const [records, setRecords] = useState(() => withKeys(ingestion.records));
@@ -290,7 +294,7 @@ function ReviewPanel({ ingestion, onFiled, onCancel }) {
           <ArrowsLeftRight size={18} weight="bold" className="text-brand-red shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-bold uppercase tracking-tight">{hint.label}</p>
-            <p className="text-xs text-muted-foreground">{hint.desc} Use the dropdowns below to flip a party between <b>customer</b> and <b>supplier</b>, or the invoice between <b>sales</b> and <b>purchase</b>, before filing.</p>
+            <p className="text-xs text-muted-foreground">{hint.desc} Use the dropdowns below to flip a party between <b>{L.customer_singular.toLowerCase()}</b> and <b>{L.vendor_singular.toLowerCase()}</b>, or the invoice between <b>sales</b> and <b>purchase</b>, before filing.</p>
           </div>
         </div>
       )}
@@ -305,11 +309,11 @@ function ReviewPanel({ ingestion, onFiled, onCancel }) {
       {/* Contacts */}
       {(records.contacts || []).length > 0 && (
         <div className="mb-5" data-testid="review-contacts">
-          <p className="label-mono text-brand-red mb-2 flex items-center gap-1"><UsersThree size={14} weight="bold" /> Customers & Suppliers ({records.contacts.length})</p>
+          <p className="label-mono text-brand-red mb-2 flex items-center gap-1"><UsersThree size={14} weight="bold" /> {L.customer_plural} & {L.vendor_plural} ({records.contacts.length})</p>
           <div className="space-y-2">
             {records.contacts.map((c, i) => (
               <div key={c._key} className={`border p-3 grid grid-cols-2 md:grid-cols-4 gap-2 relative ${isOwnCompany(c.name, ownNorm) ? "border-brand-yellow bg-brand-yellow/20" : "border-black/20"}`} data-testid={`review-contact-${i}`}>
-                <SelectField label="Type" value={c.type} onChange={(v) => setItem("contacts", i, "type", v)} options={CONTACT_TYPE_OPTS} />
+                <SelectField label="Type" value={c.type} onChange={(v) => setItem("contacts", i, "type", v)} options={CONTACT_TYPE_OPTS} optLabels={optLabels} />
                 <Field label="Name" value={c.name} onChange={(v) => setItem("contacts", i, "name", v)} />
                 <Field label="Phone" value={c.phone} onChange={(v) => setItem("contacts", i, "phone", v)} />
                 <Field label="Email" value={c.email} onChange={(v) => setItem("contacts", i, "email", v)} />

@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "../lib/api";
+import { lex } from "../lib/lexicon";
 import { useAuth } from "../context/AuthContext";
 import { PageHeader, Chip, EmptyState } from "../components/common";
 import { toast } from "sonner";
@@ -62,6 +63,8 @@ function AttachmentLink({ att }) {
 
 // ---------- Add dialogs ----------
 function AddExpenseDialog({ categories, onDone }) {
+  const { tenant } = useAuth();
+  const L = lex(tenant);
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({ title: "", amount: "", vendor_name: "", category: "", date: "", status: "unpaid", notes: "" });
   const [file, setFile] = useState(null);
@@ -110,7 +113,7 @@ function AddExpenseDialog({ categories, onDone }) {
               </select>
             </Field>
           </div>
-          <Field label="Vendor / Supplier"><input data-testid="expense-vendor" className={inp} value={f.vendor_name} onChange={(e) => set("vendor_name", e.target.value)} /></Field>
+          <Field label={`Vendor / ${L.vendor_singular}`}><input data-testid="expense-vendor" className={inp} value={f.vendor_name} onChange={(e) => set("vendor_name", e.target.value)} /></Field>
           <div>
             <div className="flex items-center justify-between">
               <label className={label}>Category</label>

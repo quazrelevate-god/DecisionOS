@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { Chip } from "../components/common";
+import { lex } from "../lib/lexicon";
 import { toast } from "sonner";
 import { timeAgo, fullTime } from "../lib/format";
 import { userPerms } from "../lib/perms";
@@ -39,7 +40,9 @@ const EMPTY_FORM = {
 };
 
 export function NewTaskDialog({ onCreated, roleOptions, members, defaultType, triggerClassName }) {
-  const { user } = useAuth();
+  const { user, tenant } = useAuth();
+  const L = lex(tenant);
+  const taskTypeLabel = (k) => L.task_types[k] || TASK_TYPES.find((t) => t.key === k)?.label || k;
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM, task_type: defaultType || "operational" });
   const [file, setFile] = useState(null);
@@ -101,7 +104,7 @@ export function NewTaskDialog({ onCreated, roleOptions, members, defaultType, tr
             <div>
               <label className="label-mono text-muted-foreground">Task type</label>
               <select data-testid="task-type-select" className={`${inp} mt-1`} value={form.task_type} onChange={set("task_type")}>
-                {TASK_TYPES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+                {TASK_TYPES.map((t) => <option key={t.key} value={t.key}>{taskTypeLabel(t.key)}</option>)}
               </select>
             </div>
             {isOp && (

@@ -251,3 +251,54 @@ def normalize_os_blueprint(data: dict) -> dict:
         "operational_tasks": _bp_op_tasks(data),
         "approval_rules": _bp_rules(data),
     }
+
+
+# ---------------------------------------------------------------------------
+# Business vocabulary (industry-tailored UI terminology)
+# ---------------------------------------------------------------------------
+DEFAULT_LEXICON = {
+    "customer_singular": "Customer",
+    "customer_plural": "Customers",
+    "vendor_singular": "Supplier",
+    "vendor_plural": "Suppliers",
+    "workflows": {
+        "production": {"label": "Production", "sub": "Order → Ready"},
+        "distribution": {"label": "Distribution", "sub": "Dispatch → Deliver"},
+        "purchase_payment": {"label": "Procurement", "sub": "Purchase → Payment"},
+    },
+    "task_types": {
+        "operational": "Operational",
+        "sales": "Sales",
+        "purchase": "Purchase",
+        "production": "Production",
+        "finance": "Finance",
+        "hr": "HR",
+    },
+}
+
+
+def normalize_lexicon(data: dict) -> dict:
+    """Merge a raw (AI or user) vocabulary over defaults, keeping only known keys."""
+    d = data or {}
+
+    def _s(v, fb):
+        v = (str(v).strip() if v is not None else "")
+        return v or fb
+
+    base = DEFAULT_LEXICON
+    out = {
+        "customer_singular": _s(d.get("customer_singular"), base["customer_singular"]),
+        "customer_plural": _s(d.get("customer_plural"), base["customer_plural"]),
+        "vendor_singular": _s(d.get("vendor_singular"), base["vendor_singular"]),
+        "vendor_plural": _s(d.get("vendor_plural"), base["vendor_plural"]),
+        "workflows": {},
+        "task_types": {},
+    }
+    wf_in = d.get("workflows") or {}
+    for k, dv in base["workflows"].items():
+        v = wf_in.get(k) or {}
+        out["workflows"][k] = {"label": _s(v.get("label"), dv["label"]), "sub": _s(v.get("sub"), dv["sub"])}
+    tt_in = d.get("task_types") or {}
+    for k, dv in base["task_types"].items():
+        out["task_types"][k] = _s(tt_in.get(k), dv)
+    return out

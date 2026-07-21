@@ -4,6 +4,7 @@ import api from "../lib/api";
 import { hasPerm } from "../lib/perms";
 import { PageHeader } from "../components/common";
 import { CompanyDetails } from "../components/CompanyDetails";
+import { BusinessVocabulary } from "../components/BusinessVocabulary";
 import { ProfileForm } from "../components/ProfileDialog";
 import { toast } from "sonner";
 import { CurrencyCircleDollar, ShieldCheck, FloppyDisk, Info, UserCircle } from "@phosphor-icons/react";
@@ -64,6 +65,8 @@ export default function Settings() {
 
       <div className="space-y-6 max-w-2xl" data-testid="settings-workspace">
         <CompanyDetails />
+
+        <BusinessVocabulary />
 
         <ProfileCard />
 

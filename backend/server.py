@@ -33,6 +33,7 @@ from core import (
     set_auth_cookie, clear_auth_cookie,
     get_current_user, require_role, require_perm, user_perms, clean_perms,
     tenant_role_keys, log_activity, add_decision_event, normalize_os_blueprint,
+    normalize_lexicon, DEFAULT_LEXICON,
     PERMISSION_KEYS,
 )
 
@@ -827,6 +828,45 @@ async def process_voice_note(note_id: str):
 # ---------------------------------------------------------------------------
 # Auth routes
 # ---------------------------------------------------------------------------
+async def ai_generate_lexicon(industry: str, company_size: str = "", roles=None) -> dict:
+    """AI-localize the app's fixed vocabulary to the tenant's industry."""
+    role_labels = ", ".join([r.get("label") for r in (roles or []) if r.get("label")]) or "not specified"
+    system = (
+        "You localize the vocabulary of DecisionOS (a business operations app) to a specific industry. "
+        "The app has fixed internal concepts; give the MOST NATURAL word a business in this industry actually uses for each. "
+        "Return ONLY valid JSON, no prose, EXACTLY this shape: "
+        "{\"customer_singular\": str, \"customer_plural\": str, \"vendor_singular\": str, \"vendor_plural\": str, "
+        "\"workflows\": {\"production\": {\"label\": str, \"sub\": str}, \"distribution\": {\"label\": str, \"sub\": str}, "
+        "\"purchase_payment\": {\"label\": str, \"sub\": str}}, "
+        "\"task_types\": {\"operational\": str, \"sales\": str, \"purchase\": str, \"production\": str, \"finance\": str, \"hr\": str}}. "
+        "Concept meanings: customer = the people/orgs who buy or receive your product/service "
+        "(e.g. a coaching institute → 'Student'/'Students', a clinic → 'Patient'/'Patients'). "
+        "vendor = who you buy/source from (e.g. 'Partner', 'Supplier', 'Publisher'). "
+        "workflows.production = your CORE delivery/fulfilment pipeline (turning an order/enrollment into a delivered outcome, "
+        "e.g. 'Enrollment', 'Course Delivery', 'Case'); "
+        "workflows.distribution = handing over / dispatching the finished outcome to the customer "
+        "(e.g. 'Onboarding', 'Handover', 'Delivery'); "
+        "workflows.purchase_payment = procuring goods/services and paying vendors (e.g. 'Procurement'). "
+        "task_types are the department buckets tasks fall into — keep them relevant to the industry. "
+        "'sub' is a short 2-4 word arrow subtitle like 'Order → Ready'. Keep every label 1-2 words, Title Case. "
+        "Use the industry's real terminology; never invent nonsense."
+    )
+    prompt = (
+        f"Industry: {industry or 'general business'}\n"
+        f"Company size: {company_size or 'unspecified'}\n"
+        f"Departments: {role_labels}\n"
+        "Localize the vocabulary now."
+    )
+    chat = LlmChat(api_key=CLAUDE_KEY, session_id=f"lexicon-{new_id()}", system_message=system).with_model(*LLM_MODEL)
+    try:
+        resp = await chat.send_message(UserMessage(text=prompt))
+        data = _extract_json(resp)
+    except Exception as e:
+        logger.error(f"ai_generate_lexicon failed: {e}")
+        data = {}
+    return normalize_lexicon(data or {})
+
+
 @api.post("/auth/register")
 async def register(inp: RegisterInput, response: Response):
     email = inp.email.lower()
@@ -862,6 +902,7 @@ async def register(inp: RegisterInput, response: Response):
         "workflow_templates": bp["workflows"] if bp else [],
         "operational_task_templates": bp["operational_tasks"] if bp else [],
         "approval_rules": bp["approval_rules"] if bp else [],
+        "lexicon": await ai_generate_lexicon(inp.industry, inp.company_size, clean_roles),
         "created_at": now_iso(),
     }
     await db.tenants.insert_one(tenant_doc)
@@ -1076,7 +1117,37 @@ async def verify_otp(inp: OtpVerifyInput, response: Response):
 @api.get("/auth/me")
 async def me(user: dict = Depends(get_current_user)):
     tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    if tenant and not tenant.get("lexicon"):
+        # Backfill industry vocabulary once for pre-existing workspaces.
+        lex = await ai_generate_lexicon(tenant.get("industry"), tenant.get("company_size"), tenant.get("roles"))
+        await db.tenants.update_one({"id": tenant["id"]}, {"$set": {"lexicon": lex}})
+        tenant["lexicon"] = lex
     return {"user": user, "tenant": tenant}
+
+
+class LexiconInput(BaseModel):
+    lexicon: dict
+
+
+@api.patch("/tenant/lexicon")
+async def update_lexicon(inp: LexiconInput, user: dict = Depends(require_perm("team_manage"))):
+    """Owner-edit the industry vocabulary (customer/vendor words, workflow & task-type labels)."""
+    lex = normalize_lexicon(inp.lexicon or {})
+    await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": {"lexicon": lex}})
+    await log_activity(user["tenant_id"], user["id"], "lexicon_updated", f"{user['name']} updated the business vocabulary")
+    return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+
+
+@api.post("/tenant/lexicon/regenerate")
+async def regenerate_lexicon(user: dict = Depends(require_perm("team_manage"))):
+    """Re-run AI to regenerate the industry vocabulary from the workspace's industry."""
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    lex = await ai_generate_lexicon(tenant.get("industry"), tenant.get("company_size"), tenant.get("roles"))
+    await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": {"lexicon": lex}})
+    await log_activity(user["tenant_id"], user["id"], "lexicon_regenerated", f"{user['name']} regenerated the business vocabulary")
+    return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
 
 
 class ProfileUpdateInput(BaseModel):

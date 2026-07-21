@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
+import { lex } from "../lib/lexicon";
 import { PageHeader } from "../components/common";
 import { UsersThree, AddressBook, Truck } from "@phosphor-icons/react";
 import { TeamPanel } from "./Team";
@@ -10,19 +11,20 @@ const CUSTOMER_TYPES = ["customer", "dealer"];
 const VENDOR_TYPES = ["vendor"];
 
 export default function People() {
-  const { user } = useAuth();
+  const { user, tenant } = useAuth();
+  const L = lex(tenant);
   const canTeam = hasPerm(user, "team_manage");
   const [tab, setTab] = useState(canTeam ? "employees" : "customers");
 
   const TABS = [
     ...(canTeam ? [{ key: "employees", label: "Employees", icon: UsersThree }] : []),
-    { key: "customers", label: "Customers", icon: AddressBook },
-    { key: "vendors", label: "Suppliers", icon: Truck },
+    { key: "customers", label: L.customer_plural, icon: AddressBook },
+    { key: "vendors", label: L.vendor_plural, icon: Truck },
   ];
 
   return (
     <div>
-      <PageHeader eyebrow="Your people — team, customers & suppliers" title="People">
+      <PageHeader eyebrow={`Your people — team, ${L.customer_plural.toLowerCase()} & ${L.vendor_plural.toLowerCase()}`} title="People">
         <div className="flex border border-black" data-testid="people-tabs">
           {TABS.map((t) => (
             <button key={t.key} onClick={() => setTab(t.key)} data-testid={`people-tab-${t.key}`}
@@ -34,8 +36,8 @@ export default function People() {
       </PageHeader>
 
       {tab === "employees" && <TeamPanel />}
-      {tab === "customers" && <ContactsPanel types={CUSTOMER_TYPES} addLabel="Add Customer" />}
-      {tab === "vendors" && <ContactsPanel types={VENDOR_TYPES} addLabel="Add Supplier" />}
+      {tab === "customers" && <ContactsPanel types={CUSTOMER_TYPES} addLabel={`Add ${L.customer_singular}`} />}
+      {tab === "vendors" && <ContactsPanel types={VENDOR_TYPES} addLabel={`Add ${L.vendor_singular}`} />}
     </div>
   );
 }

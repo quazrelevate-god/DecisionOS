@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { lex } from "../lib/lexicon";
 import { PageHeader, Chip } from "../components/common";
 import { money, timeAgo, fullTime } from "../lib/format";
 import { toast } from "sonner";
@@ -10,11 +11,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter,
 } from "../components/ui/dialog";
 
-const TABS = [
-  { key: "production", label: "Production", sub: "Order → Ready" },
-  { key: "distribution", label: "Distribution", sub: "Dispatch → Deliver" },
-  { key: "purchase_payment", label: "Procurement", sub: "Purchase → Payment" },
-];
+const TAB_KEYS = ["production", "distribution", "purchase_payment"];
 const STAGES = {
   production: ["order_received", "confirmed", "in_production", "ready"],
   distribution: ["ready_to_dispatch", "dispatched", "in_transit", "delivered"],
@@ -22,11 +19,12 @@ const STAGES = {
 };
 const STAGE_LABEL = (s) => s.replace(/_/g, " ");
 
-function NewWorkflowDialog({ type, onCreated }) {
+function NewWorkflowDialog({ type, typeLabel, custLabel, vendLabel, onCreated }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ title: "", detail: "", amount: "", counterparty: "", contact_id: "" });
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const contactType = type === "purchase_payment" ? "vendor" : "customer";
+  const contactLabel = contactType === "customer" ? custLabel : vendLabel;
   const { data: contacts } = useQuery({
     queryKey: ["contacts", contactType, "", ""],
     queryFn: () => api.get(`/contacts?type=${contactType}`).then((r) => r.data),
@@ -58,15 +56,15 @@ function NewWorkflowDialog({ type, onCreated }) {
         </button>
       </DialogTrigger>
       <DialogContent className="border border-black rounded-none">
-        <DialogHeader><DialogTitle className="font-heading uppercase tracking-tight">New {TABS.find(t=>t.key===type).label}</DialogTitle>
-          <DialogDescription className="text-sm text-muted-foreground">Add a card to track this {TABS.find(t=>t.key===type).label.toLowerCase()} process.</DialogDescription>
+        <DialogHeader><DialogTitle className="font-heading uppercase tracking-tight">New {typeLabel}</DialogTitle>
+          <DialogDescription className="text-sm text-muted-foreground">Add a card to track this {typeLabel.toLowerCase()} process.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <input data-testid="wf-title-input" className={inp} placeholder="Title (e.g. Order #4823 — Retailer)" value={form.title} onChange={set("title")} />
+          <input data-testid="wf-title-input" className={inp} placeholder="Title (e.g. Order #4823)" value={form.title} onChange={set("title")} />
           <div>
-            <label className="label-mono text-muted-foreground">{contactType === "customer" ? "Customer" : "Supplier"}</label>
+            <label className="label-mono text-muted-foreground">{contactLabel}</label>
             <select data-testid="wf-contact-select" className={`${inp} mt-1`} value={form.contact_id} onChange={pickContact}>
-              <option value="">Select {contactType}… (or type below)</option>
+              <option value="">Select {contactLabel.toLowerCase()}… (or type below)</option>
               {(contacts || []).map((c) => <option key={c.id} value={c.id}>{c.company || c.name}</option>)}
             </select>
           </div>
@@ -85,10 +83,18 @@ function NewWorkflowDialog({ type, onCreated }) {
 export default function Workflows({ embedded = false }) {
   const qc = useQueryClient();
   const { tenant, user } = useAuth();
+  const L = lex(tenant);
+  const TABS = TAB_KEYS.map((k) => ({ key: k, label: L.workflows[k].label, sub: L.workflows[k].sub }));
   const [tab, setTab] = useState("production");
   const { data } = useQuery({ queryKey: ["workflows", tab], queryFn: () => api.get(`/workflows?type=${tab}`).then((r) => r.data) });
 
   const stages = STAGES[tab];
+  const tabLabel = L.workflows[tab].label;
+  const newWfDialog = (
+    <NewWorkflowDialog
+      type={tab} typeLabel={tabLabel} custLabel={L.customer_singular} vendLabel={L.vendor_singular}
+      onCreated={() => qc.invalidateQueries({ queryKey: ["workflows", tab] })} />
+  );
 
   const advance = async (wf) => {
     const idx = wf.stages.indexOf(wf.stage);
@@ -120,11 +126,11 @@ export default function Workflows({ embedded = false }) {
     <div>
       {embedded ? (
         <div className="flex justify-end mb-4">
-          <NewWorkflowDialog type={tab} onCreated={() => qc.invalidateQueries({ queryKey: ["workflows", tab] })} />
+          {newWfDialog}
         </div>
       ) : (
         <PageHeader eyebrow="Flagship operational flows" title="Workflows">
-          <NewWorkflowDialog type={tab} onCreated={() => qc.invalidateQueries({ queryKey: ["workflows", tab] })} />
+          {newWfDialog}
         </PageHeader>
       )}
 

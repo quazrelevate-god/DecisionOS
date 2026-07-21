@@ -16,7 +16,7 @@ import {
   Sparkle, Plus, Trash, ArrowUp, ArrowDown, Robot, PencilSimple, ListChecks, CaretDown, ArrowsOutSimple,
   ArrowBendUpRight, WarningCircle, ChatText, ArrowRight, Kanban, ListChecks as ListIcon,
   Paperclip, UserCircle, ShieldCheck, Tag, ClockCounterClockwise,
-  ArrowClockwise, XCircle, LockKey, X, AirplaneTakeoff, MagnifyingGlassPlus,
+  ArrowClockwise, XCircle, LockKey, X, AirplaneTakeoff, MagnifyingGlassPlus, Eye,
 } from "@phosphor-icons/react";
 
 const CTRL = "flex items-center justify-center gap-1.5 px-2 lg:px-4 py-2 text-[11px] lg:text-sm font-semibold uppercase tracking-wider border border-black transition-all text-center leading-tight";
@@ -430,11 +430,103 @@ function PriorityScoreBars({ scores }) {
   );
 }
 
+function TaskDetailDialog({ t, open, onOpenChange }) {
+  const [zoom, setZoom] = useState(null);
+  const steps = t.execution_plan?.steps || [];
+  const attachments = t.attachments || [];
+  const updates = t.updates || [];
+  const photos = attachments.filter((a) => a.kind === "photo");
+  const voices = attachments.filter((a) => a.kind !== "photo");
+  const url = (u) => `${process.env.REACT_APP_BACKEND_URL}${u}`;
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) setZoom(null); onOpenChange(o); }}>
+      <DialogContent className="border border-black rounded-none max-w-2xl max-h-[90vh] overflow-y-auto" data-testid={`task-detail-${t.id}`}>
+        <DialogHeader>
+          <DialogTitle className="font-heading uppercase tracking-tight text-base pr-6">{t.title}</DialogTitle>
+        </DialogHeader>
+        {zoom ? (
+          <div className="space-y-3">
+            <button onClick={() => setZoom(null)} data-testid={`detail-zoom-back-${t.id}`} className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-black px-2 py-1 hover:bg-black/5"><X size={14} weight="bold" /> Back to details</button>
+            <img src={zoom} alt="proof full" className="w-full h-auto max-h-[70vh] object-contain border border-black" />
+          </div>
+        ) : (
+          <div className="space-y-5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-black bg-white">{STATUS_LABEL[t.status] || t.status}</span>
+              {t.assignee_name && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><UserCircle size={13} weight="bold" /> {t.assignee_name}</span>}
+              {t.due_date && <span className="text-xs text-muted-foreground">due {new Date(t.due_date).toLocaleDateString()}</span>}
+              <span className="label-mono text-muted-foreground ml-auto">{t.progress || 0}%</span>
+            </div>
+            {t.description && <p className="text-sm text-muted-foreground">{t.description}</p>}
+
+            {steps.length > 0 && (
+              <div>
+                <p className="flex items-center gap-2 font-heading font-extrabold uppercase tracking-tight text-sm mb-2"><ListChecks size={16} weight="bold" className="text-brand-red" /> What was done</p>
+                <ul className="space-y-1.5">
+                  {steps.map((s) => (
+                    <li key={s.id} className="flex items-start gap-2 text-sm" data-testid={`detail-step-${t.id}-${s.id}`}>
+                      <CheckCircle size={16} weight={s.done ? "fill" : "regular"} className={`mt-0.5 shrink-0 ${s.done ? "text-green-600" : "text-muted-foreground"}`} />
+                      <span className={s.done ? "line-through text-muted-foreground" : ""}>{s.text}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div>
+              <p className="flex items-center gap-2 font-heading font-extrabold uppercase tracking-tight text-sm mb-2"><Paperclip size={15} weight="bold" className="text-brand-red" /> Proof of work{attachments.length > 0 ? ` · ${attachments.length}` : ""}</p>
+              {attachments.length === 0 ? (
+                <p className="text-sm text-muted-foreground" data-testid={`detail-no-proof-${t.id}`}>No proof uploaded for this task.</p>
+              ) : (
+                <div className="space-y-2">
+                  {photos.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {photos.map((a) => (
+                        <button key={a.url} type="button" onClick={() => setZoom(url(a.url))} data-testid={`detail-photo-${t.id}-${a.url}`}
+                          className="relative w-24 h-24 border border-black overflow-hidden group" title="Click to view full photo">
+                          <img src={url(a.url)} alt="proof" className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                          <span className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"><MagnifyingGlassPlus size={20} weight="bold" className="text-white" /></span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {voices.map((a) => (
+                    <audio key={a.url} controls preload="none" src={url(a.url)} className="h-9 w-full" data-testid={`detail-voice-${t.id}-${a.url}`} />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {updates.length > 0 && (
+              <div>
+                <p className="flex items-center gap-2 font-heading font-extrabold uppercase tracking-tight text-sm mb-2"><ChatCircleText size={16} weight="bold" className="text-brand-red" /> Activity &amp; Handoffs</p>
+                <ul className="space-y-2">
+                  {updates.map((u) => (
+                    <li key={u.id} className="flex items-start gap-2 border border-black/15 p-2.5">
+                      <ChatText size={15} weight="bold" className="mt-0.5 shrink-0 text-muted-foreground" />
+                      <div className="min-w-0 flex-1">
+                        {u.step_text && <p className="label-mono text-muted-foreground">On: {u.step_text}</p>}
+                        <p className="text-sm">{u.text}</p>
+                        <p className="label-mono text-muted-foreground mt-1">{u.author_name}{u.to_name && <> <ArrowRight size={10} weight="bold" className="inline" /> {u.to_name}</>}{" · "}{new Date(u.created_at).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAssignee = false, highlight = false }) {
   const { user } = useAuth();
   const [uploading, setUploading] = useState(false);
   const [recording, setRecording] = useState(false);
   const [lightbox, setLightbox] = useState(null);
+  const [detailOpen, setDetailOpen] = useState(false);
   const fileRef = useRef(null);
   const mediaRef = useRef(null);
   const chunksRef = useRef([]);
@@ -575,6 +667,9 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
         {t.source === "handoff" && <span data-testid={`badge-handoff-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-black bg-brand-blue text-white">Handoff</span>}
         {(t.attachment_count || 0) > 0 && <span data-testid={`att-count-${t.id}`} className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Paperclip size={12} weight="bold" /> {t.attachment_count}</span>}
         {t.due_date && <span className="text-xs text-muted-foreground">due {new Date(t.due_date).toLocaleString(undefined, { day: "numeric", month: "short", ...(t.due_date.includes("T") ? { hour: "2-digit", minute: "2-digit" } : {}) })}</span>}
+        <button onClick={() => setDetailOpen(true)} data-testid={`view-details-${t.id}`} className="ml-auto inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-black px-2 py-0.5 hover:bg-brand-yellow transition-colors">
+          <Eye size={13} weight="bold" /> View details
+        </button>
       </div>
 
       {t.updated_at && (
@@ -694,6 +789,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
 
       {!awaitingApproval && <ExecutionPlan t={t} onChange={onChange} members={members} roleOptions={roleOptions} />}
       <TaskTrail t={t} onChange={onChange} members={members} roleOptions={roleOptions} />
+      <TaskDetailDialog t={t} open={detailOpen} onOpenChange={setDetailOpen} />
     </div>
   );
 }

@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import api from "../lib/api";
 import { PageHeader } from "../components/common";
-import { Gauge, Lightning, CurrencyCircleDollar, TrendUp, ChatCenteredDots, Trophy, Sparkle } from "@phosphor-icons/react";
+import { Gauge, Lightning, CurrencyCircleDollar, TrendUp, ChatCenteredDots, Trophy, Sparkle, CaretRight } from "@phosphor-icons/react";
 
 const CATS = [
   { key: "execution", label: "Execution", icon: Lightning, color: "bg-brand-blue" },
@@ -124,22 +124,24 @@ export default function OperatingScore() {
         <Trophy size={18} weight="bold" className="text-brand-red" />
         <h2 className="font-heading text-xl font-extrabold uppercase tracking-tight">Team Execution</h2>
       </div>
+      <p className="label-mono text-muted-foreground mb-3">Tap any member to see their full activity &amp; AI coaching.</p>
       <div className="card-brutal divide-y divide-black/10" data-testid="operating-employees">
         {rankedEmployees.map((e, i) => (
-          <div key={e.id} data-testid={`operating-emp-${e.id}`} className="p-4 flex items-center gap-4">
+          <Link key={e.id} to={`/coach?user=${e.id}`} data-testid={`operating-emp-${e.id}`}
+            className="p-4 flex items-center gap-4 hover:bg-black/[0.03] transition-colors group cursor-pointer">
             <span className="font-heading text-lg font-black text-black/30 w-6">{i + 1}</span>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold truncate">{e.name}</p>
+              <p className="text-sm font-semibold truncate group-hover:text-brand-red transition-colors">{e.name}</p>
               <p className="label-mono text-muted-foreground">{e.role} · {e.done} done · {e.open} open{e.overdue > 0 ? ` · ${e.overdue} overdue` : ""}</p>
             </div>
-            <Link to={`/coach?user=${e.id}`} data-testid={`coach-link-${e.id}`}
-              className="hidden sm:flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-black px-3 py-1.5 hover:bg-brand-yellow transition-colors shrink-0">
-              <Sparkle size={13} weight="bold" /> Coach
-            </Link>
+            <span className="hidden sm:flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground group-hover:text-brand-red transition-colors shrink-0">
+              <Sparkle size={13} weight="bold" /> Details
+            </span>
             <div className="w-14 h-14 flex flex-col items-center justify-center border-2 border-black bg-white shrink-0">
               <span className={`font-heading text-2xl font-black leading-none ${scoreColor(e.score)}`}>{e.score != null ? e.score : "—"}</span>
             </div>
-          </div>
+            <CaretRight size={16} weight="bold" className="text-black/30 group-hover:text-brand-red transition-colors shrink-0" />
+          </Link>
         ))}
       </div>
     </div>

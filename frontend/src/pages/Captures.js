@@ -160,6 +160,21 @@ function CaptureCard({ c, user, onChange }) {
           {c.attention_reason && <p className="text-xs text-amber-700 mt-1">⚠ {c.attention_reason}</p>}
           {c.escalate_reason && <p className="text-xs text-brand-red mt-1">⚠ {c.escalate_reason}</p>}
           {c.clarification_note && <p className="text-xs text-amber-700 mt-1">Note: {c.clarification_note}</p>}
+          {c.file_url && (
+            <div className="mt-2">
+              <p className="label-mono text-muted-foreground text-[10px] mb-1">Under review — original file</p>
+              {c.kind === "image" ? (
+                <a href={`${process.env.REACT_APP_BACKEND_URL}${c.file_url}`} target="_blank" rel="noopener noreferrer" data-testid={`capture-file-${c.id}`} title="Open full image" className="inline-block border-2 border-black hover:shadow-brutal-sm transition-all">
+                  <img src={`${process.env.REACT_APP_BACKEND_URL}${c.file_url}`} alt={c.filename || "attachment"} className="h-28 w-auto object-cover" />
+                </a>
+              ) : (
+                <a href={`${process.env.REACT_APP_BACKEND_URL}${c.file_url}`} target="_blank" rel="noopener noreferrer" data-testid={`capture-file-${c.id}`}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider border-2 border-black px-3 py-1.5 hover:bg-brand-yellow transition-colors">
+                  <FilePdf size={14} weight="bold" /> Open file{c.filename ? ` · ${c.filename}` : ""}
+                </a>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

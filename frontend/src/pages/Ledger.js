@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
 import {
   Plus, Sparkle, Package, Receipt, TrendUp, Trash, Buildings, Robot,
+  Paperclip, ArrowClockwise, PaperPlaneRight, WarningCircle, Lightbulb, CheckCircle, Brain,
 } from "@phosphor-icons/react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell,
@@ -21,18 +22,44 @@ const fmt = (cur) => (n) => {
 };
 
 const SOURCE_CHIP = { manual: "bg-black/5 text-foreground", whatsapp: "bg-green-600 text-white", ingest: "bg-brand-blue text-white", document: "bg-brand-blue text-white" };
+const LEVEL_STYLE = { high: "bg-brand-red text-white", medium: "bg-brand-yellow text-black", low: "bg-brand-blue text-white" };
 
 function Field({ label: l, children }) {
   return <div><label className={label}>{l}</label><div className="mt-1">{children}</div></div>;
+}
+
+function FileField({ file, setFile }) {
+  return (
+    <Field label="Attach bill / invoice / photo (optional)">
+      <label className="flex items-center gap-2 border border-dashed border-border rounded-lg px-3 py-2.5 text-sm cursor-pointer hover:bg-black/[0.02]">
+        <Paperclip size={15} weight="bold" />
+        <span className="truncate flex-1 text-muted-foreground">{file ? file.name : "Choose image or PDF — AI will read it & fill the rest"}</span>
+        <input type="file" accept="image/*,application/pdf" className="hidden" data-testid="ledger-file-input" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+      </label>
+      {file && <button type="button" onClick={() => setFile(null)} className="mt-1 text-xs text-brand-red hover:underline">Remove attachment</button>}
+    </Field>
+  );
+}
+
+function AttachmentLink({ att }) {
+  if (!att?.url) return null;
+  return (
+    <a href={`${process.env.REACT_APP_BACKEND_URL}${att.url}`} target="_blank" rel="noopener noreferrer" data-testid="view-attachment"
+      className="ml-2 inline-flex items-center gap-1 text-xs text-brand-blue hover:underline align-middle">
+      <Paperclip size={12} weight="bold" /> Bill
+    </a>
+  );
 }
 
 // ---------- Add dialogs ----------
 function AddExpenseDialog({ categories, onDone }) {
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({ title: "", amount: "", vendor_name: "", category: "", date: "", status: "unpaid", notes: "" });
+  const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  const reset = () => { setF({ title: "", amount: "", vendor_name: "", category: "", date: "", status: "unpaid", notes: "" }); setFile(null); };
 
   const suggest = async () => {
     const text = `${f.title} ${f.vendor_name} ${f.notes}`.trim();
@@ -42,26 +69,29 @@ function AddExpenseDialog({ categories, onDone }) {
     catch { toast.error("Could not suggest"); } finally { setSuggesting(false); }
   };
   const save = async () => {
-    if (!f.title.trim() || !f.amount) return toast.error("Title and amount required");
+    if (!f.title.trim() && !f.amount && !file) return toast.error("Add a title/amount or attach a bill");
     setBusy(true);
     try {
-      await api.post("/expenses", { ...f, amount: parseFloat(f.amount) });
-      toast.success("Expense added"); setOpen(false);
-      setF({ title: "", amount: "", vendor_name: "", category: "", date: "", status: "unpaid", notes: "" });
-      onDone();
+      const fd = new FormData();
+      Object.entries(f).forEach(([k, v]) => fd.append(k, v ?? ""));
+      if (file) fd.append("file", file);
+      await api.post("/expenses/with-file", fd);
+      toast.success(file ? "AI read your bill & added the expense" : "Expense added");
+      setOpen(false); reset(); onDone();
     } catch (e) { toast.error(e.response?.data?.detail || "Failed"); } finally { setBusy(false); }
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
       <DialogTrigger asChild>
         <button data-testid="add-expense-btn" className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
           <Plus size={16} weight="bold" /> Add Expense
         </button>
       </DialogTrigger>
       <DialogContent className="border border-black rounded-none max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle className="font-heading uppercase tracking-tight">New Expense</DialogTitle><DialogDescription className="text-xs text-muted-foreground">Log a business expense. AI can suggest a category.</DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle className="font-heading uppercase tracking-tight">New Expense</DialogTitle><DialogDescription className="text-xs text-muted-foreground">Attach a bill and AI fills the rest, or type it in manually.</DialogDescription></DialogHeader>
         <div className="space-y-4">
+          <FileField file={file} setFile={setFile} />
           <Field label="Title"><input data-testid="expense-title" className={inp} value={f.title} onChange={(e) => set("title", e.target.value)} placeholder="e.g. Cotton yarn purchase" /></Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Amount"><input data-testid="expense-amount" type="number" className={inp} value={f.amount} onChange={(e) => set("amount", e.target.value)} /></Field>
@@ -89,7 +119,7 @@ function AddExpenseDialog({ categories, onDone }) {
           </div>
           <Field label="Notes"><textarea className={inp} rows={2} value={f.notes} onChange={(e) => set("notes", e.target.value)} /></Field>
           <button onClick={save} disabled={busy} data-testid="expense-save" className="w-full bg-brand-red text-white py-2.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-60">
-            {busy ? "Saving…" : "Save Expense"}
+            {busy ? (file ? "AI reading bill…" : "Saving…") : "Save Expense"}
           </button>
         </div>
       </DialogContent>
@@ -100,33 +130,38 @@ function AddExpenseDialog({ categories, onDone }) {
 function AddAssetDialog({ categories, onDone }) {
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({ name: "", purchase_amount: "", category: "Equipment", vendor_name: "", purchase_date: "", status: "active", notes: "" });
+  const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  const reset = () => { setF({ name: "", purchase_amount: "", category: "Equipment", vendor_name: "", purchase_date: "", status: "active", notes: "" }); setFile(null); };
   const save = async () => {
-    if (!f.name.trim()) return toast.error("Name required");
+    if (!f.name.trim() && !file) return toast.error("Add a name or attach a bill");
     setBusy(true);
     try {
-      await api.post("/assets", { ...f, purchase_amount: parseFloat(f.purchase_amount || 0) });
-      toast.success("Asset added"); setOpen(false);
-      setF({ name: "", purchase_amount: "", category: "Equipment", vendor_name: "", purchase_date: "", status: "active", notes: "" });
-      onDone();
+      const fd = new FormData();
+      Object.entries(f).forEach(([k, v]) => fd.append(k, v ?? ""));
+      if (file) fd.append("file", file);
+      await api.post("/assets/with-file", fd);
+      toast.success(file ? "AI read your bill & added the asset" : "Asset added");
+      setOpen(false); reset(); onDone();
     } catch (e) { toast.error(e.response?.data?.detail || "Failed"); } finally { setBusy(false); }
   };
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
       <DialogTrigger asChild>
         <button data-testid="add-asset-btn" className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
           <Plus size={16} weight="bold" /> Add Asset
         </button>
       </DialogTrigger>
       <DialogContent className="border border-black rounded-none max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle className="font-heading uppercase tracking-tight">New Asset</DialogTitle><DialogDescription className="text-xs text-muted-foreground">Track a company asset and its purchase value.</DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle className="font-heading uppercase tracking-tight">New Asset</DialogTitle><DialogDescription className="text-xs text-muted-foreground">Attach the purchase bill and AI fills the rest, or type it in.</DialogDescription></DialogHeader>
         <div className="space-y-4">
+          <FileField file={file} setFile={setFile} />
           <Field label="Asset name"><input data-testid="asset-name" className={inp} value={f.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Ring spinning machine" /></Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Purchase amount"><input type="number" className={inp} value={f.purchase_amount} onChange={(e) => set("purchase_amount", e.target.value)} /></Field>
+            <Field label="Purchase amount"><input data-testid="asset-amount" type="number" className={inp} value={f.purchase_amount} onChange={(e) => set("purchase_amount", e.target.value)} /></Field>
             <Field label="Category">
-              <select className={inp} value={f.category} onChange={(e) => set("category", e.target.value)}>
+              <select data-testid="asset-category" className={inp} value={f.category} onChange={(e) => set("category", e.target.value)}>
                 {categories.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             </Field>
@@ -141,7 +176,7 @@ function AddAssetDialog({ categories, onDone }) {
             </Field>
           </div>
           <button onClick={save} disabled={busy} data-testid="asset-save" className="w-full bg-brand-red text-white py-2.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-60">
-            {busy ? "Saving…" : "Save Asset"}
+            {busy ? (file ? "AI reading bill…" : "Saving…") : "Save Asset"}
           </button>
         </div>
       </DialogContent>
@@ -152,47 +187,143 @@ function AddAssetDialog({ categories, onDone }) {
 function AddInventoryDialog({ onDone }) {
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({ item: "", sku: "", quantity: "", unit: "unit", unit_cost: "", category: "", vendor_name: "", notes: "" });
+  const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  const reset = () => { setF({ item: "", sku: "", quantity: "", unit: "unit", unit_cost: "", category: "", vendor_name: "", notes: "" }); setFile(null); };
   const save = async () => {
-    if (!f.item.trim()) return toast.error("Item required");
+    if (!f.item.trim() && !file) return toast.error("Add an item or attach a bill");
     setBusy(true);
     try {
-      await api.post("/inventory", { ...f, quantity: parseFloat(f.quantity || 0), unit_cost: parseFloat(f.unit_cost || 0) });
-      toast.success("Inventory added"); setOpen(false);
-      setF({ item: "", sku: "", quantity: "", unit: "unit", unit_cost: "", category: "", vendor_name: "", notes: "" });
-      onDone();
+      const fd = new FormData();
+      Object.entries(f).forEach(([k, v]) => fd.append(k, v ?? ""));
+      if (file) fd.append("file", file);
+      await api.post("/inventory/with-file", fd);
+      toast.success(file ? "AI read your bill & added the item" : "Inventory added");
+      setOpen(false); reset(); onDone();
     } catch (e) { toast.error(e.response?.data?.detail || "Failed"); } finally { setBusy(false); }
   };
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
       <DialogTrigger asChild>
         <button data-testid="add-inventory-btn" className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
           <Plus size={16} weight="bold" /> Add Item
         </button>
       </DialogTrigger>
       <DialogContent className="border border-black rounded-none max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle className="font-heading uppercase tracking-tight">New Inventory Item</DialogTitle><DialogDescription className="text-xs text-muted-foreground">Add a stock item; value is quantity × unit cost.</DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle className="font-heading uppercase tracking-tight">New Inventory Item</DialogTitle><DialogDescription className="text-xs text-muted-foreground">Attach a purchase bill and AI fills the rest; value is quantity × unit cost.</DialogDescription></DialogHeader>
         <div className="space-y-4">
+          <FileField file={file} setFile={setFile} />
           <div className="grid grid-cols-2 gap-3">
             <Field label="Item"><input data-testid="inv-item" className={inp} value={f.item} onChange={(e) => set("item", e.target.value)} /></Field>
             <Field label="SKU"><input className={inp} value={f.sku} onChange={(e) => set("sku", e.target.value)} /></Field>
           </div>
           <div className="grid grid-cols-3 gap-3">
-            <Field label="Quantity"><input type="number" className={inp} value={f.quantity} onChange={(e) => set("quantity", e.target.value)} /></Field>
+            <Field label="Quantity"><input data-testid="inv-qty" type="number" className={inp} value={f.quantity} onChange={(e) => set("quantity", e.target.value)} /></Field>
             <Field label="Unit"><input className={inp} value={f.unit} onChange={(e) => set("unit", e.target.value)} /></Field>
-            <Field label="Unit cost"><input type="number" className={inp} value={f.unit_cost} onChange={(e) => set("unit_cost", e.target.value)} /></Field>
+            <Field label="Unit cost"><input data-testid="inv-cost" type="number" className={inp} value={f.unit_cost} onChange={(e) => set("unit_cost", e.target.value)} /></Field>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Category"><input className={inp} value={f.category} onChange={(e) => set("category", e.target.value)} /></Field>
             <Field label="Vendor"><input className={inp} value={f.vendor_name} onChange={(e) => set("vendor_name", e.target.value)} /></Field>
           </div>
           <button onClick={save} disabled={busy} data-testid="inv-save" className="w-full bg-brand-red text-white py-2.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-60">
-            {busy ? "Saving…" : "Save Item"}
+            {busy ? (file ? "AI reading bill…" : "Saving…") : "Save Item"}
           </button>
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ---------- AI Analysis panel (shared: brief + per-tab) ----------
+function AiPanel({ scope, variant = "inline" }) {
+  const qc = useQueryClient();
+  const [q, setQ] = useState("");
+  const [answer, setAnswer] = useState("");
+  const [asking, setAsking] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const { data, isLoading } = useQuery({
+    queryKey: ["ledger-ai", scope],
+    queryFn: () => api.get(`/ledger/ai/${scope}`).then((r) => r.data),
+    staleTime: Infinity,
+  });
+  const isBrief = variant === "brief";
+
+  const refresh = async () => {
+    setRefreshing(true);
+    try { const { data: d } = await api.post(`/ledger/ai/${scope}/refresh`); qc.setQueryData(["ledger-ai", scope], d); toast.success("Analysis refreshed"); }
+    catch { toast.error("Could not refresh analysis"); } finally { setRefreshing(false); }
+  };
+  const ask = async () => {
+    if (!q.trim()) return;
+    setAsking(true); setAnswer("");
+    try { const { data: d } = await api.post("/ledger/ask", { question: q, scope }); setAnswer(d.answer); }
+    catch (e) { toast.error(e.response?.data?.detail || "AI is busy, try again"); } finally { setAsking(false); }
+  };
+
+  return (
+    <div className={`card-brutal ${isBrief ? "p-6" : "p-5"} space-y-5`} data-testid={`ai-panel-${scope}`}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Sparkle size={isBrief ? 22 : 18} weight="fill" className="text-brand-red" />
+          <h3 className={`font-heading font-black uppercase tracking-tight ${isBrief ? "text-lg" : "text-sm"}`}>{isBrief ? "AI Finance Brief" : "AI Analysis"}</h3>
+        </div>
+        <div className="flex items-center gap-2">
+          {data?.generated_at && <span className="text-[11px] text-muted-foreground hidden sm:inline">Updated {new Date(data.generated_at).toLocaleString()}</span>}
+          <button onClick={refresh} disabled={refreshing} data-testid={`ai-refresh-${scope}`} className="flex items-center gap-1 text-xs font-semibold border border-black px-2.5 py-1.5 hover:bg-black/5 transition-colors disabled:opacity-50">
+            <ArrowClockwise size={13} weight="bold" className={refreshing ? "animate-spin" : ""} /> {refreshing ? "Analysing…" : "Refresh"}
+          </button>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <p className="font-mono text-sm text-muted-foreground">Analysing your finances…</p>
+      ) : (
+        <>
+          <p className={`${isBrief ? "text-base" : "text-sm"} leading-relaxed`} data-testid={`ai-summary-${scope}`}>{data?.summary}</p>
+
+          {!!data?.alerts?.length && (
+            <div>
+              <div className="flex items-center gap-1.5 mb-2 text-muted-foreground"><WarningCircle size={15} weight="bold" /><span className="label-mono text-xs">Priority Alerts</span></div>
+              <div className="space-y-2">
+                {data.alerts.map((a, i) => (
+                  <div key={i} className="flex items-start gap-2.5 border border-border rounded-lg p-3" data-testid={`ai-alert-${scope}-${i}`}>
+                    <Chip value={a.level || "info"} className={`${LEVEL_STYLE[a.level] || "bg-black/5 text-foreground"} shrink-0`} />
+                    <div className="min-w-0"><p className="font-semibold text-sm">{a.title}</p>{a.detail && <p className="text-xs text-muted-foreground mt-0.5">{a.detail}</p>}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!!data?.recommendations?.length && (
+            <div>
+              <div className="flex items-center gap-1.5 mb-2 text-muted-foreground"><Lightbulb size={15} weight="bold" /><span className="label-mono text-xs">Recommended Actions</span></div>
+              <div className="space-y-2.5">
+                {data.recommendations.map((r, i) => (
+                  <div key={i} className="flex items-start gap-2" data-testid={`ai-rec-${scope}-${i}`}>
+                    <CheckCircle size={16} weight="bold" className="text-brand-red mt-0.5 shrink-0" />
+                    <div><p className="font-semibold text-sm">{r.title}</p>{r.detail && <p className="text-xs text-muted-foreground mt-0.5">{r.detail}</p>}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      <div className="border-t border-border pt-4">
+        <div className="flex items-center gap-1.5 mb-2 text-muted-foreground"><Brain size={15} weight="bold" /><span className="label-mono text-xs">Ask AI about {scope === "brief" ? "your finances" : `your ${scope}`}</span></div>
+        <div className="flex gap-2">
+          <input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && ask()} data-testid={`ai-ask-input-${scope}`} placeholder="e.g. Which vendor did I spend most on?" className={inp} />
+          <button onClick={ask} disabled={asking} data-testid={`ai-ask-btn-${scope}`} className="flex items-center gap-1 bg-brand-ink text-white px-3 py-2 text-sm font-semibold border border-black hover:shadow-brutal-sm transition-all disabled:opacity-50 shrink-0">
+            <PaperPlaneRight size={15} weight="bold" /> {asking ? "…" : "Ask"}
+          </button>
+        </div>
+        {answer && <div className="mt-3 border border-border rounded-lg p-3 bg-black/[0.02] text-sm leading-relaxed" data-testid={`ai-answer-${scope}`}>{answer}</div>}
+      </div>
+    </div>
   );
 }
 
@@ -206,17 +337,33 @@ function KPI({ icon: Icon, label: l, value, accent }) {
   );
 }
 
-function Overview({ summary }) {
+function KpiRow({ summary }) {
   const f = fmt(summary.currency);
   const t = summary.totals;
   return (
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <KPI icon={TrendUp} label="Total Spend" value={f(t.total_spend)} accent="text-brand-red" />
+      <KPI icon={Receipt} label="Outstanding" value={f(t.outstanding)} />
+      <KPI icon={Buildings} label="Asset Value" value={f(t.asset_value)} />
+      <KPI icon={Package} label="Inventory Value" value={f(t.inventory_value)} />
+    </div>
+  );
+}
+
+function BriefTab({ summary }) {
+  return (
+    <div className="space-y-6" data-testid="ledger-brief">
+      {summary && <KpiRow summary={summary} />}
+      <AiPanel scope="brief" variant="brief" />
+    </div>
+  );
+}
+
+function Overview({ summary }) {
+  const f = fmt(summary.currency);
+  return (
     <div className="space-y-6" data-testid="ledger-overview">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KPI icon={TrendUp} label="Total Spend" value={f(t.total_spend)} accent="text-brand-red" />
-        <KPI icon={Receipt} label="Outstanding" value={f(t.outstanding)} />
-        <KPI icon={Buildings} label="Asset Value" value={f(t.asset_value)} />
-        <KPI icon={Package} label="Inventory Value" value={f(t.inventory_value)} />
-      </div>
+      <KpiRow summary={summary} />
 
       <div className="grid lg:grid-cols-2 gap-4">
         <div className="card-brutal p-5">
@@ -293,7 +440,7 @@ function ExpensesTable({ rows, cur, onDelete }) {
         <tbody>
           {rows.map((e) => (
             <tr key={e.id} className="border-b border-border/60 hover:bg-black/[0.02]" data-testid={`expense-row-${e.id}`}>
-              <td className="p-3 font-medium">{e.title}{e.source !== "manual" && <Chip value={e.source} className={`ml-2 ${SOURCE_CHIP[e.source] || "bg-black/5"}`} />}</td>
+              <td className="p-3 font-medium">{e.title}{e.source !== "manual" && <Chip value={e.source} className={`ml-2 ${SOURCE_CHIP[e.source] || "bg-black/5"}`} />}<AttachmentLink att={e.attachment} /></td>
               <td className="p-3"><Chip value={e.category} className="bg-black/5 text-foreground" /></td>
               <td className="p-3 text-muted-foreground">{e.vendor_name || "—"}</td>
               <td className="p-3 text-muted-foreground">{e.date || "—"}</td>
@@ -320,7 +467,7 @@ function AssetsTable({ rows, cur, onDelete }) {
         <tbody>
           {rows.map((a) => (
             <tr key={a.id} className="border-b border-border/60 hover:bg-black/[0.02]" data-testid={`asset-row-${a.id}`}>
-              <td className="p-3 font-medium">{a.name}{a.source !== "manual" && <Chip value={a.source} className={`ml-2 ${SOURCE_CHIP[a.source] || "bg-black/5"}`} />}</td>
+              <td className="p-3 font-medium">{a.name}{a.source !== "manual" && <Chip value={a.source} className={`ml-2 ${SOURCE_CHIP[a.source] || "bg-black/5"}`} />}<AttachmentLink att={a.attachment} /></td>
               <td className="p-3"><Chip value={a.category} className="bg-black/5 text-foreground" /></td>
               <td className="p-3 text-muted-foreground">{a.vendor_name || "—"}</td>
               <td className="p-3 text-muted-foreground">{a.purchase_date || "—"}</td>
@@ -347,7 +494,7 @@ function InventoryTable({ rows, cur, onDelete }) {
         <tbody>
           {rows.map((i) => (
             <tr key={i.id} className="border-b border-border/60 hover:bg-black/[0.02]" data-testid={`inv-row-${i.id}`}>
-              <td className="p-3 font-medium">{i.item}</td>
+              <td className="p-3 font-medium">{i.item}<AttachmentLink att={i.attachment} /></td>
               <td className="p-3 text-muted-foreground">{i.sku || "—"}</td>
               <td className="p-3 font-mono">{i.quantity} {i.unit}</td>
               <td className="p-3 font-mono">{f(i.unit_cost)}</td>
@@ -363,6 +510,7 @@ function InventoryTable({ rows, cur, onDelete }) {
 }
 
 const TABS = [
+  { key: "brief", label: "AI Brief", icon: Sparkle },
   { key: "overview", label: "Overview", icon: TrendUp },
   { key: "expenses", label: "Expenses", icon: Receipt },
   { key: "assets", label: "Assets", icon: Buildings },
@@ -370,7 +518,7 @@ const TABS = [
 ];
 
 export default function Ledger() {
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useState("brief");
   const qc = useQueryClient();
   const invalidate = () => ["ledger-summary", "expenses", "assets", "inventory"].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
 
@@ -413,14 +561,15 @@ export default function Ledger() {
         </div>
       </PageHeader>
 
-      {(summaryQ.isLoading && tab === "overview") ? (
+      {(summaryQ.isLoading && (tab === "overview" || tab === "brief")) ? (
         <p className="font-mono text-sm">Loading…</p>
       ) : (
         <>
-          {tab === "overview" && summary && <Overview summary={summary} />}
-          {tab === "expenses" && <ExpensesTable rows={expensesQ.data || []} cur={cur} onDelete={(id) => del("expenses", id)} />}
-          {tab === "assets" && <AssetsTable rows={assetsQ.data || []} cur={cur} onDelete={(id) => del("assets", id)} />}
-          {tab === "inventory" && <InventoryTable rows={inventoryQ.data || []} cur={cur} onDelete={(id) => del("inventory", id)} />}
+          {tab === "brief" && <BriefTab summary={summary} />}
+          {tab === "overview" && summary && <div className="space-y-6"><AiPanel scope="overview" /><Overview summary={summary} /></div>}
+          {tab === "expenses" && <div className="space-y-6"><AiPanel scope="expenses" /><ExpensesTable rows={expensesQ.data || []} cur={cur} onDelete={(id) => del("expenses", id)} /></div>}
+          {tab === "assets" && <div className="space-y-6"><AiPanel scope="assets" /><AssetsTable rows={assetsQ.data || []} cur={cur} onDelete={(id) => del("assets", id)} /></div>}
+          {tab === "inventory" && <div className="space-y-6"><AiPanel scope="inventory" /><InventoryTable rows={inventoryQ.data || []} cur={cur} onDelete={(id) => del("inventory", id)} /></div>}
         </>
       )}
 

@@ -228,6 +228,7 @@ async def create_inventory(tenant_id: str, user_id: str, data: dict, source: str
         "unit_cost": unit_cost, "currency": currency, "value": round(qty * unit_cost, 2),
         "category": (data.get("category") or "").strip(), "vendor_name": (data.get("vendor_name") or "").strip(),
         "notes": (data.get("notes") or "").strip(), "source": source,
+        "attachment": data.get("attachment"),
         "created_by": user_id, "created_at": now_iso(),
     }
     await db.inventory.insert_one(dict(doc))
@@ -312,6 +313,41 @@ async def add_expense(inp: ExpenseInput, user: dict = Depends(require_ledger)):
     return doc
 
 
+async def _read_attachment(file: Optional[UploadFile], kind: str, tenant_id: str, typed: dict) -> tuple:
+    """Save an optional upload and, when present, AI-extract fields from it. Returns (data, attachment)."""
+    data = dict(typed)
+    attachment = None
+    if file is not None and (file.filename or ""):
+        content = await file.read()
+        saved = await asyncio.to_thread(_save_upload_sync, content, file.filename)
+        attachment = {"filename": saved["filename"], "url": saved["url"], "mime": file.content_type or ""}
+        try:
+            currency = await _currency(tenant_id)
+            ai = await ai_extract_ledger_file(saved["path"], file.content_type or "application/octet-stream", kind, currency, typed)
+            data = _merge_typed(ai, typed)
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"Ledger {kind} OCR failed, using typed values: {e}")
+        data["attachment"] = attachment
+    return data, attachment
+
+
+@router.post("/expenses/with-file")
+async def add_expense_with_file(
+    title: str = Form(""), amount: str = Form(""), vendor_name: str = Form(""),
+    category: str = Form(""), date: str = Form(""), status: str = Form("unpaid"),
+    notes: str = Form(""), file: Optional[UploadFile] = File(None),
+    user: dict = Depends(require_ledger),
+):
+    typed = {"title": title.strip(), "amount": _num(amount), "vendor_name": vendor_name.strip(),
+             "category": category, "date": date, "status": status, "notes": notes.strip()}
+    data, _ = await _read_attachment(file, "expense", user["tenant_id"], typed)
+    if not (str(data.get("title") or "").strip()) and not _num(data.get("amount")):
+        raise HTTPException(status_code=400, detail="Add a title/amount or attach a readable bill")
+    doc = await create_expense(user["tenant_id"], user["id"], data, source="manual", write_brain=True)
+    await log_activity(user["tenant_id"], user["name"], "expense_added", f"Added expense '{doc['title']}'", "expense", doc["id"])
+    return doc
+
+
 @router.patch("/expenses/{eid}")
 async def update_expense(eid: str, inp: ExpensePatch, user: dict = Depends(require_ledger)):
     updates = {k: v for k, v in inp.model_dump().items() if v is not None}
@@ -349,6 +385,23 @@ async def add_asset(inp: AssetInput, user: dict = Depends(require_ledger)):
     return doc
 
 
+@router.post("/assets/with-file")
+async def add_asset_with_file(
+    name: str = Form(""), purchase_amount: str = Form(""), vendor_name: str = Form(""),
+    category: str = Form("Other"), purchase_date: str = Form(""), status: str = Form("active"),
+    notes: str = Form(""), file: Optional[UploadFile] = File(None),
+    user: dict = Depends(require_ledger),
+):
+    typed = {"name": name.strip(), "purchase_amount": _num(purchase_amount), "vendor_name": vendor_name.strip(),
+             "category": category, "purchase_date": purchase_date, "status": status, "notes": notes.strip()}
+    data, _ = await _read_attachment(file, "asset", user["tenant_id"], typed)
+    if not (str(data.get("name") or "").strip()):
+        raise HTTPException(status_code=400, detail="Add an asset name or attach a readable bill")
+    doc = await create_asset(user["tenant_id"], user["id"], data, source="manual", write_brain=True)
+    await log_activity(user["tenant_id"], user["name"], "asset_added", f"Added asset '{doc['name']}'", "asset", doc["id"])
+    return doc
+
+
 @router.patch("/assets/{aid}")
 async def update_asset(aid: str, inp: AssetInput, user: dict = Depends(require_ledger)):
     updates = inp.model_dump()
@@ -375,6 +428,23 @@ async def list_inventory(user: dict = Depends(require_ledger)):
 @router.post("/inventory")
 async def add_inventory(inp: InventoryInput, user: dict = Depends(require_ledger)):
     doc = await create_inventory(user["tenant_id"], user["id"], inp.model_dump(), source="manual", write_brain=True)
+    await log_activity(user["tenant_id"], user["name"], "inventory_added", f"Added inventory '{doc['item']}'", "inventory", doc["id"])
+    return doc
+
+
+@router.post("/inventory/with-file")
+async def add_inventory_with_file(
+    item: str = Form(""), sku: str = Form(""), quantity: str = Form(""), unit: str = Form("unit"),
+    unit_cost: str = Form(""), category: str = Form(""), vendor_name: str = Form(""),
+    notes: str = Form(""), file: Optional[UploadFile] = File(None),
+    user: dict = Depends(require_ledger),
+):
+    typed = {"item": item.strip(), "sku": sku.strip(), "quantity": _num(quantity), "unit": unit.strip() or "unit",
+             "unit_cost": _num(unit_cost), "category": category.strip(), "vendor_name": vendor_name.strip(), "notes": notes.strip()}
+    data, _ = await _read_attachment(file, "inventory", user["tenant_id"], typed)
+    if not (str(data.get("item") or "").strip()):
+        raise HTTPException(status_code=400, detail="Add an item name or attach a readable bill")
+    doc = await create_inventory(user["tenant_id"], user["id"], data, source="manual", write_brain=True)
     await log_activity(user["tenant_id"], user["name"], "inventory_added", f"Added inventory '{doc['item']}'", "inventory", doc["id"])
     return doc
 
@@ -429,3 +499,131 @@ async def ledger_summary(user: dict = Depends(require_ledger)):
         "by_month": [{"month": m, "amount": round(by_month[m], 2)} for m in months],
         "categories": EXPENSE_CATEGORIES, "asset_categories": ASSET_CATEGORIES,
     }
+
+
+# --- AI Finance Brief + per-tab AI Analysis + Ask AI ------------------------
+SCOPES = ("brief", "overview", "expenses", "assets", "inventory")
+
+_SCOPE_FOCUS = {
+    "brief": "the company's OVERALL financial health across spend, cash outflow, assets and inventory — a crisp executive brief for the founder.",
+    "overview": "overall spending trends, month-over-month movement, and category/vendor concentration.",
+    "expenses": "expenses only: unpaid/outstanding bills, vendor and category concentration, unusual or duplicate-looking spend.",
+    "assets": "assets only: total asset value, category mix, items in maintenance or disposed, and renewal/utilisation risks.",
+    "inventory": "inventory only: stock-value concentration, high-value or slow items, and vendor dependence.",
+}
+
+
+async def _finance_context(tid: str, scope: str) -> dict:
+    currency = await _currency(tid)
+    expenses = await db.expenses.find({"tenant_id": tid}, {"_id": 0}).sort("created_at", -1).to_list(2000)
+    assets = await db.assets.find({"tenant_id": tid}, {"_id": 0}).sort("created_at", -1).to_list(2000)
+    inventory = await db.inventory.find({"tenant_id": tid}, {"_id": 0}).sort("created_at", -1).to_list(2000)
+    total = sum(_num(e.get("amount")) for e in expenses)
+    paid = sum(_num(e.get("amount")) for e in expenses if e.get("status") == "paid")
+    by_cat, by_vendor, by_month, unpaid = {}, {}, {}, []
+    for e in expenses:
+        amt = _num(e.get("amount"))
+        by_cat[e.get("category") or "Other"] = by_cat.get(e.get("category") or "Other", 0) + amt
+        v = e.get("vendor_name") or "Unspecified"
+        by_vendor[v] = by_vendor.get(v, 0) + amt
+        m = (e.get("date") or e.get("created_at", ""))[:7]
+        if m:
+            by_month[m] = by_month.get(m, 0) + amt
+        if e.get("status") != "paid":
+            unpaid.append({"title": e.get("title"), "vendor": e.get("vendor_name"), "amount": amt, "date": e.get("date")})
+
+    def _top(d, n=8):
+        return sorted(({"name": k, "amount": round(val, 2)} for k, val in d.items()), key=lambda x: -x["amount"])[:n]
+
+    ctx = {
+        "currency": currency, "today": now_iso()[:10],
+        "totals": {
+            "total_spend": round(total, 2), "paid": round(paid, 2), "outstanding": round(total - paid, 2),
+            "expense_count": len(expenses), "asset_count": len(assets),
+            "asset_value": round(sum(_num(a.get("purchase_amount")) for a in assets), 2),
+            "inventory_count": len(inventory), "inventory_value": round(sum(_num(i.get("value")) for i in inventory), 2),
+        },
+        "by_category": _top(by_cat), "by_vendor": _top(by_vendor),
+        "by_month": [{"month": m, "amount": round(by_month[m], 2)} for m in sorted(by_month)[-6:]],
+    }
+    if scope in ("expenses", "brief", "overview"):
+        ctx["top_unpaid"] = sorted(unpaid, key=lambda x: -x["amount"])[:12]
+    if scope in ("assets", "brief"):
+        ctx["assets"] = [{"name": a.get("name"), "category": a.get("category"),
+                          "value": _num(a.get("purchase_amount")), "status": a.get("status")} for a in assets[:30]]
+    if scope in ("inventory", "brief"):
+        ctx["inventory"] = [{"item": i.get("item"), "qty": _num(i.get("quantity")), "unit": i.get("unit"),
+                             "value": _num(i.get("value")), "vendor": i.get("vendor_name")} for i in inventory[:30]]
+    return ctx
+
+
+async def _generate_analysis(tid: str, scope: str) -> dict:
+    ctx = await _finance_context(tid, scope)
+    focus = _SCOPE_FOCUS.get(scope, _SCOPE_FOCUS["overview"])
+    system = (
+        "You are a sharp CFO advisor for a small business. Analyse the finance data and focus on " + focus + " "
+        f"All amounts are in {ctx['currency']}; today is {ctx['today']}. Be specific — cite real numbers, vendors and categories from the data. "
+        'Reply with ONLY JSON: {"summary": "2-4 sentence plain-English brief", '
+        '"alerts": [{"level": "high|medium|low", "title": str, "detail": str}], '
+        '"recommendations": [{"title": str, "detail": str}]}. '
+        "Max 5 alerts and 5 recommendations, ordered by importance. If there is little data, say so honestly and keep the lists short."
+    )
+    data = {}
+    try:
+        chat = LlmChat(api_key=CLAUDE_KEY, session_id=f"ledger-ai-{scope}-{new_id()}", system_message=system).with_model(*LLM_MODEL)
+        resp = await chat.send_message(UserMessage(text=f"Finance data:\n{json.dumps(ctx)}\n\nProduce the JSON now."))
+        data = _extract_json(resp) or {}
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"Ledger AI analysis ({scope}) failed: {e}")
+    result = {
+        "scope": scope,
+        "summary": data.get("summary") or "Not enough data yet to generate an analysis. Add expenses, assets or inventory to unlock insights.",
+        "alerts": [a for a in (data.get("alerts") or []) if isinstance(a, dict)][:5],
+        "recommendations": [r for r in (data.get("recommendations") or []) if isinstance(r, dict)][:5],
+        "generated_at": now_iso(),
+    }
+    await db.ledger_ai.update_one({"tenant_id": tid, "scope": scope},
+                                  {"$set": {**result, "tenant_id": tid}}, upsert=True)
+    return result
+
+
+@router.get("/ledger/ai/{scope}")
+async def get_ledger_ai(scope: str, user: dict = Depends(require_ledger)):
+    if scope not in SCOPES:
+        raise HTTPException(status_code=404, detail="Unknown scope")
+    cached = await db.ledger_ai.find_one({"tenant_id": user["tenant_id"], "scope": scope}, {"_id": 0})
+    return cached or await _generate_analysis(user["tenant_id"], scope)
+
+
+@router.post("/ledger/ai/{scope}/refresh")
+async def refresh_ledger_ai(scope: str, user: dict = Depends(require_ledger)):
+    if scope not in SCOPES:
+        raise HTTPException(status_code=404, detail="Unknown scope")
+    return await _generate_analysis(user["tenant_id"], scope)
+
+
+class LedgerAskInput(BaseModel):
+    question: str
+    scope: Optional[str] = "brief"
+
+
+@router.post("/ledger/ask")
+async def ledger_ask(inp: LedgerAskInput, user: dict = Depends(require_ledger)):
+    q = (inp.question or "").strip()
+    if not q:
+        raise HTTPException(status_code=400, detail="Ask a question")
+    scope = inp.scope if inp.scope in SCOPES else "brief"
+    ctx = await _finance_context(user["tenant_id"], scope)
+    system = (
+        "You are a finance assistant for a small business owner. Answer ONLY from the finance data provided, "
+        f"concisely (1-4 sentences), citing real numbers and vendors. Amounts are in {ctx['currency']}, today is {ctx['today']}. "
+        "If the data doesn't contain the answer, say so plainly."
+    )
+    try:
+        chat = LlmChat(api_key=CLAUDE_KEY, session_id=f"ledger-ask-{user['tenant_id']}-{new_id()}", system_message=system).with_model(*LLM_MODEL)
+        resp = await chat.send_message(UserMessage(text=f"Finance data:\n{json.dumps(ctx)}\n\nQuestion: {q}"))
+        answer = (resp or "").strip()
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"Ledger ask failed: {e}")
+        raise HTTPException(status_code=502, detail="AI is busy, please try again")
+    return {"answer": answer or "I couldn't find an answer in your finance data."}

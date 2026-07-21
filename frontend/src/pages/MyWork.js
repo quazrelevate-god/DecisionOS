@@ -430,8 +430,23 @@ function PriorityScoreBars({ scores }) {
   );
 }
 
-function TaskDetailDialog({ t, open, onOpenChange }) {
+function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
+  const { user } = useAuth();
   const [zoom, setZoom] = useState(null);
+  const [confirmDel, setConfirmDel] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const isOwner = user?.role === "owner";
+  const doDelete = async () => {
+    setDeleting(true);
+    try {
+      await api.delete(`/tasks/${t.id}`);
+      toast.success("Task deleted");
+      onOpenChange(false);
+      onChange?.();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Could not delete task");
+    } finally { setDeleting(false); }
+  };
   const steps = t.execution_plan?.steps || [];
   const attachments = t.attachments || [];
   const updates = t.updates || [];
@@ -439,7 +454,7 @@ function TaskDetailDialog({ t, open, onOpenChange }) {
   const voices = attachments.filter((a) => a.kind !== "photo");
   const url = (u) => `${process.env.REACT_APP_BACKEND_URL}${u}`;
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) setZoom(null); onOpenChange(o); }}>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) { setZoom(null); setConfirmDel(false); } onOpenChange(o); }}>
       <DialogContent className="border border-black rounded-none max-w-2xl max-h-[90vh] overflow-y-auto" data-testid={`task-detail-${t.id}`}>
         <DialogHeader>
           <DialogTitle className="font-heading uppercase tracking-tight text-base pr-6">{t.title}</DialogTitle>
@@ -512,6 +527,29 @@ function TaskDetailDialog({ t, open, onOpenChange }) {
                     </li>
                   ))}
                 </ul>
+              </div>
+            )}
+
+            {isOwner && (
+              <div className="border-t border-black/15 pt-3">
+                {!confirmDel ? (
+                  <button onClick={() => setConfirmDel(true)} data-testid={`delete-task-${t.id}`}
+                    className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-brand-red border border-brand-red px-3 py-1.5 hover:bg-brand-red hover:text-white transition-colors">
+                    <Trash size={13} weight="bold" /> Delete task
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-semibold">Delete this task permanently?</span>
+                    <button onClick={doDelete} disabled={deleting} data-testid={`delete-task-confirm-${t.id}`}
+                      className="text-xs font-semibold uppercase tracking-wider bg-brand-red text-white px-3 py-1.5 border border-brand-red hover:shadow-brutal-sm transition-all disabled:opacity-60">
+                      {deleting ? "Deleting…" : "Yes, delete"}
+                    </button>
+                    <button onClick={() => setConfirmDel(false)} disabled={deleting}
+                      className="text-xs font-semibold uppercase tracking-wider border border-black px-3 py-1.5 hover:bg-black/5 transition-colors">
+                      Cancel
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -789,7 +827,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
 
       {!awaitingApproval && <ExecutionPlan t={t} onChange={onChange} members={members} roleOptions={roleOptions} />}
       <TaskTrail t={t} onChange={onChange} members={members} roleOptions={roleOptions} />
-      <TaskDetailDialog t={t} open={detailOpen} onOpenChange={setDetailOpen} />
+      <TaskDetailDialog t={t} open={detailOpen} onOpenChange={setDetailOpen} onChange={onChange} />
     </div>
   );
 }

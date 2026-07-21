@@ -38,8 +38,8 @@ const NavBar = () => (
   </header>
 );
 
-const Kicker = ({ children, dark }) => (
-  <div className={`font-mono text-xs uppercase tracking-[0.25em] mb-4 ${dark ? "text-brand-red" : "text-brand-red"}`}>{children}</div>
+const Kicker = ({ children, big }) => (
+  <div className={`font-mono uppercase tracking-[0.25em] mb-4 text-brand-red ${big ? "text-sm sm:text-base" : "text-xs"}`}>{children}</div>
 );
 
 const Dept = ({ icon: Icon, tag, title, children }) => (
@@ -58,7 +58,7 @@ export default function Landing() {
       {/* HERO */}
       <section className="bg-[#16161a] text-white">
         <div className="max-w-6xl mx-auto px-5 sm:px-8 py-24 sm:py-32">
-          <Kicker dark>The Operating Brain for Founder-Led Businesses</Kicker>
+          <Kicker big>The Operating Brain for Founder-Led Businesses</Kicker>
           <h1 className="font-heading font-black tracking-tight text-5xl sm:text-6xl lg:text-7xl leading-[1.02]">
             Speak the decision.<br /><span className="text-brand-red">We run</span> the company.
           </h1>

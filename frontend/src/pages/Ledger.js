@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "../lib/api";
 import { PageHeader, Chip, EmptyState } from "../components/common";
 import { toast } from "sonner";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
 import {
   Plus, Sparkle, Package, Receipt, TrendUp, Trash, Buildings, Robot,
 } from "@phosphor-icons/react";
@@ -60,7 +60,7 @@ function AddExpenseDialog({ categories, onDone }) {
         </button>
       </DialogTrigger>
       <DialogContent className="border border-black rounded-none max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle className="font-heading uppercase tracking-tight">New Expense</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="font-heading uppercase tracking-tight">New Expense</DialogTitle><DialogDescription className="text-xs text-muted-foreground">Log a business expense. AI can suggest a category.</DialogDescription></DialogHeader>
         <div className="space-y-4">
           <Field label="Title"><input data-testid="expense-title" className={inp} value={f.title} onChange={(e) => set("title", e.target.value)} placeholder="e.g. Cotton yarn purchase" /></Field>
           <div className="grid grid-cols-2 gap-3">
@@ -120,7 +120,7 @@ function AddAssetDialog({ categories, onDone }) {
         </button>
       </DialogTrigger>
       <DialogContent className="border border-black rounded-none max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle className="font-heading uppercase tracking-tight">New Asset</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="font-heading uppercase tracking-tight">New Asset</DialogTitle><DialogDescription className="text-xs text-muted-foreground">Track a company asset and its purchase value.</DialogDescription></DialogHeader>
         <div className="space-y-4">
           <Field label="Asset name"><input data-testid="asset-name" className={inp} value={f.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Ring spinning machine" /></Field>
           <div className="grid grid-cols-2 gap-3">
@@ -172,7 +172,7 @@ function AddInventoryDialog({ onDone }) {
         </button>
       </DialogTrigger>
       <DialogContent className="border border-black rounded-none max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle className="font-heading uppercase tracking-tight">New Inventory Item</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="font-heading uppercase tracking-tight">New Inventory Item</DialogTitle><DialogDescription className="text-xs text-muted-foreground">Add a stock item; value is quantity × unit cost.</DialogDescription></DialogHeader>
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <Field label="Item"><input data-testid="inv-item" className={inp} value={f.item} onChange={(e) => set("item", e.target.value)} /></Field>

@@ -571,11 +571,13 @@ async def _generate_analysis(tid: str, scope: str) -> dict:
     focus = _SCOPE_FOCUS.get(scope, _SCOPE_FOCUS["overview"])
     system = (
         "You are a sharp CFO advisor for a small business. Analyse the finance data and focus on " + focus + " "
-        f"All amounts are in {ctx['currency']}; today is {ctx['today']}. Be specific — cite real numbers, vendors and categories from the data. "
-        'Reply with ONLY JSON: {"summary": "2-4 sentence plain-English brief", '
-        '"alerts": [{"level": "high|medium|low", "title": str, "detail": str}], '
-        '"recommendations": [{"title": str, "detail": str}]}. '
-        "Max 5 alerts and 5 recommendations, ordered by importance. If there is little data, say so honestly and keep the lists short."
+        f"All amounts are in {ctx['currency']}; today is {ctx['today']}. Be specific — cite real numbers, vendors and categories. "
+        'Return ONLY JSON: {"headline": "ONE short punchy line, max 12 words, summarising the finance state", '
+        '"insights": [{"level": "high|medium|low", "title": "punchy one-liner, max 10 words, include the key number", '
+        '"detail": "1-2 sentences: why it matters + what to check", '
+        '"action": "a short imperative task title to act on it, max 10 words"}]}. '
+        "Blend the most urgent problems AND recommended actions into this ONE list, ranked most-urgent-first, MAX 6 items. "
+        "Every insight MUST have a concrete `action`. If data is thin, say so in the headline and keep the list short."
     )
     data = {}
     try:
@@ -584,11 +586,20 @@ async def _generate_analysis(tid: str, scope: str) -> dict:
         data = _extract_json(resp) or {}
     except Exception as e:  # noqa: BLE001
         logger.warning(f"Ledger AI analysis ({scope}) failed: {e}")
+    insights = []
+    for it in (data.get("insights") or []):
+        if not isinstance(it, dict) or not (it.get("title") or "").strip():
+            continue
+        insights.append({
+            "level": it.get("level") if it.get("level") in ("high", "medium", "low") else "medium",
+            "title": (it.get("title") or "").strip(),
+            "detail": (it.get("detail") or "").strip(),
+            "action": (it.get("action") or it.get("title") or "").strip(),
+        })
     result = {
         "scope": scope,
-        "summary": data.get("summary") or "Not enough data yet to generate an analysis. Add expenses, assets or inventory to unlock insights.",
-        "alerts": [a for a in (data.get("alerts") or []) if isinstance(a, dict)][:5],
-        "recommendations": [r for r in (data.get("recommendations") or []) if isinstance(r, dict)][:5],
+        "headline": (data.get("headline") or "").strip() or "Not enough data yet — add expenses, assets or inventory to unlock insights.",
+        "insights": insights[:6],
         "generated_at": now_iso(),
     }
     await db.ledger_ai.update_one({"tenant_id": tid, "scope": scope},

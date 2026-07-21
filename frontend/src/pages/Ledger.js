@@ -1,12 +1,13 @@
 import { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "../lib/api";
+import { useAuth } from "../context/AuthContext";
 import { PageHeader, Chip, EmptyState } from "../components/common";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
 import {
   Plus, Sparkle, Package, Receipt, TrendUp, Trash, Buildings, Robot,
-  Paperclip, ArrowClockwise, PaperPlaneRight, WarningCircle, Lightbulb, CheckCircle, Brain,
+  Paperclip, ArrowClockwise, PaperPlaneRight, WarningCircle, Brain, CaretDown, ListPlus,
 } from "@phosphor-icons/react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell,
@@ -23,7 +24,9 @@ const fmt = (cur) => (n) => {
 };
 
 const SOURCE_CHIP = { manual: "bg-black/5 text-foreground", whatsapp: "bg-green-600 text-white", ingest: "bg-brand-blue text-white", document: "bg-brand-blue text-white" };
-const LEVEL_STYLE = { high: "bg-brand-red text-white", medium: "bg-brand-yellow text-black", low: "bg-brand-blue text-white" };
+const LEVEL_DOT = { high: "bg-brand-red", medium: "bg-brand-yellow", low: "bg-brand-blue" };
+const LEVEL_ACCENT = { high: "border-l-brand-red", medium: "border-l-brand-yellow", low: "border-l-brand-blue" };
+const LEVEL_LABEL = { high: "Urgent", medium: "Important", low: "FYI" };
 
 function Field({ label: l, children }) {
   return <div><label className={label}>{l}</label><div className="mt-1">{children}</div></div>;
@@ -242,9 +245,96 @@ function AddInventoryDialog({ onDone }) {
   );
 }
 
+// ---------- AI insight pointers (create task / ask) ----------
+function CreateTaskFromInsight({ insight, members, roleOptions }) {
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [desc, setDesc] = useState("");
+  const [assignee, setAssignee] = useState("");
+  const [priority, setPriority] = useState("medium");
+  const [busy, setBusy] = useState(false);
+
+  const openDialog = () => {
+    setTitle(insight.action || insight.title || "");
+    setDesc(insight.detail || "");
+    setPriority(insight.level === "high" ? "high" : insight.level === "low" ? "low" : "medium");
+    setAssignee("");
+    setOpen(true);
+  };
+  const save = async () => {
+    if (!title.trim()) return toast.error("Task title required");
+    setBusy(true);
+    const payload = { title: title.trim(), description: desc.trim(), priority };
+    if (assignee.startsWith("user:")) payload.assignee_id = assignee.slice(5);
+    else if (assignee.startsWith("role:")) payload.assignee_role = assignee.slice(5);
+    try { await api.post("/tasks", payload); toast.success("Task created — see My Work"); setOpen(false); }
+    catch (e) { toast.error(e.response?.data?.detail || "Could not create task"); } finally { setBusy(false); }
+  };
+
+  return (
+    <>
+      <button onClick={openDialog} data-testid="insight-create-task" className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider border border-black bg-brand-red text-white px-3 py-1.5 hover:shadow-brutal-sm transition-all">
+        <ListPlus size={13} weight="bold" /> Create task
+      </button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="border border-black rounded-none">
+          <DialogHeader><DialogTitle className="font-heading uppercase tracking-tight">New task from insight</DialogTitle><DialogDescription className="text-xs text-muted-foreground">Turn this AI insight into an action in My Work.</DialogDescription></DialogHeader>
+          <div className="space-y-4">
+            <Field label="Task title"><input data-testid="insight-task-title" className={inp} value={title} onChange={(e) => setTitle(e.target.value)} /></Field>
+            <Field label="Description"><textarea className={inp} rows={3} value={desc} onChange={(e) => setDesc(e.target.value)} /></Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Assign to">
+                <select className={inp} value={assignee} onChange={(e) => setAssignee(e.target.value)} data-testid="insight-task-assignee">
+                  <option value="">Unassigned</option>
+                  {roleOptions.map((r) => <option key={`role:${r.key}`} value={`role:${r.key}`}>{r.label} team</option>)}
+                  {members.map((m) => <option key={`user:${m.id}`} value={`user:${m.id}`}>{m.name}</option>)}
+                </select>
+              </Field>
+              <Field label="Priority">
+                <select className={inp} value={priority} onChange={(e) => setPriority(e.target.value)}>
+                  <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option>
+                </select>
+              </Field>
+            </div>
+            <button onClick={save} disabled={busy} data-testid="insight-task-save" className="w-full bg-brand-red text-white py-2.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-60">
+              {busy ? "Creating…" : "Create task"}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+function InsightCard({ insight, scope, idx, members, roleOptions, onAsk }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className={`border border-border border-l-4 ${LEVEL_ACCENT[insight.level] || "border-l-black"} rounded-lg bg-card overflow-hidden transition-shadow hover:shadow-brutal-sm`} data-testid={`ai-alert-${scope}-${idx}`}>
+      <button onClick={() => setOpen((o) => !o)} data-testid={`insight-toggle-${scope}-${idx}`} className="w-full flex items-center gap-3 p-3 text-left hover:bg-black/[0.02] transition-colors">
+        <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${LEVEL_DOT[insight.level] || "bg-black"}`} title={LEVEL_LABEL[insight.level]} />
+        <span className="flex-1 min-w-0 font-semibold text-sm leading-snug">{insight.title}</span>
+        <span className="hidden sm:inline label-mono text-[10px] text-muted-foreground shrink-0">{LEVEL_LABEL[insight.level] || ""}</span>
+        <CaretDown size={16} weight="bold" className={`shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="px-4 pb-3 space-y-3">
+          {insight.detail && <p className="text-sm text-muted-foreground leading-relaxed">{insight.detail}</p>}
+          <div className="flex flex-wrap gap-2">
+            <CreateTaskFromInsight insight={insight} members={members} roleOptions={roleOptions} />
+            <button onClick={() => onAsk(insight.title)} data-testid={`insight-ask-${scope}-${idx}`} className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider border border-black px-3 py-1.5 hover:bg-black/5 transition-colors">
+              <Brain size={13} weight="bold" /> Ask AI
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ---------- AI Analysis panel (shared: brief + per-tab) ----------
 function AiPanel({ scope, variant = "inline" }) {
   const qc = useQueryClient();
+  const { tenant } = useAuth();
   const [q, setQ] = useState("");
   const [answer, setAnswer] = useState("");
   const [asking, setAsking] = useState(false);
@@ -254,19 +344,30 @@ function AiPanel({ scope, variant = "inline" }) {
     queryFn: () => api.get(`/ledger/ai/${scope}`).then((r) => r.data),
     staleTime: Infinity,
   });
+  const usersQ = useQuery({ queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data), retry: false });
+  const members = usersQ.data || [];
+  const roleOptions = [{ key: "owner", label: "Owner" }, ...(tenant?.roles || [])];
   const isBrief = variant === "brief";
+
+  const headline = data?.headline || data?.summary || "";
+  const insights = data?.insights || [
+    ...((data?.alerts) || []).map((a) => ({ level: a.level || "medium", title: a.title, detail: a.detail, action: a.title })),
+    ...((data?.recommendations) || []).map((r) => ({ level: "low", title: r.title, detail: r.detail, action: r.title })),
+  ];
 
   const refresh = async () => {
     setRefreshing(true);
     try { const { data: d } = await api.post(`/ledger/ai/${scope}/refresh`); qc.setQueryData(["ledger-ai", scope], d); toast.success("Analysis refreshed"); }
     catch { toast.error("Could not refresh analysis"); } finally { setRefreshing(false); }
   };
-  const ask = async () => {
-    if (!q.trim()) return;
-    setAsking(true); setAnswer("");
-    try { const { data: d } = await api.post("/ledger/ask", { question: q, scope }); setAnswer(d.answer); }
+  const ask = async (question) => {
+    const query = (typeof question === "string" ? question : q).trim();
+    if (!query) return;
+    setQ(query); setAsking(true); setAnswer("");
+    try { const { data: d } = await api.post("/ledger/ask", { question: query, scope }); setAnswer(d.answer); }
     catch (e) { toast.error(e.response?.data?.detail || "AI is busy, try again"); } finally { setAsking(false); }
   };
+  const onAsk = (title) => ask(`Tell me more and what should I do about: ${title}`);
 
   return (
     <div className={`card-brutal ${isBrief ? "p-6" : "p-5"} space-y-5`} data-testid={`ai-panel-${scope}`}>
@@ -287,31 +388,14 @@ function AiPanel({ scope, variant = "inline" }) {
         <p className="font-mono text-sm text-muted-foreground">Analysing your finances…</p>
       ) : (
         <>
-          <p className={`${isBrief ? "text-base" : "text-sm"} leading-relaxed`} data-testid={`ai-summary-${scope}`}>{data?.summary}</p>
+          {headline && <p className={`${isBrief ? "text-base" : "text-sm"} font-semibold leading-snug`} data-testid={`ai-summary-${scope}`}>{headline}</p>}
 
-          {!!data?.alerts?.length && (
+          {insights.length > 0 && (
             <div>
-              <div className="flex items-center gap-1.5 mb-2 text-muted-foreground"><WarningCircle size={15} weight="bold" /><span className="label-mono text-xs">Priority Alerts</span></div>
+              <div className="flex items-center gap-1.5 mb-2 text-muted-foreground"><WarningCircle size={15} weight="bold" /><span className="label-mono text-xs">Action Items · most urgent first</span></div>
               <div className="space-y-2">
-                {data.alerts.map((a, i) => (
-                  <div key={`alert-${a.title || ""}-${i}`} className="flex items-start gap-2.5 border border-border rounded-lg p-3" data-testid={`ai-alert-${scope}-${i}`}>
-                    <Chip value={a.level || "info"} className={`${LEVEL_STYLE[a.level] || "bg-black/5 text-foreground"} shrink-0`} />
-                    <div className="min-w-0"><p className="font-semibold text-sm">{a.title}</p>{a.detail && <p className="text-xs text-muted-foreground mt-0.5">{a.detail}</p>}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {!!data?.recommendations?.length && (
-            <div>
-              <div className="flex items-center gap-1.5 mb-2 text-muted-foreground"><Lightbulb size={15} weight="bold" /><span className="label-mono text-xs">Recommended Actions</span></div>
-              <div className="space-y-2.5">
-                {data.recommendations.map((r, i) => (
-                  <div key={`rec-${r.title || ""}-${i}`} className="flex items-start gap-2" data-testid={`ai-rec-${scope}-${i}`}>
-                    <CheckCircle size={16} weight="bold" className="text-brand-red mt-0.5 shrink-0" />
-                    <div><p className="font-semibold text-sm">{r.title}</p>{r.detail && <p className="text-xs text-muted-foreground mt-0.5">{r.detail}</p>}</div>
-                  </div>
+                {insights.map((it, i) => (
+                  <InsightCard key={`${it.title || ""}-${i}`} insight={it} scope={scope} idx={i} members={members} roleOptions={roleOptions} onAsk={onAsk} />
                 ))}
               </div>
             </div>
@@ -323,7 +407,7 @@ function AiPanel({ scope, variant = "inline" }) {
         <div className="flex items-center gap-1.5 mb-2 text-muted-foreground"><Brain size={15} weight="bold" /><span className="label-mono text-xs">Ask AI about {scope === "brief" ? "your finances" : `your ${scope}`}</span></div>
         <div className="flex gap-2">
           <input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && ask()} data-testid={`ai-ask-input-${scope}`} placeholder="e.g. Which vendor did I spend most on?" className={inp} />
-          <button onClick={ask} disabled={asking} data-testid={`ai-ask-btn-${scope}`} className="flex items-center gap-1 bg-brand-ink text-white px-3 py-2 text-sm font-semibold border border-black hover:shadow-brutal-sm transition-all disabled:opacity-50 shrink-0">
+          <button onClick={() => ask()} disabled={asking} data-testid={`ai-ask-btn-${scope}`} className="flex items-center gap-1 bg-brand-ink text-white px-3 py-2 text-sm font-semibold border border-black hover:shadow-brutal-sm transition-all disabled:opacity-50 shrink-0">
             <PaperPlaneRight size={15} weight="bold" /> {asking ? "…" : "Ask"}
           </button>
         </div>

@@ -89,7 +89,7 @@ function AddExpenseDialog({ categories, onDone }) {
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
       <DialogTrigger asChild>
-        <button data-testid="add-expense-btn" className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
+        <button data-testid="add-expense-btn" className="flex items-center justify-center gap-2 w-full sm:w-auto bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
           <Plus size={16} weight="bold" /> Add Expense
         </button>
       </DialogTrigger>
@@ -154,7 +154,7 @@ function AddAssetDialog({ categories, onDone }) {
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
       <DialogTrigger asChild>
-        <button data-testid="add-asset-btn" className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
+        <button data-testid="add-asset-btn" className="flex items-center justify-center gap-2 w-full sm:w-auto bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
           <Plus size={16} weight="bold" /> Add Asset
         </button>
       </DialogTrigger>
@@ -211,7 +211,7 @@ function AddInventoryDialog({ onDone }) {
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
       <DialogTrigger asChild>
-        <button data-testid="add-inventory-btn" className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
+        <button data-testid="add-inventory-btn" className="flex items-center justify-center gap-2 w-full sm:w-auto bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
           <Plus size={16} weight="bold" /> Add Item
         </button>
       </DialogTrigger>
@@ -355,20 +355,12 @@ function KpiRow({ summary }) {
   );
 }
 
-function BriefTab({ summary }) {
-  return (
-    <div className="space-y-6" data-testid="ledger-brief">
-      {summary && <KpiRow summary={summary} />}
-      <AiPanel scope="brief" variant="brief" />
-    </div>
-  );
-}
-
-function Overview({ summary }) {
+function OverviewTab({ summary }) {
   const f = fmt(summary.currency);
   return (
     <div className="space-y-6" data-testid="ledger-overview">
       <KpiRow summary={summary} />
+      <AiPanel scope="brief" variant="brief" />
 
       <div className="grid lg:grid-cols-2 gap-4">
         <div className="card-brutal p-5">
@@ -515,15 +507,14 @@ function InventoryTable({ rows, cur, onDelete }) {
 }
 
 const TABS = [
-  { key: "brief", label: "AI Brief", icon: Sparkle },
-  { key: "overview", label: "Overview", icon: TrendUp },
+  { key: "overview", label: "Overview", icon: Sparkle },
   { key: "expenses", label: "Expenses", icon: Receipt },
   { key: "assets", label: "Assets", icon: Buildings },
   { key: "inventory", label: "Inventory", icon: Package },
 ];
 
 export default function Ledger() {
-  const [tab, setTab] = useState("brief");
+  const [tab, setTab] = useState("overview");
   const qc = useQueryClient();
   const invalidate = () => ["ledger-summary", "expenses", "assets", "inventory"].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
 
@@ -553,8 +544,8 @@ export default function Ledger() {
   return (
     <div>
       <PageHeader eyebrow="Money in one place" title="Finance">
-        <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto" data-testid="ledger-controls">
-          <div className="col-span-2 sm:col-auto flex border border-black overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto" data-testid="ledger-controls">
+          <div className="flex border border-black overflow-hidden w-full sm:w-auto">
             {TABS.map((t) => (
               <button key={t.key} onClick={() => setTab(t.key)} data-testid={`ledger-tab-${t.key}`}
                 className={`flex items-center justify-center gap-1.5 flex-1 sm:flex-none px-3 py-2 text-xs sm:text-sm font-semibold uppercase tracking-wider border-r border-black last:border-r-0 transition-colors ${tab === t.key ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
@@ -566,12 +557,11 @@ export default function Ledger() {
         </div>
       </PageHeader>
 
-      {(summaryQ.isLoading && (tab === "overview" || tab === "brief")) ? (
+      {(summaryQ.isLoading && tab === "overview") ? (
         <p className="font-mono text-sm">Loading…</p>
       ) : (
         <>
-          {tab === "brief" && <BriefTab summary={summary} />}
-          {tab === "overview" && summary && <div className="space-y-6"><AiPanel scope="overview" /><Overview summary={summary} /></div>}
+          {tab === "overview" && summary && <OverviewTab summary={summary} />}
           {tab === "expenses" && <div className="space-y-6"><AiPanel scope="expenses" /><ExpensesTable rows={expensesQ.data || []} cur={cur} onDelete={(id) => del("expenses", id)} /></div>}
           {tab === "assets" && <div className="space-y-6"><AiPanel scope="assets" /><AssetsTable rows={assetsQ.data || []} cur={cur} onDelete={(id) => del("assets", id)} /></div>}
           {tab === "inventory" && <div className="space-y-6"><AiPanel scope="inventory" /><InventoryTable rows={inventoryQ.data || []} cur={cur} onDelete={(id) => del("inventory", id)} /></div>}

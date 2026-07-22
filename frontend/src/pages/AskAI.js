@@ -1,16 +1,12 @@
 import { useState, useRef, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import api from "../lib/api";
 import { PaperPlaneTilt } from "@phosphor-icons/react";
 import { MicDictateButton } from "../components/MicDictateButton";
 
-const SUGGESTIONS = [
-  "What purchases need my approval?",
-  "Which tasks are overdue?",
-  "Summarise open sales orders",
-  "What did I decide about festive stock?",
-];
-
 export function AskPanel() {
+  const { t } = useTranslation();
+  const SUGGESTIONS = [t("ask.s1"), t("ask.s2"), t("ask.s3"), t("ask.s4")];
   const [log, setLog] = useState([]);
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
@@ -29,7 +25,7 @@ export function AskPanel() {
       const { data } = await api.post("/ask", { question: text });
       setLog((l) => [...l, { id: uid(), role: "ai", text: data.answer, citations: data.citations || [] }]);
     } catch {
-      setLog((l) => [...l, { id: uid(), role: "ai", text: "AI service error. Please try again." }]);
+      setLog((l) => [...l, { id: uid(), role: "ai", text: t("ask.error") }]);
     } finally {
       setBusy(false);
     }
@@ -40,8 +36,8 @@ export function AskPanel() {
       <div className="flex-1 border border-black bg-brand-ink text-white font-mono text-sm overflow-y-auto p-6 space-y-4">
         {log.length === 0 && (
           <div className="text-white/50">
-            <p>{"> DecisionOS Ask AI — grounded in your company data."}</p>
-            <p className="mt-2">{"> Try one of the queries below to begin."}</p>
+            <p>{t("ask.intro1")}</p>
+            <p className="mt-2">{t("ask.intro2")}</p>
           </div>
         )}
         {log.map((m, i) => (
@@ -53,7 +49,7 @@ export function AskPanel() {
                 <p className="text-white whitespace-pre-wrap leading-relaxed">{m.text}</p>
                 {(m.citations || []).length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mt-2" data-testid={`citations-${i}`}>
-                    <span className="text-white/40 text-xs uppercase tracking-wider mr-1">Sources:</span>
+                    <span className="text-white/40 text-xs uppercase tracking-wider mr-1">{t("ask.sources")}</span>
                     {m.citations.map((c, ci) => (
                       <span key={`${c.type}-${c.title}-${ci}`} data-testid="citation-chip" className="inline-flex items-center gap-1 border border-white/40 text-white/80 px-2 py-0.5 text-[11px]">
                         <span className="text-brand-red uppercase">{c.type}</span> {c.title}
@@ -65,7 +61,7 @@ export function AskPanel() {
             )}
           </div>
         ))}
-        {busy && <p className="text-white/50 animate-pulse">{"> thinking…"}</p>}
+        {busy && <p className="text-white/50 animate-pulse">{t("ask.thinking")}</p>}
         <div ref={endRef} />
       </div>
 
@@ -85,13 +81,13 @@ export function AskPanel() {
             data-testid="ask-input"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Ask anything about your operations…"
+            placeholder={t("ask.placeholder")}
             className="flex-1 py-3 px-3 text-sm focus:outline-none"
           />
         </div>
-        <MicDictateButton className="px-4" title="Speak your question" onText={(t) => setQ((v) => (v ? `${v} ${t}` : t))} />
+        <MicDictateButton className="px-4" title={t("ask.speak_q")} onText={(t) => setQ((v) => (v ? `${v} ${t}` : t))} />
         <button data-testid="ask-submit" disabled={busy} className="relative z-[10000] bg-brand-red text-white px-6 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all disabled:opacity-50">
-          <PaperPlaneTilt size={16} weight="bold" /> Ask
+          <PaperPlaneTilt size={16} weight="bold" /> {t("ask.btn")}
         </button>
       </form>
     </div>

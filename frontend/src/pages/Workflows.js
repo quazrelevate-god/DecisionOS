@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
@@ -16,6 +17,7 @@ import {
 const STAGE_LABEL = (s) => (s || "").replace(/_/g, " ");
 
 function NewWorkflowDialog({ type, typeLabel, custLabel, vendLabel, onCreated }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ title: "", detail: "", amount: "", counterparty: "", contact_id: "" });
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -35,12 +37,12 @@ function NewWorkflowDialog({ type, typeLabel, custLabel, vendLabel, onCreated })
     if (!form.title.trim()) return;
     try {
       await api.post("/workflows", { type, title: form.title, detail: form.detail, counterparty: form.counterparty, contact_id: form.contact_id || null, amount: form.amount ? Number(form.amount) : null });
-      toast.success("Workflow created");
+      toast.success(t("workflows.created"));
       setForm({ title: "", detail: "", amount: "", counterparty: "", contact_id: "" });
       setOpen(false);
       onCreated();
     } catch (e) {
-      toast.error("Create failed");
+      toast.error(t("workflows.create_failed"));
     }
   };
   const inp = "w-full border border-black px-3 py-2 text-sm font-mono focus:outline-none focus:shadow-brutal-sm";
@@ -48,28 +50,28 @@ function NewWorkflowDialog({ type, typeLabel, custLabel, vendLabel, onCreated })
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <button data-testid="new-workflow-button" className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
-          <Plus size={16} weight="bold" /> New
+          <Plus size={16} weight="bold" /> {t("workflows.new")}
         </button>
       </DialogTrigger>
       <DialogContent className="border border-black rounded-none">
-        <DialogHeader><DialogTitle className="font-heading uppercase tracking-tight">New {typeLabel}</DialogTitle>
-          <DialogDescription className="text-sm text-muted-foreground">Add a card to track this {typeLabel.toLowerCase()} process.</DialogDescription>
+        <DialogHeader><DialogTitle className="font-heading uppercase tracking-tight">{t("workflows.dlg_title", { type: typeLabel })}</DialogTitle>
+          <DialogDescription className="text-sm text-muted-foreground">{t("workflows.dlg_desc", { type: typeLabel.toLowerCase() })}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <input data-testid="wf-title-input" className={inp} placeholder="Title (e.g. Order #4823)" value={form.title} onChange={set("title")} />
+          <input data-testid="wf-title-input" className={inp} placeholder={t("workflows.title_ph")} value={form.title} onChange={set("title")} />
           <div>
             <label className="label-mono text-muted-foreground">{contactLabel}</label>
             <select data-testid="wf-contact-select" className={`${inp} mt-1`} value={form.contact_id} onChange={pickContact}>
-              <option value="">Select {contactLabel.toLowerCase()}… (or type below)</option>
+              <option value="">{t("workflows.select_contact", { label: contactLabel.toLowerCase() })}</option>
               {(contacts || []).map((c) => <option key={c.id} value={c.id}>{c.company || c.name}</option>)}
             </select>
           </div>
-          <input data-testid="wf-counterparty-input" className={inp} placeholder="Counterparty name" value={form.counterparty} onChange={set("counterparty")} />
-          <input className={inp} type="number" placeholder="Amount" value={form.amount} onChange={set("amount")} />
-          <textarea className={inp} rows={2} placeholder="Detail" value={form.detail} onChange={set("detail")} />
+          <input data-testid="wf-counterparty-input" className={inp} placeholder={t("workflows.counterparty_ph")} value={form.counterparty} onChange={set("counterparty")} />
+          <input className={inp} type="number" placeholder={t("workflows.amount_ph")} value={form.amount} onChange={set("amount")} />
+          <textarea className={inp} rows={2} placeholder={t("workflows.detail_ph")} value={form.detail} onChange={set("detail")} />
         </div>
         <DialogFooter>
-          <button data-testid="wf-create-submit" onClick={create} className="bg-brand-red text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">Create</button>
+          <button data-testid="wf-create-submit" onClick={create} className="bg-brand-red text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">{t("workflows.create")}</button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -77,6 +79,7 @@ function NewWorkflowDialog({ type, typeLabel, custLabel, vendLabel, onCreated })
 }
 
 export default function Workflows({ embedded = false }) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const { tenant, user } = useAuth();
   const L = lex(tenant);
@@ -110,27 +113,27 @@ export default function Workflows({ embedded = false }) {
 
   const advance = async (wf) => {
     const idx = wf.stages.indexOf(wf.stage);
-    if (idx >= wf.stages.length - 1) return toast.info("Already at final stage");
+    if (idx >= wf.stages.length - 1) return toast.info(t("workflows.already_final"));
     const next = wf.stages[idx + 1];
     try {
-      await api.patch(`/workflows/${wf.id}/advance`, { stage: next, note: `Moved to ${labelOf(next)}` });
+      await api.patch(`/workflows/${wf.id}/advance`, { stage: next, note: t("workflows.moved_to", { stage: labelOf(next) }) });
       toast.success(`→ ${labelOf(next)}`);
       qc.invalidateQueries({ queryKey: ["workflows", activeKey] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
     } catch (e) {
-      toast.error(e.response?.data?.detail || "Cannot advance");
+      toast.error(e.response?.data?.detail || t("workflows.cannot_advance"));
     }
   };
 
   const del = async (wf) => {
-    if (!window.confirm(`Delete "${wf.title}"? This removes the card permanently.`)) return;
+    if (!window.confirm(t("workflows.delete_confirm", { title: wf.title }))) return;
     try {
       await api.delete(`/workflows/${wf.id}`);
-      toast.success("Workflow deleted");
+      toast.success(t("workflows.deleted"));
       qc.invalidateQueries({ queryKey: ["workflows", activeKey] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
     } catch (e) {
-      toast.error(e.response?.data?.detail || "Delete failed");
+      toast.error(e.response?.data?.detail || t("workflows.delete_failed"));
     }
   };
 
@@ -141,7 +144,7 @@ export default function Workflows({ embedded = false }) {
           {newWfDialog}
         </div>
       ) : (
-        <PageHeader eyebrow="Flagship operational flows" title="Workflows">
+        <PageHeader eyebrow={t("workflows.eyebrow")} title={t("workflows.title")}>
           {newWfDialog}
         </PageHeader>
       )}
@@ -172,13 +175,13 @@ export default function Workflows({ embedded = false }) {
                     const isLast = w.stages.indexOf(w.stage) >= w.stages.length - 1;
                     const lastEv = (w.history || [])[(w.history || []).length - 1];
                     const updAt = lastEv?.at || w.created_at;
-                    const updLabel = lastEv?.note || "Created";
+                    const updLabel = lastEv?.note || t("workflows.created_label");
                     return (
                       <div key={w.id} id={`workflow-card-${w.id}`} data-testid={`workflow-card-${w.id}`} className={`border border-black p-3 shadow-hover bg-white transition-all ${w.id === focusWf ? "ring-4 ring-brand-red ring-offset-2" : ""}`}>
                         <div className="flex items-start justify-between gap-2">
                           <p className="font-semibold text-sm leading-tight">{w.title}</p>
                           {user?.role === "owner" && (
-                            <button onClick={() => del(w)} data-testid={`delete-workflow-${w.id}`} title="Delete card"
+                            <button onClick={() => del(w)} data-testid={`delete-workflow-${w.id}`} title={t("workflows.delete_card")}
                               className="shrink-0 text-muted-foreground hover:text-brand-red transition-colors">
                               <Trash size={14} weight="bold" />
                             </button>
@@ -194,7 +197,7 @@ export default function Workflows({ embedded = false }) {
                         {!isLast && (
                           <button onClick={() => advance(w)} data-testid={`advance-workflow-${w.id}`}
                             className="mt-3 w-full flex items-center justify-center gap-1 border border-black py-1.5 text-xs font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors">
-                            Advance <ArrowRight size={12} weight="bold" />
+                            {t("workflows.advance")} <ArrowRight size={12} weight="bold" />
                           </button>
                         )}
                         {isLast && <Chip value={labelOf(w.stage)} className="mt-3" />}

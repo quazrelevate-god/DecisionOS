@@ -14,7 +14,7 @@ import {
   Microphone, Stop, PaperPlaneTilt, CheckCircle, XCircle, Spinner,
   UsersThree, Truck, Receipt, CurrencyCircleDollar, Warning, CheckSquare,
   SealCheck, Bell, Brain, Check, X, ArrowClockwise, User, UserPlus, Question,
-  WarningCircle, ArrowBendUpRight, ChatCircleText, Eye, Pause, Play,
+  WarningCircle, ArrowBendUpRight, ChatCircleText, Eye, Pause, Play, PencilSimple,
 } from "@phosphor-icons/react";
 
 function SwipeRow({ children, onLeft, onRight, rightLabel = "View", testid }) {
@@ -115,6 +115,56 @@ function EscalationCard({ t, onRespond, highlight }) {
   );
 }
 
+function ReviewTaskRow({ t, members, roleOptions, onRefresh }) {
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const inp = "border border-black px-2 py-1 text-xs font-mono focus:outline-none bg-white flex-1 min-w-0";
+  const reassign = async (payload) => {
+    setBusy(true);
+    try {
+      await api.post(`/tasks/${t.id}/reassign`, payload);
+      toast.success("Task reassigned");
+      setEditing(false);
+      onRefresh();
+    } catch (e) { toast.error(e.response?.data?.detail || "Could not reassign"); }
+    finally { setBusy(false); }
+  };
+  return (
+    <li className="border border-black/15 px-3 py-2" data-testid={`review-task-${t.id}`}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm min-w-0">{t.title}</span>
+        <button onClick={() => setEditing((v) => !v)} data-testid={`reassign-toggle-${t.id}`}
+          className="shrink-0 inline-flex items-center gap-1 hover:opacity-80 transition-opacity" title="Change assignee">
+          {t.assignee_name ? (
+            <span className="inline-flex items-center gap-1 bg-brand-ink text-white px-2 py-0.5 text-xs font-semibold">
+              <User size={11} weight="bold" /> {t.assignee_name}
+            </span>
+          ) : t.assignee_role ? (
+            <Chip value={t.assignee_role} className="bg-white" />
+          ) : (
+            <span className="text-xs text-muted-foreground italic">Unassigned</span>
+          )}
+          <PencilSimple size={12} weight="bold" className="text-black/40" />
+        </button>
+      </div>
+      {editing && (
+        <div className="mt-2 flex flex-col sm:flex-row gap-2" data-testid={`reassign-form-${t.id}`}>
+          <select className={inp} defaultValue={t.assignee_id || ""} disabled={busy} data-testid={`reassign-member-${t.id}`}
+            onChange={(e) => e.target.value && reassign({ assignee_id: e.target.value })}>
+            <option value="">— Change to a member —</option>
+            {members.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
+          </select>
+          <select className={inp} defaultValue="" disabled={busy} data-testid={`reassign-role-${t.id}`}
+            onChange={(e) => e.target.value && reassign({ assignee_role: e.target.value })}>
+            <option value="">…or a whole team / role</option>
+            {roleOptions.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+          </select>
+        </div>
+      )}
+    </li>
+  );
+}
+
 function PendingApprovalCard({ d, members, roleOptions, onApprove, onReject, onRefresh, onDiscuss, highlight }) {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ title: "", assignee_id: "", assignee_role: "", priority: "medium" });
@@ -152,18 +202,7 @@ function PendingApprovalCard({ d, members, roleOptions, onApprove, onReject, onR
       {d.tasks?.length > 0 && (
         <ul className="mt-3 space-y-2" data-testid={`decision-tasks-${d.id}`}>
           {d.tasks.map((t) => (
-            <li key={t.id} className="flex items-center justify-between gap-2 border border-black/15 px-3 py-2">
-              <span className="text-sm">{t.title}</span>
-              {t.assignee_name ? (
-                <span className="inline-flex items-center gap-1 bg-brand-ink text-white px-2 py-0.5 text-xs font-semibold shrink-0">
-                  <User size={11} weight="bold" /> {t.assignee_name}
-                </span>
-              ) : t.assignee_role ? (
-                <Chip value={t.assignee_role} className="bg-white shrink-0" />
-              ) : (
-                <span className="text-xs text-muted-foreground italic shrink-0">Unassigned</span>
-              )}
-            </li>
+            <ReviewTaskRow key={t.id} t={t} members={members} roleOptions={roleOptions} onRefresh={onRefresh} />
           ))}
         </ul>
       )}

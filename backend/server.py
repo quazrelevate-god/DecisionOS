@@ -2427,6 +2427,49 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
     return await enrich_task(await db.tasks.find_one({"id": task_id}, {"_id": 0}))
 
 
+class TaskReassignInput(BaseModel):
+    assignee_id: Optional[str] = None
+    assignee_role: Optional[str] = None
+
+
+@api.post("/tasks/{task_id}/reassign")
+async def reassign_task(task_id: str, inp: TaskReassignInput, user: dict = Depends(get_current_user)):
+    """Change who a task is assigned to — a specific member or a whole role/team."""
+    perms = user_perms(user)
+    if not (user["role"] == "owner" or "team_manage" in perms or "decisions_approve" in perms):
+        raise HTTPException(status_code=403, detail="You can't reassign this task")
+    t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]})
+    if not t:
+        raise HTTPException(status_code=404, detail="Not found")
+    updates = {"updated_at": now_iso(), "last_action": "Reassigned"}
+    new_assignee_id = None
+    if inp.assignee_id:
+        member = await db.users.find_one({"id": inp.assignee_id, "tenant_id": user["tenant_id"]}, {"_id": 0, "role": 1, "name": 1})
+        if not member:
+            raise HTTPException(status_code=400, detail="Member not found")
+        updates["assignee_id"] = inp.assignee_id
+        updates["assignee_role"] = member["role"]
+        new_assignee_id = inp.assignee_id
+        who = member["name"]
+    elif inp.assignee_role:
+        if inp.assignee_role not in await tenant_role_keys(user["tenant_id"]):
+            raise HTTPException(status_code=400, detail="Invalid role")
+        updates["assignee_id"] = None
+        updates["assignee_role"] = inp.assignee_role
+        who = inp.assignee_role
+    else:
+        raise HTTPException(status_code=400, detail="Pick a member or a role")
+    await db.tasks.update_one({"id": task_id}, {"$set": updates})
+    if new_assignee_id and new_assignee_id != user["id"]:
+        await push_notification(user["tenant_id"], [new_assignee_id], 1,
+                                f"Work assigned to you: '{t['title']}'", "task", task_id,
+                                ntype="assigned", title=t["title"], sender=user["name"])
+    await log_activity(user["tenant_id"], user["id"], "task_assigned", f"Reassigned '{t['title']}' to {who}", "task", task_id)
+    if t.get("decision_id"):
+        await add_decision_event(t["decision_id"], f"{t['title']} reassigned to {who}", user["name"], "task")
+    return await enrich_task(await db.tasks.find_one({"id": task_id}, {"_id": 0}))
+
+
 class TaskRejectInput(BaseModel):
     reason: Optional[str] = ""
 

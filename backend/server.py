@@ -1657,6 +1657,28 @@ async def create_voice_note(background: BackgroundTasks, file: UploadFile = File
     return {"id": note_id, "status": "queued"}
 
 
+@api.post("/transcribe")
+async def transcribe_only(file: UploadFile = File(...), language: str = Form("auto"), user: dict = Depends(get_current_user)):
+    """Dictation helper: transcribe a short audio clip to text (no note/decision is created)."""
+    tmp_id = new_id()
+    ext = (file.filename or "audio.webm").split(".")[-1]
+    path = UPLOAD_DIR / f"dictation-{tmp_id}.{ext}"
+    with open(path, "wb") as f:
+        f.write(await file.read())
+    try:
+        text = await transcribe_audio(str(path), language)
+    except Exception as e:
+        logger.error(f"transcribe_only failed: {e}")
+        raise HTTPException(status_code=503, detail="Couldn't transcribe audio. Please try again.")
+    finally:
+        try:
+            path.unlink(missing_ok=True)
+        except Exception:
+            pass
+    return {"text": (text or "").strip()}
+
+
+
 @api.post("/voice-notes/text")
 async def create_text_note(inp: TextNoteInput, background: BackgroundTasks, user: dict = Depends(require_perm("voice_capture"))):
     note_id = new_id()

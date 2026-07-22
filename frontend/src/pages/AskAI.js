@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import api from "../lib/api";
 import { PaperPlaneTilt } from "@phosphor-icons/react";
+import { MicDictateButton } from "../components/MicDictateButton";
 
 const SUGGESTIONS = [
   "What purchases need my approval?",
@@ -88,6 +89,7 @@ export function AskPanel() {
             className="flex-1 py-3 px-3 text-sm focus:outline-none"
           />
         </div>
+        <MicDictateButton className="px-4" title="Speak your question" onText={(t) => setQ((v) => (v ? `${v} ${t}` : t))} />
         <button data-testid="ask-submit" disabled={busy} className="relative z-[10000] bg-brand-red text-white px-6 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all disabled:opacity-50">
           <PaperPlaneTilt size={16} weight="bold" /> Ask
         </button>

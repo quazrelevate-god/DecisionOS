@@ -3,6 +3,7 @@ import api from "../lib/api";
 import { PageHeader, Chip, EmptyState } from "../components/common";
 import { MagnifyingGlass, ChatCircleText } from "@phosphor-icons/react";
 import { AskPanel } from "./AskAI";
+import { MicDictateButton } from "../components/MicDictateButton";
 
 function SearchPanel() {
   const [q, setQ] = useState("");
@@ -24,7 +25,7 @@ function SearchPanel() {
 
   return (
     <div>
-      <form onSubmit={search} className="flex gap-2 mb-8 max-w-2xl">
+      <form onSubmit={search} className="flex gap-2 mb-2 max-w-2xl">
         <div className="flex-1 flex items-center border border-black bg-white px-4">
           <MagnifyingGlass size={18} weight="bold" className="text-muted-foreground" />
           <input
@@ -35,10 +36,12 @@ function SearchPanel() {
             className="flex-1 py-3 px-3 text-sm font-mono focus:outline-none"
           />
         </div>
+        <MicDictateButton className="px-4" title="Speak your search" onText={(t) => setQ((v) => (v ? `${v} ${t}` : t))} />
         <button data-testid="brain-search-button" className="bg-brand-red text-white px-6 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
           Search
         </button>
       </form>
+      <p className="text-xs text-muted-foreground mb-8">Find the exact records — decisions, tasks, workflows, contacts & more that match your words.</p>
 
       {loading && <p className="font-mono text-sm">Searching…</p>}
       {!res && !loading && <EmptyState title="Search the company brain" hint="Trace any founder decision to the tasks and workflows it created." />}
@@ -138,15 +141,18 @@ export default function Brain() {
   return (
     <div>
       <PageHeader eyebrow="Everything your business knows" title="Company Brain">
-        <div className="flex border border-black" data-testid="brain-tabs">
-          <button onClick={() => setTab("ask")} data-testid="brain-tab-ask"
-            className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border-r border-black transition-colors ${tab === "ask" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
-            <ChatCircleText size={16} weight="bold" /> Ask
-          </button>
-          <button onClick={() => setTab("search")} data-testid="brain-tab-search"
-            className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider transition-colors ${tab === "search" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
-            <MagnifyingGlass size={16} weight="bold" /> Search
-          </button>
+        <div className="flex flex-col gap-1" data-testid="brain-tabs-wrap">
+          <div className="flex border border-black w-fit" data-testid="brain-tabs">
+            <button onClick={() => setTab("ask")} data-testid="brain-tab-ask"
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border-r border-black transition-colors ${tab === "ask" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+              <ChatCircleText size={16} weight="bold" /> Ask
+            </button>
+            <button onClick={() => setTab("search")} data-testid="brain-tab-search"
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider transition-colors ${tab === "search" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+              <MagnifyingGlass size={16} weight="bold" /> Search
+            </button>
+          </div>
+          <p className="text-xs text-muted-foreground" data-testid="brain-tabs-hint">Ask = get an AI answer · Search = find records</p>
         </div>
       </PageHeader>
 

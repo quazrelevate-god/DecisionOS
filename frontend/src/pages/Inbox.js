@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "../lib/api";
@@ -115,14 +116,15 @@ function EscalationCard({ t, onRespond, highlight }) {
   );
 }
 
-function ReviewTaskRow({ t, members, roleOptions, onRefresh }) {
+function ReviewTaskRow({ t: task, members, roleOptions, onRefresh }) {
+  const { t } = useTranslation();
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const inp = "border border-black px-2 py-1 text-xs font-mono focus:outline-none bg-white flex-1 min-w-0";
   const reassign = async (payload) => {
     setBusy(true);
     try {
-      await api.post(`/tasks/${t.id}/reassign`, payload);
+      await api.post(`/tasks/${task.id}/reassign`, payload);
       toast.success("Task reassigned");
       setEditing(false);
       onRefresh();
@@ -130,17 +132,17 @@ function ReviewTaskRow({ t, members, roleOptions, onRefresh }) {
     finally { setBusy(false); }
   };
   return (
-    <li className="border border-black/15 px-3 py-2" data-testid={`review-task-${t.id}`}>
+    <li className="border border-black/15 px-3 py-2" data-testid={`review-task-${task.id}`}>
       <div className="flex items-center justify-between gap-2">
-        <span className="text-sm min-w-0">{t.title}</span>
-        <button onClick={() => setEditing((v) => !v)} data-testid={`reassign-toggle-${t.id}`}
-          className="shrink-0 inline-flex items-center gap-1 hover:opacity-80 transition-opacity" title="Change assignee">
-          {t.assignee_name ? (
+        <span className="text-sm min-w-0">{task.title}</span>
+        <button onClick={() => setEditing((v) => !v)} data-testid={`reassign-toggle-${task.id}`}
+          className="shrink-0 inline-flex items-center gap-1 hover:opacity-80 transition-opacity" title={t("inbox.change_assignee")}>
+          {task.assignee_name ? (
             <span className="inline-flex items-center gap-1 bg-brand-ink text-white px-2 py-0.5 text-xs font-semibold">
-              <User size={11} weight="bold" /> {t.assignee_name}
+              <User size={11} weight="bold" /> {task.assignee_name}
             </span>
-          ) : t.assignee_role ? (
-            <Chip value={t.assignee_role} className="bg-white" />
+          ) : task.assignee_role ? (
+            <Chip value={task.assignee_role} className="bg-white" />
           ) : (
             <span className="text-xs text-muted-foreground italic">Unassigned</span>
           )}
@@ -148,15 +150,15 @@ function ReviewTaskRow({ t, members, roleOptions, onRefresh }) {
         </button>
       </div>
       {editing && (
-        <div className="mt-2 flex flex-col sm:flex-row gap-2" data-testid={`reassign-form-${t.id}`}>
-          <select className={inp} defaultValue={t.assignee_id || ""} disabled={busy} data-testid={`reassign-member-${t.id}`}
+        <div className="mt-2 flex flex-col sm:flex-row gap-2" data-testid={`reassign-form-${task.id}`}>
+          <select className={inp} defaultValue={task.assignee_id || ""} disabled={busy} data-testid={`reassign-member-${task.id}`}
             onChange={(e) => e.target.value && reassign({ assignee_id: e.target.value })}>
-            <option value="">— Change to a member —</option>
+            <option value="">{t("inbox.change_to_member")}</option>
             {members.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
           </select>
-          <select className={inp} defaultValue="" disabled={busy} data-testid={`reassign-role-${t.id}`}
+          <select className={inp} defaultValue="" disabled={busy} data-testid={`reassign-role-${task.id}`}
             onChange={(e) => e.target.value && reassign({ assignee_role: e.target.value })}>
-            <option value="">…or a whole team / role</option>
+            <option value="">{t("inbox.change_to_role")}</option>
             {roleOptions.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
           </select>
         </div>
@@ -166,6 +168,7 @@ function ReviewTaskRow({ t, members, roleOptions, onRefresh }) {
 }
 
 function PendingApprovalCard({ d, members, roleOptions, onApprove, onReject, onRefresh, onDiscuss, highlight }) {
+  const { t } = useTranslation();
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ title: "", assignee_id: "", assignee_role: "", priority: "medium" });
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -233,16 +236,16 @@ function PendingApprovalCard({ d, members, roleOptions, onApprove, onReject, onR
       <div className="flex gap-2 mt-4">
         <button onClick={() => onApprove(d.id)} data-testid={`inbox-approve-${d.id}`}
           className="flex-1 flex items-center justify-center gap-2 bg-brand-blue text-white py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">
-          <CheckCircle size={16} weight="bold" /> Approve
+          <CheckCircle size={16} weight="bold" /> {t("inbox.approve")}
         </button>
         <button onClick={() => onReject(d.id)} data-testid={`inbox-reject-${d.id}`}
           className="flex items-center gap-2 bg-white py-2 px-4 text-sm font-semibold uppercase tracking-wider border border-black hover:bg-brand-ink hover:text-white transition-colors">
-          <XCircle size={16} weight="bold" /> Reject
+          <XCircle size={16} weight="bold" /> {t("inbox.reject")}
         </button>
       </div>
       <button onClick={() => onDiscuss(d.id)} data-testid={`decision-discuss-${d.id}`}
         className="mt-2 w-full flex items-center justify-center gap-2 border border-dashed border-black/50 py-2 text-xs font-semibold uppercase tracking-wider hover:bg-black/5 transition-colors">
-        <ChatCircleText size={15} weight="bold" /> Discuss / who raised this
+        <ChatCircleText size={15} weight="bold" /> {t("inbox.discuss")}
       </button>
     </div>
   );
@@ -294,6 +297,7 @@ function useElapsed(ticking, running) {
 
 export default function Inbox() {
   const { user, tenant } = useAuth();
+  const { t } = useTranslation();
   const canCapture = user?.role === "owner" || hasPerm(user, "voice_capture");
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -507,7 +511,7 @@ export default function Inbox() {
             <p className="font-heading font-bold uppercase tracking-tight text-sm" data-testid="structuring-status">
               {procLabel}{procNotes.length > 1 ? ` (${procNotes.length})` : ""}
             </p>
-            <p className="text-xs text-muted-foreground">DecisionOS is working through it for you — you can keep going. We'll pop up the summary the moment it's ready.</p>
+            <p className="text-xs text-muted-foreground">{t("inbox.structuring_desc")}</p>
           </div>
         </div>
       )}
@@ -520,7 +524,7 @@ export default function Inbox() {
               className={`w-24 h-24 flex items-center justify-center border border-black transition-all ${recording ? (paused ? "bg-brand-ink text-white" : "bg-brand-red text-white recording-pulse") : "bg-brand-ink text-white hover:shadow-brutal"}`}>
               {recording ? <Stop size={38} weight="fill" /> : <Microphone size={38} weight="fill" />}
             </button>
-            <p className="mt-4 font-heading font-bold uppercase tracking-tight">{recording ? (paused ? "Paused" : "Recording…") : busy ? "Thinking…" : "Tap to speak a decision"}</p>
+            <p className="mt-4 font-heading font-bold uppercase tracking-tight">{recording ? (paused ? t("inbox.paused") : t("inbox.recording")) : busy ? t("inbox.thinking") : t("inbox.tap_to_speak")}</p>
             <p className="font-mono text-sm text-muted-foreground mt-1" data-testid="record-timer">{recording ? mmss : "AI structures it into tasks"}</p>
             {recording && (
               <div className="flex flex-wrap items-center justify-center gap-2 mt-3">
@@ -553,7 +557,7 @@ export default function Inbox() {
             </div>
           </div>
           <div className="card-brutal p-6">
-            <p className="label-mono text-muted-foreground mb-3">Type a directive</p>
+            <p className="label-mono text-muted-foreground mb-3">{t("inbox.type_directive")}</p>
             <textarea data-testid="text-directive-input" value={text} onChange={(e) => setText(e.target.value)} rows={5}
               placeholder="e.g. Tell sales to send the revised quote to the Delhi retailer by Friday and ask finance to clear the packaging invoice."
               className="w-full border border-black p-3 text-sm font-mono focus:outline-none focus:shadow-brutal-sm transition-shadow resize-none" />
@@ -603,7 +607,7 @@ export default function Inbox() {
       {/* Pending approvals (owner) */}
       {hasPerm(user, "decisions_approve") && pending.length > 0 && (
         <div className="mb-10">
-          <h2 className="font-heading text-2xl font-extrabold uppercase tracking-tight mb-4">Decision Approvals</h2>
+          <h2 className="font-heading text-2xl font-extrabold uppercase tracking-tight mb-4">{t("inbox.decision_approvals")}</h2>
           <div className="grid md:grid-cols-2 gap-4">
             {pending.map((d) => (
               <PendingApprovalCard
@@ -626,7 +630,7 @@ export default function Inbox() {
       {escalations.length > 0 && (
         <div className="mb-10" data-testid="needs-attention-section">
           <h2 className="font-heading text-2xl font-extrabold uppercase tracking-tight mb-4 flex items-center gap-2">
-            <WarningCircle size={22} weight="bold" className="text-brand-red" /> Needs Your Attention
+            <WarningCircle size={22} weight="bold" className="text-brand-red" /> {t("inbox.needs_attention")}
             <span className="min-w-5 h-5 px-1.5 flex items-center justify-center text-xs border border-black bg-brand-red text-white">{escalations.length}</span>
           </h2>
           <div className="grid md:grid-cols-2 gap-4">
@@ -638,14 +642,14 @@ export default function Inbox() {
       )}
 
       {/* Tasks feed */}
-      <h2 className="font-heading text-2xl font-extrabold uppercase tracking-tight mb-4">Tasks &amp; Activity</h2>
+      <h2 className="font-heading text-2xl font-extrabold uppercase tracking-tight mb-4">{t("inbox.tasks_activity")}</h2>
 
       {/* Filter chips */}
       <div className="flex flex-wrap gap-2 mb-4" data-testid="inbox-filters">
         {FILTERS.map((f) => {
           const active = filter === f;
           const n = f === "all" ? inbox.open_total : (inbox.counts?.[f] || 0);
-          const label = f === "all" ? "All" : CLASS_META[f]?.label || f;
+          const label = f === "all" ? t("inbox.filter_all") : CLASS_META[f]?.label || f;
           return (
             <button key={f} data-testid={`inbox-filter-${f}`} onClick={() => setFilter(f)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-black transition-colors ${active ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
@@ -653,15 +657,15 @@ export default function Inbox() {
             </button>
           );
         })}
-        {processing && <span className="flex items-center gap-1.5 text-xs text-muted-foreground"><ArrowClockwise size={14} className="animate-spin" /> processing…</span>}
+        {processing && <span className="flex items-center gap-1.5 text-xs text-muted-foreground"><ArrowClockwise size={14} className="animate-spin" /> {t("inbox.processing")}</span>}
       </div>
 
       {/* Unified feed */}
       <p className="sm:hidden text-[11px] text-muted-foreground mb-2 flex items-center gap-2" data-testid="inbox-swipe-hint">
-        <Eye size={12} weight="bold" /> Swipe right to view · swipe left to dismiss
+        <Eye size={12} weight="bold" /> {t("inbox.swipe_hint")}
       </p>
       <div className="space-y-2 mb-10" data-testid="inbox-feed">
-        {items.length === 0 && <EmptyState title="Inbox zero" hint="Captured voice notes, uploads, invoices, payments and complaints will appear here — classified automatically." />}
+        {items.length === 0 && <EmptyState title={t("inbox.inbox_zero")} hint={t("inbox.inbox_zero_hint")} />}
         {items.map((it) => {
           const meta = CLASS_META[it.classification] || CLASS_META.task;
           const Icon = meta.icon;

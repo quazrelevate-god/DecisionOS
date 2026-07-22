@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import api from "../lib/api";
 import { timeAgo, fullTime } from "../lib/format";
 import { PageHeader, Chip, EmptyState } from "../components/common";
@@ -825,6 +826,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
 
 export default function MyWork() {
   const qc = useQueryClient();
+  const { t } = useTranslation();
   const { tenant, user } = useAuth();
   const om = opModel(tenant);
   const WORK_TABS = [
@@ -898,7 +900,7 @@ export default function MyWork() {
 
   return (
     <div>
-      <PageHeader eyebrow="Your day, simplified" title="My Work">
+      <PageHeader eyebrow={t("mywork.eyebrow")} title={t("mywork.title")}>
         <div className="w-full lg:w-auto flex flex-col lg:flex-row lg:items-center gap-2" data-testid="mywork-controls">
           <div className="order-2 lg:order-1 grid grid-cols-4 gap-2 lg:flex lg:flex-wrap lg:items-center" data-testid="mywork-actions">
             <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members}
@@ -906,34 +908,34 @@ export default function MyWork() {
             {isOwner && (
               <>
                 <button onClick={() => { setScope("mine"); setView("mywork"); }} data-testid="work-scope-mine"
-                  className={`${CTRL} ${view === "mywork" && scope === "mine" ? "bg-brand-blue text-white" : "bg-white hover:bg-black/5"}`}>My Tasks</button>
+                  className={`${CTRL} ${view === "mywork" && scope === "mine" ? "bg-brand-blue text-white" : "bg-white hover:bg-black/5"}`}>{t("mywork.my_tasks")}</button>
                 <button onClick={() => { setScope("all"); setView("mywork"); }} data-testid="work-scope-all"
-                  className={`${CTRL} ${view === "mywork" && scope === "all" ? "bg-brand-blue text-white" : "bg-white hover:bg-black/5"}`}>All Tasks</button>
+                  className={`${CTRL} ${view === "mywork" && scope === "all" ? "bg-brand-blue text-white" : "bg-white hover:bg-black/5"}`}>{t("mywork.all_tasks")}</button>
               </>
             )}
             <button onClick={() => { setAiPriority((v) => !v); setView("mywork"); }} data-testid="ai-priority-toggle"
               className={`${CTRL} ${view === "mywork" && aiPriority ? "bg-brand-red text-white shadow-brutal-sm" : "bg-brand-yellow hover:shadow-brutal-sm"}`}>
-              <Sparkle size={15} weight="bold" /> {scoring ? "Scoring…" : aiPriority ? "AI Priority: On" : "AI Priority"}
+              <Sparkle size={15} weight="bold" /> {scoring ? t("mywork.scoring") : aiPriority ? t("mywork.ai_priority_on") : t("mywork.ai_priority")}
             </button>
           </div>
           <div className="order-1 lg:order-2 grid grid-cols-4 gap-2 lg:flex lg:items-center" data-testid="work-view-toggle">
             <button onClick={() => setView("mywork")} data-testid="work-view-mywork"
               className={`${CTRL} ${view === "mywork" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
-              <ListIcon size={15} weight="bold" /> My Work
+              <ListIcon size={15} weight="bold" /> {t("mywork.view_mywork")}
             </button>
             <button onClick={() => setView("board")} data-testid="work-view-board"
               className={`${CTRL} ${view === "board" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
-              <Kanban size={15} weight="bold" /> Board
+              <Kanban size={15} weight="bold" /> {t("mywork.view_board")}
             </button>
             {canSeeWorkflows && (
               <button onClick={() => setView("workflows")} data-testid="work-view-workflows"
                 className={`${CTRL} ${view === "workflows" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
-                <ArrowRight size={15} weight="bold" /> Workflows
+                <ArrowRight size={15} weight="bold" /> {t("mywork.view_workflows")}
               </button>
             )}
             <button onClick={() => setView("leave")} data-testid="work-view-leave"
               className={`${CTRL} ${view === "leave" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
-              <AirplaneTakeoff size={15} weight="bold" /> Leave
+              <AirplaneTakeoff size={15} weight="bold" /> {t("mywork.view_leave")}
             </button>
           </div>
         </div>
@@ -943,8 +945,8 @@ export default function MyWork() {
         <div data-testid="access-restricted-banner" className="card-brutal p-4 mb-6 bg-brand-red text-white flex items-center gap-3">
           <LockKey size={22} weight="bold" className="shrink-0" />
           <div>
-            <p className="font-bold uppercase tracking-tight">Access restricted</p>
-            <p className="text-sm opacity-90">You don't have access to open this work item. Ask an owner if you think this is a mistake.</p>
+            <p className="font-bold uppercase tracking-tight">{t("mywork.access_restricted")}</p>
+            <p className="text-sm opacity-90">{t("mywork.access_restricted_desc")}</p>
           </div>
         </div>
       )}
@@ -967,7 +969,7 @@ export default function MyWork() {
               </button>
             ))}
           </div>
-          {list.length === 0 && <EmptyState title={tab === "completed" ? "Nothing completed yet" : "Nothing here"} hint={tab === "all" ? "You're all caught up!" : "No tasks in this category."} />}
+          {list.length === 0 && <EmptyState title={tab === "completed" ? t("mywork.empty_completed_title") : t("mywork.empty_title")} hint={tab === "all" ? t("mywork.empty_all_hint") : t("mywork.empty_cat_hint")} />}
           <div className="space-y-4">
             {list.map((t) => <TaskCard key={t.id} t={t} onChange={refresh} members={members} roleOptions={roleOptions} showAssignee={showAssignee} highlight={t.id === focusTaskId} scores={aiPriority && tab !== "completed" ? scoreMap[t.id] : undefined} />)}
           </div>

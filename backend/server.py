@@ -1313,6 +1313,11 @@ class ProfileUpdateInput(BaseModel):
     language: Optional[str] = None
 
 
+class ChangePasswordInput(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=6)
+
+
 @api.patch("/auth/profile")
 async def update_profile(inp: ProfileUpdateInput, user: dict = Depends(get_current_user)):
     updates = {}
@@ -1331,6 +1336,22 @@ async def update_profile(inp: ProfileUpdateInput, user: dict = Depends(get_curre
     fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0, "password_hash": 0, "password": 0})
     tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
     return {"user": fresh, "tenant": tenant}
+
+
+@api.post("/auth/change-password")
+async def change_password(inp: ChangePasswordInput, user: dict = Depends(get_current_user)):
+    if user.get("passwordless"):
+        raise HTTPException(status_code=400, detail="Your account signs in with mobile OTP and has no password to change.")
+    full = await db.users.find_one({"id": user["id"]})
+    if not full or not verify_password(inp.current_password, full.get("password_hash", "")):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    if inp.new_password == inp.current_password:
+        raise HTTPException(status_code=400, detail="New password must be different from your current password")
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"password_hash": hash_password(inp.new_password), "updated_at": now_iso()}},
+    )
+    return {"ok": True}
 
 
 @api.patch("/tenant")

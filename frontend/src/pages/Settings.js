@@ -6,11 +6,11 @@ import { PageHeader } from "../components/common";
 import { CompanyDetails } from "../components/CompanyDetails";
 import { BusinessVocabulary } from "../components/BusinessVocabulary";
 import { OperatingModelEditor } from "../components/OperatingModelEditor";
-import { ProfileForm } from "../components/ProfileDialog";
+import { ProfileForm, ChangePasswordForm } from "../components/ProfileDialog";
 import { LanguageSwitcher } from "../components/LanguageSwitcher";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { CurrencyCircleDollar, ShieldCheck, FloppyDisk, Info, UserCircle, Translate } from "@phosphor-icons/react";
+import { CurrencyCircleDollar, ShieldCheck, FloppyDisk, Info, UserCircle, Translate, Lock } from "@phosphor-icons/react";
 
 const CURRENCIES = ["INR", "USD", "EUR", "GBP", "AED", "SGD", "AUD"];
 const inp = "w-full border border-border rounded-lg px-3 py-2 text-sm font-mono bg-card focus:outline-none focus:ring-2 focus:ring-ring/40";
@@ -38,6 +38,19 @@ function ProfileCard() {
       </div>
       <p className="text-xs text-muted-foreground mb-4">Your personal details, sign-in and WhatsApp routing.</p>
       <ProfileForm />
+    </div>
+  );
+}
+
+function SecurityCard() {
+  return (
+    <div className="card-brutal p-5" data-testid="settings-security-card">
+      <div className="flex items-center gap-2 mb-1">
+        <Lock size={20} weight="bold" className="text-brand-red" />
+        <h2 className="font-heading text-lg font-extrabold uppercase tracking-tight">Password & Security</h2>
+      </div>
+      <p className="text-xs text-muted-foreground mb-4">Change the password you use to sign in.</p>
+      <ChangePasswordForm />
     </div>
   );
 }
@@ -71,6 +84,7 @@ export default function Settings() {
         <PageHeader eyebrow="Account" title="Settings" />
         <div className="max-w-2xl">
           <ProfileCard />
+          <div className="mt-6"><SecurityCard /></div>
         </div>
       </div>
     );
@@ -90,6 +104,8 @@ export default function Settings() {
         <LanguageCard />
 
         <ProfileCard />
+
+        <SecurityCard />
 
         <div className="card-brutal p-5" data-testid="settings-money-card">
           <div className="flex items-center gap-2 mb-1">

@@ -3,7 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
 import api from "../lib/api";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
-import { UserCircle, FloppyDisk } from "@phosphor-icons/react";
+import { UserCircle, FloppyDisk, Lock } from "@phosphor-icons/react";
 
 const inp = "w-full border border-border rounded-lg px-3 py-2 text-sm mt-1 bg-card focus:outline-none focus:ring-2 focus:ring-ring/40";
 
@@ -55,6 +55,62 @@ export function ProfileForm({ onSaved }) {
       <button onClick={save} disabled={saving} data-testid="profile-save"
         className="flex items-center justify-center gap-2 bg-brand-ink text-white px-5 py-2.5 text-sm font-semibold uppercase tracking-wider rounded-lg hover:bg-brand-red transition-colors disabled:opacity-50">
         <FloppyDisk size={16} weight="bold" /> {saving ? "Saving…" : "Save changes"}
+      </button>
+    </div>
+  );
+}
+
+export function ChangePasswordForm() {
+  const { user } = useAuth();
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  if (user?.passwordless) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        Your account signs in with mobile OTP, so there's no password to change here.
+      </p>
+    );
+  }
+
+  const submit = async () => {
+    if (!current) { toast.error("Enter your current password"); return; }
+    if (next.length < 6) { toast.error("New password must be at least 6 characters"); return; }
+    if (next !== confirm) { toast.error("New passwords don't match"); return; }
+    setSaving(true);
+    try {
+      await api.post("/auth/change-password", { current_password: current, new_password: next });
+      toast.success("Password changed");
+      setCurrent(""); setNext(""); setConfirm("");
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Could not change password");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="label-mono text-muted-foreground">Current password</label>
+        <input data-testid="password-current-input" type="password" value={current}
+          onChange={(e) => setCurrent(e.target.value)} className={inp} placeholder="••••••••" autoComplete="current-password" />
+      </div>
+      <div>
+        <label className="label-mono text-muted-foreground">New password</label>
+        <input data-testid="password-new-input" type="password" value={next}
+          onChange={(e) => setNext(e.target.value)} className={inp} placeholder="At least 6 characters" autoComplete="new-password" />
+      </div>
+      <div>
+        <label className="label-mono text-muted-foreground">Confirm new password</label>
+        <input data-testid="password-confirm-input" type="password" value={confirm}
+          onChange={(e) => setConfirm(e.target.value)} className={inp} placeholder="Re-enter new password" autoComplete="new-password" />
+      </div>
+      <button onClick={submit} disabled={saving} data-testid="password-change-submit"
+        className="flex items-center justify-center gap-2 bg-brand-ink text-white px-5 py-2.5 text-sm font-semibold uppercase tracking-wider rounded-lg hover:bg-brand-red transition-colors disabled:opacity-50">
+        <Lock size={16} weight="bold" /> {saving ? "Updating…" : "Update password"}
       </button>
     </div>
   );

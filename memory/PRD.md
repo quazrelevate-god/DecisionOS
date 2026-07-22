@@ -266,3 +266,9 @@ Fix (server.py):
 2. Added reviewer_perm field (="finance" for money items). list_captures + captures/pending-count now show a draft to non-owners where reviewer_role==user.role OR reviewer_perm in user's permissions — so anyone with the FINANCE permission sees finance captures regardless of role-key naming.
 Verified: curl (owner + sales-with-finance-perm see it; production-without-perm doesn't) and _finance_role_key unit checks (accounts->accounts, finance->finance, none->None). Backend-only.
 NOTE: the user's already-sent capture (created before this fix) lacks reviewer_perm — owner can Reassign it to the finance/accounts person. Future captures auto-route correctly. REDEPLOY to production.
+
+## Password change feature (2026-07-22)
+User: "need password change". Called integration_expert (auth rule) — reused existing bcrypt helpers.
+Backend (server.py): added ChangePasswordInput model + POST /api/auth/change-password (get_current_user dep): rejects passwordless/OTP members, verifies current password via verify_password, blocks new==old, updates password_hash via hash_password. Defaults per user: OTP members hidden, min 6 chars, stays logged in.
+Frontend: ChangePasswordForm in ProfileDialog.js (current/new/confirm fields, hides for user.passwordless) + SecurityCard ("Password & Security") in Settings.js, shown to owners and non-owners. data-testids: password-current-input, password-new-input, password-confirm-input, password-change-submit, settings-security-card.
+Verified: curl full flow (wrong current 400, same-as-current 400, valid ok, old-login 401, new-login ok) + screenshot of Settings security card. REDEPLOY to production.

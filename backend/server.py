@@ -3492,7 +3492,7 @@ async def brief_details(key: str, period: str = "morning", user: dict = Depends(
         purchases = await db.workflows.find({"tenant_id": tid, "type": "purchase_payment", "stage": "requested"}, {"_id": 0}).to_list(50)
         for w in purchases:
             items.append({"id": w["id"], "title": w.get("title"), "subtitle": w.get("counterparty") or "",
-                          "meta": w.get("amount"), "kind": "purchase"})
+                          "meta": w.get("amount"), "kind": "purchase", "wf_type": w.get("type")})
 
     elif key == "absent":
         recs = await db.attendance.find({"tenant_id": tid, "date": today, "status": "absent"}, {"_id": 0}).to_list(200)
@@ -3510,13 +3510,13 @@ async def brief_details(key: str, period: str = "morning", user: dict = Depends(
         recs = await db.complaints.find({"tenant_id": tid, "status": "open"}, {"_id": 0}).sort("created_at", -1).to_list(200)
         for c in recs:
             items.append({"id": c["id"], "title": c.get("text"), "subtitle": c.get("customer_name") or "Unknown",
-                          "meta": c.get("severity"), "kind": "complaint"})
+                          "meta": c.get("severity"), "kind": "complaint", "customer_id": c.get("customer_id")})
 
     elif key == "payment_overdue":
         recs = await db.workflows.find({"tenant_id": tid, "type": "purchase_payment", "stage": "payment_pending"}, {"_id": 0}).to_list(200)
         for w in recs:
             items.append({"id": w["id"], "title": w.get("title"), "subtitle": w.get("counterparty") or "",
-                          "meta": w.get("amount"), "kind": "payment"})
+                          "meta": w.get("amount"), "kind": "payment", "wf_type": w.get("type")})
 
     elif key == "fires":
         tasks = await db.tasks.find({"tenant_id": tid, "source": "escalation", "status": {"$ne": "done"}}, {"_id": 0}).sort("created_at", -1).to_list(200)

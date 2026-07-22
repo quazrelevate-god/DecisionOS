@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
@@ -81,9 +82,20 @@ export default function Workflows({ embedded = false }) {
   const L = lex(tenant);
   const om = opModel(tenant);
   const pipelines = om.pipelines;
-  const [tab, setTab] = useState(pipelines[0]?.key);
+  const [params] = useSearchParams();
+  const focusWf = params.get("wf");
+  const focusWfType = params.get("wf_type");
+  const [tab, setTab] = useState(() => (focusWfType && pipelines.some((p) => p.key === focusWfType)) ? focusWfType : pipelines[0]?.key);
   const activeKey = pipelines.some((p) => p.key === tab) ? tab : pipelines[0]?.key;
   const { data } = useQuery({ queryKey: ["workflows", activeKey], queryFn: () => api.get(`/workflows?type=${activeKey}`).then((r) => r.data) });
+
+  useEffect(() => {
+    if (!focusWf || !data) return;
+    const timer = setTimeout(() => {
+      document.getElementById(`workflow-card-${focusWf}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [focusWf, data]);
 
   const pipeline = pipelines.find((p) => p.key === activeKey) || pipelines[0];
   const stages = pipeline?.stages || [];
@@ -162,7 +174,7 @@ export default function Workflows({ embedded = false }) {
                     const updAt = lastEv?.at || w.created_at;
                     const updLabel = lastEv?.note || "Created";
                     return (
-                      <div key={w.id} data-testid={`workflow-card-${w.id}`} className="border border-black p-3 shadow-hover bg-white">
+                      <div key={w.id} id={`workflow-card-${w.id}`} data-testid={`workflow-card-${w.id}`} className={`border border-black p-3 shadow-hover bg-white transition-all ${w.id === focusWf ? "ring-4 ring-brand-red ring-offset-2" : ""}`}>
                         <div className="flex items-start justify-between gap-2">
                           <p className="font-semibold text-sm leading-tight">{w.title}</p>
                           {user?.role === "owner" && (

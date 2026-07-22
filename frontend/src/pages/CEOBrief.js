@@ -71,20 +71,21 @@ function DetailDialog({ row, period, open, onClose }) {
   const items = data?.items || [];
 
   const NAV = {
-    decision: (id) => `/?focus=approval:${id}`,
-    escalation: (id) => `/?focus=attention:${id}`,
-    purchase: () => `/workflows`,
-    payment: () => `/workflows`,
-    task: () => `/my-work`,
-    complaint: () => `/contacts`,
+    decision: (it) => `/?focus=approval:${it.id}`,
+    escalation: (it) => `/?focus=attention:${it.id}`,
+    purchase: (it) => `/my-work?view=workflows&wf=${it.id}${it.wf_type ? `&wf_type=${it.wf_type}` : ""}`,
+    payment: (it) => `/my-work?view=workflows&wf=${it.id}${it.wf_type ? `&wf_type=${it.wf_type}` : ""}`,
+    task: (it) => `/my-work?task=${it.id}`,
+    complaint: (it) => (it.customer_id ? `/contacts/${it.customer_id}` : `/contacts`),
     absent: () => `/contacts`,
     activity: () => `/my-work`,
+    leave: () => `/my-work?view=leave`,
   };
   const go = (it) => {
     const fn = NAV[it.kind];
     if (!fn) return;
     onClose();
-    navigate(fn(it.id));
+    navigate(fn(it));
   };
 
   return (

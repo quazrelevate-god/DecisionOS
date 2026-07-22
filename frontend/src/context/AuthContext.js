@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import api from "../lib/api";
+import { setAppLanguage } from "../i18n";
 
 const AuthContext = createContext(null);
 
@@ -7,6 +8,11 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [tenant, setTenant] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  // Apply the user's saved language whenever it changes (follows them across devices).
+  useEffect(() => {
+    if (user?.language) setAppLanguage(user.language);
+  }, [user?.language]);
 
   useEffect(() => {
     // Session is restored from the HttpOnly cookie via /auth/me.

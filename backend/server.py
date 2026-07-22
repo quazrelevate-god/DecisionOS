@@ -851,6 +851,19 @@ async def process_voice_note(note_id: str):
 # ---------------------------------------------------------------------------
 # Auth routes
 # ---------------------------------------------------------------------------
+LANG_NAMES = {"en": "English", "hi": "Hindi", "ta": "Tamil"}
+
+
+def lang_directive(lang: str) -> str:
+    """Instruct an AI to write its human-readable answer in the user's language."""
+    name = LANG_NAMES.get((lang or "en"))
+    if not name or name == "English":
+        return ""
+    return (f"IMPORTANT: Write the human-readable text (the 'answer'/'summary'/message body) in {name}. "
+            "Keep proper nouns, names, company/product names, numbers and JSON keys exactly as-is; only translate the prose.")
+
+
+
 async def ai_generate_lexicon(industry: str, company_size: str = "", roles=None, description: str = "") -> dict:
     """AI-localize the app's fixed vocabulary to the tenant's industry."""
     role_labels = ", ".join([r.get("label") for r in (roles or []) if r.get("label")]) or "not specified"
@@ -1297,6 +1310,7 @@ async def regenerate_operating_model(user: dict = Depends(require_perm("team_man
 class ProfileUpdateInput(BaseModel):
     name: Optional[str] = None
     phone: Optional[str] = None
+    language: Optional[str] = None
 
 
 @api.patch("/auth/profile")
@@ -1308,6 +1322,8 @@ async def update_profile(inp: ProfileUpdateInput, user: dict = Depends(get_curre
         # Changing your number should re-enable WhatsApp matching for it.
         updates["phone"] = inp.phone.strip()
         updates["wa_phone_obsolete"] = False
+    if inp.language is not None and inp.language in ("en", "hi", "ta"):
+        updates["language"] = inp.language
     if not updates:
         raise HTTPException(status_code=400, detail="Nothing to update")
     updates["updated_at"] = now_iso()
@@ -3062,7 +3078,8 @@ async def ask_ai(inp: AskInput, user: dict = Depends(require_perm("ask"))):
            "Financial data (invoices, payments, outstanding) is NOT available to this user's role; if asked about money, say it is restricted to Owner and Finance. ") +
         "Return ONLY valid JSON: {\"answer\": string (markdown allowed), "
         "\"citations\": [{\"type\": one of [decision,task,workflow,contact,invoice,payment], \"title\": string}]}. "
-        "Citations MUST be the specific records you used to answer (empty array if none)."
+        "Citations MUST be the specific records you used to answer (empty array if none). "
+        + lang_directive(user.get("language"))
     )
     prompt = f"Company context:\n{json.dumps(context)}\n\nQuestion: {inp.question}"
     chat = LlmChat(api_key=CLAUDE_KEY, session_id=f"ask-{tid}", system_message=system).with_model(*LLM_MODEL)
@@ -3183,20 +3200,32 @@ async def send_email(to, subject: str, html: str) -> dict:
     return {"sent": False, "mocked": True, "to": to_list}
 
 
+DIGEST_I18N = {
+    "en": {"brief": "Daily Brief", "pending": "pending approvals", "open": "open tasks", "overdue": "overdue",
+           "active": "active workflows", "pending_h": "Pending Approvals", "overdue_h": "Overdue Tasks", "none": "None"},
+    "hi": {"brief": "दैनिक ब्रीफ़", "pending": "लंबित स्वीकृतियाँ", "open": "खुले कार्य", "overdue": "अतिदेय",
+           "active": "सक्रिय वर्कफ़्लो", "pending_h": "लंबित स्वीकृतियाँ", "overdue_h": "अतिदेय कार्य", "none": "कोई नहीं"},
+    "ta": {"brief": "தினசரி சுருக்கம்", "pending": "நிலுவை ஒப்புதல்கள்", "open": "திறந்த பணிகள்", "overdue": "தாமதமானவை",
+           "active": "செயலில் உள்ள பணிப்பாய்வுகள்", "pending_h": "நிலுவை ஒப்புதல்கள்", "overdue_h": "தாமதமான பணிகள்", "none": "எதுவுமில்லை"},
+}
+
+
+
 @api.post("/brief/send-digest")
 async def send_digest(user: dict = Depends(require_role("owner"))):
     data = await dashboard(user)  # reuse
     tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
     stats = data["stats"]
+    L = DIGEST_I18N.get(user.get("language") or "en", DIGEST_I18N["en"])
     html = f"""
-    <h2>DecisionOS Daily Brief — {tenant['name']}</h2>
-    <p>{stats['pending_approvals']} pending approvals · {stats['open_tasks']} open tasks · {len(data['overdue_tasks'])} overdue · {stats['active_workflows']} active workflows</p>
-    <h3>Pending Approvals</h3>
-    <ul>{''.join(f"<li>{d['title']}</li>" for d in data['pending_decisions']) or '<li>None</li>'}</ul>
-    <h3>Overdue Tasks</h3>
-    <ul>{''.join(f"<li>{t['title']}</li>" for t in data['overdue_tasks']) or '<li>None</li>'}</ul>
+    <h2>DecisionOS {L['brief']} — {tenant['name']}</h2>
+    <p>{stats['pending_approvals']} {L['pending']} · {stats['open_tasks']} {L['open']} · {len(data['overdue_tasks'])} {L['overdue']} · {stats['active_workflows']} {L['active']}</p>
+    <h3>{L['pending_h']}</h3>
+    <ul>{''.join(f"<li>{d['title']}</li>" for d in data['pending_decisions']) or f'<li>{L["none"]}</li>'}</ul>
+    <h3>{L['overdue_h']}</h3>
+    <ul>{''.join(f"<li>{t['title']}</li>" for t in data['overdue_tasks']) or f'<li>{L["none"]}</li>'}</ul>
     """
-    result = await send_email(user["email"], f"DecisionOS Daily Brief — {tenant['name']}", html)
+    result = await send_email(user["email"], f"DecisionOS {L['brief']} — {tenant['name']}", html)
     if result.get("sent"):
         return {"sent": True, "to": user["email"], "provider": result["provider"]}
     if result.get("error") == "smtp_auth_failed":

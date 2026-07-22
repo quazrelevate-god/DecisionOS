@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../hooks/useTheme";
@@ -36,26 +37,27 @@ import {
   Wallet,
 } from "@phosphor-icons/react";
 import { ProfileDialog } from "./ProfileDialog";
+import { LanguageSwitcher } from "./LanguageSwitcher";
 
 const NAV = [
-  { to: "/", label: "Decision Desk", icon: Tray, testid: "nav-inbox", perm: "inbox" },
-  { to: "/brief", label: "CEO Brief", icon: Sun, testid: "nav-ceo-brief" },
-  { to: "/my-work", label: "My Work", icon: Briefcase, testid: "nav-my-work" },
-  { to: "/contacts", label: "People", icon: AddressBook, testid: "nav-contacts", perm: "people" },
-  { to: "/brain", label: "Company Brain", icon: BrainIcon, testid: "nav-brain", perm: "brain" },
-  { to: "/ledger", label: "Finance", icon: Wallet, testid: "nav-ledger", perms: ["ledger", "finance"] },
-  { to: "/ingest", label: "Capture", icon: FileArrowUp, testid: "nav-ingest", perm: "data_input" },
-  { to: "/meetings", label: "Meeting Notes", icon: MicrophoneStage, testid: "nav-meetings" },
-  { to: "/settings", label: "Settings", icon: GearSix, testid: "nav-settings", ownerOnly: true },
+  { to: "/", label: "Decision Desk", tkey: "inbox", icon: Tray, testid: "nav-inbox", perm: "inbox" },
+  { to: "/brief", label: "CEO Brief", tkey: "brief", icon: Sun, testid: "nav-ceo-brief" },
+  { to: "/my-work", label: "My Work", tkey: "mywork", icon: Briefcase, testid: "nav-my-work" },
+  { to: "/contacts", label: "People", tkey: "people", icon: AddressBook, testid: "nav-contacts", perm: "people" },
+  { to: "/brain", label: "Company Brain", tkey: "brain", icon: BrainIcon, testid: "nav-brain", perm: "brain" },
+  { to: "/ledger", label: "Finance", tkey: "finance", icon: Wallet, testid: "nav-ledger", perms: ["ledger", "finance"] },
+  { to: "/ingest", label: "Capture", tkey: "capture", icon: FileArrowUp, testid: "nav-ingest", perm: "data_input" },
+  { to: "/meetings", label: "Meeting Notes", tkey: "meetings", icon: MicrophoneStage, testid: "nav-meetings" },
+  { to: "/settings", label: "Settings", tkey: "settings", icon: GearSix, testid: "nav-settings", ownerOnly: true },
 ];
 
 // Primary items for the mobile bottom tab bar
 const BOTTOM_NAV = [
-  { to: "/", label: "Desk", icon: Tray, perm: "inbox" },
-  { to: "/brief", label: "Brief", icon: Sun },
-  { to: "/my-work", label: "Work", icon: Briefcase },
-  { to: "/contacts", label: "People", icon: AddressBook, perm: "people" },
-  { to: "/brain", label: "Brain", icon: BrainIcon, perm: "brain" },
+  { to: "/", label: "Desk", tkey: "desk", icon: Tray, perm: "inbox" },
+  { to: "/brief", label: "Brief", tkey: "brief", icon: Sun },
+  { to: "/my-work", label: "Work", tkey: "work", icon: Briefcase },
+  { to: "/contacts", label: "People", tkey: "people", icon: AddressBook, perm: "people" },
+  { to: "/brain", label: "Brain", tkey: "brain", icon: BrainIcon, perm: "brain" },
 ];
 
 const Logo = () => (
@@ -71,6 +73,7 @@ const Logo = () => (
 
 export default function Layout({ children }) {
   const { user, tenant, logout } = useAuth();
+  const { t } = useTranslation();
   // NAV/BOTTOM_NAV/hasPerm are stable module-level refs; only `user` can change.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const navMain = useMemo(() => NAV.filter((n) => {
@@ -118,11 +121,11 @@ export default function Layout({ children }) {
         </PopoverTrigger>
         <PopoverContent align="end" className="w-80 p-0 border border-black shadow-brutal" data-testid="notif-dropdown">
           <div className="flex items-center justify-between px-4 py-3 border-b border-black">
-            <p className="text-sm font-bold uppercase tracking-tight">Notifications</p>
-            {unread > 0 && <span className="label-mono text-brand-red">{unread} new</span>}
+            <p className="text-sm font-bold uppercase tracking-tight">{t("header.notifications")}</p>
+            {unread > 0 && <span className="label-mono text-brand-red">{unread} {t("header.new")}</span>}
           </div>
           <div className="max-h-96 overflow-y-auto divide-y divide-black/10">
-            {items.length === 0 && <p className="p-6 text-center text-sm text-muted-foreground">You're all caught up.</p>}
+            {items.length === 0 && <p className="p-6 text-center text-sm text-muted-foreground">{t("header.all_caught_up")}</p>}
             {items.map((n) => {
               const meta = notifMeta(n);
               return (
@@ -143,7 +146,7 @@ export default function Layout({ children }) {
           </div>
           <button onClick={() => navigate("/notifications")} data-testid="notif-view-all"
             className="w-full px-4 py-3 border-t border-black text-sm font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors">
-            View all
+            {t("header.view_all")}
           </button>
         </PopoverContent>
       </Popover>
@@ -178,7 +181,7 @@ export default function Layout({ children }) {
 
   const NavItems = ({ onNavigate }) => (
     <>
-      {navMain.map(({ to, label, icon: Icon, testid }) => (
+      {navMain.map(({ to, label, tkey, icon: Icon, testid }) => (
         <NavLink
           key={to}
           to={to}
@@ -194,7 +197,7 @@ export default function Layout({ children }) {
           }
         >
           <Icon size={18} weight="bold" />
-          {label}
+          {t(`nav.${tkey}`)}
           {to === "/brief" && fires > 0 && (
             <span data-testid="nav-fires-badge" title={`${fires} fire(s) to put out`}
               className="ml-auto bg-brand-red text-white text-[10px] min-w-5 h-5 px-1 flex items-center justify-center border border-black font-bold rounded-full animate-pulse">
@@ -236,7 +239,7 @@ export default function Layout({ children }) {
             data-testid="logout-button"
             className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold uppercase tracking-wider bg-white text-brand-red border-2 border-brand-red hover:bg-brand-red hover:text-white transition-colors"
           >
-            <SignOut size={16} weight="bold" /> Sign out
+            <SignOut size={16} weight="bold" /> {t("header.sign_out")}
           </button>
         </div>
       </aside>
@@ -246,7 +249,7 @@ export default function Layout({ children }) {
         {/* Desktop top bar */}
         <header className="hidden lg:flex h-16 border-b border-border bg-background/70 backdrop-blur-xl items-center justify-between px-8 sticky top-0 z-10">
           <div className="flex items-center gap-3">
-            <span className="label-mono text-muted-foreground">Signed in as</span>
+            <span className="label-mono text-muted-foreground">{t("header.signed_in_as")}</span>
             <span className="font-semibold text-sm" data-testid="current-user-name">{user?.name}</span>
             <span className="px-2 py-0.5 text-[11px] rounded-md uppercase tracking-wider bg-brand-red/10 text-brand-red border border-brand-red/20 font-semibold" data-testid="current-user-role">
               {user?.role}
@@ -259,14 +262,16 @@ export default function Layout({ children }) {
                 data-testid="send-digest-button"
                 className="flex items-center gap-2 px-4 py-2 text-sm rounded-lg bg-foreground text-background font-semibold hover:opacity-90 transition-opacity"
               >
-                <EnvelopeSimple size={16} weight="bold" /> Send Daily Digest
+                <EnvelopeSimple size={16} weight="bold" /> {t("header.send_digest")}
               </button>
+              <LanguageSwitcher />
               <ThemeToggle />
               <Bellicon />
             </div>
           )}
           {user?.role !== "owner" && (
             <div className="flex items-center gap-3">
+              <LanguageSwitcher />
               <ThemeToggle />
               <Bellicon />
             </div>
@@ -277,6 +282,7 @@ export default function Layout({ children }) {
         <header className="lg:hidden h-14 border-b border-border bg-background/80 backdrop-blur-xl flex items-center justify-between px-4 sticky top-0 z-20">
           <Logo />
           <div className="flex items-center gap-2">
+            <LanguageSwitcher />
             <ThemeToggle />
             <Bellicon />
             <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
@@ -312,7 +318,7 @@ export default function Layout({ children }) {
                     data-testid="mobile-send-digest-button"
                     className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm rounded-lg bg-foreground text-background font-semibold"
                   >
-                    <EnvelopeSimple size={16} weight="bold" /> Send Daily Digest
+                    <EnvelopeSimple size={16} weight="bold" /> {t("header.send_digest")}
                   </button>
                 )}
                 <button
@@ -320,7 +326,7 @@ export default function Layout({ children }) {
                   data-testid="mobile-logout-button"
                   className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold uppercase tracking-wider bg-white text-brand-red border-2 border-brand-red hover:bg-brand-red hover:text-white transition-colors"
                 >
-                  <SignOut size={16} weight="bold" /> Sign out
+                  <SignOut size={16} weight="bold" /> {t("header.sign_out")}
                 </button>
               </div>
             </SheetContent>
@@ -333,7 +339,7 @@ export default function Layout({ children }) {
 
       {/* Mobile bottom tab bar */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 border-t border-black bg-white flex z-[10000]" data-testid="mobile-bottom-nav">
-        {navBottom.map(({ to, label, icon: Icon }) => {
+        {navBottom.map(({ to, label, tkey, icon: Icon }) => {
           const active = to === "/" ? location.pathname === "/" : location.pathname.startsWith(to);
           return (
             <NavLink
@@ -346,7 +352,7 @@ export default function Layout({ children }) {
               }`}
             >
               <Icon size={20} weight={active ? "fill" : "bold"} />
-              <span className="text-[10px] uppercase tracking-wide font-semibold leading-none">{label.split(" ")[label.split(" ").length - 1]}</span>
+              <span className="text-[10px] uppercase tracking-wide font-semibold leading-none">{t(`bottomnav.${tkey}`)}</span>
             </NavLink>
           );
         })}

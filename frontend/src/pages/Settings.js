@@ -7,11 +7,27 @@ import { CompanyDetails } from "../components/CompanyDetails";
 import { BusinessVocabulary } from "../components/BusinessVocabulary";
 import { OperatingModelEditor } from "../components/OperatingModelEditor";
 import { ProfileForm } from "../components/ProfileDialog";
+import { LanguageSwitcher } from "../components/LanguageSwitcher";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { CurrencyCircleDollar, ShieldCheck, FloppyDisk, Info, UserCircle } from "@phosphor-icons/react";
+import { CurrencyCircleDollar, ShieldCheck, FloppyDisk, Info, UserCircle, Translate } from "@phosphor-icons/react";
 
 const CURRENCIES = ["INR", "USD", "EUR", "GBP", "AED", "SGD", "AUD"];
 const inp = "w-full border border-border rounded-lg px-3 py-2 text-sm font-mono bg-card focus:outline-none focus:ring-2 focus:ring-ring/40";
+
+function LanguageCard() {
+  const { t } = useTranslation();
+  return (
+    <div className="card-brutal p-5" data-testid="settings-language-card">
+      <div className="flex items-center gap-2 mb-1">
+        <Translate size={20} weight="bold" className="text-brand-red" />
+        <h2 className="font-heading text-lg font-extrabold uppercase tracking-tight">{t("settings.language_title")}</h2>
+      </div>
+      <p className="text-xs text-muted-foreground mb-4">{t("settings.language_desc")}</p>
+      <LanguageSwitcher variant="inline" />
+    </div>
+  );
+}
 
 function ProfileCard() {
   return (
@@ -70,6 +86,8 @@ export default function Settings() {
         <BusinessVocabulary />
 
         <OperatingModelEditor />
+
+        <LanguageCard />
 
         <ProfileCard />
 

@@ -123,7 +123,7 @@ export default function Login() {
   });
   const [software, setSoftware] = useState([]);
   const [otherSoftware, setOtherSoftware] = useState("");
-  const [customIndustry, setCustomIndustry] = useState("");
+  const [businessDescription, setBusinessDescription] = useState("");
   const [phones, setPhones] = useState([]);
   const [phoneInput, setPhoneInput] = useState("");
   const [importSummary, setImportSummary] = useState(null);
@@ -223,12 +223,12 @@ export default function Login() {
 
   // Step 4 — generate the full Industry Operating System (departments, workflows, tasks, approvals) + products
   const fetchSuggestions = async () => {
-    const eff = form.industry === "Other" ? customIndustry.trim() : form.industry;
+    const eff = form.industry === "Other" ? businessDescription.trim() : form.industry;
     setSuggesting(true);
     try {
       const [sug, bp] = await Promise.all([
-        api.post("/onboarding/suggest", { industry: eff, company_size: form.company_size }),
-        api.post("/onboarding/os-blueprint", { industry: eff, company_size: form.company_size }),
+        api.post("/onboarding/suggest", { industry: eff, company_size: form.company_size, description: businessDescription.trim() }),
+        api.post("/onboarding/os-blueprint", { industry: eff, company_size: form.company_size, description: businessDescription.trim() }),
       ]);
       setProducts((sug.data.products || []).map((p) => ({ name: p.name, description: p.description || "", _key: uid() })));
       const d = bp.data || {};
@@ -272,13 +272,14 @@ export default function Login() {
   // Step 4 → create the workspace + provision the Operating System, then show the "Ready" summary
   const createWorkspace = async () => {
     setError(""); setBusy(true);
-    const eff = form.industry === "Other" ? customIndustry.trim() : form.industry;
+    const eff = form.industry === "Other" ? businessDescription.trim() : form.industry;
     try {
       const sw = software.includes("Others") && otherSoftware.trim()
         ? [...software.filter((x) => x !== "Others"), otherSoftware.trim()] : software;
       const data = await register({
         company_name: form.company_name, name: form.name, email: form.email, password: form.password, phone: form.phone,
         industry: eff || "General", gst: form.gst, branches: form.branches,
+        description: businessDescription.trim(),
         company_size: form.company_size, region: form.region, currency: form.currency,
         current_software: sw,
         business_scale: {
@@ -345,7 +346,7 @@ export default function Login() {
   const goToRegister = () => { setMode("register"); setStep(1); setError(""); };
   const backToLogin = () => { setMode("login"); setError(""); };
   const stepValid1 = form.company_name && form.name && form.email && form.password.length >= 6 && form.industry &&
-    (form.industry !== "Other" || customIndustry.trim());
+    (form.industry !== "Other" || businessDescription.trim());
 
   const TOTAL = 7;
 
@@ -506,9 +507,25 @@ export default function Login() {
                       {INDUSTRIES.map((i) => <option key={i} value={i}>{i}</option>)}
                     </select>
                   </div>
-                  {form.industry === "Other" && (
-                    <textarea data-testid="custom-industry-input" className={`${inputCls} resize-none`} rows={2} placeholder="Describe your business in one line" value={customIndustry} onChange={(e) => setCustomIndustry(e.target.value)} />
-                  )}
+                  <div>
+                    <label className={labelCls}>
+                      {form.industry === "Other" ? "Describe your business" : "What exactly does your business do?"}
+                      {form.industry && form.industry !== "Other" && <span className="text-muted-foreground font-normal normal-case"> — optional, but sharpens your AI setup</span>}
+                    </label>
+                    <textarea
+                      data-testid="business-description-input"
+                      className={`${inputCls} resize-none mt-1`}
+                      rows={2}
+                      placeholder={
+                        form.industry && form.industry !== "Other"
+                          ? `e.g. within ${form.industry}, we specifically... (the more detail, the more tailored your workflows & tasks)`
+                          : "e.g. We run performance ad campaigns for D2C brands — strategy, creative and media buying"
+                      }
+                      value={businessDescription}
+                      onChange={(e) => setBusinessDescription(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Our AI uses this to build your pipelines, task categories and terminology — be specific.</p>
+                  </div>
                   <div className="grid grid-cols-2 gap-3">
                     <input data-testid="register-gst-input" className={inputCls} placeholder="GST (optional)" value={form.gst} onChange={set("gst")} />
                     <input data-testid="register-branches-input" className={inputCls} placeholder="Branches (e.g. 2)" value={form.branches} onChange={set("branches")} />
@@ -583,7 +600,7 @@ export default function Login() {
               {/* STEP 4 — Industry Operating System (AI-generated, editable) */}
               {step === 4 && osReady && (
                 <OsReady
-                  industryLabel={(form.industry === "Other" ? customIndustry : form.industry) || "Business"}
+                  industryLabel={(form.industry === "Other" ? businessDescription : form.industry) || "Business"}
                   summary={osReady}
                   onContinue={() => setStep(5)}
                 />
@@ -591,7 +608,7 @@ export default function Login() {
 
               {step === 4 && !osReady && (
                 <OsEditor
-                  industryLabel={(form.industry === "Other" ? customIndustry : form.industry) || "your business"}
+                  industryLabel={(form.industry === "Other" ? businessDescription : form.industry) || "your business"}
                   suggesting={suggesting}
                   roles={roles} removeRole={removeRole} roleInput={roleInput} setRoleInput={setRoleInput} addRole={addRole}
                   workflows={workflows} removeWorkflow={removeWorkflow} wfInput={wfInput} setWfInput={setWfInput} addWorkflow={addWorkflow}

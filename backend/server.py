@@ -66,6 +66,7 @@ class RegisterInput(BaseModel):
     password: str = Field(min_length=6)
     phone: Optional[str] = None
     industry: Optional[str] = None
+    description: Optional[str] = None
     company_size: Optional[str] = None
     region: Optional[str] = None
     currency: Optional[str] = "INR"
@@ -850,7 +851,7 @@ async def process_voice_note(note_id: str):
 # ---------------------------------------------------------------------------
 # Auth routes
 # ---------------------------------------------------------------------------
-async def ai_generate_lexicon(industry: str, company_size: str = "", roles=None) -> dict:
+async def ai_generate_lexicon(industry: str, company_size: str = "", roles=None, description: str = "") -> dict:
     """AI-localize the app's fixed vocabulary to the tenant's industry."""
     role_labels = ", ".join([r.get("label") for r in (roles or []) if r.get("label")]) or "not specified"
     system = (
@@ -876,6 +877,7 @@ async def ai_generate_lexicon(industry: str, company_size: str = "", roles=None)
     prompt = (
         f"Industry: {industry or 'general business'}\n"
         f"Company size: {company_size or 'unspecified'}\n"
+        f"What the business actually does: {description.strip() or 'not specified'}\n"
         f"Departments: {role_labels}\n"
         "Localize the vocabulary now."
     )
@@ -889,7 +891,7 @@ async def ai_generate_lexicon(industry: str, company_size: str = "", roles=None)
     return normalize_lexicon(data or {})
 
 
-async def ai_generate_operating_model(industry: str, company_size: str = "", roles=None) -> dict:
+async def ai_generate_operating_model(industry: str, company_size: str = "", roles=None, description: str = "") -> dict:
     """AI-design the industry's operating model: workflow pipelines (with stages) + task categories."""
     role_labels = ", ".join([r.get("label") for r in (roles or []) if r.get("label")]) or "not specified"
     system = (
@@ -913,6 +915,7 @@ async def ai_generate_operating_model(industry: str, company_size: str = "", rol
     prompt = (
         f"Industry: {industry or 'general business'}\n"
         f"Company size: {company_size or 'unspecified'}\n"
+        f"What the business actually does (use this to tailor precisely): {description.strip() or 'not specified'}\n"
         f"Departments: {role_labels}\n"
         "Design the operating model now."
     )
@@ -939,7 +942,7 @@ async def backfill_operating_model(tenant: dict) -> dict:
     """Generate the industry operating model for an existing tenant AND preserve any
     pipeline/category that already has data (non-destructive migration)."""
     tenant_id = tenant["id"]
-    om = await ai_generate_operating_model(tenant.get("industry"), tenant.get("company_size"), tenant.get("roles"))
+    om = await ai_generate_operating_model(tenant.get("industry"), tenant.get("company_size"), tenant.get("roles"), tenant.get("description") or "")
 
     # Keep legacy pipelines that already have workflow cards, so nothing is orphaned.
     ai_keys = {p["key"] for p in om["pipelines"]}
@@ -997,6 +1000,7 @@ async def register(inp: RegisterInput, response: Response):
     tenant_doc = {
         "id": tenant_id, "name": inp.company_name,
         "industry": inp.industry or "General",
+        "description": (inp.description or "").strip(),
         "company_size": inp.company_size or "",
         "region": inp.region or "",
         "currency": (inp.currency or "INR").upper(),
@@ -1010,8 +1014,8 @@ async def register(inp: RegisterInput, response: Response):
         "workflow_templates": bp["workflows"] if bp else [],
         "operational_task_templates": bp["operational_tasks"] if bp else [],
         "approval_rules": bp["approval_rules"] if bp else [],
-        "lexicon": await ai_generate_lexicon(inp.industry, inp.company_size, clean_roles),
-        "operating_model": await ai_generate_operating_model(inp.industry, inp.company_size, clean_roles),
+        "lexicon": await ai_generate_lexicon(inp.industry, inp.company_size, clean_roles, inp.description or ""),
+        "operating_model": await ai_generate_operating_model(inp.industry, inp.company_size, clean_roles, inp.description or ""),
         "created_at": now_iso(),
     }
     await db.tenants.insert_one(tenant_doc)
@@ -1228,7 +1232,7 @@ async def me(user: dict = Depends(get_current_user)):
     tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
     if tenant and not tenant.get("lexicon"):
         # Backfill industry vocabulary once for pre-existing workspaces.
-        lex = await ai_generate_lexicon(tenant.get("industry"), tenant.get("company_size"), tenant.get("roles"))
+        lex = await ai_generate_lexicon(tenant.get("industry"), tenant.get("company_size"), tenant.get("roles"), tenant.get("description") or "")
         await db.tenants.update_one({"id": tenant["id"]}, {"$set": {"lexicon": lex}})
         tenant["lexicon"] = lex
     if tenant and not (tenant.get("operating_model") or {}).get("pipelines"):
@@ -1259,7 +1263,7 @@ async def regenerate_lexicon(user: dict = Depends(require_perm("team_manage"))):
     tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
     if not tenant:
         raise HTTPException(status_code=404, detail="Workspace not found")
-    lex = await ai_generate_lexicon(tenant.get("industry"), tenant.get("company_size"), tenant.get("roles"))
+    lex = await ai_generate_lexicon(tenant.get("industry"), tenant.get("company_size"), tenant.get("roles"), tenant.get("description") or "")
     await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": {"lexicon": lex}})
     await log_activity(user["tenant_id"], user["id"], "lexicon_regenerated", f"{user['name']} regenerated the business vocabulary")
     return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})

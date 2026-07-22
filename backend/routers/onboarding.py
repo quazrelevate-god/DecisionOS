@@ -27,6 +27,7 @@ class OnboardingSuggestInput(BaseModel):
 class OSBlueprintGenInput(BaseModel):
     industry: str
     company_size: Optional[str] = None
+    description: Optional[str] = None
 
 
 class OSBlueprintInput(BaseModel):
@@ -83,7 +84,7 @@ async def onboarding_os_blueprint(inp: OSBlueprintGenInput):
         "Provide 6-9 departments, 6-12 workflows, 10-15 recurring operational tasks, and 4-8 approval rules. "
         "Make everything concrete and specific to the industry (use its real terminology). Do NOT include an 'Owner' department."
     )
-    prompt = f"Industry: {inp.industry}\nCompany size: {inp.company_size or 'unspecified'}\nDesign the operating system now."
+    prompt = f"Industry: {inp.industry}\nCompany size: {inp.company_size or 'unspecified'}\nWhat the business actually does: {inp.description or 'not specified'}\nDesign the operating system now."
     chat = LlmChat(api_key=CLAUDE_KEY, session_id=f"osbp-{new_id()}", system_message=system).with_model(*LLM_MODEL)
     try:
         resp = await chat.send_message(UserMessage(text=prompt))

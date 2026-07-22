@@ -932,6 +932,49 @@ async def tenant_operating_model(tenant_id: str) -> dict:
     return om if om and om.get("pipelines") else DEFAULT_OPERATING_MODEL
 
 
+LEGACY_WF_LABELS = {"production": "Production", "distribution": "Distribution", "purchase_payment": "Procurement", "sales_dispatch": "Sales & Dispatch"}
+
+
+async def backfill_operating_model(tenant: dict) -> dict:
+    """Generate the industry operating model for an existing tenant AND preserve any
+    pipeline/category that already has data (non-destructive migration)."""
+    tenant_id = tenant["id"]
+    om = await ai_generate_operating_model(tenant.get("industry"), tenant.get("company_size"), tenant.get("roles"))
+
+    # Keep legacy pipelines that already have workflow cards, so nothing is orphaned.
+    ai_keys = {p["key"] for p in om["pipelines"]}
+    legacy_pipelines = []
+    for wt in await db.workflows.distinct("type", {"tenant_id": tenant_id}):
+        if not wt or wt in ai_keys:
+            continue
+        stages = WORKFLOW_STAGES.get(wt)
+        if not stages:
+            sample = await db.workflows.find_one({"tenant_id": tenant_id, "type": wt}, {"_id": 0, "stages": 1})
+            stages = (sample or {}).get("stages") or []
+        if not stages:
+            continue
+        appr = "approved" if (wt == "purchase_payment" and "approved" in stages) else None
+        legacy_pipelines.append({
+            "key": wt, "label": LEGACY_WF_LABELS.get(wt, wt.replace("_", " ").title()),
+            "sub": f"{stages[0].replace('_', ' ').title()} → {stages[-1].replace('_', ' ').title()}",
+            "approval_stage": appr,
+            "stages": [{"key": s, "label": s.replace("_", " ").title()} for s in stages],
+        })
+
+    # Keep any task category already used by existing tasks.
+    ai_cat_keys = {c["key"] for c in om["task_categories"]}
+    legacy_cats = []
+    for tt in await db.tasks.distinct("task_type", {"tenant_id": tenant_id}):
+        if tt and tt != "other" and tt not in ai_cat_keys:
+            legacy_cats.append({"key": tt, "label": tt.replace("_", " ").title()})
+
+    # Legacy (data-bearing) items first so existing cards/tasks stay visible.
+    return normalize_operating_model({
+        "pipelines": legacy_pipelines + om["pipelines"],
+        "task_categories": om["task_categories"] + legacy_cats,
+    })
+
+
 @api.post("/auth/register")
 async def register(inp: RegisterInput, response: Response):
     email = inp.email.lower()
@@ -1189,8 +1232,9 @@ async def me(user: dict = Depends(get_current_user)):
         await db.tenants.update_one({"id": tenant["id"]}, {"$set": {"lexicon": lex}})
         tenant["lexicon"] = lex
     if tenant and not (tenant.get("operating_model") or {}).get("pipelines"):
-        # Backfill the industry operating model (pipelines + task categories) once.
-        om = await ai_generate_operating_model(tenant.get("industry"), tenant.get("company_size"), tenant.get("roles"))
+        # Backfill the industry operating model (pipelines + task categories) once,
+        # preserving any pipeline/category that already has data (non-destructive).
+        om = await backfill_operating_model(tenant)
         await db.tenants.update_one({"id": tenant["id"]}, {"$set": {"operating_model": om}})
         tenant["operating_model"] = om
     return {"user": user, "tenant": tenant}
@@ -1236,11 +1280,11 @@ async def update_operating_model(inp: OperatingModelInput, user: dict = Depends(
 
 @api.post("/tenant/operating-model/regenerate")
 async def regenerate_operating_model(user: dict = Depends(require_perm("team_manage"))):
-    """Re-run AI to regenerate the operating model from the workspace's industry."""
+    """Re-run AI to regenerate the operating model, preserving any pipeline/category with data."""
     tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
     if not tenant:
         raise HTTPException(status_code=404, detail="Workspace not found")
-    om = await ai_generate_operating_model(tenant.get("industry"), tenant.get("company_size"), tenant.get("roles"))
+    om = await backfill_operating_model(tenant)
     await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": {"operating_model": om}})
     await log_activity(user["tenant_id"], user["id"], "operating_model_regenerated", f"{user['name']} regenerated the operating model")
     return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})

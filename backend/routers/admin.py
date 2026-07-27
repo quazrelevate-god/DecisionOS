@@ -20,6 +20,21 @@ MAX_ATTEMPTS = 5
 LOCKOUT_MIN = 15
 
 
+async def log_admin_action(admin: dict, action: str, message: str,
+                           target_type: str = None, target_id: str = None):
+    """Append an immutable audit entry for a platform-admin action."""
+    await db.platform_audit.insert_one({
+        "id": new_id(),
+        "admin_id": admin.get("id"),
+        "admin_email": admin.get("email"),
+        "action": action,
+        "message": message,
+        "target_type": target_type,
+        "target_id": target_id,
+        "created_at": now_iso(),
+    })
+
+
 class AdminLoginInput(BaseModel):
     email: str
     password: str
@@ -59,12 +74,14 @@ async def admin_login(payload: AdminLoginInput, request: Request, response: Resp
     await db.platform_login_attempts.delete_one({"identifier": ident})
     token = create_admin_token(admin["id"])
     set_admin_cookie(response, token)
+    await log_admin_action(admin, "login", "Signed in to the admin console")
     return {"token": token, "admin": {"id": admin["id"], "email": admin["email"], "name": admin.get("name")}}
 
 
 @router.post("/logout")
 async def admin_logout(response: Response, admin: dict = Depends(get_platform_admin)):
     clear_admin_cookie(response)
+    await log_admin_action(admin, "logout", "Signed out of the admin console")
     return {"status": "ok"}
 
 
@@ -143,20 +160,26 @@ async def admin_suspend_user(user_id: str, admin: dict = Depends(get_platform_ad
     if u.get("role") == "owner":
         raise HTTPException(status_code=400, detail="Cannot suspend a workspace owner")
     await db.users.update_one({"id": user_id}, {"$set": {"suspended": True}})
+    await log_admin_action(admin, "suspend_user",
+                           f"Suspended user {u.get('email') or u.get('name') or user_id}", "user", user_id)
     return {"status": "ok", "suspended": True}
 
 
 @router.post("/users/{user_id}/reactivate")
 async def admin_reactivate_user(user_id: str, admin: dict = Depends(get_platform_admin)):
-    await _get_user_or_404(user_id)
+    u = await _get_user_or_404(user_id)
     await db.users.update_one({"id": user_id}, {"$set": {"suspended": False}})
+    await log_admin_action(admin, "reactivate_user",
+                           f"Reactivated user {u.get('email') or u.get('name') or user_id}", "user", user_id)
     return {"status": "ok", "suspended": False}
 
 
 @router.post("/users/{user_id}/reset-access")
 async def admin_reset_access(user_id: str, admin: dict = Depends(get_platform_admin)):
-    await _get_user_or_404(user_id)
+    u = await _get_user_or_404(user_id)
     await db.users.update_one({"id": user_id}, {"$unset": {"permissions": ""}})
+    await log_admin_action(admin, "reset_access",
+                           f"Reset access to role defaults for {u.get('email') or u.get('name') or user_id}", "user", user_id)
     return {"status": "ok", "detail": "Access reset to role defaults"}
 
 
@@ -194,7 +217,16 @@ async def admin_put_ai_keys(payload: AiKeysInput, admin: dict = Depends(get_plat
         {"$set": {**values, "updated_at": now_iso(), "updated_by": admin["email"]}},
         upsert=True)
     logger.info(f"AI keys updated by admin {admin['email']}: {list(values.keys())}")
+    changed = ", ".join(f"{k} ({'set' if (v or '').strip() else 'reverted to env'})" for k, v in values.items())
+    await log_admin_action(admin, "update_ai_keys", f"Updated AI keys: {changed}", "ai_keys", None)
     return {"status": "ok", "updated": list(values.keys())}
+
+
+@router.get("/audit")
+async def admin_audit(admin: dict = Depends(get_platform_admin), limit: int = 200):
+    limit = max(1, min(limit, 500))
+    rows = await db.platform_audit.find({}, {"_id": 0}).sort("created_at", -1).to_list(limit)
+    return {"entries": rows}
 
 
 async def _probe_anthropic():

@@ -2,10 +2,11 @@ import { useState, useEffect } from "react";
 import api from "../../lib/api";
 import AdminLogin from "./AdminLogin";
 import {
-  OverviewSection, AiKeysSection, TenantsSection, UsersSection, HealthSection,
+  OverviewSection, AiKeysSection, TenantsSection, UsersSection, HealthSection, AuditSection,
 } from "./AdminSections";
 import {
   ShieldStar, SquaresFour, Key, Buildings, Users, Pulse, SignOut, Spinner,
+  ClockCounterClockwise,
 } from "@phosphor-icons/react";
 
 const TABS = [
@@ -13,6 +14,7 @@ const TABS = [
   { key: "ai-keys", label: "AI Keys", icon: Key, C: AiKeysSection },
   { key: "tenants", label: "Workspaces", icon: Buildings, C: TenantsSection },
   { key: "users", label: "Users", icon: Users, C: UsersSection },
+  { key: "audit", label: "Audit Log", icon: ClockCounterClockwise, C: AuditSection },
   { key: "health", label: "Health", icon: Pulse, C: HealthSection },
 ];
 

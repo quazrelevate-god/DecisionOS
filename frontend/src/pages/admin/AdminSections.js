@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import {
   Buildings, Users, Brain, CheckSquare, Lightning, ArrowsClockwise,
   PencilSimple, Prohibit, ArrowClockwise, ShieldCheck, Spinner, Circle,
+  SignIn, SignOut, Key as KeyIcon, ClockCounterClockwise,
 } from "@phosphor-icons/react";
 
 // --- shared bits ------------------------------------------------------------
@@ -296,6 +297,70 @@ export function UsersSection() {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+// --- Audit Log --------------------------------------------------------------
+const AUDIT_META = {
+  login: { icon: SignIn, color: "#6b6b75" },
+  logout: { icon: SignOut, color: "#6b6b75" },
+  update_ai_keys: { icon: KeyIcon, color: "#d29922" },
+  suspend_user: { icon: Prohibit, color: "#e5484d" },
+  reactivate_user: { icon: ArrowClockwise, color: "#3fb950" },
+  reset_access: { icon: ArrowsClockwise, color: "#6ea8ff" },
+};
+
+export function AuditSection() {
+  const [rows, setRows] = useState(null);
+  const load = useCallback(() => {
+    api.get("/admin/audit").then((r) => setRows(r.data.entries)).catch(() => {});
+  }, []);
+  useEffect(() => { load(); }, [load]);
+  if (!rows) return <Loading />;
+  const fmt = (d) => (d ? new Date(d).toLocaleString() : "—");
+  return (
+    <div data-testid="admin-audit">
+      <div className="flex items-center justify-between mb-5">
+        <h2 className={H2}>Audit Log</h2>
+        <button
+          data-testid="audit-refresh"
+          onClick={load}
+          className={BTN + " border-white/20 text-white/70 hover:border-white/50 flex items-center gap-1.5"}
+        >
+          <ArrowClockwise size={13} /> Refresh
+        </button>
+      </div>
+      {rows.length === 0 ? (
+        <div className={CARD + " text-white/40 font-mono text-sm"}>No admin activity recorded yet.</div>
+      ) : (
+        <div className="border border-white/10">
+          {rows.map((e, i) => {
+            const meta = AUDIT_META[e.action] || { icon: ClockCounterClockwise, color: "#6b6b75" };
+            return (
+              <div
+                key={e.id}
+                data-testid={`audit-row-${i}`}
+                className="flex items-start gap-3 p-4 border-b border-white/5 last:border-0 hover:bg-white/[0.03]"
+              >
+                <div
+                  className="w-8 h-8 shrink-0 flex items-center justify-center border"
+                  style={{ borderColor: `${meta.color}55`, background: `${meta.color}12` }}
+                >
+                  <meta.icon size={15} weight="bold" style={{ color: meta.color }} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="font-mono text-sm text-white/90">{e.message}</div>
+                  <div className="font-mono text-[11px] text-white/40 mt-0.5">
+                    {e.admin_email} · <span className="uppercase tracking-wider">{(e.action || "").replace(/_/g, " ")}</span>
+                  </div>
+                </div>
+                <div className="font-mono text-[11px] text-white/40 shrink-0 whitespace-nowrap">{fmt(e.created_at)}</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

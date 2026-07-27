@@ -837,8 +837,12 @@ export default function MyWork() {
   const [params] = useSearchParams();
   const isOwner = user?.role === "owner";
   const focusTaskId = params.get("task");
-  const initialView = params.get("view") === "board" ? "board" : params.get("view") === "workflows" ? "workflows" : params.get("view") === "leave" ? "leave" : "mywork";
+  const rawView = params.get("view");
+  // "board" is no longer a top-level view — it now lives as a sub-tab inside Workflows.
+  const initialView = rawView === "board" ? "workflows"
+    : (rawView === "workflows" ? "workflows" : rawView === "leave" ? "leave" : "mywork");
   const [view, setView] = useState(focusTaskId ? "mywork" : initialView);
+  const [wfTab, setWfTab] = useState(rawView === "board" ? "board" : "pipelines");
   const canSeeWorkflows = isOwner || userPerms(user).includes("workflows");
   const [scope, setScope] = useState("mine");
   const [tab, setTab] = useState("all");
@@ -923,10 +927,6 @@ export default function MyWork() {
               className={`${CTRL} ${view === "mywork" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
               <ListIcon size={15} weight="bold" /> {t("mywork.view_mywork")}
             </button>
-            <button onClick={() => setView("board")} data-testid="work-view-board"
-              className={`${CTRL} ${view === "board" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
-              <Kanban size={15} weight="bold" /> {t("mywork.view_board")}
-            </button>
             {canSeeWorkflows && (
               <button onClick={() => setView("workflows")} data-testid="work-view-workflows"
                 className={`${CTRL} ${view === "workflows" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
@@ -951,10 +951,20 @@ export default function MyWork() {
         </div>
       )}
 
-      {view === "board" ? (
-        <TaskBoard />
-      ) : view === "workflows" ? (
-        <Workflows embedded />
+      {view === "workflows" && canSeeWorkflows ? (
+        <div data-testid="workflows-hub">
+          <div className="flex flex-wrap gap-1.5 mb-5 border-b border-black/10 pb-3" data-testid="workflows-subtabs">
+            <button onClick={() => setWfTab("pipelines")} data-testid="wf-subtab-pipelines"
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-black transition-colors ${wfTab === "pipelines" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+              <ArrowRight size={14} weight="bold" /> {t("mywork.wf_pipelines")}
+            </button>
+            <button onClick={() => setWfTab("board")} data-testid="wf-subtab-board"
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-black transition-colors ${wfTab === "board" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+              <Kanban size={14} weight="bold" /> {t("mywork.wf_task_board")}
+            </button>
+          </div>
+          {wfTab === "board" ? <TaskBoard /> : <Workflows embedded />}
+        </div>
       ) : view === "leave" ? (
         <Leave embedded />
       ) : (

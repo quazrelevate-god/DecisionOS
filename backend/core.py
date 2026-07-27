@@ -92,6 +92,48 @@ def claude_key() -> str:
     """User's Anthropic key when set, else the Emergent universal key (never breaks)."""
     return _ai_keys.get("anthropic") or EMERGENT_LLM_KEY
 
+
+class _ResilientChat:
+    """Drop-in for LlmChat(api_key=claude_key(), ...) that tries the user's Anthropic
+    key first and automatically falls back to the Emergent universal key if the call
+    fails (e.g. Anthropic credit balance too low / invalid key), so AI never hard-breaks."""
+
+    def __init__(self, session_id: str, system_message: str):
+        self.session_id = session_id
+        self.system_message = system_message
+        self.model = LLM_MODEL
+
+    def with_model(self, *model):
+        if model:
+            self.model = model
+        return self
+
+    async def send_message(self, message):
+        from emergentintegrations.llm.chat import LlmChat
+        keys, seen = [], set()
+        for k in (get_ai_key("anthropic"), EMERGENT_LLM_KEY):
+            if k and k not in seen:
+                seen.add(k)
+                keys.append(k)
+        last_err = None
+        for i, key in enumerate(keys):
+            try:
+                chat = LlmChat(api_key=key, session_id=self.session_id,
+                               system_message=self.system_message).with_model(*self.model)
+                return await chat.send_message(message)
+            except Exception as e:
+                last_err = e
+                using_fallback = i + 1 < len(keys)
+                logger.warning(
+                    f"Claude call failed on key {i + 1}/{len(keys)}"
+                    f"{' — retrying with Emergent universal key' if using_fallback else ''}: {e}")
+        raise last_err if last_err else RuntimeError("No LLM key configured")
+
+
+def claude_chat(session_id: str = None, system_message: str = None, **_ignored) -> _ResilientChat:
+    """Factory matching the old LlmChat(api_key=..., session_id=..., system_message=...) call shape."""
+    return _ResilientChat(session_id, system_message)
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("decisionos")
 

@@ -29,6 +29,7 @@ from core import (
     db, client, logger, DEFAULT_ROLES,
     EMERGENT_LLM_KEY, CLAUDE_KEY, LLM_MODEL, VISION_MODEL,
     claude_key, get_ai_key, set_ai_keys, ai_key_source, mask_key,
+    claude_chat,
     AI_KEY_PROVIDERS, load_ai_keys_from_db,
     now_iso, new_id, _extract_json,
     hash_password, verify_password, create_token,
@@ -322,7 +323,7 @@ async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[l
         "Pick assignee_role ONLY from the provided role list. Infer sensible owners and due dates. If nothing applies, use empty arrays."
     )
     prompt = f"Founder directive transcript:\n\"\"\"\n{transcript}\n\"\"\"\nExtract the structured JSON now."
-    chat = LlmChat(api_key=claude_key(), session_id=session_id, system_message=system).with_model(*LLM_MODEL)
+    chat = claude_chat(session_id=session_id, system_message=system).with_model(*LLM_MODEL)
     resp = await chat.send_message(UserMessage(text=prompt))
     try:
         data = _extract_json(resp)
@@ -360,7 +361,7 @@ async def ai_score_tasks(tasks: list, currency: str, session_id: str) -> dict:
         "Include every task id exactly once."
     )
     prompt = "Tasks:\n" + json.dumps(lines, ensure_ascii=False) + "\nScore them now."
-    chat = LlmChat(api_key=claude_key(), session_id=session_id, system_message=system).with_model(*LLM_MODEL)
+    chat = claude_chat(session_id=session_id, system_message=system).with_model(*LLM_MODEL)
     resp = await chat.send_message(UserMessage(text=prompt))
     out = {}
     try:
@@ -408,7 +409,7 @@ async def ai_score_contact(contact: dict, metrics: dict, currency: str, session_
         "Return ONLY valid JSON: {\"relationship_score\":int,\"risk_score\":int,\"reason\":string,\"signals\":[string]}."
     )
     prompt = json.dumps(payload, ensure_ascii=False, default=str) + "\nScore this relationship now."
-    chat = LlmChat(api_key=claude_key(), session_id=session_id, system_message=system).with_model(*LLM_MODEL)
+    chat = claude_chat(session_id=session_id, system_message=system).with_model(*LLM_MODEL)
     resp = await chat.send_message(UserMessage(text=prompt))
     def clamp(v):
         try:
@@ -446,7 +447,7 @@ async def ai_meeting_notes(transcript: str, members: list, session_id: str) -> d
         "The transcript may be English, Tamil or Tanglish — understand it and output all values in clear English."
     )
     prompt = f"Meeting transcript:\n\"\"\"\n{(transcript or '')[:40000]}\n\"\"\"\nExtract the structured minutes now."
-    chat = LlmChat(api_key=claude_key(), session_id=session_id, system_message=system).with_model(*LLM_MODEL)
+    chat = claude_chat(session_id=session_id, system_message=system).with_model(*LLM_MODEL)
     resp = await chat.send_message(UserMessage(text=prompt))
     try:
         d = _extract_json(resp)
@@ -478,7 +479,7 @@ async def ai_execution_plan(task: dict, industry: str, currency: str, session_id
               f"Assigned role: {task.get('assignee_role') or 'team'}\n"
               f"Priority: {task.get('priority','medium')}\n"
               "Generate the execution checklist now.")
-    chat = LlmChat(api_key=claude_key(), session_id=session_id, system_message=system).with_model(*LLM_MODEL)
+    chat = claude_chat(session_id=session_id, system_message=system).with_model(*LLM_MODEL)
     resp = await chat.send_message(UserMessage(text=prompt))
     try:
         d = _extract_json(resp)
@@ -505,7 +506,7 @@ async def ai_step_assist(task: dict, step_text: str, industry: str, session_id: 
               f"Context: {task.get('description','') or '(none)'}\n"
               f"Current step: {step_text}\n"
               "Give the suggestion and objection handling now.")
-    chat = LlmChat(api_key=claude_key(), session_id=session_id, system_message=system).with_model(*LLM_MODEL)
+    chat = claude_chat(session_id=session_id, system_message=system).with_model(*LLM_MODEL)
     resp = await chat.send_message(UserMessage(text=prompt))
     try:
         d = _extract_json(resp)
@@ -924,7 +925,7 @@ async def ai_generate_lexicon(industry: str, company_size: str = "", roles=None,
         f"Departments: {role_labels}\n"
         "Localize the vocabulary now."
     )
-    chat = LlmChat(api_key=claude_key(), session_id=f"lexicon-{new_id()}", system_message=system).with_model(*LLM_MODEL)
+    chat = claude_chat(session_id=f"lexicon-{new_id()}", system_message=system).with_model(*LLM_MODEL)
     try:
         resp = await chat.send_message(UserMessage(text=prompt))
         data = _extract_json(resp)
@@ -962,7 +963,7 @@ async def ai_generate_operating_model(industry: str, company_size: str = "", rol
         f"Departments: {role_labels}\n"
         "Design the operating model now."
     )
-    chat = LlmChat(api_key=claude_key(), session_id=f"opmodel-{new_id()}", system_message=system).with_model(*LLM_MODEL)
+    chat = claude_chat(session_id=f"opmodel-{new_id()}", system_message=system).with_model(*LLM_MODEL)
     try:
         resp = await chat.send_message(UserMessage(text=prompt))
         data = _extract_json(resp)
@@ -1776,7 +1777,7 @@ async def ai_clarify_directive(text: str, industry: str, session_id: str) -> dic
         "Return ONLY valid JSON: {\"complete\": boolean, \"questions\": [{\"id\": string, \"question\": string, \"hint\": string}]}."
     )
     prompt = f"Owner instruction: \"{text}\"\nAnalyze it now."
-    chat = LlmChat(api_key=claude_key(), session_id=session_id, system_message=system).with_model(*LLM_MODEL)
+    chat = claude_chat(session_id=session_id, system_message=system).with_model(*LLM_MODEL)
     resp = await chat.send_message(UserMessage(text=prompt))
     try:
         d = _extract_json(resp)
@@ -2055,7 +2056,7 @@ async def ai_work_coach(target: dict, stats: dict, session_id: str) -> dict:
     prompt = (f"Employee: {target.get('name')} (role: {target.get('role')})\n"
               f"Stats: {json.dumps(stats)}\n"
               "Write the review now.")
-    chat = LlmChat(api_key=claude_key(), session_id=session_id, system_message=system).with_model(*LLM_MODEL)
+    chat = claude_chat(session_id=session_id, system_message=system).with_model(*LLM_MODEL)
     resp = await chat.send_message(UserMessage(text=prompt))
     try:
         d = _extract_json(resp)
@@ -3178,7 +3179,7 @@ async def ask_ai(inp: AskInput, user: dict = Depends(require_perm("ask"))):
         + lang_directive(user.get("language"))
     )
     prompt = f"Company context:\n{json.dumps(context)}\n\nQuestion: {inp.question}"
-    chat = LlmChat(api_key=claude_key(), session_id=f"ask-{tid}", system_message=system).with_model(*LLM_MODEL)
+    chat = claude_chat(session_id=f"ask-{tid}", system_message=system).with_model(*LLM_MODEL)
     try:
         raw = await chat.send_message(UserMessage(text=prompt))
     except Exception:
@@ -3863,7 +3864,7 @@ async def ai_extract_document(file_path: str, mime_type: str, session_id: str, c
 async def ai_map_spreadsheet(headers: list, rows: list, session_id: str, currency: str = "INR", company: str = "") -> dict:
     payload = {"headers": headers, "rows": rows[:300]}
     system = _CSV_SYSTEM.replace("{currency}", currency).replace("{company}", company or "our company")
-    chat = LlmChat(api_key=claude_key(), session_id=session_id,
+    chat = claude_chat(session_id=session_id,
                    system_message=system).with_model(*LLM_MODEL)
     resp = await chat.send_message(UserMessage(text=f"Spreadsheet data:\n{json.dumps(payload)}\n\nClassify and map to JSON now."))
     data = _extract_json(resp)
@@ -4542,7 +4543,7 @@ async def ai_leave_impact(person_name: str, from_date: str, to_date: str, tasks:
         "available_members": [{"id": m["id"], "name": m["name"], "role": m["role"],
                                "active_task_count": m["load"]} for m in members],
     }
-    chat = LlmChat(api_key=claude_key(), session_id=f"leave-impact-{new_id()}", system_message=system).with_model(*LLM_MODEL)
+    chat = claude_chat(session_id=f"leave-impact-{new_id()}", system_message=system).with_model(*LLM_MODEL)
     resp = await chat.send_message(UserMessage(text=json.dumps(payload)))
     data = _extract_json(resp)
     return data if isinstance(data, dict) else {"summary": "", "suggestions": []}
@@ -5107,7 +5108,7 @@ _CAPTURE_SYS = (
 
 async def ai_capture_triage(text: str, roles: list) -> dict:
     system = _CAPTURE_SYS.replace("{roles}", ", ".join(roles) or "owner")
-    chat = LlmChat(api_key=claude_key(), session_id=f"capture-{new_id()}", system_message=system).with_model(*LLM_MODEL)
+    chat = claude_chat(session_id=f"capture-{new_id()}", system_message=system).with_model(*LLM_MODEL)
     resp = await chat.send_message(UserMessage(text=(text or "")[:4000]))
     try:
         d = _extract_json(resp)

@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 from core import (
-    db, EMERGENT_LLM_KEY, CLAUDE_KEY, LLM_MODEL,
+    db, EMERGENT_LLM_KEY, CLAUDE_KEY, claude_key, LLM_MODEL,
     _extract_json, new_id, logger, DEFAULT_ROLES,
     normalize_os_blueprint, require_perm, log_activity,
 )
@@ -47,7 +47,7 @@ async def onboarding_suggest(inp: OnboardingSuggestInput):
         "Provide 3-6 roles (do NOT include 'owner' — it is implicit) and 3-5 example products/services. Keep it specific to the industry."
     )
     prompt = f"Industry: {inp.industry}\nCompany size: {inp.company_size or 'unspecified'}\nExtra notes: {inp.description or 'none'}\nSuggest roles and example products/services now."
-    chat = LlmChat(api_key=CLAUDE_KEY, session_id=f"onboard-{new_id()}", system_message=system).with_model(*LLM_MODEL)
+    chat = LlmChat(api_key=claude_key(), session_id=f"onboard-{new_id()}", system_message=system).with_model(*LLM_MODEL)
     try:
         resp = await chat.send_message(UserMessage(text=prompt))
         data = _extract_json(resp)
@@ -85,7 +85,7 @@ async def onboarding_os_blueprint(inp: OSBlueprintGenInput):
         "Make everything concrete and specific to the industry (use its real terminology). Do NOT include an 'Owner' department."
     )
     prompt = f"Industry: {inp.industry}\nCompany size: {inp.company_size or 'unspecified'}\nWhat the business actually does: {inp.description or 'not specified'}\nDesign the operating system now."
-    chat = LlmChat(api_key=CLAUDE_KEY, session_id=f"osbp-{new_id()}", system_message=system).with_model(*LLM_MODEL)
+    chat = LlmChat(api_key=claude_key(), session_id=f"osbp-{new_id()}", system_message=system).with_model(*LLM_MODEL)
     try:
         resp = await chat.send_message(UserMessage(text=prompt))
         data = _extract_json(resp)

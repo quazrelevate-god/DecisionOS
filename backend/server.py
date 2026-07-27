@@ -28,6 +28,8 @@ from emergentintegrations.llm.openai import OpenAISpeechToText
 from core import (
     db, client, logger, DEFAULT_ROLES,
     EMERGENT_LLM_KEY, CLAUDE_KEY, LLM_MODEL, VISION_MODEL,
+    claude_key, get_ai_key, set_ai_keys, ai_key_source, mask_key,
+    AI_KEY_PROVIDERS, load_ai_keys_from_db,
     now_iso, new_id, _extract_json,
     hash_password, verify_password, create_token,
     set_auth_cookie, clear_auth_cookie,
@@ -320,7 +322,7 @@ async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[l
         "Pick assignee_role ONLY from the provided role list. Infer sensible owners and due dates. If nothing applies, use empty arrays."
     )
     prompt = f"Founder directive transcript:\n\"\"\"\n{transcript}\n\"\"\"\nExtract the structured JSON now."
-    chat = LlmChat(api_key=CLAUDE_KEY, session_id=session_id, system_message=system).with_model(*LLM_MODEL)
+    chat = LlmChat(api_key=claude_key(), session_id=session_id, system_message=system).with_model(*LLM_MODEL)
     resp = await chat.send_message(UserMessage(text=prompt))
     try:
         data = _extract_json(resp)
@@ -358,7 +360,7 @@ async def ai_score_tasks(tasks: list, currency: str, session_id: str) -> dict:
         "Include every task id exactly once."
     )
     prompt = "Tasks:\n" + json.dumps(lines, ensure_ascii=False) + "\nScore them now."
-    chat = LlmChat(api_key=CLAUDE_KEY, session_id=session_id, system_message=system).with_model(*LLM_MODEL)
+    chat = LlmChat(api_key=claude_key(), session_id=session_id, system_message=system).with_model(*LLM_MODEL)
     resp = await chat.send_message(UserMessage(text=prompt))
     out = {}
     try:
@@ -406,7 +408,7 @@ async def ai_score_contact(contact: dict, metrics: dict, currency: str, session_
         "Return ONLY valid JSON: {\"relationship_score\":int,\"risk_score\":int,\"reason\":string,\"signals\":[string]}."
     )
     prompt = json.dumps(payload, ensure_ascii=False, default=str) + "\nScore this relationship now."
-    chat = LlmChat(api_key=CLAUDE_KEY, session_id=session_id, system_message=system).with_model(*LLM_MODEL)
+    chat = LlmChat(api_key=claude_key(), session_id=session_id, system_message=system).with_model(*LLM_MODEL)
     resp = await chat.send_message(UserMessage(text=prompt))
     def clamp(v):
         try:
@@ -444,7 +446,7 @@ async def ai_meeting_notes(transcript: str, members: list, session_id: str) -> d
         "The transcript may be English, Tamil or Tanglish — understand it and output all values in clear English."
     )
     prompt = f"Meeting transcript:\n\"\"\"\n{(transcript or '')[:40000]}\n\"\"\"\nExtract the structured minutes now."
-    chat = LlmChat(api_key=CLAUDE_KEY, session_id=session_id, system_message=system).with_model(*LLM_MODEL)
+    chat = LlmChat(api_key=claude_key(), session_id=session_id, system_message=system).with_model(*LLM_MODEL)
     resp = await chat.send_message(UserMessage(text=prompt))
     try:
         d = _extract_json(resp)
@@ -476,7 +478,7 @@ async def ai_execution_plan(task: dict, industry: str, currency: str, session_id
               f"Assigned role: {task.get('assignee_role') or 'team'}\n"
               f"Priority: {task.get('priority','medium')}\n"
               "Generate the execution checklist now.")
-    chat = LlmChat(api_key=CLAUDE_KEY, session_id=session_id, system_message=system).with_model(*LLM_MODEL)
+    chat = LlmChat(api_key=claude_key(), session_id=session_id, system_message=system).with_model(*LLM_MODEL)
     resp = await chat.send_message(UserMessage(text=prompt))
     try:
         d = _extract_json(resp)
@@ -503,7 +505,7 @@ async def ai_step_assist(task: dict, step_text: str, industry: str, session_id: 
               f"Context: {task.get('description','') or '(none)'}\n"
               f"Current step: {step_text}\n"
               "Give the suggestion and objection handling now.")
-    chat = LlmChat(api_key=CLAUDE_KEY, session_id=session_id, system_message=system).with_model(*LLM_MODEL)
+    chat = LlmChat(api_key=claude_key(), session_id=session_id, system_message=system).with_model(*LLM_MODEL)
     resp = await chat.send_message(UserMessage(text=prompt))
     try:
         d = _extract_json(resp)
@@ -523,33 +525,60 @@ async def ai_step_assist(task: dict, step_text: str, industry: str, session_id: 
 
 
 
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "").strip()
 OPENAI_STT_MODEL = os.environ.get("OPENAI_STT_MODEL", "gpt-4o-transcribe").strip() or "gpt-4o-transcribe"
-_openai_stt_client = None
-if OPENAI_API_KEY:
-    try:
-        from openai import AsyncOpenAI
-        _openai_stt_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
-        logger.info(f"OpenAI transcription enabled with model '{OPENAI_STT_MODEL}' (user key).")
-    except Exception as _e:
-        logger.warning(f"Could not init OpenAI client, will fall back to Whisper via Emergent key: {_e}")
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
-_gemini_client = None
-_gtypes = None
-if GEMINI_API_KEY:
-    try:
-        from google import genai as _genai
-        from google.genai import types as _gtypes
-        _gemini_client = _genai.Client(api_key=GEMINI_API_KEY)
-        logger.info(f"Gemini document-OCR enabled with user key (model '{VISION_MODEL[1]}').")
-    except Exception as _e:
-        logger.warning(f"Could not init Gemini client, will fall back to Emergent key: {_e}")
+# OpenAI STT + Gemini OCR clients are created lazily from the CURRENT runtime key
+# (so a platform-admin key update takes effect without a restart).
+_openai_stt_state = {"key": None, "client": None}
+_gemini_state = {"key": None, "client": None}
+
+
+def get_openai_stt_client():
+    key = get_ai_key("openai")
+    if not key:
+        _openai_stt_state.update(key=None, client=None)
+        return None
+    if _openai_stt_state["key"] != key:
+        try:
+            from openai import AsyncOpenAI
+            _openai_stt_state["client"] = AsyncOpenAI(api_key=key)
+            _openai_stt_state["key"] = key
+            logger.info(f"OpenAI transcription client ready (model '{OPENAI_STT_MODEL}').")
+        except Exception as _e:
+            logger.warning(f"Could not init OpenAI client, will fall back to Whisper (Emergent key): {_e}")
+            _openai_stt_state.update(key=None, client=None)
+    return _openai_stt_state["client"]
+
+
+def get_gemini_client():
+    key = get_ai_key("gemini")
+    if not key:
+        _gemini_state.update(key=None, client=None)
+        return None
+    if _gemini_state["key"] != key:
+        try:
+            from google import genai as _genai
+            _gemini_state["client"] = _genai.Client(api_key=key)
+            _gemini_state["key"] = key
+            logger.info(f"Gemini document-OCR client ready (model '{VISION_MODEL[1]}').")
+        except Exception as _e:
+            logger.warning(f"Could not init Gemini client, will fall back to Emergent key: {_e}")
+            _gemini_state.update(key=None, client=None)
+    return _gemini_state["client"]
+
+
+def wa_token() -> str:
+    return get_ai_key("wa_access_token")
+
+
+def wa_phone_id() -> str:
+    return get_ai_key("wa_phone_number_id")
 
 
 def _gemini_doc_sync(file_path: str, mime_type: str, system: str, user_text: str) -> str:
     import pathlib
-    resp = _gemini_client.models.generate_content(
+    from google.genai import types as _gtypes
+    resp = get_gemini_client().models.generate_content(
         model=VISION_MODEL[1],
         contents=[
             _gtypes.Part.from_bytes(data=pathlib.Path(file_path).read_bytes(), mime_type=mime_type),
@@ -577,6 +606,7 @@ def _stt_lang_prompt(language: str):
 async def transcribe_audio(path: str, language: str = "auto") -> str:
     lang, prompt = _stt_lang_prompt(language)
     # Prefer the user's own OpenAI key + newer transcription model (gpt-4o-transcribe).
+    _openai_stt_client = get_openai_stt_client()
     if _openai_stt_client is not None:
         try:
             kwargs = {"model": OPENAI_STT_MODEL, "response_format": "json"}
@@ -894,7 +924,7 @@ async def ai_generate_lexicon(industry: str, company_size: str = "", roles=None,
         f"Departments: {role_labels}\n"
         "Localize the vocabulary now."
     )
-    chat = LlmChat(api_key=CLAUDE_KEY, session_id=f"lexicon-{new_id()}", system_message=system).with_model(*LLM_MODEL)
+    chat = LlmChat(api_key=claude_key(), session_id=f"lexicon-{new_id()}", system_message=system).with_model(*LLM_MODEL)
     try:
         resp = await chat.send_message(UserMessage(text=prompt))
         data = _extract_json(resp)
@@ -932,7 +962,7 @@ async def ai_generate_operating_model(industry: str, company_size: str = "", rol
         f"Departments: {role_labels}\n"
         "Design the operating model now."
     )
-    chat = LlmChat(api_key=CLAUDE_KEY, session_id=f"opmodel-{new_id()}", system_message=system).with_model(*LLM_MODEL)
+    chat = LlmChat(api_key=claude_key(), session_id=f"opmodel-{new_id()}", system_message=system).with_model(*LLM_MODEL)
     try:
         resp = await chat.send_message(UserMessage(text=prompt))
         data = _extract_json(resp)
@@ -1746,7 +1776,7 @@ async def ai_clarify_directive(text: str, industry: str, session_id: str) -> dic
         "Return ONLY valid JSON: {\"complete\": boolean, \"questions\": [{\"id\": string, \"question\": string, \"hint\": string}]}."
     )
     prompt = f"Owner instruction: \"{text}\"\nAnalyze it now."
-    chat = LlmChat(api_key=CLAUDE_KEY, session_id=session_id, system_message=system).with_model(*LLM_MODEL)
+    chat = LlmChat(api_key=claude_key(), session_id=session_id, system_message=system).with_model(*LLM_MODEL)
     resp = await chat.send_message(UserMessage(text=prompt))
     try:
         d = _extract_json(resp)
@@ -2025,7 +2055,7 @@ async def ai_work_coach(target: dict, stats: dict, session_id: str) -> dict:
     prompt = (f"Employee: {target.get('name')} (role: {target.get('role')})\n"
               f"Stats: {json.dumps(stats)}\n"
               "Write the review now.")
-    chat = LlmChat(api_key=CLAUDE_KEY, session_id=session_id, system_message=system).with_model(*LLM_MODEL)
+    chat = LlmChat(api_key=claude_key(), session_id=session_id, system_message=system).with_model(*LLM_MODEL)
     resp = await chat.send_message(UserMessage(text=prompt))
     try:
         d = _extract_json(resp)
@@ -3148,7 +3178,7 @@ async def ask_ai(inp: AskInput, user: dict = Depends(require_perm("ask"))):
         + lang_directive(user.get("language"))
     )
     prompt = f"Company context:\n{json.dumps(context)}\n\nQuestion: {inp.question}"
-    chat = LlmChat(api_key=CLAUDE_KEY, session_id=f"ask-{tid}", system_message=system).with_model(*LLM_MODEL)
+    chat = LlmChat(api_key=claude_key(), session_id=f"ask-{tid}", system_message=system).with_model(*LLM_MODEL)
     try:
         raw = await chat.send_message(UserMessage(text=prompt))
     except Exception:
@@ -3809,7 +3839,7 @@ async def ai_extract_document(file_path: str, mime_type: str, session_id: str, c
     user_text = "Extract the structured JSON from this document now."
     resp = None
     # Prefer the user's own Gemini key via the official google-genai SDK.
-    if _gemini_client is not None:
+    if get_gemini_client() is not None:
         try:
             resp = await asyncio.to_thread(_gemini_doc_sync, file_path, mime_type, system, user_text)
         except Exception as e:
@@ -3833,7 +3863,7 @@ async def ai_extract_document(file_path: str, mime_type: str, session_id: str, c
 async def ai_map_spreadsheet(headers: list, rows: list, session_id: str, currency: str = "INR", company: str = "") -> dict:
     payload = {"headers": headers, "rows": rows[:300]}
     system = _CSV_SYSTEM.replace("{currency}", currency).replace("{company}", company or "our company")
-    chat = LlmChat(api_key=CLAUDE_KEY, session_id=session_id,
+    chat = LlmChat(api_key=claude_key(), session_id=session_id,
                    system_message=system).with_model(*LLM_MODEL)
     resp = await chat.send_message(UserMessage(text=f"Spreadsheet data:\n{json.dumps(payload)}\n\nClassify and map to JSON now."))
     data = _extract_json(resp)
@@ -4512,7 +4542,7 @@ async def ai_leave_impact(person_name: str, from_date: str, to_date: str, tasks:
         "available_members": [{"id": m["id"], "name": m["name"], "role": m["role"],
                                "active_task_count": m["load"]} for m in members],
     }
-    chat = LlmChat(api_key=CLAUDE_KEY, session_id=f"leave-impact-{new_id()}", system_message=system).with_model(*LLM_MODEL)
+    chat = LlmChat(api_key=claude_key(), session_id=f"leave-impact-{new_id()}", system_message=system).with_model(*LLM_MODEL)
     resp = await chat.send_message(UserMessage(text=json.dumps(payload)))
     data = _extract_json(resp)
     return data if isinstance(data, dict) else {"summary": "", "suggestions": []}
@@ -4728,8 +4758,8 @@ def _norm_phone(p: str) -> str:
 
 @api.get("/whatsapp/status")
 async def whatsapp_status(user: dict = Depends(get_current_user)):
-    token = os.environ.get("WA_ACCESS_TOKEN")
-    pnid = os.environ.get("WA_PHONE_NUMBER_ID")
+    token = wa_token()
+    pnid = wa_phone_id()
     out = {
         "configured": bool(token and pnid),
         "has_token": bool(token), "has_phone_id": bool(pnid),
@@ -4809,7 +4839,7 @@ async def resolve_wa_tenant(sender: str):
 
 
 async def download_wa_media(media_id: str) -> bytes:
-    token = os.environ.get("WA_ACCESS_TOKEN")
+    token = wa_token()
     ver = os.environ.get("GRAPH_API_VERSION", "v21.0")
     headers = {"Authorization": f"Bearer {token}"}
     async with httpx.AsyncClient(timeout=60) as c:
@@ -4821,8 +4851,8 @@ async def download_wa_media(media_id: str) -> bytes:
 
 
 async def send_wa_reply(to_phone: str, text: str):
-    token = os.environ.get("WA_ACCESS_TOKEN")
-    pnid = os.environ.get("WA_PHONE_NUMBER_ID")
+    token = wa_token()
+    pnid = wa_phone_id()
     ver = os.environ.get("GRAPH_API_VERSION", "v21.0")
     if not (token and pnid):
         return
@@ -5077,7 +5107,7 @@ _CAPTURE_SYS = (
 
 async def ai_capture_triage(text: str, roles: list) -> dict:
     system = _CAPTURE_SYS.replace("{roles}", ", ".join(roles) or "owner")
-    chat = LlmChat(api_key=CLAUDE_KEY, session_id=f"capture-{new_id()}", system_message=system).with_model(*LLM_MODEL)
+    chat = LlmChat(api_key=claude_key(), session_id=f"capture-{new_id()}", system_message=system).with_model(*LLM_MODEL)
     resp = await chat.send_message(UserMessage(text=(text or "")[:4000]))
     try:
         d = _extract_json(resp)
@@ -5577,6 +5607,9 @@ async def _bootstrap():
         await db.decisions.create_index("tenant_id")
         await db.tasks.create_index("tenant_id")
         await db.workflows.create_index("tenant_id")
+        await db.platform_admins.create_index("email", unique=True)
+        await load_ai_keys_from_db()
+        await seed_platform_admin()
         await seed_demo()
         await migrate_tenants()
         await fixup_demo_tenant()
@@ -5584,6 +5617,23 @@ async def _bootstrap():
         logger.info("Bootstrap complete.")
     except Exception as e:
         logger.error(f"Bootstrap error (non-fatal, app stays up): {e}")
+
+
+async def seed_platform_admin():
+    """Create the platform super-admin from env, idempotently; refresh the hash if the env password changed."""
+    email = os.environ.get("SUPERADMIN_EMAIL", "admin@decisionos.biz").strip().lower()
+    password = os.environ.get("SUPERADMIN_PASSWORD", "DecisionOS@2026").strip()
+    existing = await db.platform_admins.find_one({"email": email})
+    if not existing:
+        await db.platform_admins.insert_one({
+            "id": new_id(), "email": email, "name": "Platform Admin",
+            "password_hash": hash_password(password), "created_at": now_iso(),
+        })
+        logger.info(f"Platform super-admin seeded: {email}")
+    elif not verify_password(password, existing.get("password_hash", "")):
+        await db.platform_admins.update_one(
+            {"id": existing["id"]}, {"$set": {"password_hash": hash_password(password)}})
+        logger.info(f"Platform super-admin password refreshed from env: {email}")
 
 
 @app.on_event("startup")
@@ -5616,6 +5666,8 @@ from routers.onboarding import router as onboarding_router  # noqa: E402
 app.include_router(onboarding_router)
 from routers.ledger import router as ledger_router  # noqa: E402
 app.include_router(ledger_router)
+from routers.admin import router as admin_router  # noqa: E402
+app.include_router(admin_router)
 _cors_env = os.environ.get('CORS_ORIGINS', '*').strip()
 _cors_kwargs = dict(allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 if _cors_env == '*':

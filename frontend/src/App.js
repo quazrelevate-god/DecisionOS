@@ -23,6 +23,7 @@ import OperatingScore from "./pages/OperatingScore";
 import WorkCoach from "./pages/WorkCoach";
 import Ledger from "./pages/Ledger";
 import Landing from "./pages/Landing";
+import AdminPortal from "./pages/admin/AdminPortal";
 
 function AccessDenied() {
   const navigate = useNavigate();
@@ -76,6 +77,8 @@ function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/admin" element={<AdminPortal />} />
+            <Route path="/admin/*" element={<AdminPortal />} />
             <Route path="/" element={<Home />} />
             <Route path="/dashboard" element={<Navigate to="/brief" replace />} />
             <Route path="/brief" element={<Protected><CEOBrief /></Protected>} />

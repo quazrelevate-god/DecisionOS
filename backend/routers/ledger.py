@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
 
 from core import (
-    db, CLAUDE_KEY, LLM_MODEL, EMERGENT_LLM_KEY, VISION_MODEL,
+    db, CLAUDE_KEY, claude_key, LLM_MODEL, EMERGENT_LLM_KEY, VISION_MODEL,
     _extract_json, new_id, now_iso, logger,
     get_current_user, user_perms, log_activity,
 )
@@ -66,7 +66,7 @@ async def ai_suggest_expense_category(text: str, tenant_id: str) -> str:
             + ", ".join(EXPENSE_CATEGORIES) + ". "
             "Reply with ONLY JSON: {\"category\": \"<one of the categories>\"}."
         )
-        chat = LlmChat(api_key=CLAUDE_KEY, session_id=f"expcat-{tenant_id}", system_message=system).with_model(*LLM_MODEL)
+        chat = LlmChat(api_key=claude_key(), session_id=f"expcat-{tenant_id}", system_message=system).with_model(*LLM_MODEL)
         resp = await chat.send_message(UserMessage(text=text[:600]))
         data = _extract_json(resp) or {}
         if data.get("category") in EXPENSE_CATEGORIES:
@@ -581,7 +581,7 @@ async def _generate_analysis(tid: str, scope: str) -> dict:
     )
     data = {}
     try:
-        chat = LlmChat(api_key=CLAUDE_KEY, session_id=f"ledger-ai-{scope}-{new_id()}", system_message=system).with_model(*LLM_MODEL)
+        chat = LlmChat(api_key=claude_key(), session_id=f"ledger-ai-{scope}-{new_id()}", system_message=system).with_model(*LLM_MODEL)
         resp = await chat.send_message(UserMessage(text=f"Finance data:\n{json.dumps(ctx)}\n\nProduce the JSON now."))
         data = _extract_json(resp) or {}
     except Exception as e:  # noqa: BLE001
@@ -640,7 +640,7 @@ async def ledger_ask(inp: LedgerAskInput, user: dict = Depends(require_ledger)):
         "If the data doesn't contain the answer, say so plainly."
     )
     try:
-        chat = LlmChat(api_key=CLAUDE_KEY, session_id=f"ledger-ask-{user['tenant_id']}-{new_id()}", system_message=system).with_model(*LLM_MODEL)
+        chat = LlmChat(api_key=claude_key(), session_id=f"ledger-ask-{user['tenant_id']}-{new_id()}", system_message=system).with_model(*LLM_MODEL)
         resp = await chat.send_message(UserMessage(text=f"Finance data:\n{json.dumps(ctx)}\n\nQuestion: {q}"))
         answer = (resp or "").strip()
     except Exception as e:  # noqa: BLE001

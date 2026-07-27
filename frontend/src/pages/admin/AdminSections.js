@@ -1,0 +1,343 @@
+import { useState, useEffect, useCallback } from "react";
+import api, { formatApiError } from "../../lib/api";
+import { toast } from "sonner";
+import {
+  Buildings, Users, Brain, CheckSquare, Lightning, ArrowsClockwise,
+  PencilSimple, Prohibit, ArrowClockwise, ShieldCheck, Spinner, Circle,
+} from "@phosphor-icons/react";
+
+// --- shared bits ------------------------------------------------------------
+const STATUS_COLORS = {
+  active: "#3fb950",
+  fallback: "#d29922",
+  out_of_credits: "#e5484d",
+  invalid: "#e5484d",
+  error: "#e5484d",
+  not_set: "#6b6b75",
+};
+
+function StatusBadge({ status, detail }) {
+  const color = STATUS_COLORS[status] || "#6b6b75";
+  const label = (status || "unknown").replace(/_/g, " ");
+  return (
+    <span
+      title={detail || ""}
+      className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider px-2 py-1 border"
+      style={{ color, borderColor: `${color}55`, background: `${color}12` }}
+    >
+      <Circle size={7} weight="fill" style={{ color }} />
+      {label}
+    </span>
+  );
+}
+
+const CARD = "border border-white/10 bg-[#141418] p-5";
+const H2 = "font-heading text-lg font-black uppercase tracking-tight text-white";
+const BTN = "font-mono text-[11px] uppercase tracking-wider px-3 py-2 border transition-colors";
+
+function Loading() {
+  return (
+    <div className="flex items-center gap-2 text-white/40 font-mono text-sm py-10 justify-center">
+      <Spinner size={16} className="animate-spin" /> Loading…
+    </div>
+  );
+}
+
+// --- Overview ---------------------------------------------------------------
+export function OverviewSection() {
+  const [m, setM] = useState(null);
+  useEffect(() => {
+    api.get("/admin/metrics").then((r) => setM(r.data)).catch(() => {});
+  }, []);
+  if (!m) return <Loading />;
+  const cards = [
+    { k: "tenants", label: "Workspaces", icon: Buildings, v: m.tenants },
+    { k: "users", label: "Users", icon: Users, v: m.users },
+    { k: "decisions", label: "Decisions", icon: Brain, v: m.decisions },
+    { k: "tasks", label: "Tasks", icon: CheckSquare, v: m.tasks },
+    { k: "captures", label: "Captures", icon: Lightning, v: m.captures },
+    { k: "workflows", label: "Workflows", icon: ArrowsClockwise, v: m.workflows },
+    { k: "contacts", label: "People", icon: Users, v: m.contacts },
+    { k: "tasks_done", label: "Tasks Done", icon: CheckSquare, v: m.tasks_done },
+  ];
+  return (
+    <div data-testid="admin-overview">
+      <h2 className={H2 + " mb-5"}>Platform Metrics</h2>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {cards.map((c) => (
+          <div key={c.k} className={CARD} data-testid={`metric-${c.k}`}>
+            <c.icon size={20} className="text-[#e5484d] mb-3" weight="bold" />
+            <div className="font-heading text-4xl font-black text-white tracking-tighter">{c.v}</div>
+            <div className="font-mono text-[11px] uppercase tracking-widest text-white/40 mt-1">{c.label}</div>
+          </div>
+        ))}
+      </div>
+      {m.suspended_users > 0 && (
+        <p className="mt-4 font-mono text-xs text-[#d29922]">{m.suspended_users} suspended user(s)</p>
+      )}
+    </div>
+  );
+}
+
+// --- AI Keys ----------------------------------------------------------------
+export function AiKeysSection() {
+  const [keys, setKeys] = useState(null);
+  const [status, setStatus] = useState({});
+  const [testing, setTesting] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [draft, setDraft] = useState("");
+
+  const load = useCallback(() => {
+    api.get("/admin/ai-keys").then((r) => setKeys(r.data.keys)).catch(() => {});
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const test = async () => {
+    setTesting(true);
+    try {
+      const { data } = await api.get("/admin/ai-keys/status");
+      const map = {
+        anthropic: data.anthropic, openai: data.openai, gemini: data.gemini,
+        wa_access_token: data.whatsapp, wa_phone_number_id: data.whatsapp,
+      };
+      setStatus(map);
+    } catch (e) {
+      toast.error("Status check failed");
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const save = async (provider) => {
+    try {
+      await api.put("/admin/ai-keys", { [provider]: draft });
+      toast.success(draft ? "Key updated" : "Reverted to environment default");
+      setEditing(null);
+      setDraft("");
+      load();
+    } catch (e) {
+      toast.error(formatApiError(e.response?.data?.detail));
+    }
+  };
+
+  if (!keys) return <Loading />;
+  return (
+    <div data-testid="admin-ai-keys">
+      <div className="flex items-center justify-between mb-5">
+        <h2 className={H2}>AI Provider Keys</h2>
+        <button
+          data-testid="test-all-keys"
+          onClick={test}
+          disabled={testing}
+          className={BTN + " border-[#e5484d] text-[#e5484d] hover:bg-[#e5484d] hover:text-white flex items-center gap-2"}
+        >
+          {testing ? <Spinner size={13} className="animate-spin" /> : <ArrowClockwise size={13} />}
+          {testing ? "Testing…" : "Test All Keys"}
+        </button>
+      </div>
+      <div className="space-y-3">
+        {keys.map((k) => (
+          <div key={k.provider} className={CARD} data-testid={`ai-key-${k.provider}`}>
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div className="min-w-0">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="font-heading font-black text-white uppercase text-sm tracking-tight">{k.label}</span>
+                  <span className="font-mono text-[10px] uppercase tracking-wider text-white/40 border border-white/15 px-2 py-0.5">
+                    {k.source === "custom" ? "custom" : k.source === "env" ? "env default" : "not set"}
+                  </span>
+                  {status[k.provider] && <StatusBadge status={status[k.provider].status} detail={status[k.provider].detail} />}
+                </div>
+                <div className="font-mono text-xs text-white/50 mt-2">{k.masked || "— not set —"}</div>
+                {k.note && <div className="font-mono text-[10px] text-[#d29922] mt-1">{k.note}</div>}
+              </div>
+              <button
+                data-testid={`edit-key-${k.provider}`}
+                onClick={() => { setEditing(k.provider); setDraft(""); }}
+                className={BTN + " border-white/20 text-white/70 hover:border-white/50 flex items-center gap-1.5 shrink-0"}
+              >
+                <PencilSimple size={13} /> Update
+              </button>
+            </div>
+            {editing === k.provider && (
+              <div className="mt-4 pt-4 border-t border-white/10 space-y-3" data-testid={`edit-panel-${k.provider}`}>
+                <input
+                  data-testid={`key-input-${k.provider}`}
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  placeholder="Paste new key value (leave empty to revert to env default)"
+                  className="w-full bg-[#0a0a0b] border border-white/15 text-white px-3 py-2.5 font-mono text-xs focus:border-[#e5484d] focus:outline-none"
+                />
+                <div className="flex gap-2">
+                  <button
+                    data-testid={`save-key-${k.provider}`}
+                    onClick={() => save(k.provider)}
+                    className={BTN + " bg-[#e5484d] border-[#e5484d] text-white hover:bg-[#d13940]"}
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={() => { setEditing(null); setDraft(""); }}
+                    className={BTN + " border-white/20 text-white/60 hover:border-white/40"}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// --- Tenants ----------------------------------------------------------------
+export function TenantsSection() {
+  const [rows, setRows] = useState(null);
+  useEffect(() => {
+    api.get("/admin/tenants").then((r) => setRows(r.data.tenants)).catch(() => {});
+  }, []);
+  if (!rows) return <Loading />;
+  const fmt = (d) => (d ? new Date(d).toLocaleDateString() : "—");
+  return (
+    <div data-testid="admin-tenants">
+      <h2 className={H2 + " mb-5"}>Workspaces ({rows.length})</h2>
+      <div className="overflow-x-auto border border-white/10">
+        <table className="w-full text-left">
+          <thead>
+            <tr className="bg-[#141418] font-mono text-[10px] uppercase tracking-widest text-white/40">
+              <th className="p-3">Workspace</th><th className="p-3">Industry</th>
+              <th className="p-3 text-right">Users</th><th className="p-3 text-right">Decisions</th>
+              <th className="p-3 text-right">Tasks</th><th className="p-3">Created</th><th className="p-3">Last Active</th>
+            </tr>
+          </thead>
+          <tbody className="font-mono text-xs text-white/80">
+            {rows.map((t) => (
+              <tr key={t.id} className="border-t border-white/5 hover:bg-white/[0.03]" data-testid={`tenant-row-${t.id}`}>
+                <td className="p-3 text-white font-semibold">{t.name}</td>
+                <td className="p-3 text-white/50">{t.industry}</td>
+                <td className="p-3 text-right">{t.users}</td>
+                <td className="p-3 text-right">{t.decisions}</td>
+                <td className="p-3 text-right">{t.tasks}</td>
+                <td className="p-3 text-white/50">{fmt(t.created_at)}</td>
+                <td className="p-3 text-white/50">{fmt(t.last_activity)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// --- Users ------------------------------------------------------------------
+export function UsersSection() {
+  const [rows, setRows] = useState(null);
+  const load = useCallback(() => {
+    api.get("/admin/users").then((r) => setRows(r.data.users)).catch(() => {});
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const act = async (id, action) => {
+    try {
+      await api.post(`/admin/users/${id}/${action}`);
+      toast.success(`User ${action}d`);
+      load();
+    } catch (e) {
+      toast.error(formatApiError(e.response?.data?.detail));
+    }
+  };
+
+  if (!rows) return <Loading />;
+  return (
+    <div data-testid="admin-users">
+      <h2 className={H2 + " mb-5"}>Users ({rows.length})</h2>
+      <div className="overflow-x-auto border border-white/10">
+        <table className="w-full text-left">
+          <thead>
+            <tr className="bg-[#141418] font-mono text-[10px] uppercase tracking-widest text-white/40">
+              <th className="p-3">Name</th><th className="p-3">Email</th><th className="p-3">Workspace</th>
+              <th className="p-3">Role</th><th className="p-3">Status</th><th className="p-3">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="font-mono text-xs text-white/80">
+            {rows.map((u) => (
+              <tr key={u.id} className="border-t border-white/5 hover:bg-white/[0.03]" data-testid={`user-row-${u.id}`}>
+                <td className="p-3 text-white font-semibold">{u.name || "—"}</td>
+                <td className="p-3 text-white/60">{u.email || "—"}</td>
+                <td className="p-3 text-white/50">{u.tenant_name}</td>
+                <td className="p-3 uppercase text-white/50">{u.role}</td>
+                <td className="p-3">
+                  {u.suspended
+                    ? <span className="text-[#e5484d]">suspended</span>
+                    : <span className="text-[#3fb950]">active</span>}
+                </td>
+                <td className="p-3">
+                  <div className="flex gap-1.5">
+                    {u.role !== "owner" && (u.suspended ? (
+                      <button data-testid={`reactivate-${u.id}`} onClick={() => act(u.id, "reactivate")}
+                        className={BTN + " border-[#3fb950]/50 text-[#3fb950] hover:bg-[#3fb950]/10 py-1 flex items-center gap-1"}>
+                        <ArrowClockwise size={12} /> Reactivate
+                      </button>
+                    ) : (
+                      <button data-testid={`suspend-${u.id}`} onClick={() => act(u.id, "suspend")}
+                        className={BTN + " border-[#e5484d]/50 text-[#e5484d] hover:bg-[#e5484d]/10 py-1 flex items-center gap-1"}>
+                        <Prohibit size={12} /> Suspend
+                      </button>
+                    ))}
+                    <button data-testid={`reset-access-${u.id}`} onClick={() => act(u.id, "reset-access")}
+                      className={BTN + " border-white/20 text-white/60 hover:border-white/40 py-1"}>
+                      Reset Access
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// --- Health -----------------------------------------------------------------
+export function HealthSection() {
+  const [h, setH] = useState(null);
+  useEffect(() => {
+    api.get("/admin/health").then((r) => setH(r.data)).catch(() => {});
+  }, []);
+  if (!h) return <Loading />;
+  const ok = (v) => v === "ok" || v === "running" || v === "configured";
+  const rows = [
+    { label: "Database", v: h.database.status },
+    { label: "Follow-up Scheduler", v: h.scheduler.status, detail: h.scheduler.detail },
+    { label: "Emergent LLM Key", v: h.emergent_key },
+  ];
+  return (
+    <div data-testid="admin-health">
+      <h2 className={H2 + " mb-5"}>System Health</h2>
+      <div className="grid gap-3 md:grid-cols-3">
+        {rows.map((r) => (
+          <div key={r.label} className={CARD} data-testid={`health-${r.label}`}>
+            <div className="flex items-center gap-2 mb-2">
+              {ok(r.v) ? <ShieldCheck size={18} className="text-[#3fb950]" weight="fill" />
+                : <Circle size={14} weight="fill" className="text-[#e5484d]" />}
+              <span className="font-heading font-black uppercase text-white text-sm tracking-tight">{r.label}</span>
+            </div>
+            <div className="font-mono text-xs uppercase" style={{ color: ok(r.v) ? "#3fb950" : "#e5484d" }}>{r.v}</div>
+            {r.detail && <div className="font-mono text-[10px] text-white/40 mt-1">{r.detail}</div>}
+          </div>
+        ))}
+      </div>
+      <h3 className="font-mono text-[11px] uppercase tracking-widest text-white/40 mt-8 mb-3">AI Provider Key Source</h3>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {Object.entries(h.ai_providers).map(([k, v]) => (
+          <div key={k} className={CARD}>
+            <div className="font-heading font-black uppercase text-white text-xs tracking-tight">{k}</div>
+            <div className="font-mono text-[11px] text-white/50 mt-1 uppercase">{v}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

@@ -3355,6 +3355,30 @@ async def run_followup(tenant_id: str):
         await db.tasks.update_one({"id": t["id"]}, {"$set": {"escalation_level": target, "last_escalated": now_iso()}})
 
 
+# Background scheduler: run follow-up/escalation for EVERY tenant on a timer, so overdue
+# escalations and owner alerts fire even when nobody is actively polling /notifications.
+FOLLOWUP_INTERVAL_SECONDS = int(os.environ.get("FOLLOWUP_INTERVAL_SECONDS", "300") or "300")
+
+
+async def _followup_scheduler_loop():
+    # Small initial delay so startup/bootstrap finishes first.
+    await asyncio.sleep(30)
+    while True:
+        try:
+            tenant_ids = await db.tenants.distinct("id")
+            for tid in tenant_ids:
+                try:
+                    # Bypass the per-tenant 60s poll throttle for the timer sweep.
+                    _followup_last_run.pop(tid, None)
+                    await run_followup(tid)
+                except Exception as e:
+                    logger.warning(f"[followup-scheduler] tenant {tid} failed: {e}")
+            logger.info(f"[followup-scheduler] swept {len(tenant_ids)} tenant(s); next in {FOLLOWUP_INTERVAL_SECONDS}s")
+        except Exception as e:
+            logger.warning(f"[followup-scheduler] sweep failed: {e}")
+        await asyncio.sleep(FOLLOWUP_INTERVAL_SECONDS)
+
+
 @api.get("/notifications")
 async def list_notifications(user: dict = Depends(get_current_user)):
     await run_followup(user["tenant_id"])
@@ -5491,6 +5515,8 @@ async def startup():
     # Fire-and-forget so uvicorn binds the port and answers /health immediately —
     # otherwise slow remote-Atlas seeding would block readiness and fail the deploy health check.
     asyncio.create_task(_bootstrap())
+    # Timer-driven follow-up/escalation sweep (independent of user polling).
+    asyncio.create_task(_followup_scheduler_loop())
 
 
 @app.get("/health")

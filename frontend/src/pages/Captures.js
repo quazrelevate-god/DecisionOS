@@ -149,11 +149,32 @@ function CaptureCard({ c, user, onChange }) {
             {c.status === "needs_attention" && <Chip value="needs attention" className="bg-amber-500 text-black" />}
             {c.auto_processed && <Chip value="auto-filed" className="bg-green-600 text-white" />}
             {c.duplicate_of && <Chip value="possible duplicate" className="bg-amber-500 text-black" />}
-            {c.confidence != null && <span className="label-mono text-muted-foreground">conf {Math.round(c.confidence * 100)}%</span>}
+            {c.confidence != null && (() => {
+              const pct = Math.round(c.confidence * 100);
+              const tone = pct >= 80 ? "bg-green-600 text-white" : pct >= 50 ? "bg-amber-500 text-black" : "bg-brand-red text-white";
+              return <span data-testid={`capture-confidence-${c.id}`} className={`label-mono px-1.5 py-0.5 rounded ${tone}`} title="AI confidence in this classification">AI {pct}%</span>;
+            })()}
             <span className="label-mono text-muted-foreground ml-auto flex items-center gap-1" title={fullTime(c.created_at)}><WhatsappLogo size={12} weight="bold" /> {c.wa_from || "whatsapp"} · {timeAgo(c.created_at)}</span>
           </div>
           <p className="text-sm font-semibold mt-2">{c.summary}</p>
           {c.intent && <p className="text-xs text-muted-foreground">Intent: {c.intent}</p>}
+          {(() => {
+            const parts = [];
+            parts.push(`Read as “${(c.classification || "other").replace(/_/g, " ")}”`);
+            if (c.reviewer_perm === "finance") parts.push("money item → routed to Finance");
+            else if (c.reviewer_role) parts.push(`routed to the ${c.reviewer_role} team`);
+            if (c.priority) parts.push(`${c.priority} priority`);
+            if (c.needs_owner) parts.push("needs owner sign-off");
+            if (c.confidence != null) {
+              const pct = Math.round(c.confidence * 100);
+              parts.push(pct >= 80 ? `high AI confidence (${pct}%)` : pct >= 50 ? `medium confidence (${pct}%) — worth a check` : `low confidence (${pct}%) — please verify`);
+            }
+            return (
+              <p data-testid={`capture-why-${c.id}`} className="text-xs text-muted-foreground mt-1 border-l-2 border-black/20 pl-2">
+                <span className="font-semibold text-foreground">Why AI routed this:</span> {parts.join(" · ")}.
+              </p>
+            );
+          })()}
           {c.text && <p className="text-xs text-muted-foreground mt-1 italic">“{c.text.slice(0, 200)}”</p>}
           {recCounts && <p className="label-mono text-muted-foreground mt-1">Extracted: {recCounts}{c.amount ? ` · ₹${Number(c.amount).toLocaleString()}` : ""}</p>}
           {!recCounts && c.amount ? <p className="label-mono text-muted-foreground mt-1">Amount: ₹{Number(c.amount).toLocaleString()}</p> : null}

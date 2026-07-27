@@ -3016,20 +3016,49 @@ async def delete_workflow(workflow_id: str, user: dict = Depends(require_role("o
 # ---------------------------------------------------------------------------
 # Company Brain search
 # ---------------------------------------------------------------------------
+def _brain_can_finance(user: dict) -> bool:
+    """Whether a user may see financial records in Company Brain (Search + Ask)."""
+    return bool({"finance", "ledger"} & user_perms(user))
+
+
+def _brain_privileged(user: dict) -> bool:
+    """Owners / team managers see all departments' operational records."""
+    return user.get("role") == "owner" or "team_manage" in user_perms(user)
+
+
 @api.get("/brain/search")
 async def brain_search(q: str = "", user: dict = Depends(require_perm("brain"))):
     tid = user["tenant_id"]
+    uid = user.get("id")
+    urole = user.get("role")
+    can_finance = _brain_can_finance(user)
+    privileged = _brain_privileged(user)
     tokens = [re.escape(t) for t in q.split() if len(t) >= 2]
     rx = {"$regex": "|".join(tokens), "$options": "i"} if tokens else {"$exists": True}
+
+    # Tasks: non-privileged users only see tasks in their own department (own / their role / created by them).
+    task_q = {"tenant_id": tid, "$and": [{"$or": [{"title": rx}, {"description": rx}]}]}
+    if not privileged:
+        task_q["$and"].append({"$or": [{"assignee_id": uid}, {"assignee_role": urole}, {"created_by": uid}]})
+
     decisions = await db.decisions.find({"tenant_id": tid, "$or": [{"title": rx}, {"summary": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
-    tasks = await db.tasks.find({"tenant_id": tid, "$or": [{"title": rx}, {"description": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    tasks = await db.tasks.find(task_q, {"_id": 0}).sort("created_at", -1).to_list(50)
     workflows = await db.workflows.find({"tenant_id": tid, "$or": [{"title": rx}, {"detail": rx}, {"counterparty": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
     contacts = await db.contacts.find({"tenant_id": tid, "$or": [{"name": rx}, {"company": rx}, {"email": rx}, {"phone": rx}, {"notes": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
     memory = await db.memory.find({"tenant_id": tid, "text": rx}, {"_id": 0}).sort("created_at", -1).to_list(50)
-    invoices = await db.invoices.find({"tenant_id": tid, "$or": [{"number": rx}, {"contact_name": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
-    expenses = await db.expenses.find({"tenant_id": tid, "$or": [{"title": rx}, {"vendor_name": rx}, {"category": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
-    assets = await db.assets.find({"tenant_id": tid, "$or": [{"name": rx}, {"vendor_name": rx}, {"category": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
-    inventory = await db.inventory.find({"tenant_id": tid, "$or": [{"item": rx}, {"sku": rx}, {"vendor_name": rx}, {"category": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
+
+    # Financial records: department-restricted to Owner / Finance / Ledger roles only.
+    if can_finance:
+        invoices = await db.invoices.find({"tenant_id": tid, "$or": [{"number": rx}, {"contact_name": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
+        expenses = await db.expenses.find({"tenant_id": tid, "$or": [{"title": rx}, {"vendor_name": rx}, {"category": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
+        assets = await db.assets.find({"tenant_id": tid, "$or": [{"name": rx}, {"vendor_name": rx}, {"category": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
+        inventory = await db.inventory.find({"tenant_id": tid, "$or": [{"item": rx}, {"sku": rx}, {"vendor_name": rx}, {"category": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    else:
+        invoices = expenses = assets = inventory = []
+        # Hide the money figure on operational workflow cards from non-finance roles.
+        for w in workflows:
+            if "amount" in w:
+                w["amount"] = None
     return {
         "decisions": await enrich_decisions(decisions),
         "tasks": await enrich_tasks(tasks),
@@ -3040,6 +3069,7 @@ async def brain_search(q: str = "", user: dict = Depends(require_perm("brain")))
         "expenses": expenses,
         "assets": assets,
         "inventory": inventory,
+        "scope": {"finance_visible": can_finance, "all_departments": privileged},
     }
 
 
@@ -3049,12 +3079,27 @@ async def brain_search(q: str = "", user: dict = Depends(require_perm("brain")))
 @api.post("/ask")
 async def ask_ai(inp: AskInput, user: dict = Depends(require_perm("ask"))):
     tid = user["tenant_id"]
+    uid = user.get("id")
+    urole = user.get("role")
+    can_finance = _brain_can_finance(user)
+    privileged = _brain_privileged(user)
+
+    # Tasks: non-privileged users are limited to their own department (own / their role / created by them).
+    task_q = {"tenant_id": tid}
+    if not privileged:
+        task_q["$or"] = [{"assignee_id": uid}, {"assignee_role": urole}, {"created_by": uid}]
+
     decisions = await db.decisions.find({"tenant_id": tid}, {"_id": 0, "title": 1, "summary": 1, "status": 1}).sort("created_at", -1).to_list(60)
-    tasks = await db.tasks.find({"tenant_id": tid}, {"_id": 0, "title": 1, "status": 1, "assignee_role": 1, "due_date": 1}).sort("created_at", -1).to_list(120)
+    tasks = await db.tasks.find(task_q, {"_id": 0, "title": 1, "status": 1, "assignee_role": 1, "due_date": 1}).sort("created_at", -1).to_list(120)
     workflows = await db.workflows.find({"tenant_id": tid}, {"_id": 0, "title": 1, "type": 1, "stage": 1, "amount": 1, "counterparty": 1}).sort("created_at", -1).to_list(60)
     users = await db.users.find({"tenant_id": tid}, {"_id": 0, "name": 1, "role": 1}).to_list(60)
     contacts = await db.contacts.find({"tenant_id": tid}, {"_id": 0, "name": 1, "company": 1, "type": 1, "status": 1, "phone": 1, "email": 1}).sort("created_at", -1).to_list(100)
     memory = await db.memory.find({"tenant_id": tid}, {"_id": 0, "text": 1, "tag": 1}).sort("created_at", -1).to_list(100)
+
+    # Hide workflow money figures from non-finance roles.
+    if not can_finance:
+        for w in workflows:
+            w.pop("amount", None)
 
     def slim_d(d):
         return {"title": d["title"], "summary": d.get("summary"), "status": d.get("status")}
@@ -3074,7 +3119,7 @@ async def ask_ai(inp: AskInput, user: dict = Depends(require_perm("ask"))):
         "company_memory": [m["text"] for m in memory],
         "today": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
     }
-    money_access = "finance" in user_perms(user)
+    money_access = can_finance
     if money_access:
         invs = await db.invoices.find({"tenant_id": tid}, {"_id": 0, "type": 1, "number": 1, "contact_name": 1, "amount": 1, "currency": 1, "status": 1, "date": 1, "due_date": 1, "line_items": 1}).sort("created_at", -1).to_list(300)
         pays = await db.payments.find({"tenant_id": tid}, {"_id": 0, "direction": 1, "amount": 1, "contact_name": 1, "date": 1, "method": 1, "invoice_number": 1}).sort("created_at", -1).to_list(300)

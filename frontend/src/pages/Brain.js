@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import api from "../lib/api";
 import { PageHeader, Chip, EmptyState } from "../components/common";
-import { MagnifyingGlass, ChatCircleText } from "@phosphor-icons/react";
+import { MagnifyingGlass, ChatCircleText, Lock } from "@phosphor-icons/react";
 import { AskPanel } from "./AskAI";
 import { MicDictateButton } from "../components/MicDictateButton";
 
@@ -50,6 +50,12 @@ function SearchPanel() {
       {res && !loading && (
         <>
           <p className="label-mono text-muted-foreground mb-6">{t("brain.linked", { count: total })}</p>
+          {res.scope && res.scope.finance_visible === false && (
+            <div data-testid="brain-finance-restricted" className="mb-6 flex items-center gap-2 text-xs border-l-2 border-brand-red bg-brand-red/5 px-3 py-2 rounded">
+              <Lock size={14} weight="bold" className="text-brand-red shrink-0" />
+              <span>Financial records (invoices, expenses, assets, inventory &amp; amounts) are restricted to Owner and Finance roles.</span>
+            </div>
+          )}
           <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-6">
             {/* Decisions */}
             <section>

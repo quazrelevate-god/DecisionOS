@@ -154,7 +154,13 @@ function CaptureCard({ c, user, onChange }) {
               const tone = pct >= 80 ? "bg-green-600 text-white" : pct >= 50 ? "bg-amber-500 text-black" : "bg-brand-red text-white";
               return <span data-testid={`capture-confidence-${c.id}`} className={`label-mono px-1.5 py-0.5 rounded ${tone}`} title="AI confidence in this classification">AI {pct}%</span>;
             })()}
-            <span className="label-mono text-muted-foreground ml-auto flex items-center gap-1" title={fullTime(c.created_at)}><WhatsappLogo size={12} weight="bold" /> {c.wa_from || "whatsapp"} · {timeAgo(c.created_at)}</span>
+            <span className="label-mono text-muted-foreground ml-auto flex items-center gap-1" title={c.sender_name ? `${c.sender_name}${c.wa_from ? " · " + c.wa_from : ""} · ${fullTime(c.created_at)}` : fullTime(c.created_at)}>
+              <WhatsappLogo size={12} weight="bold" />
+              {c.sender_name
+                ? <span data-testid={`capture-sender-${c.id}`}>{c.sender_name}{c.sender_role ? ` (${c.sender_role})` : ""}</span>
+                : (c.wa_from || "whatsapp")}
+              {" · "}{timeAgo(c.created_at)}
+            </span>
           </div>
           <p className="text-sm font-semibold mt-2">{c.summary}</p>
           {c.intent && <p className="text-xs text-muted-foreground">Intent: {c.intent}</p>}

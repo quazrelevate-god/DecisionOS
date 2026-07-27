@@ -5247,8 +5247,39 @@ async def list_captures(status: str = "pending_review", user: dict = Depends(get
     if ids:
         for u in await db.users.find({"id": {"$in": ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(100):
             umap[u["id"]] = u["name"]
+
+    # Resolve the WhatsApp sender phone to a known employee (or contact) in this workspace,
+    # so the review queue shows a name + role instead of a raw number.
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0, "roles": 1})
+    role_labels = {"owner": "Owner"}
+    for r in (tenant or {}).get("roles", []) or []:
+        role_labels[r.get("key")] = r.get("label") or (r.get("key") or "").title()
+    phone_index = {}
+    for u in await db.users.find({"tenant_id": user["tenant_id"], "phone": {"$exists": True, "$ne": ""}},
+                                 {"_id": 0, "name": 1, "role": 1, "phone": 1}).to_list(2000):
+        key = _norm_phone(u.get("phone", ""))
+        if key:
+            phone_index[key] = {"name": u.get("name"), "role": u.get("role"),
+                                "role_label": role_labels.get(u.get("role"), (u.get("role") or "").title()),
+                                "kind": "employee"}
+    contact_index = {}
+    for ct in await db.contacts.find({"tenant_id": user["tenant_id"], "phone": {"$exists": True, "$ne": ""}},
+                                     {"_id": 0, "name": 1, "company": 1, "type": 1, "phone": 1}).to_list(2000):
+        key = _norm_phone(ct.get("phone", ""))
+        if key:
+            contact_index[key] = {"name": ct.get("name") or ct.get("company"),
+                                  "role_label": (ct.get("type") or "contact").title(), "kind": "contact"}
+
     for r in rows:
         r["assignee_name"] = umap.get(r.get("assignee_id"))
+        wa = r.get("wa_from")
+        if wa:
+            k = _norm_phone(wa)
+            sender = phone_index.get(k) or contact_index.get(k)
+            if sender:
+                r["sender_name"] = sender["name"]
+                r["sender_role"] = sender.get("role_label")
+                r["sender_kind"] = sender["kind"]
     return rows
 
 

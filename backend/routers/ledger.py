@@ -138,8 +138,8 @@ async def ai_extract_ledger_file(file_path: str, mime_type: str, kind: str, curr
     resp = None
     # Prefer the user's own Gemini key (same client server.py configures), else the Emergent vision key.
     try:
-        from server import _gemini_client, _gemini_doc_sync
-        if _gemini_client is not None:
+        from server import get_gemini_client, _gemini_doc_sync
+        if get_gemini_client() is not None:
             resp = await asyncio.to_thread(_gemini_doc_sync, file_path, mime_type, system, "Extract the JSON now.")
     except Exception as e:  # noqa: BLE001
         logger.warning(f"Ledger OCR (user gemini) failed, falling back to Emergent key: {e}")

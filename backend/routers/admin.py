@@ -4,6 +4,7 @@ user administration and health. Foundation imported from core.py."""
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 from typing import Optional
+from datetime import datetime, timezone, timedelta
 import asyncio
 
 from core import (
@@ -125,9 +126,88 @@ async def admin_tenants(admin: dict = Depends(get_platform_admin)):
             "created_at": t.get("created_at"),
             "users": users_n, "decisions": dec_n, "tasks": task_n,
             "last_activity": last.get("created_at") if last else None,
+            "suspended": bool(t.get("suspended")),
         })
     out.sort(key=lambda x: x.get("created_at") or "", reverse=True)
     return {"tenants": out}
+
+
+@router.post("/tenants/{tenant_id}/suspend")
+async def admin_suspend_tenant(tenant_id: str, admin: dict = Depends(get_platform_admin)):
+    t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "id": 1, "company_name": 1, "name": 1})
+    if not t:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    await db.tenants.update_one({"id": tenant_id}, {"$set": {"suspended": True}})
+    await db.users.update_many({"tenant_id": tenant_id}, {"$set": {"tenant_suspended": True}})
+    name = t.get("company_name") or t.get("name") or tenant_id
+    await log_admin_action(admin, "suspend_tenant", f"Suspended workspace {name}", "tenant", tenant_id)
+    return {"status": "ok", "suspended": True}
+
+
+@router.post("/tenants/{tenant_id}/reactivate")
+async def admin_reactivate_tenant(tenant_id: str, admin: dict = Depends(get_platform_admin)):
+    t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "id": 1, "company_name": 1, "name": 1})
+    if not t:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    await db.tenants.update_one({"id": tenant_id}, {"$set": {"suspended": False}})
+    await db.users.update_many({"tenant_id": tenant_id}, {"$unset": {"tenant_suspended": ""}})
+    name = t.get("company_name") or t.get("name") or tenant_id
+    await log_admin_action(admin, "reactivate_tenant", f"Reactivated workspace {name}", "tenant", tenant_id)
+    return {"status": "ok", "suspended": False}
+
+
+# --- AI usage / credit consumption per workspace ----------------------------
+def _range_cutoff(rng: str):
+    now = datetime.now(timezone.utc)
+    if rng == "today":
+        return now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    if rng == "7d":
+        return (now - timedelta(days=7)).isoformat()
+    if rng == "30d":
+        return (now - timedelta(days=30)).isoformat()
+    return None  # all-time
+
+
+@router.get("/usage")
+async def admin_usage(admin: dict = Depends(get_platform_admin), range: str = "30d"):
+    cutoff = _range_cutoff(range)
+    match = {} if cutoff is None else {"created_at": {"$gte": cutoff}}
+    pipeline = [
+        {"$match": match},
+        {"$group": {
+            "_id": "$tenant_id",
+            "calls": {"$sum": 1},
+            "tokens_in": {"$sum": "$tokens_in"},
+            "tokens_out": {"$sum": "$tokens_out"},
+            "tokens_total": {"$sum": "$tokens_total"},
+            "cost": {"$sum": "$cost_estimate"},
+        }},
+    ]
+    rows = await db.usage_events.aggregate(pipeline).to_list(2000)
+    tmap = {t["id"]: (t.get("company_name") or t.get("name") or "—")
+            for t in await db.tenants.find({}, {"_id": 0, "id": 1, "company_name": 1, "name": 1}).to_list(2000)}
+    workspaces, totals = [], {"calls": 0, "tokens_total": 0, "cost": 0.0}
+    for r in rows:
+        tid = r["_id"]
+        workspaces.append({
+            "tenant_id": tid,
+            "tenant_name": "System / Onboarding" if not tid else tmap.get(tid, "(deleted workspace)"),
+            "calls": r["calls"], "tokens_in": r["tokens_in"], "tokens_out": r["tokens_out"],
+            "tokens_total": r["tokens_total"], "cost_estimate": round(r["cost"], 4),
+        })
+        totals["calls"] += r["calls"]
+        totals["tokens_total"] += r["tokens_total"]
+        totals["cost"] += r["cost"]
+    workspaces.sort(key=lambda x: x["tokens_total"], reverse=True)
+    totals["cost"] = round(totals["cost"], 4)
+    return {"range": range, "totals": totals, "workspaces": workspaces}
+
+
+@router.get("/alerts")
+async def admin_alerts(admin: dict = Depends(get_platform_admin)):
+    active = await db.platform_alerts.find({"resolved": False}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    recent = await db.platform_alerts.find({"resolved": True}, {"_id": 0}).sort("resolved_at", -1).to_list(20)
+    return {"active": active, "recent": recent}
 
 
 # --- Users ------------------------------------------------------------------

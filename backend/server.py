@@ -29,7 +29,7 @@ from core import (
     db, client, logger, DEFAULT_ROLES,
     EMERGENT_LLM_KEY, CLAUDE_KEY, LLM_MODEL, VISION_MODEL,
     claude_key, get_ai_key, set_ai_keys, ai_key_source, mask_key,
-    claude_chat,
+    claude_chat, set_usage_tenant,
     AI_KEY_PROVIDERS, load_ai_keys_from_db,
     now_iso, new_id, _extract_json,
     hash_password, verify_password, create_token,
@@ -815,6 +815,7 @@ async def process_voice_note(note_id: str):
     if not note:
         return
     tenant_id = note["tenant_id"]
+    set_usage_tenant(tenant_id)
     try:
         await db.voice_notes.update_one({"id": note_id}, {"$set": {"status": "transcribing"}})
         transcript = note.get("transcript")
@@ -1028,6 +1029,7 @@ async def register(inp: RegisterInput, response: Response):
     if await db.users.find_one({"email": email}):
         raise HTTPException(status_code=400, detail="Email already registered")
     tenant_id = new_id()
+    set_usage_tenant(tenant_id)
     bp = normalize_os_blueprint(inp.os_blueprint) if inp.os_blueprint else None
     # Departments from the generated OS become the tenant's roles (single source of truth for RBAC).
     provided_roles = [r.model_dump() for r in (inp.roles or [])]
@@ -3452,7 +3454,30 @@ async def _followup_scheduler_loop():
             logger.info(f"[followup-scheduler] swept {len(tenant_ids)} tenant(s); next in {FOLLOWUP_INTERVAL_SECONDS}s")
         except Exception as e:
             logger.warning(f"[followup-scheduler] sweep failed: {e}")
+        try:
+            await _notify_provider_outages()
+        except Exception as e:
+            logger.warning(f"[followup-scheduler] outage-alert check failed: {e}")
         await asyncio.sleep(FOLLOWUP_INTERVAL_SECONDS)
+
+
+async def _notify_provider_outages():
+    """Email the platform super-admin once per new AI-provider outage alert."""
+    pending = await db.platform_alerts.find({"resolved": False, "notified": False}, {"_id": 0}).to_list(20)
+    if not pending:
+        return
+    admin_email = os.environ.get("SUPERADMIN_EMAIL", "admin@decisionos.biz").strip()
+    for a in pending:
+        subject = f"[DecisionOS] AI provider alert: {a['provider']} — {a.get('status')}"
+        html = (f"<h3>AI provider outage detected</h3>"
+                f"<p><b>Provider:</b> {a['provider']}<br/>"
+                f"<b>Status:</b> {a.get('status')}<br/>"
+                f"<b>Detail:</b> {a.get('message','')}</p>"
+                f"<p>Open the Admin Console → AI Keys to update the key or clear it so AI falls back to the Emergent universal key.</p>")
+        res = await send_email(admin_email, subject, html)
+        await db.platform_alerts.update_one({"id": a["id"]},
+            {"$set": {"notified": True, "notified_at": now_iso(), "notify_result": res.get("provider") or ("sent" if res.get("sent") else "mock")}})
+        logger.info(f"[outage-alert] notified admin about {a['provider']} ({a.get('status')})")
 
 
 @api.get("/notifications")
@@ -4880,6 +4905,7 @@ async def process_whatsapp_message(message: dict):
             logger.info(f"[WHATSAPP] no tenant for {sender}; ignoring")
             return
         await update_wa_event(ev_id, tenant_id=tenant_id)
+        set_usage_tenant(tenant_id)
         owner = await db.users.find_one({"tenant_id": tenant_id, "role": "owner"}, {"_id": 0, "id": 1})
         owner_id = owner["id"] if owner else "whatsapp"
         troles = await tenant_role_keys(tenant_id)
@@ -5609,6 +5635,8 @@ async def _bootstrap():
         await db.tasks.create_index("tenant_id")
         await db.workflows.create_index("tenant_id")
         await db.platform_admins.create_index("email", unique=True)
+        await db.usage_events.create_index([("tenant_id", 1), ("created_at", -1)])
+        await db.usage_events.create_index("created_at")
         await load_ai_keys_from_db()
         await seed_platform_admin()
         await seed_demo()

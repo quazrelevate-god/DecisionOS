@@ -2,15 +2,16 @@ import { useState, useEffect } from "react";
 import api from "../../lib/api";
 import AdminLogin from "./AdminLogin";
 import {
-  OverviewSection, AiKeysSection, TenantsSection, UsersSection, HealthSection, AuditSection,
+  OverviewSection, AiKeysSection, TenantsSection, UsersSection, HealthSection, AuditSection, UsageSection,
 } from "./AdminSections";
 import {
   ShieldStar, SquaresFour, Key, Buildings, Users, Pulse, SignOut, Spinner,
-  ClockCounterClockwise,
+  ClockCounterClockwise, ChartBar, WarningCircle,
 } from "@phosphor-icons/react";
 
 const TABS = [
   { key: "overview", label: "Overview", icon: SquaresFour, C: OverviewSection },
+  { key: "usage", label: "Usage", icon: ChartBar, C: UsageSection },
   { key: "ai-keys", label: "AI Keys", icon: Key, C: AiKeysSection },
   { key: "tenants", label: "Workspaces", icon: Buildings, C: TenantsSection },
   { key: "users", label: "Users", icon: Users, C: UsersSection },
@@ -21,10 +22,19 @@ const TABS = [
 export default function AdminPortal() {
   const [admin, setAdmin] = useState(undefined); // undefined=checking, null=logged out
   const [tab, setTab] = useState("overview");
+  const [alerts, setAlerts] = useState([]);
 
   useEffect(() => {
     api.get("/admin/me").then((r) => setAdmin(r.data)).catch(() => setAdmin(null));
   }, []);
+
+  useEffect(() => {
+    if (!admin) return;
+    const load = () => api.get("/admin/alerts").then((r) => setAlerts(r.data.active || [])).catch(() => {});
+    load();
+    const t = setInterval(load, 60000);
+    return () => clearInterval(t);
+  }, [admin]);
 
   const logout = async () => {
     try { await api.post("/admin/logout"); } catch (e) { /* ignore */ }
@@ -90,6 +100,23 @@ export default function AdminPortal() {
       </nav>
 
       <main className="max-w-6xl mx-auto px-5 py-8">
+        {alerts.length > 0 && (
+          <div data-testid="admin-alert-banner"
+            className="mb-6 border-2 border-[#e5484d] bg-[#e5484d]/10 p-4 flex items-start gap-3">
+            <WarningCircle size={22} weight="fill" className="text-[#e5484d] shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <div className="font-heading font-black uppercase text-[#e5484d] text-sm tracking-tight">
+                AI Provider Alert{alerts.length > 1 ? `s (${alerts.length})` : ""}
+              </div>
+              {alerts.map((a) => (
+                <div key={a.id} className="font-mono text-xs text-white/70 mt-1">
+                  <span className="uppercase text-white/90">{a.provider}</span> — {(a.status || "").replace(/_/g, " ")}.
+                  {" "}Update or clear the key in <button onClick={() => setTab("ai-keys")} className="underline text-[#e5484d]">AI Keys</button> to restore service.
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <Active />
       </main>
     </div>

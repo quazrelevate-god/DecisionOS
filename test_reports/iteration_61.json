@@ -1,0 +1,31 @@
+{
+  "summary": "Frontend-only test of DecisionOS admin console new features (Usage tab, workspace suspend/reactivate, outage alert banner, audit log) plus tenant owner regression. All admin UI features verified working. Sharma Textiles workspace was suspended and immediately reactivated as required. Regression: owner@sharma.com login works and dashboard loads (86 tasks visible).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verified_features": [
+    "Admin login at /admin with admin@decisionos.biz lands on admin-portal",
+    "Usage tab: 3 cards render (3 AI Calls, 31.9k Tokens, $0.11 Est Cost); per-workspace table shows Sharma Textiles row with 3 calls, 31.1k in, 790 out, $0.1051",
+    "Usage time-range buttons (today/7d/30d/all) all clickable, refetch without error; all show 3 calls in this env (all Sharma /ask calls fall inside today)",
+    "Workspaces tab: 27 tenant rows, Status column + Suspend button present on each. Clicking Suspend on Sharma flipped status to 'suspended' and swapped to Reactivate button; clicking Reactivate restored 'active' + Suspend button. Toast 'Workspace reactivated' displayed.",
+    "Sharma Textiles left in ACTIVE state (verified by owner login regression working)",
+    "Outage alert banner: absent in normal state (as expected, no forced key failure)",
+    "Audit Log tab shows new entries: 'Suspended workspace Sharma Textiles Pvt Ltd · SUSPEND TENANT' and 'Reactivated workspace Sharma Textiles Pvt Ltd · REACTIVATE TENANT' with correct timestamps and admin@decisionos.biz actor",
+    "All existing tabs render (Overview, AI Keys, Users, Health)",
+    "REGRESSION: owner@sharma.com / demo1234 logs in successfully, redirected to /inbox, dashboard renders with tasks + workspace name 'Sharma Textiles Pvt Ltd'"
+  ],
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {"backend": "not tested (skipped per request)", "frontend": "100%"},
+  "test_credentials": "admin@decisionos.biz/DecisionOS@2026; owner@sharma.com/demo1234",
+  "seed_data_creation": "None (2 audit entries generated as byproduct of test: suspend+reactivate Sharma)",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Admin console at /admin uses cookie dos_admin_token; login form uses input[type=email]/[type=password] + button[type=submit]. Sharma tenant id: ae79cf8b-d407-494b-94b9-32daf017bb7a. Audit log labels action types with human-readable spaces+uppercase (e.g. 'SUSPEND TENANT') rather than raw enum strings.",
+  "rca of the issue": "N/A - no issues found"
+}

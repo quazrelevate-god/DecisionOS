@@ -5,6 +5,7 @@ import {
   Buildings, Users, Brain, CheckSquare, Lightning, ArrowsClockwise,
   PencilSimple, Prohibit, ArrowClockwise, ShieldCheck, Spinner, Circle,
   SignIn, SignOut, Key as KeyIcon, ClockCounterClockwise,
+  ChartBar, CurrencyDollar, WarningCircle, Coins,
 } from "@phosphor-icons/react";
 
 // --- shared bits ------------------------------------------------------------
@@ -192,12 +193,118 @@ export function AiKeysSection() {
   );
 }
 
+// --- Usage / credit consumption per workspace -------------------------------
+const RANGES = [
+  { key: "today", label: "Today" },
+  { key: "7d", label: "7 Days" },
+  { key: "30d", label: "30 Days" },
+  { key: "all", label: "All Time" },
+];
+
+function fmtNum(n) {
+  if (n == null) return "0";
+  if (n >= 1e6) return (n / 1e6).toFixed(2) + "M";
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + "k";
+  return String(n);
+}
+
+export function UsageSection() {
+  const [range, setRange] = useState("30d");
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    api.get(`/admin/usage?range=${range}`).then((r) => { setData(r.data); setLoading(false); }).catch(() => setLoading(false));
+  }, [range]);
+
+  return (
+    <div data-testid="admin-usage">
+      <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+        <h2 className={H2}>AI Credit Usage</h2>
+        <div className="flex gap-1" data-testid="usage-range">
+          {RANGES.map((r) => (
+            <button key={r.key} data-testid={`usage-range-${r.key}`} onClick={() => setRange(r.key)}
+              className={`font-mono text-[11px] uppercase tracking-wider px-3 py-1.5 border transition-colors ${
+                range === r.key ? "bg-[#e5484d] border-[#e5484d] text-white" : "border-white/20 text-white/60 hover:border-white/40"}`}>
+              {r.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <p className="font-mono text-[11px] text-white/35 mb-5">
+        Estimated from tokens processed (~chars/4) at Claude Sonnet rates — an approximation, not exact provider billing.
+      </p>
+      {loading || !data ? <Loading /> : (
+        <>
+          <div className="grid grid-cols-3 gap-3 mb-6">
+            <div className={CARD} data-testid="usage-total-calls">
+              <ChartBar size={20} className="text-[#e5484d] mb-2" weight="bold" />
+              <div className="font-heading text-3xl font-black text-white tracking-tighter">{fmtNum(data.totals.calls)}</div>
+              <div className="font-mono text-[11px] uppercase tracking-widest text-white/40 mt-1">AI Calls</div>
+            </div>
+            <div className={CARD} data-testid="usage-total-tokens">
+              <Coins size={20} className="text-[#d29922] mb-2" weight="bold" />
+              <div className="font-heading text-3xl font-black text-white tracking-tighter">{fmtNum(data.totals.tokens_total)}</div>
+              <div className="font-mono text-[11px] uppercase tracking-widest text-white/40 mt-1">Tokens</div>
+            </div>
+            <div className={CARD} data-testid="usage-total-cost">
+              <CurrencyDollar size={20} className="text-[#3fb950] mb-2" weight="bold" />
+              <div className="font-heading text-3xl font-black text-white tracking-tighter">${data.totals.cost.toFixed(2)}</div>
+              <div className="font-mono text-[11px] uppercase tracking-widest text-white/40 mt-1">Est. Cost</div>
+            </div>
+          </div>
+          {data.workspaces.length === 0 ? (
+            <div className={CARD + " text-white/40 font-mono text-sm"}>No AI usage recorded in this period.</div>
+          ) : (
+            <div className="overflow-x-auto border border-white/10">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-[#141418] font-mono text-[10px] uppercase tracking-widest text-white/40">
+                    <th className="p-3">Workspace</th><th className="p-3 text-right">Calls</th>
+                    <th className="p-3 text-right">Tokens In</th><th className="p-3 text-right">Tokens Out</th>
+                    <th className="p-3 text-right">Total</th><th className="p-3 text-right">Est. Cost</th>
+                  </tr>
+                </thead>
+                <tbody className="font-mono text-xs text-white/80">
+                  {data.workspaces.map((w) => (
+                    <tr key={w.tenant_id || "system"} className="border-t border-white/5 hover:bg-white/[0.03]" data-testid={`usage-row-${w.tenant_id || "system"}`}>
+                      <td className="p-3 text-white font-semibold">{w.tenant_name}</td>
+                      <td className="p-3 text-right">{fmtNum(w.calls)}</td>
+                      <td className="p-3 text-right text-white/50">{fmtNum(w.tokens_in)}</td>
+                      <td className="p-3 text-right text-white/50">{fmtNum(w.tokens_out)}</td>
+                      <td className="p-3 text-right text-[#d29922]">{fmtNum(w.tokens_total)}</td>
+                      <td className="p-3 text-right text-[#3fb950]">${w.cost_estimate.toFixed(4)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 // --- Tenants ----------------------------------------------------------------
 export function TenantsSection() {
   const [rows, setRows] = useState(null);
-  useEffect(() => {
+  const load = useCallback(() => {
     api.get("/admin/tenants").then((r) => setRows(r.data.tenants)).catch(() => {});
   }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const act = async (id, action) => {
+    try {
+      await api.post(`/admin/tenants/${id}/${action}`);
+      toast.success(action === "suspend" ? "Workspace suspended" : "Workspace reactivated");
+      load();
+    } catch (e) {
+      toast.error(formatApiError(e.response?.data?.detail));
+    }
+  };
+
   if (!rows) return <Loading />;
   const fmt = (d) => (d ? new Date(d).toLocaleDateString() : "—");
   return (
@@ -209,7 +316,8 @@ export function TenantsSection() {
             <tr className="bg-[#141418] font-mono text-[10px] uppercase tracking-widest text-white/40">
               <th className="p-3">Workspace</th><th className="p-3">Industry</th>
               <th className="p-3 text-right">Users</th><th className="p-3 text-right">Decisions</th>
-              <th className="p-3 text-right">Tasks</th><th className="p-3">Created</th><th className="p-3">Last Active</th>
+              <th className="p-3 text-right">Tasks</th><th className="p-3">Created</th>
+              <th className="p-3">Status</th><th className="p-3">Actions</th>
             </tr>
           </thead>
           <tbody className="font-mono text-xs text-white/80">
@@ -221,7 +329,24 @@ export function TenantsSection() {
                 <td className="p-3 text-right">{t.decisions}</td>
                 <td className="p-3 text-right">{t.tasks}</td>
                 <td className="p-3 text-white/50">{fmt(t.created_at)}</td>
-                <td className="p-3 text-white/50">{fmt(t.last_activity)}</td>
+                <td className="p-3">
+                  {t.suspended
+                    ? <span className="text-[#e5484d]">suspended</span>
+                    : <span className="text-[#3fb950]">active</span>}
+                </td>
+                <td className="p-3">
+                  {t.suspended ? (
+                    <button data-testid={`tenant-reactivate-${t.id}`} onClick={() => act(t.id, "reactivate")}
+                      className={BTN + " border-[#3fb950]/50 text-[#3fb950] hover:bg-[#3fb950]/10 py-1 flex items-center gap-1"}>
+                      <ArrowClockwise size={12} /> Reactivate
+                    </button>
+                  ) : (
+                    <button data-testid={`tenant-suspend-${t.id}`} onClick={() => act(t.id, "suspend")}
+                      className={BTN + " border-[#e5484d]/50 text-[#e5484d] hover:bg-[#e5484d]/10 py-1 flex items-center gap-1"}>
+                      <Prohibit size={12} /> Suspend
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

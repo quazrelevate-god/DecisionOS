@@ -330,10 +330,14 @@ async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[l
     prompt = f"Founder directive transcript:\n\"\"\"\n{transcript}\n\"\"\"\n"
     if extra_context:
         prompt += (
-            "\nThe founder also attached reference material (a photo/PDF/Word/Excel document). "
-            "Its contents have already been read for you below. Use it TOGETHER with the directive to "
-            "produce a sharper decision, tasks, deadlines and workflows. If the directive is empty, "
-            "treat the attached document as the PRIMARY input and derive the appropriate decision and tasks from it.\n"
+            "\nThe founder also attached reference material (a photo/PDF/Word/Excel — e.g. a business card, "
+            "a list, an order, a screenshot). Its full contents have already been read for you below. Use it "
+            "TOGETHER with the directive: pull the concrete facts out of it (names, phone numbers, emails, "
+            "company, addresses, dates, amounts, items) and put the relevant ones INTO the task description(s) so "
+            "the assignee has everything they need. If the directive names a person (e.g. 'fix the appointment, "
+            "Priya'), delegate the task to that person and include the attachment's details (e.g. the contact's "
+            "name, phone and email from a business card) in that task's description. If the directive is empty, "
+            "treat the attached document as the PRIMARY input and derive the decision and tasks from it.\n"
             f"ATTACHED REFERENCE CONTENT:\n\"\"\"\n{extra_context[:6000]}\n\"\"\"\n"
         )
     prompt += "Extract the structured JSON now."
@@ -606,6 +610,61 @@ def _gemini_doc_sync(file_path: str, mime_type: str, system: str, user_text: str
     ti = getattr(um, "prompt_token_count", 0) or 0
     to = getattr(um, "candidates_token_count", 0) or 0
     return (resp.text or "", ti, to)
+
+
+
+def _gemini_read_sync(file_path: str, mime_type: str, system: str, user_text: str):
+    """General plain-text vision read (no JSON constraint). Returns (text, tokens_in, tokens_out)."""
+    import pathlib
+    from google.genai import types as _gtypes
+    resp = get_gemini_client().models.generate_content(
+        model=VISION_MODEL[1],
+        contents=[
+            _gtypes.Part.from_bytes(data=pathlib.Path(file_path).read_bytes(), mime_type=mime_type),
+            user_text,
+        ],
+        config=_gtypes.GenerateContentConfig(system_instruction=system),
+    )
+    um = getattr(resp, "usage_metadata", None)
+    ti = getattr(um, "prompt_token_count", 0) or 0
+    to = getattr(um, "candidates_token_count", 0) or 0
+    return (resp.text or "", ti, to)
+
+
+_IMAGE_READ_SYSTEM = (
+    "You are a vision reader. Look at the attached image or document and TRANSCRIBE and DESCRIBE everything "
+    "a person would need, verbatim. Capture ALL readable content: names, job titles, company names, phone "
+    "numbers, emails, websites, addresses, dates, amounts, line items, table rows, headings and any handwritten "
+    "or printed text. If it is a business/visiting card, clearly list the person's name, title, company, phone(s), "
+    "email, website and address. If it is a list or table, preserve the rows. Never invent anything not in the image. "
+    "Return a concise PLAIN-TEXT extraction — no JSON, no commentary."
+)
+
+
+async def ai_read_image_general(file_path: str, mime_type: str, session_id: str) -> str:
+    """Read ANY image/PDF into plain text (business cards, notes, lists, screenshots, documents)."""
+    user_text = "Read this file and output all of its content as plain text."
+    if get_gemini_client() is not None:
+        try:
+            text, ti, to = await asyncio.to_thread(_gemini_read_sync, file_path, mime_type, _IMAGE_READ_SYSTEM, user_text)
+            await log_usage((session_id or "read").split("-")[0], "gemini", model=VISION_MODEL[1],
+                            tokens_in=ti, tokens_out=to, units=1, unit_type="document")
+            if (text or "").strip():
+                return text.strip()
+        except Exception as e:
+            logger.warning(f"Gemini general-read (user key) failed; falling back: {e}")
+    try:
+        fc = FileContentWithMimeType(file_path=file_path, mime_type=mime_type)
+        chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=session_id or "read",
+                       system_message=_IMAGE_READ_SYSTEM).with_model(*VISION_MODEL)
+        resp = await chat.send_message(UserMessage(text=user_text, file_contents=[fc]))
+        await log_usage((session_id or "read").split("-")[0], "gemini", model=VISION_MODEL[1],
+                        tokens_in=_est_tokens(_IMAGE_READ_SYSTEM + user_text), tokens_out=_est_tokens(resp or ""),
+                        units=1, unit_type="document")
+        return (resp or "").strip()
+    except Exception as e:
+        logger.warning(f"general image read failed: {e}")
+        return ""
 
 
 
@@ -3927,7 +3986,7 @@ async def _analyze_reference_file(tenant_id, task_id, rec):
         tmp = _os.path.join(tempfile.gettempdir(), f"ref_{rec['id']}.{ext}")
         with open(tmp, "wb") as f:
             f.write(data)
-        raw = await ai_extract_document(tmp, ctype, session_id=f"ref-{task_id}")
+        raw = await ai_read_image_general(tmp, ctype, session_id=f"ref-{task_id}")
         try:
             _os.remove(tmp)
         except OSError:
@@ -3970,7 +4029,7 @@ async def _read_reference_text(rec: dict, tenant_id: str = "") -> str:
         logger.warning(f"[capture-ref] could not fetch {rec.get('id')}: {e}")
         return ""
     try:
-        # Images & PDFs -> reuse the Gemini document reader.
+        # Images & PDFs -> general vision reader (business cards, lists, notes, invoices — anything).
         if ctype.startswith("image/") or ctype == "application/pdf":
             import tempfile, os as _os
             ext = fname.rsplit(".", 1)[-1] if "." in fname else "bin"
@@ -3978,14 +4037,11 @@ async def _read_reference_text(rec: dict, tenant_id: str = "") -> str:
             with open(tmp, "wb") as f:
                 f.write(data)
             try:
-                out = await ai_extract_document(tmp, ctype, session_id=f"capref-{tenant_id}")
+                text = await ai_read_image_general(tmp, ctype, session_id=f"capref-{tenant_id}")
             finally:
                 try: _os.remove(tmp)
                 except OSError: pass
-            parts = [out.get("summary", "")]
-            for r in (out.get("records") or [])[:20]:
-                parts.append(json.dumps(r, default=str))
-            return f"[{fname}]\n" + "\n".join(p for p in parts if p)
+            return f"[{fname}]\n" + (text or "")
         # Excel / CSV -> parse to a compact text table.
         if ctype in ("text/csv",) or fname.lower().endswith(".csv"):
             import pandas as pd, io as _io

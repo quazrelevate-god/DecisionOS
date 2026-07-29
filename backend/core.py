@@ -97,7 +97,13 @@ def claude_key() -> str:
 import contextvars  # noqa: E402
 _ctx_tenant = contextvars.ContextVar("dos_tenant", default=None)
 
-# Rough Claude Sonnet USD rates ($/1M tokens) — an estimate, not real billing.
+# Rough per-provider rates ($/1M tokens: input, output) — estimates, not real billing.
+_PROVIDER_RATES = {
+    "anthropic": (3.0, 15.0),   # Claude Sonnet
+    "emergent": (3.0, 15.0),    # Emergent proxies Claude Sonnet
+    "gemini": (0.30, 2.50),     # Gemini 2.5 Flash
+}
+_OPENAI_STT_PER_MIN = 0.006     # transcription $/minute (approx)
 _COST_IN_PER_M = 3.0
 _COST_OUT_PER_M = 15.0
 
@@ -111,20 +117,36 @@ def _est_tokens(text: str) -> int:
     return max(0, len(text or "") // 4)
 
 
-async def _record_usage(tenant_id, session_id, provider, system, message, resp):
+def _est_cost(provider: str, tokens_in: int, tokens_out: int) -> float:
+    ri, ro = _PROVIDER_RATES.get(provider, (_COST_IN_PER_M, _COST_OUT_PER_M))
+    return tokens_in / 1e6 * ri + tokens_out / 1e6 * ro
+
+
+async def log_usage(feature, provider, *, tenant_id=None, model=None,
+                    tokens_in=0, tokens_out=0, units=0, unit_type=None, cost=None):
+    """Record one AI usage event for any provider (Claude/OpenAI/Gemini). tenant_id
+    defaults to the request-scoped context var. Never raises."""
     try:
-        feature = (session_id or "misc").split("-")[0]
-        in_text = f"{system or ''} {getattr(message, 'text', '') or ''}"
-        ti, to = _est_tokens(in_text), _est_tokens(resp or "")
-        cost = ti / 1e6 * _COST_IN_PER_M + to / 1e6 * _COST_OUT_PER_M
+        tid = tenant_id or _ctx_tenant.get()
+        ti, to = int(tokens_in or 0), int(tokens_out or 0)
+        if cost is None:
+            cost = _est_cost(provider, ti, to)
         await db.usage_events.insert_one({
-            "id": new_id(), "tenant_id": tenant_id or None, "feature": feature,
-            "provider": provider, "model": LLM_MODEL[1],
+            "id": new_id(), "tenant_id": tid or None, "feature": feature,
+            "provider": provider, "model": model,
             "tokens_in": ti, "tokens_out": to, "tokens_total": ti + to,
+            "units": units or 0, "unit_type": unit_type,
             "cost_estimate": round(cost, 6), "created_at": now_iso(),
         })
     except Exception as e:  # never let logging break an AI call
         logger.debug(f"usage log failed: {e}")
+
+
+async def _record_usage(tenant_id, session_id, provider, system, message, resp):
+    feature = (session_id or "misc").split("-")[0]
+    in_text = f"{system or ''} {getattr(message, 'text', '') or ''}"
+    await log_usage(feature, provider, tenant_id=tenant_id, model=LLM_MODEL[1],
+                    tokens_in=_est_tokens(in_text), tokens_out=_est_tokens(resp or ""))
 
 
 async def _record_provider_alert(provider, message):

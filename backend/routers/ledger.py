@@ -17,7 +17,7 @@ from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithM
 
 from core import (
     db, CLAUDE_KEY, claude_key, claude_chat, LLM_MODEL, EMERGENT_LLM_KEY, VISION_MODEL,
-    _extract_json, new_id, now_iso, logger,
+    _extract_json, new_id, now_iso, logger, log_usage, _est_tokens,
     get_current_user, user_perms, log_activity,
 )
 
@@ -140,7 +140,9 @@ async def ai_extract_ledger_file(file_path: str, mime_type: str, kind: str, curr
     try:
         from server import get_gemini_client, _gemini_doc_sync
         if get_gemini_client() is not None:
-            resp = await asyncio.to_thread(_gemini_doc_sync, file_path, mime_type, system, "Extract the JSON now.")
+            resp, _gti, _gto = await asyncio.to_thread(_gemini_doc_sync, file_path, mime_type, system, "Extract the JSON now.")
+            await log_usage(f"ledger-ocr-{kind}", "gemini", model=VISION_MODEL[1],
+                            tokens_in=_gti, tokens_out=_gto, units=1, unit_type="document")
     except Exception as e:  # noqa: BLE001
         logger.warning(f"Ledger OCR (user gemini) failed, falling back to Emergent key: {e}")
         resp = None
@@ -149,6 +151,9 @@ async def ai_extract_ledger_file(file_path: str, mime_type: str, kind: str, curr
         chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=f"ledger-ocr-{kind}-{new_id()}",
                        system_message=system).with_model(*VISION_MODEL)
         resp = await chat.send_message(UserMessage(text="Extract the JSON now.", file_contents=[fc]))
+        await log_usage(f"ledger-ocr-{kind}", "gemini", model=VISION_MODEL[1],
+                        tokens_in=_est_tokens(system), tokens_out=_est_tokens(resp or ""),
+                        units=1, unit_type="document")
     return _extract_json(resp) or {}
 
 

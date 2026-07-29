@@ -200,6 +200,17 @@ const RANGES = [
   { key: "30d", label: "30 Days" },
   { key: "all", label: "All Time" },
 ];
+const PROVIDERS = [
+  { key: "all", label: "All" },
+  { key: "anthropic", label: "Claude" },
+  { key: "emergent", label: "Claude (Emergent)" },
+  { key: "openai", label: "OpenAI STT" },
+  { key: "gemini", label: "Gemini OCR" },
+];
+const PROVIDER_LABEL = {
+  anthropic: "Claude (your key)", emergent: "Claude (Emergent)",
+  openai: "OpenAI transcription", gemini: "Gemini document OCR", unknown: "Unknown",
+};
 
 function fmtNum(n) {
   if (n == null) return "0";
@@ -210,17 +221,20 @@ function fmtNum(n) {
 
 export function UsageSection() {
   const [range, setRange] = useState("30d");
+  const [provider, setProvider] = useState("all");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
-    api.get(`/admin/usage?range=${range}`).then((r) => { setData(r.data); setLoading(false); }).catch(() => setLoading(false));
-  }, [range]);
+    api.get(`/admin/usage?range=${range}&provider=${provider}`)
+      .then((r) => { setData(r.data); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [range, provider]);
 
   return (
     <div data-testid="admin-usage">
-      <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <h2 className={H2}>AI Credit Usage</h2>
         <div className="flex gap-1" data-testid="usage-range">
           {RANGES.map((r) => (
@@ -232,8 +246,18 @@ export function UsageSection() {
           ))}
         </div>
       </div>
+      <div className="flex gap-1 mb-4 flex-wrap" data-testid="usage-provider-filter">
+        {PROVIDERS.map((p) => (
+          <button key={p.key} data-testid={`usage-provider-${p.key}`} onClick={() => setProvider(p.key)}
+            className={`font-mono text-[10px] uppercase tracking-wider px-2.5 py-1 border transition-colors ${
+              provider === p.key ? "bg-white/10 border-white/40 text-white" : "border-white/10 text-white/40 hover:border-white/25"}`}>
+            {p.label}
+          </button>
+        ))}
+      </div>
       <p className="font-mono text-[11px] text-white/35 mb-5">
-        Estimated from tokens processed (~chars/4) at Claude Sonnet rates — an approximation, not exact provider billing.
+        Covers all providers — Claude (text), OpenAI (voice transcription) & Gemini (document OCR). Costs are estimates
+        (tokens ≈ chars/4; STT by audio duration), not exact provider billing.
       </p>
       {loading || !data ? <Loading /> : (
         <>
@@ -254,6 +278,22 @@ export function UsageSection() {
               <div className="font-mono text-[11px] uppercase tracking-widest text-white/40 mt-1">Est. Cost</div>
             </div>
           </div>
+
+          {data.by_provider && data.by_provider.length > 0 && (
+            <div className="mb-6" data-testid="usage-by-provider">
+              <h3 className="font-mono text-[11px] uppercase tracking-widest text-white/40 mb-3">By Provider</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {data.by_provider.map((p) => (
+                  <div key={p.provider} className={CARD} data-testid={`usage-provider-card-${p.provider}`}>
+                    <div className="font-heading font-black uppercase text-white text-xs tracking-tight">{PROVIDER_LABEL[p.provider] || p.provider}</div>
+                    <div className="font-mono text-[11px] text-white/50 mt-2">{fmtNum(p.calls)} calls · {fmtNum(p.tokens_total)} tok</div>
+                    <div className="font-mono text-sm text-[#3fb950] mt-1">${p.cost_estimate.toFixed(4)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {data.workspaces.length === 0 ? (
             <div className={CARD + " text-white/40 font-mono text-sm"}>No AI usage recorded in this period.</div>
           ) : (

@@ -29,7 +29,7 @@ from core import (
     db, client, logger, DEFAULT_ROLES,
     EMERGENT_LLM_KEY, CLAUDE_KEY, LLM_MODEL, VISION_MODEL,
     claude_key, get_ai_key, set_ai_keys, ai_key_source, mask_key,
-    claude_chat, set_usage_tenant,
+    claude_chat, set_usage_tenant, log_usage, _est_tokens, _OPENAI_STT_PER_MIN,
     AI_KEY_PROVIDERS, load_ai_keys_from_db,
     now_iso, new_id, _extract_json,
     hash_password, verify_password, create_token,
@@ -576,7 +576,8 @@ def wa_phone_id() -> str:
     return get_ai_key("wa_phone_number_id")
 
 
-def _gemini_doc_sync(file_path: str, mime_type: str, system: str, user_text: str) -> str:
+def _gemini_doc_sync(file_path: str, mime_type: str, system: str, user_text: str):
+    """Returns (text, tokens_in, tokens_out) so callers can log usage."""
     import pathlib
     from google.genai import types as _gtypes
     resp = get_gemini_client().models.generate_content(
@@ -587,7 +588,10 @@ def _gemini_doc_sync(file_path: str, mime_type: str, system: str, user_text: str
         ],
         config=_gtypes.GenerateContentConfig(system_instruction=system, response_mime_type="application/json"),
     )
-    return resp.text or ""
+    um = getattr(resp, "usage_metadata", None)
+    ti = getattr(um, "prompt_token_count", 0) or 0
+    to = getattr(um, "candidates_token_count", 0) or 0
+    return (resp.text or "", ti, to)
 
 
 
@@ -617,6 +621,7 @@ async def transcribe_audio(path: str, language: str = "auto") -> str:
                 kwargs["prompt"] = prompt
             with open(path, "rb") as f:
                 resp = await _openai_stt_client.audio.transcriptions.create(file=f, **kwargs)
+            await _log_stt_usage(resp.text, OPENAI_STT_MODEL)
             return resp.text
         except Exception as e:
             logger.warning(f"OpenAI STT ({OPENAI_STT_MODEL}) failed; falling back to Whisper (Emergent key): {e}")
@@ -629,7 +634,16 @@ async def transcribe_audio(path: str, language: str = "auto") -> str:
         kwargs["prompt"] = prompt
     with open(path, "rb") as f:
         resp = await stt.transcribe(file=f, **kwargs)
+    await _log_stt_usage(resp.text, "whisper-1")
     return resp.text
+
+
+async def _log_stt_usage(transcript: str, model: str):
+    # STT bills by audio duration; estimate ~15 chars/sec of speech from the transcript.
+    secs = max(1, len(transcript or "") / 15)
+    await log_usage("transcribe", "openai", model=model,
+                    units=round(secs), unit_type="audio_sec",
+                    cost=secs / 60 * _OPENAI_STT_PER_MIN)
 
 
 def match_member_by_name(members: list, name: str):
@@ -3867,7 +3881,9 @@ async def ai_extract_document(file_path: str, mime_type: str, session_id: str, c
     # Prefer the user's own Gemini key via the official google-genai SDK.
     if get_gemini_client() is not None:
         try:
-            resp = await asyncio.to_thread(_gemini_doc_sync, file_path, mime_type, system, user_text)
+            resp, _gti, _gto = await asyncio.to_thread(_gemini_doc_sync, file_path, mime_type, system, user_text)
+            await log_usage((session_id or "ocr").split("-")[0], "gemini", model=VISION_MODEL[1],
+                            tokens_in=_gti, tokens_out=_gto, units=1, unit_type="document")
         except Exception as e:
             logger.warning(f"Gemini OCR (user key) failed; falling back to Emergent key: {e}")
             resp = None
@@ -3877,6 +3893,9 @@ async def ai_extract_document(file_path: str, mime_type: str, session_id: str, c
         chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=session_id,
                        system_message=system).with_model(*VISION_MODEL)
         resp = await chat.send_message(UserMessage(text=user_text, file_contents=[fc]))
+        await log_usage((session_id or "ocr").split("-")[0], "gemini", model=VISION_MODEL[1],
+                        tokens_in=_est_tokens(system + user_text), tokens_out=_est_tokens(resp or ""),
+                        units=1, unit_type="document")
     data = _extract_json(resp)
     return {
         "summary": data.get("summary", ""),

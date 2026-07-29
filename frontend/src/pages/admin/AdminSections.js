@@ -573,3 +573,89 @@ export function HealthSection() {
     </div>
   );
 }
+
+
+// --- Maintenance ------------------------------------------------------------
+export function MaintenanceSection() {
+  const [job, setJob] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(() => {
+    api.get("/admin/reclassify-purchases/status").then((r) => setJob(r.data)).catch(() => {});
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  // Poll while a job is running.
+  useEffect(() => {
+    if (job?.status !== "running") return;
+    const t = setInterval(load, 2500);
+    return () => clearInterval(t);
+  }, [job?.status, load]);
+
+  const start = async () => {
+    if (!window.confirm("Re-run AI classification on EVERY workspace's purchase bills and move mis-booked ones into the correct ledger (Expense / Asset / Inventory)? This updates live data.")) return;
+    setBusy(true);
+    try {
+      const { data } = await api.post("/admin/reclassify-purchases");
+      toast.success(data.already_running ? "A re-classification is already running." : "Re-classification started across all workspaces.");
+      load();
+    } catch (e) { toast.error(formatApiError(e.response?.data?.detail)); }
+    finally { setBusy(false); }
+  };
+
+  const running = job?.status === "running";
+  const totals = job?.totals || {};
+  const pct = job?.total ? Math.round((job.processed / job.total) * 100) : 0;
+
+  return (
+    <div data-testid="admin-maintenance">
+      <h2 className={H2 + " mb-2"}>Fix Mis-booked Purchases</h2>
+      <p className="font-mono text-xs text-white/50 mb-5 max-w-2xl leading-relaxed">
+        Re-runs the AI classifier over every filed purchase bill in ALL workspaces and moves the
+        mis-booked ones into the correct ledger bucket — a bill for machinery becomes an Asset, raw
+        material becomes Inventory, and the rest stay as Expenses. Bills the AI still can't judge are
+        flagged for manual review. Safe to run more than once.
+      </p>
+
+      <button data-testid="admin-reclassify-start" onClick={start} disabled={busy || running}
+        className={BTN + " border-[#e5484d] text-[#e5484d] hover:bg-[#e5484d] hover:text-white disabled:opacity-40 flex items-center gap-2"}>
+        {running ? <Spinner size={14} className="animate-spin" /> : <ArrowClockwise size={14} weight="bold" />}
+        {running ? "Running…" : busy ? "Starting…" : "Re-classify all purchases"}
+      </button>
+
+      {job && job.status !== "none" && (
+        <div className={CARD + " mt-6"} data-testid="admin-reclassify-status">
+          <div className="flex items-center justify-between mb-3">
+            <span className="font-heading font-black uppercase text-white text-sm tracking-tight">
+              {running ? "In progress" : "Last run"}
+            </span>
+            <span className="font-mono text-[11px] uppercase" style={{ color: running ? "#d29922" : "#3fb950" }}>
+              {job.status} · {job.processed}/{job.total} workspaces {running ? `(${pct}%)` : ""}
+            </span>
+          </div>
+          {running && (
+            <div className="h-1.5 bg-white/10 mb-4 overflow-hidden">
+              <div className="h-full bg-[#e5484d] transition-all" style={{ width: `${pct}%` }} />
+            </div>
+          )}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {[
+              { k: "reviewed", label: "Bills reviewed" },
+              { k: "to_asset", label: "→ Assets" },
+              { k: "to_inventory", label: "→ Inventory" },
+              { k: "kept_expense", label: "Kept as Expense" },
+              { k: "unknown", label: "Needs manual review" },
+              { k: "unchanged", label: "Already correct" },
+            ].map((c) => (
+              <div key={c.k} className="border border-white/10 p-3" data-testid={`reclassify-stat-${c.k}`}>
+                <div className="font-heading text-2xl font-black text-white tracking-tighter">{totals[c.k] ?? 0}</div>
+                <div className="font-mono text-[10px] uppercase tracking-widest text-white/40 mt-1">{c.label}</div>
+              </div>
+            ))}
+          </div>
+          {job.started_by && <p className="font-mono text-[10px] text-white/30 mt-3">Started by {job.started_by}</p>}
+        </div>
+      )}
+    </div>
+  );
+}

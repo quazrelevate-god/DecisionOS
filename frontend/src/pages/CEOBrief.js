@@ -6,7 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import { Chip } from "../components/common";
 import { money } from "../lib/format";
 import { toast } from "sonner";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { Clock, CheckCircle, Stamp, UserMinus, Warning, CurrencyInr, XCircle, ArrowClockwise, CaretRight, Fire, BookOpen, ListChecks, WarningCircle, ArrowBendUpRight, Sparkle, Paperclip, Gauge, Receipt, HandCoins, Coins } from "@phosphor-icons/react";
 
 const PERIODS = [
@@ -102,6 +102,7 @@ function DetailDialog({ row, period, open, onClose }) {
             {row?.icon && <row.icon size={22} weight="bold" className={row.accent} />}
             {row?.label}
           </DialogTitle>
+          <DialogDescription className="sr-only">Details for {row?.label}</DialogDescription>
         </DialogHeader>
 
         {isLoading ? (

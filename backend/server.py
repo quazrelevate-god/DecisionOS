@@ -545,6 +545,8 @@ async def ai_step_assist(task: dict, step_text: str, industry: str, session_id: 
 
 
 OPENAI_STT_MODEL = os.environ.get("OPENAI_STT_MODEL", "gpt-4o-transcribe").strip() or "gpt-4o-transcribe"
+SARVAM_API_KEY = os.environ.get("SARVAM_API_KEY", "").strip()
+SARVAM_STT_MODEL = os.environ.get("SARVAM_STT_MODEL", "saaras:v3").strip() or "saaras:v3"
 
 # OpenAI STT + Gemini OCR clients are created lazily from the CURRENT runtime key
 # (so a platform-admin key update takes effect without a restart).
@@ -681,9 +683,37 @@ def _stt_lang_prompt(language: str):
     return lang, prompt
 
 
+def _sarvam_stt_sync(path: str) -> dict:
+    """Sarvam speech-to-text (saaras:v3) with auto language detection + translate-to-English.
+    REST endpoint handles audio under ~30s; raises on error so the caller can fall back."""
+    import requests
+    with open(path, "rb") as f:
+        r = requests.post(
+            "https://api.sarvam.ai/speech-to-text",
+            headers={"api-subscription-key": SARVAM_API_KEY},
+            files={"file": (os.path.basename(path), f, "audio/webm")},
+            data={"model": SARVAM_STT_MODEL, "mode": "translate", "language_code": "unknown"},
+            timeout=90,
+        )
+    r.raise_for_status()
+    return r.json()
+
+
 async def transcribe_audio(path: str, language: str = "auto") -> str:
+    # Primary: Sarvam saaras:v3 — auto-detects the spoken language (Tamil/Tanglish/English/…) and
+    # translates the transcript to English in one call. (language param is ignored — auto-detect.)
+    if SARVAM_API_KEY:
+        try:
+            out = await asyncio.to_thread(_sarvam_stt_sync, path)
+            transcript = (out.get("transcript") or "").strip()
+            if transcript:
+                await _log_stt_usage(transcript, f"sarvam:{SARVAM_STT_MODEL}", provider="sarvam")
+                return transcript
+            logger.warning("Sarvam STT returned empty transcript; falling back to OpenAI.")
+        except Exception as e:
+            logger.warning(f"Sarvam STT failed (audio may exceed 30s REST limit); falling back to OpenAI: {e}")
     lang, prompt = _stt_lang_prompt(language)
-    # Prefer the user's own OpenAI key + newer transcription model (gpt-4o-transcribe).
+    # Fallback: the user's own OpenAI key + gpt-4o-transcribe.
     _openai_stt_client = get_openai_stt_client()
     if _openai_stt_client is not None:
         try:
@@ -698,7 +728,7 @@ async def transcribe_audio(path: str, language: str = "auto") -> str:
             return resp.text
         except Exception as e:
             logger.warning(f"OpenAI STT ({OPENAI_STT_MODEL}) failed; falling back to Whisper (Emergent key): {e}")
-    # Fallback: Whisper via the Emergent universal key (keeps voice capture working if the key is missing/invalid).
+    # Final fallback: Whisper via the Emergent universal key.
     stt = OpenAISpeechToText(api_key=EMERGENT_LLM_KEY)
     kwargs = {"model": "whisper-1", "response_format": "json"}
     if lang:
@@ -711,10 +741,10 @@ async def transcribe_audio(path: str, language: str = "auto") -> str:
     return resp.text
 
 
-async def _log_stt_usage(transcript: str, model: str):
+async def _log_stt_usage(transcript: str, model: str, provider: str = "openai"):
     # STT bills by audio duration; estimate ~15 chars/sec of speech from the transcript.
     secs = max(1, len(transcript or "") / 15)
-    await log_usage("transcribe", "openai", model=model,
+    await log_usage("transcribe", provider, model=model,
                     units=round(secs), unit_type="audio_sec",
                     cost=secs / 60 * _OPENAI_STT_PER_MIN)
 

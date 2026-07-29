@@ -625,7 +625,7 @@ export default function Inbox() {
                 {recording ? <Stop size={38} weight="fill" /> : <Microphone size={38} weight="fill" />}
               </button>
               <p className="mt-4 font-heading font-bold uppercase tracking-tight">{recording ? (paused ? t("inbox.paused") : t("inbox.recording")) : busy ? t("inbox.thinking") : t("inbox.tap_to_speak")}</p>
-              <p className="font-mono text-sm text-muted-foreground mt-1" data-testid="record-timer">{recording ? mmss : "AI structures it into tasks"}</p>
+              <p className="font-mono text-sm text-muted-foreground mt-1" data-testid="record-timer">{recording ? mmss : "Speak in any language — AI writes it up in English"}</p>
               {recording && (
                 <div className="flex flex-wrap items-center justify-center gap-2 mt-3">
                   {paused ? (
@@ -649,12 +649,6 @@ export default function Inbox() {
                   </button>
                 </div>
               )}
-              <div className="flex border border-black mt-4" data-testid="language-selector">
-                {[{ key: "auto", label: "Auto" }, { key: "en", label: "EN" }, { key: "ta", label: "தமிழ்" }, { key: "tanglish", label: "Tanglish" }].map((l) => (
-                  <button key={l.key} onClick={() => setLanguage(l.key)} data-testid={`lang-${l.key}`}
-                    className={`px-3 py-1.5 text-xs font-semibold border-r border-black last:border-r-0 transition-colors ${language === l.key ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>{l.label}</button>
-                ))}
-              </div>
               <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
                 <button onClick={() => voiceAttachRef.current?.click()} data-testid="voice-attach-file"
                   className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider border border-black px-3 py-1.5 hover:bg-brand-yellow transition-colors">

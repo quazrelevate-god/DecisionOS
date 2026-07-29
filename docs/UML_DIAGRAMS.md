@@ -312,9 +312,9 @@ sequenceDiagram
   API->>Claude: ai_generate_lexicon(industry, roles, desc)
   API->>Claude: ai_generate_operating_model(industry, roles, desc)
   Claude-->>API: lexicon + operating_model
-  API->>Mongo: insert tenants {roles, operating_model, lexicon, templates}
-  API->>Mongo: insert users {owner, bcrypt hash, role=owner}
-  API-->>FE: Set-Cookie dos_token + {tenant, os_summary}
+  API->>Mongo: insert tenants {roles, operating_owner}
+  API-->>FE: Set-Cookie dos_token + {tenant, os_summary}model, lexicon, templates}
+  API->>Mongo: insert users {owner, bcrypt hash, role=
   Note over API,Mongo: No new DB/tables created.<br/>Company config lives in the tenants document;<br/>all future rows carry tenant_id.
 ```
 

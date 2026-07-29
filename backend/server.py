@@ -134,6 +134,7 @@ class TextNoteInput(BaseModel):
     text: str
     title: Optional[str] = None
     language: Optional[str] = "auto"
+    file_ids: Optional[List[str]] = None
 
 
 TASK_TYPES = {"operational", "sales", "purchase", "production", "finance", "hr", "other"}
@@ -270,7 +271,7 @@ async def add_inbox_item(tenant_id, created_by, source, classification, title,
 # AI helpers
 # ---------------------------------------------------------------------------
 async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[list] = None, members: Optional[list] = None,
-                     pipelines: Optional[list] = None, task_categories: Optional[list] = None) -> dict:
+                     pipelines: Optional[list] = None, task_categories: Optional[list] = None, extra_context: str = "") -> dict:
     roles = allowed_roles or ["owner", "sales", "operations", "finance"]
     roles_str = ",".join(roles)
     pipelines = pipelines or DEFAULT_OPERATING_MODEL["pipelines"]
@@ -326,7 +327,16 @@ async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[l
         "for the same person that cannot be part of the same guided checklist. Put the fuller scope in the task's \"description\". "
         "Pick assignee_role ONLY from the provided role list. Infer sensible owners and due dates. If nothing applies, use empty arrays."
     )
-    prompt = f"Founder directive transcript:\n\"\"\"\n{transcript}\n\"\"\"\nExtract the structured JSON now."
+    prompt = f"Founder directive transcript:\n\"\"\"\n{transcript}\n\"\"\"\n"
+    if extra_context:
+        prompt += (
+            "\nThe founder also attached reference material (a photo/PDF/Word/Excel document). "
+            "Its contents have already been read for you below. Use it TOGETHER with the directive to "
+            "produce a sharper decision, tasks, deadlines and workflows. If the directive is empty, "
+            "treat the attached document as the PRIMARY input and derive the appropriate decision and tasks from it.\n"
+            f"ATTACHED REFERENCE CONTENT:\n\"\"\"\n{extra_context[:6000]}\n\"\"\"\n"
+        )
+    prompt += "Extract the structured JSON now."
     chat = claude_chat(session_id=session_id, system_message=system).with_model(*LLM_MODEL)
     resp = await chat.send_message(UserMessage(text=prompt))
     try:
@@ -846,8 +856,21 @@ async def process_voice_note(note_id: str):
         members = await db.users.find({"tenant_id": tenant_id}, {"_id": 0, "id": 1, "name": 1, "role": 1}).to_list(200)
         om = await tenant_operating_model(tenant_id)
         cat_keys = {c["key"] for c in om["task_categories"]}
+        # Read any attached reference files so the AI factors them into the decision.
+        ref_ids = note.get("reference_file_ids") or []
+        extra_context = ""
+        if ref_ids:
+            chunks = []
+            for fid in ref_ids:
+                frec = await db.files.find_one({"id": fid, "tenant_id": tenant_id, "is_deleted": False}, {"_id": 0})
+                if frec:
+                    txt = await _read_reference_text(frec, tenant_id)
+                    if txt:
+                        chunks.append(txt)
+            extra_context = "\n\n".join(chunks)
         extracted = await ai_extract(transcript or "", session_id=f"extract-{note_id}", allowed_roles=sorted(troles),
-                                     members=members, pipelines=om["pipelines"], task_categories=om["task_categories"])
+                                     members=members, pipelines=om["pipelines"], task_categories=om["task_categories"],
+                                     extra_context=extra_context)
 
         decision_id = new_id()
         dlist = extracted.get("decisions", [])
@@ -869,6 +892,10 @@ async def process_voice_note(note_id: str):
             "task_ids": [],
         }
         task_ids, assignee_keys = await _create_decision_tasks(tenant_id, note, decision_id, extracted, troles, members, cat_keys)
+        # Attach the uploaded reference file(s) to every task this directive produced (context for assignees).
+        if ref_ids and task_ids:
+            for tid in task_ids:
+                await _attach_reference_ids(tenant_id, note["created_by"], tid, ref_ids)
         decision["task_ids"] = task_ids
         decision["timeline"] = [{"ts": now_iso(), "label": f"Decision captured via {note.get('source') or note.get('kind') or 'voice'}", "actor": note.get("raised_by_name") or "Owner", "kind": "created"}]
         await db.decisions.insert_one(decision)
@@ -1729,16 +1756,18 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 
 
 @api.post("/voice-notes")
-async def create_voice_note(background: BackgroundTasks, file: UploadFile = File(...), language: str = Form("auto"), user: dict = Depends(require_perm("voice_capture"))):
+async def create_voice_note(background: BackgroundTasks, file: UploadFile = File(...), language: str = Form("auto"), file_ids: str = Form(""), user: dict = Depends(require_perm("voice_capture"))):
     note_id = new_id()
     ext = (file.filename or "audio.webm").split(".")[-1]
     path = UPLOAD_DIR / f"{note_id}.{ext}"
     content = await file.read()
     with open(path, "wb") as f:
         f.write(content)
+    ref_ids = [x for x in (file_ids or "").split(",") if x.strip()]
     await db.voice_notes.insert_one({
         "id": note_id, "tenant_id": user["tenant_id"], "created_by": user["id"],
         "kind": "audio", "audio_path": str(path), "transcript": None, "language": language,
+        "reference_file_ids": ref_ids,
         "status": "queued", "created_at": now_iso(),
     })
     background.add_task(process_voice_note, note_id)
@@ -1770,9 +1799,14 @@ async def transcribe_only(file: UploadFile = File(...), language: str = Form("au
 @api.post("/voice-notes/text")
 async def create_text_note(inp: TextNoteInput, background: BackgroundTasks, user: dict = Depends(require_perm("voice_capture"))):
     note_id = new_id()
+    ref_ids = [x for x in (inp.file_ids or []) if x]
+    if not (inp.text or "").strip() and not ref_ids:
+        raise HTTPException(status_code=400, detail="Provide a directive or attach a file")
     await db.voice_notes.insert_one({
         "id": note_id, "tenant_id": user["tenant_id"], "created_by": user["id"],
-        "kind": "text", "audio_path": None, "transcript": inp.text, "language": inp.language or "auto",
+        "kind": "text" if (inp.text or "").strip() else "file", "audio_path": None,
+        "transcript": inp.text, "language": inp.language or "auto",
+        "reference_file_ids": ref_ids,
         "status": "queued", "created_at": now_iso(),
     })
     background.add_task(process_voice_note, note_id)
@@ -3923,6 +3957,57 @@ async def _analyze_reference_file(tenant_id, task_id, rec):
         logger.info(f"[reference-ai] enriched task {task_id} from {rec.get('original_filename')}")
     except Exception as e:
         logger.warning(f"[reference-ai] analysis failed for task {task_id}: {e}")
+
+
+async def _read_reference_text(rec: dict, tenant_id: str = "") -> str:
+    """Read an attached reference file into plain text so the AI can factor it into a directive.
+    Images/PDFs -> Gemini OCR summary; Excel/CSV -> parsed rows; Word/txt -> extracted text."""
+    try:
+        ctype = (rec.get("content_type") or "").lower()
+        fname = rec.get("original_filename", "file")
+        data, _ = await obj_store.get_object(rec["storage_path"])
+    except Exception as e:
+        logger.warning(f"[capture-ref] could not fetch {rec.get('id')}: {e}")
+        return ""
+    try:
+        # Images & PDFs -> reuse the Gemini document reader.
+        if ctype.startswith("image/") or ctype == "application/pdf":
+            import tempfile, os as _os
+            ext = fname.rsplit(".", 1)[-1] if "." in fname else "bin"
+            tmp = _os.path.join(tempfile.gettempdir(), f"capref_{rec['id']}.{ext}")
+            with open(tmp, "wb") as f:
+                f.write(data)
+            try:
+                out = await ai_extract_document(tmp, ctype, session_id=f"capref-{tenant_id}")
+            finally:
+                try: _os.remove(tmp)
+                except OSError: pass
+            parts = [out.get("summary", "")]
+            for r in (out.get("records") or [])[:20]:
+                parts.append(json.dumps(r, default=str))
+            return f"[{fname}]\n" + "\n".join(p for p in parts if p)
+        # Excel / CSV -> parse to a compact text table.
+        if ctype in ("text/csv",) or fname.lower().endswith(".csv"):
+            import pandas as pd, io as _io
+            df = pd.read_csv(_io.BytesIO(data), nrows=200)
+            return f"[{fname}]\n" + df.to_csv(index=False)[:6000]
+        if fname.lower().endswith((".xlsx", ".xls")) or "spreadsheet" in ctype or "excel" in ctype:
+            import pandas as pd, io as _io
+            df = pd.read_excel(_io.BytesIO(data), nrows=200)
+            return f"[{fname}]\n" + df.to_csv(index=False)[:6000]
+        # Word.
+        if fname.lower().endswith(".docx") or "wordprocessingml" in ctype:
+            import docx, io as _io
+            doc = docx.Document(_io.BytesIO(data))
+            text = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+            return f"[{fname}]\n" + text[:6000]
+        # Plain text.
+        if ctype.startswith("text/") or fname.lower().endswith(".txt"):
+            return f"[{fname}]\n" + data.decode("utf-8", errors="ignore")[:6000]
+    except Exception as e:
+        logger.warning(f"[capture-ref] read failed for {fname}: {e}")
+    return ""
+
 
 
 @api.get("/files/{fname}")

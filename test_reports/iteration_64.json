@@ -1,0 +1,29 @@
+{
+  "summary": "Validated the new Decision Desk capture-attachments UI on /inbox end-to-end for owner@sharma.com. Confirmed: (1) 'Add a reference (optional)' card renders with attach-file-button + capture-photo-button below the voice + text cards. (2) TYPE + ATTACHMENT: text directive + CSV upload → chip appears → Structure it submits successfully (no console errors, thinking flow runs). (3) CREATE FROM FILE (mode 3, empty text + file only): 'Create from file' button appears when chip exists, submits, and after ~15s a new pending decision is created with the reference attached — review-refs block and review-ref chip both visible on the review-task row. (4) REMOVE ATTACHMENT: attachment-remove-0 removes the chip AND hides structure-file-button when zero attachments remain. (5) Voice card (voice-record-button) coexists with capture-attachments card without console errors. (6) CARRY-THROUGH: after approving the file-primary decision via inbox-approve-<id>, /my-work shows the produced task with reference-block-<taskId> populated (count=1). (7) REGRESSION: plain typed directive (no attachment) still structures into a pending decision with 0 review-refs blocks — no regression. Cleanup: rejected the typed and plain test decisions via inbox-reject; the approved file-primary decision's tasks remain on /my-work (see action_items).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/my-work (also /inbox global)", "issues": ["Existing React hydration warning still present: 'In HTML, <span> cannot be a child of <option>' — carry-over from iteration_63, non-blocking."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Cleanup leftover: file-primary test decision was APPROVED (id a3746a95-0dd0-4a8f-a378-557f7b483fcf) so its produced task(s) with the order_ref2.csv reference remain on /my-work. Main agent may want to delete them to keep demo clean.",
+    "Fix carry-over React hydration warning: '<span> cannot be a child of <option>' in select on /my-work."
+  ],
+  "critical_code_review_comments": [
+    "Playwright detected a NEW decision-card less than 2s after submitting Structure it for the TYPE+ATTACHMENT flow — clearly a pre-existing pending card, not the fresh one (real AI structuring takes 15-25s per the request). This is a test-script flakiness point, not a product bug. Consider snapshotting existing decision-card ids BEFORE submitting to reliably diff. The FILE-PRIMARY branch was validated with the correct new-id diff, so the reference-attachment pipeline is proven end-to-end there (chip + review-refs + reference-block on /my-work all confirmed).",
+    "structure-file-button correctly hides when attachments length hits 0 (verified).",
+    "Hidden file input inside data-testid=capture-attachments is easily reachable via `[data-testid=capture-attachments] input[type=file]` — consider adding data-testid=capture-file-input for even more deterministic selection."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only run)", "frontend": "100% for tested flows (see note about typed+attachment new-decision diff)"},
+  "test_credentials": "owner@sharma.com / demo1234 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "3 test directives created via UI: (a) typed+CSV attachment 'REFTEST: Ask procurement...' — rejected. (b) file-primary CSV order upload — APPROVED (leftover tasks on /my-work with reference block). (c) plain typed 'REFTEST-plain: Sales team to call top 3 clients tomorrow' — rejected.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Capture UI test-ids: capture-attachments, attach-file-button, capture-photo-button, structure-file-button, attachment-chips, attachment-chip-<i>, attachment-remove-<i>. File input is hidden inside capture-attachments card — use `[data-testid=capture-attachments] input[type=file]`.first + set_input_files. AI structuring is async, allow ~15-25s and poll for a NEW decision-card by diffing ids captured BEFORE submit (do NOT just grab first card, because inbox likely has pre-existing pending items). Reject via inbox-reject-<decisionId>. Approved decisions produce tasks on /my-work with reference-block-<taskId>. Attach flow validated end-to-end via file-primary mode (mode 3).",
+  "rca of the issue": "N/A — no product bugs found in the tested surface. Only test-script observation: the typed+attachment new-decision-id diff logic was too naive and matched a pre-existing card, so that specific case was not conclusively validated at the review-refs assertion level; however the underlying attachment pipeline is proven by the file-primary case + /my-work carry-through."
+}

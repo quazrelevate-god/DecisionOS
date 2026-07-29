@@ -16,7 +16,7 @@ import {
   UsersThree, Truck, Receipt, CurrencyCircleDollar, Warning, CheckSquare,
   SealCheck, Bell, Brain, Check, X, ArrowClockwise, User, UserPlus, Question,
   WarningCircle, ArrowBendUpRight, ChatCircleText, Eye, Pause, Play, PencilSimple,
-  Paperclip, File as FileIcon, ShieldCheck,
+  Paperclip, File as FileIcon, ShieldCheck, Camera, UploadSimple,
 } from "@phosphor-icons/react";
 
 function SwipeRow({ children, onLeft, onRight, rightLabel = "View", testid }) {
@@ -361,8 +361,13 @@ export default function Inbox() {
   const [filter, setFilter] = useState("all");
   const [submittedNoteId, setSubmittedNoteId] = useState(null);
   const [execPanel, setExecPanel] = useState(null);
+  const [attachments, setAttachments] = useState([]);
+  const attachRef = useRef(null);
+  const cameraRef = useRef(null);
   const languageRef = useRef("auto");
   languageRef.current = language;
+  const attachmentsRef = useRef([]);
+  attachmentsRef.current = attachments;
   const mediaRef = useRef(null);
   const chunksRef = useRef([]);
   const cancelledRef = useRef(false);
@@ -409,8 +414,11 @@ export default function Inbox() {
         fd.append("language", languageRef.current);
         setBusy(true);
         try {
+          const refIds = await uploadRefs();
+          if (refIds.length) fd.append("file_ids", refIds.join(","));
           const { data } = await api.post("/voice-notes", fd, { headers: { "Content-Type": "multipart/form-data" } });
           if (data?.id) setSubmittedNoteId(data.id);
+          setAttachments([]);
           toast.success("Got it — thinking…");
           refresh();
         } catch { toast.error("Upload failed"); } finally { setBusy(false); }
@@ -426,15 +434,36 @@ export default function Inbox() {
   const pauseRec = () => { if (mediaRef.current?.state === "recording") { mediaRef.current.pause(); setPaused(true); } };
   const resumeRec = () => { if (mediaRef.current?.state === "paused") { mediaRef.current.resume(); setPaused(false); } };
 
+  const uploadRefs = async () => {
+    const files = attachmentsRef.current || [];
+    const ids = [];
+    for (const f of files) {
+      const fd = new FormData();
+      fd.append("file", f, f.name);
+      fd.append("kind", "reference");
+      try {
+        const { data } = await api.post("/files", fd, { headers: { "Content-Type": "multipart/form-data" } });
+        if (data?.id) ids.push(data.id);
+      } catch { toast.error(`Couldn't upload "${f.name}"`); }
+    }
+    return ids;
+  };
+
   const runCapture = async (finalText) => {
     setBusy(true);
     try {
-      const { data } = await api.post("/voice-notes/text", { text: finalText, language });
+      const file_ids = await uploadRefs();
+      const { data } = await api.post("/voice-notes/text", { text: finalText, language, file_ids });
       if (data?.id) setSubmittedNoteId(data.id);
-      setText(""); setClarify(null); setAnswers({});
+      setText(""); setClarify(null); setAnswers({}); setAttachments([]);
       toast.success("Got it — thinking…");
       refresh();
-    } catch { toast.error("Submit failed"); } finally { setBusy(false); }
+    } catch (e) { toast.error(e.response?.data?.detail || "Submit failed"); } finally { setBusy(false); }
+  };
+
+  const structureFiles = async () => {
+    if (!(attachmentsRef.current || []).length) return toast.error("Attach a file first");
+    await runCapture("");
   };
 
   // When the just-submitted directive finishes structuring, reveal the Execution Summary.
@@ -644,6 +673,45 @@ export default function Inbox() {
                 className="mt-3 flex items-center gap-2 bg-brand-red text-white px-5 py-2.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all disabled:opacity-50">
                 <PaperPlaneTilt size={16} weight="bold" /> {checking ? "Checking…" : "Structure it"}
               </button>
+            )}
+          </div>
+          <div className="card-brutal p-5 lg:col-span-2" data-testid="capture-attachments">
+            <div className="flex items-start gap-2 mb-3">
+              <Paperclip size={16} weight="bold" className="text-brand-blue mt-0.5 shrink-0" />
+              <div>
+                <p className="font-heading font-bold uppercase tracking-tight text-sm">Add a reference (optional)</p>
+                <p className="text-xs text-muted-foreground">Attach an image, PDF, Word or Excel to give the AI more context for your directive — or tap “Create from file” to build a decision from the file alone. Everything still goes to Review &amp; Approve.</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={() => attachRef.current?.click()} data-testid="attach-file-button"
+                className="flex items-center gap-2 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-black/5 transition-colors">
+                <UploadSimple size={16} weight="bold" /> Upload image / PDF / doc
+              </button>
+              <input ref={attachRef} type="file" multiple accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" className="hidden"
+                onChange={(e) => { setAttachments((prev) => [...prev, ...Array.from(e.target.files || [])]); e.target.value = ""; }} />
+              <button onClick={() => cameraRef.current?.click()} data-testid="capture-photo-button"
+                className="flex items-center gap-2 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-black/5 transition-colors">
+                <Camera size={16} weight="bold" /> Capture photo
+              </button>
+              <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) setAttachments((prev) => [...prev, f]); e.target.value = ""; }} />
+              {attachments.length > 0 && (
+                <button onClick={structureFiles} disabled={busy} data-testid="structure-file-button"
+                  className="flex items-center gap-2 bg-brand-blue text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-50">
+                  <Brain size={16} weight="bold" /> Create from file
+                </button>
+              )}
+            </div>
+            {attachments.length > 0 && (
+              <ul className="mt-3 flex flex-wrap gap-2" data-testid="attachment-chips">
+                {attachments.map((f, i) => (
+                  <li key={i} data-testid={`attachment-chip-${i}`} className="inline-flex items-center gap-1.5 border border-brand-blue/40 bg-brand-blue/[0.06] text-brand-blue px-2.5 py-1 text-xs font-mono max-w-[220px]">
+                    <FileIcon size={12} weight="bold" /> <span className="truncate">{f.name}</span>
+                    <button onClick={() => setAttachments(attachments.filter((_, j) => j !== i))} data-testid={`attachment-remove-${i}`} className="ml-0.5 hover:text-brand-red"><X size={12} weight="bold" /></button>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
         </div>

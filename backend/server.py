@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field, EmailStr
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
 from emergentintegrations.llm.openai import OpenAISpeechToText
+import obj_store
 
 from core import (
     db, client, logger, DEFAULT_ROLES,
@@ -156,6 +157,8 @@ class TaskCreateInput(BaseModel):
     approval_required: Optional[bool] = False
     approver_id: Optional[str] = None
     progress: Optional[int] = None
+    evidence_required: Optional[bool] = False
+    reference_file_ids: Optional[List[str]] = None
 
 
 class TaskUpdateInput(BaseModel):
@@ -164,6 +167,7 @@ class TaskUpdateInput(BaseModel):
     assignee_role: Optional[str] = None
     priority: Optional[str] = None
     progress: Optional[int] = None
+    evidence_required: Optional[bool] = None
 
 
 class WorkflowCreateInput(BaseModel):
@@ -2418,7 +2422,7 @@ async def list_tasks(status: Optional[str] = None, mine: Optional[bool] = False,
 
 
 @api.post("/tasks")
-async def create_task(inp: TaskCreateInput, user: dict = Depends(get_current_user)):
+async def create_task(inp: TaskCreateInput, background: BackgroundTasks, user: dict = Depends(get_current_user)):
     tid = new_id()
     due = None
     if inp.due_date:
@@ -2451,8 +2455,11 @@ async def create_task(inp: TaskCreateInput, user: dict = Depends(get_current_use
         "expected_output": inp.expected_output or None, "approval_required": needs_approval,
         "approval_status": "pending" if needs_approval else None,
         "approver_id": approver_id, "progress": progress, "created_by": user["id"],
+        "evidence_required": bool(inp.evidence_required),
         "updated_at": now_iso(), "last_action": "Created",
     })
+    if inp.reference_file_ids:
+        await _attach_reference_ids(user["tenant_id"], user["id"], tid, inp.reference_file_ids, background)
     if needs_approval:
         approvers = [approver_id] if approver_id else await _approver_ids(user["tenant_id"])
         await push_notification(user["tenant_id"], approvers, 2,
@@ -2489,6 +2496,12 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
         updates["progress"] = max(0, min(100, int(updates["progress"])))
     if updates.get("status") == "done":
         updates["progress"] = 100
+    # Completion-evidence gate: tasks flagged evidence_required need >=1 evidence file before "done".
+    if updates.get("status") == "done" and t.get("evidence_required"):
+        has_ev = any((a or {}).get("kind") == "evidence" for a in (t.get("attachments") or []))
+        if not has_ev:
+            raise HTTPException(status_code=400,
+                                detail="This task requires completion evidence — attach at least one file before marking it done.")
     # Pre-execution approval gate: a task requiring approval is locked (status "blocked")
     # until the approver approves it. The assignee cannot change status/progress before then.
     if t.get("approval_required") and t.get("approval_status") != "approved":
@@ -3784,18 +3797,131 @@ async def brief_details(key: str, period: str = "morning", user: dict = Depends(
 
 
 
+ATTACH_ALLOWED_EXT = {"jpg", "jpeg", "png", "gif", "webp", "heic", "pdf", "doc", "docx", "xls", "xlsx", "csv", "txt"}
+ATTACH_MAX_BYTES = 25 * 1024 * 1024  # 25 MB
+
+
+async def _store_file(tenant_id, user_id, upload, kind, task_id=None):
+    """Persist an uploaded file to Object Storage + a `files` DB record. Returns the record."""
+    ext = (upload.filename or "file.bin").rsplit(".", 1)[-1].lower() if "." in (upload.filename or "") else "bin"
+    if ext not in ATTACH_ALLOWED_EXT:
+        raise HTTPException(status_code=400, detail=f"Unsupported file type .{ext}")
+    data = await upload.read()
+    if len(data) > ATTACH_MAX_BYTES:
+        raise HTTPException(status_code=400, detail="File too large (max 25MB)")
+    fid = new_id()
+    path = f"{obj_store.APP_NAME}/{tenant_id}/{fid}.{ext}"
+    content_type = upload.content_type or obj_store.guess_mime(upload.filename)
+    result = await obj_store.put_object(path, data, content_type)
+    rec = {
+        "id": fid, "tenant_id": tenant_id, "storage_path": result.get("path", path),
+        "original_filename": upload.filename or f"{fid}.{ext}", "content_type": content_type,
+        "size": result.get("size", len(data)), "kind": kind, "task_id": task_id,
+        "uploaded_by": user_id, "is_deleted": False, "created_at": now_iso(),
+    }
+    await db.files.insert_one(dict(rec))
+    rec.pop("_id", None)
+    return rec
+
+
+def _file_public(rec):
+    return {"id": rec["id"], "kind": rec.get("kind"), "filename": rec.get("original_filename"),
+            "content_type": rec.get("content_type"), "size": rec.get("size"),
+            "url": f"/api/files/{rec['id']}/download", "at": rec.get("created_at"), "by": rec.get("uploaded_by")}
+
+
+@api.post("/files")
+async def upload_file(file: UploadFile = File(...), kind: str = Form("reference"),
+                      user: dict = Depends(get_current_user)):
+    """Generic upload (used to stage reference files before/at task creation)."""
+    rec = await _store_file(user["tenant_id"], user["id"], file, kind if kind in ("reference", "evidence") else "reference")
+    return _file_public(rec)
+
+
+@api.get("/files/{file_id}/download")
+async def download_file(file_id: str, user: dict = Depends(get_current_user)):
+    from fastapi.responses import Response
+    rec = await db.files.find_one({"id": file_id, "tenant_id": user["tenant_id"], "is_deleted": False}, {"_id": 0})
+    if not rec:
+        # legacy local-disk fallback (older attachments stored a bare filename)
+        raise HTTPException(status_code=404, detail="Not found")
+    data, ctype = await obj_store.get_object(rec["storage_path"])
+    fname = rec.get("original_filename", file_id)
+    return Response(content=data, media_type=rec.get("content_type", ctype),
+                    headers={"Content-Disposition": f'inline; filename="{fname}"'})
+
+
 @api.post("/tasks/{task_id}/attachment")
-async def upload_task_attachment(task_id: str, file: UploadFile = File(...), kind: str = Form("photo"), user: dict = Depends(get_current_user)):
+async def upload_task_attachment(task_id: str, file: UploadFile = File(...), kind: str = Form("evidence"),
+                                 background: BackgroundTasks = None, user: dict = Depends(get_current_user)):
     t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]})
     if not t:
         raise HTTPException(status_code=404, detail="Not found")
-    ext = (file.filename or "file.bin").split(".")[-1]
-    fname = f"att_{task_id}_{new_id()}.{ext}"
-    with open(UPLOAD_DIR / fname, "wb") as f:
-        f.write(await file.read())
-    att = {"kind": kind, "filename": fname, "url": f"/api/files/{fname}", "at": now_iso()}
-    await db.tasks.update_one({"id": task_id}, {"$push": {"attachments": att}, "$set": {"updated_at": now_iso(), "last_action": "Attachment added"}})
+    kind = kind if kind in ("reference", "evidence", "photo", "voice") else "evidence"
+    rec = await _store_file(user["tenant_id"], user["id"], file, kind, task_id=task_id)
+    att = _file_public(rec)
+    await db.tasks.update_one({"id": task_id}, {"$push": {"attachments": att},
+                              "$set": {"updated_at": now_iso(), "last_action": f"{kind.title()} attached"}})
+    if kind == "reference" and background is not None:
+        background.add_task(_analyze_reference_file, user["tenant_id"], task_id, rec)
     return att
+
+
+async def _attach_reference_ids(tenant_id, user_id, task_id, file_ids, background=None):
+    """Link previously-staged reference files (POST /files) to a task."""
+    for fid in (file_ids or []):
+        rec = await db.files.find_one({"id": fid, "tenant_id": tenant_id, "is_deleted": False}, {"_id": 0})
+        if not rec:
+            continue
+        await db.files.update_one({"id": fid}, {"$set": {"task_id": task_id, "kind": "reference"}})
+        rec["kind"] = "reference"
+        await db.tasks.update_one({"id": task_id}, {"$push": {"attachments": _file_public(rec)}})
+        if background is not None:
+            background.add_task(_analyze_reference_file, tenant_id, task_id, rec)
+
+
+async def _analyze_reference_file(tenant_id, task_id, rec):
+    """AI-analyse an attached reference (image/PDF) and enrich the task with context."""
+    try:
+        ctype = rec.get("content_type", "")
+        if not (ctype.startswith("image/") or ctype == "application/pdf"):
+            return  # Phase 1: analyse images & PDFs only
+        data, _ = await obj_store.get_object(rec["storage_path"])
+        import tempfile, os as _os
+        ext = rec.get("original_filename", "f.bin").rsplit(".", 1)[-1]
+        tmp = _os.path.join(tempfile.gettempdir(), f"ref_{rec['id']}.{ext}")
+        with open(tmp, "wb") as f:
+            f.write(data)
+        raw = await ai_extract_document(tmp, ctype, session_id=f"ref-{task_id}")
+        try:
+            _os.remove(tmp)
+        except OSError:
+            pass
+        text = (raw if isinstance(raw, str) else str(raw))[:4000]
+        if not text.strip():
+            return
+        task = await db.tasks.find_one({"id": task_id}, {"_id": 0, "title": 1, "description": 1})
+        if not task:
+            return
+        system = ("You help a team understand a reference file attached to a task. In 1-2 sentences, "
+                  "explain what the file contains and how it informs the task. Then list up to 3 concrete "
+                  'action points. Return JSON: {"summary": "...", "points": ["..."]}')
+        prompt = f"TASK: {task.get('title')}\n\nREFERENCE FILE CONTENT:\n{text}"
+        chat = claude_chat(session_id=f"ref-insight-{task_id}", system_message=system,
+                           tenant_id=tenant_id).with_model(*LLM_MODEL)
+        resp = await chat.send_message(UserMessage(text=prompt))
+        parsed = _extract_json(resp) or {}
+        summary = (parsed.get("summary") or "").strip()
+        points = [p for p in (parsed.get("points") or []) if p][:3]
+        if not summary:
+            return
+        note = {"file_id": rec["id"], "filename": rec.get("original_filename"),
+                "summary": summary, "points": points, "at": now_iso()}
+        await db.tasks.update_one({"id": task_id}, {"$push": {"reference_insights": note},
+                                  "$set": {"updated_at": now_iso()}})
+        logger.info(f"[reference-ai] enriched task {task_id} from {rec.get('original_filename')}")
+    except Exception as e:
+        logger.warning(f"[reference-ai] analysis failed for task {task_id}: {e}")
 
 
 @api.get("/files/{fname}")
@@ -5656,6 +5782,11 @@ async def _bootstrap():
         await db.platform_admins.create_index("email", unique=True)
         await db.usage_events.create_index([("tenant_id", 1), ("created_at", -1)])
         await db.usage_events.create_index("created_at")
+        await db.files.create_index([("tenant_id", 1), ("task_id", 1)])
+        try:
+            await obj_store.init_storage()
+        except Exception as e:
+            logger.warning(f"Object storage init deferred (will retry on first upload): {e}")
         await load_ai_keys_from_db()
         await seed_platform_admin()
         await seed_demo()

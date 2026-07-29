@@ -1189,6 +1189,56 @@ async def tenant_operating_model(tenant_id: str) -> dict:
     return om if om and om.get("pipelines") else DEFAULT_OPERATING_MODEL
 
 
+def normalize_finance_categories(d: dict) -> dict:
+    """Clean AI-generated finance categories: dedupe, cap, always end with 'Other'."""
+    def clean(lst, cap):
+        out = []
+        for x in (lst or []):
+            s = str(x).strip()
+            if s and s.lower() != "other" and s.lower() not in [o.lower() for o in out]:
+                out.append(s)
+        return out[:cap] + ["Other"]
+    from routers.ledger import EXPENSE_CATEGORIES, ASSET_CATEGORIES
+    exp = clean((d or {}).get("expense"), 14)
+    ast = clean((d or {}).get("asset"), 10)
+    if len(exp) <= 1:
+        exp = list(EXPENSE_CATEGORIES)
+    if len(ast) <= 1:
+        ast = list(ASSET_CATEGORIES)
+    return {"expense": exp, "asset": ast}
+
+
+async def ai_generate_finance_categories(industry: str, company_size: str = "", roles=None, description: str = "") -> dict:
+    """AI-generate the finance bookkeeping categories (expense + fixed-asset) tailored to this business."""
+    role_labels = ", ".join([r.get("label") for r in (roles or []) if r.get("label")]) or "not specified"
+    system = (
+        "You define the finance bookkeeping CATEGORIES a specific business uses to tag its money. "
+        "Return ONLY valid JSON, no prose, EXACTLY: {\"expense\": [array of strings], \"asset\": [array of strings]}. "
+        "expense = the recurring operating cost buckets THIS business actually incurs — be industry-specific "
+        "(a salon → 'Salon Consumables','Stylist Commissions','Rent'; a restaurant → 'Ingredients','Kitchen Fuel','Delivery Fees'; "
+        "a software firm → 'Cloud Hosting','Software Subscriptions','Contractor Fees'; a textile mill → 'Raw Cotton','Dyeing & Finishing','Power'). "
+        "asset = the types of long-life capital items this business buys (e.g. 'Salon Equipment','Kitchen Equipment','Computers & IT','Vehicles','Machinery'). "
+        "Give 8-12 expense and 5-8 asset categories. Keep each 1-3 words, Title Case, no duplicates. Do NOT include 'Other' (it is added automatically). "
+        "Use the industry's real terminology; never invent nonsense."
+    )
+    prompt = (
+        f"Industry: {industry or 'general business'}\n"
+        f"Company size: {company_size or 'unspecified'}\n"
+        f"What the business actually does: {(description or '').strip() or 'not specified'}\n"
+        f"Departments: {role_labels}\n"
+        "Generate the finance categories now."
+    )
+    data = {}
+    try:
+        chat = claude_chat(session_id=f"fincats-{new_id()}", system_message=system).with_model(*LLM_MODEL)
+        resp = await chat.send_message(UserMessage(text=prompt))
+        data = _extract_json(resp) or {}
+    except Exception as e:  # noqa: BLE001
+        logger.error(f"ai_generate_finance_categories failed: {e}")
+    return normalize_finance_categories(data)
+
+
+
 LEGACY_WF_LABELS = {"production": "Production", "distribution": "Distribution", "purchase_payment": "Procurement", "sales_dispatch": "Sales & Dispatch"}
 
 
@@ -1271,6 +1321,7 @@ async def register(inp: RegisterInput, response: Response):
         "approval_rules": bp["approval_rules"] if bp else [],
         "lexicon": await ai_generate_lexicon(inp.industry, inp.company_size, clean_roles, inp.description or ""),
         "operating_model": await ai_generate_operating_model(inp.industry, inp.company_size, clean_roles, inp.description or ""),
+        "finance_categories": await ai_generate_finance_categories(inp.industry, inp.company_size, clean_roles, inp.description or ""),
         "created_at": now_iso(),
     }
     await db.tenants.insert_one(tenant_doc)
@@ -1496,6 +1547,11 @@ async def me(user: dict = Depends(get_current_user)):
         om = await backfill_operating_model(tenant)
         await db.tenants.update_one({"id": tenant["id"]}, {"$set": {"operating_model": om}})
         tenant["operating_model"] = om
+    if tenant and not (tenant.get("finance_categories") or {}).get("expense"):
+        # Backfill AI-generated, per-company finance categories once for existing workspaces.
+        fc = await ai_generate_finance_categories(tenant.get("industry"), tenant.get("company_size"), tenant.get("roles"), tenant.get("description") or "")
+        await db.tenants.update_one({"id": tenant["id"]}, {"$set": {"finance_categories": fc}})
+        tenant["finance_categories"] = fc
     return {"user": user, "tenant": tenant}
 
 
@@ -1547,6 +1603,32 @@ async def regenerate_operating_model(user: dict = Depends(require_perm("team_man
     await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": {"operating_model": om}})
     await log_activity(user["tenant_id"], user["id"], "operating_model_regenerated", f"{user['name']} regenerated the operating model")
     return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+
+
+class FinanceCategoriesInput(BaseModel):
+    finance_categories: dict
+
+
+@api.patch("/tenant/finance-categories")
+async def update_finance_categories(inp: FinanceCategoriesInput, user: dict = Depends(require_perm("team_manage"))):
+    """Owner-edit the per-company finance categories (expense + fixed-asset buckets)."""
+    fc = normalize_finance_categories(inp.finance_categories or {})
+    await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": {"finance_categories": fc}})
+    await log_activity(user["tenant_id"], user["id"], "finance_categories_updated", f"{user['name']} updated the finance categories")
+    return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+
+
+@api.post("/tenant/finance-categories/regenerate")
+async def regenerate_finance_categories(user: dict = Depends(require_perm("team_manage"))):
+    """Re-run AI to regenerate the finance categories from the workspace's industry."""
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    fc = await ai_generate_finance_categories(tenant.get("industry"), tenant.get("company_size"), tenant.get("roles"), tenant.get("description") or "")
+    await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": {"finance_categories": fc}})
+    await log_activity(user["tenant_id"], user["id"], "finance_categories_regenerated", f"{user['name']} regenerated the finance categories")
+    return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+
 
 
 class ProfileUpdateInput(BaseModel):
@@ -4325,31 +4407,36 @@ def _norm_company(s: str) -> str:
     return joined.strip()
 
 
-_PURCHASE_CLASS_SYS = (
-    "You classify a single business PURCHASE (a bill we received from a supplier) into exactly one bucket. "
-    "Return ONLY JSON: {\"purchase_type\": one of [expense, asset, inventory, unknown], "
-    "\"asset_name\": string, \"inventory_qty\": number, \"inventory_unit\": string, "
-    "\"asset_category\": one of [Machinery, Equipment, Vehicle, Furniture, IT & Electronics, Building, Other], "
-    "\"expense_category\": one of [Raw Material, Salary & Wages, Rent, Utilities, Logistics & Freight, Marketing, Professional Services, Asset Purchase, Maintenance & Repairs, Taxes & Duties, Office Supplies, Other]}. "
-    "Rules: \"asset\" = capital/fixed goods that last over a year (machinery, equipment, tools, vehicles, "
-    "furniture, computers/IT hardware/networking, buildings) — put the item in asset_name and pick the best asset_category "
-    "(e.g. servers/switches/firewalls/CCTV/computers → IT & Electronics); "
-    "\"inventory\" = stock, raw materials, trading goods or components bought to resell or consume in production "
-    "— put quantity in inventory_qty and its unit (kg, pcs, box, litre) in inventory_unit; "
-    "\"expense\" = everything else (rent, salaries, utilities, transport, services, consumables, subscriptions, taxes) "
-    "— pick the best expense_category. "
-    "Use \"unknown\" ONLY when the description is too vague to tell which of the three it is — do NOT guess."
-)
+def _purchase_class_sys(expense_cats=None, asset_cats=None) -> str:
+    asset_list = ", ".join(asset_cats) if asset_cats else "Machinery, Equipment, Vehicle, Furniture, IT & Electronics, Building, Other"
+    expense_list = ", ".join(expense_cats) if expense_cats else "Raw Material, Salary & Wages, Rent, Utilities, Logistics & Freight, Marketing, Professional Services, Asset Purchase, Maintenance & Repairs, Taxes & Duties, Office Supplies, Other"
+    return (
+        "You classify a single business PURCHASE (a bill we received from a supplier) into exactly one bucket. "
+        "Return ONLY JSON: {\"purchase_type\": one of [expense, asset, inventory, unknown], "
+        "\"asset_name\": string, \"inventory_qty\": number, \"inventory_unit\": string, "
+        f"\"asset_category\": one of [{asset_list}], "
+        f"\"expense_category\": one of [{expense_list}]}}. "
+        "Rules: \"asset\" = capital/fixed goods that last over a year (machinery, equipment, tools, vehicles, "
+        "furniture, computers/IT hardware/networking, buildings) — put the item in asset_name and pick the best asset_category "
+        "from the allowed list (e.g. servers/switches/firewalls/CCTV/computers → an IT/electronics category); "
+        "\"inventory\" = stock, raw materials, trading goods or components bought to resell or consume in production "
+        "— put quantity in inventory_qty and its unit (kg, pcs, box, litre) in inventory_unit; "
+        "\"expense\" = everything else (rent, salaries, utilities, transport, services, consumables, subscriptions, taxes) "
+        "— pick the best expense_category from the allowed list. Categories MUST be chosen from the lists above. "
+        "Use \"unknown\" ONLY when the description is too vague to tell which of the three it is — do NOT guess."
+    )
 
 
-async def ai_classify_purchase(text: str) -> dict:
-    """Classify one purchase bill's WHAT-was-bought bucket from its text. Returns
+async def ai_classify_purchase(text: str, expense_categories=None, asset_categories=None) -> dict:
+    """Classify one purchase bill's WHAT-was-bought bucket from its text, using the company's own
+    category lists when provided. Returns
     {purchase_type, asset_name, inventory_qty, inventory_unit, asset_category, expense_category}. Never raises."""
     text = (text or "").strip()
     if not text:
         return {"purchase_type": "unknown"}
     try:
-        chat = claude_chat(session_id=f"purchase-class-{new_id()}", system_message=_PURCHASE_CLASS_SYS).with_model(*LLM_MODEL)
+        chat = claude_chat(session_id=f"purchase-class-{new_id()}",
+                           system_message=_purchase_class_sys(expense_categories, asset_categories)).with_model(*LLM_MODEL)
         resp = await chat.send_message(UserMessage(text=text[:1500]))
         d = _extract_json(resp) or {}
     except Exception as e:  # noqa: BLE001
@@ -4376,7 +4463,7 @@ def _has_unclassified_purchase(records: dict, doc_type: str = "") -> bool:
 
 
 async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, ingestion_id: str, source: str) -> dict:
-    from routers.ledger import create_expense, create_asset, create_inventory
+    from routers.ledger import create_expense, create_asset, create_inventory, guess_asset_category
     # Validate BEFORE writing anything — an unclassified purchase must be classified first,
     # otherwise we'd leave orphaned contacts committed before the 400 fires.
     if _has_unclassified_purchase(records):
@@ -4474,13 +4561,11 @@ async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, 
             li_text = " ".join(str(li.get("description", "")) for li in (inv.get("line_items") or []) if isinstance(li, dict))
             inv_cur = inv.get("currency") or currency
             if purchase_type == "asset":
-                from routers.ledger import guess_asset_category, ASSET_CATEGORIES
                 _aname = (inv.get("asset_name") or li_text[:60] or f"Asset from {vend}").strip()
-                _acat = inv.get("asset_category") if inv.get("asset_category") in ASSET_CATEGORIES \
-                    else guess_asset_category(f"{_aname} {li_text}")
                 await create_asset(tenant_id, user_id, {
                     "name": _aname,
-                    "category": _acat, "purchase_amount": amount, "currency": inv_cur,
+                    "category": inv.get("asset_category") or guess_asset_category(f"{_aname} {li_text}"),
+                    "purchase_amount": amount, "currency": inv_cur,
                     "purchase_date": inv.get("date") or "", "vendor_name": vend,
                     "notes": f"From bill {inv.get('number') or ''} · {li_text[:150]}".strip(),
                 }, source=source)

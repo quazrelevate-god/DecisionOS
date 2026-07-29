@@ -6,6 +6,7 @@ import { PageHeader } from "../components/common";
 import { CompanyDetails } from "../components/CompanyDetails";
 import { BusinessVocabulary } from "../components/BusinessVocabulary";
 import { OperatingModelEditor } from "../components/OperatingModelEditor";
+import { FinanceCategoriesEditor } from "../components/FinanceCategoriesEditor";
 import { ProfileForm, ChangePasswordForm } from "../components/ProfileDialog";
 import { LanguageSwitcher } from "../components/LanguageSwitcher";
 import { useTranslation } from "react-i18next";
@@ -100,6 +101,8 @@ export default function Settings() {
         <BusinessVocabulary />
 
         <OperatingModelEditor />
+
+        <FinanceCategoriesEditor />
 
         <LanguageCard />
 

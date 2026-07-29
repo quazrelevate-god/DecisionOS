@@ -78,24 +78,45 @@ def guess_asset_category(text: str) -> str:
     return "Other"
 
 
+async def get_finance_categories(tenant_id: str) -> dict:
+    """The company's AI-generated finance categories (falls back to defaults for legacy tenants)."""
+    t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "finance_categories": 1})
+    fc = (t or {}).get("finance_categories") or {}
+    return {"expense": fc.get("expense") or list(EXPENSE_CATEGORIES),
+            "asset": fc.get("asset") or list(ASSET_CATEGORIES)}
+
+
+def _match_category(value, allowed, fallback="Other") -> str:
+    """Case-insensitively snap a value onto the allowed list; else return fallback."""
+    v = str(value or "").strip()
+    if not v:
+        return fallback
+    for a in allowed:
+        if a.lower() == v.lower():
+            return a
+    return fallback
+
+
 async def ai_suggest_expense_category(text: str, tenant_id: str) -> str:
     text = (text or "").strip()
     if not text:
         return "Other"
+    cats = (await get_finance_categories(tenant_id))["expense"]
     try:
         system = (
             "You categorize a single business expense into EXACTLY one category from this list: "
-            + ", ".join(EXPENSE_CATEGORIES) + ". "
+            + ", ".join(cats) + ". "
             "Reply with ONLY JSON: {\"category\": \"<one of the categories>\"}."
         )
         chat = claude_chat(session_id=f"expcat-{tenant_id}", system_message=system).with_model(*LLM_MODEL)
         resp = await chat.send_message(UserMessage(text=text[:600]))
         data = _extract_json(resp) or {}
-        if data.get("category") in EXPENSE_CATEGORIES:
-            return data["category"]
+        matched = _match_category(data.get("category"), cats, "")
+        if matched:
+            return matched
     except Exception as e:  # noqa: BLE001
         logger.warning(f"AI expense categorization failed, using heuristic: {e}")
-    return guess_expense_category(text)
+    return _match_category(guess_expense_category(text), cats, "Other")
 
 
 async def _currency(tenant_id: str) -> str:
@@ -131,12 +152,12 @@ _LEDGER_FIELDS = {
     "expense": (
         "an EXPENSE (a bill, invoice, receipt, or a payment the company made)",
         '{"title": str, "amount": number, "vendor_name": str, "date": "YYYY-MM-DD", '
-        '"category": one of [' + ", ".join(EXPENSE_CATEGORIES) + '], "notes": str}',
+        '"category": "<one category>", "notes": str}',
     ),
     "asset": (
         "a company ASSET purchase (machinery, equipment, vehicle, furniture, IT/electronics, building)",
         '{"name": str, "purchase_amount": number, "vendor_name": str, "purchase_date": "YYYY-MM-DD", '
-        '"category": one of [' + ", ".join(ASSET_CATEGORIES) + '], "notes": str}',
+        '"category": "<one category>", "notes": str}',
     ),
     "inventory": (
         "an INVENTORY / stock item purchase",
@@ -151,14 +172,18 @@ _LEDGER_FIELDS = {
 }
 
 
-async def ai_extract_ledger_file(file_path: str, mime_type: str, kind: str, currency: str, typed: dict) -> dict:
+async def ai_extract_ledger_file(file_path: str, mime_type: str, kind: str, currency: str, typed: dict, categories=None) -> dict:
     """Read an uploaded bill/photo/PDF and return the fields for `kind`, honouring what the user already typed."""
     desc, shape = _LEDGER_FIELDS[kind]
     typed_clean = {k: v for k, v in (typed or {}).items() if v not in (None, "", 0, "0", 0.0)}
+    cat_rule = ""
+    if kind in ("expense", "asset") and categories:
+        cat_rule = f'The "category" MUST be exactly one of: [{", ".join(categories)}]. Pick the closest fit. '
     system = (
         f"You read a business document (image or PDF) and extract the details of {desc}. "
         f"Amounts are in {currency}. The user already typed these values: {json.dumps(typed_clean)}. "
         "PREFER the user's typed values when present and non-empty; fill every MISSING field from the document. "
+        f"{cat_rule}"
         f"Reply with ONLY compact JSON in exactly this shape: {shape}. "
         "Use an empty string or 0 for anything you cannot determine. Never invent data."
     )
@@ -197,8 +222,12 @@ def _merge_typed(ai: dict, typed: dict) -> dict:
 async def create_expense(tenant_id: str, user_id: str, data: dict, source: str = "manual", write_brain: Optional[bool] = None) -> dict:
     currency = data.get("currency") or await _currency(tenant_id)
     amount = _num(data.get("amount"))
-    category = data.get("category") if data.get("category") in EXPENSE_CATEGORIES else \
-        guess_expense_category(f"{data.get('title', '')} {data.get('vendor_name', '')} {data.get('notes', '')}")
+    cats = (await get_finance_categories(tenant_id))["expense"]
+    category = _match_category(data.get("category"), cats, "")
+    if not category:
+        category = _match_category(
+            guess_expense_category(f"{data.get('title', '')} {data.get('vendor_name', '')} {data.get('notes', '')}"),
+            cats, "Other")
     eid = new_id()
     doc = {
         "id": eid, "tenant_id": tenant_id, "title": (data.get("title") or "Expense").strip(),
@@ -221,7 +250,8 @@ async def create_expense(tenant_id: str, user_id: str, data: dict, source: str =
     # An "Asset Purchase" expense also becomes a tracked Asset.
     if category == "Asset Purchase":
         await create_asset(tenant_id, user_id, {
-            "name": doc["title"], "category": "Equipment", "purchase_amount": amount,
+            "name": doc["title"], "category": guess_asset_category(f"{doc['title']} {doc['notes']}"),
+            "purchase_amount": amount,
             "currency": currency, "purchase_date": doc["date"], "vendor_name": doc["vendor_name"],
             "expense_id": eid, "notes": "Auto-created from expense",
         }, source=source)
@@ -231,9 +261,13 @@ async def create_expense(tenant_id: str, user_id: str, data: dict, source: str =
 async def create_asset(tenant_id: str, user_id: str, data: dict, source: str = "manual", write_brain: Optional[bool] = None) -> dict:
     currency = data.get("currency") or await _currency(tenant_id)
     amt = _num(data.get("purchase_amount"))
+    cats = (await get_finance_categories(tenant_id))["asset"]
+    category = _match_category(data.get("category"), cats, "")
+    if not category:
+        category = _match_category(guess_asset_category(f"{data.get('name', '')} {data.get('notes', '')}"), cats, "Other")
     doc = {
         "id": new_id(), "tenant_id": tenant_id, "name": (data.get("name") or "Asset").strip(),
-        "category": data.get("category") if data.get("category") in ASSET_CATEGORIES else "Other",
+        "category": category,
         "purchase_amount": amt, "currency": currency,
         "purchase_date": data.get("purchase_date") or now_iso()[:10],
         "vendor_name": (data.get("vendor_name") or "").strip(),
@@ -398,7 +432,11 @@ async def _read_attachment(file: Optional[UploadFile], kind: str, tenant_id: str
         attachment = {"filename": saved["filename"], "url": saved["url"], "mime": mime}
         try:
             currency = await _currency(tenant_id)
-            ai = await ai_extract_ledger_file(saved["path"], mime or "application/octet-stream", kind, currency, typed)
+            cats = None
+            if kind in ("expense", "asset"):
+                fc = await get_finance_categories(tenant_id)
+                cats = fc["expense"] if kind == "expense" else fc["asset"]
+            ai = await ai_extract_ledger_file(saved["path"], mime or "application/octet-stream", kind, currency, typed, categories=cats)
             data = _merge_typed(ai, typed)
         except Exception as e:  # noqa: BLE001
             logger.warning(f"Ledger {kind} OCR failed, using typed values: {e}")
@@ -426,8 +464,10 @@ async def add_expense_with_file(
 @router.patch("/expenses/{eid}")
 async def update_expense(eid: str, inp: ExpensePatch, user: dict = Depends(require_ledger)):
     updates = {k: v for k, v in inp.model_dump().items() if v is not None}
-    if updates.get("category") and updates["category"] not in EXPENSE_CATEGORIES:
-        updates.pop("category")
+    if updates.get("category"):
+        cats = (await get_finance_categories(user["tenant_id"]))["expense"]
+        if updates["category"] not in cats:
+            updates.pop("category")
     if not updates:
         raise HTTPException(status_code=400, detail="Nothing to update")
     r = await db.expenses.update_one({"id": eid, "tenant_id": user["tenant_id"]}, {"$set": updates})
@@ -463,7 +503,7 @@ async def add_asset(inp: AssetInput, user: dict = Depends(require_ledger)):
 @router.post("/assets/with-file")
 async def add_asset_with_file(
     name: str = Form(""), purchase_amount: str = Form(""), vendor_name: str = Form(""),
-    category: str = Form("Other"), purchase_date: str = Form(""), status: str = Form("active"),
+    category: str = Form(""), purchase_date: str = Form(""), status: str = Form("active"),
     notes: str = Form(""), file: Optional[UploadFile] = File(None),
     user: dict = Depends(require_ledger),
 ):
@@ -480,7 +520,8 @@ async def add_asset_with_file(
 @router.patch("/assets/{aid}")
 async def update_asset(aid: str, inp: AssetInput, user: dict = Depends(require_ledger)):
     updates = inp.model_dump()
-    if updates.get("category") not in ASSET_CATEGORIES:
+    cats = (await get_finance_categories(user["tenant_id"]))["asset"]
+    if updates.get("category") not in cats:
         updates.pop("category", None)
     r = await db.assets.update_one({"id": aid, "tenant_id": user["tenant_id"]}, {"$set": updates})
     if not r.matched_count:
@@ -625,6 +666,7 @@ async def reclassify_purchases(user: dict = Depends(require_ledger)):
         raise HTTPException(status_code=403, detail="Only the owner can re-run purchase classification")
     from server import ai_classify_purchase
     tid, uid = user["tenant_id"], user["id"]
+    fc = await get_finance_categories(tid)
     bills = await db.invoices.find({"tenant_id": tid, "type": "purchase_bill"}, {"_id": 0}).to_list(5000)
     summary = {"reviewed": 0, "to_asset": 0, "to_inventory": 0, "kept_expense": 0, "unknown": 0, "unchanged": 0}
     for inv in bills:
@@ -632,7 +674,7 @@ async def reclassify_purchases(user: dict = Depends(require_ledger)):
         li = " ".join(str(x.get("description", "")) for x in (inv.get("line_items") or []) if isinstance(x, dict))
         text = (f"Vendor: {inv.get('contact_name', '')}. Bill no: {inv.get('number', '')}. "
                 f"Items: {li}. Amount: {inv.get('amount')} {inv.get('currency', '')}")
-        result = await ai_classify_purchase(text)
+        result = await ai_classify_purchase(text, expense_categories=fc["expense"], asset_categories=fc["asset"])
         new_type = result.get("purchase_type", "unknown")
         old_type = (inv.get("purchase_type") or "expense").strip().lower() or "expense"
         exp = await db.expenses.find_one({"tenant_id": tid, "invoice_id": inv["id"]}, {"_id": 0})
@@ -658,11 +700,10 @@ async def reclassify_purchases(user: dict = Depends(require_ledger)):
 
         if new_type == "asset":
             _name = (result.get("asset_name") or li[:60] or f"Asset from {vend}").strip()
-            _cat = result.get("asset_category") if result.get("asset_category") in ASSET_CATEGORIES \
-                else guess_asset_category(f"{_name} {li}")
             await create_asset(tid, uid, {
                 "name": _name,
-                "category": _cat, "purchase_amount": amount, "currency": currency,
+                "category": result.get("asset_category") or guess_asset_category(f"{_name} {li}"),
+                "purchase_amount": amount, "currency": currency,
                 "purchase_date": inv.get("date") or "", "vendor_name": vend,
                 "notes": f"Reclassified from bill {inv.get('number') or ''} · {li[:150]}".strip(),
             }, source="reclassify")
@@ -727,6 +768,7 @@ async def ledger_summary(user: dict = Depends(require_ledger)):
         if m:
             by_month[m] = by_month.get(m, 0) + amt
     months = sorted(by_month.keys())[-6:]
+    fc = await get_finance_categories(tid)
     return {
         "currency": currency,
         "totals": {
@@ -741,7 +783,7 @@ async def ledger_summary(user: dict = Depends(require_ledger)):
         "by_category": [{"category": k, "amount": round(v, 2)} for k, v in sorted(by_cat.items(), key=lambda x: -x[1])],
         "by_vendor": [{"vendor": k, "amount": round(v, 2)} for k, v in sorted(by_vendor.items(), key=lambda x: -x[1])[:8]],
         "by_month": [{"month": m, "amount": round(by_month[m], 2)} for m in months],
-        "categories": EXPENSE_CATEGORIES, "asset_categories": ASSET_CATEGORIES,
+        "categories": fc["expense"], "asset_categories": fc["asset"],
     }
 
 

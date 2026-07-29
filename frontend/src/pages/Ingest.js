@@ -59,6 +59,7 @@ const EMPTY = { contacts: [], invoices: [], payments: [], tasks: [] };
 const CONTACT_TYPE_OPTS = ["customer", "vendor", "dealer"];
 const INVOICE_TYPE_OPTS = ["sales_invoice", "purchase_bill"];
 const DIRECTION_OPTS = ["in", "out"];
+const PURCHASE_TYPE_OPTS = ["expense", "asset", "inventory"];
 
 const DOC_HINT = {
   sales_invoice: { label: "Sales Invoice", desc: "Money a CUSTOMER owes you. The other party is your customer." },
@@ -83,6 +84,7 @@ const OPT_LABELS = {
   customer: "Customer", vendor: "Supplier", dealer: "Dealer",
   sales_invoice: "Sales invoice", purchase_bill: "Purchase bill",
   in: "Received (in)", out: "Paid (out)",
+  expense: "Expense", asset: "Asset", inventory: "Inventory",
 };
 
 function SelectField({ label, value, onChange, options, optLabels }) {
@@ -243,6 +245,13 @@ function ReviewPanel({ ingestion, onFiled, onCancel }) {
     (records.tasks?.length || 0);
 
   const fileIt = async () => {
+    // Guard: every purchase bill must be classified into a bucket before filing.
+    const unclassified = (records.invoices || []).some(
+      (inv) => inv.type === "purchase_bill" && !PURCHASE_TYPE_OPTS.includes((inv.purchase_type || "").toLowerCase()));
+    if (unclassified) {
+      toast.error("Classify each purchase bill as Expense, Asset or Inventory before filing.");
+      return;
+    }
     setFiling(true);
     try {
       const clean = {};
@@ -329,16 +338,31 @@ function ReviewPanel({ ingestion, onFiled, onCancel }) {
         <div className="mb-5" data-testid="review-invoices">
           <p className="label-mono text-brand-red mb-2 flex items-center gap-1"><Receipt size={14} weight="bold" /> Invoices & Bills ({records.invoices.length})</p>
           <div className="space-y-2">
-            {records.invoices.map((inv, i) => (
-              <div key={inv._key} className="border border-black/20 p-3 grid grid-cols-2 md:grid-cols-5 gap-2 relative" data-testid={`review-invoice-${i}`}>
+            {records.invoices.map((inv, i) => {
+              const isPurchase = inv.type === "purchase_bill";
+              const pt = (inv.purchase_type || "").toLowerCase();
+              const needsBucket = isPurchase && !PURCHASE_TYPE_OPTS.includes(pt);
+              return (
+              <div key={inv._key} className={`border p-3 grid grid-cols-2 md:grid-cols-6 gap-2 relative ${needsBucket ? "border-brand-red border-2 bg-brand-red/5" : "border-black/20"}`} data-testid={`review-invoice-${i}`}>
                 <SelectField label="Type" value={inv.type} onChange={(v) => setItem("invoices", i, "type", v)} options={INVOICE_TYPE_OPTS} />
+                {isPurchase && (
+                  <label className="block" data-testid={`review-invoice-bucket-${i}`}>
+                    <span className="label-mono text-muted-foreground text-[10px]">Book as {needsBucket && <span className="text-brand-red">• pick one</span>}</span>
+                    <select className={`${inp} ${needsBucket ? "ring-2 ring-brand-red" : ""}`} value={pt}
+                      data-testid={`review-invoice-bucket-select-${i}`}
+                      onChange={(e) => setItem("invoices", i, "purchase_type", e.target.value)}>
+                      <option value="">Choose…</option>
+                      {PURCHASE_TYPE_OPTS.map((o) => <option key={o} value={o}>{OPT_LABELS[o]}</option>)}
+                    </select>
+                  </label>
+                )}
                 <Field label="Number" value={inv.number} onChange={(v) => setItem("invoices", i, "number", v)} />
                 <Field label="Party" value={inv.contact_name} onChange={(v) => setItem("invoices", i, "contact_name", v)} />
                 <Field label="Amount" value={inv.amount} onChange={(v) => setItem("invoices", i, "amount", v)} />
                 <Field label="Due date" value={inv.due_date} onChange={(v) => setItem("invoices", i, "due_date", v)} />
                 <button onClick={() => removeItem("invoices", i)} data-testid={`remove-invoice-${i}`} className="absolute -top-2 -right-2 w-6 h-6 flex items-center justify-center border border-black bg-white hover:bg-brand-red hover:text-white transition-colors"><Trash size={12} weight="bold" /></button>
               </div>
-            ))}
+            );})}
           </div>
         </div>
       )}

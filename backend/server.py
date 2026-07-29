@@ -4325,6 +4325,50 @@ def _norm_company(s: str) -> str:
     return joined.strip()
 
 
+_PURCHASE_CLASS_SYS = (
+    "You classify a single business PURCHASE (a bill we received from a supplier) into exactly one bucket. "
+    "Return ONLY JSON: {\"purchase_type\": one of [expense, asset, inventory, unknown], "
+    "\"asset_name\": string, \"inventory_qty\": number, \"inventory_unit\": string}. "
+    "Rules: \"asset\" = capital/fixed goods that last over a year (machinery, equipment, tools, vehicles, "
+    "furniture, computers/IT hardware, buildings) — put the item in asset_name; "
+    "\"inventory\" = stock, raw materials, trading goods or components bought to resell or consume in production "
+    "— put quantity in inventory_qty and its unit (kg, pcs, box, litre) in inventory_unit; "
+    "\"expense\" = everything else (rent, salaries, utilities, transport, services, consumables, subscriptions, taxes). "
+    "Use \"unknown\" ONLY when the description is too vague to tell which of the three it is — do NOT guess."
+)
+
+
+async def ai_classify_purchase(text: str) -> dict:
+    """Classify one purchase bill's WHAT-was-bought bucket from its text. Returns
+    {purchase_type, asset_name, inventory_qty, inventory_unit}. Never raises."""
+    text = (text or "").strip()
+    if not text:
+        return {"purchase_type": "unknown"}
+    try:
+        chat = claude_chat(session_id=f"purchase-class-{new_id()}", system_message=_PURCHASE_CLASS_SYS).with_model(*LLM_MODEL)
+        resp = await chat.send_message(UserMessage(text=text[:1500]))
+        d = _extract_json(resp) or {}
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"ai_classify_purchase failed: {e}")
+        d = {}
+    pt = (d.get("purchase_type") or "").strip().lower()
+    if pt not in ("expense", "asset", "inventory", "unknown"):
+        pt = "unknown"
+    return {"purchase_type": pt, "asset_name": (d.get("asset_name") or "").strip(),
+            "inventory_qty": d.get("inventory_qty"), "inventory_unit": (d.get("inventory_unit") or "").strip()}
+
+
+def _has_unclassified_purchase(records: dict, doc_type: str = "") -> bool:
+    """True if any purchase bill in the records lacks a confident expense/asset/inventory bucket."""
+    for inv in (records or {}).get("invoices", []):
+        itype = inv.get("type") or ("purchase_bill" if doc_type == "purchase_bill" else "")
+        if itype == "purchase_bill":
+            pt = (inv.get("purchase_type") or "").strip().lower()
+            if pt not in ("expense", "asset", "inventory"):
+                return True
+    return False
+
+
 async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, ingestion_id: str, source: str) -> dict:
     from routers.ledger import create_expense, create_asset, create_inventory
     created = {"contacts": 0, "invoices": 0, "payments": 0, "tasks": 0, "expenses": 0, "assets": 0, "inventory": 0}
@@ -4397,7 +4441,10 @@ async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, 
         inv_id = new_id()
         purchase_type = (inv.get("purchase_type") or "").strip().lower()
         if itype == "purchase_bill" and purchase_type not in ("expense", "asset", "inventory"):
-            purchase_type = "expense"
+            # No silent fallback: an unclassified purchase must be reviewed & classified by a human first.
+            raise HTTPException(
+                status_code=400,
+                detail="Please classify this purchase bill as Expense, Asset, or Inventory before filing.")
         await db.invoices.insert_one({
             "id": inv_id, "tenant_id": tenant_id, "type": itype,
             "number": str(inv.get("number") or ""), "contact_id": cid,
@@ -5366,8 +5413,10 @@ async def process_whatsapp_message(message: dict):
             needs_owner = _needs_owner_review(cls, amt or None, policy, cap_threshold)
             has_records = bool(recs.get("invoices") or recs.get("payments"))
             dup = await _find_duplicate_invoice(tenant_id, recs)
+            unknown_purchase = _has_unclassified_purchase(recs, result.get("doc_type", ""))
             level, reason = _decide_processing_level(cls, confidence, amt or None, needs_owner,
-                                                     bool(dup), has_records, is_document=True)
+                                                     bool(dup), has_records, is_document=True,
+                                                     has_unknown_purchase=unknown_purchase)
             tri = {"classification": cls, "intent": result.get("doc_type", "document"),
                    "summary": result.get("summary", ""), "department": dept,
                    "priority": "medium", "amount": amt or None}
@@ -5562,11 +5611,13 @@ async def _find_duplicate_invoice(tenant_id: str, records: dict):
     return None
 
 
-def _decide_processing_level(cls, confidence, amount, needs_owner, is_duplicate, has_records, is_document):
+def _decide_processing_level(cls, confidence, amount, needs_owner, is_duplicate, has_records, is_document, has_unknown_purchase=False):
     """Map an AI-triaged capture to one of: auto | confirm | attention.
     Returns (level, reason)."""
     if is_duplicate:
         return "attention", "Possible duplicate of an already-filed invoice — please verify before saving."
+    if has_unknown_purchase:
+        return "attention", "AI couldn't confidently tell if this purchase is an expense, an asset, or inventory — please classify and approve."
     if confidence is not None and confidence < ATTENTION_CONFIDENCE:
         return "attention", "Low confidence extraction — please double-check the details."
     if is_document and not has_records:
@@ -5736,6 +5787,7 @@ class CaptureEditInput(BaseModel):
     due_date: Optional[str] = None
     summary: Optional[str] = None
     text: Optional[str] = None
+    records: Optional[dict] = None
 
 
 class CaptureActionInput(BaseModel):

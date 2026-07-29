@@ -86,9 +86,23 @@ function CaptureCard({ c, user, onChange }) {
     assignee_id: c.assignee_id || "", summary: c.summary || "", text: c.text || "",
   });
   const [busy, setBusy] = useState(false);
+  const [recs, setRecs] = useState(c.records || null);
   const isOwner = user?.role === "owner";
   const isPending = c.status === "pending_review" || c.status === "clarification_requested" || c.status === "needs_attention";
   const blockedByEscalation = c.needs_owner && !isOwner;
+
+  const purchaseBills = (recs?.invoices || [])
+    .map((inv, i) => ({ inv, i }))
+    .filter((x) => x.inv.type === "purchase_bill");
+  const anyUnclassified = purchaseBills.some(
+    (x) => !["expense", "asset", "inventory"].includes((x.inv.purchase_type || "").toLowerCase()));
+
+  const setBucket = async (idx, val) => {
+    const next = { ...recs, invoices: recs.invoices.map((iv, i) => (i === idx ? { ...iv, purchase_type: val } : iv)) };
+    setRecs(next);
+    try { await api.patch(`/captures/${c.id}`, { records: next }); }
+    catch { toast.error("Couldn't save the classification"); }
+  };
 
   const members = useQuery({
     queryKey: ["users"],
@@ -114,7 +128,13 @@ function CaptureCard({ c, user, onChange }) {
     setEdit(false);
   }, "Saved");
 
-  const approve = () => act(() => api.post(`/captures/${c.id}/approve`), "Approved & actioned");
+  const approve = () => {
+    if (anyUnclassified) {
+      toast.error("Classify each purchase bill as Expense, Asset or Inventory before approving.");
+      return;
+    }
+    return act(() => api.post(`/captures/${c.id}/approve`), "Approved & actioned");
+  };
   const reject = () => {
     const reason = window.prompt("Reason for rejecting?") || "";
     return act(() => api.post(`/captures/${c.id}/reject`, { reason }), "Rejected");
@@ -186,6 +206,32 @@ function CaptureCard({ c, user, onChange }) {
           {!recCounts && c.amount ? <p className="label-mono text-muted-foreground mt-1">Amount: ₹{Number(c.amount).toLocaleString()}</p> : null}
           {c.attention_reason && <p className="text-xs text-amber-700 mt-1">⚠ {c.attention_reason}</p>}
           {c.escalate_reason && <p className="text-xs text-brand-red mt-1">⚠ {c.escalate_reason}</p>}
+          {isPending && purchaseBills.length > 0 && (
+            <div className="mt-3 border-2 border-black bg-brand-paper p-3" data-testid={`capture-buckets-${c.id}`}>
+              <p className="label-mono text-brand-red mb-2">Classify purchase{purchaseBills.length > 1 ? "s" : ""} before approving</p>
+              <div className="space-y-2">
+                {purchaseBills.map(({ inv, i }) => {
+                  const pt = (inv.purchase_type || "").toLowerCase();
+                  const needs = !["expense", "asset", "inventory"].includes(pt);
+                  return (
+                    <div key={i} className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-semibold flex-1 min-w-0 truncate">
+                        {inv.contact_name || "Supplier"}{inv.number ? ` · #${inv.number}` : ""}{inv.amount ? ` · ₹${Number(inv.amount).toLocaleString()}` : ""}
+                      </span>
+                      <select data-testid={`capture-bucket-select-${c.id}-${i}`}
+                        className={`${inp} w-auto ${needs ? "ring-2 ring-brand-red" : ""}`}
+                        value={pt} onChange={(e) => setBucket(i, e.target.value)}>
+                        <option value="">Book as…</option>
+                        <option value="expense">Expense</option>
+                        <option value="asset">Asset</option>
+                        <option value="inventory">Inventory</option>
+                      </select>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           {c.clarification_note && <p className="text-xs text-amber-700 mt-1">Note: {c.clarification_note}</p>}
           {c.file_url && (
             <div className="mt-2">
@@ -240,9 +286,9 @@ function CaptureCard({ c, user, onChange }) {
             </>
           ) : (
             <>
-              <button data-testid={`capture-approve-${c.id}`} disabled={busy || blockedByEscalation}
-                title={blockedByEscalation ? "Requires Owner approval" : ""}
-                onClick={approve} className={`px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border-2 border-black transition-all hover:shadow-brutal-sm disabled:opacity-50 flex items-center gap-1 ${blockedByEscalation ? "bg-black/20 text-black/50 cursor-not-allowed" : "bg-green-600 text-white"}`}>
+              <button data-testid={`capture-approve-${c.id}`} disabled={busy || blockedByEscalation || anyUnclassified}
+                title={blockedByEscalation ? "Requires Owner approval" : anyUnclassified ? "Classify the purchase first" : ""}
+                onClick={approve} className={`px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border-2 border-black transition-all hover:shadow-brutal-sm disabled:opacity-50 flex items-center gap-1 ${blockedByEscalation || anyUnclassified ? "bg-black/20 text-black/50 cursor-not-allowed" : "bg-green-600 text-white"}`}>
                 <CheckCircle size={14} weight="bold" /> Approve
               </button>
               <button data-testid={`capture-edit-btn-${c.id}`} disabled={busy} onClick={() => setEdit(true)} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border-2 border-black transition-all hover:shadow-brutal-sm disabled:opacity-50 bg-white flex items-center gap-1"><PencilSimple size={14} weight="bold" /> Edit</button>

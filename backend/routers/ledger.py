@@ -479,6 +479,89 @@ async def delete_inventory(iid: str, user: dict = Depends(require_ledger)):
     return {"ok": True}
 
 
+# --- Re-classify historical purchase bills (fix mis-booked expenses) --------
+@router.post("/ledger/reclassify-purchases")
+async def reclassify_purchases(user: dict = Depends(require_ledger)):
+    """Owner-only: re-run AI classification over every already-filed purchase bill and move
+    mis-booked ones into the correct bucket (expense / asset / inventory). Purchases the AI
+    still can't classify are tagged `unknown` and left as-is for manual review."""
+    if user.get("role") != "owner":
+        raise HTTPException(status_code=403, detail="Only the owner can re-run purchase classification")
+    from server import ai_classify_purchase
+    tid, uid = user["tenant_id"], user["id"]
+    bills = await db.invoices.find({"tenant_id": tid, "type": "purchase_bill"}, {"_id": 0}).to_list(5000)
+    summary = {"reviewed": 0, "to_asset": 0, "to_inventory": 0, "kept_expense": 0, "unknown": 0, "unchanged": 0}
+    for inv in bills:
+        summary["reviewed"] += 1
+        li = " ".join(str(x.get("description", "")) for x in (inv.get("line_items") or []) if isinstance(x, dict))
+        text = (f"Vendor: {inv.get('contact_name', '')}. Bill no: {inv.get('number', '')}. "
+                f"Items: {li}. Amount: {inv.get('amount')} {inv.get('currency', '')}")
+        result = await ai_classify_purchase(text)
+        new_type = result.get("purchase_type", "unknown")
+        old_type = (inv.get("purchase_type") or "expense").strip().lower() or "expense"
+        exp = await db.expenses.find_one({"tenant_id": tid, "invoice_id": inv["id"]}, {"_id": 0})
+        currency = inv.get("currency") or await _currency(tid)
+        amount = _num(inv.get("amount"))
+        vend = (inv.get("contact_name") or "Vendor").strip()
+
+        if new_type == "unknown":
+            await db.invoices.update_one({"id": inv["id"], "tenant_id": tid},
+                                         {"$set": {"purchase_type": "unknown", "needs_reclassification": True}})
+            summary["unknown"] += 1
+            continue
+        if new_type == old_type:
+            await db.invoices.update_one({"id": inv["id"], "tenant_id": tid},
+                                         {"$set": {"purchase_type": new_type, "needs_reclassification": False}})
+            summary["unchanged"] += 1
+            continue
+
+        # Moving buckets → remove the old expense (and any asset it auto-spawned) first.
+        if new_type in ("asset", "inventory") and exp:
+            await db.assets.delete_many({"tenant_id": tid, "expense_id": exp["id"]})
+            await db.expenses.delete_one({"id": exp["id"], "tenant_id": tid})
+
+        if new_type == "asset":
+            await create_asset(tid, uid, {
+                "name": (result.get("asset_name") or li[:60] or f"Asset from {vend}").strip(),
+                "category": "Other", "purchase_amount": amount, "currency": currency,
+                "purchase_date": inv.get("date") or "", "vendor_name": vend,
+                "notes": f"Reclassified from bill {inv.get('number') or ''} · {li[:150]}".strip(),
+            }, source="reclassify")
+            summary["to_asset"] += 1
+        elif new_type == "inventory":
+            try:
+                qty = float(result.get("inventory_qty") or 0) or 1
+            except (TypeError, ValueError):
+                qty = 1
+            await create_inventory(tid, uid, {
+                "item": (li[:60] or f"Stock from {vend}").strip(), "quantity": qty,
+                "unit": (result.get("inventory_unit") or "unit").strip(),
+                "unit_cost": round(amount / qty, 2) if qty else amount, "currency": currency,
+                "vendor_name": vend, "notes": f"Reclassified from bill {inv.get('number') or ''}".strip(),
+            }, source="reclassify")
+            summary["to_inventory"] += 1
+        else:  # expense
+            if not exp:
+                await create_expense(tid, uid, {
+                    "title": f"{vend} — Bill {inv.get('number') or ''}".strip(), "amount": amount,
+                    "currency": currency, "vendor_name": vend, "vendor_id": inv.get("contact_id"),
+                    "date": inv.get("date") or "", "status": "unpaid",
+                    "invoice_id": inv["id"], "notes": li[:200],
+                }, source="reclassify")
+            summary["kept_expense"] += 1
+
+        await db.invoices.update_one({"id": inv["id"], "tenant_id": tid},
+                                     {"$set": {"purchase_type": new_type, "needs_reclassification": False}})
+
+    # Recomputed ledger → let cached AI analysis regenerate on next view.
+    await db.ledger_ai.delete_many({"tenant_id": tid})
+    await log_activity(tid, user["name"], "purchases_reclassified",
+                       f"Re-classified {summary['reviewed']} purchase bills "
+                       f"({summary['to_asset']} → asset, {summary['to_inventory']} → inventory)",
+                       "ledger", "reclassify")
+    return summary
+
+
 # --- Dashboard summary (monthly, by-category, by-vendor, paid/outstanding) --
 @router.get("/ledger/summary")
 async def ledger_summary(user: dict = Depends(require_ledger)):

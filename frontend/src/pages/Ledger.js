@@ -617,9 +617,23 @@ const TABS = [
 
 export default function Ledger() {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const [tab, setTab] = useState("overview");
+  const [reclassifying, setReclassifying] = useState(false);
   const qc = useQueryClient();
   const invalidate = () => ["ledger-summary", "expenses", "assets", "inventory"].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+
+  const reclassify = async () => {
+    if (!window.confirm("Re-run AI on all filed purchase bills and move any mis-booked ones into the correct bucket (Expense / Asset / Inventory)? This updates your ledger.")) return;
+    setReclassifying(true);
+    try {
+      const { data: s } = await api.post("/ledger/reclassify-purchases");
+      invalidate();
+      qc.invalidateQueries({ queryKey: ["ledger-ai"] });
+      toast.success(`Reviewed ${s.reviewed} bills — ${s.to_asset} → assets, ${s.to_inventory} → inventory${s.unknown ? `, ${s.unknown} need manual review` : ""}.`);
+    } catch (e) { toast.error(e?.response?.data?.detail || "Re-classification failed"); }
+    finally { setReclassifying(false); }
+  };
 
   const summaryQ = useQuery({ queryKey: ["ledger-summary"], queryFn: () => api.get("/ledger/summary").then((r) => r.data) });
   const expensesQ = useQuery({ queryKey: ["expenses"], queryFn: () => api.get("/expenses").then((r) => r.data) });
@@ -657,6 +671,14 @@ export default function Ledger() {
             ))}
           </div>
           {addBtn}
+          {user?.role === "owner" && (
+            <button onClick={reclassify} disabled={reclassifying} data-testid="ledger-reclassify-btn"
+              title="Re-run AI classification on historical purchase bills"
+              className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-semibold uppercase tracking-wider border border-black bg-white hover:bg-black/5 transition-colors disabled:opacity-50 w-full sm:w-auto">
+              <ArrowClockwise size={15} weight="bold" className={reclassifying ? "animate-spin" : ""} />
+              {reclassifying ? "Re-classifying…" : "Fix old purchases"}
+            </button>
+          )}
         </div>
       </PageHeader>
 

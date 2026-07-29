@@ -1,0 +1,46 @@
+{
+  "summary": "Verified backend gate + reclassify endpoint (8/8 pytest pass) and frontend Ingest/Ledger/Captures bucket-picker UX. All 6 behaviours in the review request work as spec'd end-to-end against real backend + AI.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "backend_tests_executed": {
+    "TestCommitUnknownGate::test_commit_rejects_unknown": "PASS – POST /api/ingest/{id}/commit returns 400 'Please classify…' when purchase_type='unknown'",
+    "TestCommitUnknownGate::test_commit_rejects_blank": "PASS – same for purchase_type=''",
+    "TestCommitUnknownGate::test_commit_succeeds_asset": "PASS – purchase_type='asset' routes to /assets and creates a row",
+    "TestCommitUnknownGate::test_commit_succeeds_inventory": "PASS – 'inventory' routes to /inventory",
+    "TestCommitUnknownGate::test_commit_succeeds_expense": "PASS – 'expense' routes to /expenses",
+    "TestReclassifyEndpoint::test_non_owner_forbidden_sales": "PASS – sales gets 403",
+    "TestReclassifyEndpoint::test_non_owner_forbidden_finance": "PASS – finance (has ledger perm but not owner) gets 403",
+    "TestReclassifyEndpoint::test_owner_returns_summary": "PASS – owner gets JSON summary {reviewed,to_asset,to_inventory,kept_expense,unknown,unchanged}"
+  },
+  "frontend_tests_executed": {
+    "ingest_resume_review_bucket_visible": "PASS – seeded review-status ingestion, clicking Review shows ReviewPanel with review-invoice-bucket-select-0",
+    "ingest_file_it_blocked_when_unclassified": "PASS – 'File it' with purchase_type=unknown shows toast 'Classify each purchase bill…' and does NOT file (review panel stays)",
+    "ingest_file_it_succeeds_after_pick": "PASS – picking 'expense' + File it → 'Filed:' toast, ingestion filed",
+    "ledger_reclassify_btn_owner": "PASS – owner sees data-testid=ledger-reclassify-btn on /ledger",
+    "ledger_reclassify_btn_sales_hidden": "PASS – sales does NOT see the button",
+    "ledger_reclassify_btn_finance_hidden": "PASS – finance does NOT see the button",
+    "capture_bucket_picker_visible": "PASS – seeded capture_draft (needs_attention) shows capture-bucket-select-<id>-0 with 'Classify purchase before approving' block",
+    "capture_approve_disabled_before_pick": "PASS – Approve button disabled while purchase_type unclassified",
+    "capture_approve_enabled_after_pick": "PASS – after choosing Expense (PATCH /api/captures/{id}) Approve becomes enabled"
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration67_purchase_classify.py",
+    "/app/test_reports/pytest/iteration_67.xml"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration67_purchase_classify.py"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "commit_ingestion_records raises HTTPException 400 mid-loop after some records may already have been inserted (e.g. contacts). Not a functional bug for the tested flow (invoices processed before payments/tasks and the caller wraps in try/finally at DB level? — actually no rollback). If a doc has contacts + one invoice, the contact insert has already committed before the 400 fires. Consider validating all invoices up-front before any insert.",
+    "reclassify_purchases loads up to 5000 bills into memory and awaits ai_classify_purchase serially — for large tenants this will be slow and hit AI rate limits. Consider background job + progress.",
+    "Finance seed user got 'Access Denied' on /ingest (data_input perm missing from that user's explicit permissions array in DB). Not in scope of this iteration but blocks finance from ever seeing the Review Queue UI — worth confirming with main agent."
+  ],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "100% (9/9 UI checks)"},
+  "test_credentials": "owner@sharma.com / demo1234, finance@sharma.com / demo1234, sales@sharma.com / demo1234 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Seeded 1 ingestion (status=review, purchase_bill purchase_type=unknown) and 1 capture_draft (status=needs_attention, purchase_bill unknown) into mongo; all cleaned up after tests.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "test_iteration67_purchase_classify.py seeds/cleans its own mongo docs and is safe to re-run. For UI, seed script /tmp/seed_iter67.py inserts a review-ingestion + needs_attention capture — the ingest review is accessed via the 'Review' button on Recent Uploads list and the capture via /ingest → Review Queue tab → Needs Attention sub-tab. Note: finance seed user's permissions in DB may not include data_input, blocking /ingest UI for that role.",
+  "rca of the issue": "N/A – all specified behaviours verified passing."
+}

@@ -380,6 +380,8 @@ export default function Inbox() {
   const [uploadFiles, setUploadFiles] = useState([]);
   const voiceAttachRef = useRef(null);
   const textAttachRef = useRef(null);
+  const voiceCameraRef = useRef(null);
+  const textCameraRef = useRef(null);
   const uploadRef = useRef(null);
   const uploadCameraRef = useRef(null);
   const languageRef = useRef("auto");
@@ -653,12 +655,20 @@ export default function Inbox() {
                     className={`px-3 py-1.5 text-xs font-semibold border-r border-black last:border-r-0 transition-colors ${language === l.key ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>{l.label}</button>
                 ))}
               </div>
-              <button onClick={() => voiceAttachRef.current?.click()} data-testid="voice-attach-file"
-                className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider border border-black px-3 py-1.5 hover:bg-brand-yellow transition-colors">
-                <Paperclip size={13} weight="bold" /> Attach a file (optional)
-              </button>
+              <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                <button onClick={() => voiceAttachRef.current?.click()} data-testid="voice-attach-file"
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider border border-black px-3 py-1.5 hover:bg-brand-yellow transition-colors">
+                  <Paperclip size={13} weight="bold" /> Attach files
+                </button>
+                <button onClick={() => voiceCameraRef.current?.click()} data-testid="voice-capture-photo"
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider border border-black px-3 py-1.5 hover:bg-brand-yellow transition-colors">
+                  <Camera size={13} weight="bold" /> Add photo
+                </button>
+              </div>
               <input ref={voiceAttachRef} type="file" multiple accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" className="hidden"
                 onChange={(e) => { setVoiceFiles((prev) => [...prev, ...Array.from(e.target.files || [])]); e.target.value = ""; }} />
+              <input ref={voiceCameraRef} type="file" accept="image/*" capture="environment" className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) setVoiceFiles((prev) => [...prev, f]); e.target.value = ""; }} />
               <AttachChips files={voiceFiles} testid="voice-attachments" onRemove={(i) => setVoiceFiles(voiceFiles.filter((_, j) => j !== i))} />
             </div>
 
@@ -706,12 +716,18 @@ export default function Inbox() {
                   </button>
                   <button onClick={() => textAttachRef.current?.click()} data-testid="text-attach-file"
                     className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider border border-black px-3 py-2 hover:bg-brand-yellow transition-colors">
-                    <Paperclip size={13} weight="bold" /> Attach a file
+                    <Paperclip size={13} weight="bold" /> Attach files
+                  </button>
+                  <button onClick={() => textCameraRef.current?.click()} data-testid="text-capture-photo"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider border border-black px-3 py-2 hover:bg-brand-yellow transition-colors">
+                    <Camera size={13} weight="bold" /> Add photo
                   </button>
                 </div>
               )}
               <input ref={textAttachRef} type="file" multiple accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" className="hidden"
                 onChange={(e) => { setTextFiles((prev) => [...prev, ...Array.from(e.target.files || [])]); e.target.value = ""; }} />
+              <input ref={textCameraRef} type="file" accept="image/*" capture="environment" className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) setTextFiles((prev) => [...prev, f]); e.target.value = ""; }} />
               {textFiles.length > 0 && (
                 <ul className="mt-3 flex flex-wrap gap-2" data-testid="text-attachments">
                   {textFiles.map((f, i) => (
@@ -732,7 +748,7 @@ export default function Inbox() {
               <UploadSimple size={20} weight="bold" className="text-brand-blue mt-0.5 shrink-0" />
               <div>
                 <p className="font-heading font-bold uppercase tracking-tight text-sm">No need to speak or type — the file is the directive</p>
-                <p className="text-xs text-muted-foreground">Upload or snap a photo of an order, invoice, list, PDF, Word or Excel. AI reads it and proposes the decision, tasks, assignments &amp; deadlines — then it goes to Review &amp; Approve.</p>
+                <p className="text-xs text-muted-foreground">Upload files or snap photos of an order, invoice, list, business card, PDF, Word or Excel. Add <strong>several pages together</strong> (e.g. front &amp; back of a card, a multi-page order) — AI reads them all as one and proposes the decision, tasks, assignments &amp; deadlines, then it goes to Review &amp; Approve.</p>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">

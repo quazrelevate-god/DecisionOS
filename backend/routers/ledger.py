@@ -777,19 +777,88 @@ async def delete_revenue_payment(pid: str, user: dict = Depends(require_ledger))
     return {"ok": True}
 
 
-# --- Re-classify historical purchase bills (fix mis-booked expenses) --------
-@router.post("/ledger/reclassify-purchases")
-async def reclassify_purchases(user: dict = Depends(require_ledger)):
-    """Owner-only: re-run AI classification over every already-filed purchase bill and move
-    mis-booked ones into the correct bucket (expense / asset / inventory). Purchases the AI
-    still can't classify are tagged `unknown` and left as-is for manual review."""
-    if user.get("role") != "owner":
-        raise HTTPException(status_code=403, detail="Only the owner can re-run purchase classification")
+# --- Full finance re-sync: reclassify + re-categorize + recompute outstanding ---
+async def _recategorize_expenses(tid: str, fc: dict) -> int:
+    """Re-tag expenses whose category is missing / 'Other' / not in the company list."""
+    changed = 0
+    exps = await db.expenses.find({"tenant_id": tid}, {"_id": 0}).to_list(5000)
+    for e in exps:
+        cur = (e.get("category") or "").strip()
+        if cur in fc["expense"] and cur != "Other":
+            continue  # already a good company category
+        text = f"{e.get('title', '')} {e.get('vendor_name', '')} {e.get('notes', '')}"
+        newcat = await ai_suggest_expense_category(text, tid)
+        if newcat and newcat != cur:
+            await db.expenses.update_one({"id": e["id"], "tenant_id": tid}, {"$set": {"category": newcat}})
+            changed += 1
+    return changed
+
+
+async def _recategorize_assets(tid: str, fc: dict) -> int:
+    """Snap asset categories onto the company list using the keyword heuristic (no AI cost)."""
+    changed = 0
+    assets = await db.assets.find({"tenant_id": tid}, {"_id": 0}).to_list(5000)
+    for a in assets:
+        cur = (a.get("category") or "").strip()
+        if cur in fc["asset"] and cur != "Other":
+            continue
+        newcat = _match_category(guess_asset_category(f"{a.get('name', '')} {a.get('notes', '')}"), fc["asset"], "Other")
+        if newcat != cur:
+            await db.assets.update_one({"id": a["id"], "tenant_id": tid}, {"$set": {"category": newcat}})
+            changed += 1
+    return changed
+
+
+async def _recompute_outstanding(tid: str) -> dict:
+    """Rebuild payment↔invoice links and recompute each invoice's amount_paid / status,
+    so Outstanding (receivable & payable) is correct. Preserves existing/manual links and
+    'standalone' payments; auto-matches anything still unlinked."""
+    stats = {"payments_matched": 0, "payments_unmatched": 0, "invoices_settled": 0, "invoices_partial": 0}
+    # 1) Auto-match any unlinked, non-standalone payment.
+    for p in await db.payments.find({"tenant_id": tid}, {"_id": 0}).to_list(8000):
+        if p.get("match_status") == "standalone" or p.get("invoice_id"):
+            continue
+        inv = await _find_matching_invoice(tid, p.get("direction"), p)
+        if inv:
+            await db.payments.update_one({"id": p["id"], "tenant_id": tid},
+                                         {"$set": {"invoice_id": inv["id"], "match_status": "matched", "matched_by": "auto"}})
+        else:
+            await db.payments.update_one({"id": p["id"], "tenant_id": tid}, {"$set": {"match_status": "unmatched"}})
+    # 2) Recompute amount_paid + status for every invoice from its linked payments.
+    payments = await db.payments.find({"tenant_id": tid}, {"_id": 0}).to_list(8000)
+    paid_by_inv = {}
+    for p in payments:
+        if p.get("invoice_id"):
+            paid_by_inv[p["invoice_id"]] = paid_by_inv.get(p["invoice_id"], 0) + _num(p.get("amount"))
+        if p.get("match_status") == "matched":
+            stats["payments_matched"] += 1
+        elif p.get("match_status") == "unmatched":
+            stats["payments_unmatched"] += 1
+    invoices = await db.invoices.find({"tenant_id": tid, "type": {"$in": ["sales_invoice", "purchase_bill"]}}, {"_id": 0}).to_list(8000)
+    for inv in invoices:
+        total = _num(inv.get("amount"))
+        paid = round(paid_by_inv.get(inv["id"], 0), 2)
+        status = "paid" if total > 0 and paid + 0.01 >= total else ("partial" if paid > 0 else "unpaid")
+        await db.invoices.update_one({"id": inv["id"], "tenant_id": tid},
+                                     {"$set": {"amount_paid": paid, "status": status}})
+        if status == "paid":
+            stats["invoices_settled"] += 1
+        elif status == "partial":
+            stats["invoices_partial"] += 1
+    return stats
+
+
+async def resync_finance(tid: str, uid: str, user_name: str = "System") -> dict:
+    """The full 'Fix Mis-booked Purchases' engine: (1) re-classify purchase bills into the right
+    bucket with company categories, (2) re-categorize expenses & assets onto the company categories,
+    (3) recompute payment matching & outstanding balances."""
     from server import ai_classify_purchase
-    tid, uid = user["tenant_id"], user["id"]
     fc = await get_finance_categories(tid)
     bills = await db.invoices.find({"tenant_id": tid, "type": "purchase_bill"}, {"_id": 0}).to_list(5000)
-    summary = {"reviewed": 0, "to_asset": 0, "to_inventory": 0, "kept_expense": 0, "unknown": 0, "unchanged": 0}
+    summary = {"reviewed": 0, "to_asset": 0, "to_inventory": 0, "kept_expense": 0, "unknown": 0, "unchanged": 0,
+               "expenses_recategorized": 0, "assets_recategorized": 0,
+               "payments_matched": 0, "payments_unmatched": 0, "invoices_settled": 0, "invoices_partial": 0}
+    # STEP 1 — reclassify purchase bills into expense / asset / inventory.
     for inv in bills:
         summary["reviewed"] += 1
         li = " ".join(str(x.get("description", "")) for x in (inv.get("line_items") or []) if isinstance(x, dict))
@@ -814,7 +883,6 @@ async def reclassify_purchases(user: dict = Depends(require_ledger)):
             summary["unchanged"] += 1
             continue
 
-        # Moving buckets → remove the old expense (and any asset it auto-spawned) first.
         if new_type in ("asset", "inventory") and exp:
             await db.assets.delete_many({"tenant_id": tid, "expense_id": exp["id"]})
             await db.expenses.delete_one({"id": exp["id"], "tenant_id": tid})
@@ -854,13 +922,30 @@ async def reclassify_purchases(user: dict = Depends(require_ledger)):
         await db.invoices.update_one({"id": inv["id"], "tenant_id": tid},
                                      {"$set": {"purchase_type": new_type, "needs_reclassification": False}})
 
-    # Recomputed ledger → let cached AI analysis regenerate on next view.
+    # STEP 2 — re-categorize expenses & assets onto the company categories.
+    summary["expenses_recategorized"] = await _recategorize_expenses(tid, fc)
+    summary["assets_recategorized"] = await _recategorize_assets(tid, fc)
+
+    # STEP 3 — rebuild payment matching + recompute outstanding balances.
+    summary.update(await _recompute_outstanding(tid))
+
     await db.ledger_ai.delete_many({"tenant_id": tid})
-    await log_activity(tid, user["name"], "purchases_reclassified",
-                       f"Re-classified {summary['reviewed']} purchase bills "
-                       f"({summary['to_asset']} → asset, {summary['to_inventory']} → inventory)",
-                       "ledger", "reclassify")
+    await log_activity(tid, user_name, "finance_resynced",
+                       f"Finance re-sync: reviewed {summary['reviewed']} bills "
+                       f"({summary['to_asset']}→asset, {summary['to_inventory']}→inventory), "
+                       f"re-categorized {summary['expenses_recategorized']} expenses, "
+                       f"settled {summary['invoices_settled']} invoices", "ledger", "resync")
     return summary
+
+
+# --- Re-classify historical purchase bills (fix mis-booked expenses) --------
+@router.post("/ledger/reclassify-purchases")
+async def reclassify_purchases(user: dict = Depends(require_ledger)):
+    """Owner-only 'Fix Mis-booked Purchases': re-classify purchase bills into the right bucket,
+    re-categorize expenses/assets onto the company categories, and recompute outstanding balances."""
+    if user.get("role") != "owner":
+        raise HTTPException(status_code=403, detail="Only the owner can re-run purchase classification")
+    return await resync_finance(user["tenant_id"], user["id"], user.get("name") or "Owner")
 
 
 # --- Dashboard summary (monthly, by-category, by-vendor, paid/outstanding) --

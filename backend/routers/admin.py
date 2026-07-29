@@ -417,21 +417,22 @@ async def admin_ai_keys_status(admin: dict = Depends(get_platform_admin)):
 
 # --- Bulk purchase re-classification (fix mis-booked historical bills) ------
 async def _run_reclassify_all(job_id: str, admin_email: str):
-    from routers.ledger import reclassify_purchases
+    from routers.ledger import resync_finance
     tenants = await db.tenants.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(10000)
-    totals = {"reviewed": 0, "to_asset": 0, "to_inventory": 0, "kept_expense": 0, "unknown": 0, "unchanged": 0}
+    totals = {"reviewed": 0, "to_asset": 0, "to_inventory": 0, "kept_expense": 0, "unknown": 0, "unchanged": 0,
+              "expenses_recategorized": 0, "assets_recategorized": 0,
+              "payments_matched": 0, "invoices_settled": 0, "invoices_partial": 0}
     done = 0
     for t in tenants:
         tid = t["id"]
         try:
             owner = await db.users.find_one({"tenant_id": tid, "role": "owner"}, {"_id": 0, "id": 1, "name": 1})
             if owner:
-                user = {"id": owner["id"], "tenant_id": tid, "role": "owner", "name": owner.get("name") or "Owner"}
-                s = await reclassify_purchases(user)
+                s = await resync_finance(tid, owner["id"], owner.get("name") or "Owner")
                 for k in totals:
                     totals[k] += s.get(k, 0)
         except Exception as e:  # noqa: BLE001
-            logger.warning(f"reclassify-all failed for tenant {tid}: {e}")
+            logger.warning(f"finance resync failed for tenant {tid}: {e}")
         done += 1
         await db.reclassify_jobs.update_one(
             {"id": job_id}, {"$set": {"processed": done, "total": len(tenants), "totals": totals}})
@@ -441,7 +442,8 @@ async def _run_reclassify_all(job_id: str, admin_email: str):
 
 @router.post("/reclassify-purchases")
 async def admin_reclassify_purchases(admin: dict = Depends(get_platform_admin)):
-    """Start a background job that re-classifies mis-booked purchase bills across ALL workspaces."""
+    """Start a background job that re-syncs finance (reclassify + re-categorize + recompute
+    outstanding) across ALL workspaces."""
     running = await db.reclassify_jobs.find_one({"status": "running"}, {"_id": 0})
     if running:
         return {"job_id": running["id"], "status": "running", "already_running": True}
@@ -450,10 +452,12 @@ async def admin_reclassify_purchases(admin: dict = Depends(get_platform_admin)):
     await db.reclassify_jobs.insert_one({
         "id": job_id, "status": "running", "started_by": admin.get("email"),
         "started_at": now_iso(), "processed": 0, "total": tenant_count,
-        "totals": {"reviewed": 0, "to_asset": 0, "to_inventory": 0, "kept_expense": 0, "unknown": 0, "unchanged": 0},
+        "totals": {"reviewed": 0, "to_asset": 0, "to_inventory": 0, "kept_expense": 0, "unknown": 0, "unchanged": 0,
+                   "expenses_recategorized": 0, "assets_recategorized": 0,
+                   "payments_matched": 0, "invoices_settled": 0, "invoices_partial": 0},
     })
     await log_admin_action(admin, "reclassify_purchases",
-                           f"Started bulk purchase re-classification across {tenant_count} workspaces",
+                           f"Started bulk finance re-sync across {tenant_count} workspaces",
                            "ledger", job_id)
     asyncio.create_task(_run_reclassify_all(job_id, admin.get("email")))
     return {"job_id": job_id, "status": "running", "total": tenant_count}

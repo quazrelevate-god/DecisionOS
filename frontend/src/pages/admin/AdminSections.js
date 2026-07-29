@@ -611,10 +611,10 @@ export function MaintenanceSection() {
     <div data-testid="admin-maintenance">
       <h2 className={H2 + " mb-2"}>Fix Mis-booked Purchases</h2>
       <p className="font-mono text-xs text-white/50 mb-5 max-w-2xl leading-relaxed">
-        Re-runs the AI classifier over every filed purchase bill in ALL workspaces and moves the
-        mis-booked ones into the correct ledger bucket — a bill for machinery becomes an Asset, raw
-        material becomes Inventory, and the rest stay as Expenses. Bills the AI still can't judge are
-        flagged for manual review. Safe to run more than once.
+        Full finance re-sync across ALL workspaces: re-classifies every purchase bill into the right
+        bucket (Expense / Asset / Inventory), re-tags Expenses & Assets with each company's AI-generated
+        categories, and rebuilds payment↔invoice matching so Outstanding balances are correct. Bills the
+        AI still can't judge are flagged for manual review. Safe to run more than once.
       </p>
 
       <button data-testid="admin-reclassify-start" onClick={start} disabled={busy || running}
@@ -643,9 +643,12 @@ export function MaintenanceSection() {
               { k: "reviewed", label: "Bills reviewed" },
               { k: "to_asset", label: "→ Assets" },
               { k: "to_inventory", label: "→ Inventory" },
-              { k: "kept_expense", label: "Kept as Expense" },
+              { k: "expenses_recategorized", label: "Expenses re-categorized" },
+              { k: "assets_recategorized", label: "Assets re-categorized" },
+              { k: "payments_matched", label: "Payments matched" },
+              { k: "invoices_settled", label: "Invoices settled" },
+              { k: "invoices_partial", label: "Partially paid" },
               { k: "unknown", label: "Needs manual review" },
-              { k: "unchanged", label: "Already correct" },
             ].map((c) => (
               <div key={c.k} className="border border-white/10 p-3" data-testid={`reclassify-stat-${c.k}`}>
                 <div className="font-heading text-2xl font-black text-white tracking-tighter">{totals[c.k] ?? 0}</div>

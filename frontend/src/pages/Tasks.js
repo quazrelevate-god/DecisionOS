@@ -37,6 +37,7 @@ const EMPTY_FORM = {
   title: "", description: "", task_type: "operational", op_category: "Presentation",
   assignee_id: "", assignee_role: "", support_id: "", priority: "medium",
   due_date: "", due_time: "", expected_output: "", approval_required: false, approver_id: "",
+  evidence_required: false,
 };
 
 export function NewTaskDialog({ onCreated, roleOptions, members, defaultType, triggerClassName }) {
@@ -44,7 +45,7 @@ export function NewTaskDialog({ onCreated, roleOptions, members, defaultType, tr
   const cats = opModel(tenant).task_categories;
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM, task_type: defaultType || cats[0]?.key || "operational" });
-  const [file, setFile] = useState(null);
+  const [files, setFiles] = useState([]);
   const [busy, setBusy] = useState(false);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const isOp = form.task_type === "operational";
@@ -66,17 +67,20 @@ export function NewTaskDialog({ onCreated, roleOptions, members, defaultType, tr
         expected_output: form.expected_output || null,
         approval_required: form.approval_required,
         approver_id: form.approval_required ? (form.approver_id || null) : null,
+        evidence_required: form.evidence_required,
       });
-      if (file && task?.id) {
-        const fd = new FormData();
-        fd.append("file", file, file.name);
-        fd.append("kind", "file");
-        try { await api.post(`/tasks/${task.id}/attachment`, fd, { headers: { "Content-Type": "multipart/form-data" } }); }
-        catch { toast.error("Task created, but attachment upload failed"); }
+      if (files.length && task?.id) {
+        for (const f of files) {
+          const fd = new FormData();
+          fd.append("file", f, f.name);
+          fd.append("kind", "reference");
+          try { await api.post(`/tasks/${task.id}/attachment`, fd, { headers: { "Content-Type": "multipart/form-data" } }); }
+          catch { toast.error(`Task created, but "${f.name}" failed to upload`); }
+        }
       }
       toast.success("Task created");
       setForm({ ...EMPTY_FORM, task_type: defaultType || "operational" });
-      setFile(null);
+      setFiles([]);
       setOpen(false);
       onCreated();
     } catch (e) { toast.error(e.response?.data?.detail || "Create failed"); }
@@ -171,9 +175,24 @@ export function NewTaskDialog({ onCreated, roleOptions, members, defaultType, tr
               <p className="label-mono text-muted-foreground mt-1">Grant approval access to a user in People → Access Control.</p>
             </div>
           )}
+          <label className="flex items-center gap-2 text-sm font-mono cursor-pointer">
+            <input data-testid="task-evidence-required" type="checkbox" className="w-4 h-4 border border-black" checked={form.evidence_required} onChange={(e) => setForm({ ...form, evidence_required: e.target.checked })} />
+            Require proof of work before completion
+          </label>
           <div>
-            <label className="label-mono text-muted-foreground flex items-center gap-1"><Paperclip size={12} weight="bold" /> Attachment</label>
-            <input data-testid="task-attachment-input" type="file" className={`${inp} mt-1`} onChange={(e) => setFile(e.target.files?.[0] || null)} />
+            <label className="label-mono text-muted-foreground flex items-center gap-1"><Paperclip size={12} weight="bold" /> Reference material (optional)</label>
+            <input data-testid="task-attachment-input" type="file" multiple className={`${inp} mt-1`} onChange={(e) => setFiles(Array.from(e.target.files || []))} />
+            <p className="label-mono text-muted-foreground mt-1">Attach images, PDFs or docs to give the assignee context. AI reads them and summarises what to do.</p>
+            {files.length > 0 && (
+              <ul className="mt-2 space-y-1" data-testid="task-attachment-list">
+                {files.map((f, i) => (
+                  <li key={i} className="flex items-center justify-between gap-2 border border-black/20 px-2 py-1 text-xs font-mono">
+                    <span className="truncate">{f.name}</span>
+                    <button type="button" onClick={() => setFiles(files.filter((_, j) => j !== i))} className="text-brand-red font-bold shrink-0">Remove</button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
           <p className="label-mono text-muted-foreground">Created by: {user?.name}</p>
         </div>

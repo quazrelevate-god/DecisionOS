@@ -19,6 +19,7 @@ import {
   ArrowBendUpRight, WarningCircle, ChatText, ArrowRight, Kanban, ListChecks as ListIcon,
   Paperclip, UserCircle, ShieldCheck, Tag, ClockCounterClockwise,
   ArrowClockwise, XCircle, LockKey, X, AirplaneTakeoff, MagnifyingGlassPlus, Eye,
+  File, FileArrowUp, Lightbulb, Info,
 } from "@phosphor-icons/react";
 
 const CTRL = "flex items-center justify-center gap-1.5 px-2 lg:px-4 py-2 text-[11px] lg:text-sm font-semibold uppercase tracking-wider border border-black transition-all text-center leading-tight";
@@ -442,9 +443,14 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
   const steps = t.execution_plan?.steps || [];
   const attachments = t.attachments || [];
   const updates = t.updates || [];
-  const photos = attachments.filter((a) => a.kind === "photo");
-  const voices = attachments.filter((a) => a.kind !== "photo");
+  const refs = attachments.filter((a) => a.kind === "reference");
+  const proof = attachments.filter((a) => a.kind !== "reference");
+  const insights = t.reference_insights || [];
+  const photos = proof.filter((a) => a.kind === "photo" || (a.content_type || "").startsWith("image/"));
+  const voices = proof.filter((a) => !(a.kind === "photo" || (a.content_type || "").startsWith("image/")));
   const url = (u) => `${process.env.REACT_APP_BACKEND_URL}${u}`;
+  const isImg = (a) => a.kind === "photo" || (a.content_type || "").startsWith("image/");
+  const isAudio = (a) => a.kind === "voice" || (a.content_type || "").startsWith("audio/");
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) { setZoom(null); setConfirmDel(false); } onOpenChange(o); }}>
       <DialogContent className="border border-black rounded-none max-w-2xl max-h-[90vh] overflow-y-auto" data-testid={`task-detail-${t.id}`}>
@@ -480,9 +486,42 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
               </div>
             )}
 
+            {refs.length > 0 && (
+              <div data-testid={`detail-reference-${t.id}`}>
+                <p className="flex items-center gap-2 font-heading font-extrabold uppercase tracking-tight text-sm mb-2"><Paperclip size={15} weight="bold" className="text-brand-blue" /> Reference material · {refs.length}</p>
+                <div className="flex flex-wrap gap-2 items-center">
+                  {refs.map((a) => (
+                    isImg(a)
+                      ? <button key={a.url} type="button" onClick={() => setZoom(url(a.url))} data-testid={`detail-ref-photo-${t.id}-${a.url}`}
+                          className="relative w-24 h-24 border border-black overflow-hidden group" title="Click to view full image">
+                          <img src={url(a.url)} alt={a.filename || "reference"} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                          <span className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"><MagnifyingGlassPlus size={20} weight="bold" className="text-white" /></span>
+                        </button>
+                      : isAudio(a)
+                        ? <audio key={a.url} controls preload="none" src={url(a.url)} className="h-9 w-full" data-testid={`detail-ref-voice-${t.id}-${a.url}`} />
+                        : <a key={a.url} href={url(a.url)} target="_blank" rel="noreferrer" data-testid={`detail-ref-file-${t.id}-${a.url}`}
+                            className="inline-flex items-center gap-1.5 border border-black bg-white px-2.5 py-1.5 text-xs font-mono hover:bg-brand-yellow transition-colors max-w-[220px]">
+                            <File size={14} weight="bold" /> <span className="truncate">{a.filename || "file"}</span>
+                          </a>
+                  ))}
+                </div>
+                {insights.map((ins, i) => (
+                  <div key={i} className="mt-3 border border-brand-blue/40 bg-brand-blue/[0.04] p-3" data-testid={`detail-ref-insight-${t.id}-${i}`}>
+                    <p className="flex items-center gap-1.5 label-mono text-brand-blue mb-1"><Lightbulb size={13} weight="fill" className="text-brand-yellow" /> AI read this reference{ins.filename ? ` · ${ins.filename}` : ""}</p>
+                    <p className="text-sm">{ins.summary}</p>
+                    {(ins.points || []).length > 0 && (
+                      <ul className="mt-2 space-y-1">
+                        {ins.points.map((p, j) => <li key={j} className="flex items-start gap-1.5 text-xs text-muted-foreground"><ArrowRight size={11} weight="bold" className="mt-0.5 shrink-0 text-brand-blue" /> {p}</li>)}
+                      </ul>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div>
-              <p className="flex items-center gap-2 font-heading font-extrabold uppercase tracking-tight text-sm mb-2"><Paperclip size={15} weight="bold" className="text-brand-red" /> Proof of work{attachments.length > 0 ? ` · ${attachments.length}` : ""}</p>
-              {attachments.length === 0 ? (
+              <p className="flex items-center gap-2 font-heading font-extrabold uppercase tracking-tight text-sm mb-2"><Paperclip size={15} weight="bold" className="text-brand-red" /> Proof of work{proof.length > 0 ? ` · ${proof.length}` : ""}</p>
+              {proof.length === 0 ? (
                 <p className="text-sm text-muted-foreground" data-testid={`detail-no-proof-${t.id}`}>No proof uploaded for this task.</p>
               ) : (
                 <div className="space-y-2">
@@ -498,7 +537,12 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
                     </div>
                   )}
                   {voices.map((a) => (
-                    <audio key={a.url} controls preload="none" src={url(a.url)} className="h-9 w-full" data-testid={`detail-voice-${t.id}-${a.url}`} />
+                    isAudio(a)
+                      ? <audio key={a.url} controls preload="none" src={url(a.url)} className="h-9 w-full" data-testid={`detail-voice-${t.id}-${a.url}`} />
+                      : <a key={a.url} href={url(a.url)} target="_blank" rel="noreferrer" data-testid={`detail-proof-file-${t.id}-${a.url}`}
+                          className="inline-flex items-center gap-1.5 border border-black bg-white px-2.5 py-1.5 text-xs font-mono hover:bg-brand-yellow transition-colors max-w-[220px]">
+                          <File size={14} weight="bold" /> <span className="truncate">{a.filename || "file"}</span>
+                        </a>
                   ))}
                 </div>
               )}
@@ -558,9 +602,12 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
   const [lightbox, setLightbox] = useState(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const fileRef = useRef(null);
+  const evidenceRef = useRef(null);
   const mediaRef = useRef(null);
   const chunksRef = useRef([]);
   const cancelledRef = useRef(false);
+  const proofAtts = (t.attachments || []).filter((a) => a.kind !== "reference");
+  const hasEvidence = proofAtts.length > 0;
   const canApprove = t.approval_required && (user?.role === "owner" || user?.id === t.approver_id || (!t.approver_id && userPerms(user).includes("approvals")));
   const awaitingApproval = t.approval_required && t.approval_status !== "approved";
   const lockedForAssignee = awaitingApproval && !canApprove;
@@ -588,7 +635,8 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
     fd.append("kind", kind);
     try {
       await api.post(`/tasks/${t.id}/attachment`, fd, { headers: { "Content-Type": "multipart/form-data" } });
-      toast.success(`${kind === "photo" ? "Photo" : "Voice reply"} added`);
+      const label = kind === "photo" ? "Photo" : kind === "voice" ? "Voice reply" : "File";
+      toast.success(`${label} added`);
       onChange();
     } catch {
       toast.error("Upload failed");
@@ -600,6 +648,12 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
   const onPhoto = (e) => {
     const f = e.target.files?.[0];
     if (f) upload(f, "photo");
+  };
+
+  const onEvidence = (e) => {
+    const f = e.target.files?.[0];
+    if (f) upload(f, "evidence");
+    e.target.value = "";
   };
 
   const toggleVoice = async () => {
@@ -637,10 +691,15 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
   };
 
   const complete = async () => {
+    if (t.evidence_required && !hasEvidence) {
+      return toast.error("This task requires proof — add a photo, voice note, or file before completing.");
+    }
     if (!window.confirm(`Mark "${t.title}" as complete? You can reopen it later if needed.`)) return;
-    await api.patch(`/tasks/${t.id}`, { status: "done" });
-    toast.success("Task completed");
-    onChange();
+    try {
+      await api.patch(`/tasks/${t.id}`, { status: "done" });
+      toast.success("Task completed");
+      onChange();
+    } catch (e) { toast.error(e.response?.data?.detail || "Could not complete task"); }
   };
 
   const reopen = async () => {
@@ -650,9 +709,11 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
   };
 
   const setStatus = async (status) => {
-    await api.patch(`/tasks/${t.id}`, { status });
-    toast.success(`Status: ${STATUS_LABEL[status] || status}`);
-    onChange();
+    try {
+      await api.patch(`/tasks/${t.id}`, { status });
+      toast.success(`Status: ${STATUS_LABEL[status] || status}`);
+      onChange();
+    } catch (e) { toast.error(e.response?.data?.detail || "Could not update status"); }
   };
   const setProgress = async (progress) => {
     await api.patch(`/tasks/${t.id}`, { progress: Number(progress) });
@@ -730,27 +791,58 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
         </div>
       )}
 
-      {(t.attachments || []).length > 0 && (
-        <div className="mt-3 border border-black/15 bg-black/[0.02] p-3" data-testid={`proof-block-${t.id}`}>
-          <p className="label-mono text-muted-foreground flex items-center gap-1.5 mb-2">
-            <Paperclip size={13} weight="bold" /> Proof of work · {t.attachments.length}
-          </p>
-          <div className="flex flex-wrap gap-2 items-center">
-            {t.attachments.map((a) => (
-              a.kind === "photo"
-                ? <button key={a.url} type="button" onClick={() => setLightbox(`${process.env.REACT_APP_BACKEND_URL}${a.url}`)}
-                    className="relative w-20 h-20 border border-black overflow-hidden group" title="Click to view full photo"
-                    data-testid={`att-photo-${t.id}-${a.url}`}>
-                    <img src={`${process.env.REACT_APP_BACKEND_URL}${a.url}`} alt="proof" className="w-full h-full object-cover transition-transform group-hover:scale-105" />
-                    <span className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
-                      <MagnifyingGlassPlus size={20} weight="bold" className="text-white" />
-                    </span>
-                  </button>
-                : <audio key={a.url} controls preload="none" src={`${process.env.REACT_APP_BACKEND_URL}${a.url}`} className="h-9" data-testid={`att-voice-${t.id}-${a.url}`} />
-            ))}
-          </div>
-        </div>
-      )}
+      {(() => {
+        const beUrl = process.env.REACT_APP_BACKEND_URL;
+        const atts = t.attachments || [];
+        const refs = atts.filter((a) => a.kind === "reference");
+        const proof = atts.filter((a) => a.kind !== "reference");
+        const insights = t.reference_insights || [];
+        const isImg = (a) => a.kind === "photo" || (a.content_type || "").startsWith("image/");
+        const isAudio = (a) => a.kind === "voice" || (a.content_type || "").startsWith("audio/");
+        const renderAtt = (a) => (
+          isImg(a)
+            ? <button key={a.url} type="button" onClick={() => setLightbox(`${beUrl}${a.url}`)}
+                className="relative w-20 h-20 border border-black overflow-hidden group" title="Click to view full image"
+                data-testid={`att-photo-${t.id}-${a.url}`}>
+                <img src={`${beUrl}${a.url}`} alt={a.filename || "attachment"} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                <span className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
+                  <MagnifyingGlassPlus size={20} weight="bold" className="text-white" />
+                </span>
+              </button>
+            : isAudio(a)
+              ? <audio key={a.url} controls preload="none" src={`${beUrl}${a.url}`} className="h-9" data-testid={`att-voice-${t.id}-${a.url}`} />
+              : <a key={a.url} href={`${beUrl}${a.url}`} target="_blank" rel="noreferrer" data-testid={`att-file-${t.id}-${a.url}`}
+                  className="inline-flex items-center gap-1.5 border border-black bg-white px-2.5 py-1.5 text-xs font-mono hover:bg-brand-yellow transition-colors max-w-[180px]">
+                  <File size={13} weight="bold" /> <span className="truncate">{a.filename || "file"}</span>
+                </a>
+        );
+        return (
+          <>
+            {refs.length > 0 && (
+              <div className="mt-3 border border-brand-blue/40 bg-brand-blue/[0.04] p-3" data-testid={`reference-block-${t.id}`}>
+                <p className="label-mono text-brand-blue flex items-center gap-1.5 mb-2">
+                  <Paperclip size={13} weight="bold" /> Reference material · {refs.length}
+                </p>
+                <div className="flex flex-wrap gap-2 items-center">{refs.map(renderAtt)}</div>
+                {insights.length > 0 && (
+                  <div className="mt-2 flex items-start gap-1.5" data-testid={`reference-insight-${t.id}`}>
+                    <Lightbulb size={13} weight="fill" className="text-brand-yellow shrink-0 mt-0.5" />
+                    <p className="text-xs text-muted-foreground line-clamp-2">{insights[insights.length - 1].summary}</p>
+                  </div>
+                )}
+              </div>
+            )}
+            {proof.length > 0 && (
+              <div className="mt-3 border border-black/15 bg-black/[0.02] p-3" data-testid={`proof-block-${t.id}`}>
+                <p className="label-mono text-muted-foreground flex items-center gap-1.5 mb-2">
+                  <Paperclip size={13} weight="bold" /> Proof of work · {proof.length}
+                </p>
+                <div className="flex flex-wrap gap-2 items-center">{proof.map(renderAtt)}</div>
+              </div>
+            )}
+          </>
+        );
+      })()}
 
       <Dialog open={!!lightbox} onOpenChange={(o) => !o && setLightbox(null)}>
         <DialogContent className="border border-black rounded-none max-w-3xl p-2" data-testid={`photo-lightbox-${t.id}`}>
@@ -788,15 +880,28 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
         </div>
       )}
 
+      {t.evidence_required && !isTerminal(t) && !awaitingApproval && (
+        <div className={`mt-3 flex items-start gap-2 border border-black p-2.5 ${hasEvidence ? "bg-green-600/10" : "bg-brand-yellow/30"}`} data-testid={`evidence-required-${t.id}`}>
+          {hasEvidence ? <CheckCircle size={16} weight="fill" className="text-green-600 shrink-0 mt-0.5" /> : <Info size={16} weight="bold" className="text-brand-red shrink-0 mt-0.5" />}
+          <p className="text-xs">{hasEvidence
+            ? "Proof attached — you can mark this task complete."
+            : "This task requires proof before it can be completed. Add a photo, voice note, or file below."}</p>
+        </div>
+      )}
+
       {!isTerminal(t) && !awaitingApproval && (
         <div className="flex flex-wrap gap-2 mt-4">
-          <button onClick={complete} data-testid={`complete-${t.id}`} className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">
+          <button onClick={complete} disabled={t.evidence_required && !hasEvidence} data-testid={`complete-${t.id}`} className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed">
             <CheckCircle size={16} weight="bold" /> Complete
           </button>
           <button onClick={() => fileRef.current?.click()} disabled={uploading} data-testid={`photo-${t.id}`} className="flex items-center gap-2 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-black/5">
             <Camera size={16} weight="bold" /> Photo
           </button>
           <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onPhoto} />
+          <button onClick={() => evidenceRef.current?.click()} disabled={uploading} data-testid={`upload-file-${t.id}`} className="flex items-center gap-2 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-black/5">
+            <FileArrowUp size={16} weight="bold" /> Upload file
+          </button>
+          <input ref={evidenceRef} type="file" className="hidden" onChange={onEvidence} />
           <button onClick={toggleVoice} data-testid={`voice-${t.id}`} className={`flex items-center gap-2 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider transition-colors ${recording ? "bg-brand-red text-white" : "hover:bg-black/5"}`}>
             {recording ? <Stop size={16} weight="fill" /> : <Microphone size={16} weight="bold" />} {recording ? "Stop & send" : "Voice reply"}
           </button>

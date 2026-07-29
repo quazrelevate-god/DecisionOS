@@ -2498,7 +2498,8 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
         updates["progress"] = 100
     # Completion-evidence gate: tasks flagged evidence_required need >=1 evidence file before "done".
     if updates.get("status") == "done" and t.get("evidence_required"):
-        has_ev = any((a or {}).get("kind") == "evidence" for a in (t.get("attachments") or []))
+        # Any assignee-uploaded proof (photo/voice/evidence/file) satisfies the gate; reference material does not.
+        has_ev = any((a or {}).get("kind") != "reference" for a in (t.get("attachments") or []))
         if not has_ev:
             raise HTTPException(status_code=400,
                                 detail="This task requires completion evidence — attach at least one file before marking it done.")

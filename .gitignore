@@ -110,3 +110,4 @@ credentials.json
 *.key
 .credentials
 decisionos_app.zip
+frontend/node_modules/.cache/default-development/8.pack

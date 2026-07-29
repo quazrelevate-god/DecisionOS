@@ -1,0 +1,28 @@
+{
+  "summary": "Validated the Decision Desk 'Review & Approve' per-task Reference Attachments + Require-Proof controls end-to-end. Logged in as owner (owner@sharma.com / demo1234) → /inbox → submitted a typed directive → AI structured a pending decision with a review-task row → verified new controls (attach-reference button + require-proof checkbox) → uploaded a PNG reference (chip and toast appeared) → toggled 'Require proof' (toast 'Proof required to complete') → approved the decision → went to /my-work → confirmed reference-block, evidence-required note, and Complete button DISABLED → uploaded proof via upload-file → Complete became ENABLED → clicked Complete and confirmed the task transitioned to completed. All flow steps passed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Inbox / global", "issues": ["React console warning: 'In HTML, <span> cannot be a child of <option>' — hydration warning triggered on /my-work render. Non-blocking but should be cleaned up."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Clean up React hydration warning: '<span> cannot be a child of <option>' seen in console on /my-work.",
+    "Cleanup: two 'REFTEST' / spindle-order test decisions/tasks were created during testing (task_ids 7a49c22c-3297-416f-9da4-756c59131635 and 94ca33a4-2e17-4ce1-bf3f-ac746bd98d6b). Main agent may want to delete these test tasks/decisions."
+  ],
+  "critical_code_review_comments": [
+    "Require-proof checkbox is a controlled <input> wrapped in a <label>; Playwright's .check() reports 'state did not change' because React updates lag one tick. Consider adding data-testid to the wrapping label or using aria-checked to make automated interaction more robust.",
+    "File input hidden inside ReviewTaskRow works well (row.locator('input[type=file]')); consider explicit data-testid=review-file-input-<taskId> for even more deterministic uploads."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only run)", "frontend": "100%"},
+  "test_credentials": "owner@sharma.com / demo1234 (from request; /app/memory/test_credentials.md not consulted this run — no auth issue observed)",
+  "seed_data_creation": "Two directives submitted via UI creating pending decisions with 1 task each (spindle-order cost estimate); one task fully completed via proof upload flow.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Decision Desk per-task reference + require-proof controls are fully working. Test IDs used: review-task-<id>, attach-reference-<id>, require-proof-<id>, review-refs-<id>, review-ref-<id>-<idx>, inbox-approve-<decisionId>, reference-block-<id>, evidence-required-<id>, complete-<id>, upload-file-<id>. Note: use label click (force) for require-proof checkbox because it's inside a <label>. Directive submission shows an 'EXECUTION PLAN IS READY' modal that must be dismissed via 'Later' before locating new review-task rows. Approve is instant; task appears in /my-work immediately.",
+  "rca of the issue": "N/A — no bugs found in the tested surface."
+}

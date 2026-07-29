@@ -16,6 +16,7 @@ import {
   UsersThree, Truck, Receipt, CurrencyCircleDollar, Warning, CheckSquare,
   SealCheck, Bell, Brain, Check, X, ArrowClockwise, User, UserPlus, Question,
   WarningCircle, ArrowBendUpRight, ChatCircleText, Eye, Pause, Play, PencilSimple,
+  Paperclip, File as FileIcon, ShieldCheck,
 } from "@phosphor-icons/react";
 
 function SwipeRow({ children, onLeft, onRight, rightLabel = "View", testid }) {
@@ -120,7 +121,10 @@ function ReviewTaskRow({ t: task, members, roleOptions, onRefresh }) {
   const { t } = useTranslation();
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef(null);
   const inp = "border border-black px-2 py-1 text-xs font-mono focus:outline-none bg-white flex-1 min-w-0";
+  const refs = (task.attachments || []).filter((a) => a.kind === "reference");
   const reassign = async (payload) => {
     setBusy(true);
     try {
@@ -130,6 +134,28 @@ function ReviewTaskRow({ t: task, members, roleOptions, onRefresh }) {
       onRefresh();
     } catch (e) { toast.error(e.response?.data?.detail || "Could not reassign"); }
     finally { setBusy(false); }
+  };
+  const attachReference = async (e) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    setUploading(true);
+    const fd = new FormData();
+    fd.append("file", f, f.name);
+    fd.append("kind", "reference");
+    try {
+      await api.post(`/tasks/${task.id}/attachment`, fd, { headers: { "Content-Type": "multipart/form-data" } });
+      toast.success("Reference attached — AI is reading it");
+      onRefresh();
+    } catch (e2) { toast.error(e2.response?.data?.detail || "Upload failed"); }
+    finally { setUploading(false); }
+  };
+  const toggleEvidence = async (checked) => {
+    try {
+      await api.patch(`/tasks/${task.id}`, { evidence_required: checked });
+      toast.success(checked ? "Proof required to complete" : "Proof requirement removed");
+      onRefresh();
+    } catch (e) { toast.error(e.response?.data?.detail || "Could not update"); }
   };
   return (
     <li className="border border-black/15 px-3 py-2" data-testid={`review-task-${task.id}`}>
@@ -163,6 +189,29 @@ function ReviewTaskRow({ t: task, members, roleOptions, onRefresh }) {
           </select>
         </div>
       )}
+      {refs.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1.5" data-testid={`review-refs-${task.id}`}>
+          {refs.map((a) => (
+            <a key={a.url} href={`${process.env.REACT_APP_BACKEND_URL}${a.url}`} target="_blank" rel="noreferrer"
+              data-testid={`review-ref-${task.id}-${a.url}`}
+              className="inline-flex items-center gap-1 border border-brand-blue/40 bg-brand-blue/[0.06] text-brand-blue px-2 py-0.5 text-[11px] font-mono max-w-[160px] hover:bg-brand-blue/10 transition-colors">
+              <FileIcon size={11} weight="bold" /> <span className="truncate">{a.filename || "reference"}</span>
+            </a>
+          ))}
+        </div>
+      )}
+      <div className="mt-2 flex items-center gap-3 flex-wrap">
+        <button onClick={() => fileRef.current?.click()} disabled={uploading} data-testid={`attach-reference-${task.id}`}
+          className="inline-flex items-center gap-1 border border-black px-2 py-1 text-[11px] font-semibold uppercase tracking-wider hover:bg-brand-yellow transition-colors disabled:opacity-50">
+          <Paperclip size={12} weight="bold" /> {uploading ? "Uploading…" : "Attach reference"}
+        </button>
+        <input ref={fileRef} type="file" className="hidden" onChange={attachReference} />
+        <label className="inline-flex items-center gap-1.5 text-[11px] font-mono cursor-pointer" title="Assignee must upload proof before completing">
+          <input type="checkbox" data-testid={`require-proof-${task.id}`} className="w-3.5 h-3.5 border border-black"
+            checked={!!task.evidence_required} onChange={(e) => toggleEvidence(e.target.checked)} />
+          <ShieldCheck size={12} weight="bold" className="text-brand-red" /> Require proof
+        </label>
+      </div>
     </li>
   );
 }

@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import {
   Plus, Sparkle, Package, Receipt, TrendUp, Trash, Buildings, Robot,
   Paperclip, ArrowClockwise, PaperPlaneRight, WarningCircle, Brain, CaretDown, ListPlus,
+  CurrencyDollar, Coins,
 } from "@phosphor-icons/react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell,
@@ -253,6 +254,67 @@ function AddInventoryDialog({ onDone }) {
   );
 }
 
+function AddIncomeDialog({ onDone }) {
+  const { tenant } = useAuth();
+  const L = lex(tenant);
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState({ title: "", customer_name: "", amount: "", number: "", date: "", due_date: "", status: "unpaid", notes: "" });
+  const [file, setFile] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  const reset = () => { setF({ title: "", customer_name: "", amount: "", number: "", date: "", due_date: "", status: "unpaid", notes: "" }); setFile(null); };
+  const save = async () => {
+    if (!f.title.trim() && !f.amount && !f.customer_name.trim() && !file) return toast.error("Add a title, customer or amount");
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      Object.entries(f).forEach(([k, v]) => fd.append(k, v ?? ""));
+      if (file) fd.append("file", file);
+      await api.post("/revenue/with-file", fd);
+      toast.success(file ? "Income recorded from the invoice" : "Income recorded");
+      setOpen(false); reset(); onDone();
+    } catch (e) { toast.error(e.response?.data?.detail || "Could not record income"); } finally { setBusy(false); }
+  };
+  return (
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
+      <DialogTrigger asChild>
+        <button data-testid="add-income-btn" className="flex items-center justify-center gap-2 w-full sm:w-auto bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
+          <Plus size={16} weight="bold" /> Add income
+        </button>
+      </DialogTrigger>
+      <DialogContent className="border border-black rounded-none max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="font-heading uppercase tracking-tight">Record sale / service income</DialogTitle>
+          <DialogDescription className="text-xs text-muted-foreground">Money coming IN. Attach a sales invoice and AI will read the amount & customer, or type it in.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <FileField file={file} setFile={setFile} />
+          <Field label="What was it for"><input data-testid="income-title" className={inp} value={f.title} onChange={(e) => set("title", e.target.value)} placeholder="e.g. Design retainer · Order #204" /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Amount"><input data-testid="income-amount" type="number" className={inp} value={f.amount} onChange={(e) => set("amount", e.target.value)} /></Field>
+            <Field label="Payment status">
+              <select data-testid="income-status" className={inp} value={f.status} onChange={(e) => set("status", e.target.value)}>
+                <option value="unpaid">Awaiting payment</option>
+                <option value="paid">Received</option>
+              </select>
+            </Field>
+          </div>
+          <Field label={`${L.customer_singular} name`}><input data-testid="income-customer" className={inp} value={f.customer_name} onChange={(e) => set("customer_name", e.target.value)} /></Field>
+          <div className="grid grid-cols-3 gap-3">
+            <Field label="Invoice #"><input className={inp} value={f.number} onChange={(e) => set("number", e.target.value)} /></Field>
+            <Field label="Date"><input type="date" className={inp} value={f.date} onChange={(e) => set("date", e.target.value)} /></Field>
+            <Field label="Due date"><input type="date" className={inp} value={f.due_date} onChange={(e) => set("due_date", e.target.value)} /></Field>
+          </div>
+          <button onClick={save} disabled={busy} data-testid="income-save" className="w-full bg-brand-red text-white py-2.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-60">
+            {busy ? (file ? "AI reading…" : "Saving…") : "Save income"}
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+
 // ---------- AI insight pointers (create task / ask) ----------
 function CreateTaskFromInsight({ insight, members, roleOptions }) {
   const { t } = useTranslation();
@@ -443,12 +505,85 @@ function KpiRow({ summary }) {
   const { t } = useTranslation();
   const f = fmt(summary.currency);
   const tt = summary.totals;
+  const net = tt.net_profit ?? ((tt.revenue_billed || 0) - (tt.total_spend || 0));
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+      <KPI icon={CurrencyDollar} label="Revenue" value={f(tt.revenue_billed || 0)} accent="text-green-600" />
       <KPI icon={TrendUp} label={t("finance.k_spend")} value={f(tt.total_spend)} accent="text-brand-red" />
-      <KPI icon={Receipt} label={t("finance.k_out")} value={f(tt.outstanding)} />
+      <KPI icon={Coins} label="Net Profit" value={f(net)} accent={net >= 0 ? "text-green-600" : "text-brand-red"} />
+      <KPI icon={Receipt} label="Received" value={f(tt.revenue_received || 0)} />
       <KPI icon={Buildings} label={t("finance.k_asset")} value={f(tt.asset_value)} />
       <KPI icon={Package} label={t("finance.k_inv")} value={f(tt.inventory_value)} />
+    </div>
+  );
+}
+
+function RevenueTab({ data, cur, onDelete }) {
+  const f = fmt(cur);
+  const tt = data?.totals || {};
+  const invoices = data?.invoices || [];
+  const payments = data?.payments || [];
+  return (
+    <div className="space-y-6" data-testid="ledger-revenue">
+      <div className="grid grid-cols-3 gap-3">
+        <KPI icon={CurrencyDollar} label="Billed" value={f(tt.billed || 0)} accent="text-green-600" />
+        <KPI icon={Receipt} label="Received" value={f(tt.received || 0)} />
+        <KPI icon={WarningCircle} label="Outstanding" value={f(tt.outstanding || 0)} accent="text-brand-red" />
+      </div>
+
+      <AiPanel scope="revenue" />
+
+      <div>
+        <h3 className="font-heading font-extrabold uppercase tracking-tight text-sm mb-3">Sales & Service Invoices ({invoices.length})</h3>
+        {invoices.length === 0 ? (
+          <EmptyState title="No income yet" hint="Record a sale/service with “Add income”, or send a sales invoice via WhatsApp/upload — it lands here." />
+        ) : (
+          <div className="card-brutal overflow-x-auto" data-testid="revenue-invoices-table">
+            <table className="w-full text-sm">
+              <thead><tr className="border-b border-border text-left label-mono text-xs text-muted-foreground">
+                <th className="p-3">For / Invoice</th><th className="p-3">Customer</th><th className="p-3">Date</th><th className="p-3">Status</th><th className="p-3 text-right">Amount</th><th className="p-3"></th>
+              </tr></thead>
+              <tbody>
+                {invoices.map((s) => (
+                  <tr key={s.id} className="border-b border-border/60 hover:bg-black/[0.02]" data-testid={`revenue-invoice-row-${s.id}`}>
+                    <td className="p-3 font-medium">{s.title || (s.number ? `#${s.number}` : "Sale")}{s.source && s.source !== "manual" && <Chip value={s.source} className={`ml-2 ${SOURCE_CHIP[s.source] || "bg-black/5"}`} />}<AttachmentLink att={s.attachment} /></td>
+                    <td className="p-3 text-muted-foreground">{s.contact_name || "—"}</td>
+                    <td className="p-3 text-muted-foreground">{s.date || "—"}</td>
+                    <td className="p-3"><Chip value={s.status === "paid" ? "received" : "awaiting"} className={s.status === "paid" ? "bg-green-600 text-white" : "bg-brand-yellow text-black"} /></td>
+                    <td className="p-3 text-right font-mono font-semibold">{f(s.amount)}</td>
+                    <td className="p-3 text-right"><button onClick={() => onDelete("invoice", s.id)} data-testid={`revenue-invoice-delete-${s.id}`} className="text-muted-foreground hover:text-brand-red"><Trash size={15} /></button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {payments.length > 0 && (
+        <div>
+          <h3 className="font-heading font-extrabold uppercase tracking-tight text-sm mb-3">Payments Received ({payments.length})</h3>
+          <div className="card-brutal overflow-x-auto" data-testid="revenue-payments-table">
+            <table className="w-full text-sm">
+              <thead><tr className="border-b border-border text-left label-mono text-xs text-muted-foreground">
+                <th className="p-3">Date</th><th className="p-3">Customer</th><th className="p-3">Method</th><th className="p-3">Reference</th><th className="p-3 text-right">Amount</th><th className="p-3"></th>
+              </tr></thead>
+              <tbody>
+                {payments.map((p) => (
+                  <tr key={p.id} className="border-b border-border/60 hover:bg-black/[0.02]" data-testid={`revenue-payment-row-${p.id}`}>
+                    <td className="p-3 text-muted-foreground">{p.date || "—"}</td>
+                    <td className="p-3 font-medium">{p.contact_name || "—"}{p.source && p.source !== "manual" && <Chip value={p.source} className={`ml-2 ${SOURCE_CHIP[p.source] || "bg-black/5"}`} />}</td>
+                    <td className="p-3 text-muted-foreground">{p.method || "—"}</td>
+                    <td className="p-3 text-muted-foreground">{p.reference || p.invoice_number || "—"}</td>
+                    <td className="p-3 text-right font-mono font-semibold text-green-600">{f(p.amount)}</td>
+                    <td className="p-3 text-right"><button onClick={() => onDelete("payment", p.id)} data-testid={`revenue-payment-delete-${p.id}`} className="text-muted-foreground hover:text-brand-red"><Trash size={15} /></button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -610,6 +745,7 @@ function InventoryTable({ rows, cur, onDelete }) {
 
 const TABS = [
   { key: "overview", tkey: "finance.t_overview", icon: Sparkle },
+  { key: "revenue", tkey: "finance.t_revenue", icon: CurrencyDollar },
   { key: "expenses", tkey: "finance.t_expenses", icon: Receipt },
   { key: "assets", tkey: "finance.t_assets", icon: Buildings },
   { key: "inventory", tkey: "finance.t_inventory", icon: Package },
@@ -621,7 +757,7 @@ export default function Ledger() {
   const [tab, setTab] = useState("overview");
   const [reclassifying, setReclassifying] = useState(false);
   const qc = useQueryClient();
-  const invalidate = () => ["ledger-summary", "expenses", "assets", "inventory"].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+  const invalidate = () => ["ledger-summary", "expenses", "assets", "inventory", "revenue"].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
 
   const reclassify = async () => {
     if (!window.confirm("Re-run AI on all filed purchase bills and move any mis-booked ones into the correct bucket (Expense / Asset / Inventory)? This updates your ledger.")) return;
@@ -639,6 +775,7 @@ export default function Ledger() {
   const expensesQ = useQuery({ queryKey: ["expenses"], queryFn: () => api.get("/expenses").then((r) => r.data) });
   const assetsQ = useQuery({ queryKey: ["assets"], queryFn: () => api.get("/assets").then((r) => r.data) });
   const inventoryQ = useQuery({ queryKey: ["inventory"], queryFn: () => api.get("/inventory").then((r) => r.data) });
+  const revenueQ = useQuery({ queryKey: ["revenue"], queryFn: () => api.get("/revenue").then((r) => r.data) });
 
   const summary = summaryQ.data;
   const cur = summary?.currency || "INR";
@@ -650,7 +787,13 @@ export default function Ledger() {
     catch { toast.error(t("finance.del_failed")); }
   };
 
+  const delRevenue = async (kind, id) => {
+    try { await api.delete(`/revenue/${kind}/${id}`); invalidate(); toast.success(t("finance.deleted")); }
+    catch { toast.error(t("finance.del_failed")); }
+  };
+
   const addBtn = useMemo(() => {
+    if (tab === "revenue") return <AddIncomeDialog onDone={invalidate} />;
     if (tab === "expenses") return <AddExpenseDialog categories={categories} onDone={invalidate} />;
     if (tab === "assets") return <AddAssetDialog categories={assetCategories} onDone={invalidate} />;
     if (tab === "inventory") return <AddInventoryDialog onDone={invalidate} />;
@@ -687,6 +830,7 @@ export default function Ledger() {
       ) : (
         <>
           {tab === "overview" && summary && <OverviewTab summary={summary} />}
+          {tab === "revenue" && <RevenueTab data={revenueQ.data} cur={cur} onDelete={delRevenue} />}
           {tab === "expenses" && <div className="space-y-6"><AiPanel scope="expenses" /><ExpensesTable rows={expensesQ.data || []} cur={cur} onDelete={(id) => del("expenses", id)} /></div>}
           {tab === "assets" && <div className="space-y-6"><AiPanel scope="assets" /><AssetsTable rows={assetsQ.data || []} cur={cur} onDelete={(id) => del("assets", id)} /></div>}
           {tab === "inventory" && <div className="space-y-6"><AiPanel scope="inventory" /><InventoryTable rows={inventoryQ.data || []} cur={cur} onDelete={(id) => del("inventory", id)} /></div>}

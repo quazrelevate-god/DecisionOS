@@ -4328,19 +4328,23 @@ def _norm_company(s: str) -> str:
 _PURCHASE_CLASS_SYS = (
     "You classify a single business PURCHASE (a bill we received from a supplier) into exactly one bucket. "
     "Return ONLY JSON: {\"purchase_type\": one of [expense, asset, inventory, unknown], "
-    "\"asset_name\": string, \"inventory_qty\": number, \"inventory_unit\": string}. "
+    "\"asset_name\": string, \"inventory_qty\": number, \"inventory_unit\": string, "
+    "\"asset_category\": one of [Machinery, Equipment, Vehicle, Furniture, IT & Electronics, Building, Other], "
+    "\"expense_category\": one of [Raw Material, Salary & Wages, Rent, Utilities, Logistics & Freight, Marketing, Professional Services, Asset Purchase, Maintenance & Repairs, Taxes & Duties, Office Supplies, Other]}. "
     "Rules: \"asset\" = capital/fixed goods that last over a year (machinery, equipment, tools, vehicles, "
-    "furniture, computers/IT hardware, buildings) — put the item in asset_name; "
+    "furniture, computers/IT hardware/networking, buildings) — put the item in asset_name and pick the best asset_category "
+    "(e.g. servers/switches/firewalls/CCTV/computers → IT & Electronics); "
     "\"inventory\" = stock, raw materials, trading goods or components bought to resell or consume in production "
     "— put quantity in inventory_qty and its unit (kg, pcs, box, litre) in inventory_unit; "
-    "\"expense\" = everything else (rent, salaries, utilities, transport, services, consumables, subscriptions, taxes). "
+    "\"expense\" = everything else (rent, salaries, utilities, transport, services, consumables, subscriptions, taxes) "
+    "— pick the best expense_category. "
     "Use \"unknown\" ONLY when the description is too vague to tell which of the three it is — do NOT guess."
 )
 
 
 async def ai_classify_purchase(text: str) -> dict:
     """Classify one purchase bill's WHAT-was-bought bucket from its text. Returns
-    {purchase_type, asset_name, inventory_qty, inventory_unit}. Never raises."""
+    {purchase_type, asset_name, inventory_qty, inventory_unit, asset_category, expense_category}. Never raises."""
     text = (text or "").strip()
     if not text:
         return {"purchase_type": "unknown"}
@@ -4355,7 +4359,9 @@ async def ai_classify_purchase(text: str) -> dict:
     if pt not in ("expense", "asset", "inventory", "unknown"):
         pt = "unknown"
     return {"purchase_type": pt, "asset_name": (d.get("asset_name") or "").strip(),
-            "inventory_qty": d.get("inventory_qty"), "inventory_unit": (d.get("inventory_unit") or "").strip()}
+            "inventory_qty": d.get("inventory_qty"), "inventory_unit": (d.get("inventory_unit") or "").strip(),
+            "asset_category": (d.get("asset_category") or "").strip(),
+            "expense_category": (d.get("expense_category") or "").strip()}
 
 
 def _has_unclassified_purchase(records: dict, doc_type: str = "") -> bool:
@@ -4468,9 +4474,13 @@ async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, 
             li_text = " ".join(str(li.get("description", "")) for li in (inv.get("line_items") or []) if isinstance(li, dict))
             inv_cur = inv.get("currency") or currency
             if purchase_type == "asset":
+                from routers.ledger import guess_asset_category, ASSET_CATEGORIES
+                _aname = (inv.get("asset_name") or li_text[:60] or f"Asset from {vend}").strip()
+                _acat = inv.get("asset_category") if inv.get("asset_category") in ASSET_CATEGORIES \
+                    else guess_asset_category(f"{_aname} {li_text}")
                 await create_asset(tenant_id, user_id, {
-                    "name": (inv.get("asset_name") or li_text[:60] or f"Asset from {vend}").strip(),
-                    "category": "Other", "purchase_amount": amount, "currency": inv_cur,
+                    "name": _aname,
+                    "category": _acat, "purchase_amount": amount, "currency": inv_cur,
                     "purchase_date": inv.get("date") or "", "vendor_name": vend,
                     "notes": f"From bill {inv.get('number') or ''} · {li_text[:150]}".strip(),
                 }, source=source)

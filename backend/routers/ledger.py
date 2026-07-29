@@ -56,6 +56,28 @@ def guess_expense_category(text: str) -> str:
     return "Other"
 
 
+_ASSET_KEYWORDS = [
+    ("IT & Electronics", ["computer", "laptop", "desktop", "server", "switch", "router", "firewall",
+                          "monitor", "printer", "scanner", "ups", "network", "cctv", "camera", "biometric",
+                          "appliance", "rack", "patch panel", "cabling", "cable", "phone", "mobile", "tablet",
+                          "hardware", "electronic", "poe", "nvr", "storage", "nas", "projector"]),
+    ("Vehicle", ["vehicle", "truck", "van", "car", "bike", "scooter", "forklift", "tempo", "lorry", "trailer"]),
+    ("Machinery", ["machine", "machinery", "cnc", "lathe", "mill", "press", "motor", "pump", "compressor",
+                   "generator", "plant", "boiler", "turbine", "conveyor"]),
+    ("Furniture", ["furniture", "chair", "table", "desk", "cabinet", "shelf", "sofa", "workstation", "cupboard"]),
+    ("Building", ["building", "land", "property", "construction", "warehouse", "office space", "premises", "godown"]),
+    ("Equipment", ["equipment", "tool", "instrument", "device", "kit", "apparatus", "meter", "gauge"]),
+]
+
+
+def guess_asset_category(text: str) -> str:
+    t = (text or "").lower()
+    for cat, kws in _ASSET_KEYWORDS:
+        if any(k in t for k in kws):
+            return cat
+    return "Other"
+
+
 async def ai_suggest_expense_category(text: str, tenant_id: str) -> str:
     text = (text or "").strip()
     if not text:
@@ -120,6 +142,11 @@ _LEDGER_FIELDS = {
         "an INVENTORY / stock item purchase",
         '{"item": str, "sku": str, "quantity": number, "unit": str, "unit_cost": number, '
         '"category": str, "vendor_name": str, "notes": str}',
+    ),
+    "income": (
+        "a SALE or SERVICE INCOME the company EARNED — a sales invoice or service bill YOU issued to a CUSTOMER (money coming IN)",
+        '{"title": str, "customer_name": str, "amount": number, "number": str, '
+        '"date": "YYYY-MM-DD", "due_date": "YYYY-MM-DD", "notes": str}',
     ),
 }
 
@@ -242,6 +269,40 @@ async def create_inventory(tenant_id: str, user_id: str, data: dict, source: str
         await _write_brain(tenant_id, user_id,
                             f"Inventory: {qty:g} {doc['unit']} of {doc['item']} @ {currency} {unit_cost:,.0f} "
                             f"= {currency} {doc['value']:,.0f} [{source}]", "inventory")
+    return doc
+
+
+async def create_income(tenant_id: str, user_id: str, data: dict, source: str = "manual") -> dict:
+    """Record sale/service INCOME as a sales_invoice (money coming IN). If marked received/paid,
+    also logs a payment (direction=in) so the 'received' total reflects real cash."""
+    currency = data.get("currency") or await _currency(tenant_id)
+    amount = _num(data.get("amount"))
+    status = data.get("status") if data.get("status") in ("paid", "unpaid") else "unpaid"
+    received = bool(data.get("received")) or status == "paid"
+    inv_id = new_id()
+    cust = (data.get("customer_name") or data.get("contact_name") or "").strip()
+    doc = {
+        "id": inv_id, "tenant_id": tenant_id, "type": "sales_invoice",
+        "number": str(data.get("number") or "").strip(), "contact_id": data.get("contact_id"),
+        "contact_name": cust, "title": (data.get("title") or "").strip(),
+        "date": data.get("date") or now_iso()[:10], "due_date": data.get("due_date") or "",
+        "amount": amount, "currency": currency, "status": "paid" if received else status,
+        "line_items": [], "purchase_type": "", "attachment": data.get("attachment"),
+        "source": source, "created_by": user_id, "created_at": now_iso(),
+    }
+    await db.invoices.insert_one(dict(doc))
+    doc.pop("_id", None)
+    label = doc["title"] or ("Sale to " + cust if cust else "Sale")
+    frm = f" from {cust}" if cust else ""
+    await _write_brain(tenant_id, user_id,
+                       f"Income: {label} — {currency} {amount:,.0f}{frm} [{source}]", "income")
+    if received:
+        await db.payments.insert_one({
+            "id": new_id(), "tenant_id": tenant_id, "direction": "in", "amount": amount,
+            "date": doc["date"], "method": (data.get("method") or "").strip(),
+            "reference": doc["number"], "contact_name": cust, "invoice_number": doc["number"],
+            "invoice_id": inv_id, "source": source, "created_by": user_id, "created_at": now_iso(),
+        })
     return doc
 
 
@@ -479,6 +540,81 @@ async def delete_inventory(iid: str, user: dict = Depends(require_ledger)):
     return {"ok": True}
 
 
+# --- Revenue (sale/service income — money coming IN) ------------------------
+class IncomeInput(BaseModel):
+    title: Optional[str] = ""
+    customer_name: Optional[str] = ""
+    amount: float = 0
+    number: Optional[str] = ""
+    date: Optional[str] = None
+    due_date: Optional[str] = None
+    status: Optional[str] = "unpaid"
+    currency: Optional[str] = None
+    notes: Optional[str] = ""
+    received: Optional[bool] = False
+
+
+@router.get("/revenue")
+async def list_revenue(user: dict = Depends(require_ledger)):
+    tid = user["tenant_id"]
+    currency = await _currency(tid)
+    invoices = await db.invoices.find({"tenant_id": tid, "type": "sales_invoice"}, {"_id": 0}).sort("created_at", -1).to_list(3000)
+    payments = await db.payments.find({"tenant_id": tid, "direction": "in"}, {"_id": 0}).sort("created_at", -1).to_list(3000)
+    billed = sum(_num(i.get("amount")) for i in invoices)
+    received = sum(_num(p.get("amount")) for p in payments)
+    outstanding = sum(_num(i.get("amount")) for i in invoices if i.get("status") != "paid")
+    return {
+        "currency": currency,
+        "totals": {"billed": round(billed, 2), "received": round(received, 2),
+                   "outstanding": round(outstanding, 2),
+                   "invoice_count": len(invoices), "payment_count": len(payments)},
+        "invoices": invoices, "payments": payments,
+    }
+
+
+@router.post("/revenue")
+async def add_revenue(inp: IncomeInput, user: dict = Depends(require_ledger)):
+    if not (inp.title or "").strip() and not _num(inp.amount) and not (inp.customer_name or "").strip():
+        raise HTTPException(status_code=400, detail="Add a title, customer or amount")
+    doc = await create_income(user["tenant_id"], user["id"], inp.model_dump(), source="manual")
+    await log_activity(user["tenant_id"], user["name"], "income_added",
+                       f"Recorded income '{doc.get('title') or doc.get('contact_name') or 'Sale'}'", "invoice", doc["id"])
+    return doc
+
+
+@router.post("/revenue/with-file")
+async def add_revenue_with_file(
+    title: str = Form(""), customer_name: str = Form(""), amount: str = Form(""),
+    number: str = Form(""), date: str = Form(""), due_date: str = Form(""),
+    status: str = Form("unpaid"), received: str = Form("false"), notes: str = Form(""),
+    file: Optional[UploadFile] = File(None), user: dict = Depends(require_ledger),
+):
+    typed = {"title": title.strip(), "customer_name": customer_name.strip(), "amount": _num(amount),
+             "number": number.strip(), "date": date, "due_date": due_date,
+             "status": status, "notes": notes.strip()}
+    data, _ = await _read_attachment(file, "income", user["tenant_id"], typed)
+    data["received"] = str(received).lower() in ("true", "1", "yes", "on")
+    if not (str(data.get("title") or "").strip()) and not _num(data.get("amount")) and not (str(data.get("customer_name") or "").strip()):
+        raise HTTPException(status_code=400, detail="Add a title/amount or attach a readable invoice")
+    doc = await create_income(user["tenant_id"], user["id"], data, source="manual")
+    await log_activity(user["tenant_id"], user["name"], "income_added",
+                       f"Recorded income '{doc.get('title') or doc.get('contact_name') or 'Sale'}'", "invoice", doc["id"])
+    return doc
+
+
+@router.delete("/revenue/invoice/{iid}")
+async def delete_revenue_invoice(iid: str, user: dict = Depends(require_ledger)):
+    await db.invoices.delete_one({"id": iid, "tenant_id": user["tenant_id"], "type": "sales_invoice"})
+    await db.payments.delete_many({"tenant_id": user["tenant_id"], "invoice_id": iid, "direction": "in"})
+    return {"ok": True}
+
+
+@router.delete("/revenue/payment/{pid}")
+async def delete_revenue_payment(pid: str, user: dict = Depends(require_ledger)):
+    await db.payments.delete_one({"id": pid, "tenant_id": user["tenant_id"], "direction": "in"})
+    return {"ok": True}
+
+
 # --- Re-classify historical purchase bills (fix mis-booked expenses) --------
 @router.post("/ledger/reclassify-purchases")
 async def reclassify_purchases(user: dict = Depends(require_ledger)):
@@ -521,9 +657,12 @@ async def reclassify_purchases(user: dict = Depends(require_ledger)):
             await db.expenses.delete_one({"id": exp["id"], "tenant_id": tid})
 
         if new_type == "asset":
+            _name = (result.get("asset_name") or li[:60] or f"Asset from {vend}").strip()
+            _cat = result.get("asset_category") if result.get("asset_category") in ASSET_CATEGORIES \
+                else guess_asset_category(f"{_name} {li}")
             await create_asset(tid, uid, {
-                "name": (result.get("asset_name") or li[:60] or f"Asset from {vend}").strip(),
-                "category": "Other", "purchase_amount": amount, "currency": currency,
+                "name": _name,
+                "category": _cat, "purchase_amount": amount, "currency": currency,
                 "purchase_date": inv.get("date") or "", "vendor_name": vend,
                 "notes": f"Reclassified from bill {inv.get('number') or ''} · {li[:150]}".strip(),
             }, source="reclassify")
@@ -570,9 +709,14 @@ async def ledger_summary(user: dict = Depends(require_ledger)):
     expenses = await db.expenses.find({"tenant_id": tid}, {"_id": 0}).to_list(5000)
     assets = await db.assets.find({"tenant_id": tid}, {"_id": 0}).to_list(5000)
     inventory = await db.inventory.find({"tenant_id": tid}, {"_id": 0}).to_list(5000)
+    sales = await db.invoices.find({"tenant_id": tid, "type": "sales_invoice"}, {"_id": 0}).to_list(5000)
+    pays_in = await db.payments.find({"tenant_id": tid, "direction": "in"}, {"_id": 0}).to_list(5000)
 
     total = sum(_num(e.get("amount")) for e in expenses)
     paid = sum(_num(e.get("amount")) for e in expenses if e.get("status") == "paid")
+    revenue_billed = sum(_num(s.get("amount")) for s in sales)
+    revenue_received = sum(_num(p.get("amount")) for p in pays_in)
+    revenue_outstanding = sum(_num(s.get("amount")) for s in sales if s.get("status") != "paid")
     by_cat, by_vendor, by_month = {}, {}, {}
     for e in expenses:
         amt = _num(e.get("amount"))
@@ -590,6 +734,9 @@ async def ledger_summary(user: dict = Depends(require_ledger)):
             "expense_count": len(expenses),
             "asset_count": len(assets), "asset_value": round(sum(_num(a.get("purchase_amount")) for a in assets), 2),
             "inventory_count": len(inventory), "inventory_value": round(sum(_num(i.get("value")) for i in inventory), 2),
+            "revenue_billed": round(revenue_billed, 2), "revenue_received": round(revenue_received, 2),
+            "revenue_outstanding": round(revenue_outstanding, 2), "sales_count": len(sales),
+            "net_profit": round(revenue_billed - total, 2),
         },
         "by_category": [{"category": k, "amount": round(v, 2)} for k, v in sorted(by_cat.items(), key=lambda x: -x[1])],
         "by_vendor": [{"vendor": k, "amount": round(v, 2)} for k, v in sorted(by_vendor.items(), key=lambda x: -x[1])[:8]],
@@ -599,14 +746,15 @@ async def ledger_summary(user: dict = Depends(require_ledger)):
 
 
 # --- AI Finance Brief + per-tab AI Analysis + Ask AI ------------------------
-SCOPES = ("brief", "overview", "expenses", "assets", "inventory")
+SCOPES = ("brief", "overview", "expenses", "assets", "inventory", "revenue")
 
 _SCOPE_FOCUS = {
-    "brief": "the company's OVERALL financial health across spend, cash outflow, assets and inventory — a crisp executive brief for the founder.",
+    "brief": "the company's OVERALL financial health: PROFIT (revenue earned vs money spent), cash actually received vs outstanding receivables, and where the money is going — a crisp executive brief for the founder.",
     "overview": "overall spending trends, month-over-month movement, and category/vendor concentration.",
     "expenses": "expenses only: unpaid/outstanding bills, vendor and category concentration, unusual or duplicate-looking spend.",
     "assets": "assets only: total asset value, category mix, items in maintenance or disposed, and renewal/utilisation risks.",
     "inventory": "inventory only: stock-value concentration, high-value or slow items, and vendor dependence.",
+    "revenue": "income only: sales/service revenue billed vs received, outstanding receivables to chase, top customers, and revenue trend.",
 }
 
 
@@ -615,9 +763,22 @@ async def _finance_context(tid: str, scope: str) -> dict:
     expenses = await db.expenses.find({"tenant_id": tid}, {"_id": 0}).sort("created_at", -1).to_list(2000)
     assets = await db.assets.find({"tenant_id": tid}, {"_id": 0}).sort("created_at", -1).to_list(2000)
     inventory = await db.inventory.find({"tenant_id": tid}, {"_id": 0}).sort("created_at", -1).to_list(2000)
+    sales = await db.invoices.find({"tenant_id": tid, "type": "sales_invoice"}, {"_id": 0}).sort("created_at", -1).to_list(2000)
+    pays_in = await db.payments.find({"tenant_id": tid, "direction": "in"}, {"_id": 0}).sort("created_at", -1).to_list(2000)
     total = sum(_num(e.get("amount")) for e in expenses)
     paid = sum(_num(e.get("amount")) for e in expenses if e.get("status") == "paid")
+    revenue_billed = sum(_num(s.get("amount")) for s in sales)
+    revenue_received = sum(_num(p.get("amount")) for p in pays_in)
+    revenue_outstanding = sum(_num(s.get("amount")) for s in sales if s.get("status") != "paid")
     by_cat, by_vendor, by_month, unpaid = {}, {}, {}, []
+    by_customer, unpaid_sales = {}, []
+    for s in sales:
+        amt = _num(s.get("amount"))
+        cn = s.get("contact_name") or "Unspecified"
+        by_customer[cn] = by_customer.get(cn, 0) + amt
+        if s.get("status") != "paid":
+            unpaid_sales.append({"title": s.get("title") or s.get("number"), "customer": cn,
+                                 "amount": amt, "due_date": s.get("due_date"), "date": s.get("date")})
     for e in expenses:
         amt = _num(e.get("amount"))
         by_cat[e.get("category") or "Other"] = by_cat.get(e.get("category") or "Other", 0) + amt
@@ -639,6 +800,9 @@ async def _finance_context(tid: str, scope: str) -> dict:
             "expense_count": len(expenses), "asset_count": len(assets),
             "asset_value": round(sum(_num(a.get("purchase_amount")) for a in assets), 2),
             "inventory_count": len(inventory), "inventory_value": round(sum(_num(i.get("value")) for i in inventory), 2),
+            "revenue_billed": round(revenue_billed, 2), "revenue_received": round(revenue_received, 2),
+            "revenue_outstanding": round(revenue_outstanding, 2), "sales_count": len(sales),
+            "net_profit": round(revenue_billed - total, 2),
         },
         "by_category": _top(by_cat), "by_vendor": _top(by_vendor),
         "by_month": [{"month": m, "amount": round(by_month[m], 2)} for m in sorted(by_month)[-6:]],
@@ -651,6 +815,9 @@ async def _finance_context(tid: str, scope: str) -> dict:
     if scope in ("inventory", "brief"):
         ctx["inventory"] = [{"item": i.get("item"), "qty": _num(i.get("quantity")), "unit": i.get("unit"),
                              "value": _num(i.get("value")), "vendor": i.get("vendor_name")} for i in inventory[:30]]
+    if scope in ("revenue", "brief"):
+        ctx["top_customers"] = _top(by_customer)
+        ctx["outstanding_receivables"] = sorted(unpaid_sales, key=lambda x: -x["amount"])[:12]
     return ctx
 
 

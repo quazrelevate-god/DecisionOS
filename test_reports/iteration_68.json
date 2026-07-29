@@ -1,0 +1,25 @@
+{
+  "summary": "Iteration 68 (Revenue/Income tab + net_profit + asset-category fix) tested end-to-end. Backend: 12/12 pytest tests passed — GET/POST/DELETE /api/revenue all correct (paid status creates both sales_invoice + payment; unpaid creates only invoice; empty body → 400; sales role gets 403; owner/finance allowed). /api/ledger/summary returns revenue_billed / revenue_received / revenue_outstanding / sales_count / net_profit. /api/ledger/ai/revenue and /api/ledger/ai/brief both return 200 JSON. guess_asset_category correctly maps network switch/firewall/rack/CCTV → 'IT & Electronics', CNC lathe → 'Machinery', van → 'Vehicle', chairs → 'Furniture'. Frontend: /ledger shows new Revenue tab between Overview and Expenses; KPI cards for Billed/Received/Outstanding, AI Analysis panel (scope=revenue), Sales & Service Invoices table with rows + per-row delete, Add Income dialog with title/amount/status/customer/save fields all opening and saving successfully. Overview tab KPI row shows Revenue, Total Spend, Net Profit (green), Received, Asset value, Inventory Value.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration68_revenue.py",
+    "/app/test_reports/pytest/iter68.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "income-status is a native <select> (not shadcn Select) — works fine functionally but automated tests must set value via native change event rather than opening a menu. Consider migrating to shadcn Select for consistency with other dialogs.",
+    "Revenue KPI wrapper uses single data-testid='ledger-revenue' rather than per-card testids; not blocking but per-card testids (ledger-revenue-billed/received/outstanding) would make future QA easier."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration68_revenue.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "owner@sharma.com / demo1234 (used); finance & sales verified via API",
+  "seed_data_creation": "Created + cleaned up TEST_ prefixed sales invoices via /api/revenue and DELETE /api/revenue/invoice/{id}. All test data removed at test end.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend pytest at /app/backend/tests/test_iteration68_revenue.py covers /api/revenue GET/POST/DELETE, summary net_profit, AI insights, and guess_asset_category. Ledger.js Revenue tab wrapper testid is 'ledger-revenue' (single), invoices table 'revenue-invoices-table', rows 'revenue-invoice-row-<id>', deletes 'revenue-invoice-delete-<id>'. income-status is a native <select> — cannot use role=option; set value directly."
+}

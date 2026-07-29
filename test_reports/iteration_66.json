@@ -1,0 +1,24 @@
+{
+  "summary": "Verified end-to-end that a task's reference IMAGE preview actually RENDERS in both LIST and DETAILS views for BOTH the uploader (owner Rajesh Sharma) and the DELEGATED assignee (sales user Priya Nair). Created a task 'IMG PREVIEW TEST' as owner on /my-work via New Task dialog, assigned via task-role-select=Sales (delegates to Priya), enabled proof-of-work, attached a real 10x10 PNG via task-attachment-input, submitted with task-create-submit. On owner /my-work: reference-block-<taskId> rendered, att-photo-<taskId>-<attId> <img> loaded with naturalWidth=10 complete=true (src=/api/files/<id>/download), clicking thumbnail opened the fixed-position lightbox. On owner View details: detail-reference-<taskId> section present, detail-ref-photo-<taskId>-<attId> <img> loaded with naturalWidth=10 complete=true. Signed out and logged in as sales@sharma.com (Priya Nair): task 'IMG PREVIEW TEST' was visible under All Tasks. On sales LIST: att-photo <img> loaded (naturalWidth=10, complete=true, same /api/files/<id>/download URL). On sales DETAILS: detail-ref-photo <img> loaded (naturalWidth=10, complete=true). Auth cookie-based fetch of image works cross-user within the tenant, confirming the backend fix. Task then deleted via delete-task-<id> + delete-task-confirm-<id> as owner. Note: AI insight (detail-ref-insight-<taskId>-0) was NOT present within the check window (soft check only, non-blocking).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "MyWork.js is 1097 lines (exceeds 700-line guideline). Split TaskCard, TaskDetailDialog, ExecPlanEditor, UpdateForm, TaskTrail, ProgressBars into separate files under /components/mywork.",
+    "att-photo/detail-ref-photo are <button> elements wrapping <img>; consider also exposing the underlying <img> with its own data-testid (e.g. att-photo-img-...) so automated tests can query naturalWidth directly without needing a querySelector('img') helper.",
+    "AI insight (detail-ref-insight-<taskId>-0) did not appear within ~1.5s of opening details in this run — either the reference-image insight is generated asynchronously (fine) or generation is not triggered on task creation. If intended, surface a loading state (data-testid=detail-ref-insight-loading-<taskId>) so users know an insight is coming."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "100% (all 5 hard assertions passed: owner-list-img-loaded, owner-lightbox-opens, owner-detail-img-loaded, sales-list-img-loaded, sales-detail-img-loaded)"},
+  "test_credentials": "owner@sharma.com / demo1234 (uploader), sales@sharma.com / demo1234 (delegated assignee Priya Nair)",
+  "seed_data_creation": "Created a task 'IMG PREVIEW TEST' (with reference PNG /api/files/057a6b46-5303-46d2-b1aa-308fa6b14083/download) during testing; deleted it as part of cleanup. Verified 0 residual 'IMG PREVIEW TEST' tasks remain.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Testability tip: att-photo-<taskId>-<attId> and detail-ref-photo-<taskId>-<attId> are BUTTON elements wrapping the <img>; to assert image render you must query the inner <img> for naturalWidth/complete (see backend_test-style helper: `el.querySelector('img')`). Also, the created task is delegated to the SALES role -> Priya Nair, so on the owner's /my-work you must switch the toggle from 'My Tasks' to 'All Tasks' to see it (button:has-text('All Tasks')). Deletion requires two clicks: delete-task-<id> to reveal, then delete-task-confirm-<id> to confirm.",
+  "rca of the issue": "N/A — the previously suspected client-side issue (cookie not sent with <img>) is NOT present. Cookie-based auth on <img src=/api/files/{id}/download> works for both uploader and delegated tenant user. Image renders correctly in list and detail for both roles."
+}

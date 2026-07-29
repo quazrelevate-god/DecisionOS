@@ -1,0 +1,30 @@
+{
+  "summary": "Iteration 72: Finance-as-Operations (A+C) end-to-end tested. Backend (7 pytest cases, 7/7 pass after fix) confirms owner /api/brief exposes counters.receivables_overdue/bills_due/unmatched_payments + finance_amounts, drill-down endpoints return items for owner, non-owner (finance role) gets empty items, and finance-source tasks are created & idempotent. Frontend confirms CEO Brief shows 3 new finance cards with correct data-testids and amount, drill-down dialog lists items and navigates to /ledger?tab=revenue (and would navigate to ?tab=expenses if bills existed), Ledger deep-link tabs render selected tab visually, and Sunita Rao (Finance) sees 7 auto-created 'Chase ...' tasks labeled 'Auto-created from Finance' in My Work. Non-owner UI correctly hides finance rows on /brief.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "CEO Brief drill-down dialog", "issues": ["Radix DialogContent missing aria-describedby (a11y warning in console). Not blocking."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration72_finance_ops.py",
+    "/app/test_reports/pytest/iter72.xml"
+  ],
+  "action_items": [
+    "Optional: add aria-describedby to Brief drill-down DialogContent to silence a11y warning.",
+    "Note: bills_due & unmatched_payments counters are 0 in Sharma demo data, so UI paths for those (expenses tab nav) could not be exercised at the DOM click level. Backend endpoints for them return empty and are validated. Consider seeding one overdue supplier bill to make the demo more illustrative."
+  ],
+  "critical_code_review_comments": [
+    "Idempotency via invoice.action_task_id is working (verified: repeat /brief + /notifications did not grow finance task count).",
+    "Owner gating in brief_details() correctly returns empty items for non-owner roles for the three finance keys."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration72_finance_ops.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "owner@sharma.com/demo1234, finance@sharma.com/demo1234",
+  "seed_data_creation": "None. Used existing Sharma demo (7 overdue receivables incl. 6x duplicate INV-2045 as noted).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Finance sweep runs on /brief & /notifications load (60s throttle). Sharma demo has known 6x duplicate INV-2045 producing multiple Chase tasks — expected. bills_due & unmatched_payments have 0 rows in demo; if testing UI drill for expenses tab navigation, either seed a supplier bill overdue within 3 days or a purchase invoice awaiting payment."
+}

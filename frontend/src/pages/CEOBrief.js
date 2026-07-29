@@ -7,7 +7,7 @@ import { Chip } from "../components/common";
 import { money } from "../lib/format";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
-import { Clock, CheckCircle, Stamp, UserMinus, Warning, CurrencyInr, XCircle, ArrowClockwise, CaretRight, Fire, BookOpen, ListChecks, WarningCircle, ArrowBendUpRight, Sparkle, Paperclip, Gauge } from "@phosphor-icons/react";
+import { Clock, CheckCircle, Stamp, UserMinus, Warning, CurrencyInr, XCircle, ArrowClockwise, CaretRight, Fire, BookOpen, ListChecks, WarningCircle, ArrowBendUpRight, Sparkle, Paperclip, Gauge, Receipt, HandCoins, Coins } from "@phosphor-icons/react";
 
 const PERIODS = [
   { key: "morning", label: "Morning" },
@@ -23,6 +23,9 @@ const ROWS = [
   { key: "absent", label: "employees absent", bg: "bg-brand-blue", on: "text-white", accent: "text-brand-blue", icon: UserMinus },
   { key: "complaints", label: "customer complaint(s)", bg: "bg-purple-600", on: "text-white", accent: "text-purple-600", icon: Warning },
   { key: "payment_overdue", label: "payment(s) overdue", bg: "bg-orange-500", on: "text-white", accent: "text-orange-500", icon: CurrencyInr },
+  { key: "receivables_overdue", label: "overdue receivable(s)", bg: "bg-teal-600", on: "text-white", accent: "text-teal-600", icon: Receipt, money: true },
+  { key: "bills_due", label: "supplier bill(s) to pay", bg: "bg-rose-600", on: "text-white", accent: "text-rose-600", icon: HandCoins, money: true },
+  { key: "unmatched_payments", label: "payment(s) to match", bg: "bg-indigo-600", on: "text-white", accent: "text-indigo-600", icon: Coins, money: true },
 ];
 
 const EMP_ROWS = [
@@ -80,6 +83,9 @@ function DetailDialog({ row, period, open, onClose }) {
     absent: () => `/contacts`,
     activity: () => `/my-work`,
     leave: () => `/my-work?view=leave`,
+    receivable: () => `/ledger?tab=revenue`,
+    bill: () => `/ledger?tab=expenses`,
+    unmatched: (it) => (it.direction === "out" ? `/ledger?tab=expenses` : `/ledger?tab=revenue`),
   };
   const go = (it) => {
     const fn = NAV[it.kind];
@@ -119,7 +125,7 @@ function DetailDialog({ row, period, open, onClose }) {
                     {it.kind === "task" && it.meta && <Chip value={it.meta} />}
                     {it.kind === "escalation" && it.meta && <Chip value={it.meta} className="bg-brand-red text-white" />}
                     {it.kind === "complaint" && it.meta && <Chip value={it.meta} className="bg-purple-600 text-white" />}
-                    {(it.kind === "purchase" || it.kind === "payment") && it.meta != null && (
+                    {(it.kind === "purchase" || it.kind === "payment" || it.kind === "receivable" || it.kind === "bill" || it.kind === "unmatched") && it.meta != null && (
                       <span className="text-sm font-semibold">{money(it.meta, tenant?.currency)}</span>
                     )}
                     {clickable && <CaretRight size={16} weight="bold" className="text-black/40" />}
@@ -180,7 +186,7 @@ function DetailDialog({ row, period, open, onClose }) {
 }
 
 export default function CEOBrief() {
-  const { user } = useAuth();
+  const { user, tenant } = useAuth();
   const navigate = useNavigate();
   const isOwner = user?.role === "owner";
   const rows = isOwner ? ROWS : EMP_ROWS;
@@ -263,6 +269,9 @@ export default function CEOBrief() {
                     </div>
                     <p className={`font-heading text-5xl font-black tracking-tighter mt-4 ${r.accent}`} data-testid={`brief-count-${r.key}`}>{val}</p>
                     <p className="text-sm text-muted-foreground mt-1 leading-tight">{label}</p>
+                    {r.money && (data.finance_amounts?.[r.key] ?? 0) > 0 && (
+                      <p className={`text-sm font-bold mt-1 ${r.accent}`} data-testid={`brief-amount-${r.key}`}>{money(data.finance_amounts[r.key], tenant?.currency)}</p>
+                    )}
                     <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-brand-blue">
                       View details <CaretRight size={12} weight="bold" />
                     </span>

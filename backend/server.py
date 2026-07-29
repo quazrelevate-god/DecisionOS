@@ -4208,7 +4208,7 @@ _DOC_SYSTEM = (
     "\"doc_type\": one of [sales_invoice, purchase_bill, payment, purchase_order, other], "
     "\"confidence\": number between 0 and 1, "
     "\"contacts\": [{\"type\": one of [customer, vendor], \"name\": string, \"company\": string, \"phone\": string, \"email\": string, \"address\": string, \"tax_id\": string}], "
-    "\"invoices\": [{\"type\": one of [sales_invoice, purchase_bill], \"number\": string, \"contact_name\": string, \"date\": string, \"due_date\": string, \"amount\": number, \"currency\": string, \"line_items\": [{\"description\": string, \"qty\": number, \"rate\": number, \"amount\": number}]}], "
+    "\"invoices\": [{\"type\": one of [sales_invoice, purchase_bill], \"purchase_type\": one of [expense, asset, inventory] (only for purchase_bill; else empty), \"asset_name\": string (for asset purchases), \"inventory_qty\": number, \"inventory_unit\": string, \"number\": string, \"contact_name\": string, \"date\": string, \"due_date\": string, \"amount\": number, \"currency\": string, \"line_items\": [{\"description\": string, \"qty\": number, \"rate\": number, \"amount\": number}]}], "
     "\"payments\": [{\"direction\": one of [in, out], \"amount\": number, \"date\": string, \"method\": string, \"reference\": string, \"contact_name\": string, \"invoice_number\": string}], "
     "\"tasks\": [{\"title\": string, \"priority\": one of [low,medium,high], \"due_in_days\": integer or null}]}. "
     "Rules: Our own company (the DecisionOS user filing this) is \"{company}\". "
@@ -4218,6 +4218,11 @@ _DOC_SYSTEM = (
     "The contact_name on every invoice and payment MUST be the counterparty, never our own company. "
     "A sales invoice is money owed TO us by a customer (party type=customer). "
     "A purchase bill is money we owe a vendor/supplier (party type=vendor). "
+    "For each purchase_bill, ALSO set purchase_type by WHAT was bought: "
+    "\"asset\" for capital/fixed goods that last over a year (machinery, equipment, tools, vehicles, furniture, computers/IT hardware, buildings) — put the item in asset_name; "
+    "\"inventory\" for stock, raw materials, trading goods or components bought to resell or consume in production — put quantity in inventory_qty and its unit (kg, pcs, box, litre) in inventory_unit; "
+    "\"expense\" for everything else (rent, salaries, utilities, transport, services, consumables, subscriptions, taxes). When unsure, use \"expense\". "
+    "sales_invoice must have purchase_type empty. "
     "For every unpaid invoice or bill, add ONE follow-up task (e.g. 'Collect payment for invoice #123 from Acme' or 'Pay vendor bill #45 to XYZ'). "
     "A payment 'in' reduces a customer receivable; 'out' settles a vendor bill. "
     "Dates as YYYY-MM-DD when readable else empty string. Amounts are plain numbers without currency symbols. "
@@ -4321,8 +4326,8 @@ def _norm_company(s: str) -> str:
 
 
 async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, ingestion_id: str, source: str) -> dict:
-    from routers.ledger import create_expense
-    created = {"contacts": 0, "invoices": 0, "payments": 0, "tasks": 0, "expenses": 0}
+    from routers.ledger import create_expense, create_asset, create_inventory
+    created = {"contacts": 0, "invoices": 0, "payments": 0, "tasks": 0, "expenses": 0, "assets": 0, "inventory": 0}
     currency = await _tenant_currency(tenant_id)
     own_norm = _norm_company(await _tenant_name(tenant_id))
     troles = await tenant_role_keys(tenant_id)
@@ -4390,6 +4395,9 @@ async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, 
         except (TypeError, ValueError):
             amount = 0.0
         inv_id = new_id()
+        purchase_type = (inv.get("purchase_type") or "").strip().lower()
+        if itype == "purchase_bill" and purchase_type not in ("expense", "asset", "inventory"):
+            purchase_type = "expense"
         await db.invoices.insert_one({
             "id": inv_id, "tenant_id": tenant_id, "type": itype,
             "number": str(inv.get("number") or ""), "contact_id": cid,
@@ -4397,20 +4405,45 @@ async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, 
             "date": inv.get("date", "") or "", "due_date": inv.get("due_date", "") or "",
             "amount": amount, "currency": inv.get("currency") or currency,
             "status": "unpaid", "line_items": inv.get("line_items") if isinstance(inv.get("line_items"), list) else [],
+            "purchase_type": purchase_type if itype == "purchase_bill" else "",
             "source": source, "ingestion_id": ingestion_id, "created_by": user_id, "created_at": now_iso(),
         })
         created["invoices"] += 1
-        # Money we OWE a vendor (purchase bill) rolls up into the spend Ledger + Company Brain.
+        # A purchase bill (money we OWE) is segregated by WHAT was bought: asset, inventory, or expense.
         if itype == "purchase_bill":
+            vend = (inv.get("contact_name") or "Vendor").strip()
             li_text = " ".join(str(li.get("description", "")) for li in (inv.get("line_items") or []) if isinstance(li, dict))
-            await create_expense(tenant_id, user_id, {
-                "title": f"{(inv.get('contact_name') or 'Vendor').strip()} — Bill {inv.get('number') or ''}".strip(),
-                "amount": amount, "currency": inv.get("currency") or currency,
-                "vendor_name": (inv.get("contact_name") or "").strip(), "vendor_id": cid,
-                "date": inv.get("date") or "", "status": "unpaid",
-                "invoice_id": inv_id, "ingestion_id": ingestion_id, "notes": li_text[:200],
-            }, source=source)
-            created["expenses"] += 1
+            inv_cur = inv.get("currency") or currency
+            if purchase_type == "asset":
+                await create_asset(tenant_id, user_id, {
+                    "name": (inv.get("asset_name") or li_text[:60] or f"Asset from {vend}").strip(),
+                    "category": "Other", "purchase_amount": amount, "currency": inv_cur,
+                    "purchase_date": inv.get("date") or "", "vendor_name": vend,
+                    "notes": f"From bill {inv.get('number') or ''} · {li_text[:150]}".strip(),
+                }, source=source)
+                created["assets"] = created.get("assets", 0) + 1
+            elif purchase_type == "inventory":
+                try:
+                    qty = float(inv.get("inventory_qty") or 0) or 1
+                except (TypeError, ValueError):
+                    qty = 1
+                await create_inventory(tenant_id, user_id, {
+                    "item": (li_text[:60] or f"Stock from {vend}").strip(),
+                    "quantity": qty, "unit": (inv.get("inventory_unit") or "unit").strip(),
+                    "unit_cost": round(amount / qty, 2) if qty else amount,
+                    "currency": inv_cur, "vendor_name": vend,
+                    "notes": f"From bill {inv.get('number') or ''}".strip(),
+                }, source=source)
+                created["inventory"] = created.get("inventory", 0) + 1
+            else:
+                await create_expense(tenant_id, user_id, {
+                    "title": f"{vend} — Bill {inv.get('number') or ''}".strip(),
+                    "amount": amount, "currency": inv_cur,
+                    "vendor_name": vend, "vendor_id": cid,
+                    "date": inv.get("date") or "", "status": "unpaid",
+                    "invoice_id": inv_id, "ingestion_id": ingestion_id, "notes": li_text[:200],
+                }, source=source)
+                created["expenses"] += 1
 
     for p in records.get("payments", []):
         _raw_dir = str(p.get("direction") or "").strip().lower()

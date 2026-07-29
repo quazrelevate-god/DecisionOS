@@ -202,13 +202,14 @@ const RANGES = [
 ];
 const PROVIDERS = [
   { key: "all", label: "All" },
+  { key: "sarvam", label: "Sarvam STT" },
   { key: "anthropic", label: "Claude" },
   { key: "emergent", label: "Claude (Emergent)" },
   { key: "openai", label: "OpenAI STT" },
   { key: "gemini", label: "Gemini OCR" },
 ];
 const PROVIDER_LABEL = {
-  anthropic: "Claude (your key)", emergent: "Claude (Emergent)",
+  sarvam: "Sarvam voice (Indic STT)", anthropic: "Claude (your key)", emergent: "Claude (Emergent)",
   openai: "OpenAI transcription", gemini: "Gemini document OCR", unknown: "Unknown",
 };
 
@@ -256,7 +257,7 @@ export function UsageSection() {
         ))}
       </div>
       <p className="font-mono text-[11px] text-white/35 mb-5">
-        Covers all providers — Claude (text), OpenAI (voice transcription) & Gemini (document OCR). Costs are estimates
+        Covers all providers — Sarvam (Indic voice transcription), Claude (text), OpenAI (voice fallback) & Gemini (document OCR). Costs are estimates
         (tokens ≈ chars/4; STT by audio duration), not exact provider billing.
       </p>
       {loading || !data ? <Loading /> : (

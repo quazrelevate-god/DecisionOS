@@ -104,6 +104,7 @@ _PROVIDER_RATES = {
     "gemini": (0.30, 2.50),     # Gemini 2.5 Flash
 }
 _OPENAI_STT_PER_MIN = 0.006     # transcription $/minute (approx)
+_SARVAM_STT_PER_MIN = 0.0072    # Sarvam Saaras STT ~ Rs 0.60/min (approx, estimate)
 _COST_IN_PER_M = 3.0
 _COST_OUT_PER_M = 15.0
 

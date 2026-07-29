@@ -30,7 +30,7 @@ from core import (
     db, client, logger, DEFAULT_ROLES,
     EMERGENT_LLM_KEY, CLAUDE_KEY, LLM_MODEL, VISION_MODEL,
     claude_key, get_ai_key, set_ai_keys, ai_key_source, mask_key,
-    claude_chat, set_usage_tenant, log_usage, _est_tokens, _OPENAI_STT_PER_MIN,
+    claude_chat, set_usage_tenant, log_usage, _est_tokens, _OPENAI_STT_PER_MIN, _SARVAM_STT_PER_MIN,
     AI_KEY_PROVIDERS, load_ai_keys_from_db,
     now_iso, new_id, _extract_json,
     hash_password, verify_password, create_token,
@@ -808,9 +808,10 @@ async def transcribe_audio(path: str, language: str = "auto") -> str:
 async def _log_stt_usage(transcript: str, model: str, provider: str = "openai"):
     # STT bills by audio duration; estimate ~15 chars/sec of speech from the transcript.
     secs = max(1, len(transcript or "") / 15)
+    per_min = _SARVAM_STT_PER_MIN if provider == "sarvam" else _OPENAI_STT_PER_MIN
     await log_usage("transcribe", provider, model=model,
                     units=round(secs), unit_type="audio_sec",
-                    cost=secs / 60 * _OPENAI_STT_PER_MIN)
+                    cost=secs / 60 * per_min)
 
 
 def match_member_by_name(members: list, name: str):

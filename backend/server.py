@@ -4371,6 +4371,12 @@ def _has_unclassified_purchase(records: dict, doc_type: str = "") -> bool:
 
 async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, ingestion_id: str, source: str) -> dict:
     from routers.ledger import create_expense, create_asset, create_inventory
+    # Validate BEFORE writing anything — an unclassified purchase must be classified first,
+    # otherwise we'd leave orphaned contacts committed before the 400 fires.
+    if _has_unclassified_purchase(records):
+        raise HTTPException(
+            status_code=400,
+            detail="Please classify each purchase bill as Expense, Asset, or Inventory before filing.")
     created = {"contacts": 0, "invoices": 0, "payments": 0, "tasks": 0, "expenses": 0, "assets": 0, "inventory": 0}
     currency = await _tenant_currency(tenant_id)
     own_norm = _norm_company(await _tenant_name(tenant_id))

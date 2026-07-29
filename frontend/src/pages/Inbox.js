@@ -16,7 +16,7 @@ import {
   UsersThree, Truck, Receipt, CurrencyCircleDollar, Warning, CheckSquare,
   SealCheck, Bell, Brain, Check, X, ArrowClockwise, User, UserPlus, Question,
   WarningCircle, ArrowBendUpRight, ChatCircleText, Eye, Pause, Play, PencilSimple,
-  Paperclip, File as FileIcon, ShieldCheck, Camera, UploadSimple,
+  Paperclip, File as FileIcon, ShieldCheck, Camera, UploadSimple, Translate,
 } from "@phosphor-icons/react";
 
 function SwipeRow({ children, onLeft, onRight, rightLabel = "View", testid }) {
@@ -245,6 +245,12 @@ function PendingApprovalCard({ d, members, roleOptions, onApprove, onReject, onR
       <div className="flex items-center gap-1.5 flex-wrap mb-2">
         <Chip value={d.status} data-testid={`decision-status-${d.id}`} />
         {d.dtype && <Chip value={d.dtype} className="bg-brand-blue text-white" />}
+        {d.detected_language_name && (
+          <span data-testid={`decision-language-${d.id}`} title="Language auto-detected by Sarvam"
+            className="inline-flex items-center gap-1 border border-black bg-brand-yellow/60 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider">
+            <Translate size={12} weight="bold" /> Spoken in {d.detected_language_name}
+          </span>
+        )}
       </div>
       <p className="font-heading font-bold text-lg leading-tight">{d.title}</p>
       <p className="label-mono text-muted-foreground mt-1 flex items-center gap-1.5" data-testid={`decision-raised-by-${d.id}`}>

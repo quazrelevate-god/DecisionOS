@@ -683,15 +683,36 @@ def _stt_lang_prompt(language: str):
     return lang, prompt
 
 
+_LANG_NAMES = {
+    "en-IN": "English", "en-US": "English", "hi-IN": "Hindi", "ta-IN": "Tamil",
+    "te-IN": "Telugu", "kn-IN": "Kannada", "ml-IN": "Malayalam", "mr-IN": "Marathi",
+    "gu-IN": "Gujarati", "bn-IN": "Bengali", "pa-IN": "Punjabi", "od-IN": "Odia",
+    "or-IN": "Odia", "as-IN": "Assamese", "ur-IN": "Urdu", "unknown": "Unknown",
+}
+
+
+def _lang_name(code: str) -> str:
+    if not code:
+        return ""
+    return _LANG_NAMES.get(code) or code.split("-")[0].upper()
+
+
+def _sarvam_mime(path: str) -> str:
+    ext = (path.rsplit(".", 1)[-1] if "." in path else "").lower()
+    return {"webm": "audio/webm", "ogg": "audio/ogg", "oga": "audio/ogg", "opus": "audio/ogg",
+            "wav": "audio/wav", "mp3": "audio/mpeg", "m4a": "audio/mp4", "mp4": "audio/mp4",
+            "aac": "audio/aac", "flac": "audio/flac"}.get(ext, "audio/webm")
+
+
 def _sarvam_stt_sync(path: str) -> dict:
-    """Sarvam speech-to-text (saaras:v3) with auto language detection + translate-to-English.
-    REST endpoint handles audio under ~30s; raises on error so the caller can fall back."""
+    """Sarvam REST speech-to-text (saaras:v3): auto-detect language + translate to English.
+    REST handles audio under ~30s; raises on error so the caller can fall back to batch/OpenAI."""
     import requests
     with open(path, "rb") as f:
         r = requests.post(
             "https://api.sarvam.ai/speech-to-text",
             headers={"api-subscription-key": SARVAM_API_KEY},
-            files={"file": (os.path.basename(path), f, "audio/webm")},
+            files={"file": (os.path.basename(path), f, _sarvam_mime(path))},
             data={"model": SARVAM_STT_MODEL, "mode": "translate", "language_code": "unknown"},
             timeout=90,
         )
@@ -699,21 +720,58 @@ def _sarvam_stt_sync(path: str) -> dict:
     return r.json()
 
 
-async def transcribe_audio(path: str, language: str = "auto") -> str:
-    # Primary: Sarvam saaras:v3 — auto-detects the spoken language (Tamil/Tanglish/English/…) and
-    # translates the transcript to English in one call. (language param is ignored — auto-detect.)
+def _sarvam_batch_sync(path: str) -> dict:
+    """Sarvam Batch STT (async job) for long recordings (>30s, up to 2h). Blocking — run in a thread."""
+    import tempfile, glob, json as _json
+    from sarvamai import SarvamAI
+    client = SarvamAI(api_subscription_key=SARVAM_API_KEY)
+    job = client.speech_to_text_job.create_job(model=SARVAM_STT_MODEL, mode="translate", language_code="unknown")
+    job.upload_files(file_paths=[path])
+    job.start()
+    job.wait_until_complete(poll_interval=5, timeout=1500)
+    outdir = tempfile.mkdtemp(prefix="sarvam_batch_")
+    job.download_outputs(output_dir=outdir)
+    transcript, lang = "", ""
+    for jf in glob.glob(os.path.join(outdir, "*.json")):
+        try:
+            with open(jf) as fh:
+                d = _json.load(fh)
+            transcript = (transcript + " " + (d.get("transcript") or "")).strip()
+            lang = lang or (d.get("language_code") or "")
+        except Exception:
+            pass
+    return {"transcript": transcript, "language_code": lang, "language_probability": None}
+
+
+async def transcribe_audio_full(path: str, language: str = "auto") -> dict:
+    """Returns {transcript, language_code, language_name, language_probability, engine}.
+    Sarvam is primary (auto-detect + translate-to-English); batch handles long clips; OpenAI/Whisper backstop."""
     if SARVAM_API_KEY:
+        # 1) REST (fast, <30s)
         try:
             out = await asyncio.to_thread(_sarvam_stt_sync, path)
             transcript = (out.get("transcript") or "").strip()
             if transcript:
+                code = out.get("language_code") or ""
                 await _log_stt_usage(transcript, f"sarvam:{SARVAM_STT_MODEL}", provider="sarvam")
-                return transcript
-            logger.warning("Sarvam STT returned empty transcript; falling back to OpenAI.")
+                return {"transcript": transcript, "language_code": code, "language_name": _lang_name(code),
+                        "language_probability": out.get("language_probability"), "engine": "sarvam"}
         except Exception as e:
-            logger.warning(f"Sarvam STT failed (audio may exceed 30s REST limit); falling back to OpenAI: {e}")
+            logger.warning(f"Sarvam REST STT failed (likely >30s); trying Sarvam batch: {e}")
+        # 2) Batch (long audio)
+        try:
+            out = await asyncio.to_thread(_sarvam_batch_sync, path)
+            transcript = (out.get("transcript") or "").strip()
+            if transcript:
+                code = out.get("language_code") or ""
+                await _log_stt_usage(transcript, f"sarvam-batch:{SARVAM_STT_MODEL}", provider="sarvam")
+                return {"transcript": transcript, "language_code": code, "language_name": _lang_name(code),
+                        "language_probability": None, "engine": "sarvam-batch"}
+            logger.warning("Sarvam batch returned empty transcript; falling back to OpenAI.")
+        except Exception as e:
+            logger.warning(f"Sarvam batch STT failed; falling back to OpenAI: {e}")
+    # 3) OpenAI gpt-4o-transcribe
     lang, prompt = _stt_lang_prompt(language)
-    # Fallback: the user's own OpenAI key + gpt-4o-transcribe.
     _openai_stt_client = get_openai_stt_client()
     if _openai_stt_client is not None:
         try:
@@ -725,10 +783,11 @@ async def transcribe_audio(path: str, language: str = "auto") -> str:
             with open(path, "rb") as f:
                 resp = await _openai_stt_client.audio.transcriptions.create(file=f, **kwargs)
             await _log_stt_usage(resp.text, OPENAI_STT_MODEL)
-            return resp.text
+            return {"transcript": resp.text, "language_code": "", "language_name": "",
+                    "language_probability": None, "engine": "openai"}
         except Exception as e:
             logger.warning(f"OpenAI STT ({OPENAI_STT_MODEL}) failed; falling back to Whisper (Emergent key): {e}")
-    # Final fallback: Whisper via the Emergent universal key.
+    # 4) Whisper via Emergent key
     stt = OpenAISpeechToText(api_key=EMERGENT_LLM_KEY)
     kwargs = {"model": "whisper-1", "response_format": "json"}
     if lang:
@@ -738,7 +797,12 @@ async def transcribe_audio(path: str, language: str = "auto") -> str:
     with open(path, "rb") as f:
         resp = await stt.transcribe(file=f, **kwargs)
     await _log_stt_usage(resp.text, "whisper-1")
-    return resp.text
+    return {"transcript": resp.text, "language_code": "", "language_name": "",
+            "language_probability": None, "engine": "whisper"}
+
+
+async def transcribe_audio(path: str, language: str = "auto") -> str:
+    return (await transcribe_audio_full(path, language)).get("transcript", "")
 
 
 async def _log_stt_usage(transcript: str, model: str, provider: str = "openai"):
@@ -936,9 +1000,17 @@ async def process_voice_note(note_id: str):
     try:
         await db.voice_notes.update_one({"id": note_id}, {"$set": {"status": "transcribing"}})
         transcript = note.get("transcript")
+        detected_code = note.get("detected_language")
+        detected_name = note.get("detected_language_name")
         if not transcript and note.get("audio_path"):
-            transcript = await transcribe_audio(note["audio_path"], note.get("language", "auto"))
-            await db.voice_notes.update_one({"id": note_id}, {"$set": {"transcript": transcript}})
+            stt = await transcribe_audio_full(note["audio_path"], note.get("language", "auto"))
+            transcript = stt.get("transcript")
+            detected_code = stt.get("language_code") or ""
+            detected_name = stt.get("language_name") or ""
+            await db.voice_notes.update_one({"id": note_id}, {"$set": {
+                "transcript": transcript, "detected_language": detected_code,
+                "detected_language_name": detected_name,
+                "language_probability": stt.get("language_probability"), "stt_engine": stt.get("engine")}})
 
         await db.voice_notes.update_one({"id": note_id}, {"$set": {"status": "structuring"}})
         troles = await tenant_role_keys(tenant_id)
@@ -978,6 +1050,8 @@ async def process_voice_note(note_id: str):
             "created_by": note["created_by"], "created_at": now_iso(),
             "source": note.get("source") or ("voice" if note.get("kind") == "audio" else "text"),
             "wa_from": note.get("wa_from"), "raised_by_name": note.get("raised_by_name"),
+            "detected_language": detected_code or None,
+            "detected_language_name": detected_name or None,
             "task_ids": [],
         }
         task_ids, assignee_keys = await _create_decision_tasks(tenant_id, note, decision_id, extracted, troles, members, cat_keys)
@@ -5308,6 +5382,44 @@ async def process_whatsapp_message(message: dict):
             else:
                 await update_wa_event(ev_id, status="draft", summary=text[:140])
                 await send_wa_reply(sender, "✅ Received — your message is being reviewed by the right team before action.")
+        elif mtype in ("audio", "voice"):
+            media = message[mtype]
+            data = await download_wa_media(media["id"])
+            ext = (media.get("mime_type", "audio/ogg").split(";")[0].split("/")[-1]) or "ogg"
+            fname = f"wa_voice_{new_id()}.{ext}"
+            fpath = UPLOAD_DIR / fname
+            with open(fpath, "wb") as f:
+                f.write(data)
+            stt = await transcribe_audio_full(str(fpath), "auto")
+            text = (stt.get("transcript") or "").strip()
+            lang_name = stt.get("language_name") or ""
+            if not text:
+                await update_wa_event(ev_id, status="ignored", reason="Voice note could not be transcribed")
+                await send_wa_reply(sender, "🎙️ I couldn't make out your voice note. Please try again in a quieter spot or send it as text.")
+                return
+            tri = await ai_capture_triage(text, sorted(troles))
+            if tri.get("unrelated"):
+                await update_wa_event(ev_id, status="ignored", reason="Unrelated / not a business instruction")
+                await send_wa_reply(sender, "🤔 I couldn't tell what to do with this voice note. Try again with a short instruction for your team.")
+                return
+            confidence = tri.get("confidence", 0.7)
+            amount = tri.get("amount") if isinstance(tri.get("amount"), (int, float)) else None
+            cls = tri.get("classification", "other")
+            needs_owner = _needs_owner_review(cls, amount, tri.get("policy_or_high_risk"), cap_threshold)
+            level, reason = _decide_processing_level(cls, confidence, amount, needs_owner,
+                                                     False, False, is_document=False)
+            status = "needs_attention" if level == "attention" else "pending_review"
+            did = await persist_capture_draft(tenant_id, sender, "voice",
+                                              {"text": text, "detected_language_name": lang_name, "stt_engine": stt.get("engine")},
+                                              tri, troles, status=status, confidence=confidence,
+                                              processing_level=level, attention_reason=reason)
+            lang_tag = f" (heard in {lang_name})" if lang_name and lang_name != "English" else ""
+            if level == "attention":
+                await update_wa_event(ev_id, status="attention", summary=text[:140])
+                await send_wa_reply(sender, f"🎙️ Voice note received{lang_tag} — this needs a quick check by the team before we action it.")
+            else:
+                await update_wa_event(ev_id, status="draft", summary=text[:140])
+                await send_wa_reply(sender, f"🎙️ Voice note received{lang_tag} — your message is being reviewed by the right team before action.")
         else:
             await update_wa_event(ev_id, status="ignored", reason=f"Unsupported message type: {mtype}")
     except Exception as e:

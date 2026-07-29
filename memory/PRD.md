@@ -1,4 +1,7 @@
 ## Changelog
+- 2026-07: **Sarvam added to Super-Admin → AI Provider Keys.** Registered `sarvam` (env `SARVAM_API_KEY`) in the runtime key registry (`core._AI_KEY_ENV`) so it's DB-overridable at runtime without restart; `transcribe_audio`/`_sarvam_stt_sync`/`_sarvam_batch_sync` now read `get_ai_key("sarvam")` (env fallback). Admin: `AiKeysInput.sarvam`, label "Sarvam (Indic Voice STT)", note "Falls back to OpenAI transcription if unset", new `_probe_sarvam()` (POST /text-lid) wired into `/admin/ai-keys/status`. Frontend AI-keys section is dynamic (renders + edits sarvam) and status map now includes `sarvam`. Verified: /admin/ai-keys lists Sarvam (masked, editable), status probe returns active "Key working".
+
+## Changelog
 - 2026-07: **Sarvam credit usage in Super-Admin.** Sarvam STT calls were already logged (provider `sarvam`) so they auto-appear in `/api/admin/usage` `by_provider`; added a Sarvam-specific cost rate `_SARVAM_STT_PER_MIN` (≈₹0.60/min, replacing the OpenAI rate for Sarvam events) and surfaced Sarvam in the Admin → Usage tab: a "Sarvam STT" provider filter button + a "Sarvam voice (Indic STT)" breakdown card + updated the coverage note. Verified: admin usage now returns a `sarvam` row (7 calls, ~$0.0088 estimate).
 
 ## Changelog

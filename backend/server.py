@@ -31,6 +31,7 @@ from core import (
     EMERGENT_LLM_KEY, CLAUDE_KEY, LLM_MODEL, VISION_MODEL,
     claude_key, get_ai_key, set_ai_keys, ai_key_source, mask_key,
     claude_chat, set_usage_tenant, log_usage, _est_tokens, _OPENAI_STT_PER_MIN, _SARVAM_STT_PER_MIN,
+    get_ai_key,
     AI_KEY_PROVIDERS, load_ai_keys_from_db,
     now_iso, new_id, _extract_json,
     hash_password, verify_password, create_token,
@@ -711,7 +712,7 @@ def _sarvam_stt_sync(path: str) -> dict:
     with open(path, "rb") as f:
         r = requests.post(
             "https://api.sarvam.ai/speech-to-text",
-            headers={"api-subscription-key": SARVAM_API_KEY},
+            headers={"api-subscription-key": get_ai_key("sarvam")},
             files={"file": (os.path.basename(path), f, _sarvam_mime(path))},
             data={"model": SARVAM_STT_MODEL, "mode": "translate", "language_code": "unknown"},
             timeout=90,
@@ -724,7 +725,7 @@ def _sarvam_batch_sync(path: str) -> dict:
     """Sarvam Batch STT (async job) for long recordings (>30s, up to 2h). Blocking — run in a thread."""
     import tempfile, glob, json as _json
     from sarvamai import SarvamAI
-    client = SarvamAI(api_subscription_key=SARVAM_API_KEY)
+    client = SarvamAI(api_subscription_key=get_ai_key("sarvam"))
     job = client.speech_to_text_job.create_job(model=SARVAM_STT_MODEL, mode="translate", language_code="unknown")
     job.upload_files(file_paths=[path])
     job.start()
@@ -746,7 +747,7 @@ def _sarvam_batch_sync(path: str) -> dict:
 async def transcribe_audio_full(path: str, language: str = "auto") -> dict:
     """Returns {transcript, language_code, language_name, language_probability, engine}.
     Sarvam is primary (auto-detect + translate-to-English); batch handles long clips; OpenAI/Whisper backstop."""
-    if SARVAM_API_KEY:
+    if get_ai_key("sarvam"):
         # 1) REST (fast, <30s)
         try:
             out = await asyncio.to_thread(_sarvam_stt_sync, path)

@@ -99,6 +99,7 @@ export function AiKeysSection() {
     try {
       const { data } = await api.get("/admin/ai-keys/status");
       const map = {
+        sarvam: data.sarvam,
         anthropic: data.anthropic, openai: data.openai, gemini: data.gemini,
         wa_access_token: data.whatsapp, wa_phone_number_id: data.whatsapp,
       };

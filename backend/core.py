@@ -43,6 +43,7 @@ _AI_KEY_ENV = {
     "anthropic": os.environ.get('ANTHROPIC_API_KEY', '').strip(),
     "openai": os.environ.get('OPENAI_API_KEY', '').strip(),
     "gemini": os.environ.get('GEMINI_API_KEY', '').strip(),
+    "sarvam": os.environ.get('SARVAM_API_KEY', '').strip(),
     "wa_access_token": os.environ.get('WA_ACCESS_TOKEN', '').strip(),
     "wa_phone_number_id": os.environ.get('WA_PHONE_NUMBER_ID', '').strip(),
 }

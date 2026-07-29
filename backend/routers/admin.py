@@ -45,6 +45,7 @@ class AiKeysInput(BaseModel):
     anthropic: Optional[str] = None
     openai: Optional[str] = None
     gemini: Optional[str] = None
+    sarvam: Optional[str] = None
     wa_access_token: Optional[str] = None
     wa_phone_number_id: Optional[str] = None
 
@@ -276,14 +277,19 @@ async def admin_reset_access(user_id: str, admin: dict = Depends(get_platform_ad
 
 # --- AI provider keys -------------------------------------------------------
 def _emergent_note(provider):
-    return "Falls back to Emergent universal key" if provider == "anthropic" else ""
+    if provider == "anthropic":
+        return "Falls back to Emergent universal key"
+    if provider == "sarvam":
+        return "Falls back to OpenAI transcription if unset"
+    return ""
 
 
 @router.get("/ai-keys")
 async def admin_get_ai_keys(admin: dict = Depends(get_platform_admin)):
     labels = {
         "anthropic": "Anthropic (Claude)", "openai": "OpenAI (Whisper STT)",
-        "gemini": "Google Gemini (Doc OCR)", "wa_access_token": "WhatsApp Access Token",
+        "gemini": "Google Gemini (Doc OCR)", "sarvam": "Sarvam (Indic Voice STT)",
+        "wa_access_token": "WhatsApp Access Token",
         "wa_phone_number_id": "WhatsApp Phone Number ID",
     }
     keys = []
@@ -383,11 +389,30 @@ async def _probe_whatsapp():
         return {"status": "error", "detail": str(e)[:180]}
 
 
+async def _probe_sarvam():
+    key = get_ai_key("sarvam")
+    if not key:
+        return {"status": "not_set", "detail": "No key set — voice uses OpenAI fallback"}
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=15) as c:
+            r = await c.post("https://api.sarvam.ai/text-lid",
+                             headers={"api-subscription-key": key},
+                             json={"input": "hello"})
+        if r.status_code == 200:
+            return {"status": "active", "detail": "Key working"}
+        if r.status_code in (401, 403):
+            return {"status": "invalid", "detail": "Invalid API key"}
+        return {"status": "error", "detail": f"HTTP {r.status_code}"}
+    except Exception as e:
+        return {"status": "error", "detail": str(e)[:180]}
+
+
 @router.get("/ai-keys/status")
 async def admin_ai_keys_status(admin: dict = Depends(get_platform_admin)):
-    anthropic, openai, gemini, whatsapp = await asyncio.gather(
-        _probe_anthropic(), _probe_openai(), _probe_gemini(), _probe_whatsapp())
-    return {"anthropic": anthropic, "openai": openai, "gemini": gemini, "whatsapp": whatsapp}
+    sarvam, anthropic, openai, gemini, whatsapp = await asyncio.gather(
+        _probe_sarvam(), _probe_anthropic(), _probe_openai(), _probe_gemini(), _probe_whatsapp())
+    return {"sarvam": sarvam, "anthropic": anthropic, "openai": openai, "gemini": gemini, "whatsapp": whatsapp}
 
 
 # --- Health -----------------------------------------------------------------

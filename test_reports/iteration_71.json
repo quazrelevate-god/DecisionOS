@@ -1,0 +1,23 @@
+{
+  "summary": "Frontend-only testing of Ledger match/needs-matching UI (revenue + payables). Seeded 2 sales invoices (TEST-A-71 10k, TEST-B-71 8k), 1 unmatched IN payment (15k), 1 purchase_bill (TEST-PB-71 6k), 1 unmatched OUT payment (4k). Verified: searchable InvoicePicker filters correctly on both sides; overpayment leftover behavior (15k → INV_A 10k paid + 5k leftover STAYS in needs-matching with '₹5,000 · ₹10,000 already applied'); leftover 5k matched to INV_B (partial) then item removed; Expenses tab payables-needs-matching panel present; OUT 4k matched to purchase bill removed from panel with success toast 'Payment matched'; regression KPIs (Overview: Revenue/Spend/Net Profit; Revenue tab: Billed/Received/Outstanding) all render; invoice chips 'received' and 'partial' visible. All test scenarios PASSED.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/test_reports/seed_iter71.py"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Ledger.js is 938 lines — approaching >700 line threshold; consider splitting NeedsMatchingPanel/InvoicePicker/RevenueTab/ExpensesTable into separate files for maintainability.",
+    "Pre-existing demo noise: 6x INV-2045 duplicate invoices in Sharma demo tenant (already flagged by AI brief; harmless for this feature)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped)", "frontend": "100%"},
+  "test_credentials": "owner@sharma.com / demo1234 (Sharma Textiles)",
+  "seed_data_creation": "Seeded via /app/test_reports/seed_iter71.py (tag=TEST_ITER71); cleaned up after run (3 invoices + 2 payments removed).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "InvoicePicker is a custom button+list (NOT native select). Toggle via [data-testid='match-picker-<pid>-toggle'], then fill search [data-testid='match-picker-<pid>-search'], then click option [data-testid='match-picker-<pid>-opt-<invId>']. Overview tab is default at /ledger — must click Revenue tab to see ledger-revenue panel. Seed via db.invoices (type=sales_invoice or purchase_bill) and db.payments (direction=in/out with match_status='unmatched', applied=0, applications=[]).",
+  "rca of the issue": "N/A — all features work as specified."
+}

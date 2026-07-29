@@ -336,7 +336,8 @@ async def create_income(tenant_id: str, user_id: str, data: dict, source: str = 
             "id": new_id(), "tenant_id": tenant_id, "direction": "in", "amount": amount,
             "date": doc["date"], "method": (data.get("method") or "").strip(),
             "reference": doc["number"], "contact_name": cust, "invoice_number": doc["number"],
-            "invoice_id": inv_id, "match_status": "matched", "matched_by": "manual",
+            "invoice_id": inv_id, "applied": amount, "applications": [{"invoice_id": inv_id, "amount": amount, "at": now_iso()}],
+            "match_status": "matched", "matched_by": "manual",
             "source": source, "created_by": user_id, "created_at": now_iso(),
         })
     return doc
@@ -401,26 +402,50 @@ async def _find_matching_invoice(tenant_id: str, direction: str, payment: dict):
     return smart[0] if len(smart) == 1 else None
 
 
-async def _apply_payment_to_invoice(tenant_id: str, invoice: dict, amount: float, payment_id: str, matched_by: str) -> str:
+def _pay_remaining(p: dict) -> float:
+    return round(_num(p.get("amount")) - _num(p.get("applied")), 2)
+
+
+async def _apply_payment_to_invoice(tenant_id: str, invoice: dict, payment: dict, matched_by: str, max_amount=None) -> float:
+    """Allocate the payment's UNAPPLIED balance to this invoice, never overpaying it.
+    Any leftover stays on the payment (surfaces in Needs-matching). Returns the amount applied.
+    Mutates the passed invoice/payment dicts so callers can chain allocations in-memory."""
     total = _num(invoice.get("amount"))
-    paid = round(_num(invoice.get("amount_paid")) + amount, 2)
-    status = "paid" if paid + 0.01 >= total else "partial"
+    inv_remaining = round(total - _num(invoice.get("amount_paid")), 2)
+    amt = round(min(inv_remaining, _pay_remaining(payment)), 2)
+    if max_amount is not None:
+        amt = round(min(amt, _num(max_amount)), 2)
+    if amt <= 0.01:
+        return 0.0
+    new_paid = round(_num(invoice.get("amount_paid")) + amt, 2)
+    inv_status = "paid" if total > 0 and new_paid + 0.01 >= total else "partial"
     await db.invoices.update_one({"id": invoice["id"], "tenant_id": tenant_id},
-                                 {"$set": {"amount_paid": paid, "status": status}})
-    await db.payments.update_one({"id": payment_id, "tenant_id": tenant_id},
-                                 {"$set": {"invoice_id": invoice["id"], "match_status": "matched", "matched_by": matched_by}})
-    return status
+                                 {"$set": {"amount_paid": new_paid, "status": inv_status}})
+    invoice["amount_paid"] = new_paid
+    new_applied = round(_num(payment.get("applied")) + amt, 2)
+    apps = list(payment.get("applications") or [])
+    apps.append({"invoice_id": invoice["id"], "amount": amt, "at": now_iso()})
+    pstatus = "matched" if new_applied + 0.01 >= _num(payment.get("amount")) else "partial"
+    await db.payments.update_one({"id": payment["id"], "tenant_id": tenant_id},
+                                 {"$set": {"applied": new_applied, "applications": apps,
+                                           "match_status": pstatus, "matched_by": matched_by,
+                                           "invoice_id": apps[0]["invoice_id"]}})
+    payment["applied"] = new_applied
+    payment["applications"] = apps
+    return amt
 
 
 async def reconcile_payment(tenant_id: str, payment: dict, matched_by: str = "auto"):
-    """Try to auto-link a payment to an open invoice. Returns the matched invoice or None
-    (marking the payment 'unmatched' so it surfaces in the Needs-matching queue)."""
+    """Try to auto-allocate a payment to an open invoice. Any unallocated balance stays on the
+    payment (match_status 'unmatched'/'partial') so it surfaces in the Needs-matching queue."""
+    payment.setdefault("applied", 0)
+    payment.setdefault("applications", [])
     inv = await _find_matching_invoice(tenant_id, payment.get("direction"), payment)
     if not inv:
         await db.payments.update_one({"id": payment["id"], "tenant_id": tenant_id},
-                                     {"$set": {"match_status": "unmatched"}})
+                                     {"$set": {"match_status": payment.get("match_status") or "unmatched"}})
         return None
-    await _apply_payment_to_invoice(tenant_id, inv, _num(payment.get("amount")), payment["id"], matched_by)
+    await _apply_payment_to_invoice(tenant_id, inv, payment, matched_by)
     return inv
 
 
@@ -690,8 +715,9 @@ async def list_revenue(user: dict = Depends(require_ledger)):
     billed = sum(_num(i.get("amount")) for i in invoices)
     received = sum(_num(p.get("amount")) for p in payments)
     outstanding = sum(_remaining(i) for i in invoices if i.get("status") != "paid")
-    # Payments we couldn't confidently link → surfaced for human matching.
-    unmatched = [p for p in payments if not p.get("invoice_id") and p.get("match_status") not in ("standalone",)]
+    # Payments (or leftover balances) we couldn't confidently link → surfaced for human matching.
+    unmatched = [{**p, "remaining": _pay_remaining(p)} for p in payments
+                 if _pay_remaining(p) > 0.01 and p.get("match_status") != "standalone"]
     open_invoices = [i for i in invoices if i.get("status") != "paid" and _remaining(i) > 0.01]
     return {
         "currency": currency,
@@ -707,31 +733,81 @@ async def list_revenue(user: dict = Depends(require_ledger)):
     }
 
 
-@router.post("/revenue/payment/{pid}/match")
-async def match_payment(pid: str, body: dict, user: dict = Depends(require_ledger)):
-    """Manually link an unmatched payment to a chosen invoice (partial payments mark 'partial')."""
-    invoice_id = (body or {}).get("invoice_id")
-    pay = await db.payments.find_one({"id": pid, "tenant_id": user["tenant_id"]}, {"_id": 0})
+@router.get("/payables")
+async def list_payables(user: dict = Depends(require_ledger)):
+    """Supplier side: open purchase bills + supplier payments needing manual matching."""
+    tid = user["tenant_id"]
+    currency = await _currency(tid)
+    bills = await db.invoices.find({"tenant_id": tid, "type": "purchase_bill"}, {"_id": 0}).sort("created_at", -1).to_list(3000)
+    payments = await db.payments.find({"tenant_id": tid, "direction": "out"}, {"_id": 0}).sort("created_at", -1).to_list(3000)
+    for b in bills:
+        b["balance"] = _remaining(b)
+    unmatched = [{**p, "remaining": _pay_remaining(p)} for p in payments
+                 if _pay_remaining(p) > 0.01 and p.get("match_status") != "standalone"]
+    open_bills = [b for b in bills if b.get("status") != "paid" and _remaining(b) > 0.01]
+    return {
+        "currency": currency,
+        "totals": {"unmatched_count": len(unmatched), "open_bill_count": len(open_bills),
+                   "payable_outstanding": round(sum(_remaining(b) for b in open_bills), 2)},
+        "unmatched_payments": unmatched,
+        "open_invoices": [{"id": b["id"], "number": b.get("number"), "title": b.get("title"),
+                           "contact_name": b.get("contact_name"), "amount": _num(b.get("amount")),
+                           "balance": _remaining(b), "date": b.get("date")} for b in open_bills],
+    }
+
+
+async def _do_match_payment(tid: str, user: dict, pid: str, invoice_id: str) -> dict:
+    pay = await db.payments.find_one({"id": pid, "tenant_id": tid}, {"_id": 0})
     if not pay:
         raise HTTPException(status_code=404, detail="Payment not found")
-    inv = await db.invoices.find_one({"id": invoice_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
+    inv = await db.invoices.find_one({"id": invoice_id, "tenant_id": tid}, {"_id": 0})
     if not inv:
         raise HTTPException(status_code=404, detail="Invoice not found")
-    status = await _apply_payment_to_invoice(user["tenant_id"], inv, _num(pay.get("amount")), pid, "manual")
-    await log_activity(user["tenant_id"], user["name"], "payment_matched",
-                       f"Matched a {_num(pay.get('amount')):,.0f} payment to invoice {inv.get('number') or inv.get('title') or ''}".strip(),
-                       "payment", pid)
-    return {"ok": True, "invoice_status": status}
+    applied = await _apply_payment_to_invoice(tid, inv, pay, "manual")
+    leftover = _pay_remaining(pay)
+    await log_activity(tid, user["name"], "payment_matched",
+                       f"Matched {applied:,.0f} of a payment to {inv.get('number') or inv.get('title') or 'invoice'}"
+                       + (f" ({leftover:,.0f} still to match)" if leftover > 0.01 else ""), "payment", pid)
+    return {"ok": True, "applied": applied, "payment_remaining": leftover, "invoice_status": pay.get("match_status")}
+
+
+async def _do_standalone_payment(tid: str, user: dict, pid: str) -> dict:
+    pay = await db.payments.find_one({"id": pid, "tenant_id": tid}, {"_id": 0})
+    if not pay:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    remaining = _pay_remaining(pay)
+    await db.payments.update_one({"id": pid, "tenant_id": tid}, {"$set": {"match_status": "standalone"}})
+    # A supplier payment not tied to any bill is genuine spend → book its unallocated part as an expense.
+    if pay.get("direction") == "out" and remaining > 0.01:
+        existing = await db.expenses.find_one({"tenant_id": tid, "payment_id": pid})
+        if not existing:
+            await create_expense(tid, user["id"], {
+                "title": f"Payment to {(pay.get('contact_name') or 'Vendor').strip()}".strip(),
+                "amount": remaining, "vendor_name": (pay.get("contact_name") or "").strip(),
+                "date": pay.get("date") or "", "status": "paid",
+                "payment_id": pid, "notes": pay.get("reference") or "",
+            }, source="manual")
+    return {"ok": True}
+
+
+@router.post("/revenue/payment/{pid}/match")
+async def match_payment(pid: str, body: dict, user: dict = Depends(require_ledger)):
+    return await _do_match_payment(user["tenant_id"], user, pid, (body or {}).get("invoice_id"))
 
 
 @router.post("/revenue/payment/{pid}/standalone")
 async def mark_payment_standalone(pid: str, user: dict = Depends(require_ledger)):
-    """Mark an unmatched payment as standalone income (genuinely not tied to any invoice)."""
-    r = await db.payments.update_one({"id": pid, "tenant_id": user["tenant_id"]},
-                                     {"$set": {"match_status": "standalone", "invoice_id": None}})
-    if not r.matched_count:
-        raise HTTPException(status_code=404, detail="Payment not found")
-    return {"ok": True}
+    return await _do_standalone_payment(user["tenant_id"], user, pid)
+
+
+@router.post("/payables/payment/{pid}/match")
+async def match_payable(pid: str, body: dict, user: dict = Depends(require_ledger)):
+    return await _do_match_payment(user["tenant_id"], user, pid, (body or {}).get("invoice_id"))
+
+
+@router.post("/payables/payment/{pid}/standalone")
+async def mark_payable_standalone(pid: str, user: dict = Depends(require_ledger)):
+    return await _do_standalone_payment(user["tenant_id"], user, pid)
 
 
 @router.post("/revenue")
@@ -810,40 +886,63 @@ async def _recategorize_assets(tid: str, fc: dict) -> int:
 
 
 async def _recompute_outstanding(tid: str) -> dict:
-    """Rebuild payment↔invoice links and recompute each invoice's amount_paid / status,
-    so Outstanding (receivable & payable) is correct. Preserves existing/manual links and
-    'standalone' payments; auto-matches anything still unlinked."""
+    """Rebuild allocations and recompute each invoice's amount_paid / status so Outstanding
+    (receivable & payable) is correct. Preserves prior allocations & 'standalone' payments,
+    caps per-invoice (no overpay), then auto-matches any leftover balances."""
     stats = {"payments_matched": 0, "payments_unmatched": 0, "invoices_settled": 0, "invoices_partial": 0}
-    # 1) Auto-match any unlinked, non-standalone payment.
-    for p in await db.payments.find({"tenant_id": tid}, {"_id": 0}).to_list(8000):
-        if p.get("match_status") == "standalone" or p.get("invoice_id"):
-            continue
-        inv = await _find_matching_invoice(tid, p.get("direction"), p)
-        if inv:
-            await db.payments.update_one({"id": p["id"], "tenant_id": tid},
-                                         {"$set": {"invoice_id": inv["id"], "match_status": "matched", "matched_by": "auto"}})
-        else:
-            await db.payments.update_one({"id": p["id"], "tenant_id": tid}, {"$set": {"match_status": "unmatched"}})
-    # 2) Recompute amount_paid + status for every invoice from its linked payments.
-    payments = await db.payments.find({"tenant_id": tid}, {"_id": 0}).to_list(8000)
-    paid_by_inv = {}
-    for p in payments:
-        if p.get("invoice_id"):
-            paid_by_inv[p["invoice_id"]] = paid_by_inv.get(p["invoice_id"], 0) + _num(p.get("amount"))
-        if p.get("match_status") == "matched":
-            stats["payments_matched"] += 1
-        elif p.get("match_status") == "unmatched":
-            stats["payments_unmatched"] += 1
     invoices = await db.invoices.find({"tenant_id": tid, "type": {"$in": ["sales_invoice", "purchase_bill"]}}, {"_id": 0}).to_list(8000)
-    for inv in invoices:
-        total = _num(inv.get("amount"))
-        paid = round(paid_by_inv.get(inv["id"], 0), 2)
-        status = "paid" if total > 0 and paid + 0.01 >= total else ("partial" if paid > 0 else "unpaid")
-        await db.invoices.update_one({"id": inv["id"], "tenant_id": tid},
-                                     {"$set": {"amount_paid": paid, "status": status}})
-        if status == "paid":
+    invs = {i["id"]: {**i, "amount_paid": 0} for i in invoices}
+    await db.invoices.update_many({"tenant_id": tid, "type": {"$in": ["sales_invoice", "purchase_bill"]}},
+                                  {"$set": {"amount_paid": 0, "status": "unpaid"}})
+    payments = await db.payments.find({"tenant_id": tid}, {"_id": 0}).to_list(8000)
+
+    # Legacy: an out-payment already booked as its own expense stays standalone (avoid double-count).
+    for p in payments:
+        if p.get("direction") == "out" and p.get("match_status") != "standalone" and not (p.get("applications") or p.get("invoice_id")):
+            if await db.expenses.find_one({"tenant_id": tid, "payment_id": p["id"]}):
+                p["match_status"] = "standalone"
+
+    for p in payments:
+        # Capture the payment's prior allocation intent BEFORE clearing it.
+        orig_apps = list(p.get("applications") or [])
+        if not orig_apps and p.get("invoice_id"):
+            orig_apps = [{"invoice_id": p["invoice_id"], "amount": _num(p.get("amount"))}]
+        p["applied"] = 0
+        p["applications"] = []
+        await db.payments.update_one({"id": p["id"], "tenant_id": tid},
+                                     {"$set": {"applied": 0, "applications": [], "invoice_id": None}})
+        for a in orig_apps:
+            inv = invs.get(a.get("invoice_id"))
+            if inv:
+                await _apply_payment_to_invoice(tid, inv, p, p.get("matched_by") or "auto", max_amount=_num(a.get("amount")))
+        if p.get("match_status") == "standalone":
+            await db.payments.update_one({"id": p["id"], "tenant_id": tid}, {"$set": {"match_status": "standalone"}})
+
+    # Auto-match any leftover (non-standalone) balances against still-open invoices.
+    for p in payments:
+        if p.get("match_status") == "standalone":
+            continue
+        if _pay_remaining(p) <= 0.01:
+            if _num(p.get("applied")) > 0.01:
+                stats["payments_matched"] += 1
+            continue
+        probe = {"amount": _pay_remaining(p), "direction": p.get("direction"),
+                 "contact_name": p.get("contact_name"), "invoice_number": p.get("invoice_number"),
+                 "reference": p.get("reference"), "date": p.get("date")}
+        inv = await _find_matching_invoice(tid, p.get("direction"), probe)
+        if inv and inv["id"] in invs:
+            await _apply_payment_to_invoice(tid, invs[inv["id"]], p, "auto")
+        if _pay_remaining(p) <= 0.01:
+            stats["payments_matched"] += 1
+        else:
+            await db.payments.update_one({"id": p["id"], "tenant_id": tid},
+                                         {"$set": {"match_status": "partial" if _num(p.get("applied")) > 0.01 else "unmatched"}})
+            stats["payments_unmatched"] += 1
+
+    for inv in invs.values():
+        if inv.get("status") == "paid" or (_num(inv.get("amount")) > 0 and _num(inv.get("amount_paid")) + 0.01 >= _num(inv.get("amount"))):
             stats["invoices_settled"] += 1
-        elif status == "partial":
+        elif _num(inv.get("amount_paid")) > 0.01:
             stats["invoices_partial"] += 1
     return stats
 

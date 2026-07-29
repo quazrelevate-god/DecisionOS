@@ -518,46 +518,77 @@ function KpiRow({ summary }) {
   );
 }
 
-function NeedsMatching({ data, cur, onChange }) {
+function InvoicePicker({ open, value, onChange, cur, testid }) {
   const f = fmt(cur);
-  const unmatched = data?.unmatched_payments || [];
-  const open = data?.open_invoices || [];
+  const [q, setQ] = useState("");
+  const [show, setShow] = useState(false);
+  const sel = open.find((o) => o.id === value);
+  const label = (o) => (o.number ? `#${o.number} · ` : "") + (o.contact_name || o.title || "Invoice") + ` · bal ${f(o.balance)}`;
+  const filtered = open.filter((o) => label(o).toLowerCase().includes(q.toLowerCase()));
+  return (
+    <div className="relative" data-testid={testid}>
+      <button type="button" onClick={() => setShow((s) => !s)} data-testid={`${testid}-toggle`}
+        className={`${inp} w-full sm:w-[240px] text-left flex items-center justify-between gap-1`}>
+        <span className={`truncate ${sel ? "" : "text-muted-foreground"}`}>{sel ? label(sel) : "Match to invoice…"}</span>
+        <CaretDown size={14} weight="bold" />
+      </button>
+      {show && (
+        <div className="absolute z-30 mt-1 w-full sm:w-[280px] bg-card border-2 border-black shadow-brutal max-h-64 overflow-hidden flex flex-col">
+          <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} data-testid={`${testid}-search`}
+            placeholder="Search invoice # or name…" className="px-3 py-2 text-sm border-b border-border focus:outline-none bg-transparent" />
+          <div className="overflow-y-auto">
+            {filtered.length === 0 && <div className="px-3 py-3 text-xs text-muted-foreground">No matching invoices</div>}
+            {filtered.map((o) => (
+              <button key={o.id} type="button" data-testid={`${testid}-opt-${o.id}`}
+                onClick={() => { onChange(o.id); setShow(false); setQ(""); }}
+                className="block w-full text-left px-3 py-2 text-sm hover:bg-brand-red hover:text-white transition-colors border-b border-border/50">
+                {label(o)}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NeedsMatchingPanel({ title, hint, unmatched, open, cur, endpoint, standaloneLabel, onChange, testid }) {
+  const f = fmt(cur);
   const [picks, setPicks] = useState({});
   const [busy, setBusy] = useState(null);
-  if (unmatched.length === 0) return null;
+  if (!unmatched || unmatched.length === 0) return null;
 
   const match = async (pid) => {
     const invoice_id = picks[pid];
     if (!invoice_id) return toast.error("Pick an invoice to match");
     setBusy(pid);
-    try { await api.post(`/revenue/payment/${pid}/match`, { invoice_id }); toast.success("Payment matched"); onChange(); }
-    catch (e) { toast.error(e.response?.data?.detail || "Could not match"); } finally { setBusy(null); }
+    try {
+      const { data } = await api.post(`${endpoint}/${pid}/match`, { invoice_id });
+      toast.success(data.payment_remaining > 0.01 ? `Matched — ${f(data.payment_remaining)} still to match` : "Payment matched");
+      setPicks((s) => ({ ...s, [pid]: "" })); onChange();
+    } catch (e) { toast.error(e.response?.data?.detail || "Could not match"); } finally { setBusy(null); }
   };
   const standalone = async (pid) => {
     setBusy(pid);
-    try { await api.post(`/revenue/payment/${pid}/standalone`); toast.success("Marked as standalone income"); onChange(); }
+    try { await api.post(`${endpoint}/${pid}/standalone`); toast.success(standaloneLabel.done); onChange(); }
     catch { toast.error("Could not update"); } finally { setBusy(null); }
   };
 
   return (
-    <div className="card-brutal p-4 border-2 border-brand-red bg-brand-red/5" data-testid="revenue-needs-matching">
+    <div className="card-brutal p-4 border-2 border-brand-red bg-brand-red/5" data-testid={testid}>
       <div className="flex items-center gap-2 mb-1">
         <WarningCircle size={18} weight="bold" className="text-brand-red" />
-        <h3 className="font-heading font-extrabold uppercase tracking-tight text-sm">Needs matching ({unmatched.length})</h3>
+        <h3 className="font-heading font-extrabold uppercase tracking-tight text-sm">{title} ({unmatched.length})</h3>
       </div>
-      <p className="text-xs text-muted-foreground mb-3">These received payments couldn’t be auto-linked to an invoice. Pick the right one, or mark it as standalone income.</p>
+      <p className="text-xs text-muted-foreground mb-3">{hint}</p>
       <div className="space-y-2">
         {unmatched.map((p) => (
-          <div key={p.id} className="flex flex-wrap items-center gap-2 bg-card border border-border rounded-lg p-2" data-testid={`unmatched-payment-${p.id}`}>
-            <span className="text-sm font-semibold">{f(p.amount)}</span>
-            <span className="text-xs text-muted-foreground flex-1 min-w-0 truncate">{p.contact_name || "Unknown payer"}{p.date ? ` · ${p.date}` : ""}{p.invoice_number ? ` · ref ${p.invoice_number}` : ""}</span>
-            <select data-testid={`match-select-${p.id}`} className={`${inp} w-auto max-w-[220px]`} value={picks[p.id] || ""}
-              onChange={(e) => setPicks((s) => ({ ...s, [p.id]: e.target.value }))}>
-              <option value="">Match to invoice…</option>
-              {open.map((o) => <option key={o.id} value={o.id}>{(o.number ? `#${o.number} · ` : "") + (o.contact_name || o.title || "Invoice") + ` · bal ${f(o.balance)}`}</option>)}
-            </select>
+          <div key={p.id} className="flex flex-wrap items-center gap-2 bg-card border border-border rounded-lg p-2" data-testid={`${testid}-item-${p.id}`}>
+            <span className="text-sm font-semibold">{f(p.remaining ?? p.amount)}</span>
+            <span className="text-xs text-muted-foreground flex-1 min-w-0 truncate">{p.contact_name || "Unknown"}{p.date ? ` · ${p.date}` : ""}{p.invoice_number ? ` · ref ${p.invoice_number}` : ""}{p.applied > 0 ? ` · ${f(p.applied)} already applied` : ""}</span>
+            <InvoicePicker open={open} value={picks[p.id] || ""} onChange={(v) => setPicks((s) => ({ ...s, [p.id]: v }))} cur={cur} testid={`match-picker-${p.id}`} />
             <button onClick={() => match(p.id)} disabled={busy === p.id} data-testid={`match-btn-${p.id}`} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border-2 border-black bg-green-600 text-white hover:shadow-brutal-sm transition-all disabled:opacity-50">Match</button>
-            <button onClick={() => standalone(p.id)} disabled={busy === p.id} data-testid={`standalone-btn-${p.id}`} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-black bg-white hover:bg-black/5 transition-all disabled:opacity-50">Standalone income</button>
+            <button onClick={() => standalone(p.id)} disabled={busy === p.id} data-testid={`standalone-btn-${p.id}`} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-black bg-white hover:bg-black/5 transition-all disabled:opacity-50">{standaloneLabel.btn}</button>
           </div>
         ))}
       </div>
@@ -581,7 +612,11 @@ function RevenueTab({ data, cur, onDelete, onChange }) {
         <KPI icon={WarningCircle} label="Outstanding" value={f(tt.outstanding || 0)} accent="text-brand-red" />
       </div>
 
-      <NeedsMatching data={data} cur={cur} onChange={onChange} />
+      <NeedsMatchingPanel title="Needs matching" testid="revenue-needs-matching"
+        hint="These received payments couldn’t be auto-linked to an invoice. Pick the right one, or mark it as standalone income."
+        unmatched={data?.unmatched_payments} open={data?.open_invoices || []} cur={cur}
+        endpoint="/revenue/payment" standaloneLabel={{ btn: "Standalone income", done: "Marked as standalone income" }}
+        onChange={onChange} />
 
       <AiPanel scope="revenue" />
 
@@ -811,7 +846,7 @@ export default function Ledger() {
   const [tab, setTab] = useState("overview");
   const [reclassifying, setReclassifying] = useState(false);
   const qc = useQueryClient();
-  const invalidate = () => ["ledger-summary", "expenses", "assets", "inventory", "revenue"].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+  const invalidate = () => ["ledger-summary", "expenses", "assets", "inventory", "revenue", "payables"].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
 
   const reclassify = async () => {
     if (!window.confirm("Re-run AI on all filed purchase bills and move any mis-booked ones into the correct bucket (Expense / Asset / Inventory)? This updates your ledger.")) return;
@@ -830,6 +865,7 @@ export default function Ledger() {
   const assetsQ = useQuery({ queryKey: ["assets"], queryFn: () => api.get("/assets").then((r) => r.data) });
   const inventoryQ = useQuery({ queryKey: ["inventory"], queryFn: () => api.get("/inventory").then((r) => r.data) });
   const revenueQ = useQuery({ queryKey: ["revenue"], queryFn: () => api.get("/revenue").then((r) => r.data) });
+  const payablesQ = useQuery({ queryKey: ["payables"], queryFn: () => api.get("/payables").then((r) => r.data) });
 
   const summary = summaryQ.data;
   const cur = summary?.currency || "INR";
@@ -885,7 +921,7 @@ export default function Ledger() {
         <>
           {tab === "overview" && summary && <OverviewTab summary={summary} />}
           {tab === "revenue" && <RevenueTab data={revenueQ.data} cur={cur} onDelete={delRevenue} onChange={invalidate} />}
-          {tab === "expenses" && <div className="space-y-6"><AiPanel scope="expenses" /><ExpensesTable rows={expensesQ.data || []} cur={cur} onDelete={(id) => del("expenses", id)} /></div>}
+          {tab === "expenses" && <div className="space-y-6"><NeedsMatchingPanel title="Supplier payments to match" testid="payables-needs-matching" hint="These payments to suppliers couldn’t be auto-linked to a purchase bill. Pick the bill they settle, or mark as a standalone expense." unmatched={payablesQ.data?.unmatched_payments} open={payablesQ.data?.open_invoices || []} cur={cur} endpoint="/payables/payment" standaloneLabel={{ btn: "Standalone expense", done: "Booked as a standalone expense" }} onChange={invalidate} /><AiPanel scope="expenses" /><ExpensesTable rows={expensesQ.data || []} cur={cur} onDelete={(id) => del("expenses", id)} /></div>}
           {tab === "assets" && <div className="space-y-6"><AiPanel scope="assets" /><AssetsTable rows={assetsQ.data || []} cur={cur} onDelete={(id) => del("assets", id)} /></div>}
           {tab === "inventory" && <div className="space-y-6"><AiPanel scope="inventory" /><InventoryTable rows={inventoryQ.data || []} cur={cur} onDelete={(id) => del("inventory", id)} /></div>}
         </>

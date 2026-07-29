@@ -518,11 +518,61 @@ function KpiRow({ summary }) {
   );
 }
 
-function RevenueTab({ data, cur, onDelete }) {
+function NeedsMatching({ data, cur, onChange }) {
+  const f = fmt(cur);
+  const unmatched = data?.unmatched_payments || [];
+  const open = data?.open_invoices || [];
+  const [picks, setPicks] = useState({});
+  const [busy, setBusy] = useState(null);
+  if (unmatched.length === 0) return null;
+
+  const match = async (pid) => {
+    const invoice_id = picks[pid];
+    if (!invoice_id) return toast.error("Pick an invoice to match");
+    setBusy(pid);
+    try { await api.post(`/revenue/payment/${pid}/match`, { invoice_id }); toast.success("Payment matched"); onChange(); }
+    catch (e) { toast.error(e.response?.data?.detail || "Could not match"); } finally { setBusy(null); }
+  };
+  const standalone = async (pid) => {
+    setBusy(pid);
+    try { await api.post(`/revenue/payment/${pid}/standalone`); toast.success("Marked as standalone income"); onChange(); }
+    catch { toast.error("Could not update"); } finally { setBusy(null); }
+  };
+
+  return (
+    <div className="card-brutal p-4 border-2 border-brand-red bg-brand-red/5" data-testid="revenue-needs-matching">
+      <div className="flex items-center gap-2 mb-1">
+        <WarningCircle size={18} weight="bold" className="text-brand-red" />
+        <h3 className="font-heading font-extrabold uppercase tracking-tight text-sm">Needs matching ({unmatched.length})</h3>
+      </div>
+      <p className="text-xs text-muted-foreground mb-3">These received payments couldn’t be auto-linked to an invoice. Pick the right one, or mark it as standalone income.</p>
+      <div className="space-y-2">
+        {unmatched.map((p) => (
+          <div key={p.id} className="flex flex-wrap items-center gap-2 bg-card border border-border rounded-lg p-2" data-testid={`unmatched-payment-${p.id}`}>
+            <span className="text-sm font-semibold">{f(p.amount)}</span>
+            <span className="text-xs text-muted-foreground flex-1 min-w-0 truncate">{p.contact_name || "Unknown payer"}{p.date ? ` · ${p.date}` : ""}{p.invoice_number ? ` · ref ${p.invoice_number}` : ""}</span>
+            <select data-testid={`match-select-${p.id}`} className={`${inp} w-auto max-w-[220px]`} value={picks[p.id] || ""}
+              onChange={(e) => setPicks((s) => ({ ...s, [p.id]: e.target.value }))}>
+              <option value="">Match to invoice…</option>
+              {open.map((o) => <option key={o.id} value={o.id}>{(o.number ? `#${o.number} · ` : "") + (o.contact_name || o.title || "Invoice") + ` · bal ${f(o.balance)}`}</option>)}
+            </select>
+            <button onClick={() => match(p.id)} disabled={busy === p.id} data-testid={`match-btn-${p.id}`} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border-2 border-black bg-green-600 text-white hover:shadow-brutal-sm transition-all disabled:opacity-50">Match</button>
+            <button onClick={() => standalone(p.id)} disabled={busy === p.id} data-testid={`standalone-btn-${p.id}`} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-black bg-white hover:bg-black/5 transition-all disabled:opacity-50">Standalone income</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RevenueTab({ data, cur, onDelete, onChange }) {
   const f = fmt(cur);
   const tt = data?.totals || {};
   const invoices = data?.invoices || [];
   const payments = data?.payments || [];
+  const invStatus = (s) => s.status === "paid" ? { label: "received", cls: "bg-green-600 text-white" }
+    : s.status === "partial" ? { label: "partial", cls: "bg-brand-blue text-white" }
+    : { label: "awaiting", cls: "bg-brand-yellow text-black" };
   return (
     <div className="space-y-6" data-testid="ledger-revenue">
       <div className="grid grid-cols-3 gap-3">
@@ -530,6 +580,8 @@ function RevenueTab({ data, cur, onDelete }) {
         <KPI icon={Receipt} label="Received" value={f(tt.received || 0)} />
         <KPI icon={WarningCircle} label="Outstanding" value={f(tt.outstanding || 0)} accent="text-brand-red" />
       </div>
+
+      <NeedsMatching data={data} cur={cur} onChange={onChange} />
 
       <AiPanel scope="revenue" />
 
@@ -544,16 +596,18 @@ function RevenueTab({ data, cur, onDelete }) {
                 <th className="p-3">For / Invoice</th><th className="p-3">Customer</th><th className="p-3">Date</th><th className="p-3">Status</th><th className="p-3 text-right">Amount</th><th className="p-3"></th>
               </tr></thead>
               <tbody>
-                {invoices.map((s) => (
+                {invoices.map((s) => {
+                  const st = invStatus(s);
+                  return (
                   <tr key={s.id} className="border-b border-border/60 hover:bg-black/[0.02]" data-testid={`revenue-invoice-row-${s.id}`}>
                     <td className="p-3 font-medium">{s.title || (s.number ? `#${s.number}` : "Sale")}{s.source && s.source !== "manual" && <Chip value={s.source} className={`ml-2 ${SOURCE_CHIP[s.source] || "bg-black/5"}`} />}<AttachmentLink att={s.attachment} /></td>
                     <td className="p-3 text-muted-foreground">{s.contact_name || "—"}</td>
                     <td className="p-3 text-muted-foreground">{s.date || "—"}</td>
-                    <td className="p-3"><Chip value={s.status === "paid" ? "received" : "awaiting"} className={s.status === "paid" ? "bg-green-600 text-white" : "bg-brand-yellow text-black"} /></td>
+                    <td className="p-3"><Chip value={st.label} className={st.cls} />{s.status === "partial" && <span className="ml-2 text-xs text-muted-foreground">bal {f(s.balance)}</span>}</td>
                     <td className="p-3 text-right font-mono font-semibold">{f(s.amount)}</td>
                     <td className="p-3 text-right"><button onClick={() => onDelete("invoice", s.id)} data-testid={`revenue-invoice-delete-${s.id}`} className="text-muted-foreground hover:text-brand-red"><Trash size={15} /></button></td>
                   </tr>
-                ))}
+                );})}
               </tbody>
             </table>
           </div>
@@ -830,7 +884,7 @@ export default function Ledger() {
       ) : (
         <>
           {tab === "overview" && summary && <OverviewTab summary={summary} />}
-          {tab === "revenue" && <RevenueTab data={revenueQ.data} cur={cur} onDelete={delRevenue} />}
+          {tab === "revenue" && <RevenueTab data={revenueQ.data} cur={cur} onDelete={delRevenue} onChange={invalidate} />}
           {tab === "expenses" && <div className="space-y-6"><AiPanel scope="expenses" /><ExpensesTable rows={expensesQ.data || []} cur={cur} onDelete={(id) => del("expenses", id)} /></div>}
           {tab === "assets" && <div className="space-y-6"><AiPanel scope="assets" /><AssetsTable rows={assetsQ.data || []} cur={cur} onDelete={(id) => del("assets", id)} /></div>}
           {tab === "inventory" && <div className="space-y-6"><AiPanel scope="inventory" /><InventoryTable rows={inventoryQ.data || []} cur={cur} onDelete={(id) => del("inventory", id)} /></div>}

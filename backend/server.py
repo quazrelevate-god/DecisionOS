@@ -4612,8 +4612,14 @@ async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, 
             "source": source, "ingestion_id": ingestion_id, "created_by": user_id, "created_at": now_iso(),
         })
         created["payments"] += 1
-        # Money going OUT to a vendor rolls up into the spend Ledger (paid) + Company Brain.
-        if direction == "out":
+        pay_doc = {"id": pay_id, "direction": direction, "amount": amount,
+                   "date": p.get("date") or "", "contact_name": (p.get("contact_name") or "").strip(),
+                   "invoice_number": str(p.get("invoice_number") or ""), "reference": p.get("reference") or ""}
+        from routers.ledger import reconcile_payment
+        matched_inv = await reconcile_payment(tenant_id, pay_doc, matched_by="auto")
+        # Money going OUT to a vendor: if it settles a known purchase bill, just mark that bill
+        # paid (the bill already booked the expense). Only unmatched out-payments create a new spend.
+        if direction == "out" and not matched_inv:
             await create_expense(tenant_id, user_id, {
                 "title": f"Payment to {(p.get('contact_name') or 'Vendor').strip()}".strip(),
                 "amount": amount, "currency": currency,

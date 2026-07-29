@@ -1,0 +1,22 @@
+{
+  "summary": "Frontend-only testing of Revenue tab reconciliation flow on /ledger. Seeded 2 open sales invoices (TEST-NM-01 ₹15,000; TEST-NM-02 ₹8,000) and 2 unmatched IN payments (₹7,777 Unknown Payer NM; ₹8,000 Standalone Test) into MongoDB for the Sharma tenant, then exercised the UI end-to-end. All specified behaviors verified successfully.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Ledger.js NeedsMatching open-invoices dropdown lists duplicate INV-2045 entries (6x) because backend list_revenue returns all unpaid invoices without dedup — the demo tenant has a known 6x INV-2045 duplication (already surfaced by AI brief). Not a bug in this feature, but the dropdown UX gets noisy when the same invoice is duplicated. Consider disabling/grouping duplicates or deduping in list_revenue open_invoices."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped)", "frontend": "100%"},
+  "test_credentials": "owner@sharma.com / demo1234 (used Sharma demo quick-login button 'Owner'). Password login via input fields returned 401 during quick test — likely stale/no seed reset since prior iteration; the demo quick-login button worked. Not investigated further since scope was frontend-only.",
+  "seed_data_creation": "Inserted directly into MongoDB collections 'invoices' (2 sales_invoice rows, status=unpaid, ids test-inv-nm-1/2) and 'payments' (2 direction=in rows, match_status=unmatched, ids test-pay-nm-1/2) for tenant ae79cf8b-d407-494b-94b9-32daf017bb7a. All 4 seed rows were cleaned up after test.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Feature works. Verified: (1) revenue-needs-matching panel renders with correct count and each unmatched-payment-<id> row showing amount + payer + date; (2) match-select-<id> populated from open invoices; selecting TEST-NM-01 (₹15,000) and clicking match-btn for the ₹7,777 payment linked it — row disappeared from panel (2→1), success toast 'Payment matched' shown, invoice row status chip changed to blue 'partial' with 'bal ₹7,223' (=15000-7777), amount still ₹15,000; (3) standalone-btn on the ₹8,000 payment removed it from panel with toast 'Marked as standalone income'; (4) inv2 (unmatched) still shows yellow 'awaiting' chip; (5) Revenue KPIs Billed ₹192,029 / Received ₹16,806 / Outstanding ₹191,000 render (Outstanding reflects remaining balances); (6) Overview KPIs Revenue ₹192,029 / Total Spend ₹45,000 / Net Profit ₹147,029 render. Note: dropdown lists 6 duplicate INV-2045 rows because backend returns each duplicated invoice — pre-existing data-integrity issue in Sharma seed.",
+  "rca of the issue": "N/A — no bugs found for the requested feature."
+}

@@ -321,6 +321,7 @@ async def create_income(tenant_id: str, user_id: str, data: dict, source: str = 
         "contact_name": cust, "title": (data.get("title") or "").strip(),
         "date": data.get("date") or now_iso()[:10], "due_date": data.get("due_date") or "",
         "amount": amount, "currency": currency, "status": "paid" if received else status,
+        "amount_paid": amount if received else 0,
         "line_items": [], "purchase_type": "", "attachment": data.get("attachment"),
         "source": source, "created_by": user_id, "created_at": now_iso(),
     }
@@ -335,9 +336,92 @@ async def create_income(tenant_id: str, user_id: str, data: dict, source: str = 
             "id": new_id(), "tenant_id": tenant_id, "direction": "in", "amount": amount,
             "date": doc["date"], "method": (data.get("method") or "").strip(),
             "reference": doc["number"], "contact_name": cust, "invoice_number": doc["number"],
-            "invoice_id": inv_id, "source": source, "created_by": user_id, "created_at": now_iso(),
+            "invoice_id": inv_id, "match_status": "matched", "matched_by": "manual",
+            "source": source, "created_by": user_id, "created_at": now_iso(),
         })
     return doc
+
+
+# --- Payment ↔ invoice reconciliation --------------------------------------
+def _norm_name(s) -> str:
+    return " ".join(str(s or "").lower().split())
+
+
+def _norm_num(s) -> str:
+    return "".join(ch for ch in str(s or "").lower() if ch.isalnum())
+
+
+def _parse_dt(s):
+    from datetime import datetime
+    try:
+        return datetime.strptime(str(s or "")[:10], "%Y-%m-%d")
+    except (ValueError, TypeError):
+        return None
+
+
+def _remaining(inv: dict) -> float:
+    return round(_num(inv.get("amount")) - _num(inv.get("amount_paid")), 2)
+
+
+async def _open_invoices(tenant_id: str, direction: str) -> list:
+    inv_type = "sales_invoice" if direction == "in" else "purchase_bill"
+    rows = await db.invoices.find(
+        {"tenant_id": tenant_id, "type": inv_type, "status": {"$ne": "paid"}}, {"_id": 0}).to_list(3000)
+    return [r for r in rows if _remaining(r) > 0.01]
+
+
+async def _find_matching_invoice(tenant_id: str, direction: str, payment: dict):
+    """Smart match: invoice NUMBER, else same party + exact amount + date within ~30 days.
+    Returns the single matching invoice, or None if no confident/unambiguous match."""
+    candidates = await _open_invoices(tenant_id, direction)
+    if not candidates:
+        return None
+    amt = _num(payment.get("amount"))
+    pnum = _norm_num(payment.get("invoice_number")) or _norm_num(payment.get("reference"))
+    if pnum:
+        num_matches = [c for c in candidates if _norm_num(c.get("number")) and _norm_num(c.get("number")) == pnum]
+        if len(num_matches) == 1:
+            return num_matches[0]
+        if len(num_matches) > 1:
+            return None  # ambiguous → human review
+    pname = _norm_name(payment.get("contact_name"))
+    if not pname or amt <= 0:
+        return None
+    pdate = _parse_dt(payment.get("date"))
+    smart = []
+    for c in candidates:
+        if _norm_name(c.get("contact_name")) != pname:
+            continue
+        if abs(_remaining(c) - amt) > 0.01:  # exact settlement of the outstanding balance
+            continue
+        cdate = _parse_dt(c.get("date"))
+        if pdate and cdate and abs((pdate - cdate).days) > 30:
+            continue
+        smart.append(c)
+    return smart[0] if len(smart) == 1 else None
+
+
+async def _apply_payment_to_invoice(tenant_id: str, invoice: dict, amount: float, payment_id: str, matched_by: str) -> str:
+    total = _num(invoice.get("amount"))
+    paid = round(_num(invoice.get("amount_paid")) + amount, 2)
+    status = "paid" if paid + 0.01 >= total else "partial"
+    await db.invoices.update_one({"id": invoice["id"], "tenant_id": tenant_id},
+                                 {"$set": {"amount_paid": paid, "status": status}})
+    await db.payments.update_one({"id": payment_id, "tenant_id": tenant_id},
+                                 {"$set": {"invoice_id": invoice["id"], "match_status": "matched", "matched_by": matched_by}})
+    return status
+
+
+async def reconcile_payment(tenant_id: str, payment: dict, matched_by: str = "auto"):
+    """Try to auto-link a payment to an open invoice. Returns the matched invoice or None
+    (marking the payment 'unmatched' so it surfaces in the Needs-matching queue)."""
+    inv = await _find_matching_invoice(tenant_id, payment.get("direction"), payment)
+    if not inv:
+        await db.payments.update_one({"id": payment["id"], "tenant_id": tenant_id},
+                                     {"$set": {"match_status": "unmatched"}})
+        return None
+    await _apply_payment_to_invoice(tenant_id, inv, _num(payment.get("amount")), payment["id"], matched_by)
+    return inv
 
 
 # --- Access control ---------------------------------------------------------
@@ -601,16 +685,53 @@ async def list_revenue(user: dict = Depends(require_ledger)):
     currency = await _currency(tid)
     invoices = await db.invoices.find({"tenant_id": tid, "type": "sales_invoice"}, {"_id": 0}).sort("created_at", -1).to_list(3000)
     payments = await db.payments.find({"tenant_id": tid, "direction": "in"}, {"_id": 0}).sort("created_at", -1).to_list(3000)
+    for i in invoices:
+        i["balance"] = _remaining(i)
     billed = sum(_num(i.get("amount")) for i in invoices)
     received = sum(_num(p.get("amount")) for p in payments)
-    outstanding = sum(_num(i.get("amount")) for i in invoices if i.get("status") != "paid")
+    outstanding = sum(_remaining(i) for i in invoices if i.get("status") != "paid")
+    # Payments we couldn't confidently link → surfaced for human matching.
+    unmatched = [p for p in payments if not p.get("invoice_id") and p.get("match_status") not in ("standalone",)]
+    open_invoices = [i for i in invoices if i.get("status") != "paid" and _remaining(i) > 0.01]
     return {
         "currency": currency,
         "totals": {"billed": round(billed, 2), "received": round(received, 2),
                    "outstanding": round(outstanding, 2),
-                   "invoice_count": len(invoices), "payment_count": len(payments)},
+                   "invoice_count": len(invoices), "payment_count": len(payments),
+                   "unmatched_count": len(unmatched)},
         "invoices": invoices, "payments": payments,
+        "unmatched_payments": unmatched,
+        "open_invoices": [{"id": i["id"], "number": i.get("number"), "title": i.get("title"),
+                           "contact_name": i.get("contact_name"), "amount": _num(i.get("amount")),
+                           "balance": _remaining(i), "date": i.get("date")} for i in open_invoices],
     }
+
+
+@router.post("/revenue/payment/{pid}/match")
+async def match_payment(pid: str, body: dict, user: dict = Depends(require_ledger)):
+    """Manually link an unmatched payment to a chosen invoice (partial payments mark 'partial')."""
+    invoice_id = (body or {}).get("invoice_id")
+    pay = await db.payments.find_one({"id": pid, "tenant_id": user["tenant_id"]}, {"_id": 0})
+    if not pay:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    inv = await db.invoices.find_one({"id": invoice_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
+    if not inv:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    status = await _apply_payment_to_invoice(user["tenant_id"], inv, _num(pay.get("amount")), pid, "manual")
+    await log_activity(user["tenant_id"], user["name"], "payment_matched",
+                       f"Matched a {_num(pay.get('amount')):,.0f} payment to invoice {inv.get('number') or inv.get('title') or ''}".strip(),
+                       "payment", pid)
+    return {"ok": True, "invoice_status": status}
+
+
+@router.post("/revenue/payment/{pid}/standalone")
+async def mark_payment_standalone(pid: str, user: dict = Depends(require_ledger)):
+    """Mark an unmatched payment as standalone income (genuinely not tied to any invoice)."""
+    r = await db.payments.update_one({"id": pid, "tenant_id": user["tenant_id"]},
+                                     {"$set": {"match_status": "standalone", "invoice_id": None}})
+    if not r.matched_count:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    return {"ok": True}
 
 
 @router.post("/revenue")
@@ -757,7 +878,7 @@ async def ledger_summary(user: dict = Depends(require_ledger)):
     paid = sum(_num(e.get("amount")) for e in expenses if e.get("status") == "paid")
     revenue_billed = sum(_num(s.get("amount")) for s in sales)
     revenue_received = sum(_num(p.get("amount")) for p in pays_in)
-    revenue_outstanding = sum(_num(s.get("amount")) for s in sales if s.get("status") != "paid")
+    revenue_outstanding = sum(_remaining(s) for s in sales if s.get("status") != "paid")
     by_cat, by_vendor, by_month = {}, {}, {}
     for e in expenses:
         amt = _num(e.get("amount"))
@@ -811,7 +932,7 @@ async def _finance_context(tid: str, scope: str) -> dict:
     paid = sum(_num(e.get("amount")) for e in expenses if e.get("status") == "paid")
     revenue_billed = sum(_num(s.get("amount")) for s in sales)
     revenue_received = sum(_num(p.get("amount")) for p in pays_in)
-    revenue_outstanding = sum(_num(s.get("amount")) for s in sales if s.get("status") != "paid")
+    revenue_outstanding = sum(_remaining(s) for s in sales if s.get("status") != "paid")
     by_cat, by_vendor, by_month, unpaid = {}, {}, {}, []
     by_customer, unpaid_sales = {}, []
     for s in sales:

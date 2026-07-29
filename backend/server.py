@@ -4208,7 +4208,7 @@ _DOC_SYSTEM = (
     "\"doc_type\": one of [sales_invoice, purchase_bill, payment, purchase_order, other], "
     "\"confidence\": number between 0 and 1, "
     "\"contacts\": [{\"type\": one of [customer, vendor], \"name\": string, \"company\": string, \"phone\": string, \"email\": string, \"address\": string, \"tax_id\": string}], "
-    "\"invoices\": [{\"type\": one of [sales_invoice, purchase_bill], \"purchase_type\": one of [expense, asset, inventory] (only for purchase_bill; else empty), \"asset_name\": string (for asset purchases), \"inventory_qty\": number, \"inventory_unit\": string, \"number\": string, \"contact_name\": string, \"date\": string, \"due_date\": string, \"amount\": number, \"currency\": string, \"line_items\": [{\"description\": string, \"qty\": number, \"rate\": number, \"amount\": number}]}], "
+    "\"invoices\": [{\"type\": one of [sales_invoice, purchase_bill], \"purchase_type\": one of [expense, asset, inventory, unknown] (only for purchase_bill; else empty), \"asset_name\": string (for asset purchases), \"inventory_qty\": number, \"inventory_unit\": string, \"number\": string, \"contact_name\": string, \"date\": string, \"due_date\": string, \"amount\": number, \"currency\": string, \"line_items\": [{\"description\": string, \"qty\": number, \"rate\": number, \"amount\": number}]}], "
     "\"payments\": [{\"direction\": one of [in, out], \"amount\": number, \"date\": string, \"method\": string, \"reference\": string, \"contact_name\": string, \"invoice_number\": string}], "
     "\"tasks\": [{\"title\": string, \"priority\": one of [low,medium,high], \"due_in_days\": integer or null}]}. "
     "Rules: Our own company (the DecisionOS user filing this) is \"{company}\". "

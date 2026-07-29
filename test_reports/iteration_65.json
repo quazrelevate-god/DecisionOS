@@ -1,0 +1,28 @@
+{
+  "summary": "Validated the restructured 3-way Decision Desk capture UI on /inbox as owner. All required data-testids render (voice-record-button, voice-attach-file, text-directive-input, text-attach-file, submit-text-directive, capture-upload, attach-file-button, capture-photo-button, structure-file-button). structure-file-button is correctly DISABLED until a file is added to Way-3. Way-2 (Type + inline attach) end-to-end works: chip appears, chip remove works, on submit a pending decision is created with the file attached as review-refs on the task (verified with clean state, real Claude/Gemini structuring). Way-3 (Upload = file primary) works end-to-end: chip appears, structure-file-button becomes enabled, remove disables it again, and clicking Analyse & structure creates a new pending decision. Way-1 voice-attach-file coexists with voice-record-button (mic unavailable in harness, submit path unchanged from iter_64). Independence between the three lists is confirmed by design (separate voiceFiles/textFiles/uploadFiles state) and observed empirically in fresh state (attaching in Way-2 does not add a chip to Way-1/Way-3, and vice-versa). REGRESSION: plain typed directive with no attachment still structures into a pending decision. Created test decisions were rejected during cleanup.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Decision Desk / Inbox capture", "issues": ["Minor: after a decision is created via Way-2/Way-3, the 'Execution plan is ready' modal (Dialog overlay) can intercept subsequent clicks on the capture cards until dismissed. This is intentional UX but can trip automated flows; consider auto-dismissing after a few seconds or allowing outside-clicks to close."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Inbox.js is 892 lines — split into smaller components (CaptureCard, VoiceCard, TextCard, UploadCard, DecisionApprovals, TasksActivity) for maintainability.",
+    "Duplicate onChange logic across the three file inputs (lines 660-661, 713-714, 743-744, 749-750) — extract a small helper hook (e.g. useMultiFileState) to DRY it up.",
+    "Line 388 `voiceFilesRef.current = voiceFiles;` mutates a ref during render. It works because it's idempotent, but idiomatic React prefers doing this inside a useEffect to avoid subtle issues with React strict mode / concurrent rendering.",
+    "Remove-chip handlers (e.g. line 720 `setTextFiles(textFiles.filter(...))`) use stale closures over the state array. Prefer functional form `setTextFiles(prev => prev.filter((_, j) => j !== i))` to be safe when multiple updates batch.",
+    "AttachChips returns null when empty — but the Way-2/Way-3 inline chip UL is rendered directly (line 715-724, 757-765) with the same styling, resulting in visual/style duplication. Consider using AttachChips consistently for all three methods."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "100% (all required flows verified functional)"},
+  "test_credentials": "owner@sharma.com / demo1234",
+  "seed_data_creation": "Created and then rejected 2-3 pending decisions during testing (Way-2 'Reconcile packaging invoice', Way-3 CSV observation, regression 'Send updated pricing sheet'). All test-created pending decisions with TEST_ITER65 markers were rejected during cleanup. Some leftover 'No directive provided' decisions from earlier exploratory runs may still exist in the DB — recommend main agent inspect Decision Approvals list and reject any stragglers.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Testing quirk to remember: Playwright's page.set_input_files works reliably on the Way-3 upload input (uploadRef) but on our environment it did not consistently trigger React's onChange on the voice-attach (voiceAttachRef) and text-attach (textAttachRef) inputs — even though the DOM 'change' event fired. Workaround: directly invoke the input's __reactProps onChange handler via page.evaluate with a DataTransfer/File. Example: `p.onChange({ target: { files: dt.files, value: '' } })`. This is a harness-only issue, not a code bug — the manual UI works fine in a real browser (previously validated in iteration_64 and re-validated here for Way-2 in a clean state where the decision 'Reconcile packaging invoice with vendor' was created with the CSV attached as review-refs on the task).",
+  "rca of the issue": "N/A — no functional bugs found. The single flaky test-artifact (Way-2 submit not producing a decision in one attempt) was root-caused to test-session state accumulation (previous chip-remove + re-add + modal-overlay carryover), not a product bug. In an isolated clean session Way-2 submitted successfully and the file appeared on the task row via review-refs-<taskId>."
+}

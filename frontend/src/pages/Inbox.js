@@ -302,6 +302,20 @@ function PendingApprovalCard({ d, members, roleOptions, onApprove, onReject, onR
 
 const PROCESSING = ["queued", "transcribing", "structuring"];
 
+function AttachChips({ files, onRemove, testid }) {
+  if (!files.length) return null;
+  return (
+    <ul className="mt-3 flex flex-wrap gap-2 justify-center" data-testid={testid}>
+      {files.map((f, i) => (
+        <li key={i} data-testid={`${testid}-chip-${i}`} className="inline-flex items-center gap-1.5 border border-brand-blue/40 bg-brand-blue/[0.06] text-brand-blue px-2.5 py-1 text-xs font-mono max-w-[200px]">
+          <FileIcon size={12} weight="bold" /> <span className="truncate">{f.name}</span>
+          <button onClick={() => onRemove(i)} data-testid={`${testid}-remove-${i}`} className="ml-0.5 hover:text-brand-red"><X size={12} weight="bold" /></button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function ThinkingOverlay({ show }) {
   return (
     <div aria-hidden={!show} data-testid="thinking-overlay"
@@ -361,13 +375,17 @@ export default function Inbox() {
   const [filter, setFilter] = useState("all");
   const [submittedNoteId, setSubmittedNoteId] = useState(null);
   const [execPanel, setExecPanel] = useState(null);
-  const [attachments, setAttachments] = useState([]);
-  const attachRef = useRef(null);
-  const cameraRef = useRef(null);
+  const [voiceFiles, setVoiceFiles] = useState([]);
+  const [textFiles, setTextFiles] = useState([]);
+  const [uploadFiles, setUploadFiles] = useState([]);
+  const voiceAttachRef = useRef(null);
+  const textAttachRef = useRef(null);
+  const uploadRef = useRef(null);
+  const uploadCameraRef = useRef(null);
   const languageRef = useRef("auto");
   languageRef.current = language;
-  const attachmentsRef = useRef([]);
-  attachmentsRef.current = attachments;
+  const voiceFilesRef = useRef([]);
+  voiceFilesRef.current = voiceFiles;
   const mediaRef = useRef(null);
   const chunksRef = useRef([]);
   const cancelledRef = useRef(false);
@@ -414,11 +432,11 @@ export default function Inbox() {
         fd.append("language", languageRef.current);
         setBusy(true);
         try {
-          const refIds = await uploadRefs();
+          const refIds = await uploadRefs(voiceFilesRef.current);
           if (refIds.length) fd.append("file_ids", refIds.join(","));
           const { data } = await api.post("/voice-notes", fd, { headers: { "Content-Type": "multipart/form-data" } });
           if (data?.id) setSubmittedNoteId(data.id);
-          setAttachments([]);
+          setVoiceFiles([]);
           toast.success("Got it — thinking…");
           refresh();
         } catch { toast.error("Upload failed"); } finally { setBusy(false); }
@@ -434,10 +452,9 @@ export default function Inbox() {
   const pauseRec = () => { if (mediaRef.current?.state === "recording") { mediaRef.current.pause(); setPaused(true); } };
   const resumeRec = () => { if (mediaRef.current?.state === "paused") { mediaRef.current.resume(); setPaused(false); } };
 
-  const uploadRefs = async () => {
-    const files = attachmentsRef.current || [];
+  const uploadRefs = async (files) => {
     const ids = [];
-    for (const f of files) {
+    for (const f of (files || [])) {
       const fd = new FormData();
       fd.append("file", f, f.name);
       fd.append("kind", "reference");
@@ -449,21 +466,21 @@ export default function Inbox() {
     return ids;
   };
 
-  const runCapture = async (finalText) => {
+  const runCapture = async (finalText, files = []) => {
     setBusy(true);
     try {
-      const file_ids = await uploadRefs();
+      const file_ids = await uploadRefs(files);
       const { data } = await api.post("/voice-notes/text", { text: finalText, language, file_ids });
       if (data?.id) setSubmittedNoteId(data.id);
-      setText(""); setClarify(null); setAnswers({}); setAttachments([]);
+      setText(""); setClarify(null); setAnswers({}); setTextFiles([]); setUploadFiles([]);
       toast.success("Got it — thinking…");
       refresh();
     } catch (e) { toast.error(e.response?.data?.detail || "Submit failed"); } finally { setBusy(false); }
   };
 
   const structureFiles = async () => {
-    if (!(attachmentsRef.current || []).length) return toast.error("Attach a file first");
-    await runCapture("");
+    if (!uploadFiles.length) return toast.error("Attach a file first");
+    await runCapture("", uploadFiles);
   };
 
   // When the just-submitted directive finishes structuring, reveal the Execution Summary.
@@ -495,9 +512,9 @@ export default function Inbox() {
     setChecking(true);
     try {
       const { data } = await api.post("/capture/clarify", { text });
-      if (data.complete) { await runCapture(text); }
+      if (data.complete) { await runCapture(text, textFiles); }
       else { setClarify(data); setAnswers({}); }
-    } catch { await runCapture(text); }  // never block capture on clarify failure
+    } catch { await runCapture(text, textFiles); }  // never block capture on clarify failure
     finally { setChecking(false); }
   };
 
@@ -505,7 +522,7 @@ export default function Inbox() {
     const details = (clarify?.questions || [])
       .filter((q) => (answers[q.id] || "").trim())
       .map((q) => `- ${q.question} ${answers[q.id].trim()}`).join("\n");
-    runCapture(details ? `${text}\n\nDetails provided:\n${details}` : text);
+    runCapture(details ? `${text}\n\nDetails provided:\n${details}` : text, textFiles);
   };
 
   const decide = async (id, action) => {
@@ -594,121 +611,154 @@ export default function Inbox() {
         </div>
       )}
 
-      {/* Capture */}
+      {/* Capture — three ways to create a decision */}
       {canCapture ? (
-        <div className="grid lg:grid-cols-2 gap-4 mb-8">
-          <div className="card-brutal p-6 flex flex-col items-center justify-center text-center">
-            <button onClick={recording ? stopRec : startRec} disabled={busy} data-testid="voice-record-button"
-              className={`w-24 h-24 flex items-center justify-center border border-black transition-all ${recording ? (paused ? "bg-brand-ink text-white" : "bg-brand-red text-white recording-pulse") : "bg-brand-ink text-white hover:shadow-brutal"}`}>
-              {recording ? <Stop size={38} weight="fill" /> : <Microphone size={38} weight="fill" />}
-            </button>
-            <p className="mt-4 font-heading font-bold uppercase tracking-tight">{recording ? (paused ? t("inbox.paused") : t("inbox.recording")) : busy ? t("inbox.thinking") : t("inbox.tap_to_speak")}</p>
-            <p className="font-mono text-sm text-muted-foreground mt-1" data-testid="record-timer">{recording ? mmss : "AI structures it into tasks"}</p>
-            {recording && (
-              <div className="flex flex-wrap items-center justify-center gap-2 mt-3">
-                {paused ? (
-                  <button onClick={resumeRec} data-testid="voice-resume-button"
-                    className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black bg-brand-ink text-white hover:shadow-brutal-sm transition-all">
-                    <Play size={15} weight="fill" /> Resume
+        <div className="mb-8 space-y-4">
+          <div className="grid lg:grid-cols-2 gap-4">
+            {/* WAY 1 — Speak */}
+            <div className="card-brutal p-6 flex flex-col items-center justify-center text-center">
+              <p className="label-mono text-brand-red mb-2 self-start">Way 1 · Speak</p>
+              <button onClick={recording ? stopRec : startRec} disabled={busy} data-testid="voice-record-button"
+                className={`w-24 h-24 flex items-center justify-center border border-black transition-all ${recording ? (paused ? "bg-brand-ink text-white" : "bg-brand-red text-white recording-pulse") : "bg-brand-ink text-white hover:shadow-brutal"}`}>
+                {recording ? <Stop size={38} weight="fill" /> : <Microphone size={38} weight="fill" />}
+              </button>
+              <p className="mt-4 font-heading font-bold uppercase tracking-tight">{recording ? (paused ? t("inbox.paused") : t("inbox.recording")) : busy ? t("inbox.thinking") : t("inbox.tap_to_speak")}</p>
+              <p className="font-mono text-sm text-muted-foreground mt-1" data-testid="record-timer">{recording ? mmss : "AI structures it into tasks"}</p>
+              {recording && (
+                <div className="flex flex-wrap items-center justify-center gap-2 mt-3">
+                  {paused ? (
+                    <button onClick={resumeRec} data-testid="voice-resume-button"
+                      className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black bg-brand-ink text-white hover:shadow-brutal-sm transition-all">
+                      <Play size={15} weight="fill" /> Resume
+                    </button>
+                  ) : (
+                    <button onClick={pauseRec} data-testid="voice-pause-button"
+                      className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black bg-white hover:bg-black/5 transition-colors">
+                      <Pause size={15} weight="fill" /> Pause
+                    </button>
+                  )}
+                  <button onClick={stopRec} data-testid="voice-finalise-button"
+                    className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black bg-brand-red text-white hover:shadow-brutal-sm transition-all">
+                    <CheckCircle size={15} weight="bold" /> Finalise
                   </button>
-                ) : (
-                  <button onClick={pauseRec} data-testid="voice-pause-button"
-                    className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black bg-white hover:bg-black/5 transition-colors">
-                    <Pause size={15} weight="fill" /> Pause
+                  <button onClick={cancelRec} data-testid="voice-cancel-button"
+                    className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:bg-black/5 transition-colors">
+                    <X size={15} weight="bold" /> Cancel
                   </button>
-                )}
-                <button onClick={stopRec} data-testid="voice-finalise-button"
-                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black bg-brand-red text-white hover:shadow-brutal-sm transition-all">
-                  <CheckCircle size={15} weight="bold" /> Finalise
-                </button>
-                <button onClick={cancelRec} data-testid="voice-cancel-button"
-                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:bg-black/5 transition-colors">
-                  <X size={15} weight="bold" /> Cancel
-                </button>
+                </div>
+              )}
+              <div className="flex border border-black mt-4" data-testid="language-selector">
+                {[{ key: "auto", label: "Auto" }, { key: "en", label: "EN" }, { key: "ta", label: "தமிழ்" }, { key: "tanglish", label: "Tanglish" }].map((l) => (
+                  <button key={l.key} onClick={() => setLanguage(l.key)} data-testid={`lang-${l.key}`}
+                    className={`px-3 py-1.5 text-xs font-semibold border-r border-black last:border-r-0 transition-colors ${language === l.key ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>{l.label}</button>
+                ))}
               </div>
-            )}
-            <div className="flex border border-black mt-4" data-testid="language-selector">
-              {[{ key: "auto", label: "Auto" }, { key: "en", label: "EN" }, { key: "ta", label: "தமிழ்" }, { key: "tanglish", label: "Tanglish" }].map((l) => (
-                <button key={l.key} onClick={() => setLanguage(l.key)} data-testid={`lang-${l.key}`}
-                  className={`px-3 py-1.5 text-xs font-semibold border-r border-black last:border-r-0 transition-colors ${language === l.key ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>{l.label}</button>
-              ))}
+              <button onClick={() => voiceAttachRef.current?.click()} data-testid="voice-attach-file"
+                className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider border border-black px-3 py-1.5 hover:bg-brand-yellow transition-colors">
+                <Paperclip size={13} weight="bold" /> Attach a file (optional)
+              </button>
+              <input ref={voiceAttachRef} type="file" multiple accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" className="hidden"
+                onChange={(e) => { setVoiceFiles((prev) => [...prev, ...Array.from(e.target.files || [])]); e.target.value = ""; }} />
+              <AttachChips files={voiceFiles} testid="voice-attachments" onRemove={(i) => setVoiceFiles(voiceFiles.filter((_, j) => j !== i))} />
+            </div>
+
+            {/* WAY 2 — Type */}
+            <div className="card-brutal p-6">
+              <p className="label-mono text-brand-red mb-2">Way 2 · Type</p>
+              <p className="label-mono text-muted-foreground mb-3">{t("inbox.type_directive")}</p>
+              <textarea data-testid="text-directive-input" value={text} onChange={(e) => setText(e.target.value)} rows={5}
+                placeholder="e.g. Tell sales to send the revised quote to the Delhi retailer by Friday and ask finance to clear the packaging invoice."
+                className="w-full border border-black p-3 text-sm font-mono focus:outline-none focus:shadow-brutal-sm transition-shadow resize-none" />
+
+              {clarify ? (
+                <div className="mt-3 border border-dashed border-brand-blue p-3" data-testid="clarify-panel">
+                  <p className="flex items-center gap-2 label-mono text-brand-blue mb-2">
+                    <Question size={15} weight="bold" /> A few quick details for a sharper plan
+                  </p>
+                  <div className="space-y-2">
+                    {clarify.questions.map((q) => (
+                      <div key={q.id} data-testid={`clarify-q-${q.id}`}>
+                        <label className="text-xs font-medium block mb-1">{q.question}</label>
+                        <input value={answers[q.id] || ""} onChange={(e) => setAnswers({ ...answers, [q.id]: e.target.value })}
+                          data-testid={`clarify-a-${q.id}`} placeholder={q.hint}
+                          className="w-full border border-black px-2 py-1.5 text-sm focus:outline-none" />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    <button onClick={submitWithDetails} disabled={busy} data-testid="clarify-submit"
+                      className="flex items-center gap-2 bg-brand-red text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all disabled:opacity-50">
+                      <PaperPlaneTilt size={15} weight="bold" /> {busy ? "Thinking…" : "Submit with details"}
+                    </button>
+                    <button onClick={() => runCapture(text, textFiles)} disabled={busy} data-testid="clarify-skip"
+                      className="px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:bg-black/5 disabled:opacity-50">
+                      Skip &amp; structure anyway
+                    </button>
+                    <button onClick={() => setClarify(null)} data-testid="clarify-cancel"
+                      className="px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:bg-black/5">Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button onClick={submitText} disabled={busy || checking || !text.trim()} data-testid="submit-text-directive"
+                    className="flex items-center gap-2 bg-brand-red text-white px-5 py-2.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all disabled:opacity-50">
+                    <PaperPlaneTilt size={16} weight="bold" /> {checking ? "Checking…" : "Structure it"}
+                  </button>
+                  <button onClick={() => textAttachRef.current?.click()} data-testid="text-attach-file"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider border border-black px-3 py-2 hover:bg-brand-yellow transition-colors">
+                    <Paperclip size={13} weight="bold" /> Attach a file
+                  </button>
+                </div>
+              )}
+              <input ref={textAttachRef} type="file" multiple accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" className="hidden"
+                onChange={(e) => { setTextFiles((prev) => [...prev, ...Array.from(e.target.files || [])]); e.target.value = ""; }} />
+              {textFiles.length > 0 && (
+                <ul className="mt-3 flex flex-wrap gap-2" data-testid="text-attachments">
+                  {textFiles.map((f, i) => (
+                    <li key={i} data-testid={`text-attachments-chip-${i}`} className="inline-flex items-center gap-1.5 border border-brand-blue/40 bg-brand-blue/[0.06] text-brand-blue px-2.5 py-1 text-xs font-mono max-w-[200px]">
+                      <FileIcon size={12} weight="bold" /> <span className="truncate">{f.name}</span>
+                      <button onClick={() => setTextFiles(textFiles.filter((_, j) => j !== i))} data-testid={`text-attachments-remove-${i}`} className="ml-0.5 hover:text-brand-red"><X size={12} weight="bold" /></button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
-          <div className="card-brutal p-6">
-            <p className="label-mono text-muted-foreground mb-3">{t("inbox.type_directive")}</p>
-            <textarea data-testid="text-directive-input" value={text} onChange={(e) => setText(e.target.value)} rows={5}
-              placeholder="e.g. Tell sales to send the revised quote to the Delhi retailer by Friday and ask finance to clear the packaging invoice."
-              className="w-full border border-black p-3 text-sm font-mono focus:outline-none focus:shadow-brutal-sm transition-shadow resize-none" />
 
-            {clarify ? (
-              <div className="mt-3 border border-dashed border-brand-blue p-3" data-testid="clarify-panel">
-                <p className="flex items-center gap-2 label-mono text-brand-blue mb-2">
-                  <Question size={15} weight="bold" /> A few quick details for a sharper plan
-                </p>
-                <div className="space-y-2">
-                  {clarify.questions.map((q) => (
-                    <div key={q.id} data-testid={`clarify-q-${q.id}`}>
-                      <label className="text-xs font-medium block mb-1">{q.question}</label>
-                      <input value={answers[q.id] || ""} onChange={(e) => setAnswers({ ...answers, [q.id]: e.target.value })}
-                        data-testid={`clarify-a-${q.id}`} placeholder={q.hint}
-                        className="w-full border border-black px-2 py-1.5 text-sm focus:outline-none" />
-                    </div>
-                  ))}
-                </div>
-                <div className="flex flex-wrap gap-2 mt-3">
-                  <button onClick={submitWithDetails} disabled={busy} data-testid="clarify-submit"
-                    className="flex items-center gap-2 bg-brand-red text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all disabled:opacity-50">
-                    <PaperPlaneTilt size={15} weight="bold" /> {busy ? "Thinking…" : "Submit with details"}
-                  </button>
-                  <button onClick={() => runCapture(text)} disabled={busy} data-testid="clarify-skip"
-                    className="px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:bg-black/5 disabled:opacity-50">
-                    Skip &amp; structure anyway
-                  </button>
-                  <button onClick={() => setClarify(null)} data-testid="clarify-cancel"
-                    className="px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:bg-black/5">Cancel</button>
-                </div>
-              </div>
-            ) : (
-              <button onClick={submitText} disabled={busy || checking || !text.trim()} data-testid="submit-text-directive"
-                className="mt-3 flex items-center gap-2 bg-brand-red text-white px-5 py-2.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all disabled:opacity-50">
-                <PaperPlaneTilt size={16} weight="bold" /> {checking ? "Checking…" : "Structure it"}
-              </button>
-            )}
-          </div>
-          <div className="card-brutal p-5 lg:col-span-2" data-testid="capture-attachments">
-            <div className="flex items-start gap-2 mb-3">
-              <Paperclip size={16} weight="bold" className="text-brand-blue mt-0.5 shrink-0" />
+          {/* WAY 3 — Create from an image or file */}
+          <div className="card-brutal p-6" data-testid="capture-upload">
+            <p className="label-mono text-brand-red mb-2">Way 3 · Upload an image or file</p>
+            <div className="flex items-start gap-2 mb-4">
+              <UploadSimple size={20} weight="bold" className="text-brand-blue mt-0.5 shrink-0" />
               <div>
-                <p className="font-heading font-bold uppercase tracking-tight text-sm">Add a reference (optional)</p>
-                <p className="text-xs text-muted-foreground">Attach an image, PDF, Word or Excel to give the AI more context for your directive — or tap “Create from file” to build a decision from the file alone. Everything still goes to Review &amp; Approve.</p>
+                <p className="font-heading font-bold uppercase tracking-tight text-sm">No need to speak or type — the file is the directive</p>
+                <p className="text-xs text-muted-foreground">Upload or snap a photo of an order, invoice, list, PDF, Word or Excel. AI reads it and proposes the decision, tasks, assignments &amp; deadlines — then it goes to Review &amp; Approve.</p>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <button onClick={() => attachRef.current?.click()} data-testid="attach-file-button"
+              <button onClick={() => uploadRef.current?.click()} data-testid="attach-file-button"
                 className="flex items-center gap-2 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-black/5 transition-colors">
                 <UploadSimple size={16} weight="bold" /> Upload image / PDF / doc
               </button>
-              <input ref={attachRef} type="file" multiple accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" className="hidden"
-                onChange={(e) => { setAttachments((prev) => [...prev, ...Array.from(e.target.files || [])]); e.target.value = ""; }} />
-              <button onClick={() => cameraRef.current?.click()} data-testid="capture-photo-button"
+              <input ref={uploadRef} type="file" multiple accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" className="hidden"
+                onChange={(e) => { setUploadFiles((prev) => [...prev, ...Array.from(e.target.files || [])]); e.target.value = ""; }} />
+              <button onClick={() => uploadCameraRef.current?.click()} data-testid="capture-photo-button"
                 className="flex items-center gap-2 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-black/5 transition-colors">
                 <Camera size={16} weight="bold" /> Capture photo
               </button>
-              <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden"
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) setAttachments((prev) => [...prev, f]); e.target.value = ""; }} />
-              {attachments.length > 0 && (
-                <button onClick={structureFiles} disabled={busy} data-testid="structure-file-button"
-                  className="flex items-center gap-2 bg-brand-blue text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-50">
-                  <Brain size={16} weight="bold" /> Create from file
-                </button>
-              )}
+              <input ref={uploadCameraRef} type="file" accept="image/*" capture="environment" className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) setUploadFiles((prev) => [...prev, f]); e.target.value = ""; }} />
+              <button onClick={structureFiles} disabled={busy || uploadFiles.length === 0} data-testid="structure-file-button"
+                className="flex items-center gap-2 bg-brand-blue text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                <Brain size={16} weight="bold" /> Analyse &amp; structure
+              </button>
             </div>
-            {attachments.length > 0 && (
+            {uploadFiles.length > 0 && (
               <ul className="mt-3 flex flex-wrap gap-2" data-testid="attachment-chips">
-                {attachments.map((f, i) => (
+                {uploadFiles.map((f, i) => (
                   <li key={i} data-testid={`attachment-chip-${i}`} className="inline-flex items-center gap-1.5 border border-brand-blue/40 bg-brand-blue/[0.06] text-brand-blue px-2.5 py-1 text-xs font-mono max-w-[220px]">
                     <FileIcon size={12} weight="bold" /> <span className="truncate">{f.name}</span>
-                    <button onClick={() => setAttachments(attachments.filter((_, j) => j !== i))} data-testid={`attachment-remove-${i}`} className="ml-0.5 hover:text-brand-red"><X size={12} weight="bold" /></button>
+                    <button onClick={() => setUploadFiles(uploadFiles.filter((_, j) => j !== i))} data-testid={`attachment-remove-${i}`} className="ml-0.5 hover:text-brand-red"><X size={12} weight="bold" /></button>
                   </li>
                 ))}
               </ul>

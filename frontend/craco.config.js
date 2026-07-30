@@ -70,6 +70,16 @@ if (config.enableHealthCheck) {
 }
 
 let webpackConfig = {
+  // Jest needs the same "@/" alias webpack has, or any test that reaches a
+  // component importing "@/lib/utils" fails to resolve rather than failing on
+  // its assertions.
+  jest: {
+    configure: {
+      moduleNameMapper: {
+        "^@/(.*)$": "<rootDir>/src/$1",
+      },
+    },
+  },
   eslint: {
     configure: {
       extends: ["plugin:react-hooks/recommended"],

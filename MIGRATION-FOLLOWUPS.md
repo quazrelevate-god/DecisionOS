@@ -83,15 +83,41 @@ Recorded here so "now indigo" is never mistaken for "now fixed". The score needs
 remediation guidance — what to do about a low score — and that is product work, not
 a sweep.
 
-## WorkCoach — swept but NOT visually verified
+## WorkCoach — RESOLVED, now verified
 
-**Found:** M6. **Status:** open, blocks sign-off on that one screen.
+**Found:** M6. **Status:** closed. Fourth fixture round did it — the missing piece
+was `summary.strengths`, alongside `target` and `stats`. `/coach` mounts and its
+sweep is visually verified like every other screen.
 
-`/coach` still fails to mount under the preview mock after three rounds of fixture
-work (`target`, `stats`, `summary` supplied; it now fails on a further `.map`).
-WorkCoach.js received the mechanical sweep along with the rest of the long tail, so
-it carries changes whose visual result nobody has seen.
+## Ledger numbers — preview fixed, real data still unconfirmed
 
-Per the blank-baseline rule this screen is not verified. Either fixture it properly
-or open it against a real backend before sign-off. It is the only screen in the
-batch in this state.
+**Found:** M5. **Status:** partially closed.
+
+The fixture keys now match what `KpiRow` reads (`revenue_billed`, `total_spend`,
+`net_profit`, `asset_value`, `inventory_value`, `revenue_received`), so the preview
+shows real figures instead of ₹0 everywhere. That removes the false impression.
+
+**Still open:** these are stubbed numbers. Nobody has yet seen the real Ledger,
+against a real backend, showing real values. Layout verified and numbers plausible
+is not the same as the screen being correct, and ₹0-everywhere was the original
+trust symptom — so this stays open until someone opens it for real.
+
+## The gallery is now protected from blanket sweeps
+
+**Found:** M6. **Status:** closed.
+
+A blanket `font-mono` rule stripped monospace from the Company Brain terminal
+preview during the M6 sweep; the screenshot diff caught it and it was reverted. Two
+fixes so it cannot recur:
+
+1. The gallery's terminal preview now renders the real `TerminalBlock` component
+   rather than hand-rolled markup, so the only monospace outside the lint-protected
+   `components/ds/` is the type-scale specimen — which is annotated as the subject
+   of that row, not a stray usage.
+2. `scripts/sweep.js` carries a `PROTECTED` list covering `src/pages/DesignSystem.js`
+   and `components/ds/`, and refuses to touch them.
+
+This was the second blanket-rule overreach (the first was `Chip`'s `className`
+override silently defeating M1's neutralisation on Inbox). Both were caught by
+looking at output rather than trusting the rule — which is the argument for the
+screenshot diff existing at all.

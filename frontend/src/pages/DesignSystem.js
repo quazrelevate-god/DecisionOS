@@ -28,6 +28,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { PrimitivesGallery } from "@/components/ds/__examples__/PrimitivesGallery";
 import { CompositesGallery } from "@/components/ds/__examples__/CompositesGallery";
 import { AppControlsGallery } from "@/components/ds/__examples__/AppControlsGallery";
+import { TerminalBlock } from "@/components/ds";
 import { Sun, Moon, CheckCircle, WarningCircle } from "@phosphor-icons/react";
 
 const WHITE = "0 0% 100%";
@@ -309,6 +310,10 @@ export default function DesignSystem() {
                   </p>
                 </div>
                 <p
+                  // The `code` step is rendered in its own face on purpose —
+                  // this row is the specimen FOR the monospace step, so the
+                  // class is the subject, not a stray usage. sweep.js skips
+                  // this file for the same reason.
                   className={`min-w-0 ${name === "code" ? "font-mono" : ""} ${
                     name === "label" || name === "badge" ? "uppercase" : ""
                   }`}
@@ -391,23 +396,22 @@ export default function DesignSystem() {
           title="Company Brain terminal"
           intro="Dark in both themes, monospace, cited rows. This is the only place monospace appears anywhere in the system."
         >
-          <div
-            className="rounded-lg p-5 border"
-            style={{ backgroundColor: `hsl(${terminal.bg})`, borderColor: `hsl(${terminal.hairline})` }}
-          >
-            <p className="text-label uppercase mb-3" style={{ color: `hsl(${terminal.label})` }}>
-              Company Brain / grounded output
-            </p>
-            <pre className="font-mono text-code whitespace-pre-wrap" style={{ color: `hsl(${terminal.fg})` }}>
-{`cash_position   ₹18,42,300
-payroll_run     ₹12,10,000 · due Aug 01
-supplier_due    ₹4,80,000 · negotiable
-recommendation  hold until Friday`}
-            </pre>
-            <p className="font-mono text-code mt-2" style={{ color: `hsl(${terminal["fg-dim"]})` }}>
-              confidence      0.92 · 3 cited sources
-            </p>
-          </div>
+          {/* The real component, not a copy of it: this preview used to be
+              hand-rolled markup with its own font-mono, which sat outside
+              components/ds and therefore outside the lint allowlist — a blanket
+              mono rule nearly stripped it during the migration sweep. Rendering
+              TerminalBlock means the only monospace in the codebase lives in the
+              one file the lint rule protects. */}
+          <TerminalBlock
+            rows={[
+              { key: "cash_position", value: "₹18,42,300" },
+              { key: "payroll_run", value: "₹12,10,000", note: "due Aug 01" },
+              { key: "supplier_due", value: "₹4,80,000", note: "negotiable" },
+              { key: "recommendation", value: "hold until Friday" },
+            ]}
+            confidence={0.92}
+            sourceCount={3}
+          />
           <div className="flex flex-wrap gap-4 mt-4">
             <span className="text-small text-text-secondary">
               body on terminal <Ratio value={ratio(terminal.fg, terminal.bg)} />

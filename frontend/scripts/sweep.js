@@ -67,8 +67,24 @@ const REPORT = [
   [/\btext-(purple|orange|amber)-\d+\b/g, "raw palette colour"],
 ];
 
+/**
+ * Never sweep these. The gallery renders the type scale and the terminal as
+ * SPECIMENS — its `font-mono` is the subject of the page, not a stray usage, and
+ * a blanket rule stripped it once already during M6 before the diff caught it.
+ */
+const PROTECTED = ["src/pages/DesignSystem.js", "src/components/ds/"];
+
 const dry = process.argv.includes("--dry");
-const files = process.argv.slice(2).filter((a) => !a.startsWith("--"));
+const files = process.argv
+  .slice(2)
+  .filter((a) => !a.startsWith("--"))
+  .filter((f) => {
+    if (PROTECTED.some((p) => f.includes(p))) {
+      console.log(`skipped (protected): ${f}`);
+      return false;
+    }
+    return true;
+  });
 let totalSafe = 0;
 const worklist = [];
 

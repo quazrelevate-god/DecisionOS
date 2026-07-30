@@ -96,6 +96,7 @@ const ROUTES = [
         proof_upload_rate: 0.4,
         photos_uploaded: 3,
         plans_used: 5,
+        strengths: ['Closes decisions the day they are raised', 'Attaches proof on high-value tasks'],
         improvements: ['Attach proof when marking done', 'Set a due date on every task'],
         generated_at: new Date(0).toISOString(),
       },
@@ -106,7 +107,17 @@ const ROUTES = [
     '/ledger/summary',
     {
       currency: 'INR',
-      totals: { expenses: 482000, revenue: 1842300, payables: 121000, receivables: 96000, assets: 310000, inventory: 154000 },
+      // Key names match what KpiRow reads — a fixture whose keys miss render
+      // ₹0 across the board, which is the exact symptom this product was
+      // mistrusted for. Stubbed values, but they must at least be real numbers.
+      totals: {
+        revenue_billed: 1842300,
+        revenue_received: 1621000,
+        total_spend: 482000,
+        net_profit: 1139000,
+        asset_value: 310000,
+        inventory_value: 154000,
+      },
       by_month: [
         { month: 'Mar', amount: 121000 },
         { month: 'Apr', amount: 98000 },

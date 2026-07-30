@@ -84,6 +84,7 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
   const startedRef = useRef(false);
   const inputRef = useRef(null);
   const langRef = useRef("en-IN"); // stable read for async closures
+  const answerRef = useRef(""); // mirrors `answer` for async recorder callbacks
 
   const stopAudio = () => {
     if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
@@ -101,6 +102,27 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
       setSpeaking(true);
       await audio.play();
     } catch { setSpeaking(false); }
+  }, []);
+
+  // Reveal the question caption at the exact moment the voice starts speaking —
+  // the audio is fetched FIRST, then caption + playback begin together (no lag).
+  const presentQuestion = useCallback(async (data, langCode) => {
+    stopAudio();
+    const apply = () => {
+      setQuestion(data.question); setWhy(data.why || "");
+      setIndex(data.index); setMax(data.max);
+      setStarting(false);
+    };
+    if (mutedRef.current) { apply(); return; }
+    try {
+      const audio = await fetchTTS(data.question, langCode || langRef.current);
+      apply();
+      if (mutedRef.current) return;
+      audioRef.current = audio;
+      audio.onended = () => setSpeaking(false);
+      setSpeaking(true);
+      await audio.play();
+    } catch { apply(); setSpeaking(false); }
   }, []);
 
   const setLangBoth = (code, auto = false) => {
@@ -128,10 +150,7 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
       try {
         const { data } = await api.post("/signup/interview/start", profile);
         setSession(data.session_id);
-        setQuestion(data.question); setWhy(data.why || "");
-        setIndex(data.index); setMax(data.max);
-        setStarting(false);
-        speak(data.question, "en-IN");
+        await presentQuestion(data, "en-IN");
       } catch {
         toast.error("The interviewer is unavailable — building from what we have");
         onSkip(null);
@@ -142,7 +161,6 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
   }, []);
 
   const recorder = useAnswerRecorder(({ text, language_code }) => {
-    setAnswer((a) => (a ? `${a} ${text}` : text));
     // Adapt to founder's spoken language on the first successful detection,
     // but never overwrite an explicit manual pick (langAuto=false already).
     if (language_code && langAuto === false && langRef.current === "en-IN" && language_code !== "en-IN") {
@@ -152,11 +170,14 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
       // Still auto — refine to latest detected language
       setLangBoth(language_code, true);
     }
-    inputRef.current?.focus();
+    // Voice answers go straight to the interviewer — no extra tap needed.
+    const full = (answerRef.current ? `${answerRef.current} ${text}` : text).trim();
+    setAnswer(full); answerRef.current = full;
+    send(full);
   });
 
-  const send = async () => {
-    const a = answer.trim();
+  const send = async (override) => {
+    const a = (typeof override === "string" ? override : answer).trim();
     if (!a || thinking) return;
     stopAudio();
     setThinking(true);
@@ -165,10 +186,8 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
         session_id: session, answer: a, language_code: langRef.current,
       });
       if (data.done) { onComplete(session, langRef.current); return; }
-      setAnswer("");
-      setQuestion(data.question); setWhy(data.why || "");
-      setIndex(data.index); setMax(data.max);
-      speak(data.question);
+      setAnswer(""); answerRef.current = "";
+      await presentQuestion(data);
     } catch (e) {
       toast.error(e.response?.data?.detail || "Something slipped — try again");
     } finally { setThinking(false); }
@@ -193,7 +212,7 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
             </div>
           </div>
           <div>
-            <p className="font-heading font-black uppercase tracking-tight leading-none">Your COO interview</p>
+            <p className="font-heading font-black uppercase tracking-tight leading-none">Dex · your COO interview</p>
             <p className="text-xs text-muted-foreground mt-1 font-mono" data-testid="interview-progress">
               {starting ? "warming up…" : `Question ${index} of ${max} · ${orbState === "listening" ? "listening" : orbState === "speaking" ? "speaking" : "ready"}`}
             </p>
@@ -249,9 +268,9 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
           rows={3}
           value={answer}
           disabled={starting || thinking}
-          onChange={(e) => setAnswer(e.target.value)}
+          onChange={(e) => { setAnswer(e.target.value); answerRef.current = e.target.value; }}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-          placeholder={recorder.recording ? "Listening… speak naturally, any language" : "Tap the mic and speak, or type your answer…"}
+          placeholder={recorder.recording ? "Listening… tap Stop when done — your answer sends itself" : "Tap the mic and speak, or type your answer…"}
           className="w-full bg-transparent text-base focus:outline-none resize-none placeholder:text-black/30"
         />
         <div className="flex items-center justify-between mt-2 pt-3 border-t border-black/10">
@@ -262,9 +281,9 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
             className={`flex items-center gap-2 px-4 py-2.5 border border-black text-xs font-semibold uppercase tracking-wider transition-all disabled:opacity-50 ${recorder.recording ? "bg-brand-red text-white animate-pulse" : "bg-white hover:bg-black/5"}`}>
             {recorder.transcribing ? <CircleNotch size={16} className="animate-spin" />
               : recorder.recording ? <Stop size={16} weight="fill" /> : <Microphone size={16} weight="bold" />}
-            {recorder.transcribing ? "Transcribing…" : recorder.recording ? "Done — transcribe" : "Speak"}
+            {recorder.transcribing ? "Sending…" : recorder.recording ? "Stop — sends answer" : "Speak"}
           </button>
-          <button onClick={send} disabled={!answer.trim() || thinking || starting} data-testid="interview-send-button"
+          <button onClick={() => send()} disabled={!answer.trim() || thinking || starting} data-testid="interview-send-button"
             className="flex items-center gap-2 bg-brand-ink text-white px-6 py-2.5 border border-black text-xs font-semibold uppercase tracking-wider hover:shadow-brutal-sm transition-all disabled:opacity-40">
             {thinking ? <CircleNotch size={16} className="animate-spin" /> : <PaperPlaneRight size={16} weight="bold" />}
             {thinking ? "Thinking…" : "Answer"}

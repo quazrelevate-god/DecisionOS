@@ -22,7 +22,6 @@ export function WebsiteIntel({ companyName, onDone }) {
   const [intel, setIntel] = useState(null);
   const [industry, setIndustry] = useState("");
   const [model, setModel] = useState("");
-  const [description, setDescription] = useState("");
   const scanTimer = useRef(null);
 
   useEffect(() => {
@@ -53,7 +52,7 @@ export function WebsiteIntel({ companyName, onDone }) {
       website_summary: fromIntel ? (intel?.summary || "") : "",
       industry: industry || "Other",
       business_model: model,
-      description: fromIntel ? (intel?.summary || "") : description.trim(),
+      description: fromIntel ? (intel?.summary || "") : "",
       products: fromIntel ? (intel?.products || []) : [],
     });
   };
@@ -87,7 +86,7 @@ export function WebsiteIntel({ companyName, onDone }) {
               </button>
               <button onClick={() => setStage("manual")} data-testid="signup-website-skip"
                 className="text-sm font-semibold text-muted-foreground hover:text-brand-ink underline underline-offset-4 transition-colors">
-                No website — I'll describe it
+                No website — set it manually
               </button>
             </div>
           </motion.div>
@@ -167,7 +166,7 @@ export function WebsiteIntel({ companyName, onDone }) {
               </button>
               <button onClick={() => setStage("manual")} data-testid="signup-intel-edit"
                 className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-brand-ink underline underline-offset-4 transition-colors">
-                <PencilSimple size={14} weight="bold" /> Not quite — I'll describe it
+                <PencilSimple size={14} weight="bold" /> Not quite — let me fix it
               </button>
             </div>
           </motion.div>
@@ -176,9 +175,10 @@ export function WebsiteIntel({ companyName, onDone }) {
         {stage === "manual" && (
           <motion.div key="manual" {...fade} transition={{ duration: 0.35 }}>
             <p className="label-mono text-brand-red mb-3">Your world</p>
-            <h1 className="font-heading text-3xl sm:text-4xl font-black uppercase tracking-tighter leading-[1.02] mb-8">
-              Tell us what {companyName} does.
+            <h1 className="font-heading text-3xl sm:text-4xl font-black uppercase tracking-tighter leading-[1.02] mb-2">
+              Place {companyName} on the map.
             </h1>
+            <p className="text-sm text-muted-foreground mb-8">Just the industry and who you sell to — Dex will ask about your operations in the interview.</p>
             <div className="space-y-5">
               <div>
                 <label className="label-mono text-muted-foreground">Industry</label>
@@ -198,12 +198,6 @@ export function WebsiteIntel({ companyName, onDone }) {
                     </button>
                   ))}
                 </div>
-              </div>
-              <div>
-                <label className="label-mono text-muted-foreground">In one line, what do you do? <span className="normal-case font-normal">(optional — sharpens your AI setup)</span></label>
-                <textarea data-testid="signup-manual-description" rows={2} value={description} onChange={(e) => setDescription(e.target.value)}
-                  placeholder="e.g. We manufacture and export cotton fabrics to garment brands across India and the Gulf"
-                  className="w-full mt-1 border border-black bg-white px-3 py-3 text-sm focus:outline-none focus:shadow-brutal-sm resize-none" />
               </div>
             </div>
             <button onClick={() => finish(false)} disabled={!industry} data-testid="signup-manual-continue"

@@ -1,28 +1,30 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  ArrowRight, Buildings, FlowArrow, ListChecks, Stamp, CheckCircle, CircleNotch, Sparkle,
-} from "@phosphor-icons/react";
+import { ArrowRight, Sparkle } from "@phosphor-icons/react";
 import api, { formatApiError } from "../../lib/api";
+import { DexMascot } from "./DexMascot";
 
-const BUILD_STEPS = [
-  { label: "Designing your departments", icon: Buildings },
-  { label: "Drafting your workflows", icon: FlowArrow },
-  { label: "Creating recurring tasks", icon: ListChecks },
-  { label: "Setting approval rules", icon: Stamp },
+// What Dex is "doing" while the real AI build runs (30-60s). Loops until done.
+const WAIT_LINES = [
+  "Reading everything you told Dex in the interview…",
+  "Naming your departments the way you talk about them…",
+  "Wiring workflows around how your orders actually move…",
+  "Creating recurring tasks so nothing slips through…",
+  "Setting up who approves what…",
+  "Assembling your workspace — hang tight…",
 ];
 
 // Generates the personalized OS blueprint from the interview, registers the
-// workspace, then reveals what was built.
+// workspace, then reveals what was built. Dex the mascot keeps the wait alive.
 export function BuildReveal({ sessionId, languageCode, payload, register, onEnter }) {
-  const [progress, setProgress] = useState(0);
-  const [result, setResult] = useState(null); // { bp, welcome_line }
+  const [pct, setPct] = useState(0);
+  const [line, setLine] = useState(0);
+  const [result, setResult] = useState(null); // { bp, welcome }
   const [error, setError] = useState("");
   const ranRef = useRef(false);
 
   const run = async () => {
-    setError(""); setProgress(0);
-    const timers = BUILD_STEPS.map((_, i) => setTimeout(() => setProgress((p) => Math.max(p, i + 1)), (i + 1) * 2200));
+    setError(""); setPct(0); setLine(0);
     try {
       let bp = null, welcome = "";
       if (sessionId) {
@@ -52,11 +54,9 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
           approval_rules: bp.approval_rules || [],
         },
       });
-      timers.forEach(clearTimeout);
-      setProgress(BUILD_STEPS.length);
-      setResult({ bp, welcome });
+      setPct(100);
+      setTimeout(() => setResult({ bp, welcome }), 500);
     } catch (e) {
-      timers.forEach(clearTimeout);
       setError(formatApiError(e.response?.data?.detail) || "Couldn't finish the build. Please try again.");
     }
   };
@@ -67,6 +67,20 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
     run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Progress creeps toward 92% and only hits 100% when the build truly finishes.
+  useEffect(() => {
+    if (result || error) return;
+    const t = setInterval(() => setPct((p) => (p >= 92 ? p : Math.min(92, p + Math.max(0.4, (92 - p) * 0.028)))), 300);
+    return () => clearInterval(t);
+  }, [result, error]);
+
+  // Rotate the status line so the wait always feels alive.
+  useEffect(() => {
+    if (result || error) return;
+    const t = setInterval(() => setLine((i) => (i + 1) % WAIT_LINES.length), 3400);
+    return () => clearInterval(t);
+  }, [result, error]);
 
   const counts = result ? [
     { n: (result.bp.departments || []).length, label: "Departments" },
@@ -79,31 +93,43 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
     <div className="w-full max-w-2xl mx-auto" data-testid="signup-build">
       <AnimatePresence mode="wait">
         {!result ? (
-          <motion.div key="building" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
-            <p className="label-mono text-brand-red mb-3 flex items-center gap-2"><Sparkle size={14} weight="fill" /> This is the good part</p>
-            <h1 className="font-heading text-3xl sm:text-4xl lg:text-5xl font-black uppercase tracking-tighter leading-[1.02] mb-8">
-              Building {payload.company_name}'s operating system.
+          <motion.div key="building" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
+            className="text-center">
+            <p className="label-mono text-brand-red mb-2 flex items-center justify-center gap-2">
+              <Sparkle size={14} weight="fill" /> Meet Dex — your build engineer
+            </p>
+            <h1 className="font-heading text-3xl sm:text-4xl lg:text-5xl font-black uppercase tracking-tighter leading-[1.02] mb-6">
+              Dex is building {payload.company_name}'s OS.
             </h1>
-            <div className="space-y-2.5">
-              {BUILD_STEPS.map((s, i) => {
-                const done = progress > i;
-                const active = progress === i && !error;
-                const Icon = s.icon;
-                return (
-                  <motion.div key={s.label} initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.12 }}
-                    data-testid={`build-step-${i}`}
-                    className={`flex items-center gap-3 border border-black px-5 py-4 transition-colors duration-500 ${done ? "bg-brand-ink text-white" : "bg-white"}`}>
-                    <span className="w-6 h-6 flex items-center justify-center">
-                      {done ? <CheckCircle size={20} weight="fill" /> : active ? <CircleNotch size={18} className="animate-spin" /> : <Icon size={18} weight="bold" />}
-                    </span>
-                    <span className="text-sm font-semibold uppercase tracking-wide">{s.label}</span>
-                  </motion.div>
-                );
-              })}
-            </div>
-            {!error && <p className="mt-6 text-xs text-muted-foreground font-mono">Built from your answers — not a template. Takes ~20 seconds.</p>}
+
+            <DexMascot />
+
+            {!error && (
+              <>
+                {/* progress bar */}
+                <div className="mt-8 max-w-md mx-auto">
+                  <div className="h-4 border-2 border-black bg-white overflow-hidden" data-testid="build-progress-bar">
+                    <motion.div className="h-full bg-brand-red" animate={{ width: `${pct}%` }} transition={{ duration: 0.4, ease: "easeOut" }} />
+                  </div>
+                  <div className="flex items-center justify-between mt-2">
+                    <AnimatePresence mode="wait">
+                      <motion.p key={line} data-testid="build-wait-line"
+                        initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
+                        className="text-xs text-muted-foreground font-mono text-left">
+                        {WAIT_LINES[line]}
+                      </motion.p>
+                    </AnimatePresence>
+                    <p className="text-xs font-mono font-bold shrink-0 ml-3">{Math.round(pct)}%</p>
+                  </div>
+                </div>
+                <p className="mt-6 text-xs text-muted-foreground font-mono">
+                  Built from your answers — not a template. Dex takes up to a minute.
+                </p>
+              </>
+            )}
+
             {error && (
-              <div className="mt-6">
+              <div className="mt-8">
                 <p data-testid="build-error" className="text-sm text-brand-red font-semibold mb-3">{error}</p>
                 <button onClick={() => { run(); }} data-testid="build-retry"
                   className="bg-brand-ink text-white text-sm font-semibold uppercase tracking-wider px-6 py-3 border border-black hover:shadow-brutal transition-all">

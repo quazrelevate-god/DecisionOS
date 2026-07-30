@@ -186,15 +186,17 @@ def _qa_block(qa: list) -> str:
 
 
 INTERVIEW_SYSTEM = (
-    "You are the DecisionOS onboarding interviewer — think of a sharp, warm COO having a quick chat with a founder "
+    "You are Dex, the DecisionOS onboarding interviewer — a sharp, warm COO having a quick chat with a founder "
     "to understand how their company actually runs, so DecisionOS can build a REALISTIC operating system "
     "(departments, workflows, recurring tasks, approval rules) — not a generic template.\n"
-    f"Rules: you get at most {MAX_QUESTIONS} questions TOTAL, so every question must earn its place. "
-    "Ask exactly ONE question at a time, under 28 words, conversational and specific to what you already know. "
-    "Never ask what you already know (industry, size, products). Adapt to company size: a 5-person shop runs on the founder; "
-    "a 200-person company has managers, approvals and handoffs — ask accordingly.\n"
-    "Good areas: how work flows from order/enquiry to delivery, where things get stuck or slip, who approves money/decisions, "
-    "what the founder personally checks daily.\n"
+    "The founder has ALREADY answered the opening question about what the company does and how it operates. "
+    f"Rules: at most {MAX_QUESTIONS} questions TOTAL including that opener, so every question must earn its place. "
+    "Ask exactly ONE question at a time, under 28 words, conversational, and built on what they just said. "
+    "Questions must be OPERATIONAL — never strategic, visionary, or about goals/growth plans. "
+    "Dig into the mechanics: how work flows from order/enquiry to delivery, handoffs between people, where things get stuck or slip, "
+    "who approves money/decisions, what the founder personally checks daily.\n"
+    "Never re-ask what you already know (industry, size, products, what the company does). Adapt to company size: "
+    "a 5-person shop runs on the founder; a 200-person company has managers, approvals and handoffs — ask accordingly.\n"
     "Return ONLY valid JSON: {\"question\": string, \"why\": string (under 10 words, why this matters), "
     "\"enough\": boolean (true if you already have enough to design their OS — only allowed after 2+ answers)}."
 )
@@ -230,23 +232,18 @@ async def interview_start(inp: InterviewStartInput):
         "status": "active",
         "created_at": now_iso(),
     }
-    prompt = (
-        f"{_profile_block(session)}\n\nThis is question 1 of {MAX_QUESTIONS}. "
-        "Start with the most important thing: how the company actually operates day to day "
-        "(how work comes in and gets delivered). Make it specific to their industry and size."
-    )
-    try:
-        chat = claude_chat(session_id=f"interview-{session['id']}", system_message=INTERVIEW_SYSTEM).with_model(*LLM_MODEL)
-        data = _extract_json(await chat.send_message(UserMessage(text=prompt))) or {}
-    except Exception as e:
-        logger.error(f"interview start failed: {e}")
-        data = {}
-    question = (data.get("question") or "").strip() or (
-        f"Walk me through how {session['company_name']} works day to day — how does an order or enquiry come in, and what happens until it's delivered?"
+    # Question 1 is always the standard opener — no LLM call, so the interview
+    # starts instantly. Everything after builds on this answer.
+    founder_first = (session["founder_name"].split() or [""])[0]
+    greeting = f"Hi {founder_first} — tell" if founder_first else "Tell"
+    question = (
+        f"{greeting} me about {session['company_name']} — what do you do, "
+        "and how do your day-to-day operations actually run?"
     )
     session["pending_q"] = question
     await db.signup_sessions.insert_one(session)
-    return {"session_id": session["id"], "question": question, "why": (data.get("why") or "").strip(),
+    return {"session_id": session["id"], "question": question,
+            "why": "Your own words become your OS",
             "index": 1, "max": MAX_QUESTIONS, "language_code": "en-IN"}
 
 
@@ -267,7 +264,7 @@ async def interview_answer(inp: InterviewAnswerInput):
     prompt = (
         f"{_profile_block(s)}\n\nConversation so far:\n{_qa_block(qa)}\n\n"
         f"That was answer {len(qa)} of max {MAX_QUESTIONS}. If you have enough to design a realistic operating system, "
-        "set enough=true. Otherwise ask the single most valuable next question (build on their answers, don't repeat)."
+        "set enough=true. Otherwise ask the single most valuable OPERATIONAL next question (build on their answers, don't repeat)."
     )
     system = INTERVIEW_SYSTEM + _lang_directive(lang)
     try:

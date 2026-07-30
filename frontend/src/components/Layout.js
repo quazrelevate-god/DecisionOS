@@ -63,11 +63,11 @@ const BOTTOM_NAV = [
 
 const Logo = () => (
   <div className="flex items-center gap-2.5">
-    <div className="w-9 h-9 bg-brand-red rounded-lg flex items-center justify-center shrink-0">
+    <div className="w-9 h-9 bg-brand-mark rounded-lg flex items-center justify-center shrink-0">
       <span className="font-logo font-black text-white text-xl leading-none">D</span>
     </div>
     <span className="font-logo font-black text-2xl tracking-tight uppercase leading-none">
-      <span className="text-foreground">Decision</span><span className="text-brand-red">OS</span>
+      <span className="text-foreground">Decision</span><span className="text-brand-mark">OS</span>
     </span>
   </div>
 );
@@ -227,7 +227,7 @@ export default function Layout({ children }) {
           <p data-testid="tenant-name" className="mt-3 label-mono text-muted-foreground truncate">
             {tenant?.name}
           </p>
-          {tenant?.industry && <p className="label-mono text-brand-red truncate mt-1">{tenant.industry}</p>}
+          {tenant?.industry && <p className="label-mono text-text-tertiary truncate mt-1">{tenant.industry}</p>}
         </div>
         <nav className="flex-1 min-h-0 overflow-y-auto py-4">
           <NavItems />

@@ -59,6 +59,9 @@ module.exports = {
                     /* DEPRECATED legacy identity keys (~678 call sites across the app).
                        Kept so un-swept app code keeps rendering; lint-banned inside
                        components/ds/**. Removed in the app-wide sweep branch. */
+                    /* The wordmark, and only the wordmark. Same hex as the old
+                       identity red, but insulated from the danger scale. */
+                    mark: v('brand-mark'),
                     red: '#FF3B30',
                     blue: '#002FA7',
                     yellow: '#FFCC00',

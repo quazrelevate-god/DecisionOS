@@ -102,6 +102,16 @@ const neutral = {
   900: '223 17% 8%',
 };
 
+/**
+ * The wordmark red — identity, and deliberately NOT part of the semantic system.
+ *
+ * It shares its hex with the old brand red, but not its name: a logo is not a
+ * status, nobody reads a wordmark as danger, and the mark must not shift the
+ * day someone retunes the danger scale. Legal to use in exactly one place: the
+ * DecisionOS logo. Everything else that is red is danger.
+ */
+export const brandMark = '4 100% 59%';
+
 export const palette = { brand, danger, caution, success, neutral };
 
 /* ------------------------------------------------------------------------- *
@@ -435,6 +445,9 @@ export function renderTokenCss() {
     '',
     `${i}/* Semantic — light (canonical) */`,
     emitVars(Object.entries(light), i),
+    '',
+    `${i}/* Wordmark identity — not a semantic role; see brandMark */`,
+    `${i}--brand-mark: ${brandMark};`,
     '',
     `${i}/* Company Brain terminal — dark in both themes */`,
     emitVars(Object.entries(terminal).map(([k, v]) => [`terminal-${k}`, v]), i),

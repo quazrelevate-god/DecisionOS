@@ -33,3 +33,8 @@ export { SegmentedControl, FilterPills } from "./SegmentedControl";
 export { HeaderUtility, NotificationBell, ThemeToggle, LanguageSwitch } from "./HeaderUtility";
 export { VoiceCapture, LanguageToggle, CAPTURE_LANGUAGES } from "./VoiceCapture";
 export { TerminalBlock } from "./TerminalBlock";
+export { MobileDrawer } from "./MobileDrawer";
+export { PageHeader } from "./PageHeader";
+
+/* Shared state contract — busy is never unavailable. */
+export { interactiveState, DISABLED_VISUALS, BUSY_VISUALS } from "./states";

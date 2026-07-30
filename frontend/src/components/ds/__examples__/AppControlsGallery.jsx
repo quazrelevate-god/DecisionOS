@@ -5,6 +5,10 @@ import { SegmentedControl, FilterPills } from "../SegmentedControl";
 import { HeaderUtility, NotificationBell, ThemeToggle, LanguageSwitch } from "../HeaderUtility";
 import { VoiceCapture, LanguageToggle } from "../VoiceCapture";
 import { TerminalBlock } from "../TerminalBlock";
+import { MobileDrawer } from "../MobileDrawer";
+import { PageHeader } from "../PageHeader";
+import { Button } from "../Button";
+import { StatusBadge } from "../StatusBadge";
 
 /**
  * Phase 4 gallery + usage examples for the app-specific controls.
@@ -53,6 +57,7 @@ export function AppControlsGallery() {
   const [captureLang, setCaptureLang] = useState("auto");
   const [voice, setVoice] = useState("idle");
   const [unread, setUnread] = useState(3);
+  const [drawer, setDrawer] = useState(false);
 
   const cycleVoice = () => {
     if (voice === "idle") return setVoice("listening");
@@ -206,6 +211,45 @@ export function AppControlsGallery() {
             <p className="mt-4 text-center text-small text-text-tertiary">Disabled</p>
           </div>
         </div>
+      </Group>
+
+      <Group
+        title="Page header"
+        intro="The action slot is deliberately singular. Screens accumulate buttons one reasonable addition at a time, and a header with four equal buttons is how a product loses its answer to 'what am I here to do?'. The primary sits first in the DOM so it is announced first, and is pushed rightmost with order-last."
+      >
+        <div className="rounded-lg border border-hairline bg-surface p-5">
+          <PageHeader
+            breadcrumbs={[{ label: "DecisionOS", onClick: () => {} }, { label: "Decision Desk" }]}
+            title="Decision Desk"
+            description="Everything waiting on your decision, and the three ways to capture a new one."
+            meta={<StatusBadge status="pending">3 pending</StatusBadge>}
+            primaryAction={<Button>Capture a decision</Button>}
+            secondaryActions={<Button variant="tertiary">Export</Button>}
+          />
+        </div>
+      </Group>
+
+      <Group
+        title="Mobile drawer"
+        intro="The product is used on phones, so this is the primary navigation for most sessions rather than a fallback. Body scroll locks while open, Escape closes it, focus moves in on open and returns to the trigger on close, and Tab cannot walk into the page behind. The scrim is neutral — a tinted overlay makes the app underneath look like it errored."
+      >
+        <Button variant="secondary" onClick={() => setDrawer(true)}>
+          Open the drawer
+        </Button>
+        <MobileDrawer open={drawer} onClose={() => setDrawer(false)} title="Navigation">
+          <SidebarNav
+            items={NAV_ITEMS}
+            activeKey={active}
+            onSelect={(i) => {
+              setActive(i.key);
+              setDrawer(false);
+            }}
+          />
+        </MobileDrawer>
+        <p className="mt-2 text-small text-text-tertiary">
+          Opens at any viewport here so it can be reviewed on desktop; in the app it is hidden above the lg breakpoint.
+          Try Escape and Tab.
+        </p>
       </Group>
 
       <Group

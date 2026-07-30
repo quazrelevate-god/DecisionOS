@@ -38,6 +38,7 @@ import {
 } from "@phosphor-icons/react";
 import { ProfileDialog } from "./ProfileDialog";
 import { LanguageSwitcher } from "./LanguageSwitcher";
+import { Button } from "@/components/ds";
 
 const NAV = [
   { to: "/", label: "Decision Desk", tkey: "inbox", icon: Tray, testid: "nav-inbox", perm: "inbox" },
@@ -257,13 +258,19 @@ export default function Layout({ children }) {
           </div>
           {user?.role === "owner" && (
             <div className="flex items-center gap-3">
-              <button
+              {/* Ghost, not solid: sending a digest is a header utility, not what
+                  the Decision Desk exists for. As a maximum-contrast solid it was
+                  the most dominant element on the screen, outranking the page's
+                  own primary action. */}
+              <Button
+                variant="tertiary"
+                size="sm"
                 onClick={sendDigest}
                 data-testid="send-digest-button"
-                className="flex items-center gap-2 px-4 py-2 text-sm rounded-lg bg-foreground text-background font-semibold hover:opacity-90 transition-opacity"
+                leadingIcon={<EnvelopeSimple size={16} weight="bold" />}
               >
-                <EnvelopeSimple size={16} weight="bold" /> {t("header.send_digest")}
-              </button>
+                {t("header.send_digest")}
+              </Button>
               <LanguageSwitcher />
               <ThemeToggle />
               <Bellicon />
@@ -313,13 +320,15 @@ export default function Layout({ children }) {
               </nav>
               <div className="border-t border-black p-4 space-y-2 pb-24">
                 {user?.role === "owner" && (
-                  <button
+                  <Button
+                    variant="tertiary"
                     onClick={() => { setDrawerOpen(false); sendDigest(); }}
                     data-testid="mobile-send-digest-button"
-                    className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm rounded-lg bg-foreground text-background font-semibold"
+                    className="w-full"
+                    leadingIcon={<EnvelopeSimple size={16} weight="bold" />}
                   >
-                    <EnvelopeSimple size={16} weight="bold" /> {t("header.send_digest")}
-                  </button>
+                    {t("header.send_digest")}
+                  </Button>
                 )}
                 <button
                   onClick={doLogout}

@@ -11,6 +11,7 @@ import ExecutionSummary from "../components/ExecutionSummary";
 import { DecisionDialog, raisedByLabel, RaisedByIcon } from "../components/DecisionDialog";
 import { money } from "../lib/format";
 import { toast } from "sonner";
+import { Button } from "@/components/ds";
 import {
   Microphone, Stop, PaperPlaneTilt, CheckCircle, XCircle, Spinner,
   UsersThree, Truck, Receipt, CurrencyCircleDollar, Warning, CheckSquare,
@@ -710,10 +711,17 @@ export default function Inbox() {
                 </div>
               ) : (
                 <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <button onClick={submitText} disabled={busy || checking || !text.trim()} data-testid="submit-text-directive"
-                    className="flex items-center gap-2 bg-brand-red text-white px-5 py-2.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all disabled:opacity-50">
-                    <PaperPlaneTilt size={16} weight="bold" /> {checking ? "Checking…" : "Structure it"}
-                  </button>
+                  {/* The one primary action of the capture module. */}
+                  <Button
+                    size="lg"
+                    onClick={submitText}
+                    disabled={busy || !text.trim()}
+                    loading={checking}
+                    data-testid="submit-text-directive"
+                    leadingIcon={<PaperPlaneTilt size={16} weight="bold" />}
+                  >
+                    Structure it
+                  </Button>
                   <button onClick={() => textAttachRef.current?.click()} data-testid="text-attach-file"
                     className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider border border-black px-3 py-2 hover:bg-brand-yellow transition-colors">
                     <Paperclip size={13} weight="bold" /> Attach files
@@ -764,10 +772,17 @@ export default function Inbox() {
               </button>
               <input ref={uploadCameraRef} type="file" accept="image/*" capture="environment" className="hidden"
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) setUploadFiles((prev) => [...prev, f]); e.target.value = ""; }} />
-              <button onClick={structureFiles} disabled={busy || uploadFiles.length === 0} data-testid="structure-file-button"
-                className="flex items-center gap-2 bg-brand-blue text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed">
-                <Brain size={16} weight="bold" /> Analyse &amp; structure
-              </button>
+              {/* Secondary: a second solid slab here would mean two primaries on
+                  one screen and neither would read as the one that matters. */}
+              <Button
+                variant="secondary"
+                onClick={structureFiles}
+                disabled={busy || uploadFiles.length === 0}
+                data-testid="structure-file-button"
+                leadingIcon={<Brain size={16} weight="bold" />}
+              >
+                Analyse &amp; structure
+              </Button>
             </div>
             {uploadFiles.length > 0 && (
               <ul className="mt-3 flex flex-wrap gap-2" data-testid="attachment-chips">

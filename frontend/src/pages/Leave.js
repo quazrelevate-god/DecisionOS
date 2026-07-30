@@ -344,7 +344,7 @@ function LeaveCard({ lv, canAct, onRefresh, highlight }) {
                 <CheckCircle size={14} weight="bold" /> Approve
               </button>
               <button onClick={() => setAction("reject")} data-testid={`leave-reject-${lv.id}`}
-                className="flex items-center gap-1 bg-surface py-1.5 px-3 text-xs font-semibold uppercase tracking-wider border border-hairline hover:bg-brand-red hover:text-white transition-colors">
+                className="flex items-center gap-1 bg-surface py-1.5 px-3 text-xs font-semibold uppercase tracking-wider border border-hairline hover:bg-destructive-tint transition-colors">
                 <XCircle size={14} weight="bold" /> Reject
               </button>
               <button onClick={() => setAction("info")} data-testid={`leave-info-${lv.id}`}

@@ -6,13 +6,13 @@ import { PageHeader } from "../components/common";
 import { Gauge, Lightning, CurrencyCircleDollar, TrendUp, ChatCenteredDots, Trophy, Sparkle, CaretRight } from "@phosphor-icons/react";
 
 const CATS = [
-  { key: "execution", label: "Execution", icon: Lightning, color: "bg-brand-blue" },
-  { key: "finance", label: "Finance", icon: CurrencyCircleDollar, color: "bg-green-600" },
-  { key: "sales", label: "Sales", icon: TrendUp, color: "bg-brand-yellow" },
+  { key: "execution", label: "Execution", icon: Lightning, color: "bg-primary" },
+  { key: "finance", label: "Finance", icon: CurrencyCircleDollar, color: "bg-success-600" },
+  { key: "sales", label: "Sales", icon: TrendUp, color: "bg-status-pending-bg" },
   { key: "responsiveness", label: "Responsiveness", icon: ChatCenteredDots, color: "bg-purple-600" },
 ];
 
-const scoreColor = (v) => v == null ? "text-black/30" : v >= 70 ? "text-green-600" : v >= 40 ? "text-amber-600" : "text-brand-red";
+const scoreColor = (v) => v == null ? "text-text-tertiary" : v >= 70 ? "text-status-completed-fg" : v >= 40 ? "text-status-pending-fg" : "text-primary-text";
 
 export default function OperatingScore() {
   const { data, isLoading } = useQuery({
@@ -25,7 +25,7 @@ export default function OperatingScore() {
     [data]
   );
 
-  if (isLoading || !data) return <div className="font-mono text-sm py-20 text-center">Computing operating score…</div>;
+  if (isLoading || !data) return <div className="text-label uppercase text-sm py-20 text-center">Computing operating score…</div>;
 
   const { company, stats } = data;
   const overall = company.overall;
@@ -36,50 +36,50 @@ export default function OperatingScore() {
       <PageHeader eyebrow="How well the business is running" title="Operating Score" />
 
       {!enough ? (
-        <div className="card-brutal p-8 mb-8 flex flex-col lg:flex-row items-center gap-8" data-testid="operating-overall">
+        <div className="rounded-lg border border-hairline bg-surface p-8 mb-8 flex flex-col lg:flex-row items-center gap-8" data-testid="operating-overall">
           <div className="flex flex-col items-center shrink-0">
-            <div className="w-36 h-36 flex flex-col items-center justify-center border-4 border-black bg-black/5 text-center px-3">
-              <Gauge size={30} weight="bold" className="text-muted-foreground mb-1" />
-              <span className="label-mono text-muted-foreground leading-tight" data-testid="operating-overall-score">Not enough data yet</span>
+            <div className="w-36 h-36 flex flex-col items-center justify-center border-4 border-hairline bg-surface-hover text-center px-3">
+              <Gauge size={30} weight="bold" className="text-text-secondary mb-1" />
+              <span className="text-label uppercase text-text-secondary leading-tight" data-testid="operating-overall-score">Not enough data yet</span>
             </div>
             <div className="flex items-center gap-2 mt-3">
-              <Gauge size={16} weight="bold" className="text-brand-red" />
-              <span className="font-heading font-extrabold uppercase tracking-tight text-sm">Company Health</span>
+              <Gauge size={16} weight="bold" className="text-primary-text" />
+              <span className="font-extrabold uppercase tracking-tight text-sm">Company Health</span>
             </div>
           </div>
           <div className="flex-1 w-full" data-testid="operating-not-ready">
-            <p className="font-heading font-extrabold uppercase tracking-tight text-lg mb-2">We're still learning your business</p>
-            <p className="text-sm text-muted-foreground leading-relaxed">
+            <p className="font-extrabold uppercase tracking-tight text-lg mb-2">We're still learning your business</p>
+            <p className="text-sm text-text-secondary leading-relaxed">
               The Operating Score kicks in once there's enough real activity to measure — roughly <strong>3+ actionable tasks</strong> or your <strong>first invoices</strong>.
               Capture a few decisions on the Decision Desk and import or add invoices, and your score will start tracking automatically.
             </p>
             <div className="grid grid-cols-3 gap-3 mt-4">
-              <div className="border border-black/30 p-3 text-center">
-                <p className="font-heading text-2xl font-black">{stats.done + stats.open}</p>
-                <p className="label-mono text-muted-foreground">Actionable tasks</p>
+              <div className="border border-hairline p-3 text-center">
+                <p className="text-2xl font-black">{stats.done + stats.open}</p>
+                <p className="text-label uppercase text-text-secondary">Actionable tasks</p>
               </div>
-              <div className="border border-black/30 p-3 text-center">
-                <p className="font-heading text-2xl font-black">{stats.done}</p>
-                <p className="label-mono text-muted-foreground">Completed</p>
+              <div className="border border-hairline p-3 text-center">
+                <p className="text-2xl font-black">{stats.done}</p>
+                <p className="text-label uppercase text-text-secondary">Completed</p>
               </div>
-              <div className="border border-black/30 p-3 text-center">
-                <p className="font-heading text-2xl font-black">{stats.total_decisions}</p>
-                <p className="label-mono text-muted-foreground">Decisions</p>
+              <div className="border border-hairline p-3 text-center">
+                <p className="text-2xl font-black">{stats.total_decisions}</p>
+                <p className="text-label uppercase text-text-secondary">Decisions</p>
               </div>
             </div>
           </div>
         </div>
       ) : (
       /* Company overall */
-      <div className="card-brutal p-8 mb-8 flex flex-col lg:flex-row items-center gap-8" data-testid="operating-overall">
+      <div className="rounded-lg border border-hairline bg-surface p-8 mb-8 flex flex-col lg:flex-row items-center gap-8" data-testid="operating-overall">
         <div className="flex flex-col items-center shrink-0">
-          <div className="w-36 h-36 flex flex-col items-center justify-center border-4 border-black bg-white">
-            <span className={`font-heading text-6xl font-black leading-none ${scoreColor(overall)}`} data-testid="operating-overall-score">{overall}</span>
-            <span className="label-mono text-muted-foreground mt-1">/ 100</span>
+          <div className="w-36 h-36 flex flex-col items-center justify-center border-4 border-hairline bg-surface">
+            <span className={` text-6xl font-black leading-none ${scoreColor(overall)}`} data-testid="operating-overall-score">{overall}</span>
+            <span className="text-label uppercase text-text-secondary mt-1">/ 100</span>
           </div>
           <div className="flex items-center gap-2 mt-3">
-            <Gauge size={16} weight="bold" className="text-brand-red" />
-            <span className="font-heading font-extrabold uppercase tracking-tight text-sm">Company Health</span>
+            <Gauge size={16} weight="bold" className="text-primary-text" />
+            <span className="font-extrabold uppercase tracking-tight text-sm">Company Health</span>
           </div>
         </div>
         <div className="flex-1 w-full space-y-4">
@@ -90,11 +90,11 @@ export default function OperatingScore() {
               <div key={c.key} data-testid={`operating-cat-${c.key}`}>
                 <div className="flex items-center justify-between mb-1">
                   <span className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide">
-                    <c.icon size={15} weight="bold" className="text-muted-foreground" /> {c.label}
+                    <c.icon size={15} weight="bold" className="text-text-secondary" /> {c.label}
                   </span>
-                  <span className={`font-heading font-black ${scoreColor(v)}`}>{has ? v : "—"}</span>
+                  <span className={` font-black ${scoreColor(v)}`}>{has ? v : "—"}</span>
                 </div>
-                <div className="h-3 bg-black/10 border border-black">
+                <div className="h-3 bg-surface-sunken border border-hairline">
                   <div className={`h-full ${c.color}`} style={{ width: `${has ? v : 0}%` }} />
                 </div>
               </div>
@@ -109,38 +109,38 @@ export default function OperatingScore() {
         {[
           { label: "Tasks Done", value: stats.done },
           { label: "Open Tasks", value: stats.open },
-          { label: "Overdue", value: stats.overdue, accent: stats.overdue > 0 ? "text-brand-red" : "" },
-          { label: "Open Complaints", value: stats.open_complaints, accent: stats.open_complaints > 0 ? "text-purple-600" : "" },
+          { label: "Overdue", value: stats.overdue, accent: stats.overdue > 0 ? "text-primary-text" : "" },
+          { label: "Open Complaints", value: stats.open_complaints, accent: stats.open_complaints > 0 ? "text-text-secondary" : "" },
         ].map((s) => (
-          <div key={s.label} className="card-brutal p-4">
-            <p className="label-mono text-muted-foreground">{s.label}</p>
-            <p className={`font-heading text-2xl font-black tracking-tight mt-1 ${s.accent || ""}`}>{s.value}</p>
+          <div key={s.label} className="rounded-lg border border-hairline bg-surface p-4">
+            <p className="text-label uppercase text-text-secondary">{s.label}</p>
+            <p className={` text-2xl font-black tracking-tight mt-1 ${s.accent || ""}`}>{s.value}</p>
           </div>
         ))}
       </div>
 
       {/* Employee leaderboard */}
       <div className="flex items-center gap-2 mb-4">
-        <Trophy size={18} weight="bold" className="text-brand-red" />
-        <h2 className="font-heading text-xl font-extrabold uppercase tracking-tight">Team Execution</h2>
+        <Trophy size={18} weight="bold" className="text-primary-text" />
+        <h2 className="text-xl font-extrabold uppercase tracking-tight">Team Execution</h2>
       </div>
-      <p className="label-mono text-muted-foreground mb-3">Tap any member to see their full activity &amp; AI coaching.</p>
-      <div className="card-brutal divide-y divide-black/10" data-testid="operating-employees">
+      <p className="text-label uppercase text-text-secondary mb-3">Tap any member to see their full activity &amp; AI coaching.</p>
+      <div className="rounded-lg border border-hairline bg-surface divide-y divide-black/10" data-testid="operating-employees">
         {rankedEmployees.map((e, i) => (
           <Link key={e.id} to={`/coach?user=${e.id}`} data-testid={`operating-emp-${e.id}`}
             className="p-4 flex items-center gap-4 hover:bg-black/[0.03] transition-colors group cursor-pointer">
-            <span className="font-heading text-lg font-black text-black/30 w-6">{i + 1}</span>
+            <span className="text-lg font-black text-text-tertiary w-6">{i + 1}</span>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold truncate group-hover:text-brand-red transition-colors">{e.name}</p>
-              <p className="label-mono text-muted-foreground">{e.role} · {e.done} done · {e.open} open{e.overdue > 0 ? ` · ${e.overdue} overdue` : ""}</p>
+              <p className="text-sm font-semibold truncate group-hover:text-destructive-text transition-colors">{e.name}</p>
+              <p className="text-label uppercase text-text-secondary">{e.role} · {e.done} done · {e.open} open{e.overdue > 0 ? ` · ${e.overdue} overdue` : ""}</p>
             </div>
-            <span className="hidden sm:flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground group-hover:text-brand-red transition-colors shrink-0">
+            <span className="hidden sm:flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-text-secondary group-hover:text-destructive-text transition-colors shrink-0">
               <Sparkle size={13} weight="bold" /> Details
             </span>
-            <div className="w-14 h-14 flex flex-col items-center justify-center border-2 border-black bg-white shrink-0">
-              <span className={`font-heading text-2xl font-black leading-none ${scoreColor(e.score)}`}>{e.score != null ? e.score : "—"}</span>
+            <div className="w-14 h-14 flex flex-col items-center justify-center border-2 border-hairline bg-surface shrink-0">
+              <span className={` text-2xl font-black leading-none ${scoreColor(e.score)}`}>{e.score != null ? e.score : "—"}</span>
             </div>
-            <CaretRight size={16} weight="bold" className="text-black/30 group-hover:text-brand-red transition-colors shrink-0" />
+            <CaretRight size={16} weight="bold" className="text-text-tertiary group-hover:text-destructive-text transition-colors shrink-0" />
           </Link>
         ))}
       </div>

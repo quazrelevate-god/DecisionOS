@@ -30,7 +30,7 @@ const NavBar = () => (
           Log in
         </Link>
         <Link to="/login?signup=1" data-testid="landing-signup-btn"
-          className="bg-brand-red text-white text-sm font-semibold uppercase tracking-wider px-4 sm:px-5 py-2 border border-brand-red hover:bg-white hover:text-brand-red transition-colors">
+          className="bg-brand-red text-white text-sm font-semibold uppercase tracking-wider px-4 sm:px-5 py-2 border border-brand-red hover:bg-surface hover:text-brand-red transition-colors">
           Sign up
         </Link>
       </div>
@@ -43,23 +43,23 @@ const Kicker = ({ children, big }) => (
 );
 
 const Dept = ({ icon: Icon, tag, title, children }) => (
-  <div className="border-2 border-black bg-white p-6 hover:shadow-brutal transition-all">
+  <div className="border-2 border-hairline bg-surface p-6 hover:shadow-sm transition-all">
     <div className="flex items-center gap-2 text-brand-red mb-2"><Icon size={18} weight="bold" /><span className="font-mono text-[11px] uppercase tracking-widest">{tag}</span></div>
-    <h3 className="font-heading font-extrabold uppercase tracking-tight text-lg">{title}</h3>
-    <p className="text-sm text-muted-foreground mt-1">{children}</p>
+    <h3 className="font-extrabold uppercase tracking-tight text-lg">{title}</h3>
+    <p className="text-sm text-text-secondary mt-1">{children}</p>
   </div>
 );
 
 export default function Landing() {
   return (
-    <div className="bg-white text-[#16161a]" data-testid="landing-page">
+    <div className="bg-surface text-[#16161a]" data-testid="landing-page">
       <NavBar />
 
       {/* HERO */}
       <section className="bg-[#16161a] text-white">
         <div className="max-w-6xl mx-auto px-5 sm:px-8 py-24 sm:py-32">
           <Kicker big>The Operating Brain for Founder-Led Businesses</Kicker>
-          <h1 className="font-heading font-black tracking-tight text-5xl sm:text-6xl lg:text-7xl leading-[1.02]">
+          <h1 className="font-black tracking-tight text-5xl sm:text-6xl lg:text-7xl leading-[1.02]">
             Speak the decision.<br /><span className="text-brand-red">We run</span> the company.
           </h1>
           <div className="h-1.5 w-20 bg-brand-red my-8" />
@@ -68,10 +68,10 @@ export default function Landing() {
           </p>
           <div className="flex flex-wrap gap-3 mt-10">
             <Link to="/login?signup=1" data-testid="hero-signup-btn"
-              className="flex items-center gap-2 bg-brand-red text-white text-sm font-semibold uppercase tracking-wider px-6 py-3 border border-brand-red hover:bg-white hover:text-brand-red transition-colors">
+              className="flex items-center gap-2 bg-brand-red text-white text-sm font-semibold uppercase tracking-wider px-6 py-3 border border-brand-red hover:bg-surface hover:text-brand-red transition-colors">
               Get started free <ArrowRight size={16} weight="bold" />
             </Link>
-            <a href="#how" className="flex items-center gap-2 border border-white/40 text-white text-sm font-semibold uppercase tracking-wider px-6 py-3 hover:bg-white hover:text-[#16161a] transition-colors">
+            <a href="#how" className="flex items-center gap-2 border border-white/40 text-white text-sm font-semibold uppercase tracking-wider px-6 py-3 hover:bg-surface hover:text-[#16161a] transition-colors">
               See how it works
             </a>
           </div>
@@ -83,13 +83,13 @@ export default function Landing() {
       <section className="bg-[#f7f5f2]">
         <div className="max-w-6xl mx-auto px-5 sm:px-8 py-20">
           <Kicker>The Founder Problem</Kicker>
-          <h2 className="font-heading font-black tracking-tight text-3xl sm:text-4xl leading-tight max-w-2xl">Your business lives inside your head. That's the risk.</h2>
+          <h2 className="font-black tracking-tight text-3xl sm:text-4xl leading-tight max-w-2xl">Your business lives inside your head. That's the risk.</h2>
           <div className="grid sm:grid-cols-2 gap-5 mt-10">
             <div className="border-2 border-[#16161a] bg-[#16161a] text-white p-6">
               <div className="font-mono text-xs uppercase tracking-widest text-white/50 mb-2">The old way</div>
               <p className="text-white/90">Founder remembers → tells someone → hopes it happens → chases → repeats. Decisions evaporate, work scatters, nothing is provable, and you become the bottleneck.</p>
             </div>
-            <div className="border-2 border-[#16161a] bg-white p-6">
+            <div className="border-2 border-[#16161a] bg-surface p-6">
               <div className="font-mono text-xs uppercase tracking-widest text-brand-red mb-2">The DecisionOS way</div>
               <p>Founder speaks → AI captures, routes, assigns, tracks, chases, and remembers it forever. One place where nothing is lost, ignored, or left undone.</p>
             </div>
@@ -101,23 +101,23 @@ export default function Landing() {
       <section className="bg-[#16161a] text-white">
         <div className="max-w-6xl mx-auto px-5 sm:px-8 py-20">
           <Kicker dark>The 10-Second Wow</Kicker>
-          <h2 className="font-heading font-black tracking-tight text-3xl sm:text-4xl leading-tight max-w-3xl">One sentence. A company-wide rule, <span className="text-brand-red">enforced.</span></h2>
+          <h2 className="font-black tracking-tight text-3xl sm:text-4xl leading-tight max-w-3xl">One sentence. A company-wide rule, <span className="text-brand-red">enforced.</span></h2>
           <div className="mt-10 space-y-4 max-w-3xl">
             <div className="border-l-4 border-brand-red pl-5 py-2">
               <div className="font-mono text-[11px] uppercase tracking-widest text-brand-red/90">Second 0 — the owner speaks</div>
-              <p className="font-heading font-black text-xl sm:text-2xl mt-1 leading-snug">"From today, stop any dispatch that doesn't have payment approval."</p>
+              <p className="font-black text-xl sm:text-2xl mt-1 leading-snug">"From today, stop any dispatch that doesn't have payment approval."</p>
             </div>
             <div className="border-l-4 border-brand-red pl-5 py-2">
               <div className="font-mono text-[11px] uppercase tracking-widest text-brand-red/90">Second 3 — the AI understands</div>
               <div className="mt-2 flex flex-wrap gap-2">
                 {["Operating Rule", "Trigger: Dispatch", "Condition: Payment approved", "Scope: Company-wide"].map((c, i) => (
-                  <span key={c} className={`text-xs font-semibold rounded-full px-3 py-1 ${i === 0 ? "bg-brand-red text-white" : "bg-white/10 text-white border border-white/20"}`}>{c}</span>
+                  <span key={c} className={`text-xs font-semibold rounded-full px-3 py-1 ${i === 0 ? "bg-brand-red text-white" : "bg-surface/10 text-white border border-white/20"}`}>{c}</span>
                 ))}
               </div>
             </div>
             <div className="border-l-4 border-brand-red pl-5 py-2">
               <div className="font-mono text-[11px] uppercase tracking-widest text-brand-red/90">Second 10 — the business changes</div>
-              <div className="mt-2 border border-white/15 bg-white/5 p-4 rounded">
+              <div className="mt-2 border border-white/15 bg-surface/5 p-4 rounded">
                 <p className="text-white/90"><CheckCircle size={16} weight="fill" className="inline text-brand-red mr-1" /> Rule live across the dispatch workflow · teams notified · exceptions escalate to the owner · filed to the Company Brain.</p>
               </div>
             </div>
@@ -127,21 +127,21 @@ export default function Landing() {
       </section>
 
       {/* HOW IT WORKS */}
-      <section id="how" className="bg-white">
+      <section id="how" className="bg-surface">
         <div className="max-w-6xl mx-auto px-5 sm:px-8 py-20">
           <Kicker>Decision Flow</Kicker>
-          <h2 className="font-heading font-black tracking-tight text-3xl sm:text-4xl leading-tight">Capture → Execute → Remember.</h2>
+          <h2 className="font-black tracking-tight text-3xl sm:text-4xl leading-tight">Capture → Execute → Remember.</h2>
           <div className="grid md:grid-cols-3 gap-5 mt-10">
             {[
               { icon: Microphone, t: "Capture", d: "Speak it, type it, forward it, or upload it. Voice, text, WhatsApp, PDFs and photos — the channels your team already uses." },
               { icon: TreeStructure, t: "Execute", d: "AI classifies, extracts and routes to the right department. On approval it creates tasks, invoices, payments, contacts and finance entries — with owners and due dates." },
               { icon: Brain, t: "Remember", d: "Every decision, approval and rupee is filed into the Company Brain — searchable in plain English, forever." },
             ].map((s, i) => (
-              <div key={s.t} className="border-2 border-black p-6 relative">
-                <div className="font-heading font-black text-5xl text-black/10 absolute top-4 right-5">{i + 1}</div>
+              <div key={s.t} className="border-2 border-hairline p-6 relative">
+                <div className="font-black text-5xl text-text/10 absolute top-4 right-5">{i + 1}</div>
                 <s.icon size={26} weight="bold" className="text-brand-red" />
-                <h3 className="font-heading font-extrabold uppercase tracking-tight text-xl mt-3">{s.t}</h3>
-                <p className="text-sm text-muted-foreground mt-2">{s.d}</p>
+                <h3 className="font-extrabold uppercase tracking-tight text-xl mt-3">{s.t}</h3>
+                <p className="text-sm text-text-secondary mt-2">{s.d}</p>
               </div>
             ))}
           </div>
@@ -152,8 +152,8 @@ export default function Landing() {
       <section className="bg-[#f7f5f2]">
         <div className="max-w-6xl mx-auto px-5 sm:px-8 py-20">
           <Kicker>Proactive Intelligence</Kicker>
-          <h2 className="font-heading font-black tracking-tight text-3xl sm:text-4xl leading-tight">It doesn't wait to be asked.</h2>
-          <p className="text-muted-foreground mt-3 max-w-2xl">DecisionOS watches the business and speaks up first — surfacing the risk and the recommended action before it costs you money.</p>
+          <h2 className="font-black tracking-tight text-3xl sm:text-4xl leading-tight">It doesn't wait to be asked.</h2>
+          <p className="text-text-secondary mt-3 max-w-2xl">DecisionOS watches the business and speaks up first — surfacing the risk and the recommended action before it costs you money.</p>
           <div className="grid sm:grid-cols-2 gap-4 mt-8">
             {[
               { t: "Cash flow", a: "₹45,000 overdue to a vendor — due today.", r: "→ Confirm terms & clear payment." },
@@ -161,10 +161,10 @@ export default function Landing() {
               { t: "Delayed orders", a: "A dispatch is 2 days past due, no update.", r: "→ Nudge owner & notify customer." },
               { t: "Workload", a: "A teammate has 5 open, 1 overdue.", r: "→ Reassign or extend." },
             ].map((x) => (
-              <div key={x.t} className="border-2 border-black bg-white p-5">
+              <div key={x.t} className="border-2 border-hairline bg-surface p-5">
                 <div className="flex items-center gap-2 text-brand-red mb-2"><WarningCircle size={16} weight="bold" /><span className="font-mono text-[11px] uppercase tracking-widest">{x.t}</span></div>
                 <p className="font-semibold text-sm">{x.a}</p>
-                <p className="text-sm text-muted-foreground mt-1">{x.r}</p>
+                <p className="text-sm text-text-secondary mt-1">{x.r}</p>
               </div>
             ))}
           </div>
@@ -173,10 +173,10 @@ export default function Landing() {
       </section>
 
       {/* AI DEPARTMENTS */}
-      <section className="bg-white">
+      <section className="bg-surface">
         <div className="max-w-6xl mx-auto px-5 sm:px-8 py-20">
           <Kicker>AI Departments</Kicker>
-          <h2 className="font-heading font-black tracking-tight text-3xl sm:text-4xl leading-tight">Every function, quietly on autopilot.</h2>
+          <h2 className="font-black tracking-tight text-3xl sm:text-4xl leading-tight">Every function, quietly on autopilot.</h2>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-10">
             <Dept icon={ChartLineUp} tag="Finance" title="The AI CFO">Snap a bill — AI reads & files it. Live spend, outstanding, assets & inventory, plus a ranked action brief.</Dept>
             <Dept icon={Package} tag="Inventory" title="Stock in the open">Track items, quantities & value; purchase bills flow into the ledger and the Brain.</Dept>
@@ -192,16 +192,16 @@ export default function Landing() {
       <section className="bg-[#16161a] text-white">
         <div className="max-w-6xl mx-auto px-5 sm:px-8 py-20">
           <Kicker dark>Why DecisionOS?</Kicker>
-          <h2 className="font-heading font-black tracking-tight text-3xl sm:text-4xl leading-tight">Not a chatbot. Not a clunky ERP. <span className="text-brand-red">An operating brain.</span></h2>
+          <h2 className="font-black tracking-tight text-3xl sm:text-4xl leading-tight">Not a chatbot. Not a clunky ERP. <span className="text-brand-red">An operating brain.</span></h2>
           <div className="grid sm:grid-cols-3 gap-5 mt-10">
             {[
               { t: "Permanent company memory", d: "Every decision & record remembered — not forgotten each chat, not just rows of data." },
               { t: "Turns talk into action", d: "Tasks, records and rules — executed. Not text out, not manual data entry." },
               { t: "Learns how you operate", d: "Your Business DNA compounds over time — the foundation for AI managers." },
             ].map((x) => (
-              <div key={x.t} className="border border-white/15 bg-white/5 p-6">
+              <div key={x.t} className="border border-white/15 bg-surface/5 p-6">
                 <Lightning size={20} weight="bold" className="text-brand-red" />
-                <h3 className="font-heading font-extrabold uppercase tracking-tight text-base mt-3">{x.t}</h3>
+                <h3 className="font-extrabold uppercase tracking-tight text-base mt-3">{x.t}</h3>
                 <p className="text-sm text-white/60 mt-1">{x.d}</p>
               </div>
             ))}
@@ -213,14 +213,14 @@ export default function Landing() {
       <section className="bg-brand-red text-white">
         <div className="max-w-6xl mx-auto px-5 sm:px-8 py-20 text-center">
           <Sparkle size={30} weight="fill" className="mx-auto mb-5" />
-          <h2 className="font-heading font-black tracking-tight text-3xl sm:text-5xl leading-tight max-w-3xl mx-auto">Every business decision — remembered, organized, and executed.</h2>
+          <h2 className="font-black tracking-tight text-3xl sm:text-5xl leading-tight max-w-3xl mx-auto">Every business decision — remembered, organized, and executed.</h2>
           <div className="flex flex-wrap gap-3 justify-center mt-10">
             <Link to="/login?signup=1" data-testid="cta-signup-btn"
-              className="flex items-center gap-2 bg-white text-brand-red text-sm font-semibold uppercase tracking-wider px-7 py-3 border border-white hover:bg-transparent hover:text-white transition-colors">
+              className="flex items-center gap-2 bg-surface text-brand-red text-sm font-semibold uppercase tracking-wider px-7 py-3 border border-white hover:bg-transparent hover:text-white transition-colors">
               Start free <ArrowRight size={16} weight="bold" />
             </Link>
             <Link to="/login" data-testid="cta-login-btn"
-              className="border border-white/60 text-white text-sm font-semibold uppercase tracking-wider px-7 py-3 hover:bg-white hover:text-brand-red transition-colors">
+              className="border border-white/60 text-white text-sm font-semibold uppercase tracking-wider px-7 py-3 hover:bg-surface hover:text-brand-red transition-colors">
               Log in
             </Link>
           </div>

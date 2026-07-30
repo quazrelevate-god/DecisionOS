@@ -48,7 +48,7 @@ function SwipeRow({ children, onLeft, onRight, rightLabel = "View", testid }) {
   return (
     <div className="relative overflow-hidden border border-hairline" data-testid={testid}>
       {onRight && (
-        <div className={`absolute inset-y-0 left-0 flex items-center gap-1 px-5 text-white text-xs font-semibold uppercase tracking-wider transition-colors ${committedR ? "bg-brand-blue brightness-125" : "bg-brand-blue/70"}`} style={{ opacity: dx > 8 ? 1 : 0 }}>
+        <div className={`absolute inset-y-0 left-0 flex items-center gap-1 px-5 text-white text-xs font-semibold uppercase tracking-wider transition-colors ${committedR ? "bg-primary brightness-125" : "bg-primary/70"}`} style={{ opacity: dx > 8 ? 1 : 0 }}>
           <Eye size={16} weight="bold" /> {committedR ? `Release · ${rightLabel}` : rightLabel}
         </div>
       )}
@@ -195,7 +195,7 @@ function ReviewTaskRow({ t: task, members, roleOptions, onRefresh }) {
           {refs.map((a) => (
             <a key={a.url} href={`${process.env.REACT_APP_BACKEND_URL}${a.url}`} target="_blank" rel="noreferrer"
               data-testid={`review-ref-${task.id}-${a.url}`}
-              className="inline-flex items-center gap-1 border border-hairline-strong/40 bg-brand-blue/[0.06] text-primary-text px-2 py-0.5 text-[11px] text-label uppercase max-w-[160px] hover:bg-brand-blue/10 transition-colors">
+              className="inline-flex items-center gap-1 border border-hairline-strong/40 bg-primary-tint text-primary-text px-2 py-0.5 text-[11px] text-label uppercase max-w-[160px] hover:bg-primary/10 transition-colors">
               <FileIcon size={11} weight="bold" /> <span className="truncate">{a.filename || "reference"}</span>
             </a>
           ))}
@@ -323,7 +323,7 @@ function AttachChips({ files, onRemove, testid }) {
   return (
     <ul className="mt-3 flex flex-wrap gap-2 justify-center" data-testid={testid}>
       {files.map((f, i) => (
-        <li key={i} data-testid={`${testid}-chip-${i}`} className="inline-flex items-center gap-1.5 border border-hairline-strong/40 bg-brand-blue/[0.06] text-primary-text px-2.5 py-1 text-xs text-label uppercase max-w-[200px]">
+        <li key={i} data-testid={`${testid}-chip-${i}`} className="inline-flex items-center gap-1.5 border border-hairline-strong/40 bg-primary-tint text-primary-text px-2.5 py-1 text-xs text-label uppercase max-w-[200px]">
           <FileIcon size={12} weight="bold" /> <span className="truncate">{f.name}</span>
           <button onClick={() => onRemove(i)} data-testid={`${testid}-remove-${i}`} className="ml-0.5 hover:text-primary-text"><X size={12} weight="bold" /></button>
         </li>
@@ -764,7 +764,7 @@ export default function Inbox() {
               {textFiles.length > 0 && (
                 <ul className="mt-3 flex flex-wrap gap-2" data-testid="text-attachments">
                   {textFiles.map((f, i) => (
-                    <li key={i} data-testid={`text-attachments-chip-${i}`} className="inline-flex items-center gap-1.5 border border-hairline-strong/40 bg-brand-blue/[0.06] text-primary-text px-2.5 py-1 text-xs text-label uppercase max-w-[200px]">
+                    <li key={i} data-testid={`text-attachments-chip-${i}`} className="inline-flex items-center gap-1.5 border border-hairline-strong/40 bg-primary-tint text-primary-text px-2.5 py-1 text-xs text-label uppercase max-w-[200px]">
                       <FileIcon size={12} weight="bold" /> <span className="truncate">{f.name}</span>
                       <button onClick={() => setTextFiles(textFiles.filter((_, j) => j !== i))} data-testid={`text-attachments-remove-${i}`} className="ml-0.5 hover:text-primary-text"><X size={12} weight="bold" /></button>
                     </li>
@@ -812,7 +812,7 @@ export default function Inbox() {
             {uploadFiles.length > 0 && (
               <ul className="mt-3 flex flex-wrap gap-2" data-testid="attachment-chips">
                 {uploadFiles.map((f, i) => (
-                  <li key={i} data-testid={`attachment-chip-${i}`} className="inline-flex items-center gap-1.5 border border-hairline-strong/40 bg-brand-blue/[0.06] text-primary-text px-2.5 py-1 text-xs text-label uppercase max-w-[220px]">
+                  <li key={i} data-testid={`attachment-chip-${i}`} className="inline-flex items-center gap-1.5 border border-hairline-strong/40 bg-primary-tint text-primary-text px-2.5 py-1 text-xs text-label uppercase max-w-[220px]">
                     <FileIcon size={12} weight="bold" /> <span className="truncate">{f.name}</span>
                     <button onClick={() => setUploadFiles(uploadFiles.filter((_, j) => j !== i))} data-testid={`attachment-remove-${i}`} className="ml-0.5 hover:text-primary-text"><X size={12} weight="bold" /></button>
                   </li>
@@ -940,7 +940,7 @@ export default function Inbox() {
                     <button onClick={() => openItem(it)} data-testid={`inbox-open-${it.id}`} className="text-xs font-semibold uppercase tracking-wider border border-hairline px-2 py-1 hover:bg-primary hover:text-white transition-colors">View</button>
                   )}
                   {!done && <button onClick={() => setStatus(it.id, "done")} data-testid={`inbox-done-${it.id}`} title="Mark done" className="w-8 h-8 flex items-center justify-center border border-hairline hover:bg-success-600 hover:text-white transition-colors"><Check size={14} weight="bold" /></button>}
-                  <button onClick={() => setStatus(it.id, "dismissed")} data-testid={`inbox-dismiss-${it.id}`} title="Dismiss" className="w-8 h-8 flex items-center justify-center border border-hairline hover:bg-brand-red hover:text-white transition-colors"><X size={14} weight="bold" /></button>
+                  <button onClick={() => setStatus(it.id, "dismissed")} data-testid={`inbox-dismiss-${it.id}`} title="Dismiss" className="w-8 h-8 flex items-center justify-center border border-hairline hover:bg-destructive-tint transition-colors"><X size={14} weight="bold" /></button>
                 </div>
               </div>
             </SwipeRow>

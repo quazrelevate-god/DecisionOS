@@ -49,7 +49,7 @@ export function MicDictateButton({ onText, language = "auto", title = "Dictate",
       onClick={recording ? stop : start}
       disabled={busy}
       title={recording ? "Stop & transcribe" : title}
-      className={`flex items-center justify-center border border-black transition-all disabled:opacity-60 ${recording ? "bg-brand-red text-white animate-pulse" : "bg-white hover:bg-black/5"} ${className}`}
+      className={`flex items-center justify-center border border-hairline transition-all disabled:opacity-60 ${recording ? "bg-primary text-primary-foreground animate-pulse" : "bg-surface hover:bg-surface-hover"} ${className}`}
     >
       {busy ? <Spinner size={18} weight="bold" className="animate-spin" /> : recording ? <Stop size={18} weight="fill" /> : <Microphone size={18} weight="bold" />}
     </button>

@@ -32,7 +32,7 @@ export default function Notifications() {
     <div>
       <PageHeader eyebrow="Work updates, approvals & reminders" title="Notifications">
         {(data?.unread || 0) > 0 && (
-          <button onClick={markAll} data-testid="mark-all-read" className="flex items-center gap-2 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors">
+          <button onClick={markAll} data-testid="mark-all-read" className="flex items-center gap-2 border border-hairline px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-surface-hover transition-colors">
             <Check size={16} weight="bold" /> Mark all read
           </button>
         )}
@@ -40,7 +40,7 @@ export default function Notifications() {
 
       {items.length === 0 && <EmptyState title="You're all caught up" hint="Work assignments, approvals and updates will appear here." />}
 
-      <div className="card-brutal divide-y divide-black/10" data-testid="notifications-list">
+      <div className="rounded-lg border border-hairline bg-surface divide-y divide-black/10" data-testid="notifications-list">
         {items.map((n) => {
           const meta = notifMeta(n);
           const clickable = !!notifLink(n);
@@ -53,16 +53,16 @@ export default function Notifications() {
             >
               <div className="flex items-start gap-3 min-w-0">
                 {!n.read && <span className="mt-1.5 w-2 h-2 rounded-full bg-brand-red shrink-0" data-testid={`notif-unread-dot-${n.id}`} />}
-                <BellRinging size={18} weight="bold" className={`shrink-0 mt-0.5 ${n.level === "owner" ? "text-brand-red" : "text-brand-blue"}`} />
+                <BellRinging size={18} weight="bold" className={`shrink-0 mt-0.5 ${n.level === "owner" ? "text-primary-text" : "text-primary-text"}`} />
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <Chip value={meta.label} className={meta.cls} />
-                    <span className="label-mono text-muted-foreground flex items-center gap-1" title={fullTime(n.created_at)}>{timeAgo(n.created_at)}</span>
+                    <span className="text-label uppercase text-text-secondary flex items-center gap-1" title={fullTime(n.created_at)}>{timeAgo(n.created_at)}</span>
                   </div>
                   <p className="text-sm font-semibold mt-1.5 truncate">{n.work_title || n.message}</p>
-                  {n.work_title && n.message && <p className="text-xs text-muted-foreground mt-0.5 truncate">{n.message}</p>}
+                  {n.work_title && n.message && <p className="text-xs text-text-secondary mt-0.5 truncate">{n.message}</p>}
                   {n.sender_name && (
-                    <p className="label-mono text-muted-foreground mt-1 flex items-center gap-1">
+                    <p className="text-label uppercase text-text-secondary mt-1 flex items-center gap-1">
                       <UserCircle size={13} weight="bold" /> {n.sender_name}
                     </p>
                   )}
@@ -70,11 +70,11 @@ export default function Notifications() {
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 {!n.read && (
-                  <button onClick={(e) => { e.stopPropagation(); markRead(n.id); }} data-testid={`read-${n.id}`} className="text-xs uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-ink hover:text-white transition-colors">
+                  <button onClick={(e) => { e.stopPropagation(); markRead(n.id); }} data-testid={`read-${n.id}`} className="text-xs uppercase tracking-wider border border-hairline px-2 py-1 hover:bg-surface-hover transition-colors">
                     Read
                   </button>
                 )}
-                {clickable && <CaretRight size={16} weight="bold" className="text-muted-foreground" />}
+                {clickable && <CaretRight size={16} weight="bold" className="text-text-secondary" />}
               </div>
             </div>
           );

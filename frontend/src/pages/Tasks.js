@@ -87,32 +87,32 @@ export function NewTaskDialog({ onCreated, roleOptions, members, defaultType, tr
     finally { setBusy(false); }
   };
 
-  const inp = "w-full border border-black px-3 py-2 text-sm font-mono focus:outline-none focus:shadow-brutal-sm bg-white";
+  const inp = "w-full border border-hairline px-3 py-2 text-sm text-label uppercase focus:outline-none focus:shadow-xs bg-surface";
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <button data-testid="new-task-button" className={triggerClassName || "flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all"}>
+        <button data-testid="new-task-button" className={triggerClassName || "flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline hover:shadow-sm transition-all"}>
           <Plus size={16} weight="bold" /> New Task
         </button>
       </DialogTrigger>
-      <DialogContent className="border border-black rounded-none max-h-[90vh] overflow-y-auto">
+      <DialogContent className="border border-hairline rounded-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="font-heading uppercase tracking-tight">New Task</DialogTitle>
-          <DialogDescription className="label-mono text-muted-foreground">Capture any company task — operational or department work.</DialogDescription>
+          <DialogTitle className="uppercase tracking-tight">New Task</DialogTitle>
+          <DialogDescription className="text-label uppercase text-text-secondary">Capture any company task — operational or department work.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <input data-testid="task-title-input" className={inp} placeholder="Task title" value={form.title} onChange={set("title")} />
           <textarea data-testid="task-description-input" className={inp} rows={2} placeholder="Description" value={form.description} onChange={set("description")} />
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="label-mono text-muted-foreground">Task type</label>
+              <label className="text-label uppercase text-text-secondary">Task type</label>
               <select data-testid="task-type-select" className={`${inp} mt-1`} value={form.task_type} onChange={set("task_type")}>
                 {cats.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
               </select>
             </div>
             {isOp && (
               <div data-testid="op-category-wrap">
-                <label className="label-mono text-muted-foreground">Operational category</label>
+                <label className="text-label uppercase text-text-secondary">Operational category</label>
                 <select data-testid="op-category-select" className={`${inp} mt-1`} value={form.op_category} onChange={set("op_category")}>
                   {OP_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
@@ -121,14 +121,14 @@ export function NewTaskDialog({ onCreated, roleOptions, members, defaultType, tr
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="label-mono text-muted-foreground">Assigned employee</label>
+              <label className="text-label uppercase text-text-secondary">Assigned employee</label>
               <select data-testid="task-member-select" className={`${inp} mt-1`} value={form.assignee_id} onChange={set("assignee_id")}>
                 <option value="">— Pick a person —</option>
                 {members.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
               </select>
             </div>
             <div>
-              <label className="label-mono text-muted-foreground">Supporting employee (optional)</label>
+              <label className="text-label uppercase text-text-secondary">Supporting employee (optional)</label>
               <select data-testid="task-support-select" className={`${inp} mt-1`} value={form.support_id} onChange={set("support_id")}>
                 <option value="">— None —</option>
                 {members.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
@@ -137,7 +137,7 @@ export function NewTaskDialog({ onCreated, roleOptions, members, defaultType, tr
           </div>
           {!form.assignee_id && (
             <div>
-              <label className="label-mono text-muted-foreground">…or assign by team/role</label>
+              <label className="text-label uppercase text-text-secondary">…or assign by team/role</label>
               <select data-testid="task-role-select" className={`${inp} mt-1`} value={form.assignee_role} onChange={set("assignee_role")}>
                 <option value="">Any / unassigned</option>
                 {roleOptions.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
@@ -146,58 +146,58 @@ export function NewTaskDialog({ onCreated, roleOptions, members, defaultType, tr
           )}
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="label-mono text-muted-foreground">Priority</label>
+              <label className="text-label uppercase text-text-secondary">Priority</label>
               <select data-testid="task-priority-select" className={`${inp} mt-1`} value={form.priority} onChange={set("priority")}>
                 {["low", "medium", "high"].map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
             </div>
             <div>
-              <label className="label-mono text-muted-foreground">Due date</label>
+              <label className="text-label uppercase text-text-secondary">Due date</label>
               <input data-testid="task-due-date" type="date" className={`${inp} mt-1`} value={form.due_date} onChange={set("due_date")} />
             </div>
             <div>
-              <label className="label-mono text-muted-foreground">Due time</label>
+              <label className="text-label uppercase text-text-secondary">Due time</label>
               <input data-testid="task-due-time" type="time" className={`${inp} mt-1`} value={form.due_time} onChange={set("due_time")} />
             </div>
           </div>
           <input data-testid="task-expected-output" className={inp} placeholder="Expected output (e.g. Final deck in PDF)" value={form.expected_output} onChange={set("expected_output")} />
-          <label className="flex items-center gap-2 text-sm font-mono cursor-pointer">
-            <input data-testid="task-approval-required" type="checkbox" className="w-4 h-4 border border-black" checked={form.approval_required} onChange={(e) => setForm({ ...form, approval_required: e.target.checked })} />
+          <label className="flex items-center gap-2 text-sm text-label uppercase cursor-pointer">
+            <input data-testid="task-approval-required" type="checkbox" className="w-4 h-4 border border-hairline" checked={form.approval_required} onChange={(e) => setForm({ ...form, approval_required: e.target.checked })} />
             Approval required
           </label>
           {form.approval_required && (
             <div data-testid="task-approver-wrap">
-              <label className="label-mono text-muted-foreground">Approver</label>
+              <label className="text-label uppercase text-text-secondary">Approver</label>
               <select data-testid="task-approver-select" className={`${inp} mt-1`} value={form.approver_id} onChange={set("approver_id")}>
                 <option value="">— Anyone with approval access —</option>
                 {members.filter((m) => m.role === "owner" || userPerms(m).includes("approvals")).map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
               </select>
-              <p className="label-mono text-muted-foreground mt-1">Grant approval access to a user in People → Access Control.</p>
+              <p className="text-label uppercase text-text-secondary mt-1">Grant approval access to a user in People → Access Control.</p>
             </div>
           )}
-          <label className="flex items-center gap-2 text-sm font-mono cursor-pointer">
-            <input data-testid="task-evidence-required" type="checkbox" className="w-4 h-4 border border-black" checked={form.evidence_required} onChange={(e) => setForm({ ...form, evidence_required: e.target.checked })} />
+          <label className="flex items-center gap-2 text-sm text-label uppercase cursor-pointer">
+            <input data-testid="task-evidence-required" type="checkbox" className="w-4 h-4 border border-hairline" checked={form.evidence_required} onChange={(e) => setForm({ ...form, evidence_required: e.target.checked })} />
             Require proof of work before completion
           </label>
           <div>
-            <label className="label-mono text-muted-foreground flex items-center gap-1"><Paperclip size={12} weight="bold" /> Reference material (optional)</label>
+            <label className="text-label uppercase text-text-secondary flex items-center gap-1"><Paperclip size={12} weight="bold" /> Reference material (optional)</label>
             <input data-testid="task-attachment-input" type="file" multiple className={`${inp} mt-1`} onChange={(e) => setFiles(Array.from(e.target.files || []))} />
-            <p className="label-mono text-muted-foreground mt-1">Attach images, PDFs or docs to give the assignee context. AI reads them and summarises what to do.</p>
+            <p className="text-label uppercase text-text-secondary mt-1">Attach images, PDFs or docs to give the assignee context. AI reads them and summarises what to do.</p>
             {files.length > 0 && (
               <ul className="mt-2 space-y-1" data-testid="task-attachment-list">
                 {files.map((f, i) => (
-                  <li key={i} className="flex items-center justify-between gap-2 border border-black/20 px-2 py-1 text-xs font-mono">
+                  <li key={i} className="flex items-center justify-between gap-2 border border-hairline px-2 py-1 text-xs text-label uppercase">
                     <span className="truncate">{f.name}</span>
-                    <button type="button" onClick={() => setFiles(files.filter((_, j) => j !== i))} className="text-brand-red font-bold shrink-0">Remove</button>
+                    <button type="button" onClick={() => setFiles(files.filter((_, j) => j !== i))} className="text-primary-text font-bold shrink-0">Remove</button>
                   </li>
                 ))}
               </ul>
             )}
           </div>
-          <p className="label-mono text-muted-foreground">Created by: {user?.name}</p>
+          <p className="text-label uppercase text-text-secondary">Created by: {user?.name}</p>
         </div>
         <DialogFooter>
-          <button data-testid="task-create-submit" onClick={create} disabled={busy} className="bg-brand-red text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-50">{busy ? "Creating…" : "Create"}</button>
+          <button data-testid="task-create-submit" onClick={create} disabled={busy} className="bg-primary text-primary-foreground px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline hover:shadow-xs transition-all disabled:opacity-50">{busy ? "Creating…" : "Create"}</button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -242,11 +242,11 @@ export function TaskBoard() {
       <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
         {isOwner ? (
           <button onClick={() => setMine(!mine)} data-testid="toggle-mine"
-            className={`px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black transition-colors ${mine ? "bg-brand-blue text-white" : "bg-white hover:bg-black/5"}`}>
+            className={`px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline transition-colors ${mine ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>
             {mine ? "My Tasks" : "All Tasks"}
           </button>
         ) : (
-          <span data-testid="lane-badge" className="px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black bg-brand-blue text-white">
+          <span data-testid="lane-badge" className="px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline bg-primary text-primary-foreground">
             {user?.role} lane
           </span>
         )}
@@ -257,34 +257,34 @@ export function TaskBoard() {
         {COLUMNS.map((col) => {
           const cards = (data || []).filter((t) => t.status === col.key);
           return (
-            <div key={col.key} data-testid={`task-column-${col.key}`} className="border border-black bg-white">
-              <div className="px-4 py-3 border-b border-black flex items-center justify-between bg-brand-paper">
-                <p className="label-mono">{col.label}</p>
-                <span className="font-heading font-black">{cards.length}</span>
+            <div key={col.key} data-testid={`task-column-${col.key}`} className="border border-hairline bg-surface">
+              <div className="px-4 py-3 border-b border-hairline flex items-center justify-between bg-background">
+                <p className="text-label uppercase">{col.label}</p>
+                <span className="font-black">{cards.length}</span>
               </div>
               <div className="p-3 space-y-3 min-h-[200px]">
-                {cards.length === 0 && <p className="text-xs text-muted-foreground p-2">Empty</p>}
+                {cards.length === 0 && <p className="text-xs text-text-secondary p-2">Empty</p>}
                 {cards.map((t) => (
-                  <div key={t.id} data-testid={`task-card-${t.id}`} className="border border-black p-3 shadow-hover">
+                  <div key={t.id} data-testid={`task-card-${t.id}`} className="border border-hairline p-3 shadow-hover">
                     <div className="flex items-start justify-between gap-2">
                       <p className="font-semibold text-sm leading-tight">{t.title}</p>
                       <Chip value={t.priority} />
                     </div>
-                    {t.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{t.description}</p>}
+                    {t.description && <p className="text-xs text-text-secondary mt-1 line-clamp-2">{t.description}</p>}
                     <div className="flex items-center gap-1.5 mt-3 flex-wrap">
                       {t.assignee_name ? (
-                        <span data-testid={`task-assignee-${t.id}`} className="inline-flex items-center gap-1 bg-brand-ink text-white px-2 py-0.5 text-xs font-semibold">
+                        <span data-testid={`task-assignee-${t.id}`} className="inline-flex items-center gap-1 bg-primary text-primary-foreground px-2 py-0.5 text-xs font-semibold">
                           <User size={11} weight="bold" /> {t.assignee_name}
                         </span>
                       ) : t.assignee_role ? (
-                        <Chip value={t.assignee_role} className="bg-white" data-testid={`task-assignee-${t.id}`} />
+                        <Chip value={t.assignee_role} className="bg-surface" data-testid={`task-assignee-${t.id}`} />
                       ) : (
-                        <span className="text-xs text-muted-foreground italic">Unassigned</span>
+                        <span className="text-xs text-text-secondary italic">Unassigned</span>
                       )}
-                      {overdue(t) && <Chip value="overdue" className="bg-brand-red text-white" />}
+                      {overdue(t) && <Chip value="overdue" className="bg-primary text-primary-foreground" />}
                     </div>
                     {t.updated_at && (
-                      <p className="label-mono text-muted-foreground mt-2 flex items-center gap-1" data-testid={`task-updated-${t.id}`} title={fullTime(t.updated_at)}>
+                      <p className="text-label uppercase text-text-secondary mt-2 flex items-center gap-1" data-testid={`task-updated-${t.id}`} title={fullTime(t.updated_at)}>
                         <ClockCounterClockwise size={11} weight="bold" /> {t.last_action || "Updated"} · {timeAgo(t.updated_at)}
                       </p>
                     )}
@@ -292,13 +292,13 @@ export function TaskBoard() {
                       data-testid={`reassign-task-${t.id}`}
                       value={t.assignee_id || ""}
                       onChange={(e) => reassign(t, e.target.value)}
-                      className="mt-3 w-full border border-black px-2 py-1.5 text-xs font-mono bg-white focus:outline-none focus:shadow-brutal-sm">
+                      className="mt-3 w-full border border-hairline px-2 py-1.5 text-xs text-label uppercase bg-surface focus:outline-none focus:shadow-xs">
                       <option value="">Reassign to…</option>
                       {members.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
                     </select>
                     {NEXT[t.status] && (
                       <button onClick={() => move(t)} data-testid={`advance-task-${t.id}`}
-                        className="mt-2 w-full border border-black py-1.5 text-xs font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors">
+                        className="mt-2 w-full border border-hairline py-1.5 text-xs font-semibold uppercase tracking-wider hover:bg-surface-hover transition-colors">
                         Move to {NEXT[t.status].replace(/_/g, " ")}
                       </button>
                     )}

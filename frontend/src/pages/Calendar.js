@@ -8,12 +8,12 @@ import {
 } from "@phosphor-icons/react";
 
 const TYPES = {
-  meeting: { label: "Meetings", icon: UsersThree, color: "bg-brand-ink", text: "text-brand-ink" },
-  payment_due: { label: "Payments", icon: CurrencyCircleDollar, color: "bg-orange-500", text: "text-orange-600" },
-  task: { label: "Tasks", icon: CheckSquare, color: "bg-brand-blue", text: "text-brand-blue" },
-  delivery: { label: "Deliveries", icon: Truck, color: "bg-green-600", text: "text-green-600" },
-  complaint: { label: "Complaints", icon: Warning, color: "bg-purple-600", text: "text-purple-600" },
-  birthday: { label: "Birthdays", icon: Cake, color: "bg-brand-red", text: "text-brand-red" },
+  meeting: { label: "Meetings", icon: UsersThree, color: "bg-primary", text: "text-text" },
+  payment_due: { label: "Payments", icon: CurrencyCircleDollar, color: "bg-orange-500", text: "text-status-pending-fg" },
+  task: { label: "Tasks", icon: CheckSquare, color: "bg-primary", text: "text-primary-text" },
+  delivery: { label: "Deliveries", icon: Truck, color: "bg-success-600", text: "text-status-completed-fg" },
+  complaint: { label: "Complaints", icon: Warning, color: "bg-purple-600", text: "text-text-secondary" },
+  birthday: { label: "Birthdays", icon: Cake, color: "bg-brand-red", text: "text-primary-text" },
   leave: { label: "Leave", icon: AirplaneTakeoff, color: "bg-teal-600", text: "text-teal-600" },
 };
 
@@ -48,7 +48,7 @@ export default function Calendar() {
         <button
           onClick={() => setFilter("all")}
           data-testid="cal-filter-all"
-          className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black transition-colors ${filter === "all" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline transition-colors ${filter === "all" ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}
         >
           <CalendarBlank size={15} weight="bold" /> All ({data?.total || 0})
         </button>
@@ -57,7 +57,7 @@ export default function Calendar() {
             key={key}
             onClick={() => setFilter(key)}
             data-testid={`cal-filter-${key}`}
-            className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black transition-colors ${filter === key ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline transition-colors ${filter === key ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}
           >
             <t.icon size={15} weight="bold" /> {t.label} ({counts[key] || 0})
           </button>
@@ -65,7 +65,7 @@ export default function Calendar() {
       </div>
 
       {isLoading ? (
-        <p className="font-mono text-sm">Loading calendar…</p>
+        <p className="text-label uppercase text-sm">Loading calendar…</p>
       ) : days.length === 0 ? (
         <EmptyState title="Nothing scheduled" hint="Payment due dates, task deadlines, deliveries and complaints will appear here." />
       ) : (
@@ -73,10 +73,10 @@ export default function Calendar() {
           {days.map((day) => (
             <section key={day.date} data-testid={`cal-day-${day.date}`}>
               <div className="flex items-center gap-3 mb-3">
-                <span className={`font-heading text-lg font-black uppercase tracking-tight ${day.date < new Date().toISOString().slice(0, 10) ? "text-brand-red" : ""}`}>
+                <span className={` text-lg font-black uppercase tracking-tight ${day.date < new Date().toISOString().slice(0, 10) ? "text-primary-text" : ""}`}>
                   {fmtDay(day.date)}
                 </span>
-                <span className="label-mono text-muted-foreground">{day.date}</span>
+                <span className="text-label uppercase text-text-secondary">{day.date}</span>
                 <div className="flex-1 h-px bg-black/20" />
               </div>
               <div className="space-y-2">
@@ -87,16 +87,16 @@ export default function Calendar() {
                       key={e.ref_id || `${e.type}-${i}`}
                       data-testid={`cal-event-${e.type}-${i}`}
                       onClick={() => e.contact_id && navigate(`/contacts/${e.contact_id}`)}
-                      className={`card-brutal p-3 flex items-center gap-3 ${e.contact_id ? "cursor-pointer shadow-hover" : ""}`}
+                      className={`rounded-lg border border-hairline bg-surface p-3 flex items-center gap-3 ${e.contact_id ? "cursor-pointer shadow-hover" : ""}`}
                     >
-                      <div className={`w-9 h-9 flex items-center justify-center border border-black text-white shrink-0 ${t.color}`}>
+                      <div className={`w-9 h-9 flex items-center justify-center border border-hairline text-white shrink-0 ${t.color}`}>
                         <t.icon size={17} weight="bold" />
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold leading-tight truncate">{e.title}</p>
-                        {e.subtitle && <p className="label-mono text-muted-foreground truncate">{e.subtitle}</p>}
+                        {e.subtitle && <p className="text-label uppercase text-text-secondary truncate">{e.subtitle}</p>}
                       </div>
-                      {e.overdue && <span className="px-2 py-0.5 text-xs uppercase tracking-wider font-semibold border border-black bg-brand-red text-white shrink-0">Overdue</span>}
+                      {e.overdue && <span className="px-2 py-0.5 text-xs uppercase tracking-wider font-semibold border border-hairline bg-primary text-primary-foreground shrink-0">Overdue</span>}
                     </div>
                   );
                 })}

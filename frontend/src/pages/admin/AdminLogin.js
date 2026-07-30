@@ -33,13 +33,13 @@ export default function AdminLogin({ onSuccess }) {
             <h1 className="font-heading text-2xl font-black tracking-tighter uppercase text-white leading-none">
               DecisionOS
             </h1>
-            <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-[#e5484d]">Admin Console</p>
+            <p className="text-label uppercase text-[11px] uppercase tracking-[0.3em] text-[#e5484d]">Admin Console</p>
           </div>
         </div>
 
         <form onSubmit={submit} className="border-2 border-white/10 bg-[#141418] p-7 space-y-5">
           <div>
-            <label className="font-mono text-[11px] uppercase tracking-widest text-white/50 block mb-2">Email</label>
+            <label className="text-label uppercase text-[11px] uppercase tracking-widest text-white/50 block mb-2">Email</label>
             <input
               data-testid="admin-email-input"
               type="email"
@@ -47,12 +47,12 @@ export default function AdminLogin({ onSuccess }) {
               onChange={(e) => setEmail(e.target.value)}
               required
               autoComplete="username"
-              className="w-full bg-[#0a0a0b] border border-white/15 text-white px-4 py-3 font-mono text-sm focus:border-[#e5484d] focus:outline-none"
+              className="w-full bg-[#0a0a0b] border border-white/15 text-white px-4 py-3 text-label uppercase text-sm focus:border-[#e5484d] focus:outline-none"
               placeholder="admin@decisionos.biz"
             />
           </div>
           <div>
-            <label className="font-mono text-[11px] uppercase tracking-widest text-white/50 block mb-2">Password</label>
+            <label className="text-label uppercase text-[11px] uppercase tracking-widest text-white/50 block mb-2">Password</label>
             <input
               data-testid="admin-password-input"
               type="password"
@@ -60,12 +60,12 @@ export default function AdminLogin({ onSuccess }) {
               onChange={(e) => setPassword(e.target.value)}
               required
               autoComplete="current-password"
-              className="w-full bg-[#0a0a0b] border border-white/15 text-white px-4 py-3 font-mono text-sm focus:border-[#e5484d] focus:outline-none"
+              className="w-full bg-[#0a0a0b] border border-white/15 text-white px-4 py-3 text-label uppercase text-sm focus:border-[#e5484d] focus:outline-none"
               placeholder="••••••••"
             />
           </div>
           {err && (
-            <p data-testid="admin-login-error" className="text-[#e5484d] text-sm font-mono">{err}</p>
+            <p data-testid="admin-login-error" className="text-[#e5484d] text-sm text-label uppercase">{err}</p>
           )}
           <button
             data-testid="admin-login-submit"
@@ -77,7 +77,7 @@ export default function AdminLogin({ onSuccess }) {
             {busy ? "Signing in…" : "Enter Console"}
           </button>
         </form>
-        <p className="text-white/30 font-mono text-[11px] text-center mt-6 uppercase tracking-widest">
+        <p className="text-white/30 text-label uppercase text-[11px] text-center mt-6 uppercase tracking-widest">
           Platform operators only
         </p>
       </div>

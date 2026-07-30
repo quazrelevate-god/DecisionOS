@@ -27,10 +27,10 @@ export default function People() {
   return (
     <div>
       <PageHeader eyebrow={t("people.eyebrow", { customers: L.customer_plural.toLowerCase(), vendors: L.vendor_plural.toLowerCase() })} title={t("people.title")}>
-        <div className="flex border border-black" data-testid="people-tabs">
+        <div className="flex border border-hairline" data-testid="people-tabs">
           {TABS.map((t) => (
             <button key={t.key} onClick={() => setTab(t.key)} data-testid={`people-tab-${t.key}`}
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border-r border-black last:border-r-0 transition-colors ${tab === t.key ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border-r border-hairline last:border-r-0 transition-colors ${tab === t.key ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>
               <t.icon size={16} weight="bold" /> {t.label}
             </button>
           ))}

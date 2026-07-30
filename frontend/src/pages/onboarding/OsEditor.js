@@ -1,7 +1,7 @@
 import { Sparkle, CircleNotch, X, Plus, ArrowLeft, ArrowRight, Kanban, ListChecks, ShieldCheck } from "@phosphor-icons/react";
 
-const inputCls = "w-full border border-black bg-white px-4 py-3 text-sm font-mono focus:outline-none focus:shadow-brutal-sm transition-shadow";
-const labelCls = "label-mono text-muted-foreground";
+const inputCls = "w-full border border-hairline bg-surface px-4 py-3 text-sm text-label uppercase focus:outline-none focus:shadow-xs transition-shadow";
+const labelCls = "text-label uppercase text-text-secondary";
 const OP_CATEGORIES = ["Presentation", "Meeting", "Documentation", "Proposal", "Planning", "Review", "Administration", "Compliance", "Marketing", "HR Activity", "Travel", "Event", "IT Support", "Other"];
 
 export function OsEditor(props) {
@@ -17,11 +17,11 @@ export function OsEditor(props) {
 
   return (
     <div className="space-y-5" data-testid="onboarding-step-4">
-      <p className="text-sm text-muted-foreground flex items-center gap-1.5">
-        <Sparkle size={16} weight="fill" className="text-brand-red" /> Your AI-generated operating system for <strong>{industryLabel || "your business"}</strong>. Edit freely.
+      <p className="text-sm text-text-secondary flex items-center gap-1.5">
+        <Sparkle size={16} weight="fill" className="text-primary-text" /> Your AI-generated operating system for <strong>{industryLabel || "your business"}</strong>. Edit freely.
       </p>
       {suggesting ? (
-        <div className="flex items-center gap-2 border border-black p-6 justify-center" data-testid="suggest-loading">
+        <div className="flex items-center gap-2 border border-hairline p-6 justify-center" data-testid="suggest-loading">
           <CircleNotch size={18} className="animate-spin" /> <span className="text-sm font-semibold uppercase tracking-wider">Building your operating system…</span>
         </div>
       ) : (
@@ -30,15 +30,15 @@ export function OsEditor(props) {
             <label className={labelCls}>Departments &amp; roles (besides Owner)</label>
             <div className="flex flex-wrap gap-2 mt-2" data-testid="roles-list">
               {roles.map((r) => (
-                <span key={r.key} data-testid={`role-chip-${r.key}`} className="inline-flex items-center gap-1.5 border border-black bg-white px-2.5 py-1 text-xs uppercase tracking-wider font-semibold">
-                  {r.label}<button onClick={() => removeRole(r.key)} data-testid={`remove-role-${r.key}`} className="hover:text-brand-red"><X size={12} weight="bold" /></button>
+                <span key={r.key} data-testid={`role-chip-${r.key}`} className="inline-flex items-center gap-1.5 border border-hairline bg-surface px-2.5 py-1 text-xs uppercase tracking-wider font-semibold">
+                  {r.label}<button onClick={() => removeRole(r.key)} data-testid={`remove-role-${r.key}`} className="hover:text-destructive-text"><X size={12} weight="bold" /></button>
                 </span>
               ))}
-              {roles.length === 0 && <span className="text-xs text-muted-foreground">No departments yet — add some below.</span>}
+              {roles.length === 0 && <span className="text-xs text-text-secondary">No departments yet — add some below.</span>}
             </div>
             <div className="flex gap-2 mt-2">
               <input data-testid="role-input" className={inputCls} placeholder="Add a department (e.g. Quality)" value={roleInput} onChange={(e) => setRoleInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addRole(); } }} />
-              <button onClick={addRole} data-testid="add-role-button" className="px-4 border border-black bg-brand-ink text-white hover:shadow-brutal-sm transition-all"><Plus size={16} weight="bold" /></button>
+              <button onClick={addRole} data-testid="add-role-button" className="px-4 border border-hairline bg-primary text-primary-foreground hover:shadow-xs transition-all"><Plus size={16} weight="bold" /></button>
             </div>
           </div>
 
@@ -46,15 +46,15 @@ export function OsEditor(props) {
             <label className={`${labelCls} flex items-center gap-1.5`}><Kanban size={13} weight="bold" /> Workflows</label>
             <div className="flex flex-wrap gap-2 mt-2" data-testid="workflows-list">
               {workflows.map((w, i) => (
-                <span key={w._key || i} data-testid={`workflow-chip-${i}`} className="inline-flex items-center gap-1.5 border border-black bg-white px-2.5 py-1 text-xs font-semibold">
-                  {w.name}<button onClick={() => removeWorkflow(i)} data-testid={`remove-workflow-${i}`} className="hover:text-brand-red"><X size={12} weight="bold" /></button>
+                <span key={w._key || i} data-testid={`workflow-chip-${i}`} className="inline-flex items-center gap-1.5 border border-hairline bg-surface px-2.5 py-1 text-xs font-semibold">
+                  {w.name}<button onClick={() => removeWorkflow(i)} data-testid={`remove-workflow-${i}`} className="hover:text-destructive-text"><X size={12} weight="bold" /></button>
                 </span>
               ))}
-              {workflows.length === 0 && <span className="text-xs text-muted-foreground">No workflows yet.</span>}
+              {workflows.length === 0 && <span className="text-xs text-text-secondary">No workflows yet.</span>}
             </div>
             <div className="flex gap-2 mt-2">
               <input data-testid="workflow-input" className={inputCls} placeholder="Add a workflow (e.g. Dispatch)" value={wfInput} onChange={(e) => setWfInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addWorkflow(); } }} />
-              <button onClick={addWorkflow} data-testid="add-workflow-button" className="px-4 border border-black bg-brand-ink text-white hover:shadow-brutal-sm transition-all"><Plus size={16} weight="bold" /></button>
+              <button onClick={addWorkflow} data-testid="add-workflow-button" className="px-4 border border-hairline bg-primary text-primary-foreground hover:shadow-xs transition-all"><Plus size={16} weight="bold" /></button>
             </div>
           </div>
 
@@ -63,54 +63,54 @@ export function OsEditor(props) {
             <div className="space-y-2 mt-2 max-h-52 overflow-y-auto pr-1" data-testid="optasks-list">
               {opTasks.map((t, i) => (
                 <div key={t._key || i} data-testid={`optask-row-${i}`} className="flex gap-2">
-                  <input data-testid={`optask-title-${i}`} className="flex-1 border border-black/40 px-2 py-1.5 text-sm font-mono focus:outline-none" placeholder="Task title" value={t.title} onChange={(e) => updateOpTask(i, "title", e.target.value)} />
-                  <select data-testid={`optask-cat-${i}`} className="border border-black/40 px-1 py-1.5 text-xs font-mono focus:outline-none w-28" value={t.category} onChange={(e) => updateOpTask(i, "category", e.target.value)}>
+                  <input data-testid={`optask-title-${i}`} className="flex-1 border border-hairline px-2 py-1.5 text-sm text-label uppercase focus:outline-none" placeholder="Task title" value={t.title} onChange={(e) => updateOpTask(i, "title", e.target.value)} />
+                  <select data-testid={`optask-cat-${i}`} className="border border-hairline px-1 py-1.5 text-xs text-label uppercase focus:outline-none w-28" value={t.category} onChange={(e) => updateOpTask(i, "category", e.target.value)}>
                     {OP_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
                   </select>
-                  <button onClick={() => removeOpTask(i)} data-testid={`remove-optask-${i}`} className="px-2 border border-black hover:bg-brand-red hover:text-white transition-colors"><X size={14} weight="bold" /></button>
+                  <button onClick={() => removeOpTask(i)} data-testid={`remove-optask-${i}`} className="px-2 border border-hairline hover:bg-destructive-tint transition-colors"><X size={14} weight="bold" /></button>
                 </div>
               ))}
             </div>
-            <button onClick={addOpTask} data-testid="add-optask-button" className="mt-2 flex items-center gap-1.5 text-sm text-brand-blue font-semibold hover:underline"><Plus size={14} weight="bold" /> Add operational task</button>
+            <button onClick={addOpTask} data-testid="add-optask-button" className="mt-2 flex items-center gap-1.5 text-sm text-primary-text font-semibold hover:underline"><Plus size={14} weight="bold" /> Add operational task</button>
           </div>
 
           <div>
             <label className={`${labelCls} flex items-center gap-1.5`}><ShieldCheck size={13} weight="bold" /> Approval rules</label>
             <div className="space-y-2 mt-2" data-testid="rules-list">
               {approvalRules.map((r, i) => (
-                <div key={r._key || i} data-testid={`rule-row-${i}`} className="border border-black p-2">
+                <div key={r._key || i} data-testid={`rule-row-${i}`} className="border border-hairline p-2">
                   <div className="flex gap-2">
-                    <input data-testid={`rule-name-${i}`} className="flex-1 border border-black/40 px-2 py-1.5 text-sm font-mono focus:outline-none" placeholder="Rule name" value={r.name} onChange={(e) => updateRule(i, "name", e.target.value)} />
-                    <button onClick={() => removeRule(i)} data-testid={`remove-rule-${i}`} className="px-2 border border-black hover:bg-brand-red hover:text-white transition-colors"><X size={14} weight="bold" /></button>
+                    <input data-testid={`rule-name-${i}`} className="flex-1 border border-hairline px-2 py-1.5 text-sm text-label uppercase focus:outline-none" placeholder="Rule name" value={r.name} onChange={(e) => updateRule(i, "name", e.target.value)} />
+                    <button onClick={() => removeRule(i)} data-testid={`remove-rule-${i}`} className="px-2 border border-hairline hover:bg-destructive-tint transition-colors"><X size={14} weight="bold" /></button>
                   </div>
-                  <input data-testid={`rule-desc-${i}`} className="w-full border border-black/40 px-2 py-1.5 text-xs font-mono mt-2 focus:outline-none" placeholder="When does it apply?" value={r.description} onChange={(e) => updateRule(i, "description", e.target.value)} />
+                  <input data-testid={`rule-desc-${i}`} className="w-full border border-hairline px-2 py-1.5 text-xs text-label uppercase mt-2 focus:outline-none" placeholder="When does it apply?" value={r.description} onChange={(e) => updateRule(i, "description", e.target.value)} />
                 </div>
               ))}
             </div>
-            <button onClick={addRule} data-testid="add-rule-button" className="mt-2 flex items-center gap-1.5 text-sm text-brand-blue font-semibold hover:underline"><Plus size={14} weight="bold" /> Add approval rule</button>
+            <button onClick={addRule} data-testid="add-rule-button" className="mt-2 flex items-center gap-1.5 text-sm text-primary-text font-semibold hover:underline"><Plus size={14} weight="bold" /> Add approval rule</button>
           </div>
 
           <div>
             <label className={labelCls}>Products / Services</label>
             <div className="space-y-2 mt-2" data-testid="products-list">
               {products.map((p, i) => (
-                <div key={p._key || i} data-testid={`product-row-${i}`} className="border border-black p-2">
+                <div key={p._key || i} data-testid={`product-row-${i}`} className="border border-hairline p-2">
                   <div className="flex gap-2">
-                    <input data-testid={`product-name-${i}`} className="flex-1 border border-black/40 px-2 py-1.5 text-sm font-mono focus:outline-none" placeholder="Name" value={p.name} onChange={(e) => updateProduct(i, "name", e.target.value)} />
-                    <button onClick={() => removeProduct(i)} data-testid={`remove-product-${i}`} className="px-2 border border-black hover:bg-brand-red hover:text-white transition-colors"><X size={14} weight="bold" /></button>
+                    <input data-testid={`product-name-${i}`} className="flex-1 border border-hairline px-2 py-1.5 text-sm text-label uppercase focus:outline-none" placeholder="Name" value={p.name} onChange={(e) => updateProduct(i, "name", e.target.value)} />
+                    <button onClick={() => removeProduct(i)} data-testid={`remove-product-${i}`} className="px-2 border border-hairline hover:bg-destructive-tint transition-colors"><X size={14} weight="bold" /></button>
                   </div>
-                  <input data-testid={`product-desc-${i}`} className="w-full border border-black/40 px-2 py-1.5 text-xs font-mono mt-2 focus:outline-none" placeholder="Short description" value={p.description} onChange={(e) => updateProduct(i, "description", e.target.value)} />
+                  <input data-testid={`product-desc-${i}`} className="w-full border border-hairline px-2 py-1.5 text-xs text-label uppercase mt-2 focus:outline-none" placeholder="Short description" value={p.description} onChange={(e) => updateProduct(i, "description", e.target.value)} />
                 </div>
               ))}
             </div>
-            <button onClick={addProduct} data-testid="add-product-button" className="mt-2 flex items-center gap-1.5 text-sm text-brand-blue font-semibold hover:underline"><Plus size={14} weight="bold" /> Add product / service</button>
+            <button onClick={addProduct} data-testid="add-product-button" className="mt-2 flex items-center gap-1.5 text-sm text-primary-text font-semibold hover:underline"><Plus size={14} weight="bold" /> Add product / service</button>
           </div>
         </>
       )}
-      {error && <p data-testid="auth-error" className="text-sm text-brand-red font-semibold">{error}</p>}
+      {error && <p data-testid="auth-error" className="text-sm text-primary-text font-semibold">{error}</p>}
       <div className="flex gap-2">
-        <button onClick={onBack} className="flex items-center gap-2 px-4 py-3 border border-black text-sm font-semibold uppercase tracking-wider hover:bg-black/5"><ArrowLeft size={16} weight="bold" /></button>
-        <button disabled={busy || suggesting} data-testid="onboarding-create-button" onClick={onProvision} className="flex-1 flex items-center justify-center gap-2 bg-brand-red text-white font-semibold uppercase tracking-wider py-3 border border-black hover:shadow-brutal transition-all disabled:opacity-50">
+        <button onClick={onBack} className="flex items-center gap-2 px-4 py-3 border border-hairline text-sm font-semibold uppercase tracking-wider hover:bg-surface-hover"><ArrowLeft size={16} weight="bold" /></button>
+        <button disabled={busy || suggesting} data-testid="onboarding-create-button" onClick={onProvision} className="flex-1 flex items-center justify-center gap-2 bg-primary text-primary-foreground font-semibold uppercase tracking-wider py-3 border border-hairline hover:shadow-sm transition-all disabled:opacity-50">
           {busy ? <><CircleNotch size={16} className="animate-spin" /> Provisioning…</> : <>Provision Operating System <ArrowRight size={16} weight="bold" /></>}
         </button>
       </div>

@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { UserPlus, PencilSimple, ShieldCheck, Check, LinkSimple, Copy, WhatsappLogo } from "@phosphor-icons/react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../components/ui/dialog";
 
-const inp = "w-full border border-black px-3 py-2 text-sm font-mono focus:outline-none focus:shadow-brutal-sm";
+const inp = "w-full border border-hairline px-3 py-2 text-sm text-label uppercase focus:outline-none focus:shadow-xs";
 
 function InviteLinkModal({ info, onClose }) {
   const link = info ? `${window.location.origin}/login?invite=${info.token}` : "";
@@ -18,19 +18,19 @@ function InviteLinkModal({ info, onClose }) {
   };
   return (
     <Dialog open={!!info} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="border border-black rounded-none" data-testid="invite-link-modal">
-        <DialogHeader><DialogTitle className="font-heading uppercase tracking-tight">Invite {info?.name}</DialogTitle></DialogHeader>
+      <DialogContent className="border border-hairline rounded-md" data-testid="invite-link-modal">
+        <DialogHeader><DialogTitle className="uppercase tracking-tight">Invite {info?.name}</DialogTitle></DialogHeader>
         <div className="space-y-3">
-          <p className="text-sm text-muted-foreground">Share this one-tap link. {info?.name} opens it and gets a login code texted to <strong>{info?.phone_masked}</strong> — no password needed.</p>
+          <p className="text-sm text-text-secondary">Share this one-tap link. {info?.name} opens it and gets a login code texted to <strong>{info?.phone_masked}</strong> — no password needed.</p>
           <div className="flex gap-2">
             <input readOnly value={link} data-testid="invite-link-input" className={inp} onFocus={(e) => e.target.select()} />
-            <button onClick={copy} data-testid="copy-invite-link" className="flex items-center gap-1.5 border border-black px-3 text-xs font-semibold uppercase tracking-wider bg-brand-ink text-white hover:shadow-brutal-sm transition-all"><Copy size={14} weight="bold" /> Copy</button>
+            <button onClick={copy} data-testid="copy-invite-link" className="flex items-center gap-1.5 border border-hairline px-3 text-xs font-semibold uppercase tracking-wider bg-primary text-primary-foreground hover:shadow-xs transition-all"><Copy size={14} weight="bold" /> Copy</button>
           </div>
           <a href={`https://wa.me/?text=${encodeURIComponent(msg)}`} target="_blank" rel="noreferrer" data-testid="invite-whatsapp-share"
-            className="flex items-center justify-center gap-2 border border-black px-4 py-2.5 text-sm font-semibold uppercase tracking-wider hover:bg-green-600 hover:text-white transition-colors">
+            className="flex items-center justify-center gap-2 border border-hairline px-4 py-2.5 text-sm font-semibold uppercase tracking-wider hover:bg-success-600 hover:text-white transition-colors">
             <WhatsappLogo size={16} weight="bold" /> Share on WhatsApp
           </a>
-          <p className="text-[11px] text-muted-foreground italic">Auto-SMS delivery starts once your SMS provider is connected — until then, share this link directly. Link expires in 7 days.</p>
+          <p className="text-[11px] text-text-secondary italic">Auto-SMS delivery starts once your SMS provider is connected — until then, share this link directly. Link expires in 7 days.</p>
         </div>
       </DialogContent>
     </Dialog>
@@ -112,17 +112,17 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite, member
   return (
     <Dialog open={open} onOpenChange={openChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="border border-black rounded-none max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle className="font-heading uppercase tracking-tight">{editing ? `Edit access — ${initial.name}` : "Add team member"}</DialogTitle></DialogHeader>
+      <DialogContent className="border border-hairline rounded-md max-h-[90vh] overflow-y-auto">
+        <DialogHeader><DialogTitle className="uppercase tracking-tight">{editing ? `Edit access — ${initial.name}` : "Add team member"}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           {!editing && <>
             <input data-testid="member-name-input" className={inp} placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             <input data-testid="member-email-input" className={inp} type="email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-            <div className="flex border border-black" data-testid="login-method-toggle">
+            <div className="flex border border-hairline" data-testid="login-method-toggle">
               <button type="button" data-testid="login-method-password" onClick={() => setForm({ ...form, passwordless: false })}
-                className={`flex-1 px-3 py-2 text-xs font-semibold uppercase tracking-wider transition-colors ${!form.passwordless ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>Password login</button>
+                className={`flex-1 px-3 py-2 text-xs font-semibold uppercase tracking-wider transition-colors ${!form.passwordless ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>Password login</button>
               <button type="button" data-testid="login-method-otp" onClick={() => setForm({ ...form, passwordless: true })}
-                className={`flex-1 px-3 py-2 text-xs font-semibold uppercase tracking-wider border-l border-black transition-colors ${form.passwordless ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>Mobile OTP</button>
+                className={`flex-1 px-3 py-2 text-xs font-semibold uppercase tracking-wider border-l border-hairline transition-colors ${form.passwordless ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>Mobile OTP</button>
             </div>
             {!form.passwordless && (
               <input data-testid="member-password-input" className={inp} type="password" placeholder="Temp password (min 6)" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
@@ -130,16 +130,16 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite, member
           </>}
           <input data-testid="member-phone-input" className={inp} type="tel" placeholder={form.passwordless ? "Mobile number (required for OTP login)" : "Mobile number (for OTP login)"} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
           {!editing && form.passwordless && (
-            <p className="text-[11px] text-muted-foreground -mt-1 italic" data-testid="passwordless-hint">No password needed — this member signs in with a one-time code sent to their mobile.</p>
+            <p className="text-[11px] text-text-secondary -mt-1 italic" data-testid="passwordless-hint">No password needed — this member signs in with a one-time code sent to their mobile.</p>
           )}
           <div>
-            <label className="label-mono text-muted-foreground">Role</label>
+            <label className="text-label uppercase text-text-secondary">Role</label>
             <select data-testid="member-role-select" className={`${inp} mt-1`} value={form.role} onChange={(e) => setRole(e.target.value)}>
               {roleOptions.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
             </select>
           </div>
           <div>
-            <label className="label-mono text-muted-foreground">Reporting Manager (for leave approvals)</label>
+            <label className="text-label uppercase text-text-secondary">Reporting Manager (for leave approvals)</label>
             <select data-testid="member-manager-select" className={`${inp} mt-1`} value={form.reporting_manager_id} onChange={(e) => setForm({ ...form, reporting_manager_id: e.target.value })}>
               <option value="">None (use department approver)</option>
               {members.filter((m) => m.id !== initial?.id).map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
@@ -147,13 +147,13 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite, member
           </div>
           <div>
             <div className="flex items-center gap-1.5 mb-2 mt-1">
-              <ShieldCheck size={16} weight="bold" className="text-brand-red" />
-              <label className="label-mono text-muted-foreground">Access — pick what this member can open & use</label>
+              <ShieldCheck size={16} weight="bold" className="text-primary-text" />
+              <label className="text-label uppercase text-text-secondary">Access — pick what this member can open & use</label>
             </div>
             {form.role === "owner" ? (
-              <div className="border border-brand-red bg-brand-red/5 px-3 py-3 text-sm" data-testid="owner-access-note">
-                <p className="font-semibold flex items-center gap-1.5"><ShieldCheck size={15} weight="bold" className="text-brand-red" /> Full company access</p>
-                <p className="text-xs text-muted-foreground mt-1">Owners can open and manage everything — team, finances, workflows and all data. Individual permissions don't apply.</p>
+              <div className="border border-hairline-strong bg-brand-red/5 px-3 py-3 text-sm" data-testid="owner-access-note">
+                <p className="font-semibold flex items-center gap-1.5"><ShieldCheck size={15} weight="bold" className="text-primary-text" /> Full company access</p>
+                <p className="text-xs text-text-secondary mt-1">Owners can open and manage everything — team, finances, workflows and all data. Individual permissions don't apply.</p>
               </div>
             ) : (
             <>
@@ -162,35 +162,35 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite, member
                 const on = form.permissions.includes(p.key);
                 return (
                   <button key={p.key} type="button" data-testid={`perm-${p.key}`} aria-pressed={on} onClick={() => togglePerm(p.key)}
-                    className={`flex items-center justify-between gap-2 border border-black px-3 py-2 text-xs font-semibold text-left transition-colors ${on ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+                    className={`flex items-center justify-between gap-2 border border-hairline px-3 py-2 text-xs font-semibold text-left transition-colors ${on ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>
                     <span>{p.label}</span>
-                    <span className={`w-4 h-4 shrink-0 flex items-center justify-center border border-current ${on ? "bg-brand-red text-white border-black" : ""}`}>{on && <Check size={10} weight="bold" />}</span>
+                    <span className={`w-4 h-4 shrink-0 flex items-center justify-center border border-current ${on ? "bg-primary text-primary-foreground border-hairline" : ""}`}>{on && <Check size={10} weight="bold" />}</span>
                   </button>
                 );
               })}
             </div>
 
-            <div className="mt-4 border-t border-black/15 pt-3" data-testid="menu-preview">
-              <p className="label-mono text-muted-foreground mb-2">This member will see these menus</p>
+            <div className="mt-4 border-t border-hairline pt-3" data-testid="menu-preview">
+              <p className="text-label uppercase text-text-secondary mb-2">This member will see these menus</p>
               <div className="flex flex-wrap gap-1.5">
                 {MENU_PREVIEW.map((m) => {
                   const visible = !m.perm || form.permissions.includes(m.perm);
                   return (
                     <span key={m.label} data-testid={`preview-${m.label}`}
-                      className={`px-2 py-1 text-xs font-semibold border border-black ${visible ? "bg-green-600 text-white" : "bg-white text-muted-foreground line-through opacity-60"}`}>
+                      className={`px-2 py-1 text-xs font-semibold border border-hairline ${visible ? "bg-success-600 text-white" : "bg-surface text-text-secondary line-through opacity-60"}`}>
                       {m.label}
                     </span>
                   );
                 })}
               </div>
-              <p className="text-[11px] text-muted-foreground mt-2 italic">CEO Brief shows their personal brief. Everyone always has CEO Brief, My Work & Meeting Notes.</p>
+              <p className="text-[11px] text-text-secondary mt-2 italic">CEO Brief shows their personal brief. Everyone always has CEO Brief, My Work & Meeting Notes.</p>
             </div>
             </>
             )}
           </div>
         </div>
         <DialogFooter>
-          <button data-testid="member-save-submit" onClick={save} className="bg-brand-red text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">{editing ? "Save access" : "Add"}</button>
+          <button data-testid="member-save-submit" onClick={save} className="bg-primary text-primary-foreground px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline hover:shadow-xs transition-all">{editing ? "Save access" : "Add"}</button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -231,39 +231,39 @@ export function TeamPanel() {
       {canManageTeam && (
         <div className="flex justify-end mb-6">
           <MemberDialog roleOptions={roleOptions} members={data || []} isOwner={isOwner} onSaved={refresh} onInvite={setInvite}
-            trigger={<button data-testid="add-user-button" className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all"><UserPlus size={16} weight="bold" /> Add Member</button>} />
+            trigger={<button data-testid="add-user-button" className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline hover:shadow-sm transition-all"><UserPlus size={16} weight="bold" /> Add Member</button>} />
         </div>
       )}
 
       {/* Company profile & products now live in the top-bar company icon dialog */}
 
-      <h2 className="font-heading text-2xl font-extrabold uppercase tracking-tight mb-4">Members</h2>
-      <div className="card-brutal divide-y divide-black/10">
+      <h2 className="text-2xl font-extrabold uppercase tracking-tight mb-4">Members</h2>
+      <div className="rounded-lg border border-hairline bg-surface divide-y divide-black/10">
         {(data || []).map((u) => (
           <div key={u.id} data-testid={`team-member-${u.id}`} className="p-4 flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-brand-ink text-white flex items-center justify-center font-heading font-black">{u.name?.[0]?.toUpperCase()}</div>
+              <div className="w-10 h-10 bg-primary text-primary-foreground flex items-center justify-center font-black">{u.name?.[0]?.toUpperCase()}</div>
               <div>
                 <p className="font-semibold text-sm">{u.name}</p>
-                <p className="text-xs text-muted-foreground font-mono">{u.email}</p>
+                <p className="text-xs text-text-secondary text-label uppercase">{u.email}</p>
               </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap justify-end">
               {u.role !== "owner" && (
-                <span className="label-mono text-muted-foreground" data-testid={`member-access-count-${u.id}`}>{userPerms(u).length} access</span>
+                <span className="text-label uppercase text-text-secondary" data-testid={`member-access-count-${u.id}`}>{userPerms(u).length} access</span>
               )}
-              <Chip value={u.role} className={u.role === "owner" ? "bg-brand-red text-white" : "bg-brand-blue text-white"} />
+              <Chip value={u.role} className={u.role === "owner" ? "bg-primary text-primary-foreground" : "bg-primary text-primary-foreground"} />
               {absentIds.has(u.id) && <Chip value="absent" className="bg-black text-white" data-testid={`absent-badge-${u.id}`} />}
               {canManageTeam && (u.role !== "owner" || isOwner) && (
                 <MemberDialog roleOptions={roleOptions} initial={u} members={data || []} isOwner={isOwner} onSaved={refresh}
-                  trigger={<button data-testid={`edit-access-${u.id}`} className="flex items-center gap-1 text-xs uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-blue hover:text-white transition-colors"><PencilSimple size={12} weight="bold" /> Access</button>} />
+                  trigger={<button data-testid={`edit-access-${u.id}`} className="flex items-center gap-1 text-xs uppercase tracking-wider border border-hairline px-2 py-1 hover:bg-primary hover:text-white transition-colors"><PencilSimple size={12} weight="bold" /> Access</button>} />
               )}
               {canManageTeam && u.role !== "owner" && (
                 <>
                   {u.phone && (
-                    <button onClick={() => getInviteLink(u)} data-testid={`invite-link-${u.id}`} className="flex items-center gap-1 text-xs uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-red hover:text-white transition-colors"><LinkSimple size={12} weight="bold" /> Invite</button>
+                    <button onClick={() => getInviteLink(u)} data-testid={`invite-link-${u.id}`} className="flex items-center gap-1 text-xs uppercase tracking-wider border border-hairline px-2 py-1 hover:bg-destructive-tint transition-colors"><LinkSimple size={12} weight="bold" /> Invite</button>
                   )}
-                  <button onClick={() => toggleAbsent(u)} data-testid={`toggle-absent-${u.id}`} className="text-xs uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-ink hover:text-white transition-colors">
+                  <button onClick={() => toggleAbsent(u)} data-testid={`toggle-absent-${u.id}`} className="text-xs uppercase tracking-wider border border-hairline px-2 py-1 hover:bg-surface-hover transition-colors">
                     {absentIds.has(u.id) ? "Mark present" : "Mark absent"}
                   </button>
                 </>

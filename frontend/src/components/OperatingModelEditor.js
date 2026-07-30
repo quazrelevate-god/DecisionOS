@@ -5,8 +5,8 @@ import { opModel } from "../lib/operatingModel";
 import { toast } from "sonner";
 import { FlowArrow, FloppyDisk, Sparkle, Plus, Trash, ArrowUp, ArrowDown, ShieldCheck } from "@phosphor-icons/react";
 
-const inp = "w-full border border-border rounded-lg px-3 py-2 text-sm bg-card focus:outline-none focus:ring-2 focus:ring-ring/40";
-const smInp = "border border-border rounded-md px-2 py-1.5 text-sm bg-card focus:outline-none focus:ring-2 focus:ring-ring/40";
+const inp = "w-full border border-hairline rounded-lg px-3 py-2 text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-ring/40";
+const smInp = "border border-hairline rounded-md px-2 py-1.5 text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-ring/40";
 let _uid = 0;
 const uid = () => `k${Date.now()}_${_uid++}`;
 
@@ -110,80 +110,80 @@ export function OperatingModelEditor() {
   };
 
   return (
-    <div className="card-brutal p-5" data-testid="settings-operating-model-card">
+    <div className="rounded-lg border border-hairline bg-surface p-5" data-testid="settings-operating-model-card">
       <div className="flex items-center gap-2 mb-1">
-        <FlowArrow size={20} weight="bold" className="text-brand-red" />
-        <h2 className="font-heading text-lg font-extrabold uppercase tracking-tight">Operating Model</h2>
+        <FlowArrow size={20} weight="bold" className="text-primary-text" />
+        <h2 className="text-lg font-extrabold uppercase tracking-tight">Operating Model</h2>
       </div>
-      <p className="text-xs text-muted-foreground mb-4">
+      <p className="text-xs text-text-secondary mb-4">
         The workflow pipelines and task categories that shape your Workflows board and My Work — tailored to <span className="font-semibold">{tenant?.industry || "your industry"}</span>. Add your own or let AI regenerate them.
       </p>
 
-      <p className="label-mono text-brand-red mb-2">Workflow pipelines</p>
+      <p className="text-label uppercase text-primary-text mb-2">Workflow pipelines</p>
       <div className="space-y-4">
         {model.pipelines.map((p, pi) => (
-          <div key={p._uid} className="border border-border rounded-lg p-3" data-testid={`op-pipeline-${pi}`}>
+          <div key={p._uid} className="border border-hairline rounded-lg p-3" data-testid={`op-pipeline-${pi}`}>
             <div className="flex items-start gap-2">
               <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <input data-testid={`op-pipeline-label-${pi}`} className={inp} placeholder="Pipeline name (e.g. Appointments)" value={p.label} onChange={(e) => setPipeline(pi, { label: e.target.value })} />
                 <input data-testid={`op-pipeline-sub-${pi}`} className={inp} placeholder="Subtitle (e.g. Booked → Completed)" value={p.sub} onChange={(e) => setPipeline(pi, { sub: e.target.value })} />
               </div>
-              <button onClick={() => delPipeline(pi)} data-testid={`op-pipeline-delete-${pi}`} title="Delete pipeline" className="mt-1 text-muted-foreground hover:text-brand-red transition-colors">
+              <button onClick={() => delPipeline(pi)} data-testid={`op-pipeline-delete-${pi}`} title="Delete pipeline" className="mt-1 text-text-secondary hover:text-destructive-text transition-colors">
                 <Trash size={16} weight="bold" />
               </button>
             </div>
 
             <div className="mt-3 space-y-1.5">
-              <span className="label-mono text-muted-foreground">Stages (in order)</span>
+              <span className="text-label uppercase text-text-secondary">Stages (in order)</span>
               {p.stages.map((s, si) => (
                 <div key={s._uid} className="flex items-center gap-1.5" data-testid={`op-stage-${pi}-${si}`}>
                   <input className={`${smInp} flex-1`} placeholder="Stage name" value={s.label} onChange={(e) => setStage(pi, si, { label: e.target.value })} />
-                  <button onClick={() => moveStage(pi, si, -1)} disabled={si === 0} title="Move up" className="p-1 disabled:opacity-30 hover:text-brand-blue"><ArrowUp size={14} weight="bold" /></button>
-                  <button onClick={() => moveStage(pi, si, 1)} disabled={si === p.stages.length - 1} title="Move down" className="p-1 disabled:opacity-30 hover:text-brand-blue"><ArrowDown size={14} weight="bold" /></button>
-                  <button onClick={() => delStage(pi, si)} title="Delete stage" className="p-1 text-muted-foreground hover:text-brand-red"><Trash size={14} weight="bold" /></button>
+                  <button onClick={() => moveStage(pi, si, -1)} disabled={si === 0} title="Move up" className="p-1 disabled:opacity-30 hover:text-primary-text"><ArrowUp size={14} weight="bold" /></button>
+                  <button onClick={() => moveStage(pi, si, 1)} disabled={si === p.stages.length - 1} title="Move down" className="p-1 disabled:opacity-30 hover:text-primary-text"><ArrowDown size={14} weight="bold" /></button>
+                  <button onClick={() => delStage(pi, si)} title="Delete stage" className="p-1 text-text-secondary hover:text-destructive-text"><Trash size={14} weight="bold" /></button>
                 </div>
               ))}
-              <button onClick={() => addStage(pi)} data-testid={`op-add-stage-${pi}`} className="flex items-center gap-1 text-xs font-semibold text-brand-blue hover:underline mt-1">
+              <button onClick={() => addStage(pi)} data-testid={`op-add-stage-${pi}`} className="flex items-center gap-1 text-xs font-semibold text-primary-text hover:underline mt-1">
                 <Plus size={13} weight="bold" /> Add stage
               </button>
             </div>
 
             <div className="mt-3 flex items-center gap-2">
-              <ShieldCheck size={14} weight="bold" className="text-muted-foreground" />
-              <span className="label-mono text-muted-foreground">Owner sign-off stage</span>
+              <ShieldCheck size={14} weight="bold" className="text-text-secondary" />
+              <span className="text-label uppercase text-text-secondary">Owner sign-off stage</span>
               <select data-testid={`op-approval-${pi}`} className={smInp} value={p.approval_stage} onChange={(e) => setPipeline(pi, { approval_stage: e.target.value })}>
                 <option value="">None</option>
                 {p.stages.filter((s) => s.key).map((s) => <option key={s._uid} value={s.key}>{s.label}</option>)}
               </select>
-              <span className="text-[11px] text-muted-foreground">(only the owner can advance to it)</span>
+              <span className="text-[11px] text-text-secondary">(only the owner can advance to it)</span>
             </div>
           </div>
         ))}
       </div>
-      <button onClick={addPipeline} data-testid="op-add-pipeline" className="flex items-center gap-1 text-sm font-semibold text-brand-red hover:underline mt-3">
+      <button onClick={addPipeline} data-testid="op-add-pipeline" className="flex items-center gap-1 text-sm font-semibold text-primary-text hover:underline mt-3">
         <Plus size={14} weight="bold" /> Add pipeline
       </button>
 
-      <p className="label-mono text-brand-red mt-6 mb-2">Task categories</p>
+      <p className="text-label uppercase text-primary-text mt-6 mb-2">Task categories</p>
       <div className="flex flex-wrap gap-2">
         {model.task_categories.map((c, i) => (
-          <div key={c._uid} className="flex items-center gap-1 border border-border rounded-md pl-2 pr-1 py-1" data-testid={`op-cat-${i}`}>
+          <div key={c._uid} className="flex items-center gap-1 border border-hairline rounded-md pl-2 pr-1 py-1" data-testid={`op-cat-${i}`}>
             <input className="bg-transparent text-sm w-28 focus:outline-none" value={c.label} onChange={(e) => setCat(i, e.target.value)} />
-            <button onClick={() => delCat(i)} title="Delete" className="text-muted-foreground hover:text-brand-red"><Trash size={13} weight="bold" /></button>
+            <button onClick={() => delCat(i)} title="Delete" className="text-text-secondary hover:text-destructive-text"><Trash size={13} weight="bold" /></button>
           </div>
         ))}
-        <button onClick={addCat} data-testid="op-add-cat" className="flex items-center gap-1 text-sm font-semibold text-brand-blue hover:underline px-2 py-1">
+        <button onClick={addCat} data-testid="op-add-cat" className="flex items-center gap-1 text-sm font-semibold text-primary-text hover:underline px-2 py-1">
           <Plus size={13} weight="bold" /> Add category
         </button>
       </div>
 
       <div className="mt-6 flex flex-wrap gap-3">
         <button onClick={save} disabled={saving} data-testid="op-save"
-          className="flex items-center gap-2 bg-brand-ink text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider rounded-lg hover:shadow-brutal-sm transition-all disabled:opacity-60">
+          className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2 text-sm font-semibold uppercase tracking-wider rounded-lg hover:shadow-xs transition-all disabled:opacity-60">
           <FloppyDisk size={16} weight="bold" /> {saving ? "Saving…" : "Save Model"}
         </button>
         <button onClick={regenerate} disabled={regen} data-testid="op-regenerate"
-          className="flex items-center gap-2 border border-black px-5 py-2 text-sm font-semibold uppercase tracking-wider rounded-lg hover:bg-black/5 transition-all disabled:opacity-60">
+          className="flex items-center gap-2 border border-hairline px-5 py-2 text-sm font-semibold uppercase tracking-wider rounded-lg hover:bg-surface-hover transition-all disabled:opacity-60">
           <Sparkle size={16} weight="bold" /> {regen ? "Regenerating…" : "Regenerate with AI"}
         </button>
       </div>

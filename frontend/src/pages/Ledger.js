@@ -27,8 +27,8 @@ const fmt = (cur) => (n) => {
   catch { return `${cur || ""} ${Math.round(n || 0).toLocaleString()}`; }
 };
 
-const SOURCE_CHIP = { manual: "bg-surface-hover text-text", whatsapp: "bg-green-600 text-white", ingest: "bg-primary text-primary-foreground", document: "bg-primary text-primary-foreground" };
-const LEVEL_DOT = { high: "bg-brand-red", medium: "bg-status-pending-bg", low: "bg-brand-blue" };
+const SOURCE_CHIP = { manual: "bg-surface-hover text-text", whatsapp: "bg-success-600 text-white", ingest: "bg-primary text-primary-foreground", document: "bg-primary text-primary-foreground" };
+const LEVEL_DOT = { high: "bg-brand-red", medium: "bg-status-pending-bg", low: "bg-primary" };
 const LEVEL_ACCENT = { high: "border-l-brand-red", medium: "border-l-brand-yellow", low: "border-l-brand-blue" };
 
 function Field({ label: l, children }) {
@@ -542,7 +542,7 @@ function InvoicePicker({ open, value, onChange, cur, testid }) {
             {filtered.map((o) => (
               <button key={o.id} type="button" data-testid={`${testid}-opt-${o.id}`}
                 onClick={() => { onChange(o.id); setShow(false); setQ(""); }}
-                className="block w-full text-left px-3 py-2 text-sm hover:bg-brand-red hover:text-white transition-colors border-b border-hairline/50">
+                className="block w-full text-left px-3 py-2 text-sm hover:bg-destructive-tint transition-colors border-b border-hairline/50">
                 {label(o)}
               </button>
             ))}
@@ -588,7 +588,7 @@ function NeedsMatchingPanel({ title, hint, unmatched, open, cur, endpoint, stand
             <span className="text-sm font-semibold">{f(p.remaining ?? p.amount)}</span>
             <span className="text-xs text-text-secondary flex-1 min-w-0 truncate">{p.contact_name || "Unknown"}{p.date ? ` · ${p.date}` : ""}{p.invoice_number ? ` · ref ${p.invoice_number}` : ""}{p.applied > 0 ? ` · ${f(p.applied)} already applied` : ""}</span>
             <InvoicePicker open={open} value={picks[p.id] || ""} onChange={(v) => setPicks((s) => ({ ...s, [p.id]: v }))} cur={cur} testid={`match-picker-${p.id}`} />
-            <button onClick={() => match(p.id)} disabled={busy === p.id} data-testid={`match-btn-${p.id}`} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border-2 border-hairline bg-green-600 text-white hover:shadow-xs transition-all disabled:opacity-50">Match</button>
+            <button onClick={() => match(p.id)} disabled={busy === p.id} data-testid={`match-btn-${p.id}`} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border-2 border-hairline bg-success-600 text-white hover:shadow-xs transition-all disabled:opacity-50">Match</button>
             <button onClick={() => standalone(p.id)} disabled={busy === p.id} data-testid={`standalone-btn-${p.id}`} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-hairline bg-surface hover:bg-surface-hover transition-all disabled:opacity-50">{standaloneLabel.btn}</button>
           </div>
         ))}
@@ -602,7 +602,7 @@ function RevenueTab({ data, cur, onDelete, onChange }) {
   const tt = data?.totals || {};
   const invoices = data?.invoices || [];
   const payments = data?.payments || [];
-  const invStatus = (s) => s.status === "paid" ? { label: "received", cls: "bg-green-600 text-white" }
+  const invStatus = (s) => s.status === "paid" ? { label: "received", cls: "bg-success-600 text-white" }
     : s.status === "partial" ? { label: "partial", cls: "bg-primary text-primary-foreground" }
     : { label: "awaiting", cls: "bg-status-pending-bg text-text" };
   return (

@@ -67,7 +67,7 @@ const Logo = () => (
       <span className="font-logo font-black text-white text-xl leading-none">D</span>
     </div>
     <span className="font-logo font-black text-2xl tracking-tight uppercase leading-none">
-      <span className="text-foreground">Decision</span><span className="text-brand-mark">OS</span>
+      <span className="text-text">Decision</span><span className="text-brand-mark">OS</span>
     </span>
   </div>
 );
@@ -134,13 +134,13 @@ export default function Layout({ children }) {
             />
           </span>
         </PopoverAnchor>
-        <PopoverContent align="end" className="w-80 p-0 border border-black shadow-brutal" data-testid="notif-dropdown">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-black">
+        <PopoverContent align="end" className="w-80 p-0 border border-hairline shadow-sm" data-testid="notif-dropdown">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-hairline">
             <p className="text-sm font-bold uppercase tracking-tight">{t("header.notifications")}</p>
-            {unread > 0 && <span className="label-mono text-brand-red">{unread} {t("header.new")}</span>}
+            {unread > 0 && <span className="text-label uppercase text-brand-red">{unread} {t("header.new")}</span>}
           </div>
           <div className="max-h-96 overflow-y-auto divide-y divide-black/10">
-            {items.length === 0 && <p className="p-6 text-center text-sm text-muted-foreground">{t("header.all_caught_up")}</p>}
+            {items.length === 0 && <p className="p-6 text-center text-sm text-text-secondary">{t("header.all_caught_up")}</p>}
             {items.map((n) => {
               const meta = notifMeta(n);
               return (
@@ -150,17 +150,17 @@ export default function Layout({ children }) {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <Chip value={meta.label} className={`${meta.cls} text-[9px]`} />
-                      <span className="label-mono text-muted-foreground">{timeAgo(n.created_at)}</span>
+                      <span className="text-label uppercase text-text-secondary">{timeAgo(n.created_at)}</span>
                     </div>
                     <p className="text-sm font-semibold mt-1 truncate">{n.work_title || n.message}</p>
-                    {n.sender_name && <p className="label-mono text-muted-foreground truncate">{n.sender_name}</p>}
+                    {n.sender_name && <p className="text-label uppercase text-text-secondary truncate">{n.sender_name}</p>}
                   </div>
                 </button>
               );
             })}
           </div>
           <button onClick={() => navigate("/notifications")} data-testid="notif-view-all"
-            className="w-full px-4 py-3 border-t border-black text-sm font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors">
+            className="w-full px-4 py-3 border-t border-hairline text-sm font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors">
             {t("header.view_all")}
           </button>
         </PopoverContent>
@@ -219,28 +219,28 @@ export default function Layout({ children }) {
   );
 
   return (
-    <div className="min-h-screen flex bg-brand-paper text-brand-ink">
+    <div className="min-h-screen flex bg-background text-brand-ink">
       {/* Desktop sidebar */}
-      <aside className="hidden lg:flex w-64 shrink-0 border-r border-black bg-white flex-col sticky top-0 h-screen">
-        <div className="px-6 py-6 border-b border-black">
+      <aside className="hidden lg:flex w-64 shrink-0 border-r border-hairline bg-surface flex-col sticky top-0 h-screen">
+        <div className="px-6 py-6 border-b border-hairline">
           <Logo />
-          <p data-testid="tenant-name" className="mt-3 label-mono text-muted-foreground truncate">
+          <p data-testid="tenant-name" className="mt-3 text-label uppercase text-text-secondary truncate">
             {tenant?.name}
           </p>
-          {tenant?.industry && <p className="label-mono text-text-tertiary truncate mt-1">{tenant.industry}</p>}
+          {tenant?.industry && <p className="text-label uppercase text-text-tertiary truncate mt-1">{tenant.industry}</p>}
         </div>
         <nav className="flex-1 min-h-0 overflow-y-auto py-4">
           <NavItems />
         </nav>
-        <div className="border-t border-black p-4 pb-6 shrink-0">
+        <div className="border-t border-hairline p-4 pb-6 shrink-0">
           <div className="mb-2 leading-tight" data-testid="current-user">
             <p className="text-sm font-semibold truncate">{user?.name}</p>
-            <p className="label-mono text-muted-foreground truncate">{user?.email}</p>
+            <p className="text-label uppercase text-text-secondary truncate">{user?.email}</p>
           </div>
           <button
             onClick={doLogout}
             data-testid="logout-button"
-            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold uppercase tracking-wider bg-white text-brand-red border-2 border-brand-red hover:bg-brand-red hover:text-white transition-colors"
+            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold uppercase tracking-wider bg-surface text-brand-red border-2 border-brand-red hover:bg-brand-red hover:text-white transition-colors"
           >
             <SignOut size={16} weight="bold" /> {t("header.sign_out")}
           </button>
@@ -250,9 +250,9 @@ export default function Layout({ children }) {
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Desktop top bar */}
-        <header className="hidden lg:flex h-16 border-b border-border bg-background/70 backdrop-blur-xl items-center justify-between px-8 sticky top-0 z-10">
+        <header className="hidden lg:flex h-16 border-b border-hairline bg-background/70 backdrop-blur-xl items-center justify-between px-8 sticky top-0 z-10">
           <div className="flex items-center gap-3">
-            <span className="label-mono text-muted-foreground">{t("header.signed_in_as")}</span>
+            <span className="text-label uppercase text-text-secondary">{t("header.signed_in_as")}</span>
             <span className="font-semibold text-sm" data-testid="current-user-name">{user?.name}</span>
             <span className="px-2 py-0.5 text-[11px] rounded-md uppercase tracking-wider bg-brand-red/10 text-brand-red border border-brand-red/20 font-semibold" data-testid="current-user-role">
               {user?.role}
@@ -288,7 +288,7 @@ export default function Layout({ children }) {
         </header>
 
         {/* Mobile top app bar */}
-        <header className="lg:hidden h-14 border-b border-border bg-background/80 backdrop-blur-xl flex items-center justify-between px-4 sticky top-0 z-20">
+        <header className="lg:hidden h-14 border-b border-hairline bg-background/80 backdrop-blur-xl flex items-center justify-between px-4 sticky top-0 z-20">
           <Logo />
           <div className="flex items-center gap-2">
             <LanguageSwitcher />
@@ -299,17 +299,17 @@ export default function Layout({ children }) {
               <button
                 data-testid="mobile-menu-button"
                 aria-label="Open menu"
-                className="w-10 h-10 flex items-center justify-center border border-black bg-white hover:bg-brand-ink hover:text-white transition-colors"
+                className="w-10 h-10 flex items-center justify-center border border-hairline bg-surface hover:bg-brand-ink hover:text-white transition-colors"
               >
                 <ListIcon size={20} weight="bold" />
               </button>
             </SheetTrigger>
-            <SheetContent side="left" className="w-72 p-0 border-r border-black rounded-none bg-white flex flex-col" data-testid="mobile-drawer">
+            <SheetContent side="left" className="w-72 p-0 border-r border-hairline rounded-md bg-surface flex flex-col" data-testid="mobile-drawer">
               <SheetTitle className="sr-only">Navigation</SheetTitle>
               <SheetDescription className="sr-only">Main navigation menu</SheetDescription>
-              <div className="px-6 py-5 border-b border-black">
+              <div className="px-6 py-5 border-b border-hairline">
                 <Logo />
-                <p className="mt-2 label-mono text-muted-foreground truncate">{tenant?.name}</p>
+                <p className="mt-2 text-label uppercase text-text-secondary truncate">{tenant?.name}</p>
                 <div className="mt-3 flex items-center gap-2">
                   <span className="font-semibold text-sm">{user?.name}</span>
                   <span className="px-2 py-0.5 text-[11px] rounded-md uppercase tracking-wider bg-brand-red/10 text-brand-red border border-brand-red/20 font-semibold">
@@ -320,7 +320,7 @@ export default function Layout({ children }) {
               <nav className="flex-1 py-3 overflow-y-auto">
                 <NavItems onNavigate={() => setDrawerOpen(false)} />
               </nav>
-              <div className="border-t border-black p-4 space-y-2 pb-24">
+              <div className="border-t border-hairline p-4 space-y-2 pb-24">
                 {user?.role === "owner" && (
                   <Button
                     variant="tertiary"
@@ -335,7 +335,7 @@ export default function Layout({ children }) {
                 <button
                   onClick={doLogout}
                   data-testid="mobile-logout-button"
-                  className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold uppercase tracking-wider bg-white text-brand-red border-2 border-brand-red hover:bg-brand-red hover:text-white transition-colors"
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold uppercase tracking-wider bg-surface text-brand-red border-2 border-brand-red hover:bg-brand-red hover:text-white transition-colors"
                 >
                   <SignOut size={16} weight="bold" /> {t("header.sign_out")}
                 </button>
@@ -349,7 +349,7 @@ export default function Layout({ children }) {
       </div>
 
       {/* Mobile bottom tab bar */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 border-t border-black bg-white flex z-[10000]" data-testid="mobile-bottom-nav">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 border-t border-hairline bg-surface flex z-[10000]" data-testid="mobile-bottom-nav">
         {navBottom.map(({ to, label, tkey, icon: Icon }) => {
           const active = to === "/" ? location.pathname === "/" : location.pathname.startsWith(to);
           return (
@@ -358,8 +358,8 @@ export default function Layout({ children }) {
               to={to}
               end={to === "/"}
               data-testid={`bottomnav-${to === "/" ? "dashboard" : to.slice(1)}`}
-              className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 border-r border-black/10 last:border-r-0 transition-colors ${
-                active ? "bg-brand-ink text-white" : "text-brand-ink hover:bg-black/5"
+              className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 border-r border-hairline last:border-r-0 transition-colors ${
+                active ? "bg-brand-ink text-white" : "text-brand-ink hover:bg-surface-hover"
               }`}
             >
               <Icon size={20} weight={active ? "fill" : "bold"} />

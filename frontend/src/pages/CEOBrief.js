@@ -17,27 +17,27 @@ const PERIODS = [
 ];
 
 const ROWS = [
-  { key: "delayed", label: "delayed tasks", bg: "bg-brand-red", on: "text-white", accent: "text-brand-red", icon: Clock },
-  { key: "completed", label: "completed", bg: "bg-green-600", on: "text-white", accent: "text-green-600", icon: CheckCircle },
-  { key: "awaiting_approval", label: "waiting for your approval", bg: "bg-brand-yellow", on: "text-black", accent: "text-amber-600", icon: Stamp },
-  { key: "absent", label: "employees absent", bg: "bg-brand-blue", on: "text-white", accent: "text-brand-blue", icon: UserMinus },
-  { key: "complaints", label: "customer complaint(s)", bg: "bg-purple-600", on: "text-white", accent: "text-purple-600", icon: Warning },
-  { key: "payment_overdue", label: "payment(s) overdue", bg: "bg-orange-500", on: "text-white", accent: "text-orange-500", icon: CurrencyInr },
+  { key: "delayed", label: "delayed tasks", bg: "bg-brand-red", on: "text-white", accent: "text-primary-text", icon: Clock },
+  { key: "completed", label: "completed", bg: "bg-success-600", on: "text-white", accent: "text-status-completed-fg", icon: CheckCircle },
+  { key: "awaiting_approval", label: "waiting for your approval", bg: "bg-status-pending-bg", on: "text-text", accent: "text-status-pending-fg", icon: Stamp },
+  { key: "absent", label: "employees absent", bg: "bg-primary", on: "text-white", accent: "text-primary-text", icon: UserMinus },
+  { key: "complaints", label: "customer complaint(s)", bg: "bg-purple-600", on: "text-white", accent: "text-text-secondary", icon: Warning },
+  { key: "payment_overdue", label: "payment(s) overdue", bg: "bg-orange-500", on: "text-white", accent: "text-status-pending-fg", icon: CurrencyInr },
   { key: "receivables_overdue", label: "overdue receivable(s)", bg: "bg-teal-600", on: "text-white", accent: "text-teal-600", icon: Receipt, money: true },
   { key: "bills_due", label: "supplier bill(s) to pay", bg: "bg-rose-600", on: "text-white", accent: "text-rose-600", icon: HandCoins, money: true },
   { key: "unmatched_payments", label: "payment(s) to match", bg: "bg-indigo-600", on: "text-white", accent: "text-indigo-600", icon: Coins, money: true },
 ];
 
 const EMP_ROWS = [
-  { key: "delayed", label: "overdue tasks", bg: "bg-brand-red", on: "text-white", accent: "text-brand-red", icon: Clock },
-  { key: "in_progress", label: "in progress", bg: "bg-brand-blue", on: "text-white", accent: "text-brand-blue", icon: ArrowClockwise },
-  { key: "todo", label: "to do", bg: "bg-brand-yellow", on: "text-black", accent: "text-amber-600", icon: ListChecks },
-  { key: "completed", label: "completed", bg: "bg-green-600", on: "text-white", accent: "text-green-600", icon: CheckCircle },
-  { key: "escalations", label: "escalated to you", bg: "bg-brand-red", on: "text-white", accent: "text-brand-red", icon: WarningCircle },
-  { key: "handoffs", label: "handed to you", bg: "bg-purple-600", on: "text-white", accent: "text-purple-600", icon: ArrowBendUpRight },
+  { key: "delayed", label: "overdue tasks", bg: "bg-brand-red", on: "text-white", accent: "text-primary-text", icon: Clock },
+  { key: "in_progress", label: "in progress", bg: "bg-primary", on: "text-white", accent: "text-primary-text", icon: ArrowClockwise },
+  { key: "todo", label: "to do", bg: "bg-status-pending-bg", on: "text-text", accent: "text-status-pending-fg", icon: ListChecks },
+  { key: "completed", label: "completed", bg: "bg-success-600", on: "text-white", accent: "text-status-completed-fg", icon: CheckCircle },
+  { key: "escalations", label: "escalated to you", bg: "bg-brand-red", on: "text-white", accent: "text-primary-text", icon: WarningCircle },
+  { key: "handoffs", label: "handed to you", bg: "bg-purple-600", on: "text-white", accent: "text-text-secondary", icon: ArrowBendUpRight },
 ];
 
-const FIRES = { key: "fires", label: "fires to put out today", accent: "text-brand-red", icon: Fire };
+const FIRES = { key: "fires", label: "fires to put out today", accent: "text-primary-text", icon: Fire };
 
 function DetailDialog({ row, period, open, onClose }) {
   const { user, tenant } = useAuth();
@@ -96,9 +96,9 @@ function DetailDialog({ row, period, open, onClose }) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto border-black" data-testid={`brief-detail-dialog-${key}`}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto border-hairline" data-testid={`brief-detail-dialog-${key}`}>
         <DialogHeader>
-          <DialogTitle className="font-heading text-2xl font-black tracking-tighter uppercase flex items-center gap-2">
+          <DialogTitle className="text-2xl font-black tracking-tighter uppercase flex items-center gap-2">
             {row?.icon && <row.icon size={22} weight="bold" className={row.accent} />}
             {row?.label}
           </DialogTitle>
@@ -106,9 +106,9 @@ function DetailDialog({ row, period, open, onClose }) {
         </DialogHeader>
 
         {isLoading ? (
-          <p className="font-mono text-sm py-6">Loading…</p>
+          <p className="text-label uppercase text-sm py-6">Loading…</p>
         ) : items.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-6" data-testid={`brief-detail-empty-${key}`}>Nothing here right now. All clear.</p>
+          <p className="text-sm text-text-secondary py-6" data-testid={`brief-detail-empty-${key}`}>Nothing here right now. All clear.</p>
         ) : (
           <div className="space-y-3 mt-2">
             {items.map((it) => {
@@ -116,31 +116,31 @@ function DetailDialog({ row, period, open, onClose }) {
               return (
               <div key={it.id} data-testid={`brief-detail-item-${it.id}`}
                 onClick={() => clickable && go(it)}
-                className={`border border-black p-4 transition-colors ${clickable ? "cursor-pointer hover:bg-black/5" : ""}`}>
+                className={`border border-hairline p-4 transition-colors ${clickable ? "cursor-pointer hover:bg-surface-hover" : ""}`}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="font-heading font-bold leading-tight">{it.title}</p>
-                    {it.subtitle && <p className="text-sm text-muted-foreground mt-1">{it.subtitle}</p>}
+                    <p className="font-bold leading-tight">{it.title}</p>
+                    {it.subtitle && <p className="text-sm text-text-secondary mt-1">{it.subtitle}</p>}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {it.kind === "task" && it.meta && <Chip value={it.meta} />}
-                    {it.kind === "escalation" && it.meta && <Chip value={it.meta} className="bg-brand-red text-white" />}
+                    {it.kind === "escalation" && it.meta && <Chip value={it.meta} className="bg-primary text-primary-foreground" />}
                     {it.kind === "complaint" && it.meta && <Chip value={it.meta} className="bg-purple-600 text-white" />}
                     {(it.kind === "purchase" || it.kind === "payment" || it.kind === "receivable" || it.kind === "bill" || it.kind === "unmatched") && it.meta != null && (
                       <span className="text-sm font-semibold">{money(it.meta, tenant?.currency)}</span>
                     )}
-                    {clickable && <CaretRight size={16} weight="bold" className="text-black/40" />}
+                    {clickable && <CaretRight size={16} weight="bold" className="text-text-tertiary" />}
                   </div>
                 </div>
 
                 {Array.isArray(it.proof) && it.proof.length > 0 && (
-                  <div className="mt-3 border-t border-black/10 pt-3" data-testid={`brief-proof-${it.id}`} onClick={(e) => e.stopPropagation()}>
-                    <p className="label-mono text-muted-foreground mb-2 flex items-center gap-1"><Paperclip size={12} weight="bold" /> Proof of work · {it.proof.length}</p>
+                  <div className="mt-3 border-t border-hairline pt-3" data-testid={`brief-proof-${it.id}`} onClick={(e) => e.stopPropagation()}>
+                    <p className="text-label uppercase text-text-secondary mb-2 flex items-center gap-1"><Paperclip size={12} weight="bold" /> Proof of work · {it.proof.length}</p>
                     <div className="flex flex-wrap gap-2 items-center">
                       {it.proof.map((a, idx) => (
                         a.kind === "photo"
                           ? <a key={a.url || idx} href={`${process.env.REACT_APP_BACKEND_URL}${a.url}`} target="_blank" rel="noreferrer" data-testid={`brief-proof-photo-${it.id}-${idx}`}>
-                              <img src={`${process.env.REACT_APP_BACKEND_URL}${a.url}`} alt="proof" className="w-16 h-16 object-cover border border-black hover:shadow-brutal-sm transition-all" />
+                              <img src={`${process.env.REACT_APP_BACKEND_URL}${a.url}`} alt="proof" className="w-16 h-16 object-cover border border-hairline hover:shadow-xs transition-all" />
                             </a>
                           : <audio key={a.url || idx} controls src={`${process.env.REACT_APP_BACKEND_URL}${a.url}`} className="h-8" data-testid={`brief-proof-voice-${it.id}-${idx}`} />
                       ))}
@@ -150,19 +150,19 @@ function DetailDialog({ row, period, open, onClose }) {
 
                 {it.kind === "decision" && (
                   <>
-                    {it.meta && <p className="label-mono text-muted-foreground mt-2">{it.meta}</p>}
+                    {it.meta && <p className="text-label uppercase text-text-secondary mt-2">{it.meta}</p>}
                     {user?.role === "owner" && (
                       <div className="flex gap-2 mt-3">
                         <button onClick={(e) => { e.stopPropagation(); decide(it.id, "approve"); }} data-testid={`brief-approve-${it.id}`}
-                          className="flex-1 flex items-center justify-center gap-2 bg-brand-blue text-white py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">
+                          className="flex-1 flex items-center justify-center gap-2 bg-primary text-primary-foreground py-2 text-sm font-semibold uppercase tracking-wider border border-hairline hover:shadow-xs transition-all">
                           <CheckCircle size={16} weight="bold" /> Approve
                         </button>
                         <button onClick={(e) => { e.stopPropagation(); decide(it.id, "reject"); }} data-testid={`brief-reject-${it.id}`}
-                          className="flex items-center gap-2 bg-white py-2 px-4 text-sm font-semibold uppercase tracking-wider border border-black hover:bg-brand-ink hover:text-white transition-colors">
+                          className="flex items-center gap-2 bg-surface py-2 px-4 text-sm font-semibold uppercase tracking-wider border border-hairline hover:bg-surface-hover transition-colors">
                           <XCircle size={16} weight="bold" /> Reject
                         </button>
                         <button onClick={() => go(it)} data-testid={`brief-open-${it.id}`}
-                          className="flex items-center gap-1 px-3 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:bg-black/5" title="Open in Inbox to assign team">
+                          className="flex items-center gap-1 px-3 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline hover:bg-surface-hover" title="Open in Inbox to assign team">
                           Assign <CaretRight size={14} weight="bold" />
                         </button>
                       </div>
@@ -172,7 +172,7 @@ function DetailDialog({ row, period, open, onClose }) {
 
                 {it.kind === "complaint" && (user?.role === "owner" || user?.role === "sales") && (
                   <button onClick={(e) => { e.stopPropagation(); resolveComplaint(it.id); }} data-testid={`brief-resolve-${it.id}`}
-                    className="mt-3 flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:bg-brand-red transition-colors">
+                    className="mt-3 flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline hover:bg-brand-red transition-colors">
                     <CheckCircle size={15} weight="bold" /> Mark resolved
                   </button>
                 )}
@@ -203,10 +203,10 @@ export default function CEOBrief() {
     <div className="flex flex-col">
       {/* Controls: period tabs + action buttons — top on desktop, bottom on mobile */}
       <div className="order-2 lg:order-1 mt-8 lg:mt-0 lg:mb-8 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between" data-testid="brief-controls">
-        <div className="flex border border-black w-full lg:w-fit">
+        <div className="flex border border-hairline w-full lg:w-fit">
           {PERIODS.map((p) => (
             <button key={p.key} onClick={() => setPeriod(p.key)} data-testid={`brief-period-${p.key}`}
-              className={`flex-1 lg:flex-none px-4 lg:px-5 py-2.5 text-sm font-semibold uppercase tracking-wider border-r border-black last:border-r-0 transition-colors ${period === p.key ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+              className={`flex-1 lg:flex-none px-4 lg:px-5 py-2.5 text-sm font-semibold uppercase tracking-wider border-r border-hairline last:border-r-0 transition-colors ${period === p.key ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>
               {p.label}
             </button>
           ))}
@@ -215,17 +215,17 @@ export default function CEOBrief() {
           {isOwner ? (
             <>
               <button onClick={() => navigate("/operating-score")} data-testid="brief-operating-score"
-                className="flex items-center justify-center gap-2 bg-brand-ink text-white px-4 py-2.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
+                className="flex items-center justify-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 text-sm font-semibold uppercase tracking-wider border border-hairline hover:shadow-sm transition-all">
                 <Gauge size={16} weight="bold" /> Operating Score
               </button>
               <button onClick={() => navigate("/journal")} data-testid="brief-open-journal"
-                className="flex items-center justify-center gap-2 bg-brand-ink text-white px-4 py-2.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
+                className="flex items-center justify-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 text-sm font-semibold uppercase tracking-wider border border-hairline hover:shadow-sm transition-all">
                 <BookOpen size={16} weight="bold" /> CEO Journal
               </button>
             </>
           ) : (
             <button onClick={() => navigate("/coach")} data-testid="brief-open-coach"
-              className="col-span-2 flex items-center justify-center gap-2 bg-brand-ink text-white px-4 py-2.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
+              className="col-span-2 flex items-center justify-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 text-sm font-semibold uppercase tracking-wider border border-hairline hover:shadow-sm transition-all">
               <Sparkle size={16} weight="bold" /> AI Coach
             </button>
           )}
@@ -234,18 +234,18 @@ export default function CEOBrief() {
 
       <div className="order-1 lg:order-2">
         {isLoading || !data ? (
-          <p className="font-mono text-sm">Loading brief…</p>
+          <p className="text-label uppercase text-sm">Loading brief…</p>
         ) : (
           <div data-testid="ceo-brief-card">
             {isOwner && data.counters.fires > 0 && (
               <button type="button" onClick={() => setActiveRow(FIRES)} data-testid="brief-row-fires"
-                className="w-full card-brutal p-5 mb-6 bg-brand-red text-white flex items-center justify-between gap-4 text-left transition-all hover:-translate-y-0.5 focus:outline-none">
+                className="w-full rounded-lg border border-hairline bg-surface p-5 mb-6 bg-primary text-primary-foreground flex items-center justify-between gap-4 text-left transition-all hover:-translate-y-0.5 focus:outline-none">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 flex items-center justify-center border border-white/60 bg-white/10 shrink-0">
+                  <div className="w-12 h-12 flex items-center justify-center border border-white/60 bg-surface/10 shrink-0">
                     <Fire size={26} weight="fill" />
                   </div>
                   <div>
-                    <p className="font-heading text-4xl font-black tracking-tighter" data-testid="brief-count-fires">{data.counters.fires}</p>
+                    <p className="text-4xl font-black tracking-tighter" data-testid="brief-count-fires">{data.counters.fires}</p>
                     <p className="text-sm font-semibold uppercase tracking-wider mt-0.5">Fires to put out today</p>
                   </div>
                 </div>
@@ -261,19 +261,19 @@ export default function CEOBrief() {
                 const label = r.key === "completed" ? (data.completed_label || "completed") : r.label;
                 return (
                   <button key={r.key} type="button" onClick={() => setActiveRow(r)} data-testid={`brief-row-${r.key}`}
-                    className="card-brutal p-6 shadow-hover text-left transition-all hover:-translate-y-0.5 focus:outline-none">
+                    className="rounded-lg border border-hairline bg-surface p-6 shadow-hover text-left transition-all hover:-translate-y-0.5 focus:outline-none">
                     <div className="flex items-center justify-between">
-                      <div className={`w-11 h-11 flex items-center justify-center border border-black ${r.bg} ${r.on}`}>
+                      <div className={`w-11 h-11 flex items-center justify-center border border-hairline ${r.bg} ${r.on}`}>
                         <r.icon size={22} weight="bold" />
                       </div>
-                      <CaretRight size={18} weight="bold" className="text-black/40" />
+                      <CaretRight size={18} weight="bold" className="text-text-tertiary" />
                     </div>
-                    <p className={`font-heading text-5xl font-black tracking-tighter mt-4 ${r.accent}`} data-testid={`brief-count-${r.key}`}>{val}</p>
-                    <p className="text-sm text-muted-foreground mt-1 leading-tight">{label}</p>
+                    <p className={` text-5xl font-black tracking-tighter mt-4 ${r.accent}`} data-testid={`brief-count-${r.key}`}>{val}</p>
+                    <p className="text-sm text-text-secondary mt-1 leading-tight">{label}</p>
                     {r.money && (data.finance_amounts?.[r.key] ?? 0) > 0 && (
                       <p className={`text-sm font-bold mt-1 ${r.accent}`} data-testid={`brief-amount-${r.key}`}>{money(data.finance_amounts[r.key], tenant?.currency)}</p>
                     )}
-                    <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-brand-blue">
+                    <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-primary-text">
                       View details <CaretRight size={12} weight="bold" />
                     </span>
                   </button>
@@ -281,7 +281,7 @@ export default function CEOBrief() {
               })}
             </div>
 
-            <p className="mt-8 text-sm text-muted-foreground italic flex items-center gap-2">
+            <p className="mt-8 text-sm text-text-secondary italic flex items-center gap-2">
               <ArrowClockwise size={14} /> Auto-refreshes every 30s.{isOwner ? " That's it. Exactly like a CEO." : ""}
             </p>
           </div>

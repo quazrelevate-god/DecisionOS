@@ -164,12 +164,16 @@ def _refine_plan(plan: dict, question: str) -> dict:
     if on_time_words or completion_words:
         plan["on_time_analysis"] = True
     # Questions ranking PEOPLE go to the employees aggregation.
-    if (("which employee" in ql or "which employees" in ql or "who has" in ql
-         or "employees have" in ql or "employee has" in ql or "team member" in ql
-         or "per employee" in ql or "by employee" in ql or "most tasks" in ql)
-            and ("task" in ql or "overdue" in ql or "pending" in ql or "workload" in ql)):
+    people_trigger = any(p in ql for p in (
+        "which employee", "which employees", "who has", "employees have", "employee has",
+        "team member", "per employee", "by employee", "most tasks", "rank employee",
+        "employees by", "highest workload", "who is overloaded", "workload"))
+    people_generic = ("employee" in ql or "staff" in ql or "team member" in ql) and any(
+        w in ql for w in ("rank", "most", "highest", "top", "overdue", "pending", "workload", "overloaded"))
+    if (people_trigger or people_generic) and ("task" in ql or "overdue" in ql or "pending" in ql or "workload" in ql or "work" in ql):
         plan["primary_entity"] = "employees"
         plan["on_time_analysis"] = False
+        plan["keywords"] = []
     return plan
 
 
@@ -207,7 +211,7 @@ async def _retrieve(plan: dict, scope: dict):
 
     if entity == "tasks" or entity == "employees":
         q = {"tenant_id": tid}
-        if rx:
+        if rx and entity == "tasks":
             q["$or"] = [{"title": rx}, {"description": rx}]
         if not scope["privileged"]:
             dept = [{"assignee_id": scope["uid"]}, {"assignee_role": scope["role"]}, {"created_by": scope["uid"]}]

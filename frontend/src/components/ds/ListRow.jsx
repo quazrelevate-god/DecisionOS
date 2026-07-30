@@ -10,10 +10,14 @@ import { AssigneeChip } from "./AssigneeChip";
  * fills, never borders in red. A list of late work should read as a list, not
  * as an alarm; the edge is what lets a column of them be scanned at a glance.
  *
- * Inside a GroupedFeed the overdue badge is suppressed by default: under an
- * "Overdue" header the badge would be the third statement of the same fact
- * (header, edge, badge), and that is the point where urgency tips into alarm.
- * Standalone rows keep it, since there is no header to give the edge meaning.
+ * Inside a GroupedFeed both the overdue badge AND the red date are suppressed:
+ * under an "Overdue" header those would be the second and third statements of
+ * the same fact, and that is the point where urgency tips into alarm. In a
+ * group the edge is the only red.
+ *
+ * Standalone rows keep both, on the same exception: with no header to give the
+ * 3px edge meaning, the row has to carry the fact more visibly itself. The rule
+ * is parallel for badge and date rather than special-cased for one of them.
  *
  * @typedef {'overdue'|'today'|'week'|'later'} Urgency
  */
@@ -104,7 +108,7 @@ export const ListRow = React.forwardRef(
               <span
                 className={cn(
                   "mt-0.5 block truncate text-small",
-                  urgency === "overdue" ? "text-destructive-text" : "text-text-tertiary"
+                  urgency === "overdue" && !inGroup ? "text-destructive-text" : "text-text-tertiary"
                 )}
               >
                 {meta}

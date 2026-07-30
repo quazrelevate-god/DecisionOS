@@ -3,8 +3,8 @@
  *
  *   import { Button, ApprovalCard, GroupedFeed } from "@/components/ds";
  *
- * Phase 2 shipped the primitives, Phase 3 the composites. App-specific
- * controls (Phase 4) are appended here as they land.
+ * Phase 2 shipped the primitives, Phase 3 the composites, Phase 4 the
+ * app-specific controls.
  */
 
 /* Primitives */
@@ -26,3 +26,10 @@ export { ProgressSteps } from "./ProgressSteps";
 export { ListRow } from "./ListRow";
 export { GroupedFeed, GroupHeader, GROUP_LABELS } from "./GroupedFeed";
 export { EmptyState } from "./EmptyState";
+
+/* App-specific */
+export { SidebarNav } from "./SidebarNav";
+export { SegmentedControl, FilterPills } from "./SegmentedControl";
+export { HeaderUtility, NotificationBell, ThemeToggle, LanguageSwitch } from "./HeaderUtility";
+export { VoiceCapture, LanguageToggle, CAPTURE_LANGUAGES } from "./VoiceCapture";
+export { TerminalBlock } from "./TerminalBlock";

@@ -28,6 +28,27 @@ router = APIRouter(prefix="/api/signup")
 MAX_QUESTIONS = 4
 TTS_SPEAKER = os.environ.get("SARVAM_TTS_SPEAKER", "shubh").strip() or "shubh"
 
+# Languages Sarvam TTS (bulbul:v3) can speak. Keep in sync with the frontend chip.
+SUPPORTED_TTS_LANGS = {
+    "en-IN": "English", "hi-IN": "Hindi", "bn-IN": "Bengali", "gu-IN": "Gujarati",
+    "kn-IN": "Kannada", "ml-IN": "Malayalam", "mr-IN": "Marathi", "od-IN": "Odia",
+    "pa-IN": "Punjabi", "ta-IN": "Tamil", "te-IN": "Telugu",
+}
+
+
+def _norm_lang(code: str) -> str:
+    """Coerce whatever STT/frontend sends to a supported Sarvam code, defaulting to en-IN."""
+    if not code:
+        return "en-IN"
+    c = str(code).strip()
+    if c in SUPPORTED_TTS_LANGS:
+        return c
+    short = c.split("-")[0].lower()
+    for k in SUPPORTED_TTS_LANGS:
+        if k.split("-")[0] == short:
+            return k
+    return "en-IN"
+
 INDUSTRIES = [
     "Manufacturing", "Textile & Apparel", "Retail / E-commerce", "Wholesale / Distribution",
     "Restaurant / Food & Beverage", "Hospitality & Travel", "Professional Services", "Consulting",
@@ -136,10 +157,12 @@ class InterviewStartInput(BaseModel):
 class InterviewAnswerInput(BaseModel):
     session_id: str = Field(max_length=64)
     answer: str = Field(max_length=4000)
+    language_code: Optional[str] = Field(default="", max_length=16)
 
 
 class InterviewSessionInput(BaseModel):
     session_id: str = Field(max_length=64)
+    language_code: Optional[str] = Field(default="", max_length=16)
 
 
 def _profile_block(s: dict) -> str:
@@ -177,6 +200,18 @@ INTERVIEW_SYSTEM = (
 )
 
 
+def _lang_directive(code: str) -> str:
+    """Instruct Claude to write the question + why in the founder's language."""
+    code = _norm_lang(code)
+    if code == "en-IN":
+        return ""
+    name = SUPPORTED_TTS_LANGS.get(code, "the founder's language")
+    return (
+        f"\n\nIMPORTANT: The founder is speaking {name}. Write BOTH the \"question\" and \"why\" fields "
+        f"in natural, conversational {name} (native script, not transliteration). Keep it warm and simple."
+    )
+
+
 @router.post("/interview/start")
 async def interview_start(inp: InterviewStartInput):
     session = {
@@ -191,6 +226,7 @@ async def interview_start(inp: InterviewStartInput):
         "products": inp.products or [],
         "qa": [],
         "pending_q": None,
+        "language_code": "en-IN",
         "status": "active",
         "created_at": now_iso(),
     }
@@ -211,7 +247,7 @@ async def interview_start(inp: InterviewStartInput):
     session["pending_q"] = question
     await db.signup_sessions.insert_one(session)
     return {"session_id": session["id"], "question": question, "why": (data.get("why") or "").strip(),
-            "index": 1, "max": MAX_QUESTIONS}
+            "index": 1, "max": MAX_QUESTIONS, "language_code": "en-IN"}
 
 
 @router.post("/interview/answer")
@@ -222,29 +258,31 @@ async def interview_answer(inp: InterviewAnswerInput):
     answer = inp.answer.strip()
     if not answer:
         raise HTTPException(status_code=400, detail="Answer is empty")
+    lang = _norm_lang(inp.language_code or s.get("language_code") or "en-IN")
     qa = (s.get("qa") or []) + [{"q": s.get("pending_q") or "", "a": answer}]
     if len(qa) >= MAX_QUESTIONS:
-        await db.signup_sessions.update_one({"id": s["id"]}, {"$set": {"qa": qa, "pending_q": None, "status": "done"}})
-        return {"done": True, "index": len(qa), "max": MAX_QUESTIONS}
+        await db.signup_sessions.update_one({"id": s["id"]}, {"$set": {"qa": qa, "pending_q": None, "language_code": lang, "status": "done"}})
+        return {"done": True, "index": len(qa), "max": MAX_QUESTIONS, "language_code": lang}
 
     prompt = (
         f"{_profile_block(s)}\n\nConversation so far:\n{_qa_block(qa)}\n\n"
         f"That was answer {len(qa)} of max {MAX_QUESTIONS}. If you have enough to design a realistic operating system, "
         "set enough=true. Otherwise ask the single most valuable next question (build on their answers, don't repeat)."
     )
+    system = INTERVIEW_SYSTEM + _lang_directive(lang)
     try:
-        chat = claude_chat(session_id=f"interview-{s['id']}-{len(qa)}", system_message=INTERVIEW_SYSTEM).with_model(*LLM_MODEL)
+        chat = claude_chat(session_id=f"interview-{s['id']}-{len(qa)}", system_message=system).with_model(*LLM_MODEL)
         data = _extract_json(await chat.send_message(UserMessage(text=prompt))) or {}
     except Exception as e:
         logger.error(f"interview answer failed: {e}")
         data = {"enough": len(qa) >= 2}
     if data.get("enough") and len(qa) >= 2:
-        await db.signup_sessions.update_one({"id": s["id"]}, {"$set": {"qa": qa, "pending_q": None, "status": "done"}})
-        return {"done": True, "index": len(qa), "max": MAX_QUESTIONS}
+        await db.signup_sessions.update_one({"id": s["id"]}, {"$set": {"qa": qa, "pending_q": None, "language_code": lang, "status": "done"}})
+        return {"done": True, "index": len(qa), "max": MAX_QUESTIONS, "language_code": lang}
     question = (data.get("question") or "").strip() or "What part of the business slips through the cracks most often when things get busy?"
-    await db.signup_sessions.update_one({"id": s["id"]}, {"$set": {"qa": qa, "pending_q": question}})
+    await db.signup_sessions.update_one({"id": s["id"]}, {"$set": {"qa": qa, "pending_q": question, "language_code": lang}})
     return {"done": False, "question": question, "why": (data.get("why") or "").strip(),
-            "index": len(qa) + 1, "max": MAX_QUESTIONS}
+            "index": len(qa) + 1, "max": MAX_QUESTIONS, "language_code": lang}
 
 
 BLUEPRINT_SYSTEM = (
@@ -269,12 +307,21 @@ async def interview_blueprint(inp: InterviewSessionInput):
     s = await db.signup_sessions.find_one({"id": inp.session_id}, {"_id": 0})
     if not s:
         raise HTTPException(status_code=404, detail="Interview session not found")
+    lang = _norm_lang(inp.language_code or s.get("language_code") or "en-IN")
+    welcome_note = ""
+    if lang != "en-IN":
+        lang_name = SUPPORTED_TTS_LANGS.get(lang, "the founder's language")
+        welcome_note = (
+            f"\n\nIMPORTANT: Write ONLY the \"welcome_line\" field in natural, conversational "
+            f"{lang_name} (native script). Keep all other fields (departments, workflow names, "
+            f"task titles, categories, approval names) in English."
+        )
     prompt = (
         f"{_profile_block(s)}\n\nInterview transcript:\n{_qa_block(s.get('qa') or [])}\n\n"
         "Design this company's operating system now."
     )
     try:
-        chat = claude_chat(session_id=f"bp-{s['id']}", system_message=BLUEPRINT_SYSTEM).with_model(*LLM_MODEL)
+        chat = claude_chat(session_id=f"bp-{s['id']}", system_message=BLUEPRINT_SYSTEM + welcome_note).with_model(*LLM_MODEL)
         data = _extract_json(await chat.send_message(UserMessage(text=prompt))) or {}
     except Exception as e:
         logger.error(f"interview blueprint failed: {e}")
@@ -294,6 +341,7 @@ async def interview_blueprint(inp: InterviewSessionInput):
 # --------------------------------------------------------------------------
 class TTSInput(BaseModel):
     text: str = Field(max_length=1200)
+    language_code: Optional[str] = Field(default="en-IN", max_length=16)
 
 
 @router.post("/tts")
@@ -304,19 +352,20 @@ async def signup_tts(inp: TTSInput):
     text = inp.text.strip()
     if not text:
         raise HTTPException(status_code=400, detail="Nothing to speak")
+    lang = _norm_lang(inp.language_code)
     try:
         async with httpx.AsyncClient(timeout=45) as client:
             r = await client.post(
                 "https://api.sarvam.ai/text-to-speech",
                 headers={"api-subscription-key": key, "Content-Type": "application/json"},
-                json={"text": text, "target_language_code": "en-IN", "model": "bulbul:v3",
+                json={"text": text, "target_language_code": lang, "model": "bulbul:v3",
                       "speaker": TTS_SPEAKER, "pace": 1.0},
             )
         r.raise_for_status()
         audios = r.json().get("audios") or []
         if not audios:
             raise ValueError("empty TTS response")
-        return {"audio_b64": audios[0], "mime": "audio/wav"}
+        return {"audio_b64": audios[0], "mime": "audio/wav", "language_code": lang}
     except Exception as e:
         logger.error(f"signup TTS failed: {e}")
         raise HTTPException(status_code=503, detail="Voice playback unavailable right now")
@@ -342,7 +391,12 @@ async def signup_stt(file: UploadFile = File(...)):
                 data={"model": model, "mode": "translate", "language_code": "unknown"},
             )
         r.raise_for_status()
-        return {"text": (r.json().get("transcript") or "").strip()}
+        body = r.json() or {}
+        detected = body.get("language_code") or body.get("detected_language_code") or ""
+        return {
+            "text": (body.get("transcript") or "").strip(),
+            "language_code": _norm_lang(detected) if detected else "",
+        }
     except Exception as e:
         logger.error(f"signup STT failed: {e}")
         raise HTTPException(status_code=503, detail="Couldn't transcribe — try again or type your answer")

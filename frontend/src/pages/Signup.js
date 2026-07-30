@@ -23,6 +23,7 @@ export default function Signup() {
   const [form, setForm] = useState({ company_name: "", name: "", email: "", password: "", phone: "", team_size: "" });
   const [world, setWorld] = useState(null); // { industry, business_model, description, website_summary, products }
   const [sessionId, setSessionId] = useState(null);
+  const [languageCode, setLanguageCode] = useState("en-IN");
   const phaseIdx = PHASES.findIndex((p) => p.key === phase);
 
   const interviewProfile = world && {
@@ -80,12 +81,12 @@ export default function Signup() {
             {phase === "interview" && (
               <VoiceInterview
                 profile={interviewProfile}
-                onComplete={(sid) => { setSessionId(sid); setPhase("build"); }}
-                onSkip={(sid) => { setSessionId(sid); setPhase("build"); }}
+                onComplete={(sid, lang) => { setSessionId(sid); setLanguageCode(lang || "en-IN"); setPhase("build"); }}
+                onSkip={(sid, lang) => { setSessionId(sid); setLanguageCode(lang || "en-IN"); setPhase("build"); }}
               />
             )}
             {phase === "build" && (
-              <BuildReveal sessionId={sessionId} payload={buildPayload} register={register} onEnter={enterApp} />
+              <BuildReveal sessionId={sessionId} languageCode={languageCode} payload={buildPayload} register={register} onEnter={enterApp} />
             )}
           </motion.div>
         </AnimatePresence>

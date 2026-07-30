@@ -1,0 +1,34 @@
+{
+  "summary": "Iteration 75 — auto-adaptive language plumbing for the Sarvam voice interview passes end-to-end. Backend pytest 7/7 green: (1) /api/signup/tts accepts language_code and returns non-empty base64 WAV (RIFF/WAVE) for both en-IN and hi-IN, echoes back the normalised code; unknown codes default to en-IN. (2) /api/signup/stt on a real WAV fixture returns 200 with both `text` and `language_code` string fields. (3) /api/signup/interview/answer accepts language_code, echoes it in the response, and persists it on the session so that a subsequent blueprint call with an empty code inherits the session's Hindi language and still produces a Devanagari welcome_line. (4) /api/signup/interview/blueprint with language_code='hi-IN' returns welcome_line in Devanagari while departments/workflow-names/operational-task titles remain fully ASCII/English; with language_code='en-IN' the welcome_line stays Latin-only. Frontend E2E on /signup: walked basics→website(manual skip)→interview using a fresh langtest+<ts>@example.com email. Verified: interview-question renders large read-along text, 'Read or listen' indicator shows above the question, interview-lang-chip labelled 'English' initially, clicking it opens interview-lang-menu with exactly 11 options (en-IN,hi-IN,bn-IN,gu-IN,kn-IN,ml-IN,mr-IN,od-IN,pa-IN,ta-IN,te-IN), selecting hi-IN closes the menu and updates chip label to 'Hindi'. Captured the /signup/tts POST payload — includes language_code field, initial request is en-IN and after chip switch a fresh TTS request fires with language_code=hi-IN.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration75_lang.py",
+    "/app/test_reports/pytest/iter75.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "signup.py `_lang_directive` correctly injects a per-request language instruction into Claude's system prompt on /interview/answer and `interview_blueprint` scopes it to only the welcome_line — the other structural fields are explicitly told to stay English. Verified behaviourally: Hindi Devanagari present in welcome_line, none anywhere else in the blueprint.",
+    "signup.py `_norm_lang` gracefully coerces unrecognised codes (e.g. 'xx-YY') to en-IN — TTS returns en-IN audio + echoed code as expected.",
+    "voice.js `fetchTTS(text, languageCode='en-IN')` and `useAnswerRecorder` correctly pass {text, language_code} to callers. VoiceInterview.js `langRef` (stable async ref) is read inside `speak` and inside the /interview/answer request body — this avoids the stale-closure bug that would otherwise pin the language to whatever was set when the callback was created.",
+    "VoiceInterview.js: auto-adapt logic only overrides when (a) no manual override yet (`langAuto === false`), (b) current lang is still en-IN, and (c) detected lang is not en-IN — a sensible one-way switch. Manual chip pick disables auto going forward. This exact flow could not be UI-driven from headless Chromium (mic + Sarvam STT would need a canned Hindi audio), so it is `unverified: browser-STT-detection-path-not-driven`, but the state machine reads correctly and the underlying STT endpoint does return language_code (verified in backend tests).",
+    "LangChip 'menu closes on selection' works, but the menu element lingers briefly (AnimatePresence exit ~150ms) — testers should wait for state=hidden rather than checking `is_visible` immediately after click. Not a bug."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration75_lang.py"
+  ],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100% (chip UX + read-along indicator + TTS payload plumbing)"},
+  "test_credentials": "None required — pre-auth signup flow. Used throwaway langtest+<ts>@example.com and langtest2+<ts>@example.com during runs.",
+  "seed_data_creation": "Interview sessions in db.signup_sessions were created during backend tests (LangTest Weavers <ts>). No tenant/user was registered — the frontend run stopped at the interview stage before calling BuildReveal.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Language-code plumbing is confirmed working across TTS/STT/interview/blueprint and the LangChip UI. The one path that could not be driven end-to-end is browser-mic → Sarvam STT auto-detecting a non-English language and thereby triggering the automatic chip flip (langAuto=true). If future testing wants to cover it: seed /app/test_fixtures/ with a real Hindi WAV, use Chromium's --use-file-for-fake-audio-capture flag, click interview-mic-button, stop, and expect chip label to change + 'Switched voice to Hindi' toast. Backend `unverified: STT-auto-detected-language-flip` is limited to Sarvam actually returning a non-empty language_code — treat as unverified end-to-end in the frontend, verified in backend that STT shape includes the field.",
+  "rca of the issue": "N/A — no defects found."
+}

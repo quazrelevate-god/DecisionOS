@@ -2,14 +2,33 @@ import { useRef, useState } from "react";
 import api from "../../lib/api";
 import { toast } from "sonner";
 
+// Sarvam bulbul:v3 voices for the assistant. Kept in sync with backend SUPPORTED_TTS_LANGS.
+export const SPOKEN_LANGS = [
+  { code: "en-IN", label: "English", short: "EN" },
+  { code: "hi-IN", label: "Hindi", short: "हिं" },
+  { code: "bn-IN", label: "Bengali", short: "বাং" },
+  { code: "gu-IN", label: "Gujarati", short: "ગુજ" },
+  { code: "kn-IN", label: "Kannada", short: "ಕನ್" },
+  { code: "ml-IN", label: "Malayalam", short: "മല" },
+  { code: "mr-IN", label: "Marathi", short: "मरा" },
+  { code: "od-IN", label: "Odia", short: "ଓଡ଼" },
+  { code: "pa-IN", label: "Punjabi", short: "ਪੰਜਾ" },
+  { code: "ta-IN", label: "Tamil", short: "தமி" },
+  { code: "te-IN", label: "Telugu", short: "తెలు" },
+];
+
+export const langLabel = (code) =>
+  SPOKEN_LANGS.find((l) => l.code === code)?.label || "English";
+
 // Fetch spoken audio for a line of assistant text (Sarvam bulbul:v3 via backend).
-export async function fetchTTS(text) {
-  const { data } = await api.post("/signup/tts", { text });
+export async function fetchTTS(text, languageCode = "en-IN") {
+  const { data } = await api.post("/signup/tts", { text, language_code: languageCode });
   return new Audio(`data:${data.mime || "audio/wav"};base64,${data.audio_b64}`);
 }
 
 // Mic recorder for interview answers → transcribes via public /signup/stt (Sarvam saaras:v3).
-export function useAnswerRecorder(onText) {
+// onResult receives { text, language_code } so the caller can auto-adapt TTS to the founder's language.
+export function useAnswerRecorder(onResult) {
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const mediaRef = useRef(null);
@@ -31,7 +50,8 @@ export function useAnswerRecorder(onText) {
         try {
           const { data } = await api.post("/signup/stt", fd, { headers: { "Content-Type": "multipart/form-data" } });
           const text = (data?.text || "").trim();
-          if (text) onText(text);
+          const language_code = (data?.language_code || "").trim();
+          if (text) onResult({ text, language_code });
           else toast("Didn't catch that — try again or type your answer");
         } catch (e) {
           toast.error(e.response?.data?.detail || "Couldn't transcribe — type your answer instead");

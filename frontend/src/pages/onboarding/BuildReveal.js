@@ -14,7 +14,7 @@ const BUILD_STEPS = [
 
 // Generates the personalized OS blueprint from the interview, registers the
 // workspace, then reveals what was built.
-export function BuildReveal({ sessionId, payload, register, onEnter }) {
+export function BuildReveal({ sessionId, languageCode, payload, register, onEnter }) {
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState(null); // { bp, welcome_line }
   const [error, setError] = useState("");
@@ -26,7 +26,9 @@ export function BuildReveal({ sessionId, payload, register, onEnter }) {
     try {
       let bp = null, welcome = "";
       if (sessionId) {
-        const { data } = await api.post("/signup/interview/blueprint", { session_id: sessionId });
+        const { data } = await api.post("/signup/interview/blueprint", {
+          session_id: sessionId, language_code: languageCode || "en-IN",
+        });
         bp = data; welcome = data.welcome_line || "";
       } else {
         const { data } = await api.post("/onboarding/os-blueprint", {

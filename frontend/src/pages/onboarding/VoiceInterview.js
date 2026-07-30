@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Microphone, Stop, PaperPlaneRight, CircleNotch, SpeakerHigh, SpeakerSlash, Waveform,
+  Microphone, Stop, PaperPlaneRight, CircleNotch, SpeakerHigh, SpeakerSlash, Waveform, CaretDown, Check,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import api from "../../lib/api";
-import { fetchTTS, useAnswerRecorder } from "./voice";
+import { fetchTTS, useAnswerRecorder, SPOKEN_LANGS, langLabel } from "./voice";
 
 // Animated equalizer bars shown while the assistant is speaking.
 const BAR_HEIGHTS = [14, 24, 18, 26, 12];
@@ -19,6 +19,53 @@ const Bars = ({ active }) => (
   </div>
 );
 
+// Small chip in the header showing the assistant voice language + a picker to override.
+const LangChip = ({ value, autoDetected, onChange, disabled }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        data-testid="interview-lang-chip"
+        onClick={() => !disabled && setOpen((o) => !o)}
+        disabled={disabled}
+        title={autoDetected ? "Voice auto-detected — click to change" : "Change voice language"}
+        className="flex items-center gap-1.5 px-2.5 h-10 border border-black bg-white text-[11px] font-semibold uppercase tracking-wider hover:bg-black/5 disabled:opacity-40"
+      >
+        <span>{langLabel(value)}</span>
+        {autoDetected && <span className="w-1.5 h-1.5 rounded-full bg-brand-red" title="Auto-detected" />}
+        <CaretDown size={12} weight="bold" />
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
+            className="absolute right-0 mt-1 z-20 min-w-[160px] max-h-72 overflow-y-auto border border-black bg-white shadow-brutal"
+            data-testid="interview-lang-menu"
+          >
+            {SPOKEN_LANGS.map((l) => (
+              <button
+                key={l.code}
+                data-testid={`interview-lang-option-${l.code}`}
+                onClick={() => { onChange(l.code); setOpen(false); }}
+                className={`w-full flex items-center justify-between gap-3 px-3 py-2 text-left text-xs hover:bg-brand-red/10 ${value === l.code ? "bg-brand-red/5" : ""}`}
+              >
+                <span className="font-semibold">{l.label}</span>
+                {value === l.code && <Check size={12} weight="bold" />}
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
 export function VoiceInterview({ profile, onComplete, onSkip }) {
   const [session, setSession] = useState(null);
   const [question, setQuestion] = useState("");
@@ -30,21 +77,24 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
   const [speaking, setSpeaking] = useState(false);
   const [muted, setMuted] = useState(false);
   const [starting, setStarting] = useState(true);
+  const [lang, setLang] = useState("en-IN");
+  const [langAuto, setLangAuto] = useState(false); // true when detected from STT
   const audioRef = useRef(null);
   const mutedRef = useRef(false);
   const startedRef = useRef(false);
   const inputRef = useRef(null);
+  const langRef = useRef("en-IN"); // stable read for async closures
 
   const stopAudio = () => {
     if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
     setSpeaking(false);
   };
 
-  const speak = useCallback(async (text) => {
+  const speak = useCallback(async (text, langCode) => {
     if (mutedRef.current || !text) return;
     stopAudio();
     try {
-      const audio = await fetchTTS(text);
+      const audio = await fetchTTS(text, langCode || langRef.current);
       if (mutedRef.current) return;
       audioRef.current = audio;
       audio.onended = () => setSpeaking(false);
@@ -53,11 +103,21 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
     } catch { setSpeaking(false); }
   }, []);
 
+  const setLangBoth = (code, auto = false) => {
+    setLang(code); langRef.current = code; setLangAuto(auto);
+  };
+
   const toggleMute = () => {
     const next = !muted;
     setMuted(next); mutedRef.current = next;
     if (next) stopAudio();
     else if (question) speak(question);
+  };
+
+  const pickLang = (code) => {
+    if (code === langRef.current) return;
+    setLangBoth(code, false);
+    if (question && !mutedRef.current) speak(question, code);
   };
 
   // Kick off the interview once.
@@ -71,7 +131,7 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
         setQuestion(data.question); setWhy(data.why || "");
         setIndex(data.index); setMax(data.max);
         setStarting(false);
-        speak(data.question);
+        speak(data.question, "en-IN");
       } catch {
         toast.error("The interviewer is unavailable — building from what we have");
         onSkip(null);
@@ -81,8 +141,17 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const recorder = useAnswerRecorder((text) => {
+  const recorder = useAnswerRecorder(({ text, language_code }) => {
     setAnswer((a) => (a ? `${a} ${text}` : text));
+    // Adapt to founder's spoken language on the first successful detection,
+    // but never overwrite an explicit manual pick (langAuto=false already).
+    if (language_code && langAuto === false && langRef.current === "en-IN" && language_code !== "en-IN") {
+      setLangBoth(language_code, true);
+      toast.success(`Switched voice to ${langLabel(language_code)}`);
+    } else if (language_code && langAuto && language_code !== langRef.current) {
+      // Still auto — refine to latest detected language
+      setLangBoth(language_code, true);
+    }
     inputRef.current?.focus();
   });
 
@@ -92,8 +161,10 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
     stopAudio();
     setThinking(true);
     try {
-      const { data } = await api.post("/signup/interview/answer", { session_id: session, answer: a });
-      if (data.done) { onComplete(session); return; }
+      const { data } = await api.post("/signup/interview/answer", {
+        session_id: session, answer: a, language_code: langRef.current,
+      });
+      if (data.done) { onComplete(session, langRef.current); return; }
       setAnswer("");
       setQuestion(data.question); setWhy(data.why || "");
       setIndex(data.index); setMax(data.max);
@@ -130,6 +201,7 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
         </div>
         <div className="flex items-center gap-2">
           <Bars active={speaking} />
+          <LangChip value={lang} autoDetected={langAuto} onChange={pickLang} disabled={starting} />
           <button onClick={toggleMute} data-testid="interview-mute-toggle" title={muted ? "Unmute voice" : "Mute voice"}
             className={`w-10 h-10 flex items-center justify-center border border-black transition-colors ${muted ? "bg-white text-muted-foreground" : "bg-brand-ink text-white"}`}>
             {muted ? <SpeakerSlash size={18} weight="bold" /> : <SpeakerHigh size={18} weight="bold" />}
@@ -137,8 +209,8 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
         </div>
       </div>
 
-      {/* Question */}
-      <div className="min-h-[130px]">
+      {/* Question — shown as a big caption you can read while it's spoken */}
+      <div className="min-h-[150px]">
         <AnimatePresence mode="wait">
           {starting ? (
             <motion.div key="warm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -149,7 +221,18 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
           ) : (
             <motion.div key={question} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }}
               transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}>
-              <h1 data-testid="interview-question" className="font-heading text-2xl sm:text-3xl lg:text-4xl font-black uppercase tracking-tighter leading-[1.05]">
+              <div className="flex items-center gap-2 mb-3">
+                <motion.span
+                  className={`inline-block w-1.5 h-1.5 rounded-full ${speaking ? "bg-brand-red" : "bg-black/25"}`}
+                  animate={speaking ? { scale: [1, 1.6, 1], opacity: [1, 0.5, 1] } : { scale: 1, opacity: 0.5 }}
+                  transition={speaking ? { repeat: Infinity, duration: 1 } : { duration: 0.2 }}
+                />
+                <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+                  {speaking ? "Speaking · read along" : "Read or listen"}
+                </p>
+              </div>
+              <h1 data-testid="interview-question"
+                  className={`font-heading text-2xl sm:text-3xl lg:text-4xl font-black uppercase tracking-tighter leading-[1.05] transition-colors ${speaking ? "text-brand-ink" : "text-brand-ink/85"}`}>
                 {question}
               </h1>
               {why && <p className="mt-3 text-xs text-muted-foreground font-mono">Why we ask — {why}</p>}
@@ -195,7 +278,7 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
             <div key={`qdot-${i}`} className={`w-8 h-1.5 border border-black transition-colors ${i + 1 < index ? "bg-brand-ink" : i + 1 === index ? "bg-brand-red" : "bg-white"}`} />
           ))}
         </div>
-        <button onClick={() => { stopAudio(); onSkip(session); }} data-testid="interview-skip"
+        <button onClick={() => { stopAudio(); onSkip(session, langRef.current); }} data-testid="interview-skip"
           className="text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-brand-ink underline underline-offset-4 transition-colors">
           Skip — build from what you have
         </button>

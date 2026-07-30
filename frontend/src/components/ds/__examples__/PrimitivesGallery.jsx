@@ -7,7 +7,6 @@ import { Textarea } from "../Textarea";
 import { Select } from "../Select";
 import { Checkbox } from "../Checkbox";
 import { Toggle } from "../Toggle";
-import { SliderField } from "../SliderField";
 import { StatusBadge } from "../StatusBadge";
 
 /**
@@ -45,7 +44,6 @@ export function PrimitivesGallery() {
   const [loading, setLoading] = useState(false);
   const [checked, setChecked] = useState(true);
   const [toggled, setToggled] = useState(true);
-  const [progress, setProgress] = useState(45);
   const [showError, setShowError] = useState(true);
 
   const fakeSubmit = () => {
@@ -176,12 +174,6 @@ export function PrimitivesGallery() {
           <Toggle label="Disabled" checked={false} onCheckedChange={() => {}} disabled />
         </Row>
 
-        <Row label="Progress slider" note="the fill stays indigo at every value">
-          <div className="w-full max-w-md flex flex-col gap-4">
-            <SliderField label="Progress" value={progress} onValueChange={setProgress} />
-            <SliderField label="Disabled" value={30} onValueChange={() => {}} disabled />
-          </div>
-        </Row>
       </Group>
 
       <Group

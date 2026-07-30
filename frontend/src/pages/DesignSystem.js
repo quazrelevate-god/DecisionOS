@@ -26,6 +26,7 @@ import {
 } from "@/lib/tokens";
 import { useTheme } from "@/hooks/useTheme";
 import { PrimitivesGallery } from "@/components/ds/__examples__/PrimitivesGallery";
+import { CompositesGallery } from "@/components/ds/__examples__/CompositesGallery";
 import { Sun, Moon, CheckCircle, WarningCircle } from "@phosphor-icons/react";
 
 const WHITE = "0 0% 100%";
@@ -183,7 +184,7 @@ export default function DesignSystem() {
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between gap-4">
           <div className="min-w-0">
             <p className="text-label uppercase text-text-tertiary">DecisionOS / System reference</p>
-            <p className="text-body-strong text-text truncate">Tokens + primitives</p>
+            <p className="text-body-strong text-text truncate">Tokens, primitives, composites</p>
           </div>
           <button
             onClick={toggle}
@@ -425,6 +426,14 @@ recommendation  hold until Friday`}
           intro="Phase 2. Every interactive component ships all five states — default, hover, active, focus, disabled — plus loading where it applies. Hover and press these rather than reading them."
         >
           <PrimitivesGallery />
+        </Section>
+
+        <Section
+          id="composites"
+          title="Composites"
+          intro="Phase 3. Cards, the approval card, assignee chips, the two kinds of progress, grouped feed rows and the empty state. Press the approval card's actions to see the in-flight state, and click a progress segment."
+        >
+          <CompositesGallery />
         </Section>
 
         <Section id="next" title="Next">

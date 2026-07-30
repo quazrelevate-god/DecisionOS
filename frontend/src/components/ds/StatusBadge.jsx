@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
  *
  * There is no free-form colour prop: a caller picks a meaning, not a hue.
  *
- * @typedef {'pending'|'directive'|'overdue'|'completed'|'rejected'} StatusTone
+ * @typedef {'pending'|'directive'|'overdue'|'completed'|'rejected'|'neutral'} StatusTone
  * @typedef {'low'|'med'|'medium'|'high'} PriorityLevel
  */
 
@@ -37,6 +37,9 @@ const badgeVariants = cva(
         overdue: "bg-status-overdue-bg text-status-overdue-fg",
         completed: "bg-status-completed-bg text-status-completed-fg",
         rejected: "bg-status-rejected-bg text-status-rejected-fg",
+        /* For labels that classify rather than signal — a type, a role, a
+           category. Colour is reserved for state, so a category gets none. */
+        neutral: "bg-surface-sunken text-text-secondary",
         low: "bg-priority-low-bg text-priority-low-fg",
         med: "bg-priority-med-bg text-priority-med-fg",
         high: "bg-priority-high-bg text-priority-high-fg",
@@ -49,6 +52,7 @@ const badgeVariants = cva(
       { outlined: true, status: "overdue", class: "border-status-overdue-line" },
       { outlined: true, status: "completed", class: "border-status-completed-line" },
       { outlined: true, status: "rejected", class: "border-status-rejected-line" },
+      { outlined: true, status: "neutral", class: "border-hairline" },
     ],
     defaultVariants: { status: "pending", outlined: false },
   }
@@ -60,6 +64,7 @@ const DEFAULT_LABEL = {
   overdue: "Overdue",
   completed: "Completed",
   rejected: "Rejected",
+  neutral: "",
   low: "Low",
   med: "Medium",
   high: "High",

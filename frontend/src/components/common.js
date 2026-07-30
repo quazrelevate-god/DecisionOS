@@ -1,37 +1,49 @@
-import { cn } from "../lib/utils";
+import { StatusBadge } from "@/components/ds";
+import { EmptyState as DsEmptyState } from "@/components/ds";
 
 export function PageHeader({ eyebrow, title, children }) {
   if (!children) return null;
-  return (
-    <div className="mb-6 flex flex-wrap items-center gap-2 w-full">{children}</div>
-  );
+  return <div className="mb-6 flex flex-wrap items-center gap-2 w-full">{children}</div>;
 }
 
-const STATUS_STYLES = {
-  pending_approval: "bg-brand-yellow text-black",
-  approved: "bg-brand-blue text-white",
-  rejected: "bg-black text-white",
-  blocked: "bg-black/10 text-black",
-  todo: "bg-white text-black",
-  in_progress: "bg-brand-blue text-white",
-  done: "bg-brand-ink text-white",
-  cancelled: "bg-black/10 text-muted-foreground line-through",
-  high: "bg-brand-red text-white",
-  medium: "bg-brand-yellow text-black",
-  low: "bg-black/10 text-black",
-  overdue: "bg-brand-red text-white",
-  decision: "bg-brand-blue text-white",
-  purchase: "bg-brand-yellow text-black",
-  owner: "bg-brand-red text-white",
-  sales: "bg-white text-black",
-  production: "bg-white text-black",
-  finance: "bg-white text-black",
-  sales_dispatch: "bg-brand-yellow text-black",
-  purchase_payment: "bg-brand-yellow text-black",
-  directive: "bg-brand-blue text-white",
-  approval: "bg-brand-blue text-white",
-  policy: "bg-brand-ink text-white",
-  observation: "bg-black/10 text-black",
+/**
+ * Legacy status chip, now a thin adapter over the design system's StatusBadge.
+ *
+ * Changing what this renders migrates 19 files without editing them, which is
+ * why it goes first in the migration: the sweep gets smaller before it starts.
+ *
+ * Two semantic corrections come with it, and both are deliberate:
+ *
+ * 1. `high` priority was solid red and is now caution amber. High priority is
+ *    not the same claim as overdue — red stays for danger and genuinely late
+ *    work, so a list of important-but-fine tasks no longer reads as an alarm.
+ * 2. Category values (owner, sales, purchase, decision, policy…) were
+ *    hue-coded — red for owner, blue for decision, yellow for purchase — which
+ *    spends colour on classification rather than state. They are neutral now.
+ *    Colour in this system means something is happening, not what kind of
+ *    thing it is.
+ *
+ * This component is retired once its 19 call sites are swept; until then it
+ * keeps their markup working unchanged.
+ */
+const TONE = {
+  /* Decision and task states */
+  pending_approval: { status: "pending" },
+  blocked: { status: "pending" },
+  waiting: { status: "pending" },
+  review: { status: "pending" },
+  todo: { status: "directive" },
+  in_progress: { status: "directive" },
+  approved: { status: "completed" },
+  done: { status: "completed" },
+  rejected: { status: "rejected" },
+  cancelled: { status: "rejected" },
+  overdue: { status: "overdue" },
+
+  /* Priority — never red; see note above */
+  high: { priority: "high" },
+  medium: { priority: "medium" },
+  low: { priority: "low" },
 };
 
 const STATUS_LABELS = {
@@ -39,27 +51,25 @@ const STATUS_LABELS = {
 };
 
 export function Chip({ value, className = "", ...rest }) {
-  const style = STATUS_STYLES[value] || "bg-white text-black";
-  const label = STATUS_LABELS[value] || String(value || "").replace(/_/g, " ");
+  const key = String(value || "");
+  // Anything not a state is a classification, and classifications get no colour.
+  const tone = TONE[key] || { status: "neutral" };
+  const label = STATUS_LABELS[key] || key.replace(/_/g, " ");
+
   return (
-    <span
-      className={cn(
-        "inline-block px-2 py-0.5 text-xs uppercase tracking-wider font-semibold border border-black",
-        style,
-        className
-      )}
-      {...rest}
-    >
+    <StatusBadge {...tone} className={className} {...rest}>
       {label}
-    </span>
+    </StatusBadge>
   );
 }
 
+/**
+ * Legacy empty state, now the design system's.
+ *
+ * The old one was a dashed grey box — the visual language of "something is
+ * missing". No data is not a failure, so the replacement is onboarding-shaped:
+ * solid surface, no dashes, and room for an action when a caller has one.
+ */
 export function EmptyState({ title, hint }) {
-  return (
-    <div className="border border-dashed border-border rounded-xl p-12 text-center bg-card/40">
-      <p className="font-heading font-semibold tracking-tight text-lg">{title}</p>
-      {hint && <p className="text-sm text-muted-foreground mt-2">{hint}</p>}
-    </div>
-  );
+  return <DsEmptyState title={title} description={hint} />;
 }

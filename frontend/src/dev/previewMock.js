@@ -64,12 +64,44 @@ const ROUTES = [
   [
     '/operating-score',
     {
-      company: { overall: 72, enough_data: true, trend: 'up' },
-      stats: { decisions: 12, approved: 9, tasks: 31, done: 24 },
-      employees: [],
+      company: {
+        overall: 72,
+        enough_data: true,
+        trend: 'up',
+        categories: [
+          { key: 'decisions', label: 'Decision throughput', score: 81 },
+          { key: 'execution', label: 'Execution follow-through', score: 64 },
+          { key: 'response', label: 'Customer response', score: 70 },
+        ],
+      },
+      stats: { total_decisions: 12, done: 24, open: 7, overdue: 2, open_complaints: 1 },
+      employees: [
+        { id: 'u1', name: 'Prasanna Narayanan', role: 'owner', score: 78, open: 3, done: 12 },
+        { id: 'u2', name: 'Ravi Kumar', role: 'sales', score: 61, open: 4, done: 9 },
+      ],
     },
   ],
-  ['/work-coach', { summary: { name: 'Prasanna Narayanan', score: 68, strengths: [], gaps: [] }, items: [] }],
+  [
+    '/work-coach',
+    {
+      target: { id: 'u1', name: 'Prasanna Narayanan', role: 'owner' },
+      stats: { completed: 12, open: 4, overdue: 2, completion_rate: 0.75, proof_upload_rate: 0.4, photos_uploaded: 3, plans_used: 5 },
+      summary: {
+        headline: 'Follow-through is the gap, not workload.',
+        recommendation: 'Close the two overdue items before taking on new work.',
+        completed: 12,
+        open: 4,
+        overdue: 2,
+        completion_rate: 0.75,
+        proof_upload_rate: 0.4,
+        photos_uploaded: 3,
+        plans_used: 5,
+        improvements: ['Attach proof when marking done', 'Set a due date on every task'],
+        generated_at: new Date(0).toISOString(),
+      },
+      items: [],
+    },
+  ],
   [
     '/ledger/summary',
     {

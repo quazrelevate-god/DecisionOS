@@ -57,3 +57,41 @@ a migration's clothes. It is still the black-bordered globe in the header.
 Three routes do not mount under the preview mock, so their screenshot baselines are
 blank. A screen verified against a blank baseline is not verified — fixtures must
 land before those screens are swept.
+
+## Ledger fixture keys → real numbers
+
+**Found:** M5. **Status:** open, must be closed before "done".
+
+The Ledger preview renders ₹0 in every KPI tile because the fixture's `totals`
+keys do not match what `KpiRow` reads. The *layout* is verified; the *screen* is
+not. That distinction matters here more than anywhere else: ₹0-everywhere was the
+original trust-killing symptom, and a migration that leaves it looking like that in
+preview is one screenshot away from being mistaken for the real thing.
+
+**Before this work is called finished:** open the real Ledger against real data and
+confirm the numbers are real. "Layout verified" is not "screen verified".
+
+## OperatingScore — a content problem the recolour does not fix
+
+**Found:** M6. **Status:** logged, out of scope.
+
+The original product analysis flagged: *17/100 with no remediation path — judgment
+without guidance.* The migration makes that screen use the system's colours. It does
+not give the score a path to act on, which is the actual problem.
+
+Recorded here so "now indigo" is never mistaken for "now fixed". The score needs
+remediation guidance — what to do about a low score — and that is product work, not
+a sweep.
+
+## WorkCoach — swept but NOT visually verified
+
+**Found:** M6. **Status:** open, blocks sign-off on that one screen.
+
+`/coach` still fails to mount under the preview mock after three rounds of fixture
+work (`target`, `stats`, `summary` supplied; it now fails on a further `.map`).
+WorkCoach.js received the mechanical sweep along with the rest of the long tail, so
+it carries changes whose visual result nobody has seen.
+
+Per the blank-baseline rule this screen is not verified. Either fixture it properly
+or open it against a real backend before sign-off. It is the only screen in the
+batch in this state.

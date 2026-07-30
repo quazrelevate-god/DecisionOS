@@ -22,7 +22,7 @@ from emergentintegrations.llm.chat import UserMessage
 
 from core import (
     db, claude_chat, LLM_MODEL, _extract_json, new_id, now_iso, logger,
-    get_current_user, require_perm, user_perms, log_activity,
+    require_perm, user_perms,
 )
 
 router = APIRouter(prefix="/api")

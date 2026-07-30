@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
  * @property {string} label
  * @property {number} [count]
  * @property {boolean} [disabled]
+ * @property {string} [testid] Forwarded as data-testid.
  *
  * @typedef {object} SegmentedControlProps
  * @property {SegmentedOption[]} options
@@ -61,6 +62,7 @@ export const SegmentedControl = React.forwardRef(
               aria-selected={selected}
               tabIndex={selected ? 0 : -1}
               disabled={o.disabled}
+              data-testid={o.testid}
               onKeyDown={(e) => onKeyDown(e, i)}
               onClick={() => onValueChange?.(o.value)}
               className={cn(
@@ -129,6 +131,7 @@ export const FilterPills = React.forwardRef(
               type="button"
               aria-pressed={selected}
               disabled={o.disabled}
+              data-testid={o.testid}
               onClick={() => toggle(o.value)}
               className={cn(
                 "inline-flex h-8 items-center gap-1.5 rounded-pill border px-3 text-small font-medium transition-colors",

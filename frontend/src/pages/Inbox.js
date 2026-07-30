@@ -9,9 +9,9 @@ import { Chip, EmptyState } from "../components/common";
 import { ThinkingCanvas } from "../components/ThinkingCanvas";
 import ExecutionSummary from "../components/ExecutionSummary";
 import { DecisionDialog, raisedByLabel, RaisedByIcon } from "../components/DecisionDialog";
-import { money } from "../lib/format";
+import { money, timeAgo } from "../lib/format";
 import { toast } from "sonner";
-import { Button } from "@/components/ds";
+import { Button, ApprovalCard, FilterPills } from "@/components/ds";
 import {
   Microphone, Stop, PaperPlaneTilt, CheckCircle, XCircle, Spinner,
   UsersThree, Truck, Receipt, CurrencyCircleDollar, Warning, CheckSquare,
@@ -242,28 +242,47 @@ function PendingApprovalCard({ d, members, roleOptions, onApprove, onReject, onR
   };
 
   return (
-    <div data-testid={`decision-card-${d.id}`} className={`card-brutal p-5 transition-all ${highlight ? "ring-4 ring-brand-red ring-offset-2" : ""}`}>
-      <div className="flex items-center gap-1.5 flex-wrap mb-2">
-        <Chip value={d.status} data-testid={`decision-status-${d.id}`} />
-        {d.dtype && <Chip value={d.dtype} className="bg-brand-blue text-white" />}
-        {d.detected_language_name && (
-          <span data-testid={`decision-language-${d.id}`} title="Language auto-detected by Sarvam"
-            className="inline-flex items-center gap-1 border border-black bg-brand-yellow/60 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider">
-            <Translate size={12} weight="bold" /> Spoken in {d.detected_language_name}
-          </span>
-        )}
-      </div>
-      <p className="font-heading font-bold text-lg leading-tight">{d.title}</p>
-      <p className="label-mono text-muted-foreground mt-1 flex items-center gap-1.5" data-testid={`decision-raised-by-${d.id}`}>
-        <RaisedByIcon d={d} size={13} weight="bold" /> {raisedByLabel(d)}
-      </p>
-      {d.summary && <p className="text-sm text-muted-foreground mt-2">{d.summary}</p>}
+    // The DS card owns the hierarchy — badges, title, provenance, the asymmetric
+    // action row — and the editable task rows stay as children, because they do
+    // things the plain `tasks` prop cannot express (attach a reference, require
+    // proof, reassign inline). Migration keeps the behaviour and takes the shape.
+    <ApprovalCard
+      data-testid={`decision-card-${d.id}`}
+      className={highlight ? "ring-focus ring-ring ring-offset-2" : undefined}
+      title={d.title}
+      kind={d.dtype}
+      summary={d.summary}
+      provenance={raisedByLabel(d)}
+      provenanceIcon={<RaisedByIcon d={d} size={13} weight="bold" />}
+      timeLabel={d.created_at ? timeAgo(d.created_at) : undefined}
+      testids={{
+        status: `decision-status-${d.id}`,
+        provenance: `decision-raised-by-${d.id}`,
+        approve: `inbox-approve-${d.id}`,
+        reject: `inbox-reject-${d.id}`,
+        discuss: `decision-discuss-${d.id}`,
+      }}
+      onApprove={() => onApprove(d.id)}
+      onReject={() => onReject(d.id)}
+      onDiscuss={() => onDiscuss(d.id)}
+    >
+      {d.detected_language_name && (
+        <p data-testid={`decision-language-${d.id}`} title="Language auto-detected by Sarvam"
+          className="mt-2 inline-flex items-center gap-1 text-small text-text-tertiary">
+          <Translate size={12} weight="bold" /> Spoken in {d.detected_language_name}
+        </p>
+      )}
       {d.tasks?.length > 0 && (
-        <ul className="mt-3 space-y-2" data-testid={`decision-tasks-${d.id}`}>
-          {d.tasks.map((t) => (
-            <ReviewTaskRow key={t.id} t={t} members={members} roleOptions={roleOptions} onRefresh={onRefresh} />
-          ))}
-        </ul>
+        <div className="mt-4 border-t border-hairline pt-3">
+          <p className="mb-1 text-label uppercase text-text-tertiary">
+            {d.tasks.length === 1 ? "Task it will unblock" : "Tasks it will unblock"}
+          </p>
+          <ul className="space-y-2" data-testid={`decision-tasks-${d.id}`}>
+            {d.tasks.map((t) => (
+              <ReviewTaskRow key={t.id} t={t} members={members} roleOptions={roleOptions} onRefresh={onRefresh} />
+            ))}
+          </ul>
+        </div>
       )}
 
       {adding ? (
@@ -289,21 +308,11 @@ function PendingApprovalCard({ d, members, roleOptions, onApprove, onReject, onR
         </button>
       )}
 
-      <div className="flex gap-2 mt-4">
-        <button onClick={() => onApprove(d.id)} data-testid={`inbox-approve-${d.id}`}
-          className="flex-1 flex items-center justify-center gap-2 bg-brand-blue text-white py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">
-          <CheckCircle size={16} weight="bold" /> {t("inbox.approve")}
-        </button>
-        <button onClick={() => onReject(d.id)} data-testid={`inbox-reject-${d.id}`}
-          className="flex items-center gap-2 bg-white py-2 px-4 text-sm font-semibold uppercase tracking-wider border border-black hover:bg-brand-ink hover:text-white transition-colors">
-          <XCircle size={16} weight="bold" /> {t("inbox.reject")}
-        </button>
-      </div>
-      <button onClick={() => onDiscuss(d.id)} data-testid={`decision-discuss-${d.id}`}
-        className="mt-2 w-full flex items-center justify-center gap-2 border border-dashed border-black/50 py-2 text-xs font-semibold uppercase tracking-wider hover:bg-black/5 transition-colors">
-        <ChatCircleText size={15} weight="bold" /> {t("inbox.discuss")}
-      </button>
-    </div>
+      {/* Approve / Reject / Discuss are rendered by ApprovalCard itself, so the
+          asymmetry cannot be re-litigated per screen. The old row was a solid
+          blue Approve beside an equally heavy black Reject — two competing
+          slabs, and neither read as the recommended path. */}
+    </ApprovalCard>
   );
 }
 
@@ -844,17 +853,20 @@ export default function Inbox() {
 
       {/* Filter chips */}
       <div className="flex flex-wrap gap-2 mb-4" data-testid="inbox-filters">
-        {FILTERS.map((f) => {
-          const active = filter === f;
-          const n = f === "all" ? inbox.open_total : (inbox.counts?.[f] || 0);
-          const label = f === "all" ? t("inbox.filter_all") : CLASS_META[f]?.label || f;
-          return (
-            <button key={f} data-testid={`inbox-filter-${f}`} onClick={() => setFilter(f)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-black transition-colors ${active ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
-              {label}{n > 0 && <span className={`min-w-4 h-4 px-1 flex items-center justify-center text-[10px] border border-black ${active ? "bg-white text-black" : "bg-brand-red text-white"}`}>{n}</span>}
-            </button>
-          );
-        })}
+        {/* Counts were red badges — "there are two customer items" is not an
+            alarm, and a row of red numbers made routine filtering look like a
+            list of problems. */}
+        <FilterPills
+          label={t("inbox.tasks_activity")}
+          value={filter}
+          onValueChange={setFilter}
+          options={FILTERS.map((f) => ({
+            value: f,
+            label: f === "all" ? t("inbox.filter_all") : CLASS_META[f]?.label || f,
+            count: f === "all" ? inbox.open_total : inbox.counts?.[f] || 0,
+            testid: `inbox-filter-${f}`,
+          }))}
+        />
         {processing && <span className="flex items-center gap-1.5 text-xs text-muted-foreground"><ArrowClockwise size={14} className="animate-spin" /> {t("inbox.processing")}</span>}
       </div>
 
@@ -879,10 +891,12 @@ export default function Inbox() {
             <SwipeRow key={it.id} testid={`inbox-swipe-${it.id}`} onRight={onRight} rightLabel={rightLabel}
               onLeft={() => setStatus(it.id, "dismissed")}>
               <div data-testid={`inbox-item-${it.id}`} className={`p-3 flex items-center gap-3 flex-wrap ${done ? "opacity-60" : ""}`}>
-                <div className={`w-9 h-9 shrink-0 flex items-center justify-center border border-black ${meta.color}`}><Icon size={18} weight="bold" /></div>
+                {/* The icon carries the category; the colour used to, and that
+                    is what made the palette a filing system instead of a signal. */}
+                <div className="w-9 h-9 shrink-0 flex items-center justify-center rounded-md border border-hairline bg-surface-sunken text-text-secondary"><Icon size={18} weight="bold" /></div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <Chip value={meta.label} className={meta.color} data-testid={`inbox-class-${it.id}`} />
+                    <Chip value={meta.label} data-testid={`inbox-class-${it.id}`} />
                     <span className="label-mono text-muted-foreground">{it.source}</span>
                     {it.amount != null && <span className="text-xs font-semibold">{money(it.amount)}</span>}
                     {decTasks.length > 0 && (

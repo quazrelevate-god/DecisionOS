@@ -54,6 +54,14 @@ import { AssigneeChip } from "./AssigneeChip";
  * @property {() => void} [onApprove]
  * @property {() => void} [onReject]
  * @property {() => void} [onDiscuss]
+ * @property {{status?: string, kind?: string, provenance?: string, approve?: string, reject?: string, discuss?: string}} [testids]
+ *   data-testid values for the parts the card owns. Existing suites target these,
+ *   and a card that swallows them silently breaks contracts the migration
+ *   promised to keep.
+ * @property {React.ReactNode} [children] Extra content between the summary and the
+ *   action row — for callers whose task rows are editable in ways the plain
+ *   `tasks` list cannot express. The card keeps ownership of the hierarchy;
+ *   the caller only fills the middle.
  *
  * @example
  * <ApprovalCard
@@ -90,6 +98,8 @@ export const ApprovalCard = React.forwardRef(
       onApprove,
       onReject,
       onDiscuss,
+      testids = {},
+      children,
       ...props
     },
     ref
@@ -122,8 +132,12 @@ export const ApprovalCard = React.forwardRef(
       <Card ref={ref} urgency="today" className={cn("flex-col", className)} {...props}>
         <div className="flex items-start justify-between gap-4">
           <div className="flex flex-wrap items-center gap-2">
-            <StatusBadge status="pending" />
-            {kind && <StatusBadge status="directive">{kind}</StatusBadge>}
+            <StatusBadge status="pending" data-testid={testids.status} />
+            {kind && (
+              <StatusBadge status="directive" data-testid={testids.kind}>
+                {kind}
+              </StatusBadge>
+            )}
           </div>
           {timeLabel && <span className="whitespace-nowrap text-small text-text-tertiary">{timeLabel}</span>}
         </div>
@@ -131,7 +145,10 @@ export const ApprovalCard = React.forwardRef(
         <p className="mt-3 text-h3 text-text">{title}</p>
 
         {provenance && (
-          <p className="mt-1.5 flex items-center gap-1.5 text-small text-text-tertiary">
+          <p
+            data-testid={testids.provenance}
+            className="mt-1.5 flex items-center gap-1.5 text-small text-text-tertiary"
+          >
             {provenanceIcon}
             {provenance}
           </p>
@@ -164,16 +181,35 @@ export const ApprovalCard = React.forwardRef(
           </div>
         )}
 
+        {children}
+
         {canAct ? (
           <>
             <div className="mt-4 flex flex-wrap items-center gap-2">
-              <Button onClick={onApprove} loading={pendingAction === "approve"} disabled={busy}>
+              <Button
+                onClick={onApprove}
+                loading={pendingAction === "approve"}
+                disabled={busy}
+                data-testid={testids.approve}
+              >
                 Approve
               </Button>
-              <Button variant="destructive" onClick={onReject} loading={pendingAction === "reject"} disabled={busy}>
+              <Button
+                variant="destructive"
+                onClick={onReject}
+                loading={pendingAction === "reject"}
+                disabled={busy}
+                data-testid={testids.reject}
+              >
                 Reject
               </Button>
-              <Button variant="tertiary" onClick={onDiscuss} loading={pendingAction === "discuss"} disabled={busy}>
+              <Button
+                variant="tertiary"
+                onClick={onDiscuss}
+                loading={pendingAction === "discuss"}
+                disabled={busy}
+                data-testid={testids.discuss}
+              >
                 Discuss
               </Button>
             </div>

@@ -217,7 +217,7 @@ export function CompositesGallery() {
               assigneeRole={item.assigneeRole}
               onClick={() => {}}
               trailing={
-                group === "overdue" ? undefined : <ProgressQuarters value={50} showLabel={false} className="w-24" label={item.title} />
+                group === "overdue" ? undefined : <ProgressQuarters value={50} showLabel={false} className="w-32" label={item.title} />
               }
             />
           )}

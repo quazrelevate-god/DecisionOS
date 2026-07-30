@@ -10,7 +10,7 @@ import api from "../lib/api";
 import { timeAgo } from "../lib/format";
 import { notifMeta, notifLink } from "../lib/notif";
 import { Chip } from "./common";
-import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { Popover, PopoverAnchor, PopoverContent } from "./ui/popover";
 import {
   Sheet,
   SheetContent,
@@ -38,7 +38,7 @@ import {
 } from "@phosphor-icons/react";
 import { ProfileDialog } from "./ProfileDialog";
 import { LanguageSwitcher } from "./LanguageSwitcher";
-import { Button } from "@/components/ds";
+import { Button, SidebarNav, HeaderUtility, NotificationBell, ThemeToggle as DsThemeToggle, MobileDrawer } from "@/components/ds";
 
 const NAV = [
   { to: "/", label: "Decision Desk", tkey: "inbox", icon: Tray, testid: "nav-inbox", perm: "inbox" },
@@ -107,19 +107,33 @@ export default function Layout({ children }) {
 
   const Bellicon = () => {
     const items = (notif?.notifications || []).slice(0, 7);
+    const [open, setOpen] = useState(false);
+    const markAllRead = async () => {
+      try {
+        await Promise.all(
+          (notif?.notifications || []).filter((n) => !n.read).map((n) => api.post(`/notifications/${n.id}/read`))
+        );
+        qc.invalidateQueries({ queryKey: ["notifications"] });
+      } catch (e) {
+        toast.error("Could not mark all as read");
+      }
+    };
     return (
-      <Popover>
-        <PopoverTrigger asChild>
-          <button data-testid="notif-bell"
-            className="relative w-10 h-10 flex items-center justify-center border border-black hover:bg-brand-ink hover:text-white transition-colors">
-            <Bell size={18} weight="bold" />
-            {unread > 0 && (
-              <span data-testid="notif-count" className="absolute -top-2 -right-2 bg-brand-red text-white text-[10px] min-w-5 h-5 px-1 flex items-center justify-center border border-black font-bold">
-                {unread > 99 ? "99+" : unread}
-              </span>
-            )}
-          </button>
-        </PopoverTrigger>
+      // Anchored rather than triggered, so the DS bell stays the component it is
+      // and the existing dropdown keeps working — migration is a visual rewrite,
+      // not a behaviour change.
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverAnchor asChild>
+          <span>
+            <NotificationBell
+              count={unread}
+              onOpen={() => setOpen((v) => !v)}
+              onResolveAll={markAllRead}
+              badgeTestid="notif-count"
+              data-testid="notif-bell"
+            />
+          </span>
+        </PopoverAnchor>
         <PopoverContent align="end" className="w-80 p-0 border border-black shadow-brutal" data-testid="notif-dropdown">
           <div className="flex items-center justify-between px-4 py-3 border-b border-black">
             <p className="text-sm font-bold uppercase tracking-tight">{t("header.notifications")}</p>
@@ -154,17 +168,7 @@ export default function Layout({ children }) {
     );
   };
 
-  const ThemeToggle = () => (
-    <button
-      onClick={toggleTheme}
-      data-testid="theme-toggle"
-      title={isDark ? "Switch to light mode" : "Switch to dark mode"}
-      aria-label="Toggle dark mode"
-      className="w-10 h-10 flex items-center justify-center border border-black hover:bg-brand-ink hover:text-white transition-colors"
-    >
-      {isDark ? <Sun size={18} weight="bold" /> : <MoonStars size={18} weight="bold" />}
-    </button>
-  );
+  const ThemeToggle = () => <DsThemeToggle isDark={isDark} onToggle={toggleTheme} data-testid="theme-toggle" />;
 
   const doLogout = () => {
     logout();
@@ -180,40 +184,38 @@ export default function Layout({ children }) {
     }
   };
 
+  // The DS component owns the states; the router still owns which item is active.
+  // "Fires" keeps the danger badge — those are genuinely overdue — while the
+  // capture-review count becomes neutral: items waiting to be reviewed are not
+  // late, and colouring them red made every visit to the app look like an
+  // incident.
+  const navItems = navMain.map(({ to, tkey, icon: Icon, testid }) => ({
+    key: to,
+    label: t(`nav.${tkey}`),
+    icon: <Icon weight="bold" />,
+    testid,
+    overdueCount: to === "/brief" && fires > 0 ? fires : undefined,
+    overdueTestid: "nav-fires-badge",
+    count: to === "/ingest" && captureCount > 0 ? captureCount : undefined,
+    countTestid: "nav-review-badge",
+  }));
+
+  const activeKey =
+    navItems
+      .map((i) => i.key)
+      .filter((k) => (k === "/" ? location.pathname === "/" : location.pathname.startsWith(k)))
+      .sort((a, b) => b.length - a.length)[0] || "";
+
   const NavItems = ({ onNavigate }) => (
-    <>
-      {navMain.map(({ to, label, tkey, icon: Icon, testid }) => (
-        <NavLink
-          key={to}
-          to={to}
-          end={to === "/"}
-          data-testid={testid}
-          onClick={onNavigate}
-          className={({ isActive }) =>
-            `flex items-center gap-3 mx-3 px-3 py-2.5 text-sm rounded-lg border-l-2 transition-[background-color,color,border-color] duration-200 ${
-              isActive
-                ? "border-brand-red bg-brand-red/[0.08] text-brand-red font-semibold"
-                : "border-transparent text-foreground/70 hover:bg-accent hover:text-foreground"
-            }`
-          }
-        >
-          <Icon size={18} weight="bold" />
-          {t(`nav.${tkey}`)}
-          {to === "/brief" && fires > 0 && (
-            <span data-testid="nav-fires-badge" title={`${fires} fire(s) to put out`}
-              className="ml-auto bg-brand-red text-white text-[10px] min-w-5 h-5 px-1 flex items-center justify-center border border-black font-bold rounded-full animate-pulse">
-              {fires}
-            </span>
-          )}
-          {to === "/ingest" && captureCount > 0 && (
-            <span data-testid="nav-review-badge" title={`${captureCount} item(s) to review`}
-              className="ml-auto bg-brand-red text-white text-[10px] min-w-5 h-5 px-1 flex items-center justify-center border border-black font-bold rounded-full">
-              {captureCount}
-            </span>
-          )}
-        </NavLink>
-      ))}
-    </>
+    <SidebarNav
+      className="border-r-0 bg-transparent"
+      items={navItems}
+      activeKey={activeKey}
+      onSelect={(item) => {
+        navigate(item.key);
+        onNavigate?.();
+      }}
+    />
   );
 
   return (

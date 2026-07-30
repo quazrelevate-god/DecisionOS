@@ -27,6 +27,9 @@ import { cn } from "@/lib/utils";
  * @property {number} [overdueCount] Danger badge — reserved for genuinely late work.
  * @property {boolean} [disabled]
  * @property {string} [disabledReason] Becomes the title attribute.
+ * @property {string} [testid] Forwarded as data-testid — existing suites target these.
+ * @property {string} [countTestid] data-testid for the neutral count badge.
+ * @property {string} [overdueTestid] data-testid for the danger count badge.
  *
  * @typedef {object} SidebarNavProps
  * @property {NavItem[]} items
@@ -59,6 +62,7 @@ export const SidebarNav = React.forwardRef(({ className, items = [], activeKey, 
             <button
               type="button"
               disabled={item.disabled}
+              data-testid={item.testid}
               title={item.disabled ? item.disabledReason : undefined}
               aria-current={active ? "page" : undefined}
               onClick={() => onSelect?.(item)}
@@ -79,6 +83,7 @@ export const SidebarNav = React.forwardRef(({ className, items = [], activeKey, 
               {typeof item.overdueCount === "number" && item.overdueCount > 0 && (
                 <span
                   data-numeric
+                  data-testid={item.overdueTestid}
                   title={`${item.overdueCount} overdue`}
                   className="inline-flex min-w-5 items-center justify-center rounded-pill bg-status-overdue-bg px-1.5 text-badge font-semibold tabular-nums text-status-overdue-fg"
                 >
@@ -88,6 +93,7 @@ export const SidebarNav = React.forwardRef(({ className, items = [], activeKey, 
               {typeof item.count === "number" && item.count > 0 && (
                 <span
                   data-numeric
+                  data-testid={item.countTestid}
                   className={cn(
                     "inline-flex min-w-5 items-center justify-center rounded-pill px-1.5 text-badge font-semibold tabular-nums",
                     active ? "bg-primary text-primary-foreground" : "bg-surface-sunken text-text-secondary"

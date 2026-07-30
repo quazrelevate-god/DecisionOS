@@ -29,12 +29,13 @@ import { IconButton, Button } from "./Button";
  * @property {() => void} onOpen
  * @property {() => void} [onResolveAll] Required once count exceeds cap.
  * @property {string} [resolveLabel='Mark all read']
+ * @property {string} [badgeTestid] data-testid for the count badge.
  *
  * @example
  * <NotificationBell count={unread} onOpen={openPanel} onResolveAll={markAllRead} />
  */
 export const NotificationBell = React.forwardRef(
-  ({ className, count = 0, cap = 9, onOpen, onResolveAll, resolveLabel = "Mark all read", ...props }, ref) => {
+  ({ className, count = 0, cap = 9, onOpen, onResolveAll, resolveLabel = "Mark all read", badgeTestid, ...props }, ref) => {
     const over = count > cap;
     const display = over ? `${cap}+` : String(count);
 
@@ -52,6 +53,7 @@ export const NotificationBell = React.forwardRef(
           {count > 0 && (
             <span
               data-numeric
+              data-testid={badgeTestid}
               aria-hidden="true"
               className="pointer-events-none absolute -right-0.5 -top-0.5 inline-flex min-w-[18px] items-center justify-center rounded-pill bg-primary px-1 text-[10px] font-semibold tabular-nums text-primary-foreground"
             >

@@ -52,7 +52,7 @@ function DataTable({ table, currency }) {
         </thead>
         <tbody>
           {table.rows.slice(0, 100).map((r, ri) => (
-            <tr key={ri} className={ri % 2 ? "bg-black/[0.03]" : ""} data-testid={`brain-row-${ri}`}>
+            <tr key={`${r[cols[0]?.key] ?? ""}-${ri}`} className={ri % 2 ? "bg-black/[0.03]" : ""} data-testid={`brain-row-${ri}`}>
               {cols.map((c) => (
                 <td key={c.key} className="px-3 py-2 align-top border-t border-black/10">
                   {c.type === "money" ? money(r[c.key], currency)
@@ -129,7 +129,7 @@ function FollowUps({ items, onAsk }) {
   return (
     <div className="mt-3 flex flex-wrap gap-2" data-testid="brain-followups">
       {items.map((s, i) => (
-        <button key={i} onClick={() => onAsk(s)} data-testid={`brain-followup-${i}`}
+        <button key={`${s}-${i}`} onClick={() => onAsk(s)} data-testid={`brain-followup-${i}`}
           className="inline-flex items-center gap-1 text-xs border border-black/40 px-2.5 py-1 rounded-full hover:bg-brand-ink hover:text-white transition-colors">
           {s} <ArrowRight size={12} weight="bold" />
         </button>

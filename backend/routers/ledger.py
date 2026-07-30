@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
 
 from core import (
-    db, CLAUDE_KEY, claude_key, claude_chat, LLM_MODEL, EMERGENT_LLM_KEY, VISION_MODEL,
+    db, claude_chat, LLM_MODEL, EMERGENT_LLM_KEY, VISION_MODEL,
     _extract_json, new_id, now_iso, logger, log_usage, _est_tokens,
     get_current_user, user_perms, log_activity,
 )

@@ -28,16 +28,16 @@ import obj_store
 
 from core import (
     db, client, logger, DEFAULT_ROLES,
-    EMERGENT_LLM_KEY, CLAUDE_KEY, LLM_MODEL, VISION_MODEL,
-    claude_key, get_ai_key, set_ai_keys, ai_key_source, mask_key,
+    EMERGENT_LLM_KEY, LLM_MODEL, VISION_MODEL,
+    get_ai_key,
     claude_chat, set_usage_tenant, log_usage, _est_tokens, _OPENAI_STT_PER_MIN, _SARVAM_STT_PER_MIN,
-    AI_KEY_PROVIDERS, load_ai_keys_from_db,
+    load_ai_keys_from_db,
     now_iso, new_id, _extract_json,
     hash_password, verify_password, create_token,
     set_auth_cookie, clear_auth_cookie,
     get_current_user, require_role, require_perm, user_perms, clean_perms,
     tenant_role_keys, log_activity, add_decision_event, normalize_os_blueprint,
-    normalize_lexicon, DEFAULT_LEXICON,
+    normalize_lexicon,
     normalize_operating_model, DEFAULT_OPERATING_MODEL,
     PERMISSION_KEYS,
 )

@@ -24,6 +24,7 @@ import WorkCoach from "./pages/WorkCoach";
 import Ledger from "./pages/Ledger";
 import Landing from "./pages/Landing";
 import AdminPortal from "./pages/admin/AdminPortal";
+import DesignSystem from "./pages/DesignSystem";
 
 function AccessDenied() {
   const navigate = useNavigate();
@@ -79,6 +80,9 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/admin" element={<AdminPortal />} />
             <Route path="/admin/*" element={<AdminPortal />} />
+            {/* Token/component reference. Unauthenticated on purpose so the system can be
+                reviewed without a session; it renders design tokens only, no app data. */}
+            <Route path="/design-system" element={<DesignSystem />} />
             <Route path="/" element={<Home />} />
             <Route path="/dashboard" element={<Navigate to="/brief" replace />} />
             <Route path="/brief" element={<Protected><CEOBrief /></Protected>} />

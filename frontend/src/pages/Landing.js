@@ -29,7 +29,7 @@ const NavBar = () => (
           className="text-white/90 hover:text-white text-sm font-semibold uppercase tracking-wider px-3 sm:px-4 py-2 transition-colors">
           Log in
         </Link>
-        <Link to="/login?signup=1" data-testid="landing-signup-btn"
+        <Link to="/signup" data-testid="landing-signup-btn"
           className="bg-brand-red text-white text-sm font-semibold uppercase tracking-wider px-4 sm:px-5 py-2 border border-brand-red hover:bg-white hover:text-brand-red transition-colors">
           Sign up
         </Link>
@@ -67,7 +67,7 @@ export default function Landing() {
             The AI operating system that remembers every decision, organises every task, and executes the way your business actually runs — from voice notes and WhatsApp to paper bills.
           </p>
           <div className="flex flex-wrap gap-3 mt-10">
-            <Link to="/login?signup=1" data-testid="hero-signup-btn"
+            <Link to="/signup" data-testid="hero-signup-btn"
               className="flex items-center gap-2 bg-brand-red text-white text-sm font-semibold uppercase tracking-wider px-6 py-3 border border-brand-red hover:bg-white hover:text-brand-red transition-colors">
               Get started free <ArrowRight size={16} weight="bold" />
             </Link>
@@ -215,7 +215,7 @@ export default function Landing() {
           <Sparkle size={30} weight="fill" className="mx-auto mb-5" />
           <h2 className="font-heading font-black tracking-tight text-3xl sm:text-5xl leading-tight max-w-3xl mx-auto">Every business decision — remembered, organized, and executed.</h2>
           <div className="flex flex-wrap gap-3 justify-center mt-10">
-            <Link to="/login?signup=1" data-testid="cta-signup-btn"
+            <Link to="/signup" data-testid="cta-signup-btn"
               className="flex items-center gap-2 bg-white text-brand-red text-sm font-semibold uppercase tracking-wider px-7 py-3 border border-white hover:bg-transparent hover:text-white transition-colors">
               Start free <ArrowRight size={16} weight="bold" />
             </Link>
@@ -234,7 +234,7 @@ export default function Landing() {
           <div className="flex items-center gap-6 text-sm">
             <a href="/DecisionOS-Vision.pdf" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Vision doc</a>
             <Link to="/login" className="hover:text-white transition-colors">Log in</Link>
-            <Link to="/login?signup=1" className="hover:text-white transition-colors">Sign up</Link>
+            <Link to="/signup" className="hover:text-white transition-colors">Sign up</Link>
           </div>
           <div className="font-mono text-[11px] uppercase tracking-widest">© 2026 DecisionOS</div>
         </div>

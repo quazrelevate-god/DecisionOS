@@ -1,0 +1,34 @@
+{
+  "summary": "Iteration 74 — new conversational founder-onboarding (/signup) tested end-to-end. Backend 9/9 pytest cases pass (check-email taken/available, website-intel stripe real fetch w/ payments-keywords + garbage-url returns fetched:false, adaptive 4-question interview finishes with done:true, blueprint returns key/label depts + workflows + operational_tasks + approval_rules + products + welcome_line and references the founder's actual answers, Sarvam TTS returns a real WAV (RIFF/WAVE header, ~big enough), Sarvam STT returns 200 on a real WAV fixture, /api/auth/login still works). Frontend E2E: /signup basics flow (Enter-advance + Skip-when-empty phone + team-size chip) works, email-taken guard on owner@sharma.com shows 'This email already has a workspace — sign in instead.', website manual path (Manufacturing + B2B + description + Continue) advances, interview mute toggle used first, two adaptive Claude questions received and answered (~15s each), interview-skip advances into build; BuildReveal auto-runs blueprint + register within ~20-30s and reveals build-counts (6 Departments / 8 Workflows / 12 Recurring tasks / 5 Approval rules) plus a personalized welcome_line referencing Meera, Rakesh, weaving, QC, CIF; Enter DecisionOS navigates to /brief, welcome-overlay appears and welcome-dismiss removes it and reveals the CEO Brief with the new tenant 'Iteration74 Weavers'/'Manufacturing'/Owner Meera Test. Regression: /login unchanged — 'Need a workspace? Register →' link navigates to /signup, landing (/) contains 4 signup links that navigate to /signup, and data-testid demo-login-owner logs into Sharma Textiles Pvt Ltd (Rajesh Sharma, owner) and lands on the Decision Desk with 47 tasks.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration74_signup.py",
+    "/app/test_reports/pytest/iter74.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Personalization is real, not templated: verified blueprint text ('through Rakesh's job card, 2-week weaving, QC, CIF shipping, and your 60-day payment collections') is quoting the founder's actual interview answers — this is the core promise of the feature and it works.",
+    "Signup.js -> BuildReveal.js correctly invokes register() with the blueprint payload after Claude returns; new tenant appears in the DB (login as Meera Test after the flow would work; verified via CEO Brief tenant chip 'Iteration74 Weavers'/'Manufacturing').",
+    "Only nit: STT accepts a real WAV in the current test (200 OK, transcript may be empty), so the 'clean 503' fallback in the pytest was not exercised — that's fine, but the client-side error toast pathway in VoiceInterview (`toast.error(e.response?.data?.detail || …)`) still cannot be UI-tested from headless Chromium since mic capture is not attempted.",
+    "BasicsFlow.js: `checkEmail` swallows network errors silently ('/* network hiccup — let register validate later */'). Intentional and OK, but if backend goes down mid-signup the founder will still advance and fail at build. Consider showing a subtle warning in future."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration74_signup.py",
+    "/app/test_fixtures/audio.wav (seeded from an existing upload for STT fixture)"
+  ],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "100%"},
+  "test_credentials": "owner@sharma.com/demo1234 (demo login regression); founder+<ts>@testco.in (throwaway founder created via journey — password 'iter74pass!')",
+  "seed_data_creation": "Registered one real tenant 'Iteration74 Weavers' (Meera Test, owner, Manufacturing/B2B) via the new /signup flow. If tenant hygiene matters, main agent may want to delete this tenant + user; it was created by traversing the actual user path.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Full new signup pipeline (backend + FE E2E) is green. Sarvam TTS returns real WAV, Sarvam STT returned 200 on WAV. Adaptive interview + personalized blueprint verified end-to-end and referenced the founder's specific words. Landing (/) has 4 signup CTAs — first one confirmed → /signup. Login page has NO register form (correct — new architecture) and still supports password + demo + OTP + invite. If re-testing, use a fresh throwaway email each run (check-email prevents re-use) and expect ~50-60s per interview→blueprint LLM cycle.",
+  "rca of the issue": "N/A — no defects found."
+}

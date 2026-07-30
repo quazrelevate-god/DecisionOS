@@ -7,6 +7,7 @@ import { hasPerm } from "./lib/perms";
 import { LockKey } from "@phosphor-icons/react";
 import Layout from "./components/Layout";
 import Login from "./pages/Login";
+import Signup from "./pages/Signup";
 import Inbox from "./pages/Inbox";
 import Brain from "./pages/Brain";
 import People from "./pages/People";
@@ -77,6 +78,7 @@ function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} />
             <Route path="/admin" element={<AdminPortal />} />
             <Route path="/admin/*" element={<AdminPortal />} />
             <Route path="/" element={<Home />} />

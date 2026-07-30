@@ -38,6 +38,7 @@ import {
 } from "@phosphor-icons/react";
 import { ProfileDialog } from "./ProfileDialog";
 import { LanguageSwitcher } from "./LanguageSwitcher";
+import { WelcomeOverlay } from "./WelcomeOverlay";
 
 const NAV = [
   { to: "/", label: "Decision Desk", tkey: "inbox", icon: Tray, testid: "nav-inbox", perm: "inbox" },
@@ -217,6 +218,7 @@ export default function Layout({ children }) {
 
   return (
     <div className="min-h-screen flex bg-brand-paper text-brand-ink">
+      <WelcomeOverlay />
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex w-64 shrink-0 border-r border-black bg-white flex-col sticky top-0 h-screen">
         <div className="px-6 py-6 border-b border-black">

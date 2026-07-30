@@ -6484,6 +6484,8 @@ from routers.admin import router as admin_router  # noqa: E402
 app.include_router(admin_router)
 from routers.brain import router as brain_router  # noqa: E402
 app.include_router(brain_router)
+from routers.signup import router as signup_router  # noqa: E402
+app.include_router(signup_router)
 _cors_env = os.environ.get('CORS_ORIGINS', '*').strip()
 _cors_kwargs = dict(allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 if _cors_env == '*':

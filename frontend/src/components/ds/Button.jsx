@@ -3,6 +3,7 @@ import { Slot } from "@radix-ui/react-slot";
 import { cva } from "class-variance-authority";
 import { CircleNotch } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
+import { interactiveState } from "./states";
 
 /**
  * The system's action element.
@@ -63,18 +64,6 @@ const buttonVariants = cva(
 );
 
 /**
- * Disabled is neutral, never a pale tint of the primary.
- *
- * Applied in JS rather than as `disabled:` utilities because a loading button is
- * also `disabled` (it must not be clickable) but must KEEP its variant: a
- * primary that turns grey the moment it starts working reads as "this broke",
- * not "this is running". Relying on Tailwind variant ordering to settle that
- * conflict would be fragile, so the choice is made explicitly here.
- */
-const DISABLED_VISUALS =
-  "bg-surface-sunken text-text-disabled border-hairline shadow-none hover:bg-surface-sunken";
-
-/**
  * @typedef {object} ButtonProps
  * @property {ButtonVariant} [variant='primary']
  * @property {ButtonSize} [size='md']
@@ -110,18 +99,19 @@ const Button = React.forwardRef(
     ref
   ) => {
     const Comp = asChild ? Slot : "button";
-    const isDisabled = disabled || loading;
+    // Busy vs unavailable is resolved centrally — see ./states.
+    const { inert, className: stateClass, state } = interactiveState({ disabled, busy: loading });
 
     return (
       <Comp
         ref={ref}
         className={cn(
           buttonVariants({ variant, size, iconOnly }),
-          disabled && !loading && DISABLED_VISUALS,
+          stateClass,
           className
         )}
-        disabled={asChild ? undefined : isDisabled}
-        aria-busy={loading || undefined}
+        disabled={asChild ? undefined : inert}
+        aria-busy={state === "busy" || undefined}
         data-loading={loading || undefined}
         {...props}
       >

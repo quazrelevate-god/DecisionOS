@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Microphone, Stop, CircleNotch } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
+import { interactiveState } from "./states";
 
 /**
  * Voice capture — the primary action of the capture module, and the only
@@ -56,7 +57,8 @@ export const VoiceCapture = React.forwardRef(
   ) => {
     const listening = state === "listening";
     const processing = state === "processing";
-    const isDisabled = disabled || processing;
+    // Processing is busy, not unavailable — resolved centrally, see ./states.
+    const { inert, className: stateClass } = interactiveState({ disabled, busy: processing });
     const s = SIZES[size] || SIZES.lg;
 
     const label = processing
@@ -73,18 +75,15 @@ export const VoiceCapture = React.forwardRef(
           aria-label={label}
           aria-pressed={listening}
           title={disabled ? disabledReason : label}
-          disabled={isDisabled}
+          disabled={inert}
           onClick={listening ? onStop : onStart}
           className={cn(
             "inline-flex items-center justify-center rounded-pill transition-colors",
             "focus-visible:outline-none focus-visible:ring-focus focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-background",
             s.button,
-            // Processing is non-interactive but KEEPS the primary fill — the same
-            // rule as Button's loading state. A mic that turns grey the moment
-            // it starts transcribing reads as "this broke", not "this is working".
-            disabled
-              ? "cursor-not-allowed bg-surface-sunken text-text-disabled"
-              : "bg-primary text-primary-foreground hover:bg-primary-hover active:bg-primary-active",
+            "bg-primary text-primary-foreground hover:bg-primary-hover active:bg-primary-active",
+            stateClass,
+            disabled && "cursor-not-allowed",
             // Motion, not hue: listening is not an error, so it never turns red.
             listening && !isDisabled && "recording-pulse"
           )}

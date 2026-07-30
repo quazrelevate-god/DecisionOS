@@ -71,7 +71,7 @@
     "tokens": "node scripts/gen-tokens.js",
     "tokens:check": "node scripts/gen-tokens.js --check",
     "lint:ds": "eslint --no-error-on-unmatched-pattern --no-config-lookup --config eslint.config.mjs --ignore-pattern \"**/__fixtures__/**\" \"src/components/ds/**/*.{js,jsx}\"",
-    "verify:ds": "yarn tokens:check && yarn lint:ds && CI=true craco test --testPathPattern \"lib/__tests__/tokens\" --watchAll=false"
+    "verify:ds": "yarn tokens:check && yarn lint:ds && CI=true craco test --testPathPattern \"lib/__tests__\" --watchAll=false"
   },
   "browserslist": {
     "production": [

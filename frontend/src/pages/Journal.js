@@ -138,7 +138,7 @@ export default function Journal() {
         <button
           type="submit"
           data-testid="journal-search-btn"
-          className="px-5 py-2.5 text-sm font-semibold uppercase tracking-wider bg-primary text-primary-foreground hover:bg-brand-red transition-colors"
+          className="px-5 py-2.5 text-sm font-semibold uppercase tracking-wider bg-primary text-primary-foreground hover:bg-primary-hover transition-colors"
         >
           Search
         </button>

@@ -13,7 +13,7 @@ const TYPES = {
   task: { label: "Tasks", icon: CheckSquare, color: "bg-primary", text: "text-primary-text" },
   delivery: { label: "Deliveries", icon: Truck, color: "bg-success-600", text: "text-status-completed-fg" },
   complaint: { label: "Complaints", icon: Warning, color: "bg-purple-600", text: "text-text-secondary" },
-  birthday: { label: "Birthdays", icon: Cake, color: "bg-brand-red", text: "text-primary-text" },
+  birthday: { label: "Birthdays", icon: Cake, color: "bg-primary", text: "text-primary-text" },
   leave: { label: "Leave", icon: AirplaneTakeoff, color: "bg-teal-600", text: "text-teal-600" },
 };
 

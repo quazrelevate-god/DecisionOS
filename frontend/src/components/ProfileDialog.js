@@ -53,7 +53,7 @@ export function ProfileForm({ onSaved }) {
         <p className="text-label uppercase text-text-secondary mt-1">Email is your sign-in ID and can't be changed here.</p>
       </div>
       <button onClick={save} disabled={saving} data-testid="profile-save"
-        className="flex items-center justify-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 text-sm font-semibold uppercase tracking-wider rounded-lg hover:bg-brand-red transition-colors disabled:opacity-50">
+        className="flex items-center justify-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 text-sm font-semibold uppercase tracking-wider rounded-lg hover:bg-primary-hover transition-colors disabled:opacity-50">
         <FloppyDisk size={16} weight="bold" /> {saving ? "Saving…" : "Save changes"}
       </button>
     </div>
@@ -109,7 +109,7 @@ export function ChangePasswordForm() {
           onChange={(e) => setConfirm(e.target.value)} className={inp} placeholder="Re-enter new password" autoComplete="new-password" />
       </div>
       <button onClick={submit} disabled={saving} data-testid="password-change-submit"
-        className="flex items-center justify-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 text-sm font-semibold uppercase tracking-wider rounded-lg hover:bg-brand-red transition-colors disabled:opacity-50">
+        className="flex items-center justify-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 text-sm font-semibold uppercase tracking-wider rounded-lg hover:bg-primary-hover transition-colors disabled:opacity-50">
         <Lock size={16} weight="bold" /> {saving ? "Updating…" : "Update password"}
       </button>
     </div>

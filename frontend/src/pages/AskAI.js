@@ -43,7 +43,7 @@ export function AskPanel() {
         {log.map((m, i) => (
           <div key={m.id} data-testid={`chat-msg-${m.role}-${i}`}>
             {m.role === "user" ? (
-              <p className="text-brand-yellow">{"> "}{m.text}</p>
+              <p className="text-status-pending-fg">{"> "}{m.text}</p>
             ) : (
               <div>
                 <p className="text-white whitespace-pre-wrap leading-relaxed">{m.text}</p>

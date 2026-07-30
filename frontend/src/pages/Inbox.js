@@ -53,7 +53,7 @@ function SwipeRow({ children, onLeft, onRight, rightLabel = "View", testid }) {
         </div>
       )}
       {onLeft && (
-        <div className={`absolute inset-y-0 right-0 flex items-center gap-1 px-5 text-white text-xs font-semibold uppercase tracking-wider transition-colors ${committedL ? "bg-brand-red brightness-125" : "bg-brand-red/70"}`} style={{ opacity: dx < -8 ? 1 : 0 }}>
+        <div className={`absolute inset-y-0 right-0 flex items-center gap-1 px-5 text-white text-xs font-semibold uppercase tracking-wider transition-colors ${committedL ? "bg-primary brightness-125" : "bg-primary"}`} style={{ opacity: dx < -8 ? 1 : 0 }}>
           {committedL ? "Release · Dismiss" : "Dismiss"} <X size={16} weight="bold" />
         </div>
       )}
@@ -86,7 +86,7 @@ function EscalationCard({ t, onRespond, highlight }) {
   };
 
   return (
-    <div data-testid={`escalation-card-${t.id}`} className={`rounded-lg border border-hairline bg-surface p-5 transition-all ${highlight ? "ring-4 ring-brand-red ring-offset-2" : ""}`}>
+    <div data-testid={`escalation-card-${t.id}`} className={`rounded-lg border border-hairline bg-surface p-5 transition-all ${highlight ? "ring-4 ring-ring ring-offset-2" : ""}`}>
       <div className="flex items-center gap-1.5 flex-wrap mb-2">
         <span data-testid={`escalation-badge-${t.id}`}
           className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-hairline ${isEsc ? "bg-primary text-primary-foreground" : "bg-primary text-primary-foreground"}`}>
@@ -169,7 +169,7 @@ function ReviewTaskRow({ t: task, members, roleOptions, onRefresh }) {
               <User size={11} weight="bold" /> {task.assignee_name}
             </span>
           ) : task.assignee_role ? (
-            <Chip value={task.assignee_role} className="bg-surface" />
+            <Chip value={task.assignee_role} />
           ) : (
             <span className="text-xs text-text-secondary italic">Unassigned</span>
           )}
@@ -297,7 +297,7 @@ function PendingApprovalCard({ d, members, roleOptions, onApprove, onReject, onR
             {roleOptions.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
           </select>
           <div className="flex gap-2">
-            <button data-testid={`add-task-save-${d.id}`} onClick={addTask} className="flex-1 bg-primary text-primary-foreground py-1.5 text-xs font-semibold uppercase tracking-wider border border-hairline hover:bg-brand-red transition-colors">Add</button>
+            <button data-testid={`add-task-save-${d.id}`} onClick={addTask} className="flex-1 bg-primary text-primary-foreground py-1.5 text-xs font-semibold uppercase tracking-wider border border-hairline hover:bg-primary-hover transition-colors">Add</button>
             <button onClick={() => setAdding(false)} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-hairline hover:bg-surface-hover">Cancel</button>
           </div>
         </div>
@@ -341,7 +341,7 @@ function ThinkingOverlay({ show }) {
       <div className="relative flex flex-col items-center">
         <p className="thinking-text font-black uppercase tracking-[0.35em] text-text text-4xl sm:text-5xl">Thinking</p>
         <div className="relative w-[min(82vw,520px)] aspect-square -mt-2">
-          <div className="absolute inset-[28%] rounded-full bg-brand-red/15 blur-[70px] animate-pulse" aria-hidden />
+          <div className="absolute inset-[28%] rounded-full bg-primary-tint blur-[70px] animate-pulse" aria-hidden />
           <ThinkingCanvas active={show} />
         </div>
         <p className="text-sm text-text-secondary text-label uppercase -mt-4 tracking-wide">DecisionOS is connecting the dots…</p>

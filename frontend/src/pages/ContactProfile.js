@@ -210,7 +210,7 @@ export default function ContactProfile() {
           <div className="space-y-2">{follow_ups.map((t) => (
             <div key={t.id} className="border border-hairline bg-surface p-3 flex items-center justify-between gap-2">
               <span className="text-sm">{t.title}</span>
-              <div className="flex gap-1.5">{t.assignee_role && <Chip value={t.assignee_role} className="bg-surface" />}<Chip value={t.status} /></div>
+              <div className="flex gap-1.5">{t.assignee_role && <Chip value={t.assignee_role} />}<Chip value={t.status} /></div>
             </div>
           ))}</div>
         )}
@@ -231,7 +231,7 @@ export default function ContactProfile() {
         {decisions.length === 0 ? <p className="text-sm text-text-secondary">No linked decisions.</p> : (
           <div className="space-y-2">{decisions.map((d) => (
             <div key={d.id} className="border border-hairline bg-surface p-3">
-              <div className="flex items-center gap-2 mb-1"><Chip value={d.status} />{d.dtype && <Chip value={d.dtype} className="bg-primary text-primary-foreground" />}</div>
+              <div className="flex items-center gap-2 mb-1"><Chip value={d.status} />{d.dtype && <Chip value={d.dtype} />}</div>
               <p className="text-sm font-semibold">{d.title}</p>
               {d.summary && <p className="text-xs text-text-secondary">{d.summary}</p>}
             </div>

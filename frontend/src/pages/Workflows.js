@@ -177,7 +177,7 @@ export default function Workflows({ embedded = false }) {
                     const updAt = lastEv?.at || w.created_at;
                     const updLabel = lastEv?.note || t("workflows.created_label");
                     return (
-                      <div key={w.id} id={`workflow-card-${w.id}`} data-testid={`workflow-card-${w.id}`} className={`border border-hairline p-3 shadow-hover bg-surface transition-all ${w.id === focusWf ? "ring-4 ring-brand-red ring-offset-2" : ""}`}>
+                      <div key={w.id} id={`workflow-card-${w.id}`} data-testid={`workflow-card-${w.id}`} className={`border border-hairline p-3 shadow-hover bg-surface transition-all ${w.id === focusWf ? "ring-4 ring-ring ring-offset-2" : ""}`}>
                         <div className="flex items-start justify-between gap-2">
                           <p className="font-semibold text-sm leading-tight">{w.title}</p>
                           {user?.role === "owner" && (

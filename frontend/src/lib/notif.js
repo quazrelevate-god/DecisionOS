@@ -1,13 +1,13 @@
 // Notification type metadata + deep-link resolution.
 export const NOTIF_TYPE_META = {
-  assigned: { label: "New Work Assigned", cls: "bg-brand-blue text-white" },
-  approval: { label: "Approval Requested", cls: "bg-brand-yellow text-black" },
-  approved: { label: "Approved", cls: "bg-green-600 text-white" },
-  rejected: { label: "Changes Requested", cls: "bg-brand-red text-white" },
-  clarification: { label: "Clarification", cls: "bg-orange-500 text-black" },
-  status: { label: "Status Update", cls: "bg-brand-ink text-white" },
-  comment: { label: "New Comment", cls: "bg-purple-600 text-white" },
-  reminder: { label: "Reminder", cls: "bg-black/10 text-black" },
+  assigned: { label: "New Work Assigned", cls: "bg-status-directive-bg text-status-directive-fg" },
+  approval: { label: "Approval Requested", cls: "bg-status-pending-bg text-status-pending-fg" },
+  approved: { label: "Approved", cls: "bg-status-completed-bg text-status-completed-fg" },
+  rejected: { label: "Changes Requested", cls: "bg-status-rejected-bg text-status-rejected-fg" },
+  clarification: { label: "Clarification", cls: "bg-status-pending-bg text-status-pending-fg" },
+  status: { label: "Status Update", cls: "bg-surface-sunken text-text-secondary" },
+  comment: { label: "New Comment", cls: "bg-surface-sunken text-text-secondary" },
+  reminder: { label: "Reminder", cls: "bg-surface-sunken text-text-secondary" },
 };
 
 export function notifMeta(n) {

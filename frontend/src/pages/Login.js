@@ -370,7 +370,7 @@ export default function Login() {
         <div>
           <p className="text-label uppercase text-brand-red mb-4">The operational brain for founder-led SMEs</p>
           <h1 className="text-5xl xl:text-6xl font-black uppercase tracking-tighter leading-[0.95]">
-            {mode === "register" ? <>Set up your<br /><span className="text-brand-red">executive office.</span></> : <>Speak the decision.<br /><span className="text-brand-red">We run</span> the company.</>}
+            {mode === "register" ? <>Set up your<br /><span className="text-brand-red">executive office.</span></> : <>Speak the decision.<br /><span className="text-primary-text">We run</span> the company.</>}
           </h1>
           <p className="mt-6 text-white/70 text-sm max-w-md leading-relaxed">
             {mode === "register"
@@ -417,7 +417,7 @@ export default function Login() {
               {loginTab === "otp" && (
                 <form onSubmit={otpSent ? submitOtp : requestOtp} className="space-y-4" data-testid="otp-form">
                   {invite && (
-                    <div className="border border-hairline bg-brand-yellow/40 p-3" data-testid="invite-welcome">
+                    <div className="border border-hairline bg-status-pending-bg/40 p-3" data-testid="invite-welcome">
                       <p className="font-bold uppercase tracking-tight text-sm">Welcome, {invite.name}</p>
                       <p className="text-xs text-text-secondary mt-0.5">You've been invited to <strong>{invite.company}</strong>. Enter the code we sent to {invite.phone_masked} to sign in — no password needed.</p>
                     </div>
@@ -630,7 +630,7 @@ export default function Login() {
                     <input type="file" data-testid="connect-excel-input" accept=".csv,.xlsx,.xls" className="hidden" onChange={(e) => { uploadExcel(e.target.files); e.target.value = ""; }} />
                   </label>
                   {importSummary && (
-                    <p data-testid="import-summary" className="text-sm text-text border border-hairline bg-brand-yellow/40 p-2">Imported {importSummary.contacts} contacts · {importSummary.invoices} invoices · {importSummary.payments} payments</p>
+                    <p data-testid="import-summary" className="text-sm text-text border border-hairline bg-status-pending-bg/40 p-2">Imported {importSummary.contacts} contacts · {importSummary.invoices} invoices · {importSummary.payments} payments</p>
                   )}
                   <div className="grid grid-cols-2 gap-3">
                     {[{ k: "Tally" }, { k: "Zoho" }].map((c) => (

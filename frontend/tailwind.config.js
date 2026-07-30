@@ -56,17 +56,14 @@ module.exports = {
                 /* ---- Role scales: the primary colour API ---- */
                 brand: {
                     ...scale('brand'),
-                    /* DEPRECATED legacy identity keys (~678 call sites across the app).
-                       Kept so un-swept app code keeps rendering; lint-banned inside
-                       components/ds/**. Removed in the app-wide sweep branch. */
                     /* The wordmark, and only the wordmark. Same hex as the old
                        identity red, but insulated from the danger scale. */
                     mark: v('brand-mark'),
+                    /* `red` survives ONLY for the Landing/Login hero, which is
+                       parked pending a brand ruling. blue/yellow/ink/paper are
+                       gone — nothing consumes them. When the hero is ruled on,
+                       this key goes too and the legacy palette is fully dead. */
                     red: '#FF3B30',
-                    blue: '#002FA7',
-                    yellow: '#FFCC00',
-                    ink: '#0A0A0B',
-                    paper: '#F4F4F5',
                 },
                 danger: scale('danger'),
                 caution: scale('caution'),
@@ -199,10 +196,6 @@ module.exports = {
                 sm: 'var(--elevation-sm)',
                 md: 'var(--elevation-md)',
                 lg: 'var(--elevation-lg)',
-                /* DEPRECATED legacy names, still referenced by un-swept app code. */
-                brutal: 'var(--elevation-sm)',
-                'brutal-sm': 'var(--elevation-xs)',
-                'brutal-lg': 'var(--elevation-lg)',
             },
 
             keyframes: {

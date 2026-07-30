@@ -277,11 +277,11 @@ export function TaskBoard() {
                           <User size={11} weight="bold" /> {t.assignee_name}
                         </span>
                       ) : t.assignee_role ? (
-                        <Chip value={t.assignee_role} className="bg-surface" data-testid={`task-assignee-${t.id}`} />
+                        <Chip value={t.assignee_role} data-testid={`task-assignee-${t.id}`} />
                       ) : (
                         <span className="text-xs text-text-secondary italic">Unassigned</span>
                       )}
-                      {overdue(t) && <Chip value="overdue" className="bg-primary text-primary-foreground" />}
+                      {overdue(t) && <Chip value="overdue" />}
                     </div>
                     {t.updated_at && (
                       <p className="text-label uppercase text-text-secondary mt-2 flex items-center gap-1" data-testid={`task-updated-${t.id}`} title={fullTime(t.updated_at)}>

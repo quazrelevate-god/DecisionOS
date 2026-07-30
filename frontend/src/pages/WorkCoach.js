@@ -106,7 +106,7 @@ export default function WorkCoach() {
         <div className="space-y-5" data-testid="coach-summary">
           <div className="rounded-lg border border-hairline bg-surface p-6 bg-primary text-primary-foreground">
             <p className="flex items-start gap-3 text-lg font-bold leading-snug">
-              <Sparkle size={22} weight="fill" className="text-brand-yellow shrink-0 mt-0.5" /> {s.headline}
+              <Sparkle size={22} weight="fill" className="text-status-pending-fg shrink-0 mt-0.5" /> {s.headline}
             </p>
           </div>
 
@@ -139,7 +139,7 @@ export default function WorkCoach() {
             </div>
           </div>
 
-          <div className="rounded-lg border border-hairline bg-surface p-5 border-l-4 border-l-brand-red" data-testid="coach-recommendation">
+          <div className="rounded-lg border border-hairline bg-surface p-5 border-l-4 border-l-urgency-overdue" data-testid="coach-recommendation">
             <p className="text-label uppercase text-primary-text mb-1">AI Recommendation</p>
             <p className="text-sm font-medium leading-relaxed">{s.recommendation}</p>
           </div>

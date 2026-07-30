@@ -146,7 +146,7 @@ export default function Meetings() {
               placeholder="Paste or type the meeting transcript…"
               className="w-full border border-hairline p-3 text-sm text-label uppercase focus:outline-none" />
             <button onClick={submitText} disabled={busy || !text.trim()} data-testid="meeting-text-submit"
-              className="mt-2 w-full py-2.5 text-sm font-semibold uppercase tracking-wider bg-primary text-primary-foreground hover:bg-brand-red transition-colors disabled:opacity-50">
+              className="mt-2 w-full py-2.5 text-sm font-semibold uppercase tracking-wider bg-primary text-primary-foreground hover:bg-primary-hover transition-colors disabled:opacity-50">
               Generate notes
             </button>
           </div>
@@ -163,7 +163,7 @@ export default function Meetings() {
               className="rounded-lg border border-hairline bg-surface p-4 text-left shadow-hover">
               <div className="flex items-center justify-between gap-2 mb-2">
                 <FileText size={18} weight="bold" className="text-primary-text" />
-                {PROCESSING.includes(m.status) ? <Chip value="processing" className="bg-status-pending-bg text-text" /> : <Chip value={m.status} />}
+                {PROCESSING.includes(m.status) ? <Chip value="processing" className="text-text" /> : <Chip value={m.status} />}
               </div>
               <p className="text-sm font-semibold leading-tight">{m.title}</p>
               {m.summary && <p className="text-xs text-text-secondary mt-1 line-clamp-2">{m.summary}</p>}

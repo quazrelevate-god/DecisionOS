@@ -395,7 +395,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
 const PRIORITY_AXES = [
   { key: "business_impact", label: "Impact", color: "bg-primary" },
   { key: "revenue", label: "Revenue", color: "bg-success-600" },
-  { key: "risk", label: "Risk", color: "bg-brand-red" },
+  { key: "risk", label: "Risk", color: "bg-primary" },
   { key: "urgency", label: "Urgency", color: "bg-orange-500" },
 ];
 
@@ -508,7 +508,7 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
                 </div>
                 {insights.map((ins, i) => (
                   <div key={i} className="mt-3 border border-hairline-strong/40 bg-primary/[0.04] p-3" data-testid={`detail-ref-insight-${t.id}-${i}`}>
-                    <p className="flex items-center gap-1.5 text-label uppercase text-primary-text mb-1"><Lightbulb size={13} weight="fill" className="text-brand-yellow" /> AI read this reference{ins.filename ? ` · ${ins.filename}` : ""}</p>
+                    <p className="flex items-center gap-1.5 text-label uppercase text-primary-text mb-1"><Lightbulb size={13} weight="fill" className="text-status-pending-fg" /> AI read this reference{ins.filename ? ` · ${ins.filename}` : ""}</p>
                     <p className="text-sm">{ins.summary}</p>
                     {(ins.points || []).length > 0 && (
                       <ul className="mt-2 space-y-1">
@@ -725,7 +725,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
   const selCls = "border border-hairline px-2 py-1 text-xs text-label uppercase bg-surface focus:outline-none";
 
   return (
-    <div id={`task-card-${t.id}`} data-testid={`mywork-task-${t.id}`} className={`rounded-lg border border-hairline bg-surface p-5 transition-all ${highlight ? "ring-4 ring-brand-red ring-offset-2 ring-offset-brand-paper" : ""}`}>
+    <div id={`task-card-${t.id}`} data-testid={`mywork-task-${t.id}`} className={`rounded-lg border border-hairline bg-surface p-5 transition-all ${highlight ? "ring-4 ring-ring ring-offset-2 ring-offset-brand-paper" : ""}`}>
       <div className="flex items-start justify-between gap-2">
         <p className="font-bold text-lg leading-tight">{t.title}</p>
         <Chip value={t.priority} />
@@ -754,7 +754,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
 
       <div className="flex items-center flex-wrap gap-1.5 mt-3">
         <span data-testid={`status-chip-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-hairline bg-surface">{STATUS_LABEL[t.status] || t.status}</span>
-        {isOverdue(t) && <span data-testid={`overdue-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-hairline bg-primary text-primary-foreground">Overdue</span>}
+        {isOverdue(t) && <span data-testid={`overdue-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider rounded-pill bg-status-overdue-bg text-status-overdue-fg">Overdue</span>}
         {t.source === "escalation" && <span data-testid={`badge-escalation-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-hairline bg-primary text-primary-foreground">Escalation</span>}
         {t.source === "handoff" && <span data-testid={`badge-handoff-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-hairline bg-primary text-primary-foreground">Handoff</span>}
         {(t.attachment_count || 0) > 0 && <span data-testid={`att-count-${t.id}`} className="inline-flex items-center gap-1 text-xs text-text-secondary"><Paperclip size={12} weight="bold" /> {t.attachment_count}</span>}
@@ -827,7 +827,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
                 <div className="flex flex-wrap gap-2 items-center">{refs.map(renderAtt)}</div>
                 {insights.length > 0 && (
                   <div className="mt-2 flex items-start gap-1.5" data-testid={`reference-insight-${t.id}`}>
-                    <Lightbulb size={13} weight="fill" className="text-brand-yellow shrink-0 mt-0.5" />
+                    <Lightbulb size={13} weight="fill" className="text-status-pending-fg shrink-0 mt-0.5" />
                     <p className="text-xs text-text-secondary line-clamp-2">{insights[insights.length - 1].summary}</p>
                   </div>
                 )}

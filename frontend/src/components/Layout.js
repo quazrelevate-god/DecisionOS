@@ -137,7 +137,7 @@ export default function Layout({ children }) {
         <PopoverContent align="end" className="w-80 p-0 border border-hairline shadow-sm" data-testid="notif-dropdown">
           <div className="flex items-center justify-between px-4 py-3 border-b border-hairline">
             <p className="text-sm font-bold uppercase tracking-tight">{t("header.notifications")}</p>
-            {unread > 0 && <span className="text-label uppercase text-brand-red">{unread} {t("header.new")}</span>}
+            {unread > 0 && <span className="text-label uppercase text-primary-text">{unread} {t("header.new")}</span>}
           </div>
           <div className="max-h-96 overflow-y-auto divide-y divide-black/10">
             {items.length === 0 && <p className="p-6 text-center text-sm text-text-secondary">{t("header.all_caught_up")}</p>}
@@ -146,7 +146,7 @@ export default function Layout({ children }) {
               return (
                 <button key={n.id} data-testid={`notif-item-${n.id}`} onClick={() => openNotif(n)}
                   className={`w-full text-left px-4 py-3 flex items-start gap-2 hover:bg-black/[0.03] transition-colors ${n.read ? "opacity-60" : ""}`}>
-                  {!n.read && <span className="mt-1.5 w-2 h-2 rounded-full bg-brand-red shrink-0" />}
+                  {!n.read && <span className="mt-1.5 w-2 h-2 rounded-full bg-primary shrink-0" />}
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <Chip value={meta.label} className={`${meta.cls} text-[9px]`} />
@@ -160,7 +160,7 @@ export default function Layout({ children }) {
             })}
           </div>
           <button onClick={() => navigate("/notifications")} data-testid="notif-view-all"
-            className="w-full px-4 py-3 border-t border-hairline text-sm font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors">
+            className="w-full px-4 py-3 border-t border-hairline text-sm font-semibold uppercase tracking-wider hover:bg-primary hover:text-white transition-colors">
             {t("header.view_all")}
           </button>
         </PopoverContent>
@@ -219,7 +219,7 @@ export default function Layout({ children }) {
   );
 
   return (
-    <div className="min-h-screen flex bg-background text-brand-ink">
+    <div className="min-h-screen flex bg-background text-text">
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex w-64 shrink-0 border-r border-hairline bg-surface flex-col sticky top-0 h-screen">
         <div className="px-6 py-6 border-b border-hairline">
@@ -240,7 +240,7 @@ export default function Layout({ children }) {
           <button
             onClick={doLogout}
             data-testid="logout-button"
-            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold uppercase tracking-wider bg-surface text-brand-red border-2 border-brand-red hover:bg-brand-red hover:text-white transition-colors"
+            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold uppercase tracking-wider bg-surface text-primary-text border-2 border-hairline-strong hover:bg-primary-hover hover:text-white transition-colors"
           >
             <SignOut size={16} weight="bold" /> {t("header.sign_out")}
           </button>
@@ -254,7 +254,7 @@ export default function Layout({ children }) {
           <div className="flex items-center gap-3">
             <span className="text-label uppercase text-text-secondary">{t("header.signed_in_as")}</span>
             <span className="font-semibold text-sm" data-testid="current-user-name">{user?.name}</span>
-            <span className="px-2 py-0.5 text-[11px] rounded-md uppercase tracking-wider bg-brand-red/10 text-brand-red border border-brand-red/20 font-semibold" data-testid="current-user-role">
+            <span className="px-2 py-0.5 text-[11px] rounded-md uppercase tracking-wider bg-primary-tint text-primary-text border border-hairline font-semibold" data-testid="current-user-role">
               {user?.role}
             </span>
           </div>
@@ -299,7 +299,7 @@ export default function Layout({ children }) {
               <button
                 data-testid="mobile-menu-button"
                 aria-label="Open menu"
-                className="w-10 h-10 flex items-center justify-center border border-hairline bg-surface hover:bg-brand-ink hover:text-white transition-colors"
+                className="w-10 h-10 flex items-center justify-center border border-hairline bg-surface hover:bg-primary hover:text-white transition-colors"
               >
                 <ListIcon size={20} weight="bold" />
               </button>
@@ -312,7 +312,7 @@ export default function Layout({ children }) {
                 <p className="mt-2 text-label uppercase text-text-secondary truncate">{tenant?.name}</p>
                 <div className="mt-3 flex items-center gap-2">
                   <span className="font-semibold text-sm">{user?.name}</span>
-                  <span className="px-2 py-0.5 text-[11px] rounded-md uppercase tracking-wider bg-brand-red/10 text-brand-red border border-brand-red/20 font-semibold">
+                  <span className="px-2 py-0.5 text-[11px] rounded-md uppercase tracking-wider bg-primary-tint text-primary-text border border-hairline font-semibold">
                     {user?.role}
                   </span>
                 </div>
@@ -335,7 +335,7 @@ export default function Layout({ children }) {
                 <button
                   onClick={doLogout}
                   data-testid="mobile-logout-button"
-                  className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold uppercase tracking-wider bg-surface text-brand-red border-2 border-brand-red hover:bg-brand-red hover:text-white transition-colors"
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold uppercase tracking-wider bg-surface text-primary-text border-2 border-hairline-strong hover:bg-primary-hover hover:text-white transition-colors"
                 >
                   <SignOut size={16} weight="bold" /> {t("header.sign_out")}
                 </button>
@@ -359,7 +359,7 @@ export default function Layout({ children }) {
               end={to === "/"}
               data-testid={`bottomnav-${to === "/" ? "dashboard" : to.slice(1)}`}
               className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 border-r border-hairline last:border-r-0 transition-colors ${
-                active ? "bg-brand-ink text-white" : "text-brand-ink hover:bg-surface-hover"
+                active ? "bg-primary text-white" : "text-text hover:bg-surface-hover"
               }`}
             >
               <Icon size={20} weight={active ? "fill" : "bold"} />

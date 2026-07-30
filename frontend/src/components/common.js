@@ -40,6 +40,13 @@ const TONE = {
   cancelled: { status: "rejected" },
   overdue: { status: "overdue" },
 
+  /* Capture review states — waiting on a human, which is caution's job */
+  needs_attention: { status: 'pending' },
+  'needs attention': { status: 'pending' },
+  'possible duplicate': { status: 'pending' },
+  absent: { status: 'neutral' },
+  Emergency: { status: 'overdue' },
+
   /* Priority — never red; see note above */
   high: { priority: "high" },
   medium: { priority: "medium" },

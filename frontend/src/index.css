@@ -278,64 +278,6 @@
 }
 /* === end @generated design tokens === */
 
-/* Modernize the legacy neo-brutalist utility usages centrally (both themes) */
-@layer utilities {
-    /* Hard black frames -> theme hairline borders everywhere */
-    .border-black { border-color: hsl(var(--border)); }
-    /* Soften every hardcoded square corner into a crisp modern radius */
-    .rounded-none { border-radius: 0.5rem; }
-
-    /* ---- Dark surfaces ---- */
-    .dark .bg-white { background-color: hsl(var(--card)); }
-    .dark .bg-brand-paper { background-color: hsl(240 6% 6%); }
-    .dark .bg-brand-cream, .dark .bg-\[\#F4F4F5\], .dark .bg-gray-50, .dark .bg-slate-50 { background-color: hsl(240 4% 13%); }
-    .dark .bg-brand-ink { background-color: hsl(240 4% 22%); }
-    .dark .hover\:bg-brand-ink:hover { background-color: hsl(240 4% 26%); }
-    .dark .bg-black { background-color: #000; }
-    .dark .bg-black\/5 { background-color: rgba(255,255,255,0.05); }
-    .dark .bg-black\/10 { background-color: rgba(255,255,255,0.09); }
-    .dark .bg-black\/20 { background-color: rgba(255,255,255,0.13); }
-    .dark .bg-black\/80 { background-color: rgba(0,0,0,0.8); }
-    .dark .hover\:bg-black\/5:hover { background-color: rgba(255,255,255,0.07); }
-    .dark .bg-brand-yellow\/40 { background-color: rgba(250, 204, 21, 0.14); }
-
-    /* ---- Borders ---- */
-    .dark .border-black { border-color: hsl(var(--border)); }
-    .dark .border-black\/10 { border-color: rgba(228,228,231,0.10); }
-    .dark .border-black\/15 { border-color: rgba(228,228,231,0.13); }
-    .dark .border-black\/20 { border-color: rgba(228,228,231,0.16); }
-    .dark .border-black\/30 { border-color: rgba(228,228,231,0.22); }
-    .dark .border-black\/40 { border-color: rgba(228,228,231,0.28); }
-    .dark .border-black\/50 { border-color: rgba(228,228,231,0.34); }
-
-    /* ---- Text ---- */
-    .dark .text-black { color: #f4f4f5; }
-    .dark .text-brand-ink { color: #f4f4f5; }
-    .dark .text-black\/30 { color: rgba(244,244,245,0.38); }
-    .dark .text-black\/40 { color: rgba(244,244,245,0.48); }
-    .dark .text-muted-foreground { color: hsl(240 5% 64%); }
-    .dark .text-brand-blue { color: #6ea8ff; }
-    .dark .hover\:text-brand-red:hover { color: #ff6b62; }
-    .dark .text-green-600 { color: #4ade80; }
-    .dark .text-amber-600 { color: #fbbf24; }
-    .dark .text-orange-600, .dark .text-orange-500 { color: #fb923c; }
-
-    /* accent surfaces keep readable dark text */
-    .dark .bg-brand-yellow { color: #0A0A0B !important; }
-
-    /* ---- Components / chrome ---- */
-    .dark .card-brutal { background-color: hsl(var(--card)); border-color: hsl(var(--border)); }
-    .dark .shadow-brutal, .dark .shadow-brutal-sm, .dark .shadow-brutal-lg {
-        box-shadow: inset 0 1px 0 0 rgba(255,255,255,0.04), 0 8px 24px -12px rgba(0,0,0,0.7) !important;
-    }
-    .dark .shadow-hover:hover { box-shadow: 0 10px 28px -12px rgba(0,0,0,0.75) !important; }
-    .dark ::-webkit-scrollbar-track { background: transparent; }
-    .dark ::-webkit-scrollbar-thumb { background: hsl(240 4% 24%); border-color: transparent; }
-    .dark input::placeholder, .dark textarea::placeholder { color: hsl(240 5% 50%); }
-    .dark textarea, .dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]) { background-color: hsl(var(--card)); color: #f4f4f5; }
-    .dark select:invalid, .dark select option { color: #f4f4f5; background-color: hsl(var(--card)); }
-}
-
 @layer base {
     * {
         @apply border-border;
@@ -350,6 +292,28 @@
         @apply font-sans;
         letter-spacing: -0.02em;
     }
+    /* Raw form controls in dark mode, tokenised.
+       These rules used to live in the legacy .dark compatibility shim, mixed in
+       with the neo-brutalist class patches. Deleting the shim would have taken
+       them with it — they are not legacy, they are the only dark-mode styling
+       the app's ~35 remaining raw <select>/<input> elements have. Re-homed here
+       on tokens, scoped exactly as before, and they retire as those controls
+       migrate to the design system's Input/Select. */
+    .dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+    .dark textarea,
+    .dark select {
+        background-color: hsl(var(--surface));
+        color: hsl(var(--text-primary));
+    }
+    .dark input::placeholder,
+    .dark textarea::placeholder {
+        color: hsl(var(--text-tertiary));
+    }
+    .dark select option {
+        background-color: hsl(var(--surface));
+        color: hsl(var(--text-primary));
+    }
+
     /* Numbers are tabular system-wide so figures align in columns. */
     th, td, output, time, [data-numeric] {
         font-variant-numeric: tabular-nums lining-nums;
@@ -376,17 +340,13 @@
         transform: translateY(-2px);
         box-shadow: 0 10px 28px -12px rgba(10,10,11,0.18);
     }
-    /* DEPRECATED (181 call sites): monospace is reserved for the Company Brain
-       terminal block. Use `text-label` (Inter, uppercase, tracked) in all new work.
-       Removed in the app-wide sweep branch. */
-    .label-mono {
-        @apply font-mono text-xs uppercase tracking-[0.12em] font-medium;
-    }
 }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
+.dark ::-webkit-scrollbar-thumb { background: hsl(var(--hairline-strong)); }
 ::-webkit-scrollbar-thumb { background: hsl(var(--hairline-strong)); border: 2px solid transparent; background-clip: padding-box; border-radius: var(--radius-md); }
+::-webkit-scrollbar-track { background: transparent; }
 
 @keyframes pulse-ring {
     0% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0.45); }

@@ -121,3 +121,34 @@ This was the second blanket-rule overreach (the first was `Chip`'s `className`
 override silently defeating M1's neutralisation on Inbox). Both were caught by
 looking at output rather than trusting the rule — which is the argument for the
 screenshot diff existing at all.
+
+## M7 completion test — result and residual
+
+**Run:** M7. **Method:** identical app code, screenshotted with the legacy `.dark`
+shim present and absent, 42 shots each. Noise floor measured first by shooting the
+same code twice: **max 0.15%, 6/42 non-identical** (chart animation, antialiasing).
+
+**Result: 11/42 screens exceed the noise floor, none by more than 0.35%.**
+
+The test worked — it found three real things a deletion-only M7 would have shipped:
+
+1. **`src/lib/notif.js` was never swept.** `src/lib/` was outside every sweep glob,
+   so eight notification kinds still carried `text-black`, `bg-purple-600`,
+   `bg-orange-500` and friends. With the shim present they rendered; with it gone
+   the REMINDER chips went dark-grey-on-dark and became illegible. Now mapped to
+   tones.
+2. **Overdue badges had been flattened to indigo** by an over-broad `bg-brand-red →
+   bg-primary` rule in the M7 prep pass. Overdue is the canonical danger case; the
+   diff caught it on MyWork, and the same fix applied to CEO Brief, Ingest and
+   Tasks. Restored to the overdue tokens.
+3. **The shim was not purely a legacy patch.** It also carried the only dark-mode
+   styling for the app's ~35 remaining raw `<select>`/`<input>` elements and the
+   dark scrollbar thumb. Deleting it would have silently taken those with it; they
+   are re-homed onto tokens in the base layer and retire as those controls move to
+   the DS Input/Select.
+
+**Residual:** 11 screens differ by 0.15–0.35% — sub-pixel scrollbar and form-control
+rendering, concentrated in dark mode and on Ledger (34 raw controls). Explainable
+and small, but not zero, so it is recorded rather than rounded away. The honest
+reading is that the class sweep is complete and the last differences come from
+element-level rendering the shim used to pin.

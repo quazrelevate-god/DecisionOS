@@ -308,12 +308,12 @@ function LeaveCard({ lv, canAct, onRefresh, highlight }) {
   };
 
   return (
-    <div data-testid={`leave-card-${lv.id}`} className={`rounded-lg border border-hairline bg-surface p-4 transition-all ${highlight ? "ring-4 ring-brand-red ring-offset-2" : ""}`}>
+    <div data-testid={`leave-card-${lv.id}`} className={`rounded-lg border border-hairline bg-surface p-4 transition-all ${highlight ? "ring-4 ring-ring ring-offset-2" : ""}`}>
       <div className="flex items-center gap-1.5 flex-wrap mb-2">
         <Chip value={st.label} className={st.cls} data-testid={`leave-status-${lv.id}`} />
-        <Chip value={typeLabel(lv.leave_type)} className="bg-primary text-primary-foreground" />
-        {lv.day_portion === "half" && <Chip value="Half day" className="bg-surface" />}
-        {lv.is_emergency && <Chip value="Emergency" className="bg-black text-white" />}
+        <Chip value={typeLabel(lv.leave_type)} />
+        {lv.day_portion === "half" && <Chip value="Half day" />}
+        {lv.is_emergency && <Chip value="Emergency" />}
       </div>
       <p className="font-bold text-base leading-tight">{lv.user_name}</p>
       <p className="text-sm mt-1" data-testid={`leave-range-${lv.id}`}>{fmtRange(lv)}</p>
@@ -359,7 +359,7 @@ function LeaveCard({ lv, canAct, onRefresh, highlight }) {
                 value={note} onChange={(e) => setNote(e.target.value)} />
               <div className="flex gap-2">
                 <button onClick={() => decide(action === "reject" ? "reject" : "request-info")} data-testid={`leave-confirm-${lv.id}`}
-                  className="flex-1 bg-primary text-primary-foreground py-1.5 text-xs font-semibold uppercase tracking-wider border border-hairline hover:bg-brand-red transition-colors">
+                  className="flex-1 bg-primary text-primary-foreground py-1.5 text-xs font-semibold uppercase tracking-wider border border-hairline hover:bg-primary-hover transition-colors">
                   {action === "reject" ? "Confirm Reject" : "Send Request"}
                 </button>
                 <button onClick={() => { setAction(null); setNote(""); }} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-hairline hover:bg-surface-hover">Cancel</button>

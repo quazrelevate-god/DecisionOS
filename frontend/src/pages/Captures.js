@@ -10,7 +10,7 @@ import {
   ShieldWarning, Clock, FilePdf, ChatText,
 } from "@phosphor-icons/react";
 
-const inp = "w-full border border-hairline px-2 py-1.5 text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-brand-red";
+const inp = "w-full border border-hairline px-2 py-1.5 text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-ring";
 
 const CLASS_STYLE = {
   invoice: "bg-primary text-primary-foreground", payment: "bg-primary text-primary-foreground",
@@ -163,12 +163,12 @@ function CaptureCard({ c, user, onChange }) {
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <Chip value={c.classification.replace("_", " ")} className={CLASS_STYLE[c.classification] || "bg-surface-sunken text-text"} />
-            <Chip value={`review: ${c.reviewer_role}`} className="bg-surface border-hairline" />
+            <Chip value={`review: ${c.reviewer_role}`} />
             <Chip value={c.priority} className={c.priority === "high" ? "bg-primary text-primary-foreground" : "bg-surface border-hairline"} />
             {c.needs_owner && <span data-testid={`capture-escalated-${c.id}`} className="inline-flex items-center gap-1 text-xs font-bold uppercase text-primary-text"><ShieldWarning size={13} weight="bold" /> Owner approval</span>}
-            {c.status === "needs_attention" && <Chip value="needs attention" className="bg-amber-500 text-text" />}
-            {c.auto_processed && <Chip value="auto-filed" className="bg-success-600 text-white" />}
-            {c.duplicate_of && <Chip value="possible duplicate" className="bg-amber-500 text-text" />}
+            {c.status === "needs_attention" && <Chip value="needs attention" />}
+            {c.auto_processed && <Chip value="auto-filed" />}
+            {c.duplicate_of && <Chip value="possible duplicate" />}
             {c.confidence != null && (() => {
               const pct = Math.round(c.confidence * 100);
               const tone = pct >= 80 ? "bg-success-600 text-white" : pct >= 50 ? "bg-amber-500 text-text" : "bg-primary text-primary-foreground";
@@ -219,7 +219,7 @@ function CaptureCard({ c, user, onChange }) {
                         {inv.contact_name || "Supplier"}{inv.number ? ` · #${inv.number}` : ""}{inv.amount ? ` · ₹${Number(inv.amount).toLocaleString()}` : ""}
                       </span>
                       <select data-testid={`capture-bucket-select-${c.id}-${i}`}
-                        className={`${inp} w-auto ${needs ? "ring-2 ring-brand-red" : ""}`}
+                        className={`${inp} w-auto ${needs ? "ring-2 ring-ring" : ""}`}
                         value={pt} onChange={(e) => setBucket(i, e.target.value)}>
                         <option value="">Book as…</option>
                         <option value="expense">Expense</option>

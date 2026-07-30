@@ -17,7 +17,7 @@ const PERIODS = [
 ];
 
 const ROWS = [
-  { key: "delayed", label: "delayed tasks", bg: "bg-brand-red", on: "text-white", accent: "text-primary-text", icon: Clock },
+  { key: "delayed", label: "delayed tasks", bg: "bg-primary", on: "text-white", accent: "text-primary-text", icon: Clock },
   { key: "completed", label: "completed", bg: "bg-success-600", on: "text-white", accent: "text-status-completed-fg", icon: CheckCircle },
   { key: "awaiting_approval", label: "waiting for your approval", bg: "bg-status-pending-bg", on: "text-text", accent: "text-status-pending-fg", icon: Stamp },
   { key: "absent", label: "employees absent", bg: "bg-primary", on: "text-white", accent: "text-primary-text", icon: UserMinus },
@@ -29,11 +29,11 @@ const ROWS = [
 ];
 
 const EMP_ROWS = [
-  { key: "delayed", label: "overdue tasks", bg: "bg-brand-red", on: "text-white", accent: "text-primary-text", icon: Clock },
+  { key: "delayed", label: "overdue tasks", bg: "bg-status-overdue-bg", on: "text-status-overdue-fg", accent: "text-primary-text", icon: Clock },
   { key: "in_progress", label: "in progress", bg: "bg-primary", on: "text-white", accent: "text-primary-text", icon: ArrowClockwise },
   { key: "todo", label: "to do", bg: "bg-status-pending-bg", on: "text-text", accent: "text-status-pending-fg", icon: ListChecks },
   { key: "completed", label: "completed", bg: "bg-success-600", on: "text-white", accent: "text-status-completed-fg", icon: CheckCircle },
-  { key: "escalations", label: "escalated to you", bg: "bg-brand-red", on: "text-white", accent: "text-primary-text", icon: WarningCircle },
+  { key: "escalations", label: "escalated to you", bg: "bg-status-overdue-bg", on: "text-status-overdue-fg", accent: "text-primary-text", icon: WarningCircle },
   { key: "handoffs", label: "handed to you", bg: "bg-purple-600", on: "text-white", accent: "text-text-secondary", icon: ArrowBendUpRight },
 ];
 
@@ -124,8 +124,8 @@ function DetailDialog({ row, period, open, onClose }) {
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {it.kind === "task" && it.meta && <Chip value={it.meta} />}
-                    {it.kind === "escalation" && it.meta && <Chip value={it.meta} className="bg-primary text-primary-foreground" />}
-                    {it.kind === "complaint" && it.meta && <Chip value={it.meta} className="bg-purple-600 text-white" />}
+                    {it.kind === "escalation" && it.meta && <Chip value={it.meta} />}
+                    {it.kind === "complaint" && it.meta && <Chip value={it.meta} />}
                     {(it.kind === "purchase" || it.kind === "payment" || it.kind === "receivable" || it.kind === "bill" || it.kind === "unmatched") && it.meta != null && (
                       <span className="text-sm font-semibold">{money(it.meta, tenant?.currency)}</span>
                     )}
@@ -172,7 +172,7 @@ function DetailDialog({ row, period, open, onClose }) {
 
                 {it.kind === "complaint" && (user?.role === "owner" || user?.role === "sales") && (
                   <button onClick={(e) => { e.stopPropagation(); resolveComplaint(it.id); }} data-testid={`brief-resolve-${it.id}`}
-                    className="mt-3 flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline hover:bg-brand-red transition-colors">
+                    className="mt-3 flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline hover:bg-primary-hover transition-colors">
                     <CheckCircle size={15} weight="bold" /> Mark resolved
                   </button>
                 )}

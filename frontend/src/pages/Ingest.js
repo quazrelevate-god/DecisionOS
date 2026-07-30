@@ -117,7 +117,7 @@ const WA_STATUS_STYLE = {
   ignored: "bg-surface-sunken text-text",
   rejected: "bg-primary text-primary-foreground",
   signature_mismatch: "bg-orange-500 text-white",
-  error: "bg-primary text-primary-foreground",
+  error: "bg-status-overdue-bg text-status-overdue-fg",
 };
 
 function WhatsAppCard() {
@@ -136,7 +136,7 @@ function WhatsAppCard() {
     <div className="rounded-lg border border-hairline bg-surface p-5 mb-8" data-testid="whatsapp-card">
       {!st?.configured && (
         <div className="flex items-center gap-2 mb-4">
-          <Chip value="not connected" className="bg-primary text-primary-foreground" />
+          <Chip value="not connected" />
         </div>
       )}
 
@@ -159,8 +159,8 @@ function WhatsAppCard() {
 
         <div>
           {isOwner && st && st.token_error && (
-            <div className="flex items-center gap-2 mb-3 border border-hairline-strong/30 bg-brand-red/5 rounded-lg px-3 py-2" data-testid="whatsapp-token-error">
-              <Chip value="connection issue" className="bg-primary text-primary-foreground" />
+            <div className="flex items-center gap-2 mb-3 border border-hairline-strong/30 bg-primary-tint rounded-lg px-3 py-2" data-testid="whatsapp-token-error">
+              <Chip value="connection issue" />
               <span className="text-xs text-text-secondary">{st.token_error}</span>
             </div>
           )}
@@ -277,8 +277,8 @@ function ReviewPanel({ ingestion, onFiled, onCancel }) {
           </div>
           <p className="text-sm text-text-secondary">{ingestion.summary || ingestion.filename}</p>
           <div className="flex items-center gap-2 mt-2 flex-wrap">
-            {ingestion.doc_type && <Chip value={ingestion.doc_type} className="bg-primary text-primary-foreground" />}
-            {ingestion.entity && <Chip value={ingestion.entity} className="bg-primary text-primary-foreground" />}
+            {ingestion.doc_type && <Chip value={ingestion.doc_type} />}
+            {ingestion.entity && <Chip value={ingestion.entity} />}
             {ingestion.confidence != null && (
               <span className="text-label uppercase text-text-secondary">confidence {Math.round(ingestion.confidence * 100)}%</span>
             )}
@@ -321,7 +321,7 @@ function ReviewPanel({ ingestion, onFiled, onCancel }) {
           <p className="text-label uppercase text-primary-text mb-2 flex items-center gap-1"><UsersThree size={14} weight="bold" /> {L.customer_plural} & {L.vendor_plural} ({records.contacts.length})</p>
           <div className="space-y-2">
             {records.contacts.map((c, i) => (
-              <div key={c._key} className={`border p-3 grid grid-cols-2 md:grid-cols-4 gap-2 relative ${isOwnCompany(c.name, ownNorm) ? "border-brand-yellow bg-status-pending-bg/20" : "border-hairline"}`} data-testid={`review-contact-${i}`}>
+              <div key={c._key} className={`border p-3 grid grid-cols-2 md:grid-cols-4 gap-2 relative ${isOwnCompany(c.name, ownNorm) ? "border-status-pending-line bg-status-pending-bg/20" : "border-hairline"}`} data-testid={`review-contact-${i}`}>
                 <SelectField label="Type" value={c.type} onChange={(v) => setItem("contacts", i, "type", v)} options={CONTACT_TYPE_OPTS} optLabels={optLabels} />
                 <Field label="Name" value={c.name} onChange={(v) => setItem("contacts", i, "name", v)} />
                 <Field label="Phone" value={c.phone} onChange={(v) => setItem("contacts", i, "phone", v)} />
@@ -343,12 +343,12 @@ function ReviewPanel({ ingestion, onFiled, onCancel }) {
               const pt = (inv.purchase_type || "").toLowerCase();
               const needsBucket = isPurchase && !PURCHASE_TYPE_OPTS.includes(pt);
               return (
-              <div key={inv._key} className={`border p-3 grid grid-cols-2 md:grid-cols-6 gap-2 relative ${needsBucket ? "border-hairline-strong border-2 bg-brand-red/5" : "border-hairline"}`} data-testid={`review-invoice-${i}`}>
+              <div key={inv._key} className={`border p-3 grid grid-cols-2 md:grid-cols-6 gap-2 relative ${needsBucket ? "border-hairline-strong border-2 bg-primary-tint" : "border-hairline"}`} data-testid={`review-invoice-${i}`}>
                 <SelectField label="Type" value={inv.type} onChange={(v) => setItem("invoices", i, "type", v)} options={INVOICE_TYPE_OPTS} />
                 {isPurchase && (
                   <label className="block" data-testid={`review-invoice-bucket-${i}`}>
                     <span className="text-label uppercase text-text-secondary text-[10px]">Book as {needsBucket && <span className="text-primary-text">• pick one</span>}</span>
-                    <select className={`${inp} ${needsBucket ? "ring-2 ring-brand-red" : ""}`} value={pt}
+                    <select className={`${inp} ${needsBucket ? "ring-2 ring-ring" : ""}`} value={pt}
                       data-testid={`review-invoice-bucket-select-${i}`}
                       onChange={(e) => setItem("invoices", i, "purchase_type", e.target.value)}>
                       <option value="">Choose…</option>

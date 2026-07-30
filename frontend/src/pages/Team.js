@@ -151,7 +151,7 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite, member
               <label className="text-label uppercase text-text-secondary">Access — pick what this member can open & use</label>
             </div>
             {form.role === "owner" ? (
-              <div className="border border-hairline-strong bg-brand-red/5 px-3 py-3 text-sm" data-testid="owner-access-note">
+              <div className="border border-hairline-strong bg-primary-tint px-3 py-3 text-sm" data-testid="owner-access-note">
                 <p className="font-semibold flex items-center gap-1.5"><ShieldCheck size={15} weight="bold" className="text-primary-text" /> Full company access</p>
                 <p className="text-xs text-text-secondary mt-1">Owners can open and manage everything — team, finances, workflows and all data. Individual permissions don't apply.</p>
               </div>
@@ -253,7 +253,7 @@ export function TeamPanel() {
                 <span className="text-label uppercase text-text-secondary" data-testid={`member-access-count-${u.id}`}>{userPerms(u).length} access</span>
               )}
               <Chip value={u.role} className={u.role === "owner" ? "bg-primary text-primary-foreground" : "bg-primary text-primary-foreground"} />
-              {absentIds.has(u.id) && <Chip value="absent" className="bg-black text-white" data-testid={`absent-badge-${u.id}`} />}
+              {absentIds.has(u.id) && <Chip value="absent" data-testid={`absent-badge-${u.id}`} />}
               {canManageTeam && (u.role !== "owner" || isOwner) && (
                 <MemberDialog roleOptions={roleOptions} initial={u} members={data || []} isOwner={isOwner} onSaved={refresh}
                   trigger={<button data-testid={`edit-access-${u.id}`} className="flex items-center gap-1 text-xs uppercase tracking-wider border border-hairline px-2 py-1 hover:bg-primary hover:text-white transition-colors"><PencilSimple size={12} weight="bold" /> Access</button>} />

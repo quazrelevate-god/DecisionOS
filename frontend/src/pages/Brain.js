@@ -51,7 +51,7 @@ function SearchPanel() {
         <>
           <p className="text-label uppercase text-text-secondary mb-6">{t("brain.linked", { count: total })}</p>
           {res.scope && res.scope.finance_visible === false && (
-            <div data-testid="brain-finance-restricted" className="mb-6 flex items-center gap-2 text-xs border-l-2 border-hairline-strong bg-brand-red/5 px-3 py-2 rounded">
+            <div data-testid="brain-finance-restricted" className="mb-6 flex items-center gap-2 text-xs border-l-2 border-hairline-strong bg-primary-tint px-3 py-2 rounded">
               <Lock size={14} weight="bold" className="text-primary-text shrink-0" />
               <span>Financial records (invoices, expenses, assets, inventory &amp; amounts) are restricted to Owner and Finance roles.</span>
             </div>
@@ -63,7 +63,7 @@ function SearchPanel() {
               <div className="space-y-3">
                 {res.decisions.map((d) => (
                   <div key={d.id} data-testid={`brain-decision-${d.id}`} className="rounded-lg border border-hairline bg-surface p-4">
-                    <div className="flex items-center justify-between mb-2"><Chip value="decision" className="bg-primary text-primary-foreground" /><Chip value={d.status} /></div>
+                    <div className="flex items-center justify-between mb-2"><Chip value="decision" /><Chip value={d.status} /></div>
                     <p className="font-semibold text-sm">{d.title}</p>
                     <p className="text-xs text-text-secondary mt-1 line-clamp-3">{d.summary}</p>
                     {d.tasks?.length > 0 && (
@@ -83,7 +83,7 @@ function SearchPanel() {
               <div className="space-y-3">
                 {res.tasks.map((tk) => (
                   <div key={tk.id} data-testid={`brain-task-${tk.id}`} className="rounded-lg border border-hairline bg-surface p-4">
-                    <div className="flex items-center justify-between mb-2"><Chip value={tk.status} />{tk.assignee_role && <Chip value={tk.assignee_role} className="bg-surface" />}</div>
+                    <div className="flex items-center justify-between mb-2"><Chip value={tk.status} />{tk.assignee_role && <Chip value={tk.assignee_role} />}</div>
                     <p className="font-semibold text-sm">{tk.title}</p>
                     {tk.description && <p className="text-xs text-text-secondary mt-1 line-clamp-2">{tk.description}</p>}
                   </div>
@@ -97,7 +97,7 @@ function SearchPanel() {
               <div className="space-y-3">
                 {res.workflows.map((w) => (
                   <div key={w.id} data-testid={`brain-workflow-${w.id}`} className="rounded-lg border border-hairline bg-surface p-4">
-                    <div className="flex items-center justify-between mb-2"><Chip value={w.type} className="bg-status-pending-bg text-text" /><Chip value={w.stage} /></div>
+                    <div className="flex items-center justify-between mb-2"><Chip value={w.type} className="text-text" /><Chip value={w.stage} /></div>
                     <p className="font-semibold text-sm">{w.title}</p>
                     {w.counterparty && <p className="text-xs text-text-secondary mt-1">{w.counterparty}</p>}
                   </div>
@@ -129,9 +129,9 @@ function SearchPanel() {
               <h3 className="font-extrabold uppercase tracking-tight text-lg mb-3">{t("brain.memory")} ({res.memory.length})</h3>
               <div className="grid md:grid-cols-2 gap-3">
                 {res.memory.map((m) => (
-                  <div key={m.id} data-testid={`brain-memory-${m.id}`} className="rounded-lg border border-hairline bg-surface p-4 border-l-4 border-l-brand-red">
+                  <div key={m.id} data-testid={`brain-memory-${m.id}`} className="rounded-lg border border-hairline bg-surface p-4 border-l-4 border-l-urgency-overdue">
                     <p className="text-sm">{m.text}</p>
-                    <Chip value={m.tag} className="mt-2 bg-primary text-primary-foreground" />
+                    <Chip value={m.tag} className="mt-2" />
                   </div>
                 ))}
               </div>

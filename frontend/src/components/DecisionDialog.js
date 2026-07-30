@@ -67,7 +67,7 @@ export function DecisionDialog({ decisionId, open, onClose }) {
             <DialogHeader>
               <div className="flex items-center gap-2 flex-wrap">
                 <Chip value={d.status} />
-                {d.dtype && <Chip value={d.dtype} className="bg-primary text-primary-foreground" />}
+                {d.dtype && <Chip value={d.dtype} />}
               </div>
               <DialogTitle className="text-left">{d.title}</DialogTitle>
             </DialogHeader>
@@ -103,7 +103,7 @@ export function DecisionDialog({ decisionId, open, onClose }) {
                 <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()}
                   data-testid="decision-comment-input" placeholder="Write a comment…" className="flex-1 border border-hairline px-2 py-1.5 text-sm focus:outline-none" />
                 <button onClick={send} disabled={sending || !text.trim()} data-testid="decision-comment-send"
-                  className="flex items-center gap-1 bg-primary text-primary-foreground px-3 py-1.5 text-sm font-semibold uppercase tracking-wider border border-hairline hover:bg-brand-red transition-colors disabled:opacity-50">
+                  className="flex items-center gap-1 bg-primary text-primary-foreground px-3 py-1.5 text-sm font-semibold uppercase tracking-wider border border-hairline hover:bg-primary-hover transition-colors disabled:opacity-50">
                   <PaperPlaneTilt size={14} weight="bold" /> Send
                 </button>
               </div>

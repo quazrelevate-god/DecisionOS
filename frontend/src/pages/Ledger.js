@@ -28,8 +28,10 @@ const fmt = (cur) => (n) => {
 };
 
 const SOURCE_CHIP = { manual: "bg-surface-hover text-text", whatsapp: "bg-success-600 text-white", ingest: "bg-primary text-primary-foreground", document: "bg-primary text-primary-foreground" };
-const LEVEL_DOT = { high: "bg-brand-red", medium: "bg-status-pending-bg", low: "bg-primary" };
-const LEVEL_ACCENT = { high: "border-l-brand-red", medium: "border-l-brand-yellow", low: "border-l-brand-blue" };
+const LEVEL_DOT = { high: "bg-primary", medium: "bg-status-pending-bg", low: "bg-primary" };
+// Urgency on a left edge, using the urgency tokens — the same language the
+// grouped feed speaks, rather than three legacy hues.
+const LEVEL_ACCENT = { high: "border-l-urgency-overdue", medium: "border-l-urgency-week", low: "border-l-urgency-later" };
 
 function Field({ label: l, children }) {
   return <div><label className={label}>{l}</label><div className="mt-1">{children}</div></div>;
@@ -576,7 +578,7 @@ function NeedsMatchingPanel({ title, hint, unmatched, open, cur, endpoint, stand
   };
 
   return (
-    <div className="rounded-lg border border-hairline bg-surface p-4 border-2 border-hairline-strong bg-brand-red/5" data-testid={testid}>
+    <div className="rounded-lg border border-hairline bg-surface p-4 border-2 border-hairline-strong bg-primary-tint" data-testid={testid}>
       <div className="flex items-center gap-2 mb-1">
         <WarningCircle size={18} weight="bold" className="text-primary-text" />
         <h3 className="font-extrabold uppercase tracking-tight text-sm">{title} ({unmatched.length})</h3>
@@ -763,7 +765,7 @@ function ExpensesTable({ rows, cur, onDelete }) {
           {rows.map((e) => (
             <tr key={e.id} className="border-b border-hairline/60 hover:bg-black/[0.02]" data-testid={`expense-row-${e.id}`}>
               <td className="p-3 font-medium">{e.title}{e.source !== "manual" && <Chip value={e.source} className={`ml-2 ${SOURCE_CHIP[e.source] || "bg-surface-hover"}`} />}<AttachmentLink att={e.attachment} /></td>
-              <td className="p-3"><Chip value={e.category} className="bg-surface-hover text-text" /></td>
+              <td className="p-3"><Chip value={e.category} className="text-text" /></td>
               <td className="p-3 text-text-secondary">{e.vendor_name || "—"}</td>
               <td className="p-3 text-text-secondary">{e.date || "—"}</td>
               <td className="p-3"><Chip value={e.status} className={e.status === "paid" ? "bg-primary text-primary-foreground" : "bg-status-pending-bg text-text"} /></td>
@@ -791,7 +793,7 @@ function AssetsTable({ rows, cur, onDelete }) {
           {rows.map((a) => (
             <tr key={a.id} className="border-b border-hairline/60 hover:bg-black/[0.02]" data-testid={`asset-row-${a.id}`}>
               <td className="p-3 font-medium">{a.name}{a.source !== "manual" && <Chip value={a.source} className={`ml-2 ${SOURCE_CHIP[a.source] || "bg-surface-hover"}`} />}<AttachmentLink att={a.attachment} /></td>
-              <td className="p-3"><Chip value={a.category} className="bg-surface-hover text-text" /></td>
+              <td className="p-3"><Chip value={a.category} className="text-text" /></td>
               <td className="p-3 text-text-secondary">{a.vendor_name || "—"}</td>
               <td className="p-3 text-text-secondary">{a.purchase_date || "—"}</td>
               <td className="p-3"><Chip value={a.status} className={a.status === "active" ? "bg-primary text-primary-foreground" : "bg-surface-hover text-text"} /></td>

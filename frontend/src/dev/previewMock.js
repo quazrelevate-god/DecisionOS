@@ -86,9 +86,73 @@ const ROUTES = [
   ['/revenue', []],
   ['/payables', []],
   ['/voice-notes', []],
-  ['/inbox', []],
-  ['/decisions', []],
-  ['/tasks', []],
+
+  /* Populated so the Decision Desk can be reviewed with real content: an empty
+     feed proves nothing about density, scannability or the approval card. */
+  [
+    '/inbox',
+    {
+      open_total: 6,
+      counts: { customer: 2, supplier: 1, invoice: 1, payment: 0, complaint: 1, task: 1, approval: 1, reminder: 0 },
+      items: [
+        { id: 'i1', ref_type: 'decision', ref_id: 'd1', classification: 'supplier', source: 'voice', title: 'Approve supplier payment timing', preview: 'Move the ₹4,80,000 payment to Friday to preserve payroll headroom.', amount: 480000, status: 'open' },
+        { id: 'i2', ref_type: 'decision', ref_id: 'd2', classification: 'customer', source: 'whatsapp', title: 'Delhi retailer wants revised quote', preview: 'Asked for 8% off on the packaging line.', amount: null, status: 'open' },
+        { id: 'i3', ref_type: 'task', ref_id: 't3', classification: 'invoice', source: 'text', title: 'Reconcile packaging invoice', preview: 'Two line items do not match the GRN.', amount: 121000, status: 'open' },
+        { id: 'i4', ref_type: 'task', ref_id: 't4', classification: 'complaint', source: 'whatsapp', title: 'Damaged carton reported by Chennai stockist', preview: 'Third complaint this month from the same route.', amount: null, status: 'open' },
+        { id: 'i5', ref_type: 'task', ref_id: 't5', classification: 'task', source: 'text', title: 'Confirm dispatch schedule with transporter', preview: '', amount: null, status: 'open' },
+        { id: 'i6', ref_type: 'task', ref_id: 't6', classification: 'approval', source: 'text', title: 'Leave request — Ravi Kumar', preview: '2 days, next week.', amount: null, status: 'done' },
+      ],
+    },
+  ],
+  [
+    '/decisions',
+    [
+      {
+        id: 'd1',
+        title: 'Approve supplier payment timing',
+        dtype: 'directive',
+        status: 'pending_approval',
+        source: 'voice',
+        created_by_name: 'Prasanna Narayanan',
+        created_at: new Date(0).toISOString(),
+        summary: 'Move the ₹4,80,000 payment to Friday to preserve payroll headroom while maintaining the committed supplier window.',
+        tasks: [
+          { id: 'dt1', title: 'Confirm dispatch schedule', assignee_name: 'Prasanna Narayanan' },
+          { id: 'dt2', title: 'Reconcile packaging invoice', assignee_role: 'finance' },
+        ],
+      },
+      {
+        id: 'd2',
+        title: 'Delhi retailer wants revised quote',
+        dtype: 'directive',
+        status: 'pending_approval',
+        source: 'whatsapp',
+        wa_from: '+91 98••• ••210',
+        created_at: new Date(0).toISOString(),
+        summary: 'Retailer asked for 8% off the packaging line. Margin holds at 6%.',
+        tasks: [{ id: 'dt3', title: 'Send revised quote', assignee_name: 'Ravi Kumar' }],
+      },
+      {
+        id: 'd3',
+        title: 'Switch courier for the southern route',
+        dtype: 'directive',
+        status: 'approved',
+        source: 'text',
+        created_by_name: 'Prasanna Narayanan',
+        created_at: new Date(0).toISOString(),
+        summary: '',
+        tasks: [],
+      },
+    ],
+  ],
+  [
+    '/tasks',
+    [
+      { id: 't3', title: 'Reconcile packaging invoice', status: 'in_progress', priority: 'medium', progress: 50, due_date: '2026-07-28', assignee_name: 'Ravi Kumar' },
+      { id: 't5', title: 'Confirm dispatch schedule with transporter', status: 'todo', priority: 'high', progress: 25, due_date: '2026-08-01', assignee_name: 'Prasanna Narayanan' },
+      { id: 't6', title: 'Leave request — Ravi Kumar', status: 'blocked', priority: 'low', progress: 0, due_date: '2026-08-05' },
+    ],
+  ],
   ['/users', [USER]],
 ];
 

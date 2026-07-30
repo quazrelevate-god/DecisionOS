@@ -3415,10 +3415,10 @@ async def brain_search(q: str = "", user: dict = Depends(require_perm("brain")))
 
 
 # ---------------------------------------------------------------------------
-# Ask AI
+# Ask AI  →  superseded by routers/brain.py (Company Brain Phase-1 pipeline).
+# Kept un-registered (no route) for reference; /api/ask is now served by brain.py.
 # ---------------------------------------------------------------------------
-@api.post("/ask")
-async def ask_ai(inp: AskInput, user: dict = Depends(require_perm("ask"))):
+async def _ask_ai_legacy(inp: AskInput, user: dict):
     tid = user["tenant_id"]
     uid = user.get("id")
     urole = user.get("role")
@@ -6482,6 +6482,8 @@ from routers.ledger import router as ledger_router  # noqa: E402
 app.include_router(ledger_router)
 from routers.admin import router as admin_router  # noqa: E402
 app.include_router(admin_router)
+from routers.brain import router as brain_router  # noqa: E402
+app.include_router(brain_router)
 _cors_env = os.environ.get('CORS_ORIGINS', '*').strip()
 _cors_kwargs = dict(allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 if _cors_env == '*':

@@ -1,0 +1,37 @@
+{
+  "summary": "Iteration 73 — Company Brain 'Ask' pipeline (Phase 1) tested end-to-end. Backend: 10/11 pytest cases pass. All 6 requested scenarios verified: (1) owner on-time analysis returns ANSWER with Completed=25/On time=19/Late=6/On-time rate=76% + 12 sources w/ deep_links + export_options csv/excel/pdf + query_context_id + suggested_questions; (2) SALES asking profit% or 'outstanding invoices' => PERMISSION_DENIED, no kpis/table; owner outstanding invoices returns 8 rows w/ 'outstanding' column; (3) follow-up context via context_id works; (4) employees ranking table has Employee/Team, Department, Overdue, Open columns and is sorted overdue desc — INTERMITTENT: flakes to INSUFFICIENT_DATA (see rca); (5) nonsense question => INSUFFICIENT_DATA; (6) exports csv/excel/pdf return 200 with correct content-types; sales blocked (403) exporting a finance context. Frontend /brain Ask tab: empty state + 4 suggested prompts render; submitting a question shows brain-answer, brain-kpis (KPI-0='Completed 25'), brain-table, 12 brain-source-* chips (source click navigated to /my-work?task=<id>), 4 brain-export-* buttons, 3 brain-followup-* chips. brain-tab-search still works. Sales login on /brain asking profit question shows brain-permission-denied (Restricted card) and NO brain-table.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/ask", "issue": "Employees-ranking query ('Which employees have the most overdue tasks?') intermittently returns INSUFFICIENT_DATA. Root cause: LLM planner may emit non-stopword keywords (e.g., 'most', 'ranking') that pass _rx() and filter db.tasks to zero rows before the employees aggregation runs. _KW_STOP does not include those words, and the employees branch reuses the keyword regex. Suggested fix: for primary_entity=='employees', skip _rx keyword filtering (or empty keywords) so aggregation always runs over the tenant/dept-scoped task set."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration73_brain_ask.py",
+    "/app/test_reports/pytest/iter73.xml"
+  ],
+  "action_items": [
+    "Harden employees-ranking path in routers/brain.py: when plan.primary_entity=='employees', bypass keyword regex in _retrieve() (or clear plan['keywords'] in _refine_plan()) so LLM-supplied noise words like 'most' don't produce zero-record retrieval and a false INSUFFICIENT_DATA response.",
+    "Nice-to-have: dedupe demo INV-2045 (6x duplicate) so owner 'outstanding invoices' table isn't dominated by duplicates (known pre-existing demo-data issue, not this feature)."
+  ],
+  "critical_code_review_comments": [
+    "Numbers are indeed computed in Python (not the LLM) — verified: on-time KPIs derived from db.activity kind=task_done joined with tasks + due_date comparison in _compute().",
+    "Two-layer permission gate is solid: (a) needs_finance/FINANCE_ENTITIES check before retrieval returns PERMISSION_DENIED, and (b) belt-and-suspenders money-column stripping post-compute for non-finance users. Export endpoint mirrors both.",
+    "brain_contexts is tenant-scoped, not user-scoped — any user in the tenant can reference another user's context_id. Finance gate blocks disclosure, but this could allow a sales user to force-run a non-finance context created by another user. Consider scoping to user_id too, or documenting the intent.",
+    "_KW_STOP is a good stop-list but incomplete for planner noise (e.g., 'most','ranking','list','records'). Consider adding these or making keyword filtering optional per intent.",
+    "brain.py is ~800 lines and mixes planner + retrieval + compute + answer + export. Consider splitting into brain_pipeline.py (plan/retrieve/compute) + brain_router.py + brain_export.py to keep files <700 lines per code-review guideline."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration73_brain_ask.py"],
+  "success_rate": {"backend": "91% (10/11 pytest, employees flake)", "frontend": "100%"},
+  "test_credentials": "owner@sharma.com / demo1234, sales@sharma.com / demo1234",
+  "seed_data_creation": "None. Used existing Sharma demo.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "After main agent fixes the employees-ranking keyword flake, re-run pytest /app/backend/tests/test_iteration73_brain_ask.py 3x to confirm test_employees_overdue_ranking is stable. All other cases (owner ANSWER, sales PERMISSION_DENIED, follow-up context, INSUFFICIENT_DATA, exports csv/excel/pdf, sales-blocked export) pass reliably.",
+  "rca of the issue": "test_employees_overdue_ranking flake: LLM query planner extracts keywords such as ['most','overdue','employees'] from 'Which employees have the most overdue tasks?'. _KW_STOP strips 'overdue' and 'employees' but not 'most', so _rx returns a regex /most/i applied to db.tasks {title,description} in _retrieve(). Sharma demo has no task titles containing 'most', so retrieval returns [] tasks; the employees aggregation therefore produces 0 rows; ask() returns INSUFFICIENT_DATA. Reproduction: repeat the same question ~3 times; ~2/3 runs will flake depending on planner output. Mitigation: in _retrieve() branch for entity=='employees', ignore keyword regex OR in _refine_plan() when plan.primary_entity becomes 'employees', overwrite plan['keywords']=[]."
+}

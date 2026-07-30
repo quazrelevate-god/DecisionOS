@@ -22,7 +22,7 @@ import {
   File, FileArrowUp, Lightbulb, Info,
 } from "@phosphor-icons/react";
 
-const CTRL = "flex items-center justify-center gap-1.5 px-2 lg:px-4 py-2 text-[11px] lg:text-sm font-semibold uppercase tracking-wider border border-black transition-all text-center leading-tight";
+const CTRL = "flex items-center justify-center gap-1.5 px-2 lg:px-4 py-2 text-[11px] lg:text-sm font-semibold uppercase tracking-wider border border-hairline transition-all text-center leading-tight";
 
 const STATUS_OPTIONS = [
   { key: "todo", label: "Not Started" },
@@ -46,7 +46,7 @@ function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel }) 
   const [toId, setToId] = useState("");
   const [toRole, setToRole] = useState("");
   const [busy, setBusy] = useState(false);
-  const inp = "w-full border border-black px-2 py-1.5 text-sm focus:outline-none";
+  const inp = "w-full border border-hairline px-2 py-1.5 text-sm focus:outline-none";
 
   const submit = async () => {
     if (!text.trim()) return toast.error("Write what you found");
@@ -70,13 +70,13 @@ function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel }) 
   ];
 
   return (
-    <div className="border border-dashed border-black/50 p-3 space-y-2 bg-brand-paper" data-testid={`update-form-${taskId}`}>
+    <div className="border border-dashed border-hairline p-3 space-y-2 bg-background" data-testid={`update-form-${taskId}`}>
       <textarea rows={2} value={text} onChange={(e) => setText(e.target.value)} data-testid={`update-text-${taskId}`}
         placeholder="What did you find? e.g. Logistics can't commit to a date — supplier issue" className={inp} />
       <div className="flex gap-1">
         {ACTIONS.map((a) => (
           <button key={a.key} onClick={() => setAction(a.key)} data-testid={`update-action-${a.key}-${taskId}`}
-            className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-semibold uppercase tracking-wider border border-black transition-colors ${action === a.key ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+            className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-semibold uppercase tracking-wider border border-hairline transition-colors ${action === a.key ? "bg-brand-ink text-white" : "bg-surface hover:bg-surface-hover"}`}>
             <a.icon size={13} weight="bold" /> {a.label}
           </button>
         ))}
@@ -93,13 +93,13 @@ function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel }) 
           </select>
         </div>
       )}
-      {action === "escalate" && <p className="text-xs text-muted-foreground">This will alert the owner and create a follow-up for them.</p>}
+      {action === "escalate" && <p className="text-xs text-text-secondary">This will alert the owner and create a follow-up for them.</p>}
       <div className="flex gap-2">
         <button onClick={submit} disabled={busy} data-testid={`update-submit-${taskId}`}
-          className="flex-1 bg-brand-blue text-white py-1.5 text-xs font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-50">
+          className="flex-1 bg-primary text-primary-foreground py-1.5 text-xs font-semibold uppercase tracking-wider rounded-md hover:bg-primary-hover transition-all disabled:opacity-50">
           {busy ? "Posting…" : "Post"}
         </button>
-        <button onClick={onCancel} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-black hover:bg-black/5">Cancel</button>
+        <button onClick={onCancel} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-hairline hover:bg-surface-hover">Cancel</button>
       </div>
     </div>
   );
@@ -111,14 +111,14 @@ function TaskTrail({ t, members, roleOptions, onChange }) {
   const [open, setOpen] = useState(false);
   const updates = t.updates || [];
   return (
-    <div className="mt-4 border-t border-black/10 pt-4" data-testid={`task-trail-${t.id}`}>
+    <div className="mt-4 border-t border-hairline pt-4" data-testid={`task-trail-${t.id}`}>
       <div className="flex items-center justify-between mb-2">
-        <span className="flex items-center gap-2 font-heading font-extrabold uppercase tracking-tight text-sm">
-          <ChatCircleText size={16} weight="bold" className="text-brand-red" /> Activity &amp; Handoffs
+        <span className="flex items-center gap-2 font-extrabold uppercase tracking-tight text-sm">
+          <ChatCircleText size={16} weight="bold" className="text-text-tertiary" /> Activity &amp; Handoffs
         </span>
         {!open && (
           <button onClick={() => setOpen(true)} data-testid={`add-update-${t.id}`}
-            className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-yellow transition-colors">
+            className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-hairline px-2 py-1 hover:bg-surface-hover transition-colors">
             <Plus size={12} weight="bold" /> Update / Escalate
           </button>
         )}
@@ -128,12 +128,12 @@ function TaskTrail({ t, members, roleOptions, onChange }) {
           {updates.map((u) => {
             const Icon = UPDATE_ICON[u.kind] || ChatText;
             return (
-              <li key={u.id} className="flex items-start gap-2 border border-black/15 p-2.5">
-                <Icon size={15} weight="bold" className={`mt-0.5 shrink-0 ${u.kind === "escalate" ? "text-brand-red" : u.kind === "handoff" ? "text-brand-blue" : "text-muted-foreground"}`} />
+              <li key={u.id} className="flex items-start gap-2 border border-hairline p-2.5">
+                <Icon size={15} weight="bold" className={`mt-0.5 shrink-0 ${u.kind === "escalate" ? "text-destructive-text" : u.kind === "handoff" ? "text-brand-blue" : "text-text-secondary"}`} />
                 <div className="min-w-0 flex-1">
-                  {u.step_text && <p className="label-mono text-muted-foreground">On: {u.step_text}</p>}
+                  {u.step_text && <p className="text-label uppercase text-text-secondary">On: {u.step_text}</p>}
                   <p className="text-sm">{u.text}</p>
-                  <p className="label-mono text-muted-foreground mt-1">
+                  <p className="text-label uppercase text-text-secondary mt-1">
                     {u.author_name}
                     {u.to_name && <> <ArrowRight size={10} weight="bold" className="inline" /> {u.to_name}</>}
                     {" · "}{new Date(u.created_at).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
@@ -249,17 +249,17 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
     } catch { setAsk((a) => ({ ...a, [s.id]: { error: true } })); }
   };
 
-  const inp = "flex-1 border border-black px-2 py-1.5 text-sm focus:outline-none";
+  const inp = "flex-1 border border-hairline px-2 py-1.5 text-sm focus:outline-none";
 
   if (!plan && !steps.length) {
     return (
       <div className="mt-4 flex flex-col sm:flex-row gap-2" data-testid={`exec-plan-empty-${t.id}`}>
         <button onClick={generate} disabled={busy} data-testid={`generate-plan-${t.id}`}
-          className="flex-1 flex items-center justify-center gap-2 border border-dashed border-brand-red text-brand-red py-2.5 text-sm font-semibold uppercase tracking-wider hover:bg-brand-red hover:text-white transition-colors disabled:opacity-50">
+          className="flex-1 flex items-center justify-center gap-2 border border-dashed border-hairline-strong text-primary-text py-2.5 text-sm font-semibold uppercase tracking-wider hover:bg-destructive-tint transition-colors disabled:opacity-50">
           <Sparkle size={16} weight="bold" /> {busy ? "Thinking…" : "Generate AI plan"}
         </button>
         <button onClick={startManual} disabled={busy} data-testid={`manual-plan-${t.id}`}
-          className="flex-1 flex items-center justify-center gap-2 border border-dashed border-black text-brand-ink py-2.5 text-sm font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors disabled:opacity-50">
+          className="flex-1 flex items-center justify-center gap-2 border border-dashed border-hairline text-brand-ink py-2.5 text-sm font-semibold uppercase tracking-wider hover:bg-surface-hover transition-colors disabled:opacity-50">
           <PencilSimple size={16} weight="bold" /> Manual execution plan
         </button>
       </div>
@@ -267,15 +267,15 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
   }
 
   return (
-    <div className="mt-4 border-t border-black/10 pt-4" data-testid={`exec-plan-${t.id}`}>
+    <div className="mt-4 border-t border-hairline pt-4" data-testid={`exec-plan-${t.id}`}>
       <div className="flex items-center justify-between mb-2">
-        <span className="flex items-center gap-2 font-heading font-extrabold uppercase tracking-tight text-sm">
-          <ListChecks size={16} weight="bold" className="text-brand-red" /> AI Execution Guide
+        <span className="flex items-center gap-2 font-extrabold uppercase tracking-tight text-sm">
+          <ListChecks size={16} weight="bold" className="text-text-tertiary" /> AI Execution Guide
         </span>
-        <span className="label-mono" data-testid={`exec-progress-${t.id}`}>{progress}%</span>
+        <span className="text-label uppercase" data-testid={`exec-progress-${t.id}`}>{progress}%</span>
       </div>
-      <div className="h-2 bg-black/10 border border-black mb-3">
-        <div className="h-full bg-brand-blue transition-all" style={{ width: `${progress}%` }} />
+      <div className="h-2 bg-surface-sunken border border-hairline mb-3">
+        <div className="h-full bg-primary transition-all" style={{ width: `${progress}%` }} />
       </div>
 
       <div className="space-y-2">
@@ -287,27 +287,27 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
                   <textarea value={s.text} onChange={(e) => editStep(i, e.target.value)} rows={2}
                     className={`${inp} w-full resize-y leading-snug`} />
                   <div className="flex gap-1 shrink-0 self-end sm:self-start">
-                    <button onClick={() => setViewStep(s)} data-testid={`exec-expand-${t.id}-${i}`} className="p-2 sm:p-1 border border-black hover:bg-brand-blue hover:text-white" title="View full"><ArrowsOutSimple size={14} weight="bold" /></button>
-                    <button onClick={() => moveStep(i, -1)} className="p-2 sm:p-1 border border-black hover:bg-black/5" title="Up"><ArrowUp size={14} weight="bold" /></button>
-                    <button onClick={() => moveStep(i, 1)} className="p-2 sm:p-1 border border-black hover:bg-black/5" title="Down"><ArrowDown size={14} weight="bold" /></button>
-                    <button onClick={() => removeStep(i)} data-testid={`exec-remove-${t.id}-${i}`} className="p-2 sm:p-1 border border-black hover:bg-brand-red hover:text-white" title="Remove"><Trash size={14} weight="bold" /></button>
+                    <button onClick={() => setViewStep(s)} data-testid={`exec-expand-${t.id}-${i}`} className="p-2 sm:p-1 border border-hairline hover:bg-brand-blue hover:text-white" title="View full"><ArrowsOutSimple size={14} weight="bold" /></button>
+                    <button onClick={() => moveStep(i, -1)} className="p-2 sm:p-1 border border-hairline hover:bg-surface-hover" title="Up"><ArrowUp size={14} weight="bold" /></button>
+                    <button onClick={() => moveStep(i, 1)} className="p-2 sm:p-1 border border-hairline hover:bg-surface-hover" title="Down"><ArrowDown size={14} weight="bold" /></button>
+                    <button onClick={() => removeStep(i)} data-testid={`exec-remove-${t.id}-${i}`} className="p-2 sm:p-1 border border-hairline hover:bg-destructive-tint" title="Remove"><Trash size={14} weight="bold" /></button>
                   </div>
                 </>
               ) : (
                 <>
                   <button onClick={() => toggle(i)} data-testid={`exec-toggle-${t.id}-${i}`}
-                    className={`w-5 h-5 shrink-0 mt-0.5 border border-black flex items-center justify-center ${s.done ? "bg-brand-ink text-white" : "bg-white"}`}>
+                    className={`w-5 h-5 shrink-0 mt-0.5 border border-hairline flex items-center justify-center ${s.done ? "bg-success-600 text-text-inverse" : "bg-surface"}`}>
                     {s.done && <CheckCircle size={13} weight="bold" />}
                   </button>
                   <button onClick={() => setViewStep(s)} data-testid={`exec-view-${t.id}-${i}`}
-                    className={`text-sm flex-1 min-w-0 text-left break-words hover:underline decoration-dotted ${s.done ? "line-through text-muted-foreground" : ""}`}>{s.text}</button>
+                    className={`text-sm flex-1 min-w-0 text-left break-words hover:underline decoration-dotted ${s.done ? "line-through text-text-secondary" : ""}`}>{s.text}</button>
                   <div className="flex gap-1 shrink-0">
                     <button onClick={() => askAI(s)} data-testid={`exec-ask-${t.id}-${i}`}
-                      className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-yellow transition-colors">
+                      className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-hairline px-2 py-1 hover:bg-surface-hover transition-colors">
                       <Sparkle size={12} weight="bold" /> Ask AI
                     </button>
                     <button onClick={() => setUpdStep(updStep === s.id ? null : s.id)} data-testid={`exec-update-${t.id}-${i}`}
-                      className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-blue hover:text-white transition-colors">
+                      className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-hairline px-2 py-1 hover:bg-brand-blue hover:text-white transition-colors">
                       <ArrowBendUpRight size={12} weight="bold" /> Update
                     </button>
                   </div>
@@ -321,7 +321,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
               </div>
             )}
             {ask[s.id] && (
-              <div className="ml-7 mt-1.5 mb-2 border border-black bg-brand-paper p-2.5 text-xs" data-testid={`exec-ask-result-${t.id}-${i}`}>
+              <div className="ml-7 mt-1.5 mb-2 border border-hairline bg-background p-2.5 text-xs" data-testid={`exec-ask-result-${t.id}-${i}`}>
                 {ask[s.id].loading ? <p className="font-mono">AI is thinking…</p>
                   : ask[s.id].error ? <p className="text-brand-red">Couldn't fetch a suggestion.</p>
                   : (
@@ -329,13 +329,13 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
                       <p className="flex items-start gap-1.5"><Robot size={13} weight="bold" className="text-brand-blue mt-0.5 shrink-0" /><span>{ask[s.id].data.suggestion}</span></p>
                       {(ask[s.id].data.objections || []).length > 0 && (
                         <div className="mt-2 space-y-1.5">
-                          <p className="label-mono text-muted-foreground">If they push back:</p>
+                          <p className="text-label uppercase text-text-secondary">If they push back:</p>
                           {ask[s.id].data.objections.map((o, k) => (
                             <p key={`${o.objection}-${k}`}><span className="font-semibold">“{o.objection}”</span> — {o.response}</p>
                           ))}
                         </div>
                       )}
-                      <button onClick={() => setAsk((a) => ({ ...a, [s.id]: undefined }))} className="mt-2 label-mono text-brand-red">dismiss</button>
+                      <button onClick={() => setAsk((a) => ({ ...a, [s.id]: undefined }))} className="mt-2 text-label uppercase text-brand-red">dismiss</button>
                     </>
                   )}
               </div>
@@ -348,7 +348,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
         <div className="flex gap-2 mt-3">
           <input value={newStep} onChange={(e) => setNewStep(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addStep()}
             placeholder="Add your own step…" data-testid={`exec-newstep-${t.id}`} className={inp} />
-          <button onClick={addStep} data-testid={`exec-add-${t.id}`} className="px-3 border border-black hover:bg-black/5"><Plus size={14} weight="bold" /></button>
+          <button onClick={addStep} data-testid={`exec-add-${t.id}`} className="px-3 border border-hairline hover:bg-surface-hover"><Plus size={14} weight="bold" /></button>
         </div>
       )}
 
@@ -356,22 +356,22 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
         {editing ? (
           <>
             <button onClick={() => save("accepted")} disabled={busy} data-testid={`exec-accept-${t.id}`}
-              className="flex-1 min-w-[140px] flex items-center justify-center gap-2 bg-brand-blue text-white py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-50">
+              className="flex-1 min-w-[140px] flex items-center justify-center gap-2 bg-brand-blue text-white py-2 text-sm font-semibold uppercase tracking-wider border border-hairline hover:shadow-xs transition-all disabled:opacity-50">
               <CheckCircle size={16} weight="bold" /> Accept plan
             </button>
             <button onClick={generate} disabled={busy} data-testid={`exec-regenerate-${t.id}`}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:bg-brand-yellow transition-colors disabled:opacity-50">
+              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline hover:bg-surface-hover transition-colors disabled:opacity-50">
               <ArrowClockwise size={15} weight="bold" /> Regenerate
             </button>
             <button onClick={cancelAIPlan} disabled={busy} data-testid={`exec-cancel-plan-${t.id}`}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black text-brand-red hover:bg-brand-red hover:text-white transition-colors disabled:opacity-50">
+              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline text-brand-red hover:bg-destructive-tint transition-colors disabled:opacity-50">
               <XCircle size={15} weight="bold" /> Cancel plan
             </button>
           </>
         ) : (
           t.status !== "done" && (
             <button onClick={() => setEditing(true)} data-testid={`exec-edit-${t.id}`}
-              className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider border border-black px-4 py-2 hover:bg-brand-ink hover:text-white transition-colors">
+              className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider border border-hairline px-4 py-2 hover:bg-surface-hover transition-colors">
               <PencilSimple size={15} weight="bold" /> Customize steps
             </button>
           )
@@ -379,12 +379,12 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
       </div>
 
       <Dialog open={!!viewStep} onOpenChange={(o) => !o && setViewStep(null)}>
-        <DialogContent className="border border-black rounded-none">
+        <DialogContent className="border border-hairline rounded-md">
           <DialogHeader>
-            <DialogTitle className="font-heading uppercase tracking-tight text-base flex items-center gap-2"><ListChecks size={18} weight="bold" className="text-brand-red" /> Execution Step</DialogTitle>
+            <DialogTitle className="uppercase tracking-tight text-base flex items-center gap-2"><ListChecks size={18} weight="bold" className="text-brand-red" /> Execution Step</DialogTitle>
           </DialogHeader>
           <p className="text-sm leading-relaxed whitespace-pre-wrap break-words" data-testid={`exec-step-detail-${t.id}`}>{viewStep?.text}</p>
-          <p className="label-mono text-muted-foreground mt-1">Tap outside to close</p>
+          <p className="text-label uppercase text-text-secondary mt-1">Tap outside to close</p>
         </DialogContent>
       </Dialog>
     </div>
@@ -400,25 +400,25 @@ const PRIORITY_AXES = [
 
 function PriorityScoreBars({ scores }) {
   return (
-    <div className="mt-3 border border-black/15 bg-black/[0.02] p-3" data-testid="priority-score-bars">
+    <div className="mt-3 border border-hairline bg-black/[0.02] p-3" data-testid="priority-score-bars">
       <div className="flex items-center justify-between mb-2">
-        <span className="label-mono text-muted-foreground flex items-center gap-1"><Sparkle size={12} weight="bold" className="text-brand-red" /> AI Priority</span>
+        <span className="text-label uppercase text-text-secondary flex items-center gap-1"><Sparkle size={12} weight="bold" className="text-brand-red" /> AI Priority</span>
         {scores.priority_score != null && (
-          <span className="font-heading font-black text-lg leading-none" data-testid="priority-score-value">{scores.priority_score}</span>
+          <span className="font-black text-lg leading-none" data-testid="priority-score-value">{scores.priority_score}</span>
         )}
       </div>
       <div className="space-y-1.5">
         {PRIORITY_AXES.map((a) => (
           <div key={a.key} className="flex items-center gap-2" data-testid={`axis-${a.key}`}>
-            <span className="label-mono w-16 shrink-0 text-muted-foreground">{a.label}</span>
-            <div className="flex-1 h-2 bg-black/10 border border-black/20">
+            <span className="text-label uppercase w-16 shrink-0 text-text-secondary">{a.label}</span>
+            <div className="flex-1 h-2 bg-surface-sunken border border-hairline">
               <div className={`h-full ${a.color}`} style={{ width: `${scores[a.key] || 0}%` }} />
             </div>
-            <span className="label-mono w-7 text-right">{scores[a.key] || 0}</span>
+            <span className="text-label uppercase w-7 text-right">{scores[a.key] || 0}</span>
           </div>
         ))}
       </div>
-      {scores.reason && <p className="text-xs text-muted-foreground mt-2 italic">{scores.reason}</p>}
+      {scores.reason && <p className="text-xs text-text-secondary mt-2 italic">{scores.reason}</p>}
     </div>
   );
 }
@@ -453,33 +453,33 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
   const isAudio = (a) => a.kind === "voice" || (a.content_type || "").startsWith("audio/");
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) { setZoom(null); setConfirmDel(false); } onOpenChange(o); }}>
-      <DialogContent className="border border-black rounded-none max-w-2xl max-h-[90vh] overflow-y-auto" data-testid={`task-detail-${t.id}`}>
+      <DialogContent className="border border-hairline rounded-md max-w-2xl max-h-[90vh] overflow-y-auto" data-testid={`task-detail-${t.id}`}>
         <DialogHeader>
-          <DialogTitle className="font-heading uppercase tracking-tight text-base pr-6">{t.title}</DialogTitle>
+          <DialogTitle className="uppercase tracking-tight text-base pr-6">{t.title}</DialogTitle>
         </DialogHeader>
         {zoom ? (
           <div className="space-y-3">
-            <button onClick={() => setZoom(null)} data-testid={`detail-zoom-back-${t.id}`} className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-black px-2 py-1 hover:bg-black/5"><X size={14} weight="bold" /> Back to details</button>
-            <img src={zoom} alt="proof full" className="w-full h-auto max-h-[70vh] object-contain border border-black" />
+            <button onClick={() => setZoom(null)} data-testid={`detail-zoom-back-${t.id}`} className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-hairline px-2 py-1 hover:bg-surface-hover"><X size={14} weight="bold" /> Back to details</button>
+            <img src={zoom} alt="proof full" className="w-full h-auto max-h-[70vh] object-contain border border-hairline" />
           </div>
         ) : (
           <div className="space-y-5">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-black bg-white">{STATUS_LABEL[t.status] || t.status}</span>
-              {t.assignee_name && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><UserCircle size={13} weight="bold" /> {t.assignee_name}</span>}
-              {t.due_date && <span className="text-xs text-muted-foreground">due {new Date(t.due_date).toLocaleDateString()}</span>}
-              <span className="label-mono text-muted-foreground ml-auto">{t.progress || 0}%</span>
+              <span className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-hairline bg-surface">{STATUS_LABEL[t.status] || t.status}</span>
+              {t.assignee_name && <span className="inline-flex items-center gap-1 text-xs text-text-secondary"><UserCircle size={13} weight="bold" /> {t.assignee_name}</span>}
+              {t.due_date && <span className="text-xs text-text-secondary">due {new Date(t.due_date).toLocaleDateString()}</span>}
+              <span className="text-label uppercase text-text-secondary ml-auto">{t.progress || 0}%</span>
             </div>
-            {t.description && <p className="text-sm text-muted-foreground">{t.description}</p>}
+            {t.description && <p className="text-sm text-text-secondary">{t.description}</p>}
 
             {steps.length > 0 && (
               <div>
-                <p className="flex items-center gap-2 font-heading font-extrabold uppercase tracking-tight text-sm mb-2"><ListChecks size={16} weight="bold" className="text-brand-red" /> What was done</p>
+                <p className="flex items-center gap-2 font-extrabold uppercase tracking-tight text-sm mb-2"><ListChecks size={16} weight="bold" className="text-text-tertiary" /> What was done</p>
                 <ul className="space-y-1.5">
                   {steps.map((s) => (
                     <li key={s.id} className="flex items-start gap-2 text-sm" data-testid={`detail-step-${t.id}-${s.id}`}>
-                      <CheckCircle size={16} weight={s.done ? "fill" : "regular"} className={`mt-0.5 shrink-0 ${s.done ? "text-green-600" : "text-muted-foreground"}`} />
-                      <span className={s.done ? "line-through text-muted-foreground" : ""}>{s.text}</span>
+                      <CheckCircle size={16} weight={s.done ? "fill" : "regular"} className={`mt-0.5 shrink-0 ${s.done ? "text-green-600" : "text-text-secondary"}`} />
+                      <span className={s.done ? "line-through text-text-secondary" : ""}>{s.text}</span>
                     </li>
                   ))}
                 </ul>
@@ -488,30 +488,30 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
 
             {refs.length > 0 && (
               <div data-testid={`detail-reference-${t.id}`}>
-                <p className="flex items-center gap-2 font-heading font-extrabold uppercase tracking-tight text-sm mb-2"><Paperclip size={15} weight="bold" className="text-brand-blue" /> Reference material · {refs.length}</p>
+                <p className="flex items-center gap-2 font-extrabold uppercase tracking-tight text-sm mb-2"><Paperclip size={15} weight="bold" className="text-brand-blue" /> Reference material · {refs.length}</p>
                 <div className="flex flex-wrap gap-2 items-center">
                   {refs.map((a) => (
                     isImg(a)
                       ? <button key={a.url} type="button" onClick={() => setZoom(url(a.url))} data-testid={`detail-ref-photo-${t.id}-${a.url}`}
-                          className="relative w-24 h-24 border border-black overflow-hidden group" title="Click to view full image">
+                          className="relative w-24 h-24 border border-hairline overflow-hidden group" title="Click to view full image">
                           <img src={url(a.url)} alt={a.filename || "reference"} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
                           <span className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"><MagnifyingGlassPlus size={20} weight="bold" className="text-white" /></span>
                         </button>
                       : isAudio(a)
                         ? <audio key={a.url} controls preload="none" src={url(a.url)} className="h-9 w-full" data-testid={`detail-ref-voice-${t.id}-${a.url}`} />
                         : <a key={a.url} href={url(a.url)} target="_blank" rel="noreferrer" data-testid={`detail-ref-file-${t.id}-${a.url}`}
-                            className="inline-flex items-center gap-1.5 border border-black bg-white px-2.5 py-1.5 text-xs font-mono hover:bg-brand-yellow transition-colors max-w-[220px]">
+                            className="inline-flex items-center gap-1.5 border border-hairline bg-surface px-2.5 py-1.5 text-xs font-mono hover:bg-surface-hover transition-colors max-w-[220px]">
                             <File size={14} weight="bold" /> <span className="truncate">{a.filename || "file"}</span>
                           </a>
                   ))}
                 </div>
                 {insights.map((ins, i) => (
                   <div key={i} className="mt-3 border border-brand-blue/40 bg-brand-blue/[0.04] p-3" data-testid={`detail-ref-insight-${t.id}-${i}`}>
-                    <p className="flex items-center gap-1.5 label-mono text-brand-blue mb-1"><Lightbulb size={13} weight="fill" className="text-brand-yellow" /> AI read this reference{ins.filename ? ` · ${ins.filename}` : ""}</p>
+                    <p className="flex items-center gap-1.5 text-label uppercase text-brand-blue mb-1"><Lightbulb size={13} weight="fill" className="text-brand-yellow" /> AI read this reference{ins.filename ? ` · ${ins.filename}` : ""}</p>
                     <p className="text-sm">{ins.summary}</p>
                     {(ins.points || []).length > 0 && (
                       <ul className="mt-2 space-y-1">
-                        {ins.points.map((p, j) => <li key={j} className="flex items-start gap-1.5 text-xs text-muted-foreground"><ArrowRight size={11} weight="bold" className="mt-0.5 shrink-0 text-brand-blue" /> {p}</li>)}
+                        {ins.points.map((p, j) => <li key={j} className="flex items-start gap-1.5 text-xs text-text-secondary"><ArrowRight size={11} weight="bold" className="mt-0.5 shrink-0 text-brand-blue" /> {p}</li>)}
                       </ul>
                     )}
                   </div>
@@ -520,16 +520,16 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
             )}
 
             <div>
-              <p className="flex items-center gap-2 font-heading font-extrabold uppercase tracking-tight text-sm mb-2"><Paperclip size={15} weight="bold" className="text-brand-red" /> Proof of work{proof.length > 0 ? ` · ${proof.length}` : ""}</p>
+              <p className="flex items-center gap-2 font-extrabold uppercase tracking-tight text-sm mb-2"><Paperclip size={15} weight="bold" className="text-brand-red" /> Proof of work{proof.length > 0 ? ` · ${proof.length}` : ""}</p>
               {proof.length === 0 ? (
-                <p className="text-sm text-muted-foreground" data-testid={`detail-no-proof-${t.id}`}>No proof uploaded for this task.</p>
+                <p className="text-sm text-text-secondary" data-testid={`detail-no-proof-${t.id}`}>No proof uploaded for this task.</p>
               ) : (
                 <div className="space-y-2">
                   {photos.length > 0 && (
                     <div className="flex flex-wrap gap-2">
                       {photos.map((a) => (
                         <button key={a.url} type="button" onClick={() => setZoom(url(a.url))} data-testid={`detail-photo-${t.id}-${a.url}`}
-                          className="relative w-24 h-24 border border-black overflow-hidden group" title="Click to view full photo">
+                          className="relative w-24 h-24 border border-hairline overflow-hidden group" title="Click to view full photo">
                           <img src={url(a.url)} alt="proof" className="w-full h-full object-cover transition-transform group-hover:scale-105" />
                           <span className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"><MagnifyingGlassPlus size={20} weight="bold" className="text-white" /></span>
                         </button>
@@ -540,7 +540,7 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
                     isAudio(a)
                       ? <audio key={a.url} controls preload="none" src={url(a.url)} className="h-9 w-full" data-testid={`detail-voice-${t.id}-${a.url}`} />
                       : <a key={a.url} href={url(a.url)} target="_blank" rel="noreferrer" data-testid={`detail-proof-file-${t.id}-${a.url}`}
-                          className="inline-flex items-center gap-1.5 border border-black bg-white px-2.5 py-1.5 text-xs font-mono hover:bg-brand-yellow transition-colors max-w-[220px]">
+                          className="inline-flex items-center gap-1.5 border border-hairline bg-surface px-2.5 py-1.5 text-xs font-mono hover:bg-surface-hover transition-colors max-w-[220px]">
                           <File size={14} weight="bold" /> <span className="truncate">{a.filename || "file"}</span>
                         </a>
                   ))}
@@ -550,15 +550,15 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
 
             {updates.length > 0 && (
               <div>
-                <p className="flex items-center gap-2 font-heading font-extrabold uppercase tracking-tight text-sm mb-2"><ChatCircleText size={16} weight="bold" className="text-brand-red" /> Activity &amp; Handoffs</p>
+                <p className="flex items-center gap-2 font-extrabold uppercase tracking-tight text-sm mb-2"><ChatCircleText size={16} weight="bold" className="text-text-tertiary" /> Activity &amp; Handoffs</p>
                 <ul className="space-y-2">
                   {updates.map((u) => (
-                    <li key={u.id} className="flex items-start gap-2 border border-black/15 p-2.5">
-                      <ChatText size={15} weight="bold" className="mt-0.5 shrink-0 text-muted-foreground" />
+                    <li key={u.id} className="flex items-start gap-2 border border-hairline p-2.5">
+                      <ChatText size={15} weight="bold" className="mt-0.5 shrink-0 text-text-secondary" />
                       <div className="min-w-0 flex-1">
-                        {u.step_text && <p className="label-mono text-muted-foreground">On: {u.step_text}</p>}
+                        {u.step_text && <p className="text-label uppercase text-text-secondary">On: {u.step_text}</p>}
                         <p className="text-sm">{u.text}</p>
-                        <p className="label-mono text-muted-foreground mt-1">{u.author_name}{u.to_name && <> <ArrowRight size={10} weight="bold" className="inline" /> {u.to_name}</>}{" · "}{new Date(u.created_at).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
+                        <p className="text-label uppercase text-text-secondary mt-1">{u.author_name}{u.to_name && <> <ArrowRight size={10} weight="bold" className="inline" /> {u.to_name}</>}{" · "}{new Date(u.created_at).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
                       </div>
                     </li>
                   ))}
@@ -567,21 +567,21 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
             )}
 
             {isOwner && (
-              <div className="border-t border-black/15 pt-3">
+              <div className="border-t border-hairline pt-3">
                 {!confirmDel ? (
                   <button onClick={() => setConfirmDel(true)} data-testid={`delete-task-${t.id}`}
-                    className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-brand-red border border-brand-red px-3 py-1.5 hover:bg-brand-red hover:text-white transition-colors">
+                    className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-brand-red border border-brand-red px-3 py-1.5 hover:bg-destructive-tint transition-colors">
                     <Trash size={13} weight="bold" /> Delete task
                   </button>
                 ) : (
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs font-semibold">Delete this task permanently?</span>
                     <button onClick={doDelete} disabled={deleting} data-testid={`delete-task-confirm-${t.id}`}
-                      className="text-xs font-semibold uppercase tracking-wider bg-brand-red text-white px-3 py-1.5 border border-brand-red hover:shadow-brutal-sm transition-all disabled:opacity-60">
+                      className="text-xs font-semibold uppercase tracking-wider bg-brand-red text-white px-3 py-1.5 border border-brand-red hover:shadow-xs transition-all disabled:opacity-60">
                       {deleting ? "Deleting…" : "Yes, delete"}
                     </button>
                     <button onClick={() => setConfirmDel(false)} disabled={deleting}
-                      className="text-xs font-semibold uppercase tracking-wider border border-black px-3 py-1.5 hover:bg-black/5 transition-colors">
+                      className="text-xs font-semibold uppercase tracking-wider border border-hairline px-3 py-1.5 hover:bg-surface-hover transition-colors">
                       Cancel
                     </button>
                   </div>
@@ -721,17 +721,17 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
   };
 
   const isOp = t.task_type === "operational" || !!t.op_category;
-  const selCls = "border border-black px-2 py-1 text-xs font-mono bg-white focus:outline-none";
+  const selCls = "border border-hairline px-2 py-1 text-xs font-mono bg-surface focus:outline-none";
 
   return (
-    <div id={`task-card-${t.id}`} data-testid={`mywork-task-${t.id}`} className={`card-brutal p-5 transition-all ${highlight ? "ring-4 ring-brand-red ring-offset-2 ring-offset-brand-paper" : ""}`}>
+    <div id={`task-card-${t.id}`} data-testid={`mywork-task-${t.id}`} className={`rounded-lg border border-hairline bg-surface p-5 transition-all ${highlight ? "ring-4 ring-brand-red ring-offset-2 ring-offset-brand-paper" : ""}`}>
       <div className="flex items-start justify-between gap-2">
-        <p className="font-heading font-bold text-lg leading-tight">{t.title}</p>
+        <p className="font-bold text-lg leading-tight">{t.title}</p>
         <Chip value={t.priority} />
       </div>
-      {t.description && <p className="text-sm text-muted-foreground mt-1">{t.description}</p>}
+      {t.description && <p className="text-sm text-text-secondary mt-1">{t.description}</p>}
       {showAssignee && !isOp && (
-        <p className="label-mono text-muted-foreground mt-2 flex items-center gap-1" data-testid={`assignee-line-${t.id}`}>
+        <p className="text-label uppercase text-text-secondary mt-2 flex items-center gap-1" data-testid={`assignee-line-${t.id}`}>
           <UserCircle size={13} weight="bold" />
           {t.assignee_name ? t.assignee_name : (t.assignee_role ? `${t.assignee_role} team` : "Unassigned")}
         </p>
@@ -740,11 +740,11 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
 
       {isOp && (
         <div className="mt-3 flex flex-wrap items-center gap-2" data-testid={`op-meta-${t.id}`}>
-          {t.op_category && <span className="inline-flex items-center gap-1 border border-black px-2 py-0.5 text-xs font-semibold uppercase tracking-wider bg-brand-yellow"><Tag size={11} weight="bold" /> {t.op_category}</span>}
-          {t.assignee_name && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><UserCircle size={13} weight="bold" /> {t.assignee_name}</span>}
-          {t.support_name && <span className="text-xs text-muted-foreground">+ {t.support_name}</span>}
+          {t.op_category && <span className="inline-flex items-center gap-1 border border-hairline px-2 py-0.5 text-xs font-semibold uppercase tracking-wider bg-brand-yellow"><Tag size={11} weight="bold" /> {t.op_category}</span>}
+          {t.assignee_name && <span className="inline-flex items-center gap-1 text-xs text-text-secondary"><UserCircle size={13} weight="bold" /> {t.assignee_name}</span>}
+          {t.support_name && <span className="text-xs text-text-secondary">+ {t.support_name}</span>}
           {t.approval_required && (
-            <span data-testid={`op-approval-${t.id}`} className={`inline-flex items-center gap-1 border border-black px-2 py-0.5 text-xs font-semibold uppercase tracking-wider ${t.approval_status === "approved" ? "bg-green-600 text-white" : t.approval_status === "pending" ? "bg-brand-yellow" : t.approval_status === "rejected" ? "bg-brand-red text-white" : "bg-brand-paper"}`}>
+            <span data-testid={`op-approval-${t.id}`} className={`inline-flex items-center gap-1 border border-hairline px-2 py-0.5 text-xs font-semibold uppercase tracking-wider ${t.approval_status === "approved" ? "bg-green-600 text-white" : t.approval_status === "pending" ? "bg-brand-yellow" : t.approval_status === "rejected" ? "bg-brand-red text-white" : "bg-background"}`}>
               <ShieldCheck size={11} weight="bold" /> {t.approval_status === "approved" ? "Approved" : t.approval_status === "pending" ? "Pending approval" : t.approval_status === "rejected" ? "Changes requested" : `${t.approver_name || "Approval"} required`}
             </span>
           )}
@@ -752,19 +752,19 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
       )}
 
       <div className="flex items-center flex-wrap gap-1.5 mt-3">
-        <span data-testid={`status-chip-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-black bg-white">{STATUS_LABEL[t.status] || t.status}</span>
-        {isOverdue(t) && <span data-testid={`overdue-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-black bg-brand-red text-white">Overdue</span>}
-        {t.source === "escalation" && <span data-testid={`badge-escalation-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-black bg-brand-red text-white">Escalation</span>}
-        {t.source === "handoff" && <span data-testid={`badge-handoff-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-black bg-brand-blue text-white">Handoff</span>}
-        {(t.attachment_count || 0) > 0 && <span data-testid={`att-count-${t.id}`} className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Paperclip size={12} weight="bold" /> {t.attachment_count}</span>}
-        {t.due_date && <span className="text-xs text-muted-foreground">due {new Date(t.due_date).toLocaleString(undefined, { day: "numeric", month: "short", ...(t.due_date.includes("T") ? { hour: "2-digit", minute: "2-digit" } : {}) })}</span>}
-        <button onClick={() => setDetailOpen(true)} data-testid={`view-details-${t.id}`} className="ml-auto inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-black px-2 py-0.5 hover:bg-brand-yellow transition-colors">
+        <span data-testid={`status-chip-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-hairline bg-surface">{STATUS_LABEL[t.status] || t.status}</span>
+        {isOverdue(t) && <span data-testid={`overdue-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-hairline bg-brand-red text-white">Overdue</span>}
+        {t.source === "escalation" && <span data-testid={`badge-escalation-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-hairline bg-brand-red text-white">Escalation</span>}
+        {t.source === "handoff" && <span data-testid={`badge-handoff-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-hairline bg-brand-blue text-white">Handoff</span>}
+        {(t.attachment_count || 0) > 0 && <span data-testid={`att-count-${t.id}`} className="inline-flex items-center gap-1 text-xs text-text-secondary"><Paperclip size={12} weight="bold" /> {t.attachment_count}</span>}
+        {t.due_date && <span className="text-xs text-text-secondary">due {new Date(t.due_date).toLocaleString(undefined, { day: "numeric", month: "short", ...(t.due_date.includes("T") ? { hour: "2-digit", minute: "2-digit" } : {}) })}</span>}
+        <button onClick={() => setDetailOpen(true)} data-testid={`view-details-${t.id}`} className="ml-auto inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-hairline px-2 py-0.5 hover:bg-surface-hover transition-colors">
           <Eye size={13} weight="bold" /> View details
         </button>
       </div>
 
       {t.updated_at && (
-        <p className="label-mono text-muted-foreground mt-2 flex items-center gap-1" data-testid={`task-updated-${t.id}`} title={fullTime(t.updated_at)}>
+        <p className="text-label uppercase text-text-secondary mt-2 flex items-center gap-1" data-testid={`task-updated-${t.id}`} title={fullTime(t.updated_at)}>
           <ClockCounterClockwise size={12} weight="bold" />
           {t.last_action || "Updated"} · {timeAgo(t.updated_at)}
         </p>
@@ -772,19 +772,19 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
 
       <div className="mt-3">
         <div className="flex items-center justify-between mb-1">
-          <span className="label-mono text-muted-foreground">Progress</span>
-          <span className="label-mono" data-testid={`progress-value-${t.id}`}>{t.progress || 0}%</span>
+          <span className="text-label uppercase text-text-secondary">Progress</span>
+          <span className="text-label uppercase" data-testid={`progress-value-${t.id}`}>{t.progress || 0}%</span>
         </div>
-        <div className="h-2 bg-black/10 border border-black"><div className="h-full bg-brand-blue transition-all" style={{ width: `${t.progress || 0}%` }} /></div>
+        <div className="h-2 bg-surface-sunken border border-hairline"><div className="h-full bg-brand-blue transition-all" style={{ width: `${t.progress || 0}%` }} /></div>
       </div>
 
       {!isTerminal(t) && !awaitingApproval && (
         <div className="flex flex-wrap items-center gap-2 mt-3">
-          <label className="label-mono text-muted-foreground">Status</label>
+          <label className="text-label uppercase text-text-secondary">Status</label>
           <select data-testid={`status-select-${t.id}`} value={t.status === "blocked" ? "todo" : t.status} onChange={(e) => setStatus(e.target.value)} className={selCls}>
             {STATUS_OPTIONS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
           </select>
-          <label className="label-mono text-muted-foreground ml-1">Set progress</label>
+          <label className="text-label uppercase text-text-secondary ml-1">Set progress</label>
           <select data-testid={`progress-select-${t.id}`} value={PROGRESS_OPTIONS.includes(t.progress) ? t.progress : 0} onChange={(e) => setProgress(e.target.value)} className={selCls}>
             {PROGRESS_OPTIONS.map((p) => <option key={p} value={p}>{p}%</option>)}
           </select>
@@ -802,7 +802,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
         const renderAtt = (a) => (
           isImg(a)
             ? <button key={a.url} type="button" onClick={() => setLightbox(`${beUrl}${a.url}`)}
-                className="relative w-20 h-20 border border-black overflow-hidden group" title="Click to view full image"
+                className="relative w-20 h-20 border border-hairline overflow-hidden group" title="Click to view full image"
                 data-testid={`att-photo-${t.id}-${a.url}`}>
                 <img src={`${beUrl}${a.url}`} alt={a.filename || "attachment"} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
                 <span className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
@@ -812,7 +812,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
             : isAudio(a)
               ? <audio key={a.url} controls preload="none" src={`${beUrl}${a.url}`} className="h-9" data-testid={`att-voice-${t.id}-${a.url}`} />
               : <a key={a.url} href={`${beUrl}${a.url}`} target="_blank" rel="noreferrer" data-testid={`att-file-${t.id}-${a.url}`}
-                  className="inline-flex items-center gap-1.5 border border-black bg-white px-2.5 py-1.5 text-xs font-mono hover:bg-brand-yellow transition-colors max-w-[180px]">
+                  className="inline-flex items-center gap-1.5 border border-hairline bg-surface px-2.5 py-1.5 text-xs font-mono hover:bg-surface-hover transition-colors max-w-[180px]">
                   <File size={13} weight="bold" /> <span className="truncate">{a.filename || "file"}</span>
                 </a>
         );
@@ -820,21 +820,21 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
           <>
             {refs.length > 0 && (
               <div className="mt-3 border border-brand-blue/40 bg-brand-blue/[0.04] p-3" data-testid={`reference-block-${t.id}`}>
-                <p className="label-mono text-brand-blue flex items-center gap-1.5 mb-2">
+                <p className="text-label uppercase text-brand-blue flex items-center gap-1.5 mb-2">
                   <Paperclip size={13} weight="bold" /> Reference material · {refs.length}
                 </p>
                 <div className="flex flex-wrap gap-2 items-center">{refs.map(renderAtt)}</div>
                 {insights.length > 0 && (
                   <div className="mt-2 flex items-start gap-1.5" data-testid={`reference-insight-${t.id}`}>
                     <Lightbulb size={13} weight="fill" className="text-brand-yellow shrink-0 mt-0.5" />
-                    <p className="text-xs text-muted-foreground line-clamp-2">{insights[insights.length - 1].summary}</p>
+                    <p className="text-xs text-text-secondary line-clamp-2">{insights[insights.length - 1].summary}</p>
                   </div>
                 )}
               </div>
             )}
             {proof.length > 0 && (
-              <div className="mt-3 border border-black/15 bg-black/[0.02] p-3" data-testid={`proof-block-${t.id}`}>
-                <p className="label-mono text-muted-foreground flex items-center gap-1.5 mb-2">
+              <div className="mt-3 border border-hairline bg-black/[0.02] p-3" data-testid={`proof-block-${t.id}`}>
+                <p className="text-label uppercase text-text-secondary flex items-center gap-1.5 mb-2">
                   <Paperclip size={13} weight="bold" /> Proof of work · {proof.length}
                 </p>
                 <div className="flex flex-wrap gap-2 items-center">{proof.map(renderAtt)}</div>
@@ -845,7 +845,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
       })()}
 
       <Dialog open={!!lightbox} onOpenChange={(o) => !o && setLightbox(null)}>
-        <DialogContent className="border border-black rounded-none max-w-3xl p-2" data-testid={`photo-lightbox-${t.id}`}>
+        <DialogContent className="border border-hairline rounded-md max-w-3xl p-2" data-testid={`photo-lightbox-${t.id}`}>
           <DialogHeader>
             <DialogTitle className="sr-only">Proof photo</DialogTitle>
           </DialogHeader>
@@ -854,34 +854,34 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
       </Dialog>
 
       {canApprove && awaitingApproval && (
-        <div className="flex flex-wrap gap-2 mt-4 border border-black bg-brand-yellow/40 p-3" data-testid={`approval-actions-${t.id}`}>
-          <span className="w-full label-mono text-muted-foreground">This task needs your approval before {t.assignee_name || "the assignee"} can start work.</span>
+        <div className="flex flex-wrap gap-2 mt-4 border border-hairline bg-brand-yellow/40 p-3" data-testid={`approval-actions-${t.id}`}>
+          <span className="w-full text-label uppercase text-text-secondary">This task needs your approval before {t.assignee_name || "the assignee"} can start work.</span>
           {t.approval_status === "rejected" && t.rejection_reason && <span className="w-full text-xs text-brand-red">Previously requested: {t.rejection_reason}</span>}
-          <button onClick={approveTask} data-testid={`approve-${t.id}`} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">
+          <button onClick={approveTask} data-testid={`approve-${t.id}`} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline hover:shadow-xs transition-all">
             <CheckCircle size={16} weight="bold" /> Approve
           </button>
-          <button onClick={rejectTask} data-testid={`reject-${t.id}`} className="flex items-center gap-2 bg-brand-red text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">
+          <button onClick={rejectTask} data-testid={`reject-${t.id}`} className="flex items-center gap-2 bg-brand-red text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline hover:shadow-xs transition-all">
             <WarningCircle size={16} weight="bold" /> Request changes
           </button>
-          <button onClick={clarifyTask} data-testid={`clarify-${t.id}`} className="flex items-center gap-2 bg-orange-500 text-black px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">
+          <button onClick={clarifyTask} data-testid={`clarify-${t.id}`} className="flex items-center gap-2 bg-orange-500 text-text px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline hover:shadow-xs transition-all">
             <ChatText size={16} weight="bold" /> Ask clarification
           </button>
         </div>
       )}
 
       {lockedForAssignee && (
-        <div className="flex items-start gap-2 mt-4 border border-black bg-brand-paper p-3" data-testid={`approval-locked-${t.id}`}>
+        <div className="flex items-start gap-2 mt-4 border border-hairline bg-background p-3" data-testid={`approval-locked-${t.id}`}>
           <LockKey size={18} weight="bold" className="text-brand-red shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-bold uppercase tracking-tight">{t.approval_status === "rejected" ? "Changes requested" : "Awaiting approval"}</p>
-            <p className="text-xs text-muted-foreground">You can start once {t.approver_name || "the approver"} approves this task. Status, progress and the execution plan are locked until then.</p>
+            <p className="text-xs text-text-secondary">You can start once {t.approver_name || "the approver"} approves this task. Status, progress and the execution plan are locked until then.</p>
             {t.approval_status === "rejected" && t.rejection_reason && <p className="text-xs text-brand-red mt-1">Note: {t.rejection_reason}</p>}
           </div>
         </div>
       )}
 
       {t.evidence_required && !isTerminal(t) && !awaitingApproval && (
-        <div className={`mt-3 flex items-start gap-2 border border-black p-2.5 ${hasEvidence ? "bg-green-600/10" : "bg-brand-yellow/30"}`} data-testid={`evidence-required-${t.id}`}>
+        <div className={`mt-3 flex items-start gap-2 border border-hairline p-2.5 ${hasEvidence ? "bg-green-600/10" : "bg-brand-yellow/30"}`} data-testid={`evidence-required-${t.id}`}>
           {hasEvidence ? <CheckCircle size={16} weight="fill" className="text-green-600 shrink-0 mt-0.5" /> : <Info size={16} weight="bold" className="text-brand-red shrink-0 mt-0.5" />}
           <p className="text-xs">{hasEvidence
             ? "Proof attached — you can mark this task complete."
@@ -891,22 +891,22 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
 
       {!isTerminal(t) && !awaitingApproval && (
         <div className="flex flex-wrap gap-2 mt-4">
-          <button onClick={complete} disabled={t.evidence_required && !hasEvidence} data-testid={`complete-${t.id}`} className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+          <button onClick={complete} disabled={t.evidence_required && !hasEvidence} data-testid={`complete-${t.id}`} className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline hover:shadow-xs transition-all disabled:opacity-40 disabled:cursor-not-allowed">
             <CheckCircle size={16} weight="bold" /> Complete
           </button>
-          <button onClick={() => fileRef.current?.click()} disabled={uploading} data-testid={`photo-${t.id}`} className="flex items-center gap-2 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-black/5">
+          <button onClick={() => fileRef.current?.click()} disabled={uploading} data-testid={`photo-${t.id}`} className="flex items-center gap-2 border border-hairline px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-surface-hover">
             <Camera size={16} weight="bold" /> Photo
           </button>
           <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onPhoto} />
-          <button onClick={() => evidenceRef.current?.click()} disabled={uploading} data-testid={`upload-file-${t.id}`} className="flex items-center gap-2 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-black/5">
+          <button onClick={() => evidenceRef.current?.click()} disabled={uploading} data-testid={`upload-file-${t.id}`} className="flex items-center gap-2 border border-hairline px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-surface-hover">
             <FileArrowUp size={16} weight="bold" /> Upload file
           </button>
           <input ref={evidenceRef} type="file" className="hidden" onChange={onEvidence} />
-          <button onClick={toggleVoice} data-testid={`voice-${t.id}`} className={`flex items-center gap-2 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider transition-colors ${recording ? "bg-brand-red text-white" : "hover:bg-black/5"}`}>
+          <button onClick={toggleVoice} data-testid={`voice-${t.id}`} className={`flex items-center gap-2 border border-hairline px-4 py-2 text-sm font-semibold uppercase tracking-wider transition-colors ${recording ? "bg-brand-red text-white" : "hover:bg-surface-hover"}`}>
             {recording ? <Stop size={16} weight="fill" /> : <Microphone size={16} weight="bold" />} {recording ? "Stop & send" : "Voice reply"}
           </button>
           {recording && (
-            <button onClick={cancelVoice} data-testid={`voice-cancel-${t.id}`} className="flex items-center gap-2 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-black/5">
+            <button onClick={cancelVoice} data-testid={`voice-cancel-${t.id}`} className="flex items-center gap-2 border border-hairline px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-surface-hover">
               <X size={16} weight="bold" /> Cancel
             </button>
           )}
@@ -915,10 +915,10 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
 
       {isTerminal(t) && !awaitingApproval && (
         <div className="flex flex-wrap gap-2 mt-4" data-testid={`reopen-actions-${t.id}`}>
-          <button onClick={reopen} data-testid={`reopen-${t.id}`} className="flex items-center gap-2 bg-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:bg-brand-ink hover:text-white transition-colors">
+          <button onClick={reopen} data-testid={`reopen-${t.id}`} className="flex items-center gap-2 bg-surface px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline hover:bg-surface-hover transition-colors">
             <ArrowClockwise size={16} weight="bold" /> Reopen
           </button>
-          <span className="flex items-center text-xs text-muted-foreground">Completed by mistake? Reopen brings it back to your active work.</span>
+          <span className="flex items-center text-xs text-text-secondary">Completed by mistake? Reopen brings it back to your active work.</span>
         </div>
       )}
 
@@ -1013,33 +1013,33 @@ export default function MyWork() {
         <div className="w-full lg:w-auto flex flex-col lg:flex-row lg:items-center gap-2" data-testid="mywork-controls">
           <div className="order-2 lg:order-1 grid grid-cols-4 gap-2 lg:flex lg:flex-wrap lg:items-center" data-testid="mywork-actions">
             <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members}
-              triggerClassName={`${CTRL} bg-brand-ink text-white hover:shadow-brutal-sm`} />
+              triggerClassName={`${CTRL} bg-brand-ink text-white hover:shadow-xs`} />
             {isOwner && (
               <>
                 <button onClick={() => { setScope("mine"); setView("mywork"); }} data-testid="work-scope-mine"
-                  className={`${CTRL} ${view === "mywork" && scope === "mine" ? "bg-brand-blue text-white" : "bg-white hover:bg-black/5"}`}>{t("mywork.my_tasks")}</button>
+                  className={`${CTRL} ${view === "mywork" && scope === "mine" ? "bg-brand-blue text-white" : "bg-surface hover:bg-surface-hover"}`}>{t("mywork.my_tasks")}</button>
                 <button onClick={() => { setScope("all"); setView("mywork"); }} data-testid="work-scope-all"
-                  className={`${CTRL} ${view === "mywork" && scope === "all" ? "bg-brand-blue text-white" : "bg-white hover:bg-black/5"}`}>{t("mywork.all_tasks")}</button>
+                  className={`${CTRL} ${view === "mywork" && scope === "all" ? "bg-brand-blue text-white" : "bg-surface hover:bg-surface-hover"}`}>{t("mywork.all_tasks")}</button>
               </>
             )}
             <button onClick={() => { setAiPriority((v) => !v); setView("mywork"); }} data-testid="ai-priority-toggle"
-              className={`${CTRL} ${view === "mywork" && aiPriority ? "bg-brand-red text-white shadow-brutal-sm" : "bg-brand-yellow hover:shadow-brutal-sm"}`}>
+              className={`${CTRL} ${view === "mywork" && aiPriority ? "bg-brand-red text-white shadow-xs" : "bg-brand-yellow hover:shadow-xs"}`}>
               <Sparkle size={15} weight="bold" /> {scoring ? t("mywork.scoring") : aiPriority ? t("mywork.ai_priority_on") : t("mywork.ai_priority")}
             </button>
           </div>
           <div className="order-1 lg:order-2 grid grid-cols-4 gap-2 lg:flex lg:items-center" data-testid="work-view-toggle">
             <button onClick={() => setView("mywork")} data-testid="work-view-mywork"
-              className={`${CTRL} ${view === "mywork" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+              className={`${CTRL} ${view === "mywork" ? "bg-brand-ink text-white" : "bg-surface hover:bg-surface-hover"}`}>
               <ListIcon size={15} weight="bold" /> {t("mywork.view_mywork")}
             </button>
             {canSeeWorkflows && (
               <button onClick={() => setView("workflows")} data-testid="work-view-workflows"
-                className={`${CTRL} ${view === "workflows" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+                className={`${CTRL} ${view === "workflows" ? "bg-brand-ink text-white" : "bg-surface hover:bg-surface-hover"}`}>
                 <ArrowRight size={15} weight="bold" /> {t("mywork.view_workflows")}
               </button>
             )}
             <button onClick={() => setView("leave")} data-testid="work-view-leave"
-              className={`${CTRL} ${view === "leave" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+              className={`${CTRL} ${view === "leave" ? "bg-brand-ink text-white" : "bg-surface hover:bg-surface-hover"}`}>
               <AirplaneTakeoff size={15} weight="bold" /> {t("mywork.view_leave")}
             </button>
           </div>
@@ -1047,7 +1047,7 @@ export default function MyWork() {
       </PageHeader>
 
       {focusDenied && (
-        <div data-testid="access-restricted-banner" className="card-brutal p-4 mb-6 bg-brand-red text-white flex items-center gap-3">
+        <div data-testid="access-restricted-banner" className="rounded-lg border border-hairline bg-surface p-4 mb-6 bg-brand-red text-white flex items-center gap-3">
           <LockKey size={22} weight="bold" className="shrink-0" />
           <div>
             <p className="font-bold uppercase tracking-tight">{t("mywork.access_restricted")}</p>
@@ -1058,13 +1058,13 @@ export default function MyWork() {
 
       {view === "workflows" && canSeeWorkflows ? (
         <div data-testid="workflows-hub">
-          <div className="flex flex-wrap gap-1.5 mb-5 border-b border-black/10 pb-3" data-testid="workflows-subtabs">
+          <div className="flex flex-wrap gap-1.5 mb-5 border-b border-hairline pb-3" data-testid="workflows-subtabs">
             <button onClick={() => setWfTab("pipelines")} data-testid="wf-subtab-pipelines"
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-black transition-colors ${wfTab === "pipelines" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-hairline transition-colors ${wfTab === "pipelines" ? "bg-brand-ink text-white" : "bg-surface hover:bg-surface-hover"}`}>
               <ArrowRight size={14} weight="bold" /> {t("mywork.wf_pipelines")}
             </button>
             <button onClick={() => setWfTab("board")} data-testid="wf-subtab-board"
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-black transition-colors ${wfTab === "board" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-hairline transition-colors ${wfTab === "board" ? "bg-brand-ink text-white" : "bg-surface hover:bg-surface-hover"}`}>
               <Kanban size={14} weight="bold" /> {t("mywork.wf_task_board")}
             </button>
           </div>
@@ -1075,12 +1075,12 @@ export default function MyWork() {
       ) : (
       <div data-testid="mywork-list">
         <div>
-          <div className="flex flex-wrap gap-1.5 mb-5 border-b border-black/10 pb-3" data-testid="work-tabs">
+          <div className="flex flex-wrap gap-1.5 mb-5 border-b border-hairline pb-3" data-testid="work-tabs">
             {WORK_TABS.map((tb) => (
               <button key={tb.key} onClick={() => setTab(tb.key)} data-testid={`work-tab-${tb.key}`}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-black transition-colors ${tab === tb.key ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-hairline transition-colors ${tab === tb.key ? "bg-brand-ink text-white" : "bg-surface hover:bg-surface-hover"}`}>
                 {tb.label}
-                <span className={`px-1.5 py-0.5 text-[10px] leading-none border ${tab === tb.key ? "border-white/40" : "border-black/20 text-muted-foreground"}`}>{countFor(tb.key)}</span>
+                <span className={`px-1.5 py-0.5 text-[10px] leading-none border ${tab === tb.key ? "border-white/40" : "border-hairline text-text-secondary"}`}>{countFor(tb.key)}</span>
               </button>
             ))}
           </div>

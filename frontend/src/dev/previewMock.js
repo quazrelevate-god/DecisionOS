@@ -47,7 +47,44 @@ const ROUTES = [
     },
   ],
   ['/captures/pending-count', { count: 2 }],
-  ['/brief', { fires: [{ id: 'f1', title: 'Payroll headroom' }], summary: '', sections: [] }],
+
+  /* Shapes below are richer than the endpoints they stand in for because the
+     migration's screenshot baseline is worthless if a screen renders a crash
+     instead of a layout. Each field here exists because a page dereferenced it
+     and threw. */
+  [
+    '/brief',
+    {
+      counters: { fires: 2, decisions: 3, tasks: 7, overdue: 1 },
+      fires: [{ id: 'f1', title: 'Payroll headroom' }],
+      sections: [],
+      summary: '',
+    },
+  ],
+  [
+    '/operating-score',
+    {
+      company: { overall: 72, enough_data: true, trend: 'up' },
+      stats: { decisions: 12, approved: 9, tasks: 31, done: 24 },
+      employees: [],
+    },
+  ],
+  ['/work-coach', { summary: { name: 'Prasanna Narayanan', score: 68, strengths: [], gaps: [] }, items: [] }],
+  [
+    '/ledger/summary',
+    {
+      currency: 'INR',
+      totals: { expenses: 482000, revenue: 1842300, payables: 121000, assets: 0 },
+      by_month: [],
+      by_category: [],
+    },
+  ],
+  ['/ledger', { items: [] }],
+  ['/expenses', []],
+  ['/assets', []],
+  ['/inventory', []],
+  ['/revenue', []],
+  ['/payables', []],
   ['/voice-notes', []],
   ['/inbox', []],
   ['/decisions', []],

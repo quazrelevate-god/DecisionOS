@@ -25,6 +25,7 @@ import {
   hslTripletToHex,
 } from "@/lib/tokens";
 import { useTheme } from "@/hooks/useTheme";
+import { PrimitivesGallery } from "@/components/ds/__examples__/PrimitivesGallery";
 import { Sun, Moon, CheckCircle, WarningCircle } from "@phosphor-icons/react";
 
 const WHITE = "0 0% 100%";
@@ -182,7 +183,7 @@ export default function DesignSystem() {
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between gap-4">
           <div className="min-w-0">
             <p className="text-label uppercase text-text-tertiary">DecisionOS / System reference</p>
-            <p className="text-body-strong text-text truncate">Design tokens — Phase 1</p>
+            <p className="text-body-strong text-text truncate">Tokens + primitives</p>
           </div>
           <button
             onClick={toggle}
@@ -416,6 +417,14 @@ recommendation  hold until Friday`}
               label on terminal <Ratio value={ratio(terminal.label, terminal.bg)} />
             </span>
           </div>
+        </Section>
+
+        <Section
+          id="primitives"
+          title="Primitives"
+          intro="Phase 2. Every interactive component ships all five states — default, hover, active, focus, disabled — plus loading where it applies. Hover and press these rather than reading them."
+        >
+          <PrimitivesGallery />
         </Section>
 
         <Section id="next" title="Next">

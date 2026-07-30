@@ -1,55 +1,273 @@
-@import url('https://fonts.googleapis.com/css2?family=Chivo:wght@700;800;900&family=Geist:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+/* Inter is the single sans-serif for the whole system. IBM Plex Mono exists for one
+   purpose only: the Company Brain terminal block. Chivo is legacy (the wordmark) and
+   is scheduled for removal in the app-wide sweep — do not use it in new work. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Chivo:wght@700;800;900&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* === @generated design tokens — do not edit; run `node scripts/gen-tokens.js` === */
 @layer base {
     :root {
-        --background: 240 6% 98%;
-        --foreground: 240 10% 4%;
+        /* Role scales */
+        --brand-50: 233 100% 97%;
+        --brand-100: 236 100% 94%;
+        --brand-200: 238 100% 89%;
+        --brand-300: 239 100% 82%;
+        --brand-400: 240 88% 71%;
+        --brand-500: 240 80% 61%;
+        --brand-600: 239 60% 51%;
+        --brand-700: 238 57% 41%;
+        --brand-800: 237 56% 33%;
+        --brand-900: 236 52% 26%;
+        --danger-50: 0 86% 97%;
+        --danger-100: 0 93% 94%;
+        --danger-200: 0 96% 89%;
+        --danger-300: 0 94% 82%;
+        --danger-400: 0 91% 71%;
+        --danger-500: 0 84% 60%;
+        --danger-600: 0 72% 51%;
+        --danger-700: 0 74% 42%;
+        --danger-800: 0 70% 35%;
+        --danger-900: 0 63% 31%;
+        --caution-50: 48 100% 96%;
+        --caution-100: 48 96% 89%;
+        --caution-200: 48 97% 77%;
+        --caution-300: 46 97% 65%;
+        --caution-400: 43 96% 56%;
+        --caution-500: 38 92% 50%;
+        --caution-600: 32 95% 44%;
+        --caution-700: 26 90% 37%;
+        --caution-800: 23 83% 31%;
+        --caution-900: 22 78% 26%;
+        --success-50: 138 76% 97%;
+        --success-100: 141 84% 93%;
+        --success-200: 141 79% 85%;
+        --success-300: 142 77% 73%;
+        --success-400: 142 69% 58%;
+        --success-500: 142 71% 45%;
+        --success-600: 142 76% 36%;
+        --success-700: 142 72% 29%;
+        --success-800: 143 61% 24%;
+        --success-900: 144 61% 20%;
+        --neutral-50: 220 20% 98%;
+        --neutral-100: 220 19% 95%;
+        --neutral-200: 220 18% 90%;
+        --neutral-300: 219 14% 81%;
+        --neutral-400: 218 11% 65%;
+        --neutral-500: 220 10% 43%;
+        --neutral-600: 215 14% 34%;
+        --neutral-700: 220 13% 26%;
+        --neutral-800: 222 17% 11%;
+        --neutral-900: 223 17% 8%;
+
+        /* Semantic — light (canonical) */
+        --background: 220 20% 98%;
+        --surface: 0 0% 100%;
+        --surface-raised: 0 0% 100%;
+        --surface-sunken: 220 19% 95%;
+        --surface-hover: 220 20% 98%;
+        --text-primary: 223 17% 8%;
+        --text-secondary: 215 14% 34%;
+        --text-tertiary: 220 10% 43%;
+        --text-disabled: 218 11% 65%;
+        --text-inverse: 0 0% 100%;
+        --hairline: 220 18% 90%;
+        --hairline-strong: 219 14% 81%;
+        --primary: 239 60% 51%;
+        --primary-hover: 238 57% 41%;
+        --primary-active: 237 56% 33%;
+        --primary-tint: 233 100% 97%;
+        --primary-tint-hover: 236 100% 94%;
+        --primary-text: 238 57% 41%;
+        --on-primary: 0 0% 100%;
+        --danger: 0 72% 51%;
+        --danger-hover: 0 74% 42%;
+        --danger-tint: 0 86% 97%;
+        --danger-text: 0 74% 42%;
+        --danger-line: 0 94% 82%;
+        --ring: 239 60% 51%;
+        --status-pending-bg: 48 100% 96%;
+        --status-pending-fg: 23 83% 31%;
+        --status-pending-line: 48 97% 77%;
+        --status-directive-bg: 233 100% 97%;
+        --status-directive-fg: 238 57% 41%;
+        --status-directive-line: 238 100% 89%;
+        --status-overdue-bg: 0 86% 97%;
+        --status-overdue-fg: 0 70% 35%;
+        --status-overdue-line: 0 96% 89%;
+        --status-completed-bg: 138 76% 97%;
+        --status-completed-fg: 143 61% 24%;
+        --status-completed-line: 141 79% 85%;
+        --priority-low-bg: 220 20% 98%;
+        --priority-low-fg: 215 14% 34%;
+        --priority-med-bg: 220 19% 95%;
+        --priority-med-fg: 222 17% 11%;
+        --priority-high-bg: 48 100% 96%;
+        --priority-high-fg: 23 83% 31%;
+        --urgency-overdue: 0 72% 51%;
+        --urgency-today: 239 60% 51%;
+        --urgency-week: 32 95% 44%;
+        --urgency-later: 219 14% 81%;
+
+        /* Company Brain terminal — dark in both themes */
+        --terminal-bg: 221 39% 11%;
+        --terminal-bg-raised: 221 35% 15%;
+        --terminal-fg: 216 12% 84%;
+        --terminal-fg-dim: 218 11% 65%;
+        --terminal-label: 235 100% 82%;
+        --terminal-accent: 235 100% 82%;
+        --terminal-hairline: 221 30% 22%;
+
+        /* Type scale — Tailwind's text-* utilities read these */
+        --fs-display: 2.5rem;
+        --lh-display: 2.75rem;
+        --ls-display: -0.025em;
+        --fw-display: 700;
+        --fs-h1: 2rem;
+        --lh-h1: 2.3rem;
+        --ls-h1: -0.022em;
+        --fw-h1: 700;
+        --fs-h2: 1.5rem;
+        --lh-h2: 1.8125rem;
+        --ls-h2: -0.021em;
+        --fw-h2: 700;
+        --fs-h3: 1.125rem;
+        --lh-h3: 1.4625rem;
+        --ls-h3: -0.04em;
+        --fw-h3: 600;
+        --fs-body: 0.9375rem;
+        --lh-body: 1.45rem;
+        --ls-body: -0.02em;
+        --fw-body: 400;
+        --fs-body-strong: 0.9375rem;
+        --lh-body-strong: 1.45rem;
+        --ls-body-strong: -0.02em;
+        --fw-body-strong: 600;
+        --fs-small: 0.8125rem;
+        --lh-small: 1.38rem;
+        --ls-small: -0.01em;
+        --fw-small: 400;
+        --fs-label: 0.6875rem;
+        --lh-label: 0.825rem;
+        --ls-label: 0.1em;
+        --fw-label: 600;
+        --fs-badge: 0.75rem;
+        --lh-badge: 1rem;
+        --ls-badge: 0.042em;
+        --fw-badge: 600;
+        --fs-code: 0.8125rem;
+        --lh-code: 1.375rem;
+        --ls-code: 0;
+        --fw-code: 400;
+        --font-numeric: 'tnum' 1, 'lnum' 1;
+
+        /* Structure */
+        --control-h-sm: 2rem;
+        --control-h-md: 2.5rem;
+        --control-h-lg: 3rem;
+        --radius-none: 0px;
+        --radius-sm: 0.375rem;
+        --radius-md: 0.5rem;
+        --radius-lg: 0.75rem;
+        --radius-xl: 1rem;
+        --radius-pill: 999px;
+        --radius: 0.75rem;
+        --border-hairline: 1px;
+        --border-focus: 2px;
+        --elevation-none: none;
+        --elevation-xs: 0 1px 2px hsl(223 17% 8% / 0.04);
+        --elevation-sm: 0 1px 2px hsl(223 17% 8% / 0.05), 0 1px 3px hsl(223 17% 8% / 0.04);
+        --elevation-md: 0 2px 4px hsl(223 17% 8% / 0.04), 0 8px 20px -8px hsl(223 17% 8% / 0.10);
+        --elevation-lg: 0 12px 32px -12px hsl(223 17% 8% / 0.16);
+
+        /* shadcn/ui compatibility aliases — existing components read these */
+        --foreground: 223 17% 8%;
         --card: 0 0% 100%;
-        --card-foreground: 240 10% 4%;
+        --card-foreground: 223 17% 8%;
         --popover: 0 0% 100%;
-        --popover-foreground: 240 10% 4%;
-        --primary: 4 100% 59%;
+        --popover-foreground: 223 17% 8%;
         --primary-foreground: 0 0% 100%;
-        --secondary: 240 5% 96%;
-        --secondary-foreground: 240 10% 4%;
-        --muted: 240 5% 96%;
-        --muted-foreground: 240 4% 44%;
-        --accent: 240 5% 95%;
-        --accent-foreground: 240 10% 4%;
-        --destructive: 4 100% 59%;
+        --secondary: 220 19% 95%;
+        --secondary-foreground: 223 17% 8%;
+        --muted: 220 19% 95%;
+        --muted-foreground: 215 14% 34%;
+        --accent: 220 20% 98%;
+        --accent-foreground: 223 17% 8%;
+        --destructive: 0 72% 51%;
         --destructive-foreground: 0 0% 100%;
-        --border: 240 6% 90%;
-        --input: 240 6% 90%;
-        --ring: 4 100% 59%;
-        --radius: 0.625rem;
+        --input: 220 18% 90%;
     }
 
     .dark {
-        --background: 240 6% 7%;
         color-scheme: dark;
-        --foreground: 0 0% 96%;
-        --card: 240 5% 10%;
-        --card-foreground: 0 0% 96%;
-        --popover: 240 6% 9%;
-        --popover-foreground: 0 0% 96%;
-        --primary: 4 100% 62%;
+        /* Semantic — dark */
+        --background: 223 17% 8%;
+        --surface: 222 17% 11%;
+        --surface-raised: 222 16% 14%;
+        --surface-sunken: 223 17% 6%;
+        --surface-hover: 222 15% 16%;
+        --text-primary: 220 20% 98%;
+        --text-secondary: 219 14% 81%;
+        --text-tertiary: 218 11% 65%;
+        --text-disabled: 220 10% 40%;
+        --text-inverse: 223 17% 8%;
+        --hairline: 221 14% 20%;
+        --hairline-strong: 221 13% 28%;
+        --primary: 240 80% 61%;
+        --primary-hover: 240 78% 55%;
+        --primary-active: 239 70% 48%;
+        --primary-tint: 238 45% 18%;
+        --primary-tint-hover: 238 45% 23%;
+        --primary-text: 239 100% 82%;
+        --on-primary: 0 0% 100%;
+        --danger: 0 84% 60%;
+        --danger-hover: 0 91% 71%;
+        --danger-tint: 0 45% 15%;
+        --danger-text: 0 94% 82%;
+        --danger-line: 0 40% 32%;
+        --ring: 240 88% 71%;
+        --status-pending-bg: 30 50% 13%;
+        --status-pending-fg: 46 97% 65%;
+        --status-pending-line: 30 40% 26%;
+        --status-directive-bg: 238 45% 18%;
+        --status-directive-fg: 239 100% 82%;
+        --status-directive-line: 238 40% 32%;
+        --status-overdue-bg: 0 45% 15%;
+        --status-overdue-fg: 0 94% 82%;
+        --status-overdue-line: 0 40% 30%;
+        --status-completed-bg: 143 40% 13%;
+        --status-completed-fg: 142 77% 73%;
+        --status-completed-line: 143 35% 26%;
+        --priority-low-bg: 222 15% 16%;
+        --priority-low-fg: 219 14% 81%;
+        --priority-med-bg: 221 15% 22%;
+        --priority-med-fg: 220 20% 98%;
+        --priority-high-bg: 30 50% 13%;
+        --priority-high-fg: 46 97% 65%;
+        --urgency-overdue: 0 84% 60%;
+        --urgency-today: 240 88% 71%;
+        --urgency-week: 43 96% 56%;
+        --urgency-later: 221 13% 28%;
+
+        --foreground: 220 20% 98%;
+        --card: 222 17% 11%;
+        --card-foreground: 220 20% 98%;
+        --popover: 222 16% 14%;
+        --popover-foreground: 220 20% 98%;
         --primary-foreground: 0 0% 100%;
-        --secondary: 240 4% 15%;
-        --secondary-foreground: 0 0% 96%;
-        --muted: 240 4% 15%;
-        --muted-foreground: 240 5% 64%;
-        --accent: 240 4% 16%;
-        --accent-foreground: 0 0% 98%;
-        --destructive: 4 100% 62%;
+        --secondary: 223 17% 6%;
+        --secondary-foreground: 220 20% 98%;
+        --muted: 223 17% 6%;
+        --muted-foreground: 219 14% 81%;
+        --accent: 222 15% 16%;
+        --accent-foreground: 220 20% 98%;
+        --destructive: 0 84% 60%;
         --destructive-foreground: 0 0% 100%;
-        --border: 240 4% 18%;
-        --input: 240 4% 18%;
-        --ring: 4 100% 62%;
+        --input: 221 14% 20%;
     }
 }
+/* === end @generated design tokens === */
 
 /* Modernize the legacy neo-brutalist utility usages centrally (both themes) */
 @layer utilities {
@@ -114,21 +332,25 @@
         @apply border-border;
     }
     body {
-        @apply bg-background text-foreground;
-        font-family: 'Geist', system-ui, sans-serif;
+        @apply bg-background text-foreground font-sans;
         -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
         letter-spacing: -0.006em;
     }
     h1, h2, h3, h4, .font-heading {
-        font-family: 'Geist', system-ui, sans-serif;
+        @apply font-sans;
         letter-spacing: -0.02em;
+    }
+    /* Numbers are tabular system-wide so figures align in columns. */
+    th, td, output, time, [data-numeric] {
+        font-variant-numeric: tabular-nums lining-nums;
     }
     .font-logo {
         font-family: 'Chivo', sans-serif;
     }
     ::selection {
-        background: #FF3B30;
-        color: #fff;
+        background: hsl(var(--primary));
+        color: hsl(var(--on-primary));
     }
 }
 
@@ -145,6 +367,9 @@
         transform: translateY(-2px);
         box-shadow: 0 10px 28px -12px rgba(10,10,11,0.18);
     }
+    /* DEPRECATED (181 call sites): monospace is reserved for the Company Brain
+       terminal block. Use `text-label` (Inter, uppercase, tracked) in all new work.
+       Removed in the app-wide sweep branch. */
     .label-mono {
         @apply font-mono text-xs uppercase tracking-[0.12em] font-medium;
     }
@@ -152,12 +377,12 @@
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: hsl(240 6% 82%); border: 2px solid transparent; background-clip: padding-box; border-radius: 8px; }
+::-webkit-scrollbar-thumb { background: hsl(var(--hairline-strong)); border: 2px solid transparent; background-clip: padding-box; border-radius: var(--radius-md); }
 
 @keyframes pulse-ring {
-    0% { box-shadow: 0 0 0 0 rgba(255,59,48,0.5); }
-    70% { box-shadow: 0 0 0 22px rgba(255,59,48,0); }
-    100% { box-shadow: 0 0 0 0 rgba(255,59,48,0); }
+    0% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0.45); }
+    70% { box-shadow: 0 0 0 22px hsl(var(--primary) / 0); }
+    100% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0); }
 }
 .recording-pulse { animation: pulse-ring 1.5s infinite; }
 
@@ -165,17 +390,18 @@
 @keyframes constellation-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 .constellation-spin { animation: constellation-spin 44s linear infinite; }
 @keyframes thinking-glow {
-    0%, 100% { opacity: 0.7; text-shadow: 0 0 18px rgba(255,59,48,0.35); }
-    50%      { opacity: 1;   text-shadow: 0 0 46px rgba(255,59,48,0.85); }
+    0%, 100% { opacity: 0.7; text-shadow: 0 0 18px hsl(var(--primary) / 0.35); }
+    50%      { opacity: 1;   text-shadow: 0 0 46px hsl(var(--primary) / 0.85); }
 }
 .thinking-text { animation: thinking-glow 2.2s ease-in-out infinite; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-/* Futuristic ambient canvas: soft red glow + faint dot-grid, theme-aware */
+/* Ambient canvas: soft brand glow + faint dot-grid, theme-aware.
+   Decoration is never danger-coloured, so this glow is brand, not red. */
 .app-canvas {
     background-color: hsl(var(--background));
     background-image:
-        radial-gradient(70% 45% at 50% -6%, rgba(255,59,48,0.06), transparent 62%),
+        radial-gradient(70% 45% at 50% -6%, hsl(var(--primary) / 0.06), transparent 62%),
         radial-gradient(hsl(var(--border)) 0.6px, transparent 0.6px);
     background-size: 100% 100%, 24px 24px;
     background-position: 0 0, 0 0;

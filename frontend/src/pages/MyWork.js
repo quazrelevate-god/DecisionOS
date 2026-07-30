@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/
 import Workflows from "./Workflows";
 import Leave from "./Leave";
 import {
+  CircleNotch,
   CheckCircle, Camera, Microphone, Stop, ChatCircleText,
   Sparkle, Plus, Trash, ArrowUp, ArrowDown, Robot, PencilSimple, ListChecks, CaretDown, ArrowsOutSimple,
   ArrowBendUpRight, WarningCircle, ChatText, ArrowRight, Kanban, ListChecks as ListIcon,
@@ -1022,9 +1023,32 @@ export default function MyWork() {
                   className={`${CTRL} ${view === "mywork" && scope === "all" ? "bg-primary-tint text-primary-text" : "bg-surface hover:bg-surface-hover"}`}>{t("mywork.all_tasks")}</button>
               </>
             )}
-            <button onClick={() => { setAiPriority((v) => !v); setView("mywork"); }} data-testid="ai-priority-toggle"
-              className={`${CTRL} ${view === "mywork" && aiPriority ? "bg-brand-red text-white shadow-xs" : "bg-brand-yellow hover:shadow-xs"}`}>
-              <Sparkle size={15} weight="bold" /> {scoring ? t("mywork.scoring") : aiPriority ? t("mywork.ai_priority_on") : t("mywork.ai_priority")}
+            {/* A toggle, confirmed from the source: boolean state, re-sorts by
+                AI score, and the testid says so. So it renders as a toggle —
+                selected takes the system's indigo tint, unselected is
+                secondary, and "scoring" is the Button's loading state rather
+                than a label swap, because busy is not a different control. */}
+            <button
+              onClick={() => { setAiPriority((v) => !v); setView("mywork"); }}
+              data-testid="ai-priority-toggle"
+              aria-pressed={view === "mywork" && aiPriority}
+              disabled={scoring}
+              className={`${CTRL} relative ${
+                view === "mywork" && aiPriority
+                  ? "bg-primary-tint text-primary-text"
+                  : "bg-surface hover:bg-surface-hover"
+              }`}
+            >
+              <span className={scoring ? "invisible flex items-center gap-1.5" : "flex items-center gap-1.5"}>
+                <Sparkle size={15} weight="bold" />
+                {aiPriority ? t("mywork.ai_priority_on") : t("mywork.ai_priority")}
+              </span>
+              {scoring && (
+                <span className="absolute inset-0 flex items-center justify-center">
+                  <CircleNotch size={15} weight="bold" className="animate-spin" />
+                  <span className="sr-only">{t("mywork.scoring")}</span>
+                </span>
+              )}
             </button>
           </div>
           <div className="order-1 lg:order-2 grid grid-cols-4 gap-2 lg:flex lg:items-center" data-testid="work-view-toggle">

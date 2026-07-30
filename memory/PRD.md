@@ -359,3 +359,9 @@ Frontend (Brain.js): red "Financial records … restricted to Owner and Finance 
 Verified end-to-end: owner sees finance (finance_visible True, invoices>0); sales user sees finance_visible False, 0 financial records, workflow amounts hidden, tasks scoped 47 vs 50, banner shown (screenshot). Test user/draft cleaned up.
 NOTE: Ask AI currently returns errors for ALL users because the tenant's Anthropic API key is OUT OF CREDIT (litellm AnthropicError "credit balance is too low") — unrelated to this change; Ask data-gating verified by code + Search test. Search path fully working (no LLM needed).
 No schema changes.
+
+## Voice interview auto-adaptive language + read-along (2026-07-30, iteration 75)
+Sarvam voice interview now adapts to the founder's spoken language automatically.
+- Backend (routers/signup.py): added SUPPORTED_TTS_LANGS (11 Indian languages), `_norm_lang`, `_lang_directive`. `/signup/tts` accepts `language_code`; `/signup/stt` now also returns `language_code` from Sarvam. `/interview/answer` and `/interview/blueprint` accept/persist `language_code`; the answer prompt tells Claude to write the next question + why in the founder's language (native script); blueprint keeps structural fields in English but writes `welcome_line` in the founder's language.
+- Frontend: `voice.js` exposes SPOKEN_LANGS + `fetchTTS(text, lang)`; `useAnswerRecorder` returns `{text, language_code}`. `VoiceInterview.js` gained a LangChip in the header (auto-detected pill + dropdown to override), a "Read or listen / Speaking · read along" indicator above the question, and threads language_code through to /interview/answer + /interview/blueprint.
+- Verified 100% in iteration_75.json (7/7 backend pytest + frontend LangChip + TTS payload plumbing). One-way auto-flip triggers only from en-IN when no manual pick has been made; manual pick disables further auto-adaptation.

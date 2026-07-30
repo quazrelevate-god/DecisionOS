@@ -402,7 +402,7 @@ function PriorityScoreBars({ scores }) {
   return (
     <div className="mt-3 border border-hairline bg-black/[0.02] p-3" data-testid="priority-score-bars">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-label uppercase text-text-secondary flex items-center gap-1"><Sparkle size={12} weight="bold" className="text-brand-red" /> AI Priority</span>
+        <span className="text-label uppercase text-text-secondary flex items-center gap-1"><Sparkle size={12} weight="bold" className="text-text-tertiary" /> AI Priority</span>
         {scores.priority_score != null && (
           <span className="font-black text-lg leading-none" data-testid="priority-score-value">{scores.priority_score}</span>
         )}
@@ -1013,13 +1013,13 @@ export default function MyWork() {
         <div className="w-full lg:w-auto flex flex-col lg:flex-row lg:items-center gap-2" data-testid="mywork-controls">
           <div className="order-2 lg:order-1 grid grid-cols-4 gap-2 lg:flex lg:flex-wrap lg:items-center" data-testid="mywork-actions">
             <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members}
-              triggerClassName={`${CTRL} bg-brand-ink text-white hover:shadow-xs`} />
+              triggerClassName={`${CTRL} bg-primary text-primary-foreground hover:bg-primary-hover`} />
             {isOwner && (
               <>
                 <button onClick={() => { setScope("mine"); setView("mywork"); }} data-testid="work-scope-mine"
-                  className={`${CTRL} ${view === "mywork" && scope === "mine" ? "bg-brand-blue text-white" : "bg-surface hover:bg-surface-hover"}`}>{t("mywork.my_tasks")}</button>
+                  className={`${CTRL} ${view === "mywork" && scope === "mine" ? "bg-primary-tint text-primary-text" : "bg-surface hover:bg-surface-hover"}`}>{t("mywork.my_tasks")}</button>
                 <button onClick={() => { setScope("all"); setView("mywork"); }} data-testid="work-scope-all"
-                  className={`${CTRL} ${view === "mywork" && scope === "all" ? "bg-brand-blue text-white" : "bg-surface hover:bg-surface-hover"}`}>{t("mywork.all_tasks")}</button>
+                  className={`${CTRL} ${view === "mywork" && scope === "all" ? "bg-primary-tint text-primary-text" : "bg-surface hover:bg-surface-hover"}`}>{t("mywork.all_tasks")}</button>
               </>
             )}
             <button onClick={() => { setAiPriority((v) => !v); setView("mywork"); }} data-testid="ai-priority-toggle"
@@ -1029,17 +1029,17 @@ export default function MyWork() {
           </div>
           <div className="order-1 lg:order-2 grid grid-cols-4 gap-2 lg:flex lg:items-center" data-testid="work-view-toggle">
             <button onClick={() => setView("mywork")} data-testid="work-view-mywork"
-              className={`${CTRL} ${view === "mywork" ? "bg-brand-ink text-white" : "bg-surface hover:bg-surface-hover"}`}>
+              className={`${CTRL} ${view === "mywork" ? "bg-primary-tint text-primary-text" : "bg-surface hover:bg-surface-hover"}`}>
               <ListIcon size={15} weight="bold" /> {t("mywork.view_mywork")}
             </button>
             {canSeeWorkflows && (
               <button onClick={() => setView("workflows")} data-testid="work-view-workflows"
-                className={`${CTRL} ${view === "workflows" ? "bg-brand-ink text-white" : "bg-surface hover:bg-surface-hover"}`}>
+                className={`${CTRL} ${view === "workflows" ? "bg-primary-tint text-primary-text" : "bg-surface hover:bg-surface-hover"}`}>
                 <ArrowRight size={15} weight="bold" /> {t("mywork.view_workflows")}
               </button>
             )}
             <button onClick={() => setView("leave")} data-testid="work-view-leave"
-              className={`${CTRL} ${view === "leave" ? "bg-brand-ink text-white" : "bg-surface hover:bg-surface-hover"}`}>
+              className={`${CTRL} ${view === "leave" ? "bg-primary-tint text-primary-text" : "bg-surface hover:bg-surface-hover"}`}>
               <AirplaneTakeoff size={15} weight="bold" /> {t("mywork.view_leave")}
             </button>
           </div>

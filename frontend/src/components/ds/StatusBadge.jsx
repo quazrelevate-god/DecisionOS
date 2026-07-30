@@ -15,9 +15,17 @@ import { cn } from "@/lib/utils";
  *
  * There is no free-form colour prop: a caller picks a meaning, not a hue.
  *
- * @typedef {'pending'|'directive'|'overdue'|'completed'} StatusTone
- * @typedef {'low'|'med'|'high'} PriorityLevel
+ * @typedef {'pending'|'directive'|'overdue'|'completed'|'rejected'} StatusTone
+ * @typedef {'low'|'med'|'medium'|'high'} PriorityLevel
  */
+
+/**
+ * The backend stores priority as "medium"; the token scale is keyed "med".
+ * The backend's language wins, so "medium" is canonical on the wire and both
+ * spellings are accepted here — callers should never have to remember which
+ * layer they are talking to.
+ */
+const PRIORITY_ALIASES = { medium: 'med', normal: 'med', med: 'med', low: 'low', high: 'high' };
 
 const badgeVariants = cva(
   "inline-flex items-center gap-1 rounded-pill px-2.5 py-1 text-badge font-semibold uppercase whitespace-nowrap",
@@ -28,6 +36,7 @@ const badgeVariants = cva(
         directive: "bg-status-directive-bg text-status-directive-fg",
         overdue: "bg-status-overdue-bg text-status-overdue-fg",
         completed: "bg-status-completed-bg text-status-completed-fg",
+        rejected: "bg-status-rejected-bg text-status-rejected-fg",
         low: "bg-priority-low-bg text-priority-low-fg",
         med: "bg-priority-med-bg text-priority-med-fg",
         high: "bg-priority-high-bg text-priority-high-fg",
@@ -39,6 +48,7 @@ const badgeVariants = cva(
       { outlined: true, status: "directive", class: "border-status-directive-line" },
       { outlined: true, status: "overdue", class: "border-status-overdue-line" },
       { outlined: true, status: "completed", class: "border-status-completed-line" },
+      { outlined: true, status: "rejected", class: "border-status-rejected-line" },
     ],
     defaultVariants: { status: "pending", outlined: false },
   }
@@ -49,6 +59,7 @@ const DEFAULT_LABEL = {
   directive: "Directive",
   overdue: "Overdue",
   completed: "Completed",
+  rejected: "Rejected",
   low: "Low",
   med: "Medium",
   high: "High",
@@ -66,10 +77,11 @@ const DEFAULT_LABEL = {
  * <StatusBadge status="overdue" />
  * <StatusBadge status="directive">Directive</StatusBadge>
  * <StatusBadge priority="high" outlined />
+ * <StatusBadge priority="medium" />   // the backend's spelling also works
  */
 export const StatusBadge = React.forwardRef(
   ({ className, status, priority, outlined = false, icon, children, ...props }, ref) => {
-    const tone = priority || status || "pending";
+    const tone = priority ? PRIORITY_ALIASES[priority] || "med" : status || "pending";
     return (
       <span ref={ref} className={cn(badgeVariants({ status: tone, outlined }), className)} {...props}>
         {icon}

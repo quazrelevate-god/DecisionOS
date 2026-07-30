@@ -166,6 +166,13 @@ const light = {
   'status-completed-fg': ref('success', 800),
   'status-completed-line': ref('success', 200),
 
+  /* Rejected — an outcome, not a failure. Neutral, and deliberately its own
+     token rather than a reuse of priority/neutral so it can diverge later
+     without anyone reaching for danger. */
+  'status-rejected-bg': ref('neutral', 100),
+  'status-rejected-fg': ref('neutral', 600),
+  'status-rejected-line': ref('neutral', 200),
+
   /* Priority — deliberately NOT red; see PRIORITY note below */
   'priority-low-bg': ref('neutral', 50),
   'priority-low-fg': ref('neutral', 600),
@@ -228,6 +235,10 @@ const dark = {
   'status-completed-bg': '143 40% 13%',
   'status-completed-fg': ref('success', 300),
   'status-completed-line': '143 35% 26%',
+
+  'status-rejected-bg': '221 15% 22%',
+  'status-rejected-fg': ref('neutral', 300),
+  'status-rejected-line': '221 13% 28%',
 
   'priority-low-bg': '222 15% 16%',
   'priority-low-fg': ref('neutral', 300),

@@ -99,6 +99,9 @@
         --status-completed-bg: 138 76% 97%;
         --status-completed-fg: 143 61% 24%;
         --status-completed-line: 141 79% 85%;
+        --status-rejected-bg: 220 19% 95%;
+        --status-rejected-fg: 215 14% 34%;
+        --status-rejected-line: 220 18% 90%;
         --priority-low-bg: 220 20% 98%;
         --priority-low-fg: 215 14% 34%;
         --priority-med-bg: 220 19% 95%;
@@ -239,6 +242,9 @@
         --status-completed-bg: 143 40% 13%;
         --status-completed-fg: 142 77% 73%;
         --status-completed-line: 143 35% 26%;
+        --status-rejected-bg: 221 15% 22%;
+        --status-rejected-fg: 219 14% 81%;
+        --status-rejected-line: 221 13% 28%;
         --priority-low-bg: 222 15% 16%;
         --priority-low-fg: 219 14% 81%;
         --priority-med-bg: 221 15% 22%;

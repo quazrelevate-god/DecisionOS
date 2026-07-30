@@ -113,6 +113,9 @@ module.exports = {
                     'completed-bg': v('status-completed-bg'),
                     'completed-fg': v('status-completed-fg'),
                     'completed-line': v('status-completed-line'),
+                    'rejected-bg': v('status-rejected-bg'),
+                    'rejected-fg': v('status-rejected-fg'),
+                    'rejected-line': v('status-rejected-line'),
                 },
                 priority: {
                     'low-bg': v('priority-low-bg'),

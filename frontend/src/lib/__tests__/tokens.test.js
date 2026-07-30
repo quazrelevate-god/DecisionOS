@@ -38,6 +38,7 @@ const textPairs = (t) => [
   ['directive badge', t['status-directive-fg'], t['status-directive-bg']],
   ['overdue badge', t['status-overdue-fg'], t['status-overdue-bg']],
   ['completed badge', t['status-completed-fg'], t['status-completed-bg']],
+  ['rejected badge', t['status-rejected-fg'], t['status-rejected-bg']],
   ['priority low badge', t['priority-low-fg'], t['priority-low-bg']],
   ['priority med badge', t['priority-med-fg'], t['priority-med-bg']],
   ['priority high badge', t['priority-high-fg'], t['priority-high-bg']],
@@ -49,6 +50,7 @@ const badgeOnSurfacePairs = (t) => [
   ['directive badge text on surface', t['status-directive-fg'], t.surface],
   ['overdue badge text on surface', t['status-overdue-fg'], t.surface],
   ['completed badge text on surface', t['status-completed-fg'], t.surface],
+  ['rejected badge text on surface', t['status-rejected-fg'], t.surface],
 ];
 
 describe.each([

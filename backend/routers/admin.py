@@ -157,6 +157,35 @@ async def admin_reactivate_tenant(tenant_id: str, admin: dict = Depends(get_plat
     return {"status": "ok", "suspended": False}
 
 
+# All tenant-scoped collections — wiped when a workspace is permanently deleted.
+TENANT_COLLECTIONS = [
+    "users", "tasks", "decisions", "workflows", "contacts", "capture_drafts",
+    "invoices", "payments", "expenses", "assets", "leaves", "attendance",
+    "meetings", "voice_notes", "inbox", "notifications", "activity", "memory",
+    "files", "ingestions", "inventory", "complaints", "calendar_events",
+    "brain_contexts", "brain_audit", "ledger_ai", "usage_events", "wa_events",
+]
+
+
+@router.delete("/tenants/{tenant_id}")
+async def admin_delete_tenant(tenant_id: str, admin: dict = Depends(get_platform_admin)):
+    """Permanently delete a workspace and ALL its data. Irreversible."""
+    t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "id": 1, "company_name": 1, "name": 1})
+    if not t:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    name = t.get("company_name") or t.get("name") or tenant_id
+    removed = {}
+    for coll in TENANT_COLLECTIONS:
+        res = await db[coll].delete_many({"tenant_id": tenant_id})
+        if res.deleted_count:
+            removed[coll] = res.deleted_count
+    await db.tenants.delete_one({"id": tenant_id})
+    total = sum(removed.values())
+    await log_admin_action(admin, "delete_tenant",
+                           f"Permanently deleted workspace {name} ({total} records wiped)", "tenant", tenant_id)
+    return {"status": "ok", "deleted": True, "records_removed": removed, "total_removed": total}
+
+
 # --- AI usage / credit consumption per workspace ----------------------------
 def _range_cutoff(rng: str):
     now = datetime.now(timezone.utc)

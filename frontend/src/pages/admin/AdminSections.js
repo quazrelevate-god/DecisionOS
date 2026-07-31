@@ -5,7 +5,7 @@ import {
   Buildings, Users, Brain, CheckSquare, Lightning, ArrowsClockwise,
   PencilSimple, Prohibit, ArrowClockwise, ShieldCheck, Spinner, Circle,
   SignIn, SignOut, Key as KeyIcon, ClockCounterClockwise,
-  ChartBar, CurrencyDollar, WarningCircle, Coins,
+  ChartBar, CurrencyDollar, WarningCircle, Coins, Trash,
 } from "@phosphor-icons/react";
 
 // --- shared bits ------------------------------------------------------------
@@ -332,6 +332,9 @@ export function UsageSection() {
 // --- Tenants ----------------------------------------------------------------
 export function TenantsSection() {
   const [rows, setRows] = useState(null);
+  const [toDelete, setToDelete] = useState(null); // tenant row pending delete confirmation
+  const [confirmText, setConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
   const load = useCallback(() => {
     api.get("/admin/tenants").then((r) => setRows(r.data.tenants)).catch(() => {});
   }, []);
@@ -345,6 +348,19 @@ export function TenantsSection() {
     } catch (e) {
       toast.error(formatApiError(e.response?.data?.detail));
     }
+  };
+
+  const doDelete = async () => {
+    if (!toDelete || confirmText.trim() !== toDelete.name) return;
+    setDeleting(true);
+    try {
+      const { data } = await api.delete(`/admin/tenants/${toDelete.id}`);
+      toast.success(`"${toDelete.name}" permanently deleted (${data.total_removed} records wiped)`);
+      setToDelete(null); setConfirmText("");
+      load();
+    } catch (e) {
+      toast.error(formatApiError(e.response?.data?.detail));
+    } finally { setDeleting(false); }
   };
 
   if (!rows) return <Loading />;
@@ -377,23 +393,73 @@ export function TenantsSection() {
                     : <span className="text-[#3fb950]">active</span>}
                 </td>
                 <td className="p-3">
-                  {t.suspended ? (
-                    <button data-testid={`tenant-reactivate-${t.id}`} onClick={() => act(t.id, "reactivate")}
-                      className={BTN + " border-[#3fb950]/50 text-[#3fb950] hover:bg-[#3fb950]/10 py-1 flex items-center gap-1"}>
-                      <ArrowClockwise size={12} /> Reactivate
+                  <div className="flex items-center gap-2">
+                    {t.suspended ? (
+                      <button data-testid={`tenant-reactivate-${t.id}`} onClick={() => act(t.id, "reactivate")}
+                        className={BTN + " border-[#3fb950]/50 text-[#3fb950] hover:bg-[#3fb950]/10 py-1 flex items-center gap-1"}>
+                        <ArrowClockwise size={12} /> Reactivate
+                      </button>
+                    ) : (
+                      <button data-testid={`tenant-suspend-${t.id}`} onClick={() => act(t.id, "suspend")}
+                        className={BTN + " border-[#e5484d]/50 text-[#e5484d] hover:bg-[#e5484d]/10 py-1 flex items-center gap-1"}>
+                        <Prohibit size={12} /> Suspend
+                      </button>
+                    )}
+                    <button data-testid={`tenant-delete-${t.id}`} onClick={() => { setToDelete(t); setConfirmText(""); }}
+                      title="Permanently delete this workspace and all its data"
+                      className={BTN + " border-white/15 text-white/50 hover:border-[#e5484d]/60 hover:text-[#e5484d] hover:bg-[#e5484d]/10 py-1 flex items-center gap-1"}>
+                      <Trash size={12} /> Delete
                     </button>
-                  ) : (
-                    <button data-testid={`tenant-suspend-${t.id}`} onClick={() => act(t.id, "suspend")}
-                      className={BTN + " border-[#e5484d]/50 text-[#e5484d] hover:bg-[#e5484d]/10 py-1 flex items-center gap-1"}>
-                      <Prohibit size={12} /> Suspend
-                    </button>
-                  )}
+                  </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {/* Permanent-delete confirmation — requires typing the workspace name */}
+      {toDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4" data-testid="tenant-delete-modal">
+          <div className="w-full max-w-md border border-[#e5484d]/40 bg-[#141418] p-6">
+            <div className="flex items-center gap-2 mb-3 text-[#e5484d]">
+              <WarningCircle size={20} weight="fill" />
+              <h3 className="font-heading text-base font-black uppercase tracking-tight">Delete workspace</h3>
+            </div>
+            <p className="font-mono text-xs text-white/70 leading-relaxed mb-2">
+              This permanently deletes <span className="text-white font-semibold">{toDelete.name}</span> — all{" "}
+              {toDelete.users} user(s), {toDelete.tasks} task(s), {toDelete.decisions} decision(s), invoices, files and
+              every other record. <span className="text-[#e5484d]">This cannot be undone.</span>
+            </p>
+            <p className="font-mono text-[11px] uppercase tracking-wider text-white/40 mt-4 mb-1.5">
+              Type <span className="text-white">{toDelete.name}</span> to confirm
+            </p>
+            <input
+              autoFocus
+              data-testid="tenant-delete-confirm-input"
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") doDelete(); }}
+              placeholder={toDelete.name}
+              className="w-full bg-[#0d0d10] border border-white/15 px-3 py-2.5 font-mono text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-[#e5484d]/60"
+            />
+            <div className="flex items-center justify-end gap-2 mt-5">
+              <button data-testid="tenant-delete-cancel" onClick={() => { setToDelete(null); setConfirmText(""); }}
+                className={BTN + " border-white/20 text-white/70 hover:border-white/50"}>
+                Cancel
+              </button>
+              <button
+                data-testid="tenant-delete-confirm"
+                onClick={doDelete}
+                disabled={confirmText.trim() !== toDelete.name || deleting}
+                className={BTN + " border-[#e5484d] bg-[#e5484d]/15 text-[#e5484d] hover:bg-[#e5484d]/25 flex items-center gap-1.5 disabled:opacity-30 disabled:cursor-not-allowed"}>
+                {deleting ? <Spinner size={13} className="animate-spin" /> : <Trash size={13} />}
+                {deleting ? "Deleting…" : "Delete forever"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -475,6 +541,9 @@ const AUDIT_META = {
   update_ai_keys: { icon: KeyIcon, color: "#d29922" },
   suspend_user: { icon: Prohibit, color: "#e5484d" },
   reactivate_user: { icon: ArrowClockwise, color: "#3fb950" },
+  suspend_tenant: { icon: Prohibit, color: "#e5484d" },
+  reactivate_tenant: { icon: ArrowClockwise, color: "#3fb950" },
+  delete_tenant: { icon: Trash, color: "#e5484d" },
   reset_access: { icon: ArrowsClockwise, color: "#6ea8ff" },
 };
 

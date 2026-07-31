@@ -313,7 +313,7 @@ function AttachChips({ files, onRemove, testid }) {
   return (
     <ul className="mt-3 flex flex-wrap gap-2 justify-center" data-testid={testid}>
       {files.map((f, i) => (
-        <li key={i} data-testid={`${testid}-chip-${i}`} className="inline-flex items-center gap-1.5 border border-brand-blue/40 bg-brand-blue/[0.06] text-brand-blue px-2.5 py-1 text-xs font-mono max-w-[200px]">
+        <li key={`${f.name}-${f.size}-${f.lastModified}`} data-testid={`${testid}-chip-${i}`} className="inline-flex items-center gap-1.5 border border-brand-blue/40 bg-brand-blue/[0.06] text-brand-blue px-2.5 py-1 text-xs font-mono max-w-[200px]">
           <FileIcon size={12} weight="bold" /> <span className="truncate">{f.name}</span>
           <button onClick={() => onRemove(i)} data-testid={`${testid}-remove-${i}`} className="ml-0.5 hover:text-brand-red"><X size={12} weight="bold" /></button>
         </li>
@@ -596,7 +596,6 @@ export default function Inbox() {
       }
     }, 500);
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focus, dataReady]);
 
   return (
@@ -731,7 +730,7 @@ export default function Inbox() {
               {textFiles.length > 0 && (
                 <ul className="mt-3 flex flex-wrap gap-2" data-testid="text-attachments">
                   {textFiles.map((f, i) => (
-                    <li key={i} data-testid={`text-attachments-chip-${i}`} className="inline-flex items-center gap-1.5 border border-brand-blue/40 bg-brand-blue/[0.06] text-brand-blue px-2.5 py-1 text-xs font-mono max-w-[200px]">
+                    <li key={`${f.name}-${f.size}-${f.lastModified}`} data-testid={`text-attachments-chip-${i}`} className="inline-flex items-center gap-1.5 border border-brand-blue/40 bg-brand-blue/[0.06] text-brand-blue px-2.5 py-1 text-xs font-mono max-w-[200px]">
                       <FileIcon size={12} weight="bold" /> <span className="truncate">{f.name}</span>
                       <button onClick={() => setTextFiles(textFiles.filter((_, j) => j !== i))} data-testid={`text-attachments-remove-${i}`} className="ml-0.5 hover:text-brand-red"><X size={12} weight="bold" /></button>
                     </li>
@@ -772,7 +771,7 @@ export default function Inbox() {
             {uploadFiles.length > 0 && (
               <ul className="mt-3 flex flex-wrap gap-2" data-testid="attachment-chips">
                 {uploadFiles.map((f, i) => (
-                  <li key={i} data-testid={`attachment-chip-${i}`} className="inline-flex items-center gap-1.5 border border-brand-blue/40 bg-brand-blue/[0.06] text-brand-blue px-2.5 py-1 text-xs font-mono max-w-[220px]">
+                  <li key={`${f.name}-${f.size}-${f.lastModified}`} data-testid={`attachment-chip-${i}`} className="inline-flex items-center gap-1.5 border border-brand-blue/40 bg-brand-blue/[0.06] text-brand-blue px-2.5 py-1 text-xs font-mono max-w-[220px]">
                     <FileIcon size={12} weight="bold" /> <span className="truncate">{f.name}</span>
                     <button onClick={() => setUploadFiles(uploadFiles.filter((_, j) => j !== i))} data-testid={`attachment-remove-${i}`} className="ml-0.5 hover:text-brand-red"><X size={12} weight="bold" /></button>
                   </li>

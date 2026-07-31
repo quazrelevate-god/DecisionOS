@@ -891,7 +891,6 @@ export default function Ledger() {
     if (tab === "assets") return <AddAssetDialog categories={assetCategories} onDone={invalidate} />;
     if (tab === "inventory") return <AddInventoryDialog onDone={invalidate} />;
     return null;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, categories, assetCategories]);
 
   return (

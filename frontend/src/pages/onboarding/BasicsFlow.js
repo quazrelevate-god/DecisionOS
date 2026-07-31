@@ -75,7 +75,7 @@ export function BasicsFlow({ form, setForm, onDone }) {
       try {
         const { data } = await api.post("/signup/check-email", { email: v.trim() });
         if (!data.available) { setError("This email already has a workspace — sign in instead."); setChecking(false); return; }
-      } catch { /* network hiccup — let register validate later */ }
+      } catch (e) { console.debug("email availability check skipped (network) — register validates later", e); }
       setChecking(false);
     }
     setError("");

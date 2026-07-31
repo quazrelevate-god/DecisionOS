@@ -25,7 +25,6 @@ export function AuthProvider({ children }) {
       .catch(() => {})
       .finally(() => setLoading(false));
     // Runs once on mount to restore the session; deps intentionally empty.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const persist = (data) => {
@@ -78,7 +77,6 @@ export function AuthProvider({ children }) {
   const value = useMemo(
     () => ({ user, tenant, loading, login, register, logout, refreshTenant, refreshMe, loginWithOtp }),
     // login/register/etc close only over stable refs (api import, setState); safe to omit.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [user, tenant, loading]
   );
 

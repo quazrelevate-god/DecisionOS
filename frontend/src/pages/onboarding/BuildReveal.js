@@ -65,7 +65,6 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
     if (ranRef.current) return;
     ranRef.current = true;
     run();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Progress creeps toward 92% and only hits 100% when the build truly finishes.

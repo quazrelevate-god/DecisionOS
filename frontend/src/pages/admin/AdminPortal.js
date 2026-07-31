@@ -39,7 +39,7 @@ export default function AdminPortal() {
   }, [admin]);
 
   const logout = async () => {
-    try { await api.post("/admin/logout"); } catch (e) { /* ignore */ }
+    try { await api.post("/admin/logout"); } catch (e) { console.debug("admin logout call failed — clearing session anyway", e); }
     setAdmin(null);
   };
 

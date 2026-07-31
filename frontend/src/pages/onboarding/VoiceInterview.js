@@ -157,7 +157,6 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
       }
     })();
     return stopAudio;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const recorder = useAnswerRecorder(({ text, language_code }) => {

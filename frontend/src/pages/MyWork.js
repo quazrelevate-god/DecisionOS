@@ -165,7 +165,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
   useEffect(() => {
     setSteps(t.execution_plan?.steps || []);
     setEditing(!t.execution_plan || t.execution_plan.status === "draft");
-  }, [t.execution_plan?.updated_at, t.execution_plan?.status]);  // eslint-disable-line
+  }, [t.execution_plan?.updated_at, t.execution_plan?.status]);
 
   const total = steps.length;
   const done = steps.filter((s) => s.done).length;
@@ -506,12 +506,12 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
                   ))}
                 </div>
                 {insights.map((ins, i) => (
-                  <div key={i} className="mt-3 border border-brand-blue/40 bg-brand-blue/[0.04] p-3" data-testid={`detail-ref-insight-${t.id}-${i}`}>
+                  <div key={`${ins.filename || "ref"}-${(ins.summary || "").slice(0, 40)}`} className="mt-3 border border-brand-blue/40 bg-brand-blue/[0.04] p-3" data-testid={`detail-ref-insight-${t.id}-${i}`}>
                     <p className="flex items-center gap-1.5 label-mono text-brand-blue mb-1"><Lightbulb size={13} weight="fill" className="text-brand-yellow" /> AI read this reference{ins.filename ? ` · ${ins.filename}` : ""}</p>
                     <p className="text-sm">{ins.summary}</p>
                     {(ins.points || []).length > 0 && (
                       <ul className="mt-2 space-y-1">
-                        {ins.points.map((p, j) => <li key={j} className="flex items-start gap-1.5 text-xs text-muted-foreground"><ArrowRight size={11} weight="bold" className="mt-0.5 shrink-0 text-brand-blue" /> {p}</li>)}
+                        {ins.points.map((p) => <li key={p} className="flex items-start gap-1.5 text-xs text-muted-foreground"><ArrowRight size={11} weight="bold" className="mt-0.5 shrink-0 text-brand-blue" /> {p}</li>)}
                       </ul>
                     )}
                   </div>
@@ -981,7 +981,6 @@ export default function MyWork() {
       document.getElementById(`task-card-${focusTaskId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 400);
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusTaskId, focusQ.data, scope]);
 
   const scoreMap = {};

@@ -154,7 +154,7 @@ function AiAnswer({ m, onGo, onAsk, currency }) {
         <p className="text-sm text-muted-foreground mt-1">{m.resp.answer}</p>
         {(m.resp.missing_information || []).length > 0 && (
           <ul className="mt-2 text-xs text-muted-foreground list-disc pl-5">
-            {m.resp.missing_information.map((x, i) => <li key={i}>{x}</li>)}
+            {m.resp.missing_information.map((x) => <li key={x}>{x}</li>)}
           </ul>
         )}
         <FollowUps items={m.resp.suggested_questions} onAsk={onAsk} />

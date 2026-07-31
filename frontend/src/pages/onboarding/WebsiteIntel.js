@@ -42,7 +42,7 @@ export function WebsiteIntel({ companyName, onDone }) {
         setStage("confirm");
         return;
       }
-    } catch { /* fall through to manual */ }
+    } catch (e) { console.debug("website-intel scan failed — falling back to manual", e); }
     setStage("manual");
   };
 

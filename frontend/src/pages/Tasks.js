@@ -186,7 +186,7 @@ export function NewTaskDialog({ onCreated, roleOptions, members, defaultType, tr
             {files.length > 0 && (
               <ul className="mt-2 space-y-1" data-testid="task-attachment-list">
                 {files.map((f, i) => (
-                  <li key={i} className="flex items-center justify-between gap-2 border border-black/20 px-2 py-1 text-xs font-mono">
+                  <li key={`${f.name}-${f.size}-${f.lastModified}`} className="flex items-center justify-between gap-2 border border-black/20 px-2 py-1 text-xs font-mono">
                     <span className="truncate">{f.name}</span>
                     <button type="button" onClick={() => setFiles(files.filter((_, j) => j !== i))} className="text-brand-red font-bold shrink-0">Remove</button>
                   </li>

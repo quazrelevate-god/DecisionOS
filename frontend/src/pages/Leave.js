@@ -192,7 +192,7 @@ function ImpactDialog({ leaveId, open, onOpenChange, onApplied }) {
 
   const applyAll = async () => {
     const pending = (data?.tasks || []).filter((t) => (t.action === "reassign" || t.action === "extend") && !applied[t.id]);
-    for (const t of pending) { await applyOne(t); }  // eslint-disable-line no-await-in-loop
+    for (const t of pending) { await applyOne(t); }
   };
 
   const tasks = data?.tasks || [];

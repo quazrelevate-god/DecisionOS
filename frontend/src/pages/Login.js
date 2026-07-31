@@ -113,7 +113,6 @@ export default function Login() {
       navigate("/signup", { replace: true });
     }
     // Runs once on mount to handle the deep-link.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Invite deep-link: /?invite=<token> — auto-switch to OTP and text the code.
@@ -138,7 +137,6 @@ export default function Login() {
       }
     })();
     // Runs once on mount to handle the ?invite= deep-link; deps intentionally empty.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const doLogin = async (e) => {

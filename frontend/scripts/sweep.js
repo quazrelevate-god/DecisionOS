@@ -63,8 +63,14 @@ const REPORT = [
   [/\bbg-brand-yellow\b/g, "yellow fill — caution, or a category?"],
   [/\bbg-brand-ink\b/g, "ink fill — was this the screen's primary action?"],
   [/\bfont-mono\b/g, "monospace outside the terminal block"],
-  [/\btext-green-\d+\b/g, "raw green — success, or decoration?"],
-  [/\btext-(purple|orange|amber)-\d+\b/g, "raw palette colour"],
+  // Prefix-agnostic on purpose. Four separate misses in this migration were the
+  // same mistake: a rule written for `text-` or `bg-` while the codebase also
+  // used `hover:`, `ring-offset-`, `border-l-` and `bg-` variants of the same
+  // colour. Match the COLOUR, whatever is attached to it.
+  [
+    /\b[a-z-]*(?:bg|text|border|ring|from|to|via|fill|stroke|divide|outline|shadow|accent|caret|decoration)-(?:red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|slate|gray|zinc|stone)-\d+\b/g,
+    "raw palette colour — which ROLE is this? (state, or a category that should be neutral)",
+  ],
 ];
 
 /**

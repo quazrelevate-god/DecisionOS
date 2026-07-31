@@ -21,11 +21,11 @@ const ROWS = [
   { key: "completed", label: "completed", bg: "bg-success-600", on: "text-white", accent: "text-status-completed-fg", icon: CheckCircle },
   { key: "awaiting_approval", label: "waiting for your approval", bg: "bg-status-pending-bg", on: "text-text", accent: "text-status-pending-fg", icon: Stamp },
   { key: "absent", label: "employees absent", bg: "bg-primary", on: "text-white", accent: "text-primary-text", icon: UserMinus },
-  { key: "complaints", label: "customer complaint(s)", bg: "bg-purple-600", on: "text-white", accent: "text-text-secondary", icon: Warning },
-  { key: "payment_overdue", label: "payment(s) overdue", bg: "bg-orange-500", on: "text-white", accent: "text-status-pending-fg", icon: CurrencyInr },
-  { key: "receivables_overdue", label: "overdue receivable(s)", bg: "bg-teal-600", on: "text-white", accent: "text-teal-600", icon: Receipt, money: true },
-  { key: "bills_due", label: "supplier bill(s) to pay", bg: "bg-rose-600", on: "text-white", accent: "text-rose-600", icon: HandCoins, money: true },
-  { key: "unmatched_payments", label: "payment(s) to match", bg: "bg-indigo-600", on: "text-white", accent: "text-indigo-600", icon: Coins, money: true },
+  { key: "complaints", label: "customer complaint(s)", bg: "bg-surface-sunken", on: "text-white", accent: "text-text-secondary", icon: Warning },
+  { key: "payment_overdue", label: "payment(s) overdue", bg: "bg-surface-sunken", on: "text-white", accent: "text-status-pending-fg", icon: CurrencyInr },
+  { key: "receivables_overdue", label: "overdue receivable(s)", bg: "bg-surface-sunken", on: "text-white", accent: "text-text-secondary", icon: Receipt, money: true },
+  { key: "bills_due", label: "supplier bill(s) to pay", bg: "bg-surface-sunken", on: "text-white", accent: "text-text-secondary", icon: HandCoins, money: true },
+  { key: "unmatched_payments", label: "payment(s) to match", bg: "bg-surface-sunken", on: "text-white", accent: "text-text-secondary", icon: Coins, money: true },
 ];
 
 const EMP_ROWS = [
@@ -34,7 +34,7 @@ const EMP_ROWS = [
   { key: "todo", label: "to do", bg: "bg-status-pending-bg", on: "text-text", accent: "text-status-pending-fg", icon: ListChecks },
   { key: "completed", label: "completed", bg: "bg-success-600", on: "text-white", accent: "text-status-completed-fg", icon: CheckCircle },
   { key: "escalations", label: "escalated to you", bg: "bg-status-overdue-bg", on: "text-status-overdue-fg", accent: "text-primary-text", icon: WarningCircle },
-  { key: "handoffs", label: "handed to you", bg: "bg-purple-600", on: "text-white", accent: "text-text-secondary", icon: ArrowBendUpRight },
+  { key: "handoffs", label: "handed to you", bg: "bg-surface-sunken", on: "text-white", accent: "text-text-secondary", icon: ArrowBendUpRight },
 ];
 
 const FIRES = { key: "fires", label: "fires to put out today", accent: "text-primary-text", icon: Fire };

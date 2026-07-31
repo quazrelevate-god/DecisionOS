@@ -33,7 +33,7 @@ const STATUS_META = {
   pending: { label: "Pending", cls: "bg-status-pending-bg text-text" },
   approved: { label: "Approved", cls: "bg-success-600 text-white" },
   rejected: { label: "Rejected", cls: "bg-primary text-primary-foreground" },
-  info_requested: { label: "Info Requested", cls: "bg-orange-500 text-white" },
+  info_requested: { label: "Info Requested", cls: "bg-surface-sunken text-white" },
 };
 const inp = "w-full border border-hairline px-3 py-2 text-sm text-label focus:outline-none focus:shadow-xs";
 const typeLabel = (k) => LEAVE_TYPES.find((t) => t.key === k)?.label || k;
@@ -143,7 +143,7 @@ function AbsenceDialog({ onDone }) {
 
 const ACTION_META = {
   reassign: { label: "Reassign", cls: "bg-primary text-primary-foreground", Icon: ArrowsClockwise },
-  extend: { label: "Extend due date", cls: "bg-orange-500 text-white", Icon: CalendarPlus },
+  extend: { label: "Extend due date", cls: "bg-surface-sunken text-white", Icon: CalendarPlus },
   monitor: { label: "Monitor", cls: "bg-surface", Icon: Eye },
 };
 
@@ -262,7 +262,7 @@ function ImpactDialog({ leaveId, open, onOpenChange, onApplied }) {
                       <input type="date" data-testid={`impact-date-${t.id}`} className={`${inp} text-sm`}
                         value={e.due_date} onChange={(ev) => setEdits((s) => ({ ...s, [t.id]: { ...s[t.id], due_date: ev.target.value } }))} />
                       <button onClick={() => applyOne(t)} data-testid={`impact-apply-${t.id}`}
-                        className="shrink-0 flex items-center gap-1 bg-orange-500 text-white px-3 py-1.5 text-xs font-semibold border border-hairline hover:shadow-xs transition-all rounded-md">
+                        className="shrink-0 flex items-center gap-1 bg-surface-sunken text-white px-3 py-1.5 text-xs font-semibold border border-hairline hover:shadow-xs transition-all rounded-md">
                         <CalendarPlus size={13} weight="bold" /> Extend
                       </button>
                     </div>
@@ -322,7 +322,7 @@ function LeaveCard({ lv, canAct, onRefresh, highlight }) {
         <Clock size={11} weight="bold" /> {timeAgo(lv.created_at)}{lv.approver_name ? ` · Approver: ${lv.approver_name}` : ""}
       </p>
       {lv.status === "info_requested" && lv.info_note && (
-        <div className="mt-2 border border-orange-500 bg-orange-50 p-2 text-xs rounded-md" data-testid={`leave-info-note-${lv.id}`}>
+        <div className="mt-2 border border-status-pending-line bg-status-pending-bg p-2 text-xs rounded-md" data-testid={`leave-info-note-${lv.id}`}>
           <span className="font-semibold">Info requested:</span> {lv.info_note}
         </div>
       )}
@@ -348,7 +348,7 @@ function LeaveCard({ lv, canAct, onRefresh, highlight }) {
                 <XCircle size={14} weight="bold" /> Reject
               </button>
               <button onClick={() => setAction("info")} data-testid={`leave-info-${lv.id}`}
-                className="flex items-center gap-1 bg-surface py-1.5 px-3 text-xs font-semibold border border-hairline hover:bg-orange-500 hover:text-white transition-colors rounded-md">
+                className="flex items-center gap-1 bg-surface py-1.5 px-3 text-xs font-semibold border border-hairline hover:bg-surface-sunken hover:text-white transition-colors rounded-md">
                 <ChatCircleText size={14} weight="bold" /> Info
               </button>
             </div>

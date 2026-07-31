@@ -9,12 +9,12 @@ import {
 
 const TYPES = {
   meeting: { label: "Meetings", icon: UsersThree, color: "bg-primary", text: "text-text" },
-  payment_due: { label: "Payments", icon: CurrencyCircleDollar, color: "bg-orange-500", text: "text-status-pending-fg" },
+  payment_due: { label: "Payments", icon: CurrencyCircleDollar, color: "bg-surface-sunken", text: "text-status-pending-fg" },
   task: { label: "Tasks", icon: CheckSquare, color: "bg-primary", text: "text-primary-text" },
   delivery: { label: "Deliveries", icon: Truck, color: "bg-success-600", text: "text-status-completed-fg" },
-  complaint: { label: "Complaints", icon: Warning, color: "bg-purple-600", text: "text-text-secondary" },
+  complaint: { label: "Complaints", icon: Warning, color: "bg-surface-sunken", text: "text-text-secondary" },
   birthday: { label: "Birthdays", icon: Cake, color: "bg-primary", text: "text-primary-text" },
-  leave: { label: "Leave", icon: AirplaneTakeoff, color: "bg-teal-600", text: "text-teal-600" },
+  leave: { label: "Leave", icon: AirplaneTakeoff, color: "bg-surface-sunken", text: "text-text-secondary" },
 };
 
 function fmtDay(iso) {

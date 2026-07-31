@@ -416,7 +416,7 @@ const PRIORITY_AXES = [
   { key: "business_impact", label: "Impact", color: "bg-primary" },
   { key: "revenue", label: "Revenue", color: "bg-success-600" },
   { key: "risk", label: "Risk", color: "bg-primary" },
-  { key: "urgency", label: "Urgency", color: "bg-orange-500" },
+  { key: "urgency", label: "Urgency", color: "bg-surface-sunken" },
 ];
 
 function PriorityScoreBars({ scores }) {
@@ -884,7 +884,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
           <button onClick={rejectTask} data-testid={`reject-${t.id}`} className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold border border-hairline hover:shadow-xs transition-all rounded-md">
             <WarningCircle size={16} weight="bold" /> Request changes
           </button>
-          <button onClick={clarifyTask} data-testid={`clarify-${t.id}`} className="flex items-center gap-2 bg-orange-500 text-text px-4 py-2 text-sm font-semibold border border-hairline hover:shadow-xs transition-all rounded-md">
+          <button onClick={clarifyTask} data-testid={`clarify-${t.id}`} className="flex items-center gap-2 bg-surface-sunken text-text px-4 py-2 text-sm font-semibold border border-hairline hover:shadow-xs transition-all rounded-md">
             <ChatText size={16} weight="bold" /> Ask clarification
           </button>
         </div>

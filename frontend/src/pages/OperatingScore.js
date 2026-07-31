@@ -9,7 +9,7 @@ const CATS = [
   { key: "execution", label: "Execution", icon: Lightning, color: "bg-primary" },
   { key: "finance", label: "Finance", icon: CurrencyCircleDollar, color: "bg-success-600" },
   { key: "sales", label: "Sales", icon: TrendUp, color: "bg-status-pending-bg" },
-  { key: "responsiveness", label: "Responsiveness", icon: ChatCenteredDots, color: "bg-purple-600" },
+  { key: "responsiveness", label: "Responsiveness", icon: ChatCenteredDots, color: "bg-surface-sunken" },
 ];
 
 const scoreColor = (v) => v == null ? "text-text-tertiary" : v >= 70 ? "text-status-completed-fg" : v >= 40 ? "text-status-pending-fg" : "text-primary-text";

@@ -31,7 +31,7 @@ function ComplaintDialog({ contact, onSaved }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <button data-testid={`log-complaint-${contact.id}`} className="w-8 h-8 flex items-center justify-center border border-hairline hover:bg-purple-600 hover:text-white transition-colors rounded-md"><Warning size={14} weight="bold" /></button>
+        <button data-testid={`log-complaint-${contact.id}`} className="w-8 h-8 flex items-center justify-center border border-hairline hover:bg-surface-sunken hover:text-white transition-colors rounded-md"><Warning size={14} weight="bold" /></button>
       </DialogTrigger>
       <DialogContent className="border border-hairline rounded-md">
         <DialogHeader><DialogTitle className="tracking-tight">Log complaint — {contact.name}</DialogTitle></DialogHeader>
@@ -42,7 +42,7 @@ function ComplaintDialog({ contact, onSaved }) {
           </select>
         </div>
         <DialogFooter>
-          <button data-testid="complaint-save-button" onClick={save} className="bg-purple-600 text-white px-5 py-2 text-sm font-semibold border border-hairline hover:shadow-xs transition-all rounded-md">Log complaint</button>
+          <button data-testid="complaint-save-button" onClick={save} className="bg-surface-sunken text-white px-5 py-2 text-sm font-semibold border border-hairline hover:shadow-xs transition-all rounded-md">Log complaint</button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -355,7 +355,7 @@ const CLASS_META = {
   supplier: { icon: Truck, color: "bg-status-pending-bg text-text", label: "Supplier" },
   invoice: { icon: Receipt, color: "bg-primary text-primary-foreground", label: "Invoice" },
   payment: { icon: CurrencyCircleDollar, color: "bg-success-600 text-white", label: "Payment" },
-  complaint: { icon: Warning, color: "bg-purple-600 text-white", label: "Complaint" },
+  complaint: { icon: Warning, color: "bg-surface-sunken text-white", label: "Complaint" },
   task: { icon: CheckSquare, color: "bg-surface text-text", label: "Task" },
   approval: { icon: SealCheck, color: "bg-primary text-primary-foreground", label: "Approval" },
   reminder: { icon: Bell, color: "bg-status-pending-bg text-text", label: "Reminder" },

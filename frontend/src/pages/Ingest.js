@@ -111,12 +111,12 @@ const withKeys = (recs) => {
 const WA_STATUS_STYLE = {
   received: "bg-status-pending-bg text-text",
   draft: "bg-primary text-primary-foreground",
-  attention: "bg-amber-500 text-text",
+  attention: "bg-surface-sunken text-text",
   filed: "bg-success-600 text-white",
   structured: "bg-success-600 text-white",
   ignored: "bg-surface-sunken text-text",
   rejected: "bg-primary text-primary-foreground",
-  signature_mismatch: "bg-orange-500 text-white",
+  signature_mismatch: "bg-surface-sunken text-white",
   error: "bg-status-overdue-bg text-status-overdue-fg",
 };
 

@@ -14,10 +14,10 @@ const inp = "w-full border border-hairline px-2 py-1.5 text-sm bg-surface focus:
 
 const CLASS_STYLE = {
   invoice: "bg-primary text-primary-foreground", payment: "bg-primary text-primary-foreground",
-  purchase: "bg-purple-600 text-white", sales: "bg-success-600 text-white",
-  hr: "bg-pink-600 text-white", meeting: "bg-amber-500 text-text",
+  purchase: "bg-surface-sunken text-white", sales: "bg-success-600 text-white",
+  hr: "bg-surface-sunken text-white", meeting: "bg-surface-sunken text-text",
   decision: "bg-primary text-primary-foreground", approval: "bg-primary text-primary-foreground",
-  workflow: "bg-teal-600 text-white", operational_task: "bg-surface-sunken text-text",
+  workflow: "bg-surface-sunken text-white", operational_task: "bg-surface-sunken text-text",
   other: "bg-surface-sunken text-text",
 };
 const STATUS_TABS = [
@@ -157,7 +157,7 @@ function CaptureCard({ c, user, onChange }) {
   return (
     <div data-testid={`capture-card-${c.id}`} className="rounded-lg border border-hairline bg-surface p-4">
       <div className="flex items-start gap-3 flex-wrap">
-        <div className="w-10 h-10 shrink-0 flex items-center justify-center border-2 border-hairline bg-green-50">
+        <div className="w-10 h-10 shrink-0 flex items-center justify-center border-2 border-hairline bg-status-completed-bg">
           {c.kind === "pdf" || c.kind === "image" ? <FilePdf size={20} weight="bold" className="text-status-completed-fg" /> : <ChatText size={20} weight="bold" className="text-status-completed-fg" />}
         </div>
         <div className="min-w-0 flex-1">
@@ -171,7 +171,7 @@ function CaptureCard({ c, user, onChange }) {
             {c.duplicate_of && <Chip value="possible duplicate" />}
             {c.confidence != null && (() => {
               const pct = Math.round(c.confidence * 100);
-              const tone = pct >= 80 ? "bg-success-600 text-white" : pct >= 50 ? "bg-amber-500 text-text" : "bg-primary text-primary-foreground";
+              const tone = pct >= 80 ? "bg-success-600 text-white" : pct >= 50 ? "bg-surface-sunken text-text" : "bg-primary text-primary-foreground";
               return <span data-testid={`capture-confidence-${c.id}`} className={`text-label px-1.5 py-0.5 rounded-md ${tone}`} title="AI confidence in this classification">AI {pct}%</span>;
             })()}
             <span className="text-label text-text-secondary ml-auto flex items-center gap-1" title={c.sender_name ? `${c.sender_name}${c.wa_from ? " · " + c.wa_from : ""} · ${fullTime(c.created_at)}` : fullTime(c.created_at)}>
@@ -204,7 +204,7 @@ function CaptureCard({ c, user, onChange }) {
           {c.text && <p className="text-xs text-text-secondary mt-1 italic">“{c.text.slice(0, 200)}”</p>}
           {recCounts && <p className="text-label text-text-secondary mt-1">Extracted: {recCounts}{c.amount ? ` · ₹${Number(c.amount).toLocaleString()}` : ""}</p>}
           {!recCounts && c.amount ? <p className="text-label text-text-secondary mt-1">Amount: ₹{Number(c.amount).toLocaleString()}</p> : null}
-          {c.attention_reason && <p className="text-xs text-amber-700 mt-1">⚠ {c.attention_reason}</p>}
+          {c.attention_reason && <p className="text-xs text-status-pending-fg mt-1">⚠ {c.attention_reason}</p>}
           {c.escalate_reason && <p className="text-xs text-primary-text mt-1">⚠ {c.escalate_reason}</p>}
           {isPending && purchaseBills.length > 0 && (
             <div className="mt-3 border-2 border-hairline bg-background p-3" data-testid={`capture-buckets-${c.id}`}>
@@ -232,7 +232,7 @@ function CaptureCard({ c, user, onChange }) {
               </div>
             </div>
           )}
-          {c.clarification_note && <p className="text-xs text-amber-700 mt-1">Note: {c.clarification_note}</p>}
+          {c.clarification_note && <p className="text-xs text-status-pending-fg mt-1">Note: {c.clarification_note}</p>}
           {c.file_url && (
             <div className="mt-2">
               <p className="text-label text-text-secondary text-[10px] mb-1">Under review — original file</p>

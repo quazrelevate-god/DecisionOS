@@ -37,7 +37,7 @@ backend spec sheet. This file is the state of play; that one is the work queue.
 **Tags, oldest to newest:** `ds-base`, `ds-phase-1..4b`, `mig-m2`, `mig-m3`,
 `mig-m6`, `mig-m7`, `mig-palette-closed`, `ds-type-radius`, `ux-frontend-batch`.
 
-**Backups:** `~/Documents/decisionos-ds-backups/` holds per-phase `git bundle`
+**Backups:** a local backups directory (outside the repo) holds per-phase `git bundle`
 files (verified restorable) plus the screenshot tooling — `tools/shoot.js`
 captures 42 shots across 17 routes in both themes, `tools/diff.js` byte-compares
 two sets. Branch protection was skipped by decision, so the bundles are the
@@ -192,7 +192,7 @@ beautiful imply correct.**
 
 ## 6. Deploy
 
-The client (**Yokesh**) is deploying this branch on **Railway**.
+Deployed on **Railway** from this branch by the client.
 
 - **App root is `frontend/`** — not the repo root. The repo also contains a
   FastAPI backend in `backend/`.

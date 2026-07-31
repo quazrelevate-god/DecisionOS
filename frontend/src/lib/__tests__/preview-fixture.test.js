@@ -26,8 +26,13 @@ describe("preview fixture — shape", () => {
     expect(decisions.filter((d) => d.status !== "pending_approval").length).toBeGreaterThan(0);
   });
 
-  test("serves twelve tasks", () => {
-    expect(tasks).toHaveLength(12);
+  test("serves thirteen tasks", () => {
+    expect(tasks).toHaveLength(13);
+  });
+
+  test("carries both an escalation and a handoff, which share a tier", () => {
+    expect(tasks.filter((t) => t.source === "escalation")).toHaveLength(2);
+    expect(tasks.filter((t) => t.source === "handoff")).toHaveLength(1);
   });
 });
 
@@ -35,7 +40,7 @@ describe("preview fixture — exercises every tier", () => {
   test("all four tiers are populated", () => {
     expect(ranked.counts).toEqual({
       approval: 6,
-      escalation: 2,
+      escalation: 3,
       overdue: 5,
       today: 3,
     });
@@ -43,7 +48,11 @@ describe("preview fixture — exercises every tier", () => {
 
   test("there are more candidates than the top-3 shows, so the hidden count is real", () => {
     expect(ranked.items).toHaveLength(3);
-    expect(ranked.hidden).toBe(13);
+    expect(ranked.hidden).toBe(14);
+  });
+
+  test("the shortlist spans tiers rather than being filled by approvals alone", () => {
+    expect(ranked.items.map((i) => i.tier)).toEqual(["approval", "escalation", "overdue"]);
   });
 });
 

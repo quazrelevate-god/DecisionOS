@@ -31,6 +31,109 @@ describe("whatMatters — tier order", () => {
   });
 });
 
+describe("whatMatters — lateness outranks amount, whatever the amount", () => {
+  /* The packed-integer sort this replaced assumed amounts below ten lakh.
+     ₹18,00,000 three days late then beat a task four days late, because the
+     amount had escaped its tie-break role into the day ordering. */
+  test("a very large amount does not jump a day boundary", () => {
+    const { items } = whatMatters({
+      tasks: [
+        { id: "big", due_date: daysAgo(3), title: "Huge but newer", amount: 1800000 },
+        { id: "later", due_date: daysAgo(4), title: "Older, no amount", amount: null },
+      ],
+    });
+    expect(items.map((i) => i.id)).toEqual(["later", "big"]);
+  });
+
+  test("amount still breaks a tie on the same day, at any scale", () => {
+    const { items } = whatMatters({
+      tasks: [
+        { id: "small", due_date: daysAgo(3), title: "Small", amount: 95000 },
+        { id: "huge", due_date: daysAgo(3), title: "Huge", amount: 18000000 },
+      ],
+    });
+    expect(items.map((i) => i.id)).toEqual(["huge", "small"]);
+  });
+});
+
+describe("whatMatters — handoffs share the escalation tier", () => {
+  test("a handoff is tier 2, with its own verb", () => {
+    const { items, counts } = whatMatters({
+      tasks: [{ id: "t1", source: "handoff", title: "Take this over", raised_by_name: "Ravi Kumar" }],
+    });
+    expect(items[0].tier).toBe("escalation");
+    expect(items[0].reason).toBe("Ravi Kumar handed this to you");
+    expect(counts.escalation).toBe(1);
+  });
+
+  test("an escalation keeps its own verb", () => {
+    const { items } = whatMatters({
+      tasks: [{ id: "t1", source: "escalation", title: "Decide", raised_by_name: "Meena Raghavan" }],
+    });
+    expect(items[0].reason).toBe("Meena Raghavan escalated this to you");
+  });
+
+  test("the person who raised it is named, not the person it sits with", () => {
+    const { items } = whatMatters({
+      tasks: [{ id: "t1", source: "escalation", title: "x", raised_by_name: "Meena", assignee_name: "Prasanna" }],
+    });
+    expect(items[0].reason).toContain("Meena");
+    expect(items[0].reason).not.toContain("Prasanna");
+  });
+});
+
+describe("whatMatters — one slot per tier before any tier takes a second", () => {
+  test("six approvals cannot crowd out an overdue item", () => {
+    const decisions = Array.from({ length: 6 }, (_, i) => ({
+      id: `d${i}`,
+      status: "pending_approval",
+      title: `Approve ${i}`,
+    }));
+    const { items } = whatMatters({
+      decisions,
+      tasks: [
+        { id: "esc", source: "escalation", title: "Escalated", raised_by_name: "Ravi" },
+        { id: "late", due_date: daysAgo(5), title: "Five days late" },
+      ],
+    });
+    expect(items.map((i) => i.tier)).toEqual(["approval", "escalation", "overdue"]);
+    expect(items.map((i) => i.id)).toEqual(["d0", "esc", "late"]);
+  });
+
+  test("with one tier populated it still fills the list from that tier", () => {
+    const tasks = Array.from({ length: 5 }, (_, i) => ({ id: `t${i}`, due_date: daysAgo(i + 1), title: `T${i}` }));
+    const { items } = whatMatters({ tasks });
+    expect(items).toHaveLength(3);
+    expect(items.every((i) => i.tier === "overdue")).toBe(true);
+    // Worst first is unchanged within the tier.
+    expect(items.map((i) => i.id)).toEqual(["t4", "t3", "t2"]);
+  });
+
+  test("spare slots after every tier is represented go to the best of the rest", () => {
+    const { items } = whatMatters({
+      decisions: [{ id: "d1", status: "pending_approval", title: "Approve" }],
+      tasks: [
+        { id: "a", due_date: daysAgo(2), title: "Two days" },
+        { id: "b", due_date: daysAgo(9), title: "Nine days" },
+      ],
+      limit: 3,
+    });
+    // Two populated tiers, three slots: approval, worst overdue, then the next overdue.
+    expect(items.map((i) => i.id)).toEqual(["d1", "b", "a"]);
+  });
+
+  test("the shortlist is still displayed in tier order, not allocation order", () => {
+    const { items } = whatMatters({
+      decisions: [{ id: "d1", status: "pending_approval", title: "Approve" }],
+      tasks: [
+        { id: "t1", due_date: today(), title: "Today" },
+        { id: "t2", due_date: daysAgo(3), title: "Late" },
+      ],
+    });
+    expect(items.map((i) => i.tier)).toEqual(["approval", "overdue", "today"]);
+  });
+});
+
 describe("whatMatters — what it refuses to surface", () => {
   test("completed and cancelled work never appears, however late", () => {
     const { items, counts } = whatMatters({

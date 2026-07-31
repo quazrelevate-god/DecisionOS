@@ -13,9 +13,13 @@
  *
  * The tiers, in order:
  *   1. Decisions awaiting your approval — someone else's work is blocked
- *   2. Escalations addressed to you — a person explicitly asked
+ *   2. Escalations and handoffs addressed to you — a person explicitly asked
  *   3. Overdue work — promises already broken, worst first
  *   4. Due today — breaks today if ignored
+ *
+ * Tier order decides who gets a slot, but not how many: the shortlist gives
+ * every populated tier one slot before any tier takes a second. Six pending
+ * approvals should not be able to hide the thing that is five days late.
  *
  * Everything else is "not today". That is a claim, not an omission: the counts
  * of what is not shown travel with the result so the caller can always say how
@@ -34,6 +38,68 @@
 const TIER_ORDER = ["approval", "escalation", "overdue", "today"];
 
 const isTerminal = (t) => t?.status === "done" || t?.status === "cancelled";
+
+/**
+ * Tier, then lateness, then amount — as three separate comparisons.
+ *
+ * This used to be one packed number, `-(late * 1e6 + amount)`, which quietly
+ * assumed every amount was under ten lakh. Indian SME amounts are routinely
+ * larger, and a ₹18,00,000 task three days late then outranked one four days
+ * late — the amount had leaked out of its tie-break role and into the day
+ * ordering. Packing two ranks into one integer only works while you can
+ * guarantee the range of the lower one, and here you cannot.
+ *
+ * Approvals and escalations have no within-tier ranking on purpose. "Who is
+ * waiting" is not a quantity, and ordering a colleague's escalation by rupees
+ * would be a judgement the data does not support. Array.prototype.sort is
+ * stable, so they hold the order they arrived in.
+ */
+function compare(a, b) {
+  const ta = TIER_ORDER.indexOf(a.tier);
+  const tb = TIER_ORDER.indexOf(b.tier);
+  if (ta !== tb) return ta - tb;
+  if (a.tier !== "overdue" && a.tier !== "today") return 0;
+  if (a.late !== b.late) return b.late - a.late;
+  return b.amount - a.amount;
+}
+
+/**
+ * Fill the shortlist with one slot per populated tier before letting any tier
+ * take a second.
+ *
+ * Straight rank order meant six pending approvals filled all three slots and a
+ * founder's morning brief never showed the thing that was five days late. Tier
+ * order still decides who gets a slot when there are more populated tiers than
+ * slots — it just no longer lets one tier monopolise the list while another is
+ * shut out entirely.
+ *
+ * @param {any[]} candidates Already sorted by `compare`.
+ */
+function oneSlotPerTier(candidates, limit) {
+  const chosen = [];
+  const taken = new Set();
+
+  for (const tier of TIER_ORDER) {
+    if (chosen.length >= limit) break;
+    const best = candidates.find((c) => c.tier === tier);
+    if (best) {
+      chosen.push(best);
+      taken.add(best.id);
+    }
+  }
+
+  // Slots left over after every tier has been represented go to the best of
+  // the rest, which is the old behaviour and the right one at that point.
+  for (const c of candidates) {
+    if (chosen.length >= limit) break;
+    if (!taken.has(c.id)) {
+      chosen.push(c);
+      taken.add(c.id);
+    }
+  }
+
+  return chosen.sort(compare);
+}
 
 /** Days a task is past due; 0 if not overdue. */
 function daysLate(due) {
@@ -77,22 +143,31 @@ export function whatMatters({ decisions = [], tasks = [], limit = 3 } = {}) {
       reason: "Waiting on your approval — work is blocked until you decide",
       title: d.title,
       ref: d,
-      sort: 0,
+      late: 0,
+      amount: Number(d.amount) || 0,
     });
   }
 
   for (const t of tasks) {
     if (isTerminal(t)) continue;
 
-    if (t.source === "escalation") {
+    /* Escalations and handoffs are one tier, because they are one situation:
+       a named person has put this in front of you and is waiting. The Desk
+       already treats them together in its "Needs your attention" section, and
+       two definitions of the same thing is how counts start disagreeing. The
+       verb still differs, because being escalated to and being handed
+       something are not the same social act. */
+    if (t.source === "escalation" || t.source === "handoff") {
+      const who = t.raised_by_name || t.assignee_name || "Someone";
       candidates.push({
         id: t.id,
         kind: "task",
         tier: "escalation",
-        reason: `${t.assignee_name || "Someone"} escalated this to you`,
+        reason: `${who} ${t.source === "handoff" ? "handed this to you" : "escalated this to you"}`,
         title: t.title,
         ref: t,
-        sort: 0,
+        late: 0,
+        amount: Number(t.amount) || 0,
       });
       continue;
     }
@@ -106,8 +181,8 @@ export function whatMatters({ decisions = [], tasks = [], limit = 3 } = {}) {
         reason: late === 1 ? "1 day overdue" : `${late} days overdue`,
         title: t.title,
         ref: t,
-        // Worst first, and within the same day count the larger amount leads.
-        sort: -(late * 1e6 + (Number(t.amount) || 0)),
+        late,
+        amount: Number(t.amount) || 0,
       });
       continue;
     }
@@ -120,23 +195,20 @@ export function whatMatters({ decisions = [], tasks = [], limit = 3 } = {}) {
         reason: "Due today",
         title: t.title,
         ref: t,
-        sort: -(Number(t.amount) || 0),
+        late: 0,
+        amount: Number(t.amount) || 0,
       });
     }
   }
 
-  candidates.sort((a, b) => {
-    const ta = TIER_ORDER.indexOf(a.tier);
-    const tb = TIER_ORDER.indexOf(b.tier);
-    return ta !== tb ? ta - tb : a.sort - b.sort;
-  });
+  candidates.sort(compare);
 
   const counts = TIER_ORDER.reduce((acc, t) => {
     acc[t] = candidates.filter((c) => c.tier === t).length;
     return acc;
   }, {});
 
-  const items = candidates.slice(0, limit);
+  const items = oneSlotPerTier(candidates, limit);
 
   return {
     items,

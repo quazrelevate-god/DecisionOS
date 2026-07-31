@@ -294,8 +294,12 @@ const ROUTES = [
          overdue: it must still rank as an escalation, because a person asking
          outranks a date passing. If it ever appears under "2 days overdue",
          tier precedence has broken. */
-      { id: 'te1', title: 'Chennai stockist wants a callback today', status: 'todo', priority: 'high', progress: 0, source: 'escalation', assignee_name: 'Ravi Kumar', due_date: daysAhead(2), amount: null },
-      { id: 'te2', title: 'Approve the revised packaging artwork', status: 'in_progress', priority: 'medium', progress: 40, source: 'escalation', assignee_name: 'Meena Raghavan', due_date: daysAgo(2), amount: 88000 },
+      { id: 'te1', title: 'Chennai stockist wants a callback today', status: 'todo', priority: 'high', progress: 0, source: 'escalation', raised_by_name: 'Ravi Kumar', assignee_name: 'Prasanna Narayanan', due_date: daysAhead(2), amount: null },
+      { id: 'te2', title: 'Approve the revised packaging artwork', status: 'in_progress', priority: 'medium', progress: 40, source: 'escalation', raised_by_name: 'Meena Raghavan', assignee_name: 'Prasanna Narayanan', due_date: daysAgo(2), amount: 88000 },
+      /* A handoff, not an escalation: same tier, different verb. Here so the
+         two sources are proven to land together — they used to be one thing
+         on the Desk and another in the ranking. */
+      { id: 'th1', title: 'Take over the Trichy dealer conversation', status: 'todo', priority: 'medium', progress: 0, source: 'handoff', raised_by_name: 'Ravi Kumar', assignee_name: 'Prasanna Narayanan', due_date: daysAhead(3), amount: null },
 
       /* Tier 3 — overdue, worst first. Five rows at four distinct day counts.
          The 3-day pair exists for the tie-break: same lateness, different

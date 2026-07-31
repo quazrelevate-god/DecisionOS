@@ -290,3 +290,24 @@ Select-all, archive-completed and merge-duplicates therefore cannot be built
 honestly in the frontend: fanning out N single calls gives no atomicity, partial
 failure with no rollback, and N× the load. **Needs `POST /tasks/bulk` (or
 equivalent) taking ids + an action.** Logged rather than faked.
+
+## Finance empty states cannot carry an action yet
+
+**Found:** UX batch. **Status:** open, small.
+
+The EmptyState shim now forwards `actionLabel`/`onAction`, but Finance's
+add-entry controls are `DialogTrigger` components that own their own open state.
+Wiring "Add an expense" from the empty state needs that state lifted out of them
+— a structural change, not a copy fix, so it did not ride inside the batch.
+
+## Operating Score remediation
+
+**Found:** M6, decided in the UX batch. **Status:** open, product work.
+
+The composite is demoted out of the hero slot, which removes the
+judgement-without-guidance problem today. It does not add guidance. The score
+still cannot say *"here are the three things that would move this"* — that needs
+backend logic to identify the highest-leverage gaps and rank them, and product
+thinking about what a founder should actually do about a low score.
+
+Demotion was the honest interim. Remediation is a feature to design, not a patch.

@@ -202,3 +202,91 @@ is legal in exactly those two places; everywhere else red is danger.
 **Discrepancy worth someone's attention:** the deck's red is `#FF2D20` and the app's
 is `#FF3B30`. Close, but not the same red. Nobody has reconciled them, and the
 brand should probably pick one.
+
+---
+
+# Backend-blocked — specs for handoff
+
+These are **not** fixable in the frontend, and a frontend fix would make them
+worse by hiding inconsistent data behind a plausible-looking number. Written up
+so they can be handed to whoever owns the backend.
+
+## B1. Contradictory counts across the app
+
+**Symptom, as observed:**
+
+- CEO Brief: **"96 delayed / 0 completed"** — 96 tasks past due while zero have
+  ever completed, which cannot be true of a live workspace.
+- My Work: filter reads **"All 23"** while **"Completed 27"** — a subset larger
+  than its superset.
+- My Work department filters (Operational, Sales, Purchase, Production, Finance,
+  HR) all read **0** while 23 tasks are open.
+
+**What is actually wrong:** these counters are computed by different endpoints
+over different filter sets, and nothing reconciles them.
+
+- `/brief?period=…` returns `counters.{fires,delayed,completed}`.
+- `/tasks?mine=true` returns the task list the "All" count is derived from.
+- `/inbox` returns `counts` per classification.
+
+Three sources, three definitions of "a task that counts". At least one of them
+disagrees with the others about (a) whether cancelled/archived tasks are
+included, (b) whether the scope is the current user or the whole tenant, and (c)
+whether "completed" means `status === "done"` or includes `cancelled`.
+
+**What needs to happen at source:** one definition of the task universe, shared
+by every counter — the same scope, the same status set, the same tenant filter.
+Then every count derives from it. Until that exists, any frontend reconciliation
+is a guess dressed as a fact.
+
+**Acceptance:** for a given workspace, `completed ≤ all`, the sum of the
+department filters equals the unfiltered open count, and `delayed > 0` with
+`completed === 0` is either impossible or explainable.
+
+## B2. Ledger shows ₹0 with real data behind it
+
+**Symptom:** every KPI tile on Finance/Ledger renders ₹0 and the tabs show "no
+financial data found", on workspaces that do have financial records.
+
+**What the frontend does:** `KpiRow` reads `summary.totals.{revenue_billed,
+revenue_received, total_spend, net_profit, asset_value, inventory_value}` from
+`GET /ledger/summary`. It renders exactly what it is given; there is no
+client-side aggregation to get wrong.
+
+**So the question is at source:** does `/ledger/summary` return that shape, with
+those key names, populated for a tenant that has expenses/revenue rows? The
+frontend's preview fixture had to be corrected twice to match those key names —
+if the backend emits a different shape (or a correct shape with an empty tenant
+filter), every tile is ₹0 while the underlying rows exist.
+
+**Why this matters more than it looks:** ₹0-everywhere was the original
+trust-killing symptom of this product. A finance screen that reports nothing on a
+business with money moving through it is not a cosmetic bug.
+
+**Acceptance:** open the real Ledger for a workspace with known revenue and
+expenses; the six tiles show those numbers.
+
+## B3. Duplicate ingestion (the half that is not display)
+
+**Status:** the display half shipped — residual duplicates collapse into one row
+with an `n×` count.
+
+**Still open at source:** the same invoice parsed twice, or a task captured from
+both a voice note and the WhatsApp forward of it, still creates multiple records.
+The frontend collapse tidies the feed; it does not stop the rows being created,
+and anything counting rows still counts them twice — which likely feeds B1.
+
+**What needs to happen:** deduplicate at ingestion on a content key (vendor +
+amount + document date for invoices; normalised text + window for captures).
+
+## B4. Bulk triage has no endpoints
+
+**Checked, does not exist.** The backend exposes only per-id operations —
+`PATCH /tasks/{id}`, `POST /tasks/{id}/approve|reject|clarify`,
+`POST /inbox/{id}/status`. There is no bulk/batch/archive/merge route and nothing
+accepting a list of ids.
+
+Select-all, archive-completed and merge-duplicates therefore cannot be built
+honestly in the frontend: fanning out N single calls gives no atomicity, partial
+failure with no rollback, and N× the load. **Needs `POST /tasks/bulk` (or
+equivalent) taking ids + an action.** Logged rather than faked.

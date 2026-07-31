@@ -571,7 +571,36 @@ export default function Inbox() {
 
   const mmss = `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`;
   const inbox = inboxQ.data || { items: [], counts: {}, open_total: 0 };
-  const items = (inbox.items || []).filter((i) => i.status !== "dismissed" && (filter === "all" || i.classification === filter));
+  const rawItems = (inbox.items || []).filter((i) => i.status !== "dismissed" && (filter === "all" || i.classification === filter));
+
+  /**
+   * Collapse residual duplicates into one row carrying a count.
+   *
+   * The same invoice parsed twice, or a task captured from both a voice note and
+   * the WhatsApp forward of it, arrives as two or three separate cards.
+   * Deduplicating at ingestion is the real fix and is backend work; this is the
+   * display half, so a feed that has already been polluted still reads as one
+   * row per thing.
+   *
+   * The key is title + classification + amount + status. Status is deliberately
+   * part of it: an open copy and a done copy are different states, and merging
+   * them would hide work rather than tidy it.
+   */
+  const items = (() => {
+    const seen = new Map();
+    for (const it of rawItems) {
+      const key = [
+        (it.title || "").trim().toLowerCase(),
+        it.classification || "",
+        it.amount ?? "",
+        it.status || "",
+      ].join("|");
+      const hit = seen.get(key);
+      if (hit) hit.duplicateCount = (hit.duplicateCount || 1) + 1;
+      else seen.set(key, { ...it });
+    }
+    return [...seen.values()];
+  })();
   const pending = (decisionsQ.data || []).filter((d) => d.status === "pending_approval");
   const decMap = {};
   (decisionsQ.data || []).forEach((d) => { decMap[d.id] = d; });
@@ -913,6 +942,15 @@ export default function Inbox() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <Chip value={meta.label} data-testid={`inbox-class-${it.id}`} />
+                    {it.duplicateCount > 1 && (
+                      <span
+                        data-testid={`inbox-duplicate-count-${it.id}`}
+                        title={`This arrived ${it.duplicateCount} times — collapsed into one row`}
+                        className="inline-flex items-center rounded-pill bg-surface-sunken px-2 py-0.5 text-badge font-semibold text-text-secondary"
+                      >
+                        {it.duplicateCount}×
+                      </span>
+                    )}
                     <span className="text-label text-text-secondary">{it.source}</span>
                     {it.amount != null && <span className="text-xs font-semibold">{money(it.amount)}</span>}
                     {decTasks.length > 0 && (

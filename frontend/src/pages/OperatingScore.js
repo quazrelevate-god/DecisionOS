@@ -72,14 +72,22 @@ export default function OperatingScore() {
       ) : (
       /* Company overall */
       <div className="rounded-lg border border-hairline bg-surface p-8 mb-8 flex flex-col lg:flex-row items-center gap-8" data-testid="operating-overall">
-        <div className="flex flex-col items-center shrink-0">
-          <div className="w-36 h-36 flex flex-col items-center justify-center border-4 border-hairline bg-surface">
-            <span className={` text-6xl font-black leading-none ${scoreColor(overall)}`} data-testid="operating-overall-score">{overall}</span>
-            <span className="text-label text-text-secondary mt-1">/ 100</span>
+        {/* Demoted from the hero slot.
+            A 17/100 with no path to improve it is judgement without guidance —
+            it tells a founder they are failing and nothing about what to do,
+            which is worse than not scoring at all. Until the score can carry
+            remediation ("the three things that would move this"), the composite
+            is a supporting stat and the per-area breakdown leads, because the
+            breakdown at least says WHERE the weakness is. The remediation is
+            product work and sits in the backlog. */}
+        <div className="flex flex-row lg:flex-col items-center gap-3 shrink-0">
+          <div className="flex items-baseline gap-1.5">
+            <span className={`text-h1 font-bold leading-none ${scoreColor(overall)}`} data-testid="operating-overall-score">{overall}</span>
+            <span className="text-small text-text-tertiary">/ 100</span>
           </div>
-          <div className="flex items-center gap-2 mt-3">
-            <Gauge size={16} weight="bold" className="text-primary-text" />
-            <span className="font-extrabold tracking-tight text-sm">Company Health</span>
+          <div className="flex items-center gap-2">
+            <Gauge size={14} weight="bold" className="text-text-tertiary" />
+            <span className="text-label text-text-secondary">Company health</span>
           </div>
         </div>
         <div className="flex-1 w-full space-y-4">

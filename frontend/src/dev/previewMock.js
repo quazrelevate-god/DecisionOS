@@ -159,6 +159,9 @@ const ROUTES = [
         { id: 'i4', ref_type: 'task', ref_id: 't4', classification: 'complaint', source: 'whatsapp', title: 'Damaged carton reported by Chennai stockist', preview: 'Third complaint this month from the same route.', amount: null, status: 'open' },
         { id: 'i5', ref_type: 'task', ref_id: 't5', classification: 'task', source: 'text', title: 'Confirm dispatch schedule with transporter', preview: '', amount: null, status: 'open' },
         { id: 'i6', ref_type: 'task', ref_id: 't6', classification: 'approval', source: 'text', title: 'Leave request — Ravi Kumar', preview: '2 days, next week.', amount: null, status: 'done' },
+        // The same invoice parsed twice — what duplicate collapse is for.
+        { id: 'i7', ref_type: 'task', ref_id: 't3', classification: 'invoice', source: 'whatsapp', title: 'Reconcile packaging invoice', preview: 'Two line items do not match the GRN.', amount: 121000, status: 'open' },
+        { id: 'i8', ref_type: 'task', ref_id: 't3', classification: 'invoice', source: 'text', title: 'Reconcile packaging invoice', preview: 'Two line items do not match the GRN.', amount: 121000, status: 'open' },
       ],
     },
   ],

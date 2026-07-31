@@ -12,6 +12,7 @@ import { DecisionDialog, raisedByLabel, RaisedByIcon } from "../components/Decis
 import { money, timeAgo } from "../lib/format";
 import { toast } from "sonner";
 import { Button, ApprovalCard, FilterPills } from "@/components/ds";
+import { TodayBrief } from "../components/TodayBrief";
 import {
   Microphone, Stop, PaperPlaneTilt, CheckCircle, XCircle, Spinner,
   UsersThree, Truck, Receipt, CurrencyCircleDollar, Warning, CheckSquare,
@@ -615,6 +616,13 @@ export default function Inbox() {
   const focus = params.get("focus");
   const [highlightId, setHighlightId] = useState(null);
   const [openDecision, setOpenDecision] = useState(null);
+
+  /* "See the other N" lands here — above the approvals, escalations and feed,
+     which together are the remainder. The count in the brief is only honest
+     while the rest is reachable, so the affordance and the number ship
+     together or not at all. */
+  const restRef = useRef(null);
+  const scrollToRest = () => restRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   useEffect(() => {
     const dq = params.get("decision");
     if (dq) setOpenDecision(dq);
@@ -657,6 +665,18 @@ export default function Inbox() {
           </div>
         </div>
       )}
+
+      {/* What matters today — the business before the input.
+          Deliberately above the capture block: the measured problem was a
+          morning screen that opened on three ways to type and nothing about
+          the company. Collapsing capture is a separate, later change; this one
+          only decides what comes first. */}
+      <TodayBrief
+        decisions={decisionsQ.data || []}
+        tasks={myTasksQ.data || []}
+        onOpenDecision={setOpenDecision}
+        onSeeRest={scrollToRest}
+      />
 
       {/* Capture — three ways to create a decision */}
       {canCapture ? (
@@ -855,6 +875,9 @@ export default function Inbox() {
           Voice/text capture isn't enabled for your access. Your inbox below shows everything happening across the business.
         </div>
       )}
+
+      {/* Everything the brief counted but did not show starts here. */}
+      <div ref={restRef} aria-hidden="true" data-testid="desk-rest-anchor" />
 
       {/* Pending approvals (owner) */}
       {hasPerm(user, "decisions_approve") && pending.length > 0 && (

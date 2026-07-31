@@ -11,7 +11,7 @@ import ExecutionSummary from "../components/ExecutionSummary";
 import { DecisionDialog, raisedByLabel, RaisedByIcon } from "../components/DecisionDialog";
 import { money, timeAgo } from "../lib/format";
 import { toast } from "sonner";
-import { Button, ApprovalCard, FilterPills, Skeleton, SkeletonBrief, SkeletonRows } from "@/components/ds";
+import { Button, ApprovalCard, FilterPills, Skeleton, SkeletonBrief, SkeletonRows, Tooltip } from "@/components/ds";
 import { TodayBrief } from "../components/TodayBrief";
 import { whatMatters } from "../lib/whatMatters";
 import {
@@ -1147,8 +1147,14 @@ export default function Inbox() {
                   {(it.ref_type === "ingestion" || it.classification === "complaint") && (
                     <button onClick={() => openItem(it)} data-testid={`inbox-open-${it.id}`} className="text-xs font-semibold border border-hairline px-2 py-1 hover:bg-primary hover:text-white transition-colors rounded-md">View</button>
                   )}
-                  {!done && <button onClick={() => setStatus(it.id, "done")} data-testid={`inbox-done-${it.id}`} title="Mark done" className="w-8 h-8 flex items-center justify-center border border-hairline hover:bg-success-600 hover:text-white transition-colors rounded-md"><Check size={14} weight="bold" /></button>}
-                  <button onClick={() => setStatus(it.id, "dismissed")} data-testid={`inbox-dismiss-${it.id}`} title="Dismiss" className="w-8 h-8 flex items-center justify-center border border-hairline hover:bg-destructive-tint transition-colors rounded-md"><X size={14} weight="bold" /></button>
+                  {!done && (
+                    <Tooltip label="Mark done">
+                      <button onClick={() => setStatus(it.id, "done")} data-testid={`inbox-done-${it.id}`} aria-label="Mark done" className="w-8 h-8 flex items-center justify-center border border-hairline hover:bg-success-600 hover:text-white transition-colors rounded-md"><Check size={14} weight="bold" /></button>
+                    </Tooltip>
+                  )}
+                  <Tooltip label="Dismiss">
+                    <button onClick={() => setStatus(it.id, "dismissed")} data-testid={`inbox-dismiss-${it.id}`} aria-label="Dismiss" className="w-8 h-8 flex items-center justify-center border border-hairline hover:bg-destructive-tint transition-colors rounded-md"><X size={14} weight="bold" /></button>
+                  </Tooltip>
                 </div>
               </div>
             </SwipeRow>

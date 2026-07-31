@@ -27,6 +27,7 @@ export { ListRow } from "./ListRow";
 export { GroupedFeed, GroupHeader, GROUP_LABELS } from "./GroupedFeed";
 export { EmptyState } from "./EmptyState";
 export { Skeleton, SkeletonBrief, SkeletonRows } from "./Skeleton";
+export { Tooltip, TooltipProvider } from "./Tooltip";
 
 /* App-specific */
 export { SidebarNav } from "./SidebarNav";

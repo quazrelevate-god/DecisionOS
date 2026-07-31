@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import "./App.css";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { Toaster } from "./components/ui/sonner";
+import { TooltipProvider } from "@/components/ds";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { hasPerm } from "./lib/perms";
 import { LockKey } from "@phosphor-icons/react";
@@ -75,6 +76,10 @@ function App() {
   return (
     <div className="App">
       <AuthProvider>
+        {/* One provider for the whole app: it owns the shared open/close timing,
+            so moving between two icon buttons shows the second immediately
+            instead of re-waiting the delay on each. */}
+        <TooltipProvider delayDuration={250} skipDelayDuration={300}>
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<Login />} />
@@ -112,6 +117,7 @@ function App() {
           </Routes>
         </BrowserRouter>
         <Toaster position="top-right" />
+        </TooltipProvider>
       </AuthProvider>
     </div>
   );

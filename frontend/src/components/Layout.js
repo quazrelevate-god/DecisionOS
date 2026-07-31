@@ -38,7 +38,7 @@ import {
 } from "@phosphor-icons/react";
 import { ProfileDialog } from "./ProfileDialog";
 import { LanguageSwitcher } from "./LanguageSwitcher";
-import { Button, SidebarNav, HeaderUtility, NotificationBell, ThemeToggle as DsThemeToggle, MobileDrawer } from "@/components/ds";
+import { Button, SidebarNav, HeaderUtility, NotificationBell, ThemeToggle as DsThemeToggle, MobileDrawer, Tooltip } from "@/components/ds";
 
 const NAV = [
   { to: "/", label: "Decision Desk", tkey: "inbox", icon: Tray, testid: "nav-inbox", perm: "inbox" },
@@ -173,7 +173,15 @@ export default function Layout({ children }) {
     );
   };
 
-  const ThemeToggle = () => <DsThemeToggle isDark={isDark} onToggle={toggleTheme} data-testid="theme-toggle" />;
+  /* Icon-only, on every screen, and previously nameless to a screen reader and
+     to anyone on a touch device where `title` never fires. */
+  const ThemeToggle = () => (
+    <Tooltip label={isDark ? "Switch to light theme" : "Switch to dark theme"}>
+      <span>
+        <DsThemeToggle isDark={isDark} onToggle={toggleTheme} data-testid="theme-toggle" />
+      </span>
+    </Tooltip>
+  );
 
   const doLogout = () => {
     logout();

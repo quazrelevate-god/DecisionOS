@@ -9,6 +9,7 @@ import { useAuth } from "../context/AuthContext";
 import { userPerms } from "../lib/perms";
 import { opModel } from "../lib/operatingModel";
 import { toast } from "sonner";
+import { Tooltip } from "@/components/ds";
 import { TaskBoard, NewTaskDialog } from "./Tasks";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import Workflows from "./Workflows";
@@ -308,10 +309,10 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
                   <textarea value={s.text} onChange={(e) => editStep(i, e.target.value)} rows={2}
                     className={`${inp} w-full resize-y leading-snug`} />
                   <div className="flex gap-1 shrink-0 self-end sm:self-start">
-                    <button onClick={() => setViewStep(s)} data-testid={`exec-expand-${t.id}-${i}`} className="p-2 sm:p-1 border border-hairline hover:bg-primary hover:text-white rounded-md" title="View full"><ArrowsOutSimple size={14} weight="bold" /></button>
-                    <button onClick={() => moveStep(i, -1)} className="p-2 sm:p-1 border border-hairline hover:bg-surface-hover rounded-md" title="Up"><ArrowUp size={14} weight="bold" /></button>
-                    <button onClick={() => moveStep(i, 1)} className="p-2 sm:p-1 border border-hairline hover:bg-surface-hover rounded-md" title="Down"><ArrowDown size={14} weight="bold" /></button>
-                    <button onClick={() => removeStep(i)} data-testid={`exec-remove-${t.id}-${i}`} className="p-2 sm:p-1 border border-hairline hover:bg-destructive-tint rounded-md" title="Remove"><Trash size={14} weight="bold" /></button>
+                    <Tooltip label="View full"><button onClick={() => setViewStep(s)} data-testid={`exec-expand-${t.id}-${i}`} className="p-2 sm:p-1 border border-hairline hover:bg-primary hover:text-white rounded-md" aria-label="View full"><ArrowsOutSimple size={14} weight="bold" /></button></Tooltip>
+                    <Tooltip label="Move up"><button onClick={() => moveStep(i, -1)} className="p-2 sm:p-1 border border-hairline hover:bg-surface-hover rounded-md" aria-label="Move up"><ArrowUp size={14} weight="bold" /></button></Tooltip>
+                    <Tooltip label="Move down"><button onClick={() => moveStep(i, 1)} className="p-2 sm:p-1 border border-hairline hover:bg-surface-hover rounded-md" aria-label="Move down"><ArrowDown size={14} weight="bold" /></button></Tooltip>
+                    <Tooltip label="Remove step"><button onClick={() => removeStep(i)} data-testid={`exec-remove-${t.id}-${i}`} className="p-2 sm:p-1 border border-hairline hover:bg-destructive-tint rounded-md" aria-label="Remove step"><Trash size={14} weight="bold" /></button></Tooltip>
                   </div>
                 </>
               ) : (

@@ -57,11 +57,22 @@ const STATUS_LABELS = {
   blocked: "pending approval",
 };
 
+/**
+ * Chip values arrive as wire keys — "pending_approval", "in_progress". They used
+ * to be rendered lowercase and CSS-uppercased into looking like labels. With
+ * all-caps gone that trick is gone too, so the text has to be Title Case for
+ * real rather than shouted into shape.
+ */
+const titleCase = (v) =>
+  String(v || "")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+
 export function Chip({ value, className = "", ...rest }) {
   const key = String(value || "");
   // Anything not a state is a classification, and classifications get no colour.
   const tone = TONE[key] || { status: "neutral" };
-  const label = STATUS_LABELS[key] || key.replace(/_/g, " ");
+  const label = titleCase(STATUS_LABELS[key] || key);
 
   return (
     <StatusBadge {...tone} className={className} {...rest}>

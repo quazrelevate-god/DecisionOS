@@ -311,8 +311,16 @@ export const typography = {
     body: ['0.9375rem', { lineHeight: '1.45rem', letterSpacing: '-0.02em', fontWeight: '400' }],
     'body-strong': ['0.9375rem', { lineHeight: '1.45rem', letterSpacing: '-0.02em', fontWeight: '600' }],
     small: ['0.8125rem', { lineHeight: '1.38rem', letterSpacing: '-0.01em', fontWeight: '400' }],
-    label: ['0.6875rem', { lineHeight: '0.825rem', letterSpacing: '0.1em', fontWeight: '600' }],
-    badge: ['0.75rem', { lineHeight: '1rem', letterSpacing: '0.042em', fontWeight: '600' }],
+    /* The label tier no longer leans on.
+       Uppercase + wide tracking was doing the work of separating labels and
+       metadata from body copy — it inherited that job from the monospace it
+       replaced. With all-caps gone, the distinction has to come from somewhere
+       else or the hierarchy collapses, so labels now read as labels through
+       three stacked cues rather than one: smaller than body, heavier than body,
+       and set in the tertiary text colour. Tracking drops to near-zero because
+       loose tracking on lowercase text just looks broken. */
+    label: ['0.75rem', { lineHeight: '1rem', letterSpacing: '0.005em', fontWeight: '600' }],
+    badge: ['0.75rem', { lineHeight: '1rem', letterSpacing: '0.005em', fontWeight: '600' }],
     code: ['0.8125rem', { lineHeight: '1.375rem', letterSpacing: '0', fontWeight: '400' }],
   },
   /** Numbers are always tabular so columns of figures align. */
@@ -390,7 +398,7 @@ export function hslTripletToRgb(triplet) {
   return [r1 + m, g1 + m, b1 + m].map((v) => Math.round(v * 255));
 }
 
-/** @param {string} triplet @returns {string} uppercase hex, for display only. */
+/** @param {string} triplet @returns {string} hex, for display only. */
 export function hslTripletToHex(triplet) {
   return `#${hslTripletToRgb(triplet).map((v) => v.toString(16).padStart(2, '0')).join('').toUpperCase()}`;
 }

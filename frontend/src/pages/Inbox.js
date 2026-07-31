@@ -11,7 +11,7 @@ import ExecutionSummary from "../components/ExecutionSummary";
 import { DecisionDialog, raisedByLabel, RaisedByIcon } from "../components/DecisionDialog";
 import { money, timeAgo } from "../lib/format";
 import { toast } from "sonner";
-import { Button, ApprovalCard, FilterPills } from "@/components/ds";
+import { Button, ApprovalCard, FilterPills, Skeleton, SkeletonBrief, SkeletonRows } from "@/components/ds";
 import { TodayBrief } from "../components/TodayBrief";
 import { whatMatters } from "../lib/whatMatters";
 import {
@@ -575,6 +575,13 @@ export default function Inbox() {
   };
 
   const mmss = `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`;
+  /* Four independent queries used to land in four visible jumps, each one
+     reflowing whatever the founder was already reaching for. Grouped by what
+     each region actually needs rather than gated on all four, so a slow feed
+     cannot hold up the brief. */
+  const deskLoading = decisionsQ.isLoading || myTasksQ.isLoading;
+  const feedLoading = inboxQ.isLoading || decisionsQ.isLoading || myTasksQ.isLoading;
+
   const inbox = inboxQ.data || { items: [], counts: {}, open_total: 0 };
   const rawItems = (inbox.items || []).filter((i) => i.status !== "dismissed" && (filter === "all" || i.classification === filter));
 
@@ -710,12 +717,20 @@ export default function Inbox() {
           morning screen that opened on three ways to type and nothing about
           the company. Collapsing capture is a separate, later change; this one
           only decides what comes first. */}
-      <TodayBrief
-        decisions={decisionsQ.data || []}
-        tasks={myTasksQ.data || []}
-        onOpenDecision={setOpenDecision}
-        onSeeRest={scrollToRest}
-      />
+      {/* The brief ranks decisions and tasks together, so it needs both queries
+          in before it can say anything true. Rendering it on one of the two
+          would state a summary — "3 overdue" — that is about to change, and a
+          number that corrects itself is worse than a number that waited. */}
+      {deskLoading ? (
+        <SkeletonBrief testid="today-brief-skeleton" />
+      ) : (
+        <TodayBrief
+          decisions={decisionsQ.data || []}
+          tasks={myTasksQ.data || []}
+          onOpenDecision={setOpenDecision}
+          onSeeRest={scrollToRest}
+        />
+      )}
 
       {/* Capture.
           Collapsed by default to one primary: the mic, which stays visible and
@@ -960,6 +975,19 @@ export default function Inbox() {
       {/* Everything the brief counted but did not show starts here. */}
       <div ref={restRef} aria-hidden="true" data-testid="desk-rest-anchor" />
 
+      {/* Approvals hold their own space while the decisions query is in flight.
+          Without this the whole lower page jumped up by a card height the
+          moment it resolved. */}
+      {deskLoading && hasPerm(user, "decisions_approve") && (
+        <div className="mb-10">
+          <Skeleton className="h-8 w-56" />
+          <Skeleton className="mt-2 h-6 w-72" />
+          <div className="mt-4">
+            <SkeletonRows rows={1} testid="approvals-skeleton" />
+          </div>
+        </div>
+      )}
+
       {/* Pending approvals (owner).
           One card, not six. Six full approval cards is 1,800px of identical
           chrome demanding the same act six times, and the sixth is no more
@@ -1051,13 +1079,19 @@ export default function Inbox() {
         <Eye size={12} weight="bold" /> {t("inbox.swipe_hint")}
       </p>
       <div className="space-y-2 mb-4" data-testid="inbox-feed">
-        {feedItems.length === 0 && (
+        {/* The feed needs all three: the rows come from /inbox, but whether a
+            row counts as "today" is decided against decisions and tasks. An
+            empty state rendered before those arrive would claim the day is
+            clear when it is only unmeasured — the worst thing this screen
+            could say. */}
+        {feedLoading && <SkeletonRows rows={4} testid="feed-skeleton" />}
+        {!feedLoading && feedItems.length === 0 && (
           <EmptyState
             title={feedShowAll ? t("inbox.inbox_zero") : "Nothing in the feed needs you today"}
             hint={feedShowAll ? t("inbox.inbox_zero_hint") : "Everything here is either scheduled for later or already closed."}
           />
         )}
-        {feedItems.map((it) => {
+          {!feedLoading && feedItems.map((it) => {
           const meta = CLASS_META[it.classification] || CLASS_META.task;
           const Icon = meta.icon;
           const done = it.status === "done";

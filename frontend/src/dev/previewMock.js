@@ -350,11 +350,31 @@ const ROUTES = [
  */
 export const previewData = (path) => (ROUTES.find(([p]) => p === path) || [])[1];
 
+/**
+ * Opt-in latency, via `?mockDelay=1500`.
+ *
+ * The stub swaps axios's adapter rather than answering over the network, so
+ * responses resolve in the same tick and no loading state is ever observable —
+ * which means the skeletons could be built, shipped and never once seen. This
+ * makes the in-flight state reachable without slowing the default run, so
+ * screenshot baselines are unaffected.
+ */
+const mockDelay = () => {
+  try {
+    const n = Number(new URLSearchParams(window.location.search).get('mockDelay'));
+    return Number.isFinite(n) && n > 0 ? Math.min(n, 10000) : 0;
+  } catch {
+    return 0;
+  }
+};
+
 export function installPreviewMock() {
   api.interceptors.request.use((config) => {
     config.adapter = async (cfg) => {
       const url = cfg.url || '';
       const method = (cfg.method || 'get').toLowerCase();
+      const wait = mockDelay();
+      if (wait) await new Promise((r) => setTimeout(r, wait));
       const hit = ROUTES.find(([p]) => url.startsWith(p));
       /* A route value may be a function of the url, for the by-id endpoints
          that prefix matching alone answers wrongly — '/decisions/d1' matches

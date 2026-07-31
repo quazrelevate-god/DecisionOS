@@ -184,6 +184,15 @@ const ROUTES = [
       ],
     },
   ],
+  /* Must precede '/decisions' — first match wins, and the list route's prefix
+     swallows every by-id request otherwise. */
+  [
+    '/decisions/',
+    (url) => {
+      const id = url.split('/decisions/')[1]?.split(/[?#/]/)[0];
+      return previewData('/decisions').find((d) => d.id === id) || null;
+    },
+  ],
   [
     '/decisions',
     [
@@ -330,7 +339,12 @@ export function installPreviewMock() {
       const url = cfg.url || '';
       const method = (cfg.method || 'get').toLowerCase();
       const hit = ROUTES.find(([p]) => url.startsWith(p));
-      const data = method === 'get' ? (hit ? hit[1] : []) : { ok: true };
+      /* A route value may be a function of the url, for the by-id endpoints
+         that prefix matching alone answers wrongly — '/decisions/d1' matches
+         '/decisions' and would otherwise hand a component the whole array
+         where it expects one record. */
+      const body = hit ? (typeof hit[1] === 'function' ? hit[1](url) : hit[1]) : [];
+      const data = method === 'get' ? body : { ok: true };
       return { data, status: 200, statusText: 'OK', headers: {}, config: cfg, request: {} };
     };
     return config;

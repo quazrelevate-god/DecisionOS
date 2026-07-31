@@ -168,7 +168,7 @@ export function CompanyDialog({ trigger }) {
 
         {canManage && tenant?.id && (
           <div className="mt-4 border border-hairline bg-background p-3 rounded-md" data-testid="workspace-id-block">
-            <label className="text-label text-text-secondary flex items-center gap-1.5"><WhatsappLogo size={13} weight="bold" className="text-status-completed-fg" /> Workspace ID <span className="normal-case">(WhatsApp routing fallback — set as WA_TENANT_ID)</span></label>
+            <label className="text-label text-text-secondary flex items-center gap-1.5"><WhatsappLogo size={13} weight="bold" className="text-status-completed-fg" /> Workspace ID <span className="normal-case">(used to route WhatsApp messages)</span></label>
             <div className="flex gap-2 mt-1.5">
               <input data-testid="workspace-id-value" readOnly value={tenant.id} className={`${inp} bg-surface cursor-text`} onFocus={(e) => e.target.select()} />
               <button data-testid="workspace-id-copy"
@@ -177,7 +177,7 @@ export function CompanyDialog({ trigger }) {
                 <Copy size={14} weight="bold" /> Copy
               </button>
             </div>
-            <p className="text-xs text-text-secondary mt-1.5">Messages from unregistered numbers fall back to this workspace. Paste this into your production <span className="text-label">WA_TENANT_ID</span> env variable.</p>
+            <p className="text-xs text-text-secondary mt-1.5">WhatsApp messages from numbers we don't recognise land in this workspace. Your administrator connects this once during setup — you don't need to do anything with the ID.</p>
           </div>
         )}
 

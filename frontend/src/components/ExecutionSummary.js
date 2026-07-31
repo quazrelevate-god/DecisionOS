@@ -38,7 +38,7 @@ export default function ExecutionSummary({ data, onReview, onClose }) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="border-2 border-hairline rounded-md max-w-lg p-0 overflow-hidden" data-testid="execution-summary-panel">
+      <DialogContent className="border-hairline rounded-md max-w-lg p-0 overflow-hidden" data-testid="execution-summary-panel">
         <div className="bg-primary text-primary-foreground px-6 py-5">
           <div className="flex items-center gap-2 text-primary-text">
             <Lightning size={18} weight="fill" />

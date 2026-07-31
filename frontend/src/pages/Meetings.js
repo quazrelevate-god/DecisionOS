@@ -36,7 +36,7 @@ function MeetingDialog({ id, open, onClose }) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl rounded-md border-2 border-hairline max-h-[85vh] overflow-y-auto" data-testid="meeting-dialog">
+      <DialogContent className="max-w-2xl rounded-md border-hairline max-h-[85vh] overflow-y-auto" data-testid="meeting-dialog">
         <DialogHeader>
           <DialogTitle className="text-2xl font-black tracking-tighter pr-6">{m?.title || "Meeting"}</DialogTitle>
           <DialogDescription className="sr-only">Meeting minutes and action items</DialogDescription>

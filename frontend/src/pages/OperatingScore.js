@@ -38,7 +38,7 @@ export default function OperatingScore() {
       {!enough ? (
         <div className="rounded-lg border border-hairline bg-surface p-8 mb-8 flex flex-col lg:flex-row items-center gap-8" data-testid="operating-overall">
           <div className="flex flex-col items-center shrink-0">
-            <div className="w-36 h-36 flex flex-col items-center justify-center border-4 border-hairline bg-surface-hover text-center px-3 rounded-lg">
+            <div className="w-36 h-36 flex flex-col items-center justify-center border-hairline bg-surface-hover text-center px-3 rounded-lg">
               <Gauge size={30} weight="bold" className="text-text-secondary mb-1" />
               <span className="text-label text-text-secondary leading-tight" data-testid="operating-overall-score">Not enough data yet</span>
             </div>
@@ -145,7 +145,7 @@ export default function OperatingScore() {
             <span className="hidden sm:flex items-center gap-1 text-xs font-semibold text-text-secondary group-hover:text-destructive-text transition-colors shrink-0">
               <Sparkle size={13} weight="bold" /> Details
             </span>
-            <div className="w-14 h-14 flex flex-col items-center justify-center border-2 border-hairline bg-surface shrink-0 rounded-md">
+            <div className="w-14 h-14 flex flex-col items-center justify-center border-hairline bg-surface shrink-0 rounded-md">
               <span className={` text-2xl font-black leading-none ${scoreColor(e.score)}`}>{e.score != null ? e.score : "—"}</span>
             </div>
             <CaretRight size={16} weight="bold" className="text-text-tertiary group-hover:text-destructive-text transition-colors shrink-0" />

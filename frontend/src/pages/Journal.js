@@ -69,7 +69,7 @@ function TimelineDialog({ decisionId, open, onClose }) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg rounded-md border-2 border-hairline" data-testid="timeline-dialog">
+      <DialogContent className="max-w-lg rounded-md border-hairline" data-testid="timeline-dialog">
         <DialogHeader>
           <DialogTitle className="text-2xl font-black tracking-tighter pr-6">
             {data?.title || "Decision Timeline"}
@@ -88,7 +88,7 @@ function TimelineDialog({ decisionId, open, onClose }) {
               const color = EVENT_COLOR[e.kind] || "text-text-secondary";
               return (
                 <li key={`${e.kind}-${e.ts || i}`} className="mb-6 ml-6" data-testid={`timeline-event-${i}`}>
-                  <span className="absolute -left-[13px] flex items-center justify-center w-6 h-6 bg-surface border-2 border-hairline rounded-pill">
+                  <span className="absolute -left-[13px] flex items-center justify-center w-6 h-6 bg-surface border-hairline rounded-pill">
                     <Icon size={13} weight="bold" className={color} />
                   </span>
                   <p className="text-sm font-medium leading-tight">{e.label}</p>

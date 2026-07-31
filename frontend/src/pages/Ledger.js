@@ -536,7 +536,7 @@ function InvoicePicker({ open, value, onChange, cur, testid }) {
         <CaretDown size={14} weight="bold" />
       </button>
       {show && (
-        <div className="absolute z-30 mt-1 w-full sm:w-[280px] bg-surface border-2 border-hairline shadow-sm max-h-64 overflow-hidden flex flex-col rounded-lg">
+        <div className="absolute z-30 mt-1 w-full sm:w-[280px] bg-surface border-hairline shadow-sm max-h-64 overflow-hidden flex flex-col rounded-lg">
           <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} data-testid={`${testid}-search`}
             placeholder="Search invoice # or name…" className="px-3 py-2 text-sm border-b-hairline focus:outline-none bg-transparent" />
           <div className="overflow-y-auto">
@@ -590,7 +590,7 @@ function NeedsMatchingPanel({ title, hint, unmatched, open, cur, endpoint, stand
             <span className="text-sm font-semibold">{f(p.remaining ?? p.amount)}</span>
             <span className="text-xs text-text-secondary flex-1 min-w-0 truncate">{p.contact_name || "Unknown"}{p.date ? ` · ${p.date}` : ""}{p.invoice_number ? ` · ref ${p.invoice_number}` : ""}{p.applied > 0 ? ` · ${f(p.applied)} already applied` : ""}</span>
             <InvoicePicker open={open} value={picks[p.id] || ""} onChange={(v) => setPicks((s) => ({ ...s, [p.id]: v }))} cur={cur} testid={`match-picker-${p.id}`} />
-            <button onClick={() => match(p.id)} disabled={busy === p.id} data-testid={`match-btn-${p.id}`} className="px-3 py-1.5 text-xs font-semibold border-2 border-hairline bg-success-600 text-white hover:shadow-xs transition-all disabled:opacity-50 rounded-md">Match</button>
+            <button onClick={() => match(p.id)} disabled={busy === p.id} data-testid={`match-btn-${p.id}`} className="px-3 py-1.5 text-xs font-semibold border-hairline bg-success-600 text-white hover:shadow-xs transition-all disabled:opacity-50 rounded-md">Match</button>
             <button onClick={() => standalone(p.id)} disabled={busy === p.id} data-testid={`standalone-btn-${p.id}`} className="px-3 py-1.5 text-xs font-semibold border border-hairline bg-surface hover:bg-surface-hover transition-all disabled:opacity-50 rounded-md">{standaloneLabel.btn}</button>
           </div>
         ))}

@@ -43,7 +43,7 @@ const Kicker = ({ children, big }) => (
 );
 
 const Dept = ({ icon: Icon, tag, title, children }) => (
-  <div className="border-2 border-hairline bg-surface p-6 hover:shadow-sm transition-all rounded-lg">
+  <div className="border-hairline bg-surface p-6 hover:shadow-sm transition-all rounded-lg">
     <div className="flex items-center gap-2 text-brand-400 mb-2"><Icon size={18} weight="bold" /><span className="text-label text-[11px]">{tag}</span></div>
     <h3 className="font-extrabold tracking-tight text-lg">{title}</h3>
     <p className="text-sm text-text-secondary mt-1">{children}</p>
@@ -137,7 +137,7 @@ export default function Landing() {
               { icon: TreeStructure, t: "Execute", d: "AI classifies, extracts and routes to the right department. On approval it creates tasks, invoices, payments, contacts and finance entries — with owners and due dates." },
               { icon: Brain, t: "Remember", d: "Every decision, approval and rupee is filed into the Company Brain — searchable in plain English, forever." },
             ].map((s, i) => (
-              <div key={s.t} className="border-2 border-hairline p-6 relative rounded-lg">
+              <div key={s.t} className="border-hairline p-6 relative rounded-lg">
                 <div className="font-black text-5xl text-text/10 absolute top-4 right-5">{i + 1}</div>
                 <s.icon size={26} weight="bold" className="text-brand-400" />
                 <h3 className="font-extrabold tracking-tight text-xl mt-3">{s.t}</h3>
@@ -161,7 +161,7 @@ export default function Landing() {
               { t: "Delayed orders", a: "A dispatch is 2 days past due, no update.", r: "→ Nudge owner & notify customer." },
               { t: "Workload", a: "A teammate has 5 open, 1 overdue.", r: "→ Reassign or extend." },
             ].map((x) => (
-              <div key={x.t} className="border-2 border-hairline bg-surface p-5 rounded-lg">
+              <div key={x.t} className="border-hairline bg-surface p-5 rounded-lg">
                 <div className="flex items-center gap-2 text-brand-400 mb-2"><WarningCircle size={16} weight="bold" /><span className="text-label text-[11px]">{x.t}</span></div>
                 <p className="font-semibold text-sm">{x.a}</p>
                 <p className="text-sm text-text-secondary mt-1">{x.r}</p>

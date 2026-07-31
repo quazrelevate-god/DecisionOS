@@ -82,12 +82,23 @@ export function Chip({ value, className = "", ...rest }) {
 }
 
 /**
- * Legacy empty state, now the design system's.
+ * Legacy empty state, now the design system's — and now able to carry an action.
  *
- * The old one was a dashed grey box — the visual language of "something is
- * missing". No data is not a failure, so the replacement is onboarding-shaped:
- * solid surface, no dashes, and room for an action when a caller has one.
+ * The old one was a dashed grey box: the visual language of "something is
+ * missing". No data is not a failure, it is the state every account starts in,
+ * so an empty screen should tell you what to create first and give you the
+ * control to do it. Callers that pass `actionLabel`/`onAction` get an
+ * onboarding prompt; the rest still get the calm version.
  */
-export function EmptyState({ title, hint }) {
-  return <DsEmptyState title={title} description={hint} />;
+export function EmptyState({ title, hint, icon, actionLabel, onAction, secondaryAction }) {
+  return (
+    <DsEmptyState
+      title={title}
+      description={hint}
+      icon={icon}
+      actionLabel={actionLabel}
+      onAction={onAction}
+      secondaryAction={secondaryAction}
+    />
+  );
 }

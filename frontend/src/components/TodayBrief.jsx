@@ -68,9 +68,13 @@ function MatterRow({ item, rank, onOpenDecision }) {
           {/* The reason is the point of the whole module: every item can say
               why it placed where it did, which is what makes the ranking
               arguable instead of oracular. */}
+          {/* The assignee is appended only where the reason is about a date.
+              A tier-2 reason already names a person — "Ravi Kumar escalated
+              this to you · Prasanna Narayanan" reads as two people involved
+              in a way that obscures which one is waiting. */}
           <p className="mt-1 text-sm text-text-secondary" data-testid={`today-brief-reason-${item.id}`}>
             {reason}
-            {who && !isDecision ? ` · ${who}` : ""}
+            {who && !isDecision && tier !== "escalation" ? ` · ${who}` : ""}
           </p>
 
           {isDecision && onOpenDecision && (

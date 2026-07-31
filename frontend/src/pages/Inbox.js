@@ -390,6 +390,7 @@ export default function Inbox() {
   const [busy, setBusy] = useState(false);
   const [language, setLanguage] = useState("auto");
   const [filter, setFilter] = useState("all");
+  const [captureOpen, setCaptureOpen] = useState(false);
   const [submittedNoteId, setSubmittedNoteId] = useState(null);
   const [execPanel, setExecPanel] = useState(null);
   const [voiceFiles, setVoiceFiles] = useState([]);
@@ -623,6 +624,17 @@ export default function Inbox() {
      together or not at all. */
   const restRef = useRef(null);
   const scrollToRest = () => restRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+
+  /* Never collapse a surface someone is part-way through using. A clarify
+     panel is a question waiting for an answer and typed text is unsaved work;
+     folding either away to save height would be the collapse causing the data
+     loss it was meant to prevent.
+     Derived rather than an effect that forces the state open: an effect only
+     fires when its dependencies change, so it re-opened on the next keystroke
+     but did nothing about the click that had just closed it — the input
+     vanished with text still in it. This cannot express that state at all. */
+  const captureLocked = !!clarify || !!text.trim();
+  const captureExpanded = captureOpen || captureLocked;
   useEffect(() => {
     const dq = params.get("decision");
     if (dq) setOpenDecision(dq);
@@ -678,21 +690,36 @@ export default function Inbox() {
         onSeeRest={scrollToRest}
       />
 
-      {/* Capture — three ways to create a decision */}
+      {/* Capture.
+          Collapsed by default to one primary: the mic, which stays visible and
+          stays the primary because speak-first is the product thesis, not a
+          layout preference. Type and Upload are named on the control that
+          reveals them — "Type or upload instead" — so this is a fold, not a
+          removal: nothing here is a count of work, so naming the two methods
+          is the whole of what disclosure requires.
+
+          It opens automatically while recording and while a clarify panel is
+          waiting for answers, because collapsing the surface someone is
+          mid-way through using is worse than the height it saves. */}
       {canCapture ? (
-        <div className="mb-8 space-y-4">
-          <div className="grid lg:grid-cols-2 gap-4">
-            {/* WAY 1 — Speak */}
-            <div className="rounded-lg border border-hairline bg-surface p-6 flex flex-col items-center justify-center text-center">
-              <p className="text-label text-primary-text mb-2 self-start">Way 1 · Speak</p>
+        <div className="mb-8 space-y-4" data-testid="capture-block">
+          <div className={captureExpanded ? "grid lg:grid-cols-2 gap-4" : ""}>
+            {/* WAY 1 — Speak. One element, two layouts: vertical and full when
+                expanded, a compact row when collapsed. Duplicating the button
+                would duplicate the record handler, which is the kind of thing
+                that drifts. */}
+            <div className={`rounded-lg border border-hairline bg-surface ${captureExpanded ? "p-6 flex flex-col items-center justify-center text-center" : "p-4 flex items-center gap-4"}`}>
+              {captureExpanded && <p className="text-label text-primary-text mb-2 self-start">Way 1 · Speak</p>}
               <button onClick={recording ? stopRec : startRec} disabled={busy} data-testid="voice-record-button"
-                className={`rounded-pill w-24 h-24 flex items-center justify-center border border-hairline transition-all ${recording ? (paused ? "bg-primary text-primary-foreground" : "bg-primary text-primary-foreground recording-pulse") : "bg-primary text-primary-foreground hover:shadow-sm"}`}>
-                {recording ? <Stop size={38} weight="fill" /> : <Microphone size={38} weight="fill" />}
+                className={`rounded-pill shrink-0 ${captureExpanded ? "w-24 h-24" : "w-16 h-16"} flex items-center justify-center border border-hairline transition-all ${recording ? (paused ? "bg-primary text-primary-foreground" : "bg-primary text-primary-foreground recording-pulse") : "bg-primary text-primary-foreground hover:shadow-sm"}`}>
+                {recording ? <Stop size={captureExpanded ? 38 : 26} weight="fill" /> : <Microphone size={captureExpanded ? 38 : 26} weight="fill" />}
               </button>
-              <p className="mt-4 font-bold tracking-tight">{recording ? (paused ? t("inbox.paused") : t("inbox.recording")) : busy ? t("inbox.thinking") : t("inbox.tap_to_speak")}</p>
+
+              <div className={captureExpanded ? "contents" : "min-w-0 flex-1"}>
+              <p className={`font-bold tracking-tight ${captureExpanded ? "mt-4" : ""}`}>{recording ? (paused ? t("inbox.paused") : t("inbox.recording")) : busy ? t("inbox.thinking") : captureExpanded ? t("inbox.tap_to_speak") : "Capture a decision"}</p>
               <p className="text-label text-sm text-text-secondary mt-1" data-testid="record-timer">{recording ? mmss : "Speak in any language — AI writes it up in English"}</p>
               {recording && (
-                <div className="flex flex-wrap items-center justify-center gap-2 mt-3">
+                <div className={`flex flex-wrap items-center gap-2 mt-3 ${captureExpanded ? "justify-center" : ""}`}>
                   {paused ? (
                     <button onClick={resumeRec} data-testid="voice-resume-button"
                       className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold border border-hairline bg-primary text-primary-foreground hover:shadow-xs transition-all rounded-md">
@@ -714,24 +741,48 @@ export default function Inbox() {
                   </button>
                 </div>
               )}
-              <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-                <button onClick={() => voiceAttachRef.current?.click()} data-testid="voice-attach-file"
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold border border-hairline px-3 py-1.5 hover:bg-status-pending-bg transition-colors rounded-md">
-                  <Paperclip size={13} weight="bold" /> Attach files
-                </button>
-                <button onClick={() => voiceCameraRef.current?.click()} data-testid="voice-capture-photo"
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold border border-hairline px-3 py-1.5 hover:bg-status-pending-bg transition-colors rounded-md">
-                  <Camera size={13} weight="bold" /> Add photo
-                </button>
-              </div>
+              {/* Attaching is a companion to speaking, so it follows the mic
+                  into the fold — an action, not information, and it returns
+                  the moment the block is open. Chips stay whatever the state:
+                  a file already attached must never vanish silently. */}
+              {captureExpanded && (
+                <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                  <button onClick={() => voiceAttachRef.current?.click()} data-testid="voice-attach-file"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold border border-hairline px-3 py-1.5 hover:bg-status-pending-bg transition-colors rounded-md">
+                    <Paperclip size={13} weight="bold" /> Attach files
+                  </button>
+                  <button onClick={() => voiceCameraRef.current?.click()} data-testid="voice-capture-photo"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold border border-hairline px-3 py-1.5 hover:bg-status-pending-bg transition-colors rounded-md">
+                    <Camera size={13} weight="bold" /> Add photo
+                  </button>
+                </div>
+              )}
               <input ref={voiceAttachRef} type="file" multiple accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" className="hidden"
                 onChange={(e) => { setVoiceFiles((prev) => [...prev, ...Array.from(e.target.files || [])]); e.target.value = ""; }} />
               <input ref={voiceCameraRef} type="file" accept="image/*" capture="environment" className="hidden"
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) setVoiceFiles((prev) => [...prev, f]); e.target.value = ""; }} />
               <AttachChips files={voiceFiles} testid="voice-attachments" onRemove={(i) => setVoiceFiles(voiceFiles.filter((_, j) => j !== i))} />
+              </div>
+
+              {/* The disclosure names what is behind it. "Show more" would not.
+                  Withdrawn entirely while there is unsaved work, rather than
+                  left present and inert: a control that is visible and does
+                  nothing teaches people the interface is broken. */}
+              {!captureLocked && (
+                <Button
+                  variant="tertiary"
+                  size="sm"
+                  className={captureExpanded ? "mt-4" : "shrink-0"}
+                  onClick={() => setCaptureOpen((v) => !v)}
+                  data-testid="capture-toggle"
+                >
+                  {captureExpanded ? "Hide type and upload" : "Type or upload instead"}
+                </Button>
+              )}
             </div>
 
             {/* WAY 2 — Type */}
+            {captureExpanded && (
             <div className="rounded-lg border border-hairline bg-surface p-6">
               <p className="text-label text-primary-text mb-2">Way 2 · Type</p>
               <p className="text-label text-text-secondary mb-3">{t("inbox.type_directive")}</p>
@@ -821,9 +872,11 @@ export default function Inbox() {
                 </ul>
               )}
             </div>
+            )}
           </div>
 
           {/* WAY 3 — Create from an image or file */}
+          {captureExpanded && (
           <div className="rounded-lg border border-hairline bg-surface p-6" data-testid="capture-upload">
             <p className="text-label text-primary-text mb-2">Way 3 · Upload an image or file</p>
             <div className="flex items-start gap-2 mb-4">
@@ -869,6 +922,7 @@ export default function Inbox() {
               </ul>
             )}
           </div>
+          )}
         </div>
       ) : (
         <div className="border border-hairline bg-status-pending-bg p-4 text-sm mb-8 rounded-md" data-testid="owner-only-notice">

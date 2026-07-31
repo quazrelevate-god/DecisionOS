@@ -13,6 +13,25 @@
  */
 import api from '../lib/api';
 
+/* Relative dates, not literals.
+ *
+ * whatMatters() computes lateness against Date.now(), so a hardcoded
+ * '2026-07-28' means a fixture whose tiers silently drift: what is "3 days
+ * overdue" the week it was written becomes "40 days overdue" a month later,
+ * and every screenshot baseline taken against it disagrees with the next one.
+ * Offsetting from now keeps the *meaning* fixed — "3 days overdue" reads as
+ * 3 days overdue forever — which is also what makes shot-to-shot diffs honest. */
+const DAY = 86400000;
+/** Exactly n×24h before now, so daysLate() reads back exactly n at any hour. */
+const daysAgo = (n) => new Date(Date.now() - n * DAY).toISOString();
+const daysAhead = (n) => new Date(Date.now() + n * DAY).toISOString();
+/** Noon today — lands in the due-today tier whatever time the preview is opened. */
+const todayAtNoon = () => {
+  const d = new Date();
+  d.setHours(12, 0, 0, 0);
+  return d.toISOString();
+};
+
 const USER = {
   id: 'u_preview',
   name: 'Prasanna Narayanan',
@@ -204,18 +223,106 @@ const ROUTES = [
         summary: '',
         tasks: [],
       },
+      /* Approvals 3–6. Six pending is what a real morning looks like; two was
+         an empty case dressed as a fixture, and a top-3 chosen from two
+         candidates proves nothing about how the Desk behaves under load. */
+      {
+        id: 'd4',
+        title: 'Raise freight rate on the Chennai route',
+        dtype: 'directive',
+        status: 'pending_approval',
+        source: 'whatsapp',
+        wa_from: '+91 98••• ••441',
+        created_at: new Date(0).toISOString(),
+        summary: 'Transporter wants 11% more from next month. Holding the current rate means absorbing ₹38,000 a month.',
+        tasks: [{ id: 'dt4', title: 'Get two comparison quotes', assignee_name: 'Ravi Kumar' }],
+      },
+      {
+        id: 'd5',
+        title: 'Hire a second dispatch coordinator',
+        dtype: 'directive',
+        status: 'pending_approval',
+        source: 'voice',
+        created_by_name: 'Prasanna Narayanan',
+        created_at: new Date(0).toISOString(),
+        summary: 'Dispatch has slipped four times this month with one coordinator covering both shifts.',
+        tasks: [
+          { id: 'dt5', title: 'Draft the role and shift pattern', assignee_role: 'owner' },
+          { id: 'dt6', title: 'Confirm the salary band against last year', assignee_role: 'finance' },
+        ],
+      },
+      {
+        id: 'd6',
+        title: 'Write off the damaged carton stock',
+        dtype: 'directive',
+        status: 'pending_approval',
+        source: 'text',
+        created_by_name: 'Meena Raghavan',
+        created_at: new Date(0).toISOString(),
+        summary: '₹1,15,000 of packaging damaged in the monsoon leak. Insurance covers a third of it.',
+        tasks: [{ id: 'dt7', title: 'File the insurance claim', assignee_role: 'finance' }],
+      },
+      {
+        id: 'd7',
+        title: 'Extend credit terms for the Coimbatore distributor',
+        dtype: 'directive',
+        status: 'pending_approval',
+        source: 'whatsapp',
+        wa_from: '+91 90••• ••077',
+        created_at: new Date(0).toISOString(),
+        summary: 'Asked to move from 30 to 45 days. They have never missed a payment; it costs ₹62,000 of working capital.',
+        tasks: [],
+      },
     ],
   ],
+  /* Twelve tasks, laid out to exercise every branch of whatMatters() rather
+     than to look plausible. Read the comments as the spec of what each row is
+     here to prove — if one of these stops being true, the ranking changed. */
   [
     '/tasks',
     [
-      { id: 't3', title: 'Reconcile packaging invoice', status: 'in_progress', priority: 'medium', progress: 50, due_date: '2026-07-28', assignee_name: 'Ravi Kumar' },
-      { id: 't5', title: 'Confirm dispatch schedule with transporter', status: 'todo', priority: 'high', progress: 25, due_date: '2026-08-01', assignee_name: 'Prasanna Narayanan' },
-      { id: 't6', title: 'Leave request — Ravi Kumar', status: 'blocked', priority: 'low', progress: 0, due_date: '2026-08-05' },
+      /* Tier 2 — escalations. Two of them, and the second is also two days
+         overdue: it must still rank as an escalation, because a person asking
+         outranks a date passing. If it ever appears under "2 days overdue",
+         tier precedence has broken. */
+      { id: 'te1', title: 'Chennai stockist wants a callback today', status: 'todo', priority: 'high', progress: 0, source: 'escalation', assignee_name: 'Ravi Kumar', due_date: daysAhead(2), amount: null },
+      { id: 'te2', title: 'Approve the revised packaging artwork', status: 'in_progress', priority: 'medium', progress: 40, source: 'escalation', assignee_name: 'Meena Raghavan', due_date: daysAgo(2), amount: 88000 },
+
+      /* Tier 3 — overdue, worst first. Five rows at four distinct day counts.
+         The 3-day pair exists for the tie-break: same lateness, different
+         amounts, so ₹18,00,000 must sort above ₹95,000. */
+      { id: 'to6', title: 'Reconcile packaging invoice against the GRN', status: 'in_progress', priority: 'high', progress: 50, due_date: daysAgo(6), assignee_name: 'Ravi Kumar', amount: 240000 },
+      { id: 'to4', title: 'Return the signed transporter agreement', status: 'todo', priority: 'medium', progress: 0, due_date: daysAgo(4), assignee_name: 'Prasanna Narayanan', amount: null },
+      { id: 'to3a', title: 'Release the quarterly distributor payout', status: 'todo', priority: 'high', progress: 0, due_date: daysAgo(3), assignee_name: 'Prasanna Narayanan', amount: 1800000 },
+      { id: 'to3b', title: 'Chase the Salem retailer receivable', status: 'todo', priority: 'medium', progress: 0, due_date: daysAgo(3), assignee_name: 'Ravi Kumar', amount: 95000 },
+      { id: 'to1', title: 'Confirm the monsoon leak repair quote', status: 'todo', priority: 'medium', progress: 0, due_date: daysAgo(1), assignee_name: 'Meena Raghavan', amount: 610000 },
+
+      /* Tier 4 — due today. */
+      { id: 'td1', title: 'Confirm dispatch schedule with the transporter', status: 'todo', priority: 'high', progress: 25, due_date: todayAtNoon(), assignee_name: 'Prasanna Narayanan', amount: 420000 },
+      { id: 'td2', title: 'Send the revised Delhi quote', status: 'todo', priority: 'medium', progress: 0, due_date: todayAtNoon(), assignee_name: 'Ravi Kumar', amount: null },
+      { id: 'td3', title: 'Sign off the weekly payroll run', status: 'todo', priority: 'high', progress: 0, due_date: todayAtNoon(), assignee_name: 'Prasanna Narayanan', amount: 75000 },
+
+      /* Not today — present so "hidden" is a real count of real work, and so a
+         future date is proven not to leak into the due-today tier. */
+      { id: 'tf1', title: 'Plan the Diwali dispatch schedule', status: 'todo', priority: 'low', progress: 0, due_date: daysAhead(5), assignee_name: 'Meena Raghavan', amount: null },
+
+      /* Terminal, and eight days past due. Must never surface: a completed task
+         cannot be overdue, and this row is the guard against that regression. */
+      { id: 'tx1', title: 'Leave request — Ravi Kumar', status: 'done', priority: 'low', progress: 100, due_date: daysAgo(8), assignee_name: 'Ravi Kumar', amount: null },
     ],
   ],
   ['/users', [USER]],
 ];
+
+/**
+ * The exact array the preview serves for a path.
+ *
+ * Exported so a test can assert the fixture still exercises every tier. The
+ * comments above each row say what it is there to prove; without this, those
+ * comments are a promise nobody checks, and a fixture that quietly stops
+ * covering a tier is indistinguishable from one that still does.
+ */
+export const previewData = (path) => (ROUTES.find(([p]) => p === path) || [])[1];
 
 export function installPreviewMock() {
   api.interceptors.request.use((config) => {

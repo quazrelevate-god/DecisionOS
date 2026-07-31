@@ -622,6 +622,15 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
   const [recording, setRecording] = useState(false);
   const [lightbox, setLightbox] = useState(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  /* Collapsed by default.
+     An expanded card is ~340px of chrome — progress bar, status select,
+     progress select, four action buttons, two plan controls, activity. Thirty-nine
+     of those is fifteen screens of scrolling to answer "what should I do first?",
+     which is the question the list exists to answer. Collapsed, a row is title +
+     status + due + one action, and the controls are one tap away for the task you
+     actually chose. Overdue work opens by default, because that is the row most
+     likely to need acting on rather than scanning. */
+  const [expanded, setExpanded] = useState(isOverdue(t));
   const fileRef = useRef(null);
   const evidenceRef = useRef(null);
   const mediaRef = useRef(null);
@@ -791,6 +800,19 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
         </p>
       )}
 
+      {!expanded && (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          data-testid={`task-expand-${t.id}`}
+          className="mt-2 inline-flex items-center gap-1.5 rounded-md text-small font-medium text-primary-text transition-colors hover:underline focus-visible:outline-none focus-visible:ring-focus focus-visible:ring-ring"
+        >
+          <CaretDown size={12} weight="bold" /> Open
+          {(t.progress || 0) > 0 && <span data-numeric className="tabular-nums text-text-tertiary">· {t.progress}%</span>}
+        </button>
+      )}
+
+      <div className={expanded ? "" : "hidden"} data-testid={`task-body-${t.id}`}>
       <div className="mt-3">
         <div className="flex items-center justify-between mb-1">
           <span className="text-label text-text-secondary">Progress</span>
@@ -945,6 +967,19 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
 
       {!awaitingApproval && <ExecutionPlan t={t} onChange={onChange} members={members} roleOptions={roleOptions} />}
       <TaskTrail t={t} onChange={onChange} members={members} roleOptions={roleOptions} />
+
+        <button
+          type="button"
+          onClick={() => setExpanded(false)}
+          data-testid={`task-collapse-${t.id}`}
+          className="mt-3 inline-flex items-center gap-1.5 rounded-md text-small font-medium text-text-tertiary transition-colors hover:text-text focus-visible:outline-none focus-visible:ring-focus focus-visible:ring-ring"
+        >
+          <CaretDown size={12} weight="bold" className="rotate-180" /> Close
+        </button>
+      </div>
+
+      {/* The dialog lives outside the collapsed body — "View details" must work
+          from a collapsed row, which is the whole point of collapsing it. */}
       <TaskDetailDialog t={t} open={detailOpen} onOpenChange={setDetailOpen} onChange={onChange} />
     </div>
   );

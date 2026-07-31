@@ -43,7 +43,7 @@ const Kicker = ({ children, big }) => (
 );
 
 const Dept = ({ icon: Icon, tag, title, children }) => (
-  <div className="border-2 border-hairline bg-surface p-6 hover:shadow-sm transition-all">
+  <div className="border-2 border-hairline bg-surface p-6 hover:shadow-sm transition-all rounded-lg">
     <div className="flex items-center gap-2 text-brand-400 mb-2"><Icon size={18} weight="bold" /><span className="text-label text-[11px]">{tag}</span></div>
     <h3 className="font-extrabold tracking-tight text-lg">{title}</h3>
     <p className="text-sm text-text-secondary mt-1">{children}</p>
@@ -85,11 +85,11 @@ export default function Landing() {
           <Kicker>The Founder Problem</Kicker>
           <h2 className="font-black tracking-tight text-3xl sm:text-4xl leading-tight max-w-2xl">Your business lives inside your head. That's the risk.</h2>
           <div className="grid sm:grid-cols-2 gap-5 mt-10">
-            <div className="border-2 border-[#16161a] bg-[#16161a] text-white p-6">
+            <div className="border-2 border-[#16161a] bg-[#16161a] text-white p-6 rounded-lg">
               <div className="text-label text-xs text-white/50 mb-2">The old way</div>
               <p className="text-white/90">Founder remembers → tells someone → hopes it happens → chases → repeats. Decisions evaporate, work scatters, nothing is provable, and you become the bottleneck.</p>
             </div>
-            <div className="border-2 border-[#16161a] bg-surface p-6">
+            <div className="border-2 border-[#16161a] bg-surface p-6 rounded-lg">
               <div className="text-label text-xs text-brand-400 mb-2">The DecisionOS way</div>
               <p>Founder speaks → AI captures, routes, assigns, tracks, chases, and remembers it forever. One place where nothing is lost, ignored, or left undone.</p>
             </div>
@@ -137,7 +137,7 @@ export default function Landing() {
               { icon: TreeStructure, t: "Execute", d: "AI classifies, extracts and routes to the right department. On approval it creates tasks, invoices, payments, contacts and finance entries — with owners and due dates." },
               { icon: Brain, t: "Remember", d: "Every decision, approval and rupee is filed into the Company Brain — searchable in plain English, forever." },
             ].map((s, i) => (
-              <div key={s.t} className="border-2 border-hairline p-6 relative">
+              <div key={s.t} className="border-2 border-hairline p-6 relative rounded-lg">
                 <div className="font-black text-5xl text-text/10 absolute top-4 right-5">{i + 1}</div>
                 <s.icon size={26} weight="bold" className="text-brand-400" />
                 <h3 className="font-extrabold tracking-tight text-xl mt-3">{s.t}</h3>
@@ -161,7 +161,7 @@ export default function Landing() {
               { t: "Delayed orders", a: "A dispatch is 2 days past due, no update.", r: "→ Nudge owner & notify customer." },
               { t: "Workload", a: "A teammate has 5 open, 1 overdue.", r: "→ Reassign or extend." },
             ].map((x) => (
-              <div key={x.t} className="border-2 border-hairline bg-surface p-5">
+              <div key={x.t} className="border-2 border-hairline bg-surface p-5 rounded-lg">
                 <div className="flex items-center gap-2 text-brand-400 mb-2"><WarningCircle size={16} weight="bold" /><span className="text-label text-[11px]">{x.t}</span></div>
                 <p className="font-semibold text-sm">{x.a}</p>
                 <p className="text-sm text-text-secondary mt-1">{x.r}</p>

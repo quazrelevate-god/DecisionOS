@@ -77,7 +77,7 @@ export default function ContactProfile() {
       : (value >= 60 ? "text-primary-text" : value >= 30 ? "text-status-pending-fg" : "text-status-completed-fg");
     return (
       <div className="flex items-center gap-3" data-testid={`rel-${label.toLowerCase()}`}>
-        <div className="w-14 h-14 flex flex-col items-center justify-center border-2 border-hairline bg-surface shrink-0">
+        <div className="w-14 h-14 flex flex-col items-center justify-center border-2 border-hairline bg-surface shrink-0 rounded-md">
           <span className={` text-2xl font-black leading-none ${color}`}>{value != null ? value : "—"}</span>
         </div>
         <div className="flex items-center gap-1.5 text-sm font-semibold tracking-wide">

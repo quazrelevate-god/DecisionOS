@@ -88,7 +88,7 @@ function TimelineDialog({ decisionId, open, onClose }) {
               const color = EVENT_COLOR[e.kind] || "text-text-secondary";
               return (
                 <li key={`${e.kind}-${e.ts || i}`} className="mb-6 ml-6" data-testid={`timeline-event-${i}`}>
-                  <span className="absolute -left-[13px] flex items-center justify-center w-6 h-6 bg-surface border-2 border-hairline">
+                  <span className="absolute -left-[13px] flex items-center justify-center w-6 h-6 bg-surface border-2 border-hairline rounded-pill">
                     <Icon size={13} weight="bold" className={color} />
                   </span>
                   <p className="text-sm font-medium leading-tight">{e.label}</p>

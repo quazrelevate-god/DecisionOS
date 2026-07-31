@@ -150,7 +150,7 @@ function WhatsAppCard() {
               </a>
             </>
           ) : (
-            <div className="border-2 border-dashed border-hairline p-6 w-full">
+            <div className="border-2 border-dashed border-hairline p-6 w-full rounded-lg">
               <p className="text-sm font-semibold">WhatsApp not connected yet</p>
               <p className="text-xs text-text-secondary mt-1">{st?.token_error || "Add the WhatsApp credentials in your environment to enable forwarding."}</p>
             </div>
@@ -457,11 +457,11 @@ export default function Ingest() {
   const tabsEl = (
     <div className="flex gap-2 mb-6" data-testid="capture-main-tabs">
       <button data-testid="capture-maintab-import" onClick={() => setMainTab("import")}
-        className={`px-4 py-2 text-sm font-semibold  border-2 border-hairline transition-all ${mainTab === "import" ? "bg-primary text-primary-foreground shadow-xs" : "bg-surface hover:bg-surface-hover"}`}>
+        className={`px-4 py-2 text-sm font-semibold  border-2 border-hairline transition-all ${mainTab === "import" ? "bg-primary text-primary-foreground shadow-xs" : "bg-surface hover:bg-surface-hover"} rounded-md`}>
         Import
       </button>
       <button data-testid="capture-maintab-review" onClick={() => setMainTab("review")}
-        className={`px-4 py-2 text-sm font-semibold  border-2 border-hairline transition-all flex items-center gap-2 ${mainTab === "review" ? "bg-primary text-primary-foreground shadow-xs" : "bg-surface hover:bg-surface-hover"}`}>
+        className={`px-4 py-2 text-sm font-semibold  border-2 border-hairline transition-all flex items-center gap-2 ${mainTab === "review" ? "bg-primary text-primary-foreground shadow-xs" : "bg-surface hover:bg-surface-hover"} rounded-md`}>
         Review Queue
         {pendingCount > 0 && (
           <span data-testid="review-tab-badge" className="bg-primary text-primary-foreground text-[10px] min-w-5 h-5 px-1 flex items-center justify-center border border-hairline font-bold rounded-pill">{pendingCount}</span>

@@ -536,7 +536,7 @@ function InvoicePicker({ open, value, onChange, cur, testid }) {
         <CaretDown size={14} weight="bold" />
       </button>
       {show && (
-        <div className="absolute z-30 mt-1 w-full sm:w-[280px] bg-surface border-2 border-hairline shadow-sm max-h-64 overflow-hidden flex flex-col">
+        <div className="absolute z-30 mt-1 w-full sm:w-[280px] bg-surface border-2 border-hairline shadow-sm max-h-64 overflow-hidden flex flex-col rounded-lg">
           <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} data-testid={`${testid}-search`}
             placeholder="Search invoice # or name…" className="px-3 py-2 text-sm border-b border-hairline focus:outline-none bg-transparent" />
           <div className="overflow-y-auto">
@@ -590,7 +590,7 @@ function NeedsMatchingPanel({ title, hint, unmatched, open, cur, endpoint, stand
             <span className="text-sm font-semibold">{f(p.remaining ?? p.amount)}</span>
             <span className="text-xs text-text-secondary flex-1 min-w-0 truncate">{p.contact_name || "Unknown"}{p.date ? ` · ${p.date}` : ""}{p.invoice_number ? ` · ref ${p.invoice_number}` : ""}{p.applied > 0 ? ` · ${f(p.applied)} already applied` : ""}</span>
             <InvoicePicker open={open} value={picks[p.id] || ""} onChange={(v) => setPicks((s) => ({ ...s, [p.id]: v }))} cur={cur} testid={`match-picker-${p.id}`} />
-            <button onClick={() => match(p.id)} disabled={busy === p.id} data-testid={`match-btn-${p.id}`} className="px-3 py-1.5 text-xs font-semibold border-2 border-hairline bg-success-600 text-white hover:shadow-xs transition-all disabled:opacity-50">Match</button>
+            <button onClick={() => match(p.id)} disabled={busy === p.id} data-testid={`match-btn-${p.id}`} className="px-3 py-1.5 text-xs font-semibold border-2 border-hairline bg-success-600 text-white hover:shadow-xs transition-all disabled:opacity-50 rounded-md">Match</button>
             <button onClick={() => standalone(p.id)} disabled={busy === p.id} data-testid={`standalone-btn-${p.id}`} className="px-3 py-1.5 text-xs font-semibold border border-hairline bg-surface hover:bg-surface-hover transition-all disabled:opacity-50 rounded-md">{standaloneLabel.btn}</button>
           </div>
         ))}
@@ -900,7 +900,7 @@ export default function Ledger() {
     <div>
       <PageHeader eyebrow={t("finance.eyebrow")} title={t("finance.title")}>
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto" data-testid="ledger-controls">
-          <div className="grid grid-cols-2 gap-2 sm:gap-0 sm:flex sm:border sm:border-hairline sm:overflow-hidden w-full sm:w-auto">
+          <div className="grid grid-cols-2 gap-2 sm:gap-0 sm:flex sm:border sm:border-hairline sm:overflow-hidden w-full sm:w-auto sm:rounded-md">
             {TABS.map((tb) => (
               <button key={tb.key} onClick={() => setTab(tb.key)} data-testid={`ledger-tab-${tb.key}`}
                 className={`flex items-center justify-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-semibold  border border-hairline sm:border-0 sm:border-r sm:border-hairline sm:last:border-r-0 transition-colors ${tab === tb.key ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"} rounded-md`}>

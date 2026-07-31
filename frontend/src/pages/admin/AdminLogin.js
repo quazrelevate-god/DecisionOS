@@ -26,7 +26,7 @@ export default function AdminLogin({ onSuccess }) {
     <div className="min-h-screen flex items-center justify-center bg-[#0a0a0b] px-4" data-testid="admin-login-screen">
       <div className="w-full max-w-md">
         <div className="flex items-center gap-3 mb-8">
-          <div className="w-12 h-12 flex items-center justify-center bg-[#e5484d] border-2 border-white/10">
+          <div className="w-12 h-12 flex items-center justify-center bg-[#e5484d] border-2 border-white/10 rounded-md">
             <ShieldStar size={26} weight="fill" className="text-white" />
           </div>
           <div>
@@ -37,7 +37,7 @@ export default function AdminLogin({ onSuccess }) {
           </div>
         </div>
 
-        <form onSubmit={submit} className="border-2 border-white/10 bg-[#141418] p-7 space-y-5">
+        <form onSubmit={submit} className="border-2 border-white/10 bg-[#141418] p-7 space-y-5 rounded-lg">
           <div>
             <label className="text-label text-[11px] text-white/50 block mb-2">Email</label>
             <input

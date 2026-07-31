@@ -104,7 +104,7 @@ export default function AdminPortal() {
       <main className="max-w-6xl mx-auto px-5 py-8">
         {alerts.length > 0 && (
           <div data-testid="admin-alert-banner"
-            className="mb-6 border-2 border-[#e5484d] bg-[#e5484d]/10 p-4 flex items-start gap-3">
+            className="mb-6 border-2 border-[#e5484d] bg-[#e5484d]/10 p-4 flex items-start gap-3 rounded-md">
             <WarningCircle size={22} weight="fill" className="text-[#e5484d] shrink-0 mt-0.5" />
             <div className="min-w-0">
               <div className="font-heading font-black text-[#e5484d] text-sm tracking-tight">

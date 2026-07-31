@@ -255,7 +255,7 @@ export default function Layout({ children }) {
           <button
             onClick={doLogout}
             data-testid="logout-button"
-            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold bg-surface text-primary-text border-2 border-hairline-strong hover:bg-primary-hover hover:text-white transition-colors"
+            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold bg-surface text-primary-text border-2 border-hairline-strong hover:bg-primary-hover hover:text-white transition-colors rounded-md"
           >
             <SignOut size={16} weight="bold" /> {t("header.sign_out")}
           </button>
@@ -351,7 +351,7 @@ export default function Layout({ children }) {
                 <button
                   onClick={doLogout}
                   data-testid="mobile-logout-button"
-                  className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold bg-surface text-primary-text border-2 border-hairline-strong hover:bg-primary-hover hover:text-white transition-colors"
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold bg-surface text-primary-text border-2 border-hairline-strong hover:bg-primary-hover hover:text-white transition-colors rounded-md"
                 >
                   <SignOut size={16} weight="bold" /> {t("header.sign_out")}
                 </button>

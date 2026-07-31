@@ -32,7 +32,7 @@ export default function Notifications() {
     <div>
       <PageHeader eyebrow="Work updates, approvals & reminders" title="Notifications">
         {(data?.unread || 0) > 0 && (
-          <button onClick={markAll} data-testid="mark-all-read" className="flex items-center gap-2 border border-hairline px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-surface-hover transition-colors">
+          <button onClick={markAll} data-testid="mark-all-read" className="flex items-center gap-2 border border-hairline px-4 py-2 text-sm font-semibold hover:bg-surface-hover transition-colors rounded-md">
             <Check size={16} weight="bold" /> Mark all read
           </button>
         )}
@@ -52,17 +52,17 @@ export default function Notifications() {
               className={`p-4 flex items-start justify-between gap-4 transition-colors ${n.read ? "opacity-60" : ""} ${clickable ? "cursor-pointer hover:bg-black/[0.03]" : ""}`}
             >
               <div className="flex items-start gap-3 min-w-0">
-                {!n.read && <span className="mt-1.5 w-2 h-2 rounded-full bg-primary shrink-0" data-testid={`notif-unread-dot-${n.id}`} />}
+                {!n.read && <span className="mt-1.5 w-2 h-2 rounded-pill bg-primary shrink-0" data-testid={`notif-unread-dot-${n.id}`} />}
                 <BellRinging size={18} weight="bold" className={`shrink-0 mt-0.5 ${n.level === "owner" ? "text-primary-text" : "text-primary-text"}`} />
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <Chip value={meta.label} className={meta.cls} />
-                    <span className="text-label uppercase text-text-secondary flex items-center gap-1" title={fullTime(n.created_at)}>{timeAgo(n.created_at)}</span>
+                    <span className="text-label text-text-secondary flex items-center gap-1" title={fullTime(n.created_at)}>{timeAgo(n.created_at)}</span>
                   </div>
                   <p className="text-sm font-semibold mt-1.5 truncate">{n.work_title || n.message}</p>
                   {n.work_title && n.message && <p className="text-xs text-text-secondary mt-0.5 truncate">{n.message}</p>}
                   {n.sender_name && (
-                    <p className="text-label uppercase text-text-secondary mt-1 flex items-center gap-1">
+                    <p className="text-label text-text-secondary mt-1 flex items-center gap-1">
                       <UserCircle size={13} weight="bold" /> {n.sender_name}
                     </p>
                   )}
@@ -70,7 +70,7 @@ export default function Notifications() {
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 {!n.read && (
-                  <button onClick={(e) => { e.stopPropagation(); markRead(n.id); }} data-testid={`read-${n.id}`} className="text-xs uppercase tracking-wider border border-hairline px-2 py-1 hover:bg-surface-hover transition-colors">
+                  <button onClick={(e) => { e.stopPropagation(); markRead(n.id); }} data-testid={`read-${n.id}`} className="text-xs border border-hairline px-2 py-1 hover:bg-surface-hover transition-colors rounded-md">
                     Read
                   </button>
                 )}

@@ -158,7 +158,7 @@ export const ApprovalCard = React.forwardRef(
 
         {tasks.length > 0 && (
           <div className="mt-4 border-t border-hairline pt-3">
-            <p className="mb-1 text-label uppercase text-text-tertiary">
+            <p className="mb-1 text-label text-text-tertiary">
               {tasks.length === 1 ? "Task it will unblock" : "Tasks it will unblock"}
             </p>
             <ul>

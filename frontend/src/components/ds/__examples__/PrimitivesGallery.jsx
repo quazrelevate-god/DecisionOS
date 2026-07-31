@@ -22,7 +22,7 @@ function Row({ label, children, note }) {
   return (
     <div className="py-4 border-b border-hairline last:border-0">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-3">
-        <p className="text-label uppercase text-text-tertiary w-32 shrink-0">{label}</p>
+        <p className="text-label text-text-tertiary w-32 shrink-0">{label}</p>
         {note && <p className="text-small text-text-tertiary">{note}</p>}
       </div>
       <div className="flex flex-wrap items-center gap-3">{children}</div>
@@ -178,7 +178,7 @@ export function PrimitivesGallery() {
 
       <Group
         title="Status badge"
-        intro="Light tint, dark coloured text, uppercase and tracked. There is no colour prop — a caller picks a meaning, not a hue."
+        intro="Light tint, dark coloured text, and tracked. There is no colour prop — a caller picks a meaning, not a hue."
       >
         <Row label="Status">
           <StatusBadge status="pending" />

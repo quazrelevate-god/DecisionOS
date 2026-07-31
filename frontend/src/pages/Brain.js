@@ -28,30 +28,30 @@ function SearchPanel() {
   return (
     <div>
       <form onSubmit={search} className="flex gap-2 mb-2 max-w-2xl">
-        <div className="flex-1 flex items-center border border-hairline bg-surface px-4">
+        <div className="flex-1 flex items-center border border-hairline bg-surface px-4 rounded-md">
           <MagnifyingGlass size={18} weight="bold" className="text-text-secondary" />
           <input
             data-testid="brain-search-input"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder={t("brain.search_ph")}
-            className="flex-1 py-3 px-3 text-sm text-label uppercase focus:outline-none"
+            className="flex-1 py-3 px-3 text-sm text-label focus:outline-none"
           />
         </div>
         <MicDictateButton className="px-4" title={t("brain.speak_search")} onText={(txt) => setQ((v) => (v ? `${v} ${txt}` : txt))} />
-        <button data-testid="brain-search-button" className="bg-primary text-primary-foreground px-6 text-sm font-semibold uppercase tracking-wider border border-hairline hover:shadow-sm transition-all">
+        <button data-testid="brain-search-button" className="bg-primary text-primary-foreground px-6 text-sm font-semibold border border-hairline hover:shadow-sm transition-all rounded-md">
           {t("brain.search_btn")}
         </button>
       </form>
       <p className="text-xs text-text-secondary mb-8">{t("brain.search_hint")}</p>
 
-      {loading && <p className="text-label uppercase text-sm">{t("brain.searching")}</p>}
+      {loading && <p className="text-label text-sm">{t("brain.searching")}</p>}
       {!res && !loading && <EmptyState title={t("brain.empty_title")} hint={t("brain.empty_hint")} />}
       {res && !loading && (
         <>
-          <p className="text-label uppercase text-text-secondary mb-6">{t("brain.linked", { count: total })}</p>
+          <p className="text-label text-text-secondary mb-6">{t("brain.linked", { count: total })}</p>
           {res.scope && res.scope.finance_visible === false && (
-            <div data-testid="brain-finance-restricted" className="mb-6 flex items-center gap-2 text-xs border-l-2 border-hairline-strong bg-primary-tint px-3 py-2 rounded">
+            <div data-testid="brain-finance-restricted" className="mb-6 flex items-center gap-2 text-xs border-l-2 border-hairline-strong bg-primary-tint px-3 py-2 rounded-md">
               <Lock size={14} weight="bold" className="text-primary-text shrink-0" />
               <span>Financial records (invoices, expenses, assets, inventory &amp; amounts) are restricted to Owner and Finance roles.</span>
             </div>
@@ -59,7 +59,7 @@ function SearchPanel() {
           <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-6">
             {/* Decisions */}
             <section>
-              <h3 className="font-extrabold uppercase tracking-tight text-lg mb-3">{t("brain.decisions")} ({res.decisions.length})</h3>
+              <h3 className="font-extrabold tracking-tight text-lg mb-3">{t("brain.decisions")} ({res.decisions.length})</h3>
               <div className="space-y-3">
                 {res.decisions.map((d) => (
                   <div key={d.id} data-testid={`brain-decision-${d.id}`} className="rounded-lg border border-hairline bg-surface p-4">
@@ -68,7 +68,7 @@ function SearchPanel() {
                     <p className="text-xs text-text-secondary mt-1 line-clamp-3">{d.summary}</p>
                     {d.tasks?.length > 0 && (
                       <div className="mt-3 border-t border-hairline pt-2">
-                        <p className="text-label uppercase text-text-secondary mb-1">{t("brain.linked_tasks")}</p>
+                        <p className="text-label text-text-secondary mb-1">{t("brain.linked_tasks")}</p>
                         {d.tasks.map((tk) => <p key={tk.id} className="text-xs">→ {tk.title}</p>)}
                       </div>
                     )}
@@ -79,7 +79,7 @@ function SearchPanel() {
             </section>
             {/* Tasks */}
             <section>
-              <h3 className="font-extrabold uppercase tracking-tight text-lg mb-3">{t("brain.tasks")} ({res.tasks.length})</h3>
+              <h3 className="font-extrabold tracking-tight text-lg mb-3">{t("brain.tasks")} ({res.tasks.length})</h3>
               <div className="space-y-3">
                 {res.tasks.map((tk) => (
                   <div key={tk.id} data-testid={`brain-task-${tk.id}`} className="rounded-lg border border-hairline bg-surface p-4">
@@ -93,7 +93,7 @@ function SearchPanel() {
             </section>
             {/* Workflows */}
             <section>
-              <h3 className="font-extrabold uppercase tracking-tight text-lg mb-3">{t("brain.workflows")} ({res.workflows.length})</h3>
+              <h3 className="font-extrabold tracking-tight text-lg mb-3">{t("brain.workflows")} ({res.workflows.length})</h3>
               <div className="space-y-3">
                 {res.workflows.map((w) => (
                   <div key={w.id} data-testid={`brain-workflow-${w.id}`} className="rounded-lg border border-hairline bg-surface p-4">
@@ -107,7 +107,7 @@ function SearchPanel() {
             </section>
             {/* Contacts */}
             <section>
-              <h3 className="font-extrabold uppercase tracking-tight text-lg mb-3">{t("brain.contacts")} ({res.contacts?.length || 0})</h3>
+              <h3 className="font-extrabold tracking-tight text-lg mb-3">{t("brain.contacts")} ({res.contacts?.length || 0})</h3>
               <div className="space-y-3">
                 {(res.contacts || []).map((c) => (
                   <div key={c.id} data-testid={`brain-contact-${c.id}`} className="rounded-lg border border-hairline bg-surface p-4">
@@ -126,7 +126,7 @@ function SearchPanel() {
           </div>
           {(res.memory || []).length > 0 && (
             <div className="mt-8">
-              <h3 className="font-extrabold uppercase tracking-tight text-lg mb-3">{t("brain.memory")} ({res.memory.length})</h3>
+              <h3 className="font-extrabold tracking-tight text-lg mb-3">{t("brain.memory")} ({res.memory.length})</h3>
               <div className="grid md:grid-cols-2 gap-3">
                 {res.memory.map((m) => (
                   <div key={m.id} data-testid={`brain-memory-${m.id}`} className="rounded-lg border border-hairline bg-surface p-4 border-l-4 border-l-urgency-overdue">
@@ -151,13 +151,13 @@ export default function Brain() {
     <div>
       <PageHeader eyebrow={t("brain.eyebrow")} title={t("brain.title")}>
         <div className="flex flex-col gap-1" data-testid="brain-tabs-wrap">
-          <div className="flex border border-hairline w-fit" data-testid="brain-tabs">
+          <div className="flex border border-hairline w-fit rounded-md" data-testid="brain-tabs">
             <button onClick={() => setTab("ask")} data-testid="brain-tab-ask"
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border-r border-hairline transition-colors ${tab === "ask" ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold  border-r border-hairline transition-colors ${tab === "ask" ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>
               <ChatCircleText size={16} weight="bold" /> {t("brain.ask")}
             </button>
             <button onClick={() => setTab("search")} data-testid="brain-tab-search"
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider transition-colors ${tab === "search" ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold  transition-colors ${tab === "search" ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>
               <MagnifyingGlass size={16} weight="bold" /> {t("brain.search")}
             </button>
           </div>

@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import { CurrencyCircleDollar, ShieldCheck, FloppyDisk, Info, UserCircle, Translate, Lock } from "@phosphor-icons/react";
 
 const CURRENCIES = ["INR", "USD", "EUR", "GBP", "AED", "SGD", "AUD"];
-const inp = "w-full border border-hairline rounded-lg px-3 py-2 text-sm text-label uppercase bg-surface focus:outline-none focus:ring-2 focus:ring-ring/40";
+const inp = "w-full border border-hairline rounded-lg px-3 py-2 text-sm text-label bg-surface focus:outline-none focus:ring-2 focus:ring-ring/40";
 
 function LanguageCard() {
   const { t } = useTranslation();
@@ -22,7 +22,7 @@ function LanguageCard() {
     <div className="rounded-lg border border-hairline bg-surface p-5" data-testid="settings-language-card">
       <div className="flex items-center gap-2 mb-1">
         <Translate size={20} weight="bold" className="text-primary-text" />
-        <h2 className="text-lg font-extrabold uppercase tracking-tight">{t("settings.language_title")}</h2>
+        <h2 className="text-lg font-extrabold tracking-tight">{t("settings.language_title")}</h2>
       </div>
       <p className="text-xs text-text-secondary mb-4">{t("settings.language_desc")}</p>
       <LanguageSwitcher variant="inline" />
@@ -35,7 +35,7 @@ function ProfileCard() {
     <div className="rounded-lg border border-hairline bg-surface p-5" data-testid="settings-profile-card">
       <div className="flex items-center gap-2 mb-1">
         <UserCircle size={20} weight="bold" className="text-primary-text" />
-        <h2 className="text-lg font-extrabold uppercase tracking-tight">Your Profile</h2>
+        <h2 className="text-lg font-extrabold tracking-tight">Your Profile</h2>
       </div>
       <p className="text-xs text-text-secondary mb-4">Your personal details, sign-in and WhatsApp routing.</p>
       <ProfileForm />
@@ -48,7 +48,7 @@ function SecurityCard() {
     <div className="rounded-lg border border-hairline bg-surface p-5" data-testid="settings-security-card">
       <div className="flex items-center gap-2 mb-1">
         <Lock size={20} weight="bold" className="text-primary-text" />
-        <h2 className="text-lg font-extrabold uppercase tracking-tight">Password & Security</h2>
+        <h2 className="text-lg font-extrabold tracking-tight">Password & Security</h2>
       </div>
       <p className="text-xs text-text-secondary mb-4">Change the password you use to sign in.</p>
       <ChangePasswordForm />
@@ -119,14 +119,14 @@ export default function Settings() {
 
           <div className="space-y-5">
             <div>
-              <label className="text-label uppercase text-text-secondary">Default currency</label>
+              <label className="text-label text-text-secondary">Default currency</label>
               <select data-testid="settings-currency" className={`${inp} mt-1 max-w-[200px]`} value={currency} onChange={(e) => setCurrency(e.target.value)}>
                 {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
 
             <div>
-              <label className="text-label uppercase text-text-secondary">High-value threshold ({currency})</label>
+              <label className="text-label text-text-secondary">High-value threshold ({currency})</label>
               <input data-testid="settings-threshold" type="number" min="0" step="1000" className={`${inp} mt-1 max-w-[260px]`}
                 value={threshold} onChange={(e) => setThreshold(e.target.value)} />
               <p className="text-xs text-text-secondary mt-1.5 flex items-start gap-1.5">
@@ -137,7 +137,7 @@ export default function Settings() {
 
             <button type="button" onClick={() => setSignoff(!signoff)} data-testid="settings-signoff-toggle"
               className="flex items-start gap-3 w-full text-left border border-hairline rounded-lg p-3 hover:bg-accent transition-colors">
-              <span className={`w-5 h-5 shrink-0 mt-0.5 border border-hairline rounded flex items-center justify-center ${signoff ? "bg-primary text-primary-foreground" : "bg-surface"}`}>
+              <span className={`w-5 h-5 shrink-0 mt-0.5 border border-hairline rounded-md flex items-center justify-center ${signoff ? "bg-primary text-primary-foreground" : "bg-surface"}`}>
                 {signoff && <ShieldCheck size={13} weight="bold" />}
               </span>
               <span>
@@ -148,7 +148,7 @@ export default function Settings() {
           </div>
 
           <button onClick={save} disabled={saving} data-testid="settings-save"
-            className="mt-6 flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2 text-sm font-semibold uppercase tracking-wider rounded-lg hover:shadow-xs transition-all disabled:opacity-60">
+            className="mt-6 flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2 text-sm font-semibold rounded-lg hover:shadow-xs transition-all disabled:opacity-60">
             <FloppyDisk size={16} weight="bold" /> {saving ? "Saving…" : "Save Settings"}
           </button>
         </div>

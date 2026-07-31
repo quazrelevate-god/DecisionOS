@@ -62,7 +62,7 @@ export const TerminalBlock = React.forwardRef(
         className={cn("rounded-lg border border-terminal-hairline bg-terminal p-5", className)}
         {...props}
       >
-        <p className="mb-3 text-label uppercase text-terminal-label">{label}</p>
+        <p className="mb-3 text-label text-terminal-label">{label}</p>
 
         {loading ? (
           <p className="font-mono text-code text-terminal-fg-dim">Thinking…</p>

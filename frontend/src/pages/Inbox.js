@@ -46,14 +46,14 @@ function SwipeRow({ children, onLeft, onRight, rightLabel = "View", testid }) {
   };
   const committedR = dx >= THRESH, committedL = dx <= -THRESH;
   return (
-    <div className="relative overflow-hidden border border-hairline" data-testid={testid}>
+    <div className="relative overflow-hidden border border-hairline rounded-md" data-testid={testid}>
       {onRight && (
-        <div className={`absolute inset-y-0 left-0 flex items-center gap-1 px-5 text-white text-xs font-semibold uppercase tracking-wider transition-colors ${committedR ? "bg-primary brightness-125" : "bg-primary/70"}`} style={{ opacity: dx > 8 ? 1 : 0 }}>
+        <div className={`absolute inset-y-0 left-0 flex items-center gap-1 px-5 text-white text-xs font-semibold  transition-colors ${committedR ? "bg-primary brightness-125" : "bg-primary/70"}`} style={{ opacity: dx > 8 ? 1 : 0 }}>
           <Eye size={16} weight="bold" /> {committedR ? `Release · ${rightLabel}` : rightLabel}
         </div>
       )}
       {onLeft && (
-        <div className={`absolute inset-y-0 right-0 flex items-center gap-1 px-5 text-white text-xs font-semibold uppercase tracking-wider transition-colors ${committedL ? "bg-primary brightness-125" : "bg-primary"}`} style={{ opacity: dx < -8 ? 1 : 0 }}>
+        <div className={`absolute inset-y-0 right-0 flex items-center gap-1 px-5 text-white text-xs font-semibold  transition-colors ${committedL ? "bg-primary brightness-125" : "bg-primary"}`} style={{ opacity: dx < -8 ? 1 : 0 }}>
           {committedL ? "Release · Dismiss" : "Dismiss"} <X size={16} weight="bold" />
         </div>
       )}
@@ -89,7 +89,7 @@ function EscalationCard({ t, onRespond, highlight }) {
     <div data-testid={`escalation-card-${t.id}`} className={`rounded-lg border border-hairline bg-surface p-5 transition-all ${highlight ? "ring-4 ring-ring ring-offset-2" : ""}`}>
       <div className="flex items-center gap-1.5 flex-wrap mb-2">
         <span data-testid={`escalation-badge-${t.id}`}
-          className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-hairline ${isEsc ? "bg-primary text-primary-foreground" : "bg-primary text-primary-foreground"}`}>
+          className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold  border border-hairline ${isEsc ? "bg-primary text-primary-foreground" : "bg-primary text-primary-foreground"} rounded-md`}>
           {isEsc ? <WarningCircle size={12} weight="bold" /> : <ArrowBendUpRight size={12} weight="bold" />}
           {isEsc ? "Escalation" : "Handoff"}
         </span>
@@ -101,16 +101,16 @@ function EscalationCard({ t, onRespond, highlight }) {
         <p className="text-xs text-text-secondary mt-2 border-l-2 border-hairline pl-2 italic">On step: {t.raised_step_text}</p>
       )}
       {t.raised_by_name && (
-        <p className="text-label uppercase text-text-secondary mt-3 flex items-center gap-1">
+        <p className="text-label text-text-secondary mt-3 flex items-center gap-1">
           <User size={12} weight="bold" /> Raised by {t.raised_by_name}
         </p>
       )}
       <div className="mt-4 border-t border-hairline pt-3">
         <textarea data-testid={`escalation-response-${t.id}`} value={text} onChange={(e) => setText(e.target.value)} rows={2}
           placeholder={isEsc ? `Type your decision — this goes back to ${t.raised_by_name || "the person who raised it"}` : `Reply to ${t.raised_by_name || "the sender"}`}
-          className="w-full border border-hairline p-2.5 text-sm text-label uppercase focus:outline-none focus:shadow-xs transition-shadow resize-none" />
+          className="w-full border border-hairline p-2.5 text-sm text-label focus:outline-none focus:shadow-xs transition-shadow resize-none rounded-md" />
         <button onClick={send} disabled={sending || !text.trim()} data-testid={`escalation-send-${t.id}`}
-          className="mt-2 flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline hover:shadow-xs transition-all disabled:opacity-50">
+          className="mt-2 flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold border border-hairline hover:shadow-xs transition-all disabled:opacity-50 rounded-md">
           <PaperPlaneTilt size={15} weight="bold" /> {sending ? "Sending…" : "Send response"}
         </button>
       </div>
@@ -124,7 +124,7 @@ function ReviewTaskRow({ t: task, members, roleOptions, onRefresh }) {
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef(null);
-  const inp = "border border-hairline px-2 py-1 text-xs text-label uppercase focus:outline-none bg-surface flex-1 min-w-0";
+  const inp = "border border-hairline px-2 py-1 text-xs text-label focus:outline-none bg-surface flex-1 min-w-0";
   const refs = (task.attachments || []).filter((a) => a.kind === "reference");
   const reassign = async (payload) => {
     setBusy(true);
@@ -159,7 +159,7 @@ function ReviewTaskRow({ t: task, members, roleOptions, onRefresh }) {
     } catch (e) { toast.error(e.response?.data?.detail || "Could not update"); }
   };
   return (
-    <li className="border border-hairline px-3 py-2" data-testid={`review-task-${task.id}`}>
+    <li className="border border-hairline px-3 py-2 rounded-md" data-testid={`review-task-${task.id}`}>
       <div className="flex items-center justify-between gap-2">
         <span className="text-sm min-w-0">{task.title}</span>
         <button onClick={() => setEditing((v) => !v)} data-testid={`reassign-toggle-${task.id}`}
@@ -195,7 +195,7 @@ function ReviewTaskRow({ t: task, members, roleOptions, onRefresh }) {
           {refs.map((a) => (
             <a key={a.url} href={`${process.env.REACT_APP_BACKEND_URL}${a.url}`} target="_blank" rel="noreferrer"
               data-testid={`review-ref-${task.id}-${a.url}`}
-              className="inline-flex items-center gap-1 border border-hairline-strong/40 bg-primary-tint text-primary-text px-2 py-0.5 text-[11px] text-label uppercase max-w-[160px] hover:bg-primary/10 transition-colors">
+              className="inline-flex items-center gap-1 border border-hairline-strong/40 bg-primary-tint text-primary-text px-2 py-0.5 text-[11px] text-label max-w-[160px] hover:bg-primary/10 transition-colors rounded-md">
               <FileIcon size={11} weight="bold" /> <span className="truncate">{a.filename || "reference"}</span>
             </a>
           ))}
@@ -203,12 +203,12 @@ function ReviewTaskRow({ t: task, members, roleOptions, onRefresh }) {
       )}
       <div className="mt-2 flex items-center gap-3 flex-wrap">
         <button onClick={() => fileRef.current?.click()} disabled={uploading} data-testid={`attach-reference-${task.id}`}
-          className="inline-flex items-center gap-1 border border-hairline px-2 py-1 text-[11px] font-semibold uppercase tracking-wider hover:bg-status-pending-bg transition-colors disabled:opacity-50">
+          className="inline-flex items-center gap-1 border border-hairline px-2 py-1 text-[11px] font-semibold hover:bg-status-pending-bg transition-colors disabled:opacity-50 rounded-md">
           <Paperclip size={12} weight="bold" /> {uploading ? "Uploading…" : "Attach reference"}
         </button>
         <input ref={fileRef} type="file" className="hidden" onChange={attachReference} />
-        <label className="inline-flex items-center gap-1.5 text-[11px] text-label uppercase cursor-pointer" title="Assignee must upload proof before completing">
-          <input type="checkbox" data-testid={`require-proof-${task.id}`} className="w-3.5 h-3.5 border border-hairline"
+        <label className="inline-flex items-center gap-1.5 text-[11px] text-label cursor-pointer" title="Assignee must upload proof before completing">
+          <input type="checkbox" data-testid={`require-proof-${task.id}`} className="w-3.5 h-3.5 border border-hairline rounded-md"
             checked={!!task.evidence_required} onChange={(e) => toggleEvidence(e.target.checked)} />
           <ShieldCheck size={12} weight="bold" className="text-primary-text" /> Require proof
         </label>
@@ -222,7 +222,7 @@ function PendingApprovalCard({ d, members, roleOptions, onApprove, onReject, onR
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ title: "", assignee_id: "", assignee_role: "", priority: "medium" });
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
-  const inp = "w-full border border-hairline px-2 py-1.5 text-xs text-label uppercase focus:outline-none";
+  const inp = "w-full border border-hairline px-2 py-1.5 text-xs text-label focus:outline-none";
 
   const addTask = async () => {
     if (!form.title.trim()) return toast.error("Task title required");
@@ -274,7 +274,7 @@ function PendingApprovalCard({ d, members, roleOptions, onApprove, onReject, onR
       )}
       {d.tasks?.length > 0 && (
         <div className="mt-4 border-t border-hairline pt-3">
-          <p className="mb-1 text-label uppercase text-text-tertiary">
+          <p className="mb-1 text-label text-text-tertiary">
             {d.tasks.length === 1 ? "Task it will unblock" : "Tasks it will unblock"}
           </p>
           <ul className="space-y-2" data-testid={`decision-tasks-${d.id}`}>
@@ -286,7 +286,7 @@ function PendingApprovalCard({ d, members, roleOptions, onApprove, onReject, onR
       )}
 
       {adding ? (
-        <div className="mt-3 border border-dashed border-hairline p-3 space-y-2" data-testid={`add-task-form-${d.id}`}>
+        <div className="mt-3 border border-dashed border-hairline p-3 space-y-2 rounded-md" data-testid={`add-task-form-${d.id}`}>
           <input data-testid={`add-task-title-${d.id}`} className={inp} placeholder="What should they do?" value={form.title} onChange={set("title")} />
           <select data-testid={`add-task-member-${d.id}`} className={inp} value={form.assignee_id} onChange={set("assignee_id")}>
             <option value="">— Assign to a team member —</option>
@@ -297,13 +297,13 @@ function PendingApprovalCard({ d, members, roleOptions, onApprove, onReject, onR
             {roleOptions.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
           </select>
           <div className="flex gap-2">
-            <button data-testid={`add-task-save-${d.id}`} onClick={addTask} className="flex-1 bg-primary text-primary-foreground py-1.5 text-xs font-semibold uppercase tracking-wider border border-hairline hover:bg-primary-hover transition-colors">Add</button>
-            <button onClick={() => setAdding(false)} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-hairline hover:bg-surface-hover">Cancel</button>
+            <button data-testid={`add-task-save-${d.id}`} onClick={addTask} className="flex-1 bg-primary text-primary-foreground py-1.5 text-xs font-semibold border border-hairline hover:bg-primary-hover transition-colors rounded-md">Add</button>
+            <button onClick={() => setAdding(false)} className="px-3 py-1.5 text-xs font-semibold border border-hairline hover:bg-surface-hover rounded-md">Cancel</button>
           </div>
         </div>
       ) : (
         <button onClick={() => setAdding(true)} data-testid={`add-member-${d.id}`}
-          className="mt-3 w-full flex items-center justify-center gap-2 border border-dashed border-hairline py-2 text-xs font-semibold uppercase tracking-wider hover:bg-surface-hover transition-colors">
+          className="mt-3 w-full flex items-center justify-center gap-2 border border-dashed border-hairline py-2 text-xs font-semibold hover:bg-surface-hover transition-colors rounded-md">
           <UserPlus size={15} weight="bold" /> Add team member / task
         </button>
       )}
@@ -323,7 +323,7 @@ function AttachChips({ files, onRemove, testid }) {
   return (
     <ul className="mt-3 flex flex-wrap gap-2 justify-center" data-testid={testid}>
       {files.map((f, i) => (
-        <li key={i} data-testid={`${testid}-chip-${i}`} className="inline-flex items-center gap-1.5 border border-hairline-strong/40 bg-primary-tint text-primary-text px-2.5 py-1 text-xs text-label uppercase max-w-[200px]">
+        <li key={i} data-testid={`${testid}-chip-${i}`} className="inline-flex items-center gap-1.5 border border-hairline-strong/40 bg-primary-tint text-primary-text px-2.5 py-1 text-xs text-label max-w-[200px] rounded-md">
           <FileIcon size={12} weight="bold" /> <span className="truncate">{f.name}</span>
           <button onClick={() => onRemove(i)} data-testid={`${testid}-remove-${i}`} className="ml-0.5 hover:text-primary-text"><X size={12} weight="bold" /></button>
         </li>
@@ -339,12 +339,12 @@ function ThinkingOverlay({ show }) {
       {/* frosted application backdrop */}
       <div className="absolute inset-0 bg-background/70 backdrop-blur-2xl app-canvas opacity-95" />
       <div className="relative flex flex-col items-center">
-        <p className="thinking-text font-black uppercase tracking-[0.35em] text-text text-4xl sm:text-5xl">Thinking</p>
+        <p className="thinking-text font-black tracking-[0.35em] text-text text-4xl sm:text-5xl">Thinking</p>
         <div className="relative w-[min(82vw,520px)] aspect-square -mt-2">
-          <div className="absolute inset-[28%] rounded-full bg-primary-tint blur-[70px] animate-pulse" aria-hidden />
+          <div className="absolute inset-[28%] rounded-pill bg-primary-tint blur-[70px] animate-pulse" aria-hidden />
           <ThinkingCanvas active={show} />
         </div>
-        <p className="text-sm text-text-secondary text-label uppercase -mt-4 tracking-wide">DecisionOS is connecting the dots…</p>
+        <p className="text-sm text-text-secondary text-label -mt-4 tracking-wide">DecisionOS is connecting the dots…</p>
       </div>
     </div>
   );
@@ -618,10 +618,10 @@ export default function Inbox() {
 
       {processing && !submittedNoteId && (
         <div data-testid="structuring-banner"
-          className="sticky top-2 z-30 mb-6 flex items-center gap-3 border border-hairline bg-status-pending-bg px-4 py-3 shadow-xs">
+          className="sticky top-2 z-30 mb-6 flex items-center gap-3 border border-hairline bg-status-pending-bg px-4 py-3 shadow-xs rounded-md">
           <Spinner size={20} weight="bold" className="animate-spin text-primary-text shrink-0" />
           <div className="min-w-0">
-            <p className="font-bold uppercase tracking-tight text-sm" data-testid="structuring-status">
+            <p className="font-bold tracking-tight text-sm" data-testid="structuring-status">
               {procLabel}{procNotes.length > 1 ? ` (${procNotes.length})` : ""}
             </p>
             <p className="text-xs text-text-secondary">{t("inbox.structuring_desc")}</p>
@@ -635,43 +635,43 @@ export default function Inbox() {
           <div className="grid lg:grid-cols-2 gap-4">
             {/* WAY 1 — Speak */}
             <div className="rounded-lg border border-hairline bg-surface p-6 flex flex-col items-center justify-center text-center">
-              <p className="text-label uppercase text-primary-text mb-2 self-start">Way 1 · Speak</p>
+              <p className="text-label text-primary-text mb-2 self-start">Way 1 · Speak</p>
               <button onClick={recording ? stopRec : startRec} disabled={busy} data-testid="voice-record-button"
-                className={`w-24 h-24 flex items-center justify-center border border-hairline transition-all ${recording ? (paused ? "bg-primary text-primary-foreground" : "bg-primary text-primary-foreground recording-pulse") : "bg-primary text-primary-foreground hover:shadow-sm"}`}>
+                className={`rounded-pill w-24 h-24 flex items-center justify-center border border-hairline transition-all ${recording ? (paused ? "bg-primary text-primary-foreground" : "bg-primary text-primary-foreground recording-pulse") : "bg-primary text-primary-foreground hover:shadow-sm"}`}>
                 {recording ? <Stop size={38} weight="fill" /> : <Microphone size={38} weight="fill" />}
               </button>
-              <p className="mt-4 font-bold uppercase tracking-tight">{recording ? (paused ? t("inbox.paused") : t("inbox.recording")) : busy ? t("inbox.thinking") : t("inbox.tap_to_speak")}</p>
-              <p className="text-label uppercase text-sm text-text-secondary mt-1" data-testid="record-timer">{recording ? mmss : "Speak in any language — AI writes it up in English"}</p>
+              <p className="mt-4 font-bold tracking-tight">{recording ? (paused ? t("inbox.paused") : t("inbox.recording")) : busy ? t("inbox.thinking") : t("inbox.tap_to_speak")}</p>
+              <p className="text-label text-sm text-text-secondary mt-1" data-testid="record-timer">{recording ? mmss : "Speak in any language — AI writes it up in English"}</p>
               {recording && (
                 <div className="flex flex-wrap items-center justify-center gap-2 mt-3">
                   {paused ? (
                     <button onClick={resumeRec} data-testid="voice-resume-button"
-                      className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline bg-primary text-primary-foreground hover:shadow-xs transition-all">
+                      className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold border border-hairline bg-primary text-primary-foreground hover:shadow-xs transition-all rounded-md">
                       <Play size={15} weight="fill" /> Resume
                     </button>
                   ) : (
                     <button onClick={pauseRec} data-testid="voice-pause-button"
-                      className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline bg-surface hover:bg-surface-hover transition-colors">
+                      className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold border border-hairline bg-surface hover:bg-surface-hover transition-colors rounded-md">
                       <Pause size={15} weight="fill" /> Pause
                     </button>
                   )}
                   <button onClick={stopRec} data-testid="voice-finalise-button"
-                    className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline bg-primary text-primary-foreground hover:shadow-xs transition-all">
+                    className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold border border-hairline bg-primary text-primary-foreground hover:shadow-xs transition-all rounded-md">
                     <CheckCircle size={15} weight="bold" /> Finalise
                   </button>
                   <button onClick={cancelRec} data-testid="voice-cancel-button"
-                    className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline hover:bg-surface-hover transition-colors">
+                    className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold border border-hairline hover:bg-surface-hover transition-colors rounded-md">
                     <X size={15} weight="bold" /> Cancel
                   </button>
                 </div>
               )}
               <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
                 <button onClick={() => voiceAttachRef.current?.click()} data-testid="voice-attach-file"
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider border border-hairline px-3 py-1.5 hover:bg-status-pending-bg transition-colors">
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold border border-hairline px-3 py-1.5 hover:bg-status-pending-bg transition-colors rounded-md">
                   <Paperclip size={13} weight="bold" /> Attach files
                 </button>
                 <button onClick={() => voiceCameraRef.current?.click()} data-testid="voice-capture-photo"
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider border border-hairline px-3 py-1.5 hover:bg-status-pending-bg transition-colors">
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold border border-hairline px-3 py-1.5 hover:bg-status-pending-bg transition-colors rounded-md">
                   <Camera size={13} weight="bold" /> Add photo
                 </button>
               </div>
@@ -684,15 +684,15 @@ export default function Inbox() {
 
             {/* WAY 2 — Type */}
             <div className="rounded-lg border border-hairline bg-surface p-6">
-              <p className="text-label uppercase text-primary-text mb-2">Way 2 · Type</p>
-              <p className="text-label uppercase text-text-secondary mb-3">{t("inbox.type_directive")}</p>
+              <p className="text-label text-primary-text mb-2">Way 2 · Type</p>
+              <p className="text-label text-text-secondary mb-3">{t("inbox.type_directive")}</p>
               <textarea data-testid="text-directive-input" value={text} onChange={(e) => setText(e.target.value)} rows={5}
                 placeholder="e.g. Tell sales to send the revised quote to the Delhi retailer by Friday and ask finance to clear the packaging invoice."
-                className="w-full border border-hairline p-3 text-sm text-label uppercase focus:outline-none focus:shadow-xs transition-shadow resize-none" />
+                className="w-full border border-hairline p-3 text-sm text-label focus:outline-none focus:shadow-xs transition-shadow resize-none rounded-md" />
 
               {clarify ? (
                 <div className="mt-3 rounded-lg border border-dashed border-hairline-strong p-3" data-testid="clarify-panel">
-                  <p className="flex items-center gap-2 text-label uppercase text-primary-text mb-2">
+                  <p className="flex items-center gap-2 text-label text-primary-text mb-2">
                     <Question size={15} weight="bold" /> A few quick details for a sharper plan
                   </p>
                   <div className="space-y-2">
@@ -701,7 +701,7 @@ export default function Inbox() {
                         <label className="text-xs font-medium block mb-1">{q.question}</label>
                         <input value={answers[q.id] || ""} onChange={(e) => setAnswers({ ...answers, [q.id]: e.target.value })}
                           data-testid={`clarify-a-${q.id}`} placeholder={q.hint}
-                          className="w-full border border-hairline px-2 py-1.5 text-sm focus:outline-none" />
+                          className="w-full border border-hairline px-2 py-1.5 text-sm focus:outline-none rounded-md" />
                       </div>
                     ))}
                   </div>
@@ -748,11 +748,11 @@ export default function Inbox() {
                     Structure it
                   </Button>
                   <button onClick={() => textAttachRef.current?.click()} data-testid="text-attach-file"
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider border border-hairline px-3 py-2 hover:bg-status-pending-bg transition-colors">
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold border border-hairline px-3 py-2 hover:bg-status-pending-bg transition-colors rounded-md">
                     <Paperclip size={13} weight="bold" /> Attach files
                   </button>
                   <button onClick={() => textCameraRef.current?.click()} data-testid="text-capture-photo"
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider border border-hairline px-3 py-2 hover:bg-status-pending-bg transition-colors">
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold border border-hairline px-3 py-2 hover:bg-status-pending-bg transition-colors rounded-md">
                     <Camera size={13} weight="bold" /> Add photo
                   </button>
                 </div>
@@ -764,7 +764,7 @@ export default function Inbox() {
               {textFiles.length > 0 && (
                 <ul className="mt-3 flex flex-wrap gap-2" data-testid="text-attachments">
                   {textFiles.map((f, i) => (
-                    <li key={i} data-testid={`text-attachments-chip-${i}`} className="inline-flex items-center gap-1.5 border border-hairline-strong/40 bg-primary-tint text-primary-text px-2.5 py-1 text-xs text-label uppercase max-w-[200px]">
+                    <li key={i} data-testid={`text-attachments-chip-${i}`} className="inline-flex items-center gap-1.5 border border-hairline-strong/40 bg-primary-tint text-primary-text px-2.5 py-1 text-xs text-label max-w-[200px] rounded-md">
                       <FileIcon size={12} weight="bold" /> <span className="truncate">{f.name}</span>
                       <button onClick={() => setTextFiles(textFiles.filter((_, j) => j !== i))} data-testid={`text-attachments-remove-${i}`} className="ml-0.5 hover:text-primary-text"><X size={12} weight="bold" /></button>
                     </li>
@@ -776,23 +776,23 @@ export default function Inbox() {
 
           {/* WAY 3 — Create from an image or file */}
           <div className="rounded-lg border border-hairline bg-surface p-6" data-testid="capture-upload">
-            <p className="text-label uppercase text-primary-text mb-2">Way 3 · Upload an image or file</p>
+            <p className="text-label text-primary-text mb-2">Way 3 · Upload an image or file</p>
             <div className="flex items-start gap-2 mb-4">
               <UploadSimple size={20} weight="bold" className="text-primary-text mt-0.5 shrink-0" />
               <div>
-                <p className="font-bold uppercase tracking-tight text-sm">No need to speak or type — the file is the directive</p>
+                <p className="font-bold tracking-tight text-sm">No need to speak or type — the file is the directive</p>
                 <p className="text-xs text-text-secondary">Upload files or snap photos of an order, invoice, list, business card, PDF, Word or Excel. Add <strong>several pages together</strong> (e.g. front &amp; back of a card, a multi-page order) — AI reads them all as one and proposes the decision, tasks, assignments &amp; deadlines, then it goes to Review &amp; Approve.</p>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
               <button onClick={() => uploadRef.current?.click()} data-testid="attach-file-button"
-                className="flex items-center gap-2 border border-hairline px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-surface-hover transition-colors">
+                className="flex items-center gap-2 border border-hairline px-4 py-2 text-sm font-semibold hover:bg-surface-hover transition-colors rounded-md">
                 <UploadSimple size={16} weight="bold" /> Upload image / PDF / doc
               </button>
               <input ref={uploadRef} type="file" multiple accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" className="hidden"
                 onChange={(e) => { setUploadFiles((prev) => [...prev, ...Array.from(e.target.files || [])]); e.target.value = ""; }} />
               <button onClick={() => uploadCameraRef.current?.click()} data-testid="capture-photo-button"
-                className="flex items-center gap-2 border border-hairline px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-surface-hover transition-colors">
+                className="flex items-center gap-2 border border-hairline px-4 py-2 text-sm font-semibold hover:bg-surface-hover transition-colors rounded-md">
                 <Camera size={16} weight="bold" /> Capture photo
               </button>
               <input ref={uploadCameraRef} type="file" accept="image/*" capture="environment" className="hidden"
@@ -812,7 +812,7 @@ export default function Inbox() {
             {uploadFiles.length > 0 && (
               <ul className="mt-3 flex flex-wrap gap-2" data-testid="attachment-chips">
                 {uploadFiles.map((f, i) => (
-                  <li key={i} data-testid={`attachment-chip-${i}`} className="inline-flex items-center gap-1.5 border border-hairline-strong/40 bg-primary-tint text-primary-text px-2.5 py-1 text-xs text-label uppercase max-w-[220px]">
+                  <li key={i} data-testid={`attachment-chip-${i}`} className="inline-flex items-center gap-1.5 border border-hairline-strong/40 bg-primary-tint text-primary-text px-2.5 py-1 text-xs text-label max-w-[220px] rounded-md">
                     <FileIcon size={12} weight="bold" /> <span className="truncate">{f.name}</span>
                     <button onClick={() => setUploadFiles(uploadFiles.filter((_, j) => j !== i))} data-testid={`attachment-remove-${i}`} className="ml-0.5 hover:text-primary-text"><X size={12} weight="bold" /></button>
                   </li>
@@ -822,7 +822,7 @@ export default function Inbox() {
           </div>
         </div>
       ) : (
-        <div className="border border-hairline bg-status-pending-bg p-4 text-sm mb-8" data-testid="owner-only-notice">
+        <div className="border border-hairline bg-status-pending-bg p-4 text-sm mb-8 rounded-md" data-testid="owner-only-notice">
           Voice/text capture isn't enabled for your access. Your inbox below shows everything happening across the business.
         </div>
       )}
@@ -830,7 +830,7 @@ export default function Inbox() {
       {/* Pending approvals (owner) */}
       {hasPerm(user, "decisions_approve") && pending.length > 0 && (
         <div className="mb-10">
-          <h2 className="text-2xl font-extrabold uppercase tracking-tight mb-4">{t("inbox.decision_approvals")}</h2>
+          <h2 className="text-2xl font-extrabold tracking-tight mb-4">{t("inbox.decision_approvals")}</h2>
           <div className="grid md:grid-cols-2 gap-4">
             {pending.map((d) => (
               <PendingApprovalCard
@@ -852,9 +852,9 @@ export default function Inbox() {
       {/* Needs your attention (escalations & handoffs) */}
       {escalations.length > 0 && (
         <div className="mb-10" data-testid="needs-attention-section">
-          <h2 className="text-2xl font-extrabold uppercase tracking-tight mb-4 flex items-center gap-2">
+          <h2 className="text-2xl font-extrabold tracking-tight mb-4 flex items-center gap-2">
             <WarningCircle size={22} weight="bold" className="text-primary-text" /> {t("inbox.needs_attention")}
-            <span className="min-w-5 h-5 px-1.5 flex items-center justify-center text-xs border border-hairline bg-primary text-primary-foreground">{escalations.length}</span>
+            <span className="min-w-5 h-5 px-1.5 flex items-center justify-center text-xs border border-hairline bg-primary text-primary-foreground rounded-md">{escalations.length}</span>
           </h2>
           <div className="grid md:grid-cols-2 gap-4">
             {escalations.map((t) => (
@@ -865,7 +865,7 @@ export default function Inbox() {
       )}
 
       {/* Tasks feed */}
-      <h2 className="text-2xl font-extrabold uppercase tracking-tight mb-4">{t("inbox.tasks_activity")}</h2>
+      <h2 className="text-2xl font-extrabold tracking-tight mb-4">{t("inbox.tasks_activity")}</h2>
 
       {/* Filter chips */}
       <div className="flex flex-wrap gap-2 mb-4" data-testid="inbox-filters">
@@ -913,11 +913,11 @@ export default function Inbox() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <Chip value={meta.label} data-testid={`inbox-class-${it.id}`} />
-                    <span className="text-label uppercase text-text-secondary">{it.source}</span>
+                    <span className="text-label text-text-secondary">{it.source}</span>
                     {it.amount != null && <span className="text-xs font-semibold">{money(it.amount)}</span>}
                     {decTasks.length > 0 && (
                       <span data-testid={`inbox-tasks-badge-${it.id}`}
-                        className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-hairline ${pendingApproval ? "bg-status-pending-bg" : "bg-surface"}`}>
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold  border border-hairline ${pendingApproval ? "bg-status-pending-bg" : "bg-surface"} rounded-md`}>
                         <CheckSquare size={11} weight="bold" /> {decTasks.length} task{decTasks.length > 1 ? "s" : ""}{pendingApproval ? " · Pending your approval" : ""}
                       </span>
                     )}
@@ -928,19 +928,19 @@ export default function Inbox() {
                 <div className="hidden sm:flex items-center gap-1.5 shrink-0">
                   {pendingApproval && hasPerm(user, "decisions_approve") && (
                     <button onClick={() => decide(dec.id, "approve")} data-testid={`inbox-approve-tasks-${it.id}`}
-                      className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-hairline px-2 py-1 bg-success-600 text-white hover:shadow-xs transition-all">
+                      className="flex items-center gap-1 text-xs font-semibold border border-hairline px-2 py-1 bg-success-600 text-white hover:shadow-xs transition-all rounded-md">
                       <CheckCircle size={13} weight="bold" /> Approve
                     </button>
                   )}
                   {decTasks.length > 0 && (
                     <button onClick={() => navigate("/my-work?view=board")} data-testid={`inbox-view-board-${it.id}`}
-                      className="text-xs font-semibold uppercase tracking-wider border border-hairline px-2 py-1 hover:bg-primary hover:text-white transition-colors">Board</button>
+                      className="text-xs font-semibold border border-hairline px-2 py-1 hover:bg-primary hover:text-white transition-colors rounded-md">Board</button>
                   )}
                   {(it.ref_type === "ingestion" || it.classification === "complaint") && (
-                    <button onClick={() => openItem(it)} data-testid={`inbox-open-${it.id}`} className="text-xs font-semibold uppercase tracking-wider border border-hairline px-2 py-1 hover:bg-primary hover:text-white transition-colors">View</button>
+                    <button onClick={() => openItem(it)} data-testid={`inbox-open-${it.id}`} className="text-xs font-semibold border border-hairline px-2 py-1 hover:bg-primary hover:text-white transition-colors rounded-md">View</button>
                   )}
-                  {!done && <button onClick={() => setStatus(it.id, "done")} data-testid={`inbox-done-${it.id}`} title="Mark done" className="w-8 h-8 flex items-center justify-center border border-hairline hover:bg-success-600 hover:text-white transition-colors"><Check size={14} weight="bold" /></button>}
-                  <button onClick={() => setStatus(it.id, "dismissed")} data-testid={`inbox-dismiss-${it.id}`} title="Dismiss" className="w-8 h-8 flex items-center justify-center border border-hairline hover:bg-destructive-tint transition-colors"><X size={14} weight="bold" /></button>
+                  {!done && <button onClick={() => setStatus(it.id, "done")} data-testid={`inbox-done-${it.id}`} title="Mark done" className="w-8 h-8 flex items-center justify-center border border-hairline hover:bg-success-600 hover:text-white transition-colors rounded-md"><Check size={14} weight="bold" /></button>}
+                  <button onClick={() => setStatus(it.id, "dismissed")} data-testid={`inbox-dismiss-${it.id}`} title="Dismiss" className="w-8 h-8 flex items-center justify-center border border-hairline hover:bg-destructive-tint transition-colors rounded-md"><X size={14} weight="bold" /></button>
                 </div>
               </div>
             </SwipeRow>

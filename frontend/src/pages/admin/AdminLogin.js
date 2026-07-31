@@ -30,16 +30,16 @@ export default function AdminLogin({ onSuccess }) {
             <ShieldStar size={26} weight="fill" className="text-white" />
           </div>
           <div>
-            <h1 className="font-heading text-2xl font-black tracking-tighter uppercase text-white leading-none">
+            <h1 className="font-heading text-2xl font-black tracking-tighter text-white leading-none">
               DecisionOS
             </h1>
-            <p className="text-label uppercase text-[11px] uppercase tracking-[0.3em] text-[#e5484d]">Admin Console</p>
+            <p className="text-label text-[11px] tracking-[0.3em] text-[#e5484d]">Admin Console</p>
           </div>
         </div>
 
         <form onSubmit={submit} className="border-2 border-white/10 bg-[#141418] p-7 space-y-5">
           <div>
-            <label className="text-label uppercase text-[11px] uppercase tracking-widest text-white/50 block mb-2">Email</label>
+            <label className="text-label text-[11px] text-white/50 block mb-2">Email</label>
             <input
               data-testid="admin-email-input"
               type="email"
@@ -47,12 +47,12 @@ export default function AdminLogin({ onSuccess }) {
               onChange={(e) => setEmail(e.target.value)}
               required
               autoComplete="username"
-              className="w-full bg-[#0a0a0b] border border-white/15 text-white px-4 py-3 text-label uppercase text-sm focus:border-[#e5484d] focus:outline-none"
+              className="w-full bg-[#0a0a0b] border border-white/15 text-white px-4 py-3 text-label text-sm focus:border-[#e5484d] focus:outline-none rounded-md"
               placeholder="admin@decisionos.biz"
             />
           </div>
           <div>
-            <label className="text-label uppercase text-[11px] uppercase tracking-widest text-white/50 block mb-2">Password</label>
+            <label className="text-label text-[11px] text-white/50 block mb-2">Password</label>
             <input
               data-testid="admin-password-input"
               type="password"
@@ -60,24 +60,24 @@ export default function AdminLogin({ onSuccess }) {
               onChange={(e) => setPassword(e.target.value)}
               required
               autoComplete="current-password"
-              className="w-full bg-[#0a0a0b] border border-white/15 text-white px-4 py-3 text-label uppercase text-sm focus:border-[#e5484d] focus:outline-none"
+              className="w-full bg-[#0a0a0b] border border-white/15 text-white px-4 py-3 text-label text-sm focus:border-[#e5484d] focus:outline-none rounded-md"
               placeholder="••••••••"
             />
           </div>
           {err && (
-            <p data-testid="admin-login-error" className="text-[#e5484d] text-sm text-label uppercase">{err}</p>
+            <p data-testid="admin-login-error" className="text-[#e5484d] text-sm text-label">{err}</p>
           )}
           <button
             data-testid="admin-login-submit"
             type="submit"
             disabled={busy}
-            className="w-full bg-[#e5484d] text-white py-3 font-heading font-black uppercase tracking-wider text-sm hover:bg-[#d13940] transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+            className="w-full bg-[#e5484d] text-white py-3 font-heading font-black text-sm hover:bg-[#d13940] transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
           >
             {busy && <Spinner size={16} className="animate-spin" />}
             {busy ? "Signing in…" : "Enter Console"}
           </button>
         </form>
-        <p className="text-white/30 text-label uppercase text-[11px] text-center mt-6 uppercase tracking-widest">
+        <p className="text-white/30 text-label text-[11px] text-center mt-6">
           Platform operators only
         </p>
       </div>

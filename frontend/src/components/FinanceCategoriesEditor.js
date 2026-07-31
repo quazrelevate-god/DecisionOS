@@ -16,7 +16,7 @@ const fromTenant = (tenant) => {
 function CategoryGroup({ title, items, onSet, onAdd, onDel, testid }) {
   return (
     <div data-testid={testid}>
-      <p className="text-label uppercase text-primary-text mb-2">{title}</p>
+      <p className="text-label text-primary-text mb-2">{title}</p>
       <div className="flex flex-wrap gap-2">
         {items.map((c, i) => (
           <div key={c._uid} className="flex items-center gap-1 border border-hairline rounded-md pl-2 pr-1 py-1" data-testid={`${testid}-item-${i}`}>
@@ -82,7 +82,7 @@ export function FinanceCategoriesEditor() {
     <div className="rounded-lg border border-hairline bg-surface p-5" data-testid="settings-finance-categories-card">
       <div className="flex items-center gap-2 mb-1">
         <Tag size={20} weight="bold" className="text-primary-text" />
-        <h2 className="text-lg font-extrabold uppercase tracking-tight">Finance Categories</h2>
+        <h2 className="text-lg font-extrabold tracking-tight">Finance Categories</h2>
       </div>
       <p className="text-xs text-text-secondary mb-4">
         The buckets your Expenses and Assets are filed under — AI-generated for <span className="font-semibold">{tenant?.industry || "your industry"}</span>. Edit them or let AI regenerate. “Other” is always kept.
@@ -97,11 +97,11 @@ export function FinanceCategoriesEditor() {
 
       <div className="mt-6 flex flex-wrap gap-3">
         <button onClick={save} disabled={saving} data-testid="fc-save"
-          className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2 text-sm font-semibold uppercase tracking-wider rounded-lg hover:shadow-xs transition-all disabled:opacity-60">
+          className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2 text-sm font-semibold rounded-lg hover:shadow-xs transition-all disabled:opacity-60">
           <FloppyDisk size={16} weight="bold" /> {saving ? "Saving…" : "Save Categories"}
         </button>
         <button onClick={regenerate} disabled={regen} data-testid="fc-regenerate"
-          className="flex items-center gap-2 border border-hairline px-5 py-2 text-sm font-semibold uppercase tracking-wider rounded-lg hover:bg-surface-hover transition-all disabled:opacity-60">
+          className="flex items-center gap-2 border border-hairline px-5 py-2 text-sm font-semibold rounded-lg hover:bg-surface-hover transition-all disabled:opacity-60">
           <Sparkle size={16} weight="bold" /> {regen ? "Regenerating…" : "Regenerate with AI"}
         </button>
       </div>

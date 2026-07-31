@@ -98,7 +98,7 @@ function DetailDialog({ row, period, open, onClose }) {
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto border-hairline" data-testid={`brief-detail-dialog-${key}`}>
         <DialogHeader>
-          <DialogTitle className="text-2xl font-black tracking-tighter uppercase flex items-center gap-2">
+          <DialogTitle className="text-2xl font-black tracking-tighter flex items-center gap-2">
             {row?.icon && <row.icon size={22} weight="bold" className={row.accent} />}
             {row?.label}
           </DialogTitle>
@@ -106,7 +106,7 @@ function DetailDialog({ row, period, open, onClose }) {
         </DialogHeader>
 
         {isLoading ? (
-          <p className="text-label uppercase text-sm py-6">Loading…</p>
+          <p className="text-label text-sm py-6">Loading…</p>
         ) : items.length === 0 ? (
           <p className="text-sm text-text-secondary py-6" data-testid={`brief-detail-empty-${key}`}>Nothing here right now. All clear.</p>
         ) : (
@@ -116,7 +116,7 @@ function DetailDialog({ row, period, open, onClose }) {
               return (
               <div key={it.id} data-testid={`brief-detail-item-${it.id}`}
                 onClick={() => clickable && go(it)}
-                className={`border border-hairline p-4 transition-colors ${clickable ? "cursor-pointer hover:bg-surface-hover" : ""}`}>
+                className={`border border-hairline p-4 transition-colors ${clickable ? "cursor-pointer hover:bg-surface-hover" : ""} rounded-md`}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="font-bold leading-tight">{it.title}</p>
@@ -135,12 +135,12 @@ function DetailDialog({ row, period, open, onClose }) {
 
                 {Array.isArray(it.proof) && it.proof.length > 0 && (
                   <div className="mt-3 border-t border-hairline pt-3" data-testid={`brief-proof-${it.id}`} onClick={(e) => e.stopPropagation()}>
-                    <p className="text-label uppercase text-text-secondary mb-2 flex items-center gap-1"><Paperclip size={12} weight="bold" /> Proof of work · {it.proof.length}</p>
+                    <p className="text-label text-text-secondary mb-2 flex items-center gap-1"><Paperclip size={12} weight="bold" /> Proof of work · {it.proof.length}</p>
                     <div className="flex flex-wrap gap-2 items-center">
                       {it.proof.map((a, idx) => (
                         a.kind === "photo"
                           ? <a key={a.url || idx} href={`${process.env.REACT_APP_BACKEND_URL}${a.url}`} target="_blank" rel="noreferrer" data-testid={`brief-proof-photo-${it.id}-${idx}`}>
-                              <img src={`${process.env.REACT_APP_BACKEND_URL}${a.url}`} alt="proof" className="w-16 h-16 object-cover border border-hairline hover:shadow-xs transition-all" />
+                              <img src={`${process.env.REACT_APP_BACKEND_URL}${a.url}`} alt="proof" className="w-16 h-16 object-cover border border-hairline hover:shadow-xs transition-all rounded-md" />
                             </a>
                           : <audio key={a.url || idx} controls src={`${process.env.REACT_APP_BACKEND_URL}${a.url}`} className="h-8" data-testid={`brief-proof-voice-${it.id}-${idx}`} />
                       ))}
@@ -150,19 +150,19 @@ function DetailDialog({ row, period, open, onClose }) {
 
                 {it.kind === "decision" && (
                   <>
-                    {it.meta && <p className="text-label uppercase text-text-secondary mt-2">{it.meta}</p>}
+                    {it.meta && <p className="text-label text-text-secondary mt-2">{it.meta}</p>}
                     {user?.role === "owner" && (
                       <div className="flex gap-2 mt-3">
                         <button onClick={(e) => { e.stopPropagation(); decide(it.id, "approve"); }} data-testid={`brief-approve-${it.id}`}
-                          className="flex-1 flex items-center justify-center gap-2 bg-primary text-primary-foreground py-2 text-sm font-semibold uppercase tracking-wider border border-hairline hover:shadow-xs transition-all">
+                          className="flex-1 flex items-center justify-center gap-2 bg-primary text-primary-foreground py-2 text-sm font-semibold border border-hairline hover:shadow-xs transition-all rounded-md">
                           <CheckCircle size={16} weight="bold" /> Approve
                         </button>
                         <button onClick={(e) => { e.stopPropagation(); decide(it.id, "reject"); }} data-testid={`brief-reject-${it.id}`}
-                          className="flex items-center gap-2 bg-surface py-2 px-4 text-sm font-semibold uppercase tracking-wider border border-hairline hover:bg-surface-hover transition-colors">
+                          className="flex items-center gap-2 bg-surface py-2 px-4 text-sm font-semibold border border-hairline hover:bg-surface-hover transition-colors rounded-md">
                           <XCircle size={16} weight="bold" /> Reject
                         </button>
                         <button onClick={() => go(it)} data-testid={`brief-open-${it.id}`}
-                          className="flex items-center gap-1 px-3 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline hover:bg-surface-hover" title="Open in Inbox to assign team">
+                          className="flex items-center gap-1 px-3 py-2 text-sm font-semibold border border-hairline hover:bg-surface-hover rounded-md" title="Open in Inbox to assign team">
                           Assign <CaretRight size={14} weight="bold" />
                         </button>
                       </div>
@@ -172,7 +172,7 @@ function DetailDialog({ row, period, open, onClose }) {
 
                 {it.kind === "complaint" && (user?.role === "owner" || user?.role === "sales") && (
                   <button onClick={(e) => { e.stopPropagation(); resolveComplaint(it.id); }} data-testid={`brief-resolve-${it.id}`}
-                    className="mt-3 flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline hover:bg-primary-hover transition-colors">
+                    className="mt-3 flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold border border-hairline hover:bg-primary-hover transition-colors rounded-md">
                     <CheckCircle size={15} weight="bold" /> Mark resolved
                   </button>
                 )}
@@ -203,10 +203,10 @@ export default function CEOBrief() {
     <div className="flex flex-col">
       {/* Controls: period tabs + action buttons — top on desktop, bottom on mobile */}
       <div className="order-2 lg:order-1 mt-8 lg:mt-0 lg:mb-8 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between" data-testid="brief-controls">
-        <div className="flex border border-hairline w-full lg:w-fit">
+        <div className="flex border border-hairline w-full lg:w-fit rounded-md">
           {PERIODS.map((p) => (
             <button key={p.key} onClick={() => setPeriod(p.key)} data-testid={`brief-period-${p.key}`}
-              className={`flex-1 lg:flex-none px-4 lg:px-5 py-2.5 text-sm font-semibold uppercase tracking-wider border-r border-hairline last:border-r-0 transition-colors ${period === p.key ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>
+              className={`flex-1 lg:flex-none px-4 lg:px-5 py-2.5 text-sm font-semibold  border-r border-hairline last:border-r-0 transition-colors ${period === p.key ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>
               {p.label}
             </button>
           ))}
@@ -215,17 +215,17 @@ export default function CEOBrief() {
           {isOwner ? (
             <>
               <button onClick={() => navigate("/operating-score")} data-testid="brief-operating-score"
-                className="flex items-center justify-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 text-sm font-semibold uppercase tracking-wider border border-hairline hover:shadow-sm transition-all">
+                className="flex items-center justify-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 text-sm font-semibold border border-hairline hover:shadow-sm transition-all rounded-md">
                 <Gauge size={16} weight="bold" /> Operating Score
               </button>
               <button onClick={() => navigate("/journal")} data-testid="brief-open-journal"
-                className="flex items-center justify-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 text-sm font-semibold uppercase tracking-wider border border-hairline hover:shadow-sm transition-all">
+                className="flex items-center justify-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 text-sm font-semibold border border-hairline hover:shadow-sm transition-all rounded-md">
                 <BookOpen size={16} weight="bold" /> CEO Journal
               </button>
             </>
           ) : (
             <button onClick={() => navigate("/coach")} data-testid="brief-open-coach"
-              className="col-span-2 flex items-center justify-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 text-sm font-semibold uppercase tracking-wider border border-hairline hover:shadow-sm transition-all">
+              className="col-span-2 flex items-center justify-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 text-sm font-semibold border border-hairline hover:shadow-sm transition-all rounded-md">
               <Sparkle size={16} weight="bold" /> AI Coach
             </button>
           )}
@@ -234,22 +234,22 @@ export default function CEOBrief() {
 
       <div className="order-1 lg:order-2">
         {isLoading || !data ? (
-          <p className="text-label uppercase text-sm">Loading brief…</p>
+          <p className="text-label text-sm">Loading brief…</p>
         ) : (
           <div data-testid="ceo-brief-card">
             {isOwner && data.counters.fires > 0 && (
               <button type="button" onClick={() => setActiveRow(FIRES)} data-testid="brief-row-fires"
                 className="w-full rounded-lg border border-hairline bg-surface p-5 mb-6 bg-primary text-primary-foreground flex items-center justify-between gap-4 text-left transition-all hover:-translate-y-0.5 focus:outline-none">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 flex items-center justify-center border border-white/60 bg-surface/10 shrink-0">
+                  <div className="w-12 h-12 flex items-center justify-center border border-white/60 bg-surface/10 shrink-0 rounded-md">
                     <Fire size={26} weight="fill" />
                   </div>
                   <div>
                     <p className="text-4xl font-black tracking-tighter" data-testid="brief-count-fires">{data.counters.fires}</p>
-                    <p className="text-sm font-semibold uppercase tracking-wider mt-0.5">Fires to put out today</p>
+                    <p className="text-sm font-semibold mt-0.5">Fires to put out today</p>
                   </div>
                 </div>
-                <span className="inline-flex items-center gap-1 text-sm font-semibold uppercase tracking-wider shrink-0">
+                <span className="inline-flex items-center gap-1 text-sm font-semibold shrink-0">
                   Handle now <CaretRight size={16} weight="bold" />
                 </span>
               </button>
@@ -263,7 +263,7 @@ export default function CEOBrief() {
                   <button key={r.key} type="button" onClick={() => setActiveRow(r)} data-testid={`brief-row-${r.key}`}
                     className="rounded-lg border border-hairline bg-surface p-6 shadow-hover text-left transition-all hover:-translate-y-0.5 focus:outline-none">
                     <div className="flex items-center justify-between">
-                      <div className={`w-11 h-11 flex items-center justify-center border border-hairline ${r.bg} ${r.on}`}>
+                      <div className={`w-11 h-11 flex items-center justify-center border border-hairline ${r.bg} ${r.on} rounded-md`}>
                         <r.icon size={22} weight="bold" />
                       </div>
                       <CaretRight size={18} weight="bold" className="text-text-tertiary" />
@@ -273,7 +273,7 @@ export default function CEOBrief() {
                     {r.money && (data.finance_amounts?.[r.key] ?? 0) > 0 && (
                       <p className={`text-sm font-bold mt-1 ${r.accent}`} data-testid={`brief-amount-${r.key}`}>{money(data.finance_amounts[r.key], tenant?.currency)}</p>
                     )}
-                    <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-primary-text">
+                    <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-primary-text">
                       View details <CaretRight size={12} weight="bold" />
                     </span>
                   </button>

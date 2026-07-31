@@ -42,9 +42,9 @@ export default function ExecutionSummary({ data, onReview, onClose }) {
         <div className="bg-primary text-primary-foreground px-6 py-5">
           <div className="flex items-center gap-2 text-primary-text">
             <Lightning size={18} weight="fill" />
-            <span className="text-label uppercase">Structured in seconds</span>
+            <span className="text-label">Structured in seconds</span>
           </div>
-          <h2 className="text-2xl font-black uppercase tracking-tight mt-1">Execution plan is ready</h2>
+          <h2 className="text-2xl font-black tracking-tight mt-1">Execution plan is ready</h2>
         </div>
         <DialogTitle className="sr-only">Execution plan is ready</DialogTitle>
         <DialogDescription className="sr-only">Real counts of the tasks, people, workflows, approvals, meetings and reminders produced by this directive.</DialogDescription>
@@ -55,7 +55,7 @@ export default function ExecutionSummary({ data, onReview, onClose }) {
               const Icon = c.icon;
               return (
                 <div key={c.key} data-testid={`es-chip-${c.key}`}
-                  className="border border-hairline p-3 flex items-center gap-3 es-reveal"
+                  className="border border-hairline p-3 flex items-center gap-3 es-reveal rounded-md"
                   style={{ animationDelay: `${i * 120}ms` }}>
                   <span className={`w-9 h-9 shrink-0 flex items-center justify-center text-white ${c.color}`}>
                     <Icon size={18} weight="bold" />
@@ -80,12 +80,12 @@ export default function ExecutionSummary({ data, onReview, onClose }) {
           <div className="mt-5 flex gap-2">
             {hasApprovals && (
               <button onClick={onReview} data-testid="es-review-btn"
-                className="flex-1 flex items-center justify-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 text-sm font-semibold uppercase tracking-wider border border-hairline hover:shadow-xs transition-all">
+                className="flex-1 flex items-center justify-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 text-sm font-semibold border border-hairline hover:shadow-xs transition-all rounded-md">
                 Review &amp; approve <ArrowRight size={15} weight="bold" />
               </button>
             )}
             <button onClick={onClose} data-testid="es-close-btn"
-              className={`${hasApprovals ? "" : "flex-1 "}px-5 py-2.5 text-sm font-semibold uppercase tracking-wider border border-hairline hover:bg-surface-hover transition-colors`}>
+              className={`${hasApprovals ? "" : "flex-1 "}px-5 py-2.5 text-sm font-semibold  border border-hairline hover:bg-surface-hover transition-colors rounded-md`}>
               {hasApprovals ? "Later" : "Done"}
             </button>
           </div>

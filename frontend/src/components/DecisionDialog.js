@@ -47,7 +47,7 @@ export function DecisionDialog({ decisionId, open, onClose }) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg border border-hairline" data-testid="decision-dialog">
+      <DialogContent className="max-w-lg border border-hairline rounded-md" data-testid="decision-dialog">
         {isError ? (
           <div className="py-2" data-testid="decision-access-restricted">
             <DialogHeader>
@@ -71,39 +71,39 @@ export function DecisionDialog({ decisionId, open, onClose }) {
               </div>
               <DialogTitle className="text-left">{d.title}</DialogTitle>
             </DialogHeader>
-            <p className="text-label uppercase text-text-secondary flex items-center gap-1.5" data-testid="decision-raised-by">
+            <p className="text-label text-text-secondary flex items-center gap-1.5" data-testid="decision-raised-by">
               <RaisedByIcon d={d} size={13} weight="bold" /> {raisedByLabel(d)} · {timeAgo(d.created_at)}
             </p>
             {d.summary && <p className="text-sm mt-2">{d.summary}</p>}
             {d.tasks?.length > 0 && (
               <div className="mt-3">
-                <p className="text-label uppercase text-text-secondary mb-1">Tasks</p>
+                <p className="text-label text-text-secondary mb-1">Tasks</p>
                 <ul className="space-y-1">
                   {d.tasks.map((t) => (
-                    <li key={t.id} className="text-sm flex justify-between gap-2 border border-hairline px-2 py-1">
+                    <li key={t.id} className="text-sm flex justify-between gap-2 border border-hairline px-2 py-1 rounded-md">
                       <span>{t.title}</span>
-                      <span className="text-label uppercase text-text-secondary shrink-0">{t.assignee_name || t.assignee_role || "unassigned"}</span>
+                      <span className="text-label text-text-secondary shrink-0">{t.assignee_name || t.assignee_role || "unassigned"}</span>
                     </li>
                   ))}
                 </ul>
               </div>
             )}
             <div className="mt-3 border-t border-hairline pt-3">
-              <p className="text-label uppercase text-text-secondary mb-2 flex items-center gap-1"><ChatCircleText size={14} weight="bold" /> Discussion &amp; activity</p>
+              <p className="text-label text-text-secondary mb-2 flex items-center gap-1"><ChatCircleText size={14} weight="bold" /> Discussion &amp; activity</p>
               <div className="space-y-2 max-h-56 overflow-y-auto" data-testid="decision-timeline">
                 {timeline.length === 0 && <p className="text-sm text-text-secondary">No activity yet. Start the discussion below.</p>}
                 {timeline.map((e, i) => (
                   <div key={`${e.ts}-${i}`} className={`text-sm pl-2 border-l-2 ${e.kind === "comment" ? "border-hairline-strong" : "border-hairline"}`}>
                     <p className={e.kind === "comment" ? "" : "text-text-secondary"}>{e.label}</p>
-                    <p className="text-label uppercase text-text-secondary">{e.actor || "System"} · {timeAgo(e.ts)}</p>
+                    <p className="text-label text-text-secondary">{e.actor || "System"} · {timeAgo(e.ts)}</p>
                   </div>
                 ))}
               </div>
               <div className="flex gap-2 mt-3">
                 <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()}
-                  data-testid="decision-comment-input" placeholder="Write a comment…" className="flex-1 border border-hairline px-2 py-1.5 text-sm focus:outline-none" />
+                  data-testid="decision-comment-input" placeholder="Write a comment…" className="flex-1 border border-hairline px-2 py-1.5 text-sm focus:outline-none rounded-md" />
                 <button onClick={send} disabled={sending || !text.trim()} data-testid="decision-comment-send"
-                  className="flex items-center gap-1 bg-primary text-primary-foreground px-3 py-1.5 text-sm font-semibold uppercase tracking-wider border border-hairline hover:bg-primary-hover transition-colors disabled:opacity-50">
+                  className="flex items-center gap-1 bg-primary text-primary-foreground px-3 py-1.5 text-sm font-semibold border border-hairline hover:bg-primary-hover transition-colors disabled:opacity-50 rounded-md">
                   <PaperPlaneTilt size={14} weight="bold" /> Send
                 </button>
               </div>

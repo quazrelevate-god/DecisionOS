@@ -31,7 +31,7 @@ function Group({ title, intro, children }) {
 function Case({ label, note, children }) {
   return (
     <div className="mb-5">
-      <p className="text-label uppercase text-text-tertiary mb-1">{label}</p>
+      <p className="text-label text-text-tertiary mb-1">{label}</p>
       {note && <p className="text-small text-text-tertiary mb-2 max-w-3xl">{note}</p>}
       {children}
     </div>

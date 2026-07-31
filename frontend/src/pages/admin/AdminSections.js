@@ -24,7 +24,7 @@ function StatusBadge({ status, detail }) {
   return (
     <span
       title={detail || ""}
-      className="inline-flex items-center gap-1.5 text-label uppercase text-[10px] uppercase tracking-wider px-2 py-1 border"
+      className="inline-flex items-center gap-1.5 text-label text-[10px] px-2 py-1 border rounded-md"
       style={{ color, borderColor: `${color}55`, background: `${color}12` }}
     >
       <Circle size={7} weight="fill" style={{ color }} />
@@ -34,12 +34,12 @@ function StatusBadge({ status, detail }) {
 }
 
 const CARD = "border border-white/10 bg-[#141418] p-5";
-const H2 = "font-heading text-lg font-black uppercase tracking-tight text-white";
-const BTN = "text-label uppercase text-[11px] uppercase tracking-wider px-3 py-2 border transition-colors";
+const H2 = "font-heading text-lg font-black tracking-tight text-white";
+const BTN = "text-label text-[11px]  px-3 py-2 border transition-colors";
 
 function Loading() {
   return (
-    <div className="flex items-center gap-2 text-white/40 text-label uppercase text-sm py-10 justify-center">
+    <div className="flex items-center gap-2 text-white/40 text-label text-sm py-10 justify-center">
       <Spinner size={16} className="animate-spin" /> Loading…
     </div>
   );
@@ -70,12 +70,12 @@ export function OverviewSection() {
           <div key={c.k} className={CARD} data-testid={`metric-${c.k}`}>
             <c.icon size={20} className="text-[#e5484d] mb-3" weight="bold" />
             <div className="font-heading text-4xl font-black text-white tracking-tighter">{c.v}</div>
-            <div className="text-label uppercase text-[11px] uppercase tracking-widest text-white/40 mt-1">{c.label}</div>
+            <div className="text-label text-[11px] text-white/40 mt-1">{c.label}</div>
           </div>
         ))}
       </div>
       {m.suspended_users > 0 && (
-        <p className="mt-4 text-label uppercase text-xs text-[#d29922]">{m.suspended_users} suspended user(s)</p>
+        <p className="mt-4 text-label text-xs text-[#d29922]">{m.suspended_users} suspended user(s)</p>
       )}
     </div>
   );
@@ -144,14 +144,14 @@ export function AiKeysSection() {
             <div className="flex items-start justify-between gap-4 flex-wrap">
               <div className="min-w-0">
                 <div className="flex items-center gap-3 flex-wrap">
-                  <span className="font-heading font-black text-white uppercase text-sm tracking-tight">{k.label}</span>
-                  <span className="text-label uppercase text-[10px] uppercase tracking-wider text-white/40 border border-white/15 px-2 py-0.5">
+                  <span className="font-heading font-black text-white text-sm tracking-tight">{k.label}</span>
+                  <span className="text-label text-[10px] text-white/40 border border-white/15 px-2 py-0.5 rounded-md">
                     {k.source === "custom" ? "custom" : k.source === "env" ? "env default" : "not set"}
                   </span>
                   {status[k.provider] && <StatusBadge status={status[k.provider].status} detail={status[k.provider].detail} />}
                 </div>
-                <div className="text-label uppercase text-xs text-white/50 mt-2">{k.masked || "— not set —"}</div>
-                {k.note && <div className="text-label uppercase text-[10px] text-[#d29922] mt-1">{k.note}</div>}
+                <div className="text-label text-xs text-white/50 mt-2">{k.masked || "— not set —"}</div>
+                {k.note && <div className="text-label text-[10px] text-[#d29922] mt-1">{k.note}</div>}
               </div>
               <button
                 data-testid={`edit-key-${k.provider}`}
@@ -168,7 +168,7 @@ export function AiKeysSection() {
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   placeholder="Paste new key value (leave empty to revert to env default)"
-                  className="w-full bg-[#0a0a0b] border border-white/15 text-white px-3 py-2.5 text-label uppercase text-xs focus:border-[#e5484d] focus:outline-none"
+                  className="w-full bg-[#0a0a0b] border border-white/15 text-white px-3 py-2.5 text-label text-xs focus:border-[#e5484d] focus:outline-none rounded-md"
                 />
                 <div className="flex gap-2">
                   <button
@@ -241,8 +241,8 @@ export function UsageSection() {
         <div className="flex gap-1" data-testid="usage-range">
           {RANGES.map((r) => (
             <button key={r.key} data-testid={`usage-range-${r.key}`} onClick={() => setRange(r.key)}
-              className={`text-label uppercase text-[11px] uppercase tracking-wider px-3 py-1.5 border transition-colors ${
-                range === r.key ? "bg-[#e5484d] border-[#e5484d] text-white" : "border-white/20 text-white/60 hover:border-white/40"}`}>
+              className={`text-label text-[11px]  px-3 py-1.5 border transition-colors ${
+                range === r.key ? "bg-[#e5484d] border-[#e5484d] text-white" : "border-white/20 text-white/60 hover:border-white/40"} rounded-md`}>
               {r.label}
             </button>
           ))}
@@ -251,13 +251,13 @@ export function UsageSection() {
       <div className="flex gap-1 mb-4 flex-wrap" data-testid="usage-provider-filter">
         {PROVIDERS.map((p) => (
           <button key={p.key} data-testid={`usage-provider-${p.key}`} onClick={() => setProvider(p.key)}
-            className={`text-label uppercase text-[10px] uppercase tracking-wider px-2.5 py-1 border transition-colors ${
-              provider === p.key ? "bg-white/10 border-white/40 text-white" : "border-white/10 text-white/40 hover:border-white/25"}`}>
+            className={`text-label text-[10px]  px-2.5 py-1 border transition-colors ${
+              provider === p.key ? "bg-white/10 border-white/40 text-white" : "border-white/10 text-white/40 hover:border-white/25"} rounded-md`}>
             {p.label}
           </button>
         ))}
       </div>
-      <p className="text-label uppercase text-[11px] text-white/35 mb-5">
+      <p className="text-label text-[11px] text-white/35 mb-5">
         Covers all providers — Sarvam (Indic voice transcription), Claude (text), OpenAI (voice fallback) & Gemini (document OCR). Costs are estimates
         (tokens ≈ chars/4; STT by audio duration), not exact provider billing.
       </p>
@@ -267,29 +267,29 @@ export function UsageSection() {
             <div className={CARD} data-testid="usage-total-calls">
               <ChartBar size={20} className="text-[#e5484d] mb-2" weight="bold" />
               <div className="font-heading text-3xl font-black text-white tracking-tighter">{fmtNum(data.totals.calls)}</div>
-              <div className="text-label uppercase text-[11px] uppercase tracking-widest text-white/40 mt-1">AI Calls</div>
+              <div className="text-label text-[11px] text-white/40 mt-1">AI Calls</div>
             </div>
             <div className={CARD} data-testid="usage-total-tokens">
               <Coins size={20} className="text-[#d29922] mb-2" weight="bold" />
               <div className="font-heading text-3xl font-black text-white tracking-tighter">{fmtNum(data.totals.tokens_total)}</div>
-              <div className="text-label uppercase text-[11px] uppercase tracking-widest text-white/40 mt-1">Tokens</div>
+              <div className="text-label text-[11px] text-white/40 mt-1">Tokens</div>
             </div>
             <div className={CARD} data-testid="usage-total-cost">
               <CurrencyDollar size={20} className="text-[#3fb950] mb-2" weight="bold" />
               <div className="font-heading text-3xl font-black text-white tracking-tighter">${data.totals.cost.toFixed(2)}</div>
-              <div className="text-label uppercase text-[11px] uppercase tracking-widest text-white/40 mt-1">Est. Cost</div>
+              <div className="text-label text-[11px] text-white/40 mt-1">Est. Cost</div>
             </div>
           </div>
 
           {data.by_provider && data.by_provider.length > 0 && (
             <div className="mb-6" data-testid="usage-by-provider">
-              <h3 className="text-label uppercase text-[11px] uppercase tracking-widest text-white/40 mb-3">By Provider</h3>
+              <h3 className="text-label text-[11px] text-white/40 mb-3">By Provider</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {data.by_provider.map((p) => (
                   <div key={p.provider} className={CARD} data-testid={`usage-provider-card-${p.provider}`}>
-                    <div className="font-heading font-black uppercase text-white text-xs tracking-tight">{PROVIDER_LABEL[p.provider] || p.provider}</div>
-                    <div className="text-label uppercase text-[11px] text-white/50 mt-2">{fmtNum(p.calls)} calls · {fmtNum(p.tokens_total)} tok</div>
-                    <div className="text-label uppercase text-sm text-[#3fb950] mt-1">${p.cost_estimate.toFixed(4)}</div>
+                    <div className="font-heading font-black text-white text-xs tracking-tight">{PROVIDER_LABEL[p.provider] || p.provider}</div>
+                    <div className="text-label text-[11px] text-white/50 mt-2">{fmtNum(p.calls)} calls · {fmtNum(p.tokens_total)} tok</div>
+                    <div className="text-label text-sm text-[#3fb950] mt-1">${p.cost_estimate.toFixed(4)}</div>
                   </div>
                 ))}
               </div>
@@ -297,18 +297,18 @@ export function UsageSection() {
           )}
 
           {data.workspaces.length === 0 ? (
-            <div className={CARD + " text-white/40 text-label uppercase text-sm"}>No AI usage recorded in this period.</div>
+            <div className={CARD + " text-white/40 text-label text-sm"}>No AI usage recorded in this period.</div>
           ) : (
-            <div className="overflow-x-auto border border-white/10">
+            <div className="overflow-x-auto border border-white/10 rounded-md">
               <table className="w-full text-left">
                 <thead>
-                  <tr className="bg-[#141418] text-label uppercase text-[10px] uppercase tracking-widest text-white/40">
+                  <tr className="bg-[#141418] text-label text-[10px] text-white/40">
                     <th className="p-3">Workspace</th><th className="p-3 text-right">Calls</th>
                     <th className="p-3 text-right">Tokens In</th><th className="p-3 text-right">Tokens Out</th>
                     <th className="p-3 text-right">Total</th><th className="p-3 text-right">Est. Cost</th>
                   </tr>
                 </thead>
-                <tbody className="text-label uppercase text-xs text-white/80">
+                <tbody className="text-label text-xs text-white/80">
                   {data.workspaces.map((w) => (
                     <tr key={w.tenant_id || "system"} className="border-t border-white/5 hover:bg-white/[0.03]" data-testid={`usage-row-${w.tenant_id || "system"}`}>
                       <td className="p-3 text-white font-semibold">{w.tenant_name}</td>
@@ -352,17 +352,17 @@ export function TenantsSection() {
   return (
     <div data-testid="admin-tenants">
       <h2 className={H2 + " mb-5"}>Workspaces ({rows.length})</h2>
-      <div className="overflow-x-auto border border-white/10">
+      <div className="overflow-x-auto border border-white/10 rounded-md">
         <table className="w-full text-left">
           <thead>
-            <tr className="bg-[#141418] text-label uppercase text-[10px] uppercase tracking-widest text-white/40">
+            <tr className="bg-[#141418] text-label text-[10px] text-white/40">
               <th className="p-3">Workspace</th><th className="p-3">Industry</th>
               <th className="p-3 text-right">Users</th><th className="p-3 text-right">Decisions</th>
               <th className="p-3 text-right">Tasks</th><th className="p-3">Created</th>
               <th className="p-3">Status</th><th className="p-3">Actions</th>
             </tr>
           </thead>
-          <tbody className="text-label uppercase text-xs text-white/80">
+          <tbody className="text-label text-xs text-white/80">
             {rows.map((t) => (
               <tr key={t.id} className="border-t border-white/5 hover:bg-white/[0.03]" data-testid={`tenant-row-${t.id}`}>
                 <td className="p-3 text-white font-semibold">{t.name}</td>
@@ -420,21 +420,21 @@ export function UsersSection() {
   return (
     <div data-testid="admin-users">
       <h2 className={H2 + " mb-5"}>Users ({rows.length})</h2>
-      <div className="overflow-x-auto border border-white/10">
+      <div className="overflow-x-auto border border-white/10 rounded-md">
         <table className="w-full text-left">
           <thead>
-            <tr className="bg-[#141418] text-label uppercase text-[10px] uppercase tracking-widest text-white/40">
+            <tr className="bg-[#141418] text-label text-[10px] text-white/40">
               <th className="p-3">Name</th><th className="p-3">Email</th><th className="p-3">Workspace</th>
               <th className="p-3">Role</th><th className="p-3">Status</th><th className="p-3">Actions</th>
             </tr>
           </thead>
-          <tbody className="text-label uppercase text-xs text-white/80">
+          <tbody className="text-label text-xs text-white/80">
             {rows.map((u) => (
               <tr key={u.id} className="border-t border-white/5 hover:bg-white/[0.03]" data-testid={`user-row-${u.id}`}>
                 <td className="p-3 text-white font-semibold">{u.name || "—"}</td>
                 <td className="p-3 text-white/60">{u.email || "—"}</td>
                 <td className="p-3 text-white/50">{u.tenant_name}</td>
-                <td className="p-3 uppercase text-white/50">{u.role}</td>
+                <td className="p-3 text-white/50">{u.role}</td>
                 <td className="p-3">
                   {u.suspended
                     ? <span className="text-[#e5484d]">suspended</span>
@@ -499,9 +499,9 @@ export function AuditSection() {
         </button>
       </div>
       {rows.length === 0 ? (
-        <div className={CARD + " text-white/40 text-label uppercase text-sm"}>No admin activity recorded yet.</div>
+        <div className={CARD + " text-white/40 text-label text-sm"}>No admin activity recorded yet.</div>
       ) : (
-        <div className="border border-white/10">
+        <div className="border border-white/10 rounded-md">
           {rows.map((e, i) => {
             const meta = AUDIT_META[e.action] || { icon: ClockCounterClockwise, color: "#6b6b75" };
             return (
@@ -511,18 +511,18 @@ export function AuditSection() {
                 className="flex items-start gap-3 p-4 border-b border-white/5 last:border-0 hover:bg-white/[0.03]"
               >
                 <div
-                  className="w-8 h-8 shrink-0 flex items-center justify-center border"
+                  className="w-8 h-8 shrink-0 flex items-center justify-center border rounded-md"
                   style={{ borderColor: `${meta.color}55`, background: `${meta.color}12` }}
                 >
                   <meta.icon size={15} weight="bold" style={{ color: meta.color }} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-label uppercase text-sm text-white/90">{e.message}</div>
-                  <div className="text-label uppercase text-[11px] text-white/40 mt-0.5">
-                    {e.admin_email} · <span className="uppercase tracking-wider">{(e.action || "").replace(/_/g, " ")}</span>
+                  <div className="text-label text-sm text-white/90">{e.message}</div>
+                  <div className="text-label text-[11px] text-white/40 mt-0.5">
+                    {e.admin_email} · <span className="">{(e.action || "").replace(/_/g, " ")}</span>
                   </div>
                 </div>
-                <div className="text-label uppercase text-[11px] text-white/40 shrink-0 whitespace-nowrap">{fmt(e.created_at)}</div>
+                <div className="text-label text-[11px] text-white/40 shrink-0 whitespace-nowrap">{fmt(e.created_at)}</div>
               </div>
             );
           })}
@@ -554,19 +554,19 @@ export function HealthSection() {
             <div className="flex items-center gap-2 mb-2">
               {ok(r.v) ? <ShieldCheck size={18} className="text-[#3fb950]" weight="fill" />
                 : <Circle size={14} weight="fill" className="text-[#e5484d]" />}
-              <span className="font-heading font-black uppercase text-white text-sm tracking-tight">{r.label}</span>
+              <span className="font-heading font-black text-white text-sm tracking-tight">{r.label}</span>
             </div>
-            <div className="text-label uppercase text-xs uppercase" style={{ color: ok(r.v) ? "#3fb950" : "#e5484d" }}>{r.v}</div>
-            {r.detail && <div className="text-label uppercase text-[10px] text-white/40 mt-1">{r.detail}</div>}
+            <div className="text-label text-xs" style={{ color: ok(r.v) ? "#3fb950" : "#e5484d" }}>{r.v}</div>
+            {r.detail && <div className="text-label text-[10px] text-white/40 mt-1">{r.detail}</div>}
           </div>
         ))}
       </div>
-      <h3 className="text-label uppercase text-[11px] uppercase tracking-widest text-white/40 mt-8 mb-3">AI Provider Key Source</h3>
+      <h3 className="text-label text-[11px] text-white/40 mt-8 mb-3">AI Provider Key Source</h3>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {Object.entries(h.ai_providers).map(([k, v]) => (
           <div key={k} className={CARD}>
-            <div className="font-heading font-black uppercase text-white text-xs tracking-tight">{k}</div>
-            <div className="text-label uppercase text-[11px] text-white/50 mt-1 uppercase">{v}</div>
+            <div className="font-heading font-black text-white text-xs tracking-tight">{k}</div>
+            <div className="text-label text-[11px] text-white/50 mt-1">{v}</div>
           </div>
         ))}
       </div>
@@ -610,7 +610,7 @@ export function MaintenanceSection() {
   return (
     <div data-testid="admin-maintenance">
       <h2 className={H2 + " mb-2"}>Fix Mis-booked Purchases</h2>
-      <p className="text-label uppercase text-xs text-white/50 mb-5 max-w-2xl leading-relaxed">
+      <p className="text-label text-xs text-white/50 mb-5 max-w-2xl leading-relaxed">
         Full finance re-sync across ALL workspaces: re-classifies every purchase bill into the right
         bucket (Expense / Asset / Inventory), re-tags Expenses & Assets with each company's AI-generated
         categories, and rebuilds payment↔invoice matching so Outstanding balances are correct. Bills the
@@ -626,10 +626,10 @@ export function MaintenanceSection() {
       {job && job.status !== "none" && (
         <div className={CARD + " mt-6"} data-testid="admin-reclassify-status">
           <div className="flex items-center justify-between mb-3">
-            <span className="font-heading font-black uppercase text-white text-sm tracking-tight">
+            <span className="font-heading font-black text-white text-sm tracking-tight">
               {running ? "In progress" : "Last run"}
             </span>
-            <span className="text-label uppercase text-[11px] uppercase" style={{ color: running ? "#d29922" : "#3fb950" }}>
+            <span className="text-label text-[11px]" style={{ color: running ? "#d29922" : "#3fb950" }}>
               {job.status} · {job.processed}/{job.total} workspaces {running ? `(${pct}%)` : ""}
             </span>
           </div>
@@ -650,13 +650,13 @@ export function MaintenanceSection() {
               { k: "invoices_partial", label: "Partially paid" },
               { k: "unknown", label: "Needs manual review" },
             ].map((c) => (
-              <div key={c.k} className="border border-white/10 p-3" data-testid={`reclassify-stat-${c.k}`}>
+              <div key={c.k} className="border border-white/10 p-3 rounded-md" data-testid={`reclassify-stat-${c.k}`}>
                 <div className="font-heading text-2xl font-black text-white tracking-tighter">{totals[c.k] ?? 0}</div>
-                <div className="text-label uppercase text-[10px] uppercase tracking-widest text-white/40 mt-1">{c.label}</div>
+                <div className="text-label text-[10px] text-white/40 mt-1">{c.label}</div>
               </div>
             ))}
           </div>
-          {job.started_by && <p className="text-label uppercase text-[10px] text-white/30 mt-3">Started by {job.started_by}</p>}
+          {job.started_by && <p className="text-label text-[10px] text-white/30 mt-3">Started by {job.started_by}</p>}
         </div>
       )}
     </div>

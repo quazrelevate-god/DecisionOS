@@ -59,7 +59,7 @@ export function CaptureReview() {
       <div className="flex flex-wrap gap-2 mb-6">
         {STATUS_TABS.map((t) => (
           <button key={t.key} data-testid={`capture-tab-${t.key}`} onClick={() => setTab(t.key)}
-            className={`px-4 py-2 text-sm font-semibold uppercase tracking-wider border-2 border-hairline transition-all ${tab === t.key ? "bg-primary text-primary-foreground shadow-xs" : "bg-surface hover:bg-surface-hover"}`}>
+            className={`px-4 py-2 text-sm font-semibold  border-2 border-hairline transition-all ${tab === t.key ? "bg-primary text-primary-foreground shadow-xs" : "bg-surface hover:bg-surface-hover"}`}>
             {t.label}
           </button>
         ))}
@@ -165,16 +165,16 @@ function CaptureCard({ c, user, onChange }) {
             <Chip value={c.classification.replace("_", " ")} className={CLASS_STYLE[c.classification] || "bg-surface-sunken text-text"} />
             <Chip value={`review: ${c.reviewer_role}`} />
             <Chip value={c.priority} className={c.priority === "high" ? "bg-primary text-primary-foreground" : "bg-surface border-hairline"} />
-            {c.needs_owner && <span data-testid={`capture-escalated-${c.id}`} className="inline-flex items-center gap-1 text-xs font-bold uppercase text-primary-text"><ShieldWarning size={13} weight="bold" /> Owner approval</span>}
+            {c.needs_owner && <span data-testid={`capture-escalated-${c.id}`} className="inline-flex items-center gap-1 text-xs font-bold text-primary-text"><ShieldWarning size={13} weight="bold" /> Owner approval</span>}
             {c.status === "needs_attention" && <Chip value="needs attention" />}
             {c.auto_processed && <Chip value="auto-filed" />}
             {c.duplicate_of && <Chip value="possible duplicate" />}
             {c.confidence != null && (() => {
               const pct = Math.round(c.confidence * 100);
               const tone = pct >= 80 ? "bg-success-600 text-white" : pct >= 50 ? "bg-amber-500 text-text" : "bg-primary text-primary-foreground";
-              return <span data-testid={`capture-confidence-${c.id}`} className={`text-label uppercase px-1.5 py-0.5 rounded ${tone}`} title="AI confidence in this classification">AI {pct}%</span>;
+              return <span data-testid={`capture-confidence-${c.id}`} className={`text-label px-1.5 py-0.5 rounded-md ${tone}`} title="AI confidence in this classification">AI {pct}%</span>;
             })()}
-            <span className="text-label uppercase text-text-secondary ml-auto flex items-center gap-1" title={c.sender_name ? `${c.sender_name}${c.wa_from ? " · " + c.wa_from : ""} · ${fullTime(c.created_at)}` : fullTime(c.created_at)}>
+            <span className="text-label text-text-secondary ml-auto flex items-center gap-1" title={c.sender_name ? `${c.sender_name}${c.wa_from ? " · " + c.wa_from : ""} · ${fullTime(c.created_at)}` : fullTime(c.created_at)}>
               <WhatsappLogo size={12} weight="bold" />
               {c.sender_name
                 ? <span data-testid={`capture-sender-${c.id}`}>{c.sender_name}{c.sender_role ? ` (${c.sender_role})` : ""}</span>
@@ -202,13 +202,13 @@ function CaptureCard({ c, user, onChange }) {
             );
           })()}
           {c.text && <p className="text-xs text-text-secondary mt-1 italic">“{c.text.slice(0, 200)}”</p>}
-          {recCounts && <p className="text-label uppercase text-text-secondary mt-1">Extracted: {recCounts}{c.amount ? ` · ₹${Number(c.amount).toLocaleString()}` : ""}</p>}
-          {!recCounts && c.amount ? <p className="text-label uppercase text-text-secondary mt-1">Amount: ₹{Number(c.amount).toLocaleString()}</p> : null}
+          {recCounts && <p className="text-label text-text-secondary mt-1">Extracted: {recCounts}{c.amount ? ` · ₹${Number(c.amount).toLocaleString()}` : ""}</p>}
+          {!recCounts && c.amount ? <p className="text-label text-text-secondary mt-1">Amount: ₹{Number(c.amount).toLocaleString()}</p> : null}
           {c.attention_reason && <p className="text-xs text-amber-700 mt-1">⚠ {c.attention_reason}</p>}
           {c.escalate_reason && <p className="text-xs text-primary-text mt-1">⚠ {c.escalate_reason}</p>}
           {isPending && purchaseBills.length > 0 && (
             <div className="mt-3 border-2 border-hairline bg-background p-3" data-testid={`capture-buckets-${c.id}`}>
-              <p className="text-label uppercase text-primary-text mb-2">Classify purchase{purchaseBills.length > 1 ? "s" : ""} before approving</p>
+              <p className="text-label text-primary-text mb-2">Classify purchase{purchaseBills.length > 1 ? "s" : ""} before approving</p>
               <div className="space-y-2">
                 {purchaseBills.map(({ inv, i }) => {
                   const pt = (inv.purchase_type || "").toLowerCase();
@@ -235,14 +235,14 @@ function CaptureCard({ c, user, onChange }) {
           {c.clarification_note && <p className="text-xs text-amber-700 mt-1">Note: {c.clarification_note}</p>}
           {c.file_url && (
             <div className="mt-2">
-              <p className="text-label uppercase text-text-secondary text-[10px] mb-1">Under review — original file</p>
+              <p className="text-label text-text-secondary text-[10px] mb-1">Under review — original file</p>
               {c.kind === "image" ? (
                 <a href={`${process.env.REACT_APP_BACKEND_URL}${c.file_url}`} target="_blank" rel="noopener noreferrer" data-testid={`capture-file-${c.id}`} title="Open full image" className="inline-block border-2 border-hairline hover:shadow-xs transition-all">
                   <img src={`${process.env.REACT_APP_BACKEND_URL}${c.file_url}`} alt={c.filename || "attachment"} className="h-28 w-auto object-cover" />
                 </a>
               ) : (
                 <a href={`${process.env.REACT_APP_BACKEND_URL}${c.file_url}`} target="_blank" rel="noopener noreferrer" data-testid={`capture-file-${c.id}`}
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider border-2 border-hairline px-3 py-1.5 hover:bg-status-pending-bg transition-colors">
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold border-2 border-hairline px-3 py-1.5 hover:bg-status-pending-bg transition-colors">
                   <FilePdf size={14} weight="bold" /> Open file{c.filename ? ` · ${c.filename}` : ""}
                 </a>
               )}
@@ -253,26 +253,26 @@ function CaptureCard({ c, user, onChange }) {
 
       {edit && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3 border-t border-hairline pt-3" data-testid={`capture-edit-${c.id}`}>
-          <label className="block"><span className="text-label uppercase text-text-secondary text-[10px]">Type</span>
+          <label className="block"><span className="text-label text-text-secondary text-[10px]">Type</span>
             <input className={inp} value={form.classification} onChange={(e) => setForm({ ...form, classification: e.target.value })} /></label>
-          <label className="block"><span className="text-label uppercase text-text-secondary text-[10px]">Reviewer role</span>
+          <label className="block"><span className="text-label text-text-secondary text-[10px]">Reviewer role</span>
             <select className={inp} value={form.reviewer_role} onChange={(e) => setForm({ ...form, reviewer_role: e.target.value, assignee_id: "" })}>
               {ROLE_OPTS.map((r) => <option key={r} value={r}>{r}</option>)}
             </select></label>
-          <label className="block"><span className="text-label uppercase text-text-secondary text-[10px]">Priority</span>
+          <label className="block"><span className="text-label text-text-secondary text-[10px]">Priority</span>
             <select className={inp} value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
               {PRIORITY_OPTS.map((p) => <option key={p} value={p}>{p}</option>)}
             </select></label>
-          <label className="block"><span className="text-label uppercase text-text-secondary text-[10px]">Due date</span>
+          <label className="block"><span className="text-label text-text-secondary text-[10px]">Due date</span>
             <input type="date" className={inp} value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} /></label>
           {roleMembers.length > 0 && (
-            <label className="block col-span-2"><span className="text-label uppercase text-text-secondary text-[10px]">Assign to</span>
+            <label className="block col-span-2"><span className="text-label text-text-secondary text-[10px]">Assign to</span>
               <select className={inp} value={form.assignee_id} onChange={(e) => setForm({ ...form, assignee_id: e.target.value })}>
                 <option value="">Auto (by workload)</option>
                 {roleMembers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select></label>
           )}
-          <label className="block col-span-2 md:col-span-4"><span className="text-label uppercase text-text-secondary text-[10px]">Summary</span>
+          <label className="block col-span-2 md:col-span-4"><span className="text-label text-text-secondary text-[10px]">Summary</span>
             <input className={inp} value={form.summary} onChange={(e) => setForm({ ...form, summary: e.target.value })} /></label>
         </div>
       )}
@@ -281,20 +281,20 @@ function CaptureCard({ c, user, onChange }) {
         <div className="flex flex-wrap gap-2 mt-3 border-t border-hairline pt-3">
           {edit ? (
             <>
-              <button data-testid={`capture-save-${c.id}`} disabled={busy} onClick={saveEdit} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border-2 border-hairline transition-all hover:shadow-xs disabled:opacity-50 bg-primary text-primary-foreground flex items-center gap-1"><PencilSimple size={14} weight="bold" /> Save</button>
-              <button onClick={() => setEdit(false)} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border-2 border-hairline transition-all hover:shadow-xs disabled:opacity-50 bg-surface flex items-center gap-1">Cancel</button>
+              <button data-testid={`capture-save-${c.id}`} disabled={busy} onClick={saveEdit} className="px-3 py-1.5 text-xs font-semibold border-2 border-hairline transition-all hover:shadow-xs disabled:opacity-50 bg-primary text-primary-foreground flex items-center gap-1"><PencilSimple size={14} weight="bold" /> Save</button>
+              <button onClick={() => setEdit(false)} className="px-3 py-1.5 text-xs font-semibold border-2 border-hairline transition-all hover:shadow-xs disabled:opacity-50 bg-surface flex items-center gap-1">Cancel</button>
             </>
           ) : (
             <>
               <button data-testid={`capture-approve-${c.id}`} disabled={busy || blockedByEscalation || anyUnclassified}
                 title={blockedByEscalation ? "Requires Owner approval" : anyUnclassified ? "Classify the purchase first" : ""}
-                onClick={approve} className={`px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border-2 border-hairline transition-all hover:shadow-xs disabled:opacity-50 flex items-center gap-1 ${blockedByEscalation || anyUnclassified ? "bg-black/20 text-text/50 cursor-not-allowed" : "bg-success-600 text-white"}`}>
+                onClick={approve} className={`px-3 py-1.5 text-xs font-semibold  border-2 border-hairline transition-all hover:shadow-xs disabled:opacity-50 flex items-center gap-1 ${blockedByEscalation || anyUnclassified ? "bg-black/20 text-text/50 cursor-not-allowed" : "bg-success-600 text-white"}`}>
                 <CheckCircle size={14} weight="bold" /> Approve
               </button>
-              <button data-testid={`capture-edit-btn-${c.id}`} disabled={busy} onClick={() => setEdit(true)} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border-2 border-hairline transition-all hover:shadow-xs disabled:opacity-50 bg-surface flex items-center gap-1"><PencilSimple size={14} weight="bold" /> Edit</button>
-              <button data-testid={`capture-reassign-${c.id}`} disabled={busy} onClick={reassign} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border-2 border-hairline transition-all hover:shadow-xs disabled:opacity-50 bg-surface flex items-center gap-1"><ArrowsClockwise size={14} weight="bold" /> Reassign</button>
-              <button data-testid={`capture-clarify-${c.id}`} disabled={busy} onClick={clarify} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border-2 border-hairline transition-all hover:shadow-xs disabled:opacity-50 bg-surface flex items-center gap-1"><Question size={14} weight="bold" /> Clarify</button>
-              <button data-testid={`capture-reject-${c.id}`} disabled={busy} onClick={reject} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border-2 border-hairline transition-all hover:shadow-xs disabled:opacity-50 bg-surface text-primary-text flex items-center gap-1"><XCircle size={14} weight="bold" /> Reject</button>
+              <button data-testid={`capture-edit-btn-${c.id}`} disabled={busy} onClick={() => setEdit(true)} className="px-3 py-1.5 text-xs font-semibold border-2 border-hairline transition-all hover:shadow-xs disabled:opacity-50 bg-surface flex items-center gap-1"><PencilSimple size={14} weight="bold" /> Edit</button>
+              <button data-testid={`capture-reassign-${c.id}`} disabled={busy} onClick={reassign} className="px-3 py-1.5 text-xs font-semibold border-2 border-hairline transition-all hover:shadow-xs disabled:opacity-50 bg-surface flex items-center gap-1"><ArrowsClockwise size={14} weight="bold" /> Reassign</button>
+              <button data-testid={`capture-clarify-${c.id}`} disabled={busy} onClick={clarify} className="px-3 py-1.5 text-xs font-semibold border-2 border-hairline transition-all hover:shadow-xs disabled:opacity-50 bg-surface flex items-center gap-1"><Question size={14} weight="bold" /> Clarify</button>
+              <button data-testid={`capture-reject-${c.id}`} disabled={busy} onClick={reject} className="px-3 py-1.5 text-xs font-semibold border-2 border-hairline transition-all hover:shadow-xs disabled:opacity-50 bg-surface text-primary-text flex items-center gap-1"><XCircle size={14} weight="bold" /> Reject</button>
             </>
           )}
           {blockedByEscalation && <span className="text-xs text-primary-text self-center">Waiting for Owner — you can still edit or reassign.</span>}

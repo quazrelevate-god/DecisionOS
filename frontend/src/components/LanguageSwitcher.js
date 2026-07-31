@@ -55,11 +55,11 @@ export function LanguageSwitcher({ variant = "icon" }) {
     <Popover>
       <PopoverTrigger asChild>
         <button data-testid="language-switcher" title={t("common.language")}
-          className="w-10 h-10 flex items-center justify-center border border-hairline hover:bg-surface-hover transition-colors">
+          className="w-10 h-10 flex items-center justify-center border border-hairline hover:bg-surface-hover transition-colors rounded-md">
           <Globe size={18} weight="bold" />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-44 p-0 border border-hairline shadow-sm">
+      <PopoverContent align="end" className="w-44 p-0 border border-hairline shadow-sm rounded-md">
         <Options />
       </PopoverContent>
     </Popover>

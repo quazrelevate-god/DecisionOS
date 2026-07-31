@@ -88,7 +88,7 @@ export const StatCard = React.forwardRef(
   ({ className, label, value, icon, delta, drillLabel = "View", onDrill, ...props }, ref) => (
     <Card ref={ref} padding="sm" className={cn("flex-col", className)} {...props}>
       <div className="flex items-start justify-between gap-3">
-        <p className="text-label uppercase text-text-tertiary">{label}</p>
+        <p className="text-label text-text-tertiary">{label}</p>
         {icon && <span className="text-text-tertiary [&_svg]:size-4 shrink-0">{icon}</span>}
       </div>
       <p data-numeric className="mt-2 text-h1 text-text tabular-nums">

@@ -45,7 +45,7 @@ export default function AdminPortal() {
 
   if (admin === undefined)
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0a0a0b] text-white/40 text-label uppercase text-sm gap-2">
+      <div className="min-h-screen flex items-center justify-center bg-[#0a0a0b] text-white/40 text-label text-sm gap-2">
         <Spinner size={16} className="animate-spin" /> Loading console…
       </div>
     );
@@ -63,16 +63,16 @@ export default function AdminPortal() {
               <ShieldStar size={20} weight="fill" className="text-white" />
             </div>
             <div>
-              <div className="font-heading font-black uppercase tracking-tighter leading-none">DecisionOS</div>
-              <div className="text-label uppercase text-[10px] uppercase tracking-[0.3em] text-[#e5484d]">Admin Console</div>
+              <div className="font-heading font-black tracking-tighter leading-none">DecisionOS</div>
+              <div className="text-label text-[10px] tracking-[0.3em] text-[#e5484d]">Admin Console</div>
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-label uppercase text-xs text-white/40 hidden sm:block">{admin.email}</span>
+            <span className="text-label text-xs text-white/40 hidden sm:block">{admin.email}</span>
             <button
               data-testid="admin-logout"
               onClick={logout}
-              className="text-label uppercase text-[11px] uppercase tracking-wider px-3 py-2 border border-white/20 text-white/70 hover:border-[#e5484d] hover:text-[#e5484d] transition-colors flex items-center gap-1.5"
+              className="text-label text-[11px] px-3 py-2 border border-white/20 text-white/70 hover:border-[#e5484d] hover:text-[#e5484d] transition-colors flex items-center gap-1.5 rounded-md"
             >
               <SignOut size={14} /> Logout
             </button>
@@ -88,7 +88,7 @@ export default function AdminPortal() {
               key={t.key}
               data-testid={`admin-tab-${t.key}`}
               onClick={() => setTab(t.key)}
-              className={`text-label uppercase text-[11px] uppercase tracking-wider px-4 py-4 flex items-center gap-2 border-b-2 whitespace-nowrap transition-colors ${
+              className={`text-label text-[11px]  px-4 py-4 flex items-center gap-2 border-b-2 whitespace-nowrap transition-colors ${
                 tab === t.key
                   ? "border-[#e5484d] text-white"
                   : "border-transparent text-white/40 hover:text-white/70"
@@ -107,12 +107,12 @@ export default function AdminPortal() {
             className="mb-6 border-2 border-[#e5484d] bg-[#e5484d]/10 p-4 flex items-start gap-3">
             <WarningCircle size={22} weight="fill" className="text-[#e5484d] shrink-0 mt-0.5" />
             <div className="min-w-0">
-              <div className="font-heading font-black uppercase text-[#e5484d] text-sm tracking-tight">
+              <div className="font-heading font-black text-[#e5484d] text-sm tracking-tight">
                 AI Provider Alert{alerts.length > 1 ? `s (${alerts.length})` : ""}
               </div>
               {alerts.map((a) => (
-                <div key={a.id} className="text-label uppercase text-xs text-white/70 mt-1">
-                  <span className="uppercase text-white/90">{a.provider}</span> — {(a.status || "").replace(/_/g, " ")}.
+                <div key={a.id} className="text-label text-xs text-white/70 mt-1">
+                  <span className="text-white/90">{a.provider}</span> — {(a.status || "").replace(/_/g, " ")}.
                   {" "}Update or clear the key in <button onClick={() => setTab("ai-keys")} className="underline text-[#e5484d]">AI Keys</button> to restore service.
                 </div>
               ))}

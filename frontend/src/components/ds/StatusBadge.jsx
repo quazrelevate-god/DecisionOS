@@ -28,7 +28,7 @@ import { cn } from "@/lib/utils";
 const PRIORITY_ALIASES = { medium: 'med', normal: 'med', med: 'med', low: 'low', high: 'high' };
 
 const badgeVariants = cva(
-  "inline-flex items-center gap-1 rounded-pill px-2.5 py-1 text-badge font-semibold uppercase whitespace-nowrap",
+  "inline-flex items-center gap-1 rounded-pill px-2.5 py-1 text-badge font-semibold whitespace-nowrap",
   {
     variants: {
       status: {

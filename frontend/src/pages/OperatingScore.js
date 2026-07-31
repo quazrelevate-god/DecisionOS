@@ -25,7 +25,7 @@ export default function OperatingScore() {
     [data]
   );
 
-  if (isLoading || !data) return <div className="text-label uppercase text-sm py-20 text-center">Computing operating score…</div>;
+  if (isLoading || !data) return <div className="text-label text-sm py-20 text-center">Computing operating score…</div>;
 
   const { company, stats } = data;
   const overall = company.overall;
@@ -40,31 +40,31 @@ export default function OperatingScore() {
           <div className="flex flex-col items-center shrink-0">
             <div className="w-36 h-36 flex flex-col items-center justify-center border-4 border-hairline bg-surface-hover text-center px-3">
               <Gauge size={30} weight="bold" className="text-text-secondary mb-1" />
-              <span className="text-label uppercase text-text-secondary leading-tight" data-testid="operating-overall-score">Not enough data yet</span>
+              <span className="text-label text-text-secondary leading-tight" data-testid="operating-overall-score">Not enough data yet</span>
             </div>
             <div className="flex items-center gap-2 mt-3">
               <Gauge size={16} weight="bold" className="text-primary-text" />
-              <span className="font-extrabold uppercase tracking-tight text-sm">Company Health</span>
+              <span className="font-extrabold tracking-tight text-sm">Company Health</span>
             </div>
           </div>
           <div className="flex-1 w-full" data-testid="operating-not-ready">
-            <p className="font-extrabold uppercase tracking-tight text-lg mb-2">We're still learning your business</p>
+            <p className="font-extrabold tracking-tight text-lg mb-2">We're still learning your business</p>
             <p className="text-sm text-text-secondary leading-relaxed">
               The Operating Score kicks in once there's enough real activity to measure — roughly <strong>3+ actionable tasks</strong> or your <strong>first invoices</strong>.
               Capture a few decisions on the Decision Desk and import or add invoices, and your score will start tracking automatically.
             </p>
             <div className="grid grid-cols-3 gap-3 mt-4">
-              <div className="border border-hairline p-3 text-center">
+              <div className="border border-hairline p-3 text-center rounded-md">
                 <p className="text-2xl font-black">{stats.done + stats.open}</p>
-                <p className="text-label uppercase text-text-secondary">Actionable tasks</p>
+                <p className="text-label text-text-secondary">Actionable tasks</p>
               </div>
-              <div className="border border-hairline p-3 text-center">
+              <div className="border border-hairline p-3 text-center rounded-md">
                 <p className="text-2xl font-black">{stats.done}</p>
-                <p className="text-label uppercase text-text-secondary">Completed</p>
+                <p className="text-label text-text-secondary">Completed</p>
               </div>
-              <div className="border border-hairline p-3 text-center">
+              <div className="border border-hairline p-3 text-center rounded-md">
                 <p className="text-2xl font-black">{stats.total_decisions}</p>
-                <p className="text-label uppercase text-text-secondary">Decisions</p>
+                <p className="text-label text-text-secondary">Decisions</p>
               </div>
             </div>
           </div>
@@ -75,11 +75,11 @@ export default function OperatingScore() {
         <div className="flex flex-col items-center shrink-0">
           <div className="w-36 h-36 flex flex-col items-center justify-center border-4 border-hairline bg-surface">
             <span className={` text-6xl font-black leading-none ${scoreColor(overall)}`} data-testid="operating-overall-score">{overall}</span>
-            <span className="text-label uppercase text-text-secondary mt-1">/ 100</span>
+            <span className="text-label text-text-secondary mt-1">/ 100</span>
           </div>
           <div className="flex items-center gap-2 mt-3">
             <Gauge size={16} weight="bold" className="text-primary-text" />
-            <span className="font-extrabold uppercase tracking-tight text-sm">Company Health</span>
+            <span className="font-extrabold tracking-tight text-sm">Company Health</span>
           </div>
         </div>
         <div className="flex-1 w-full space-y-4">
@@ -89,12 +89,12 @@ export default function OperatingScore() {
             return (
               <div key={c.key} data-testid={`operating-cat-${c.key}`}>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide">
+                  <span className="flex items-center gap-2 text-sm font-semibold tracking-wide">
                     <c.icon size={15} weight="bold" className="text-text-secondary" /> {c.label}
                   </span>
                   <span className={` font-black ${scoreColor(v)}`}>{has ? v : "—"}</span>
                 </div>
-                <div className="h-3 bg-surface-sunken border border-hairline">
+                <div className="h-3 bg-surface-sunken border border-hairline rounded-md">
                   <div className={`h-full ${c.color}`} style={{ width: `${has ? v : 0}%` }} />
                 </div>
               </div>
@@ -113,7 +113,7 @@ export default function OperatingScore() {
           { label: "Open Complaints", value: stats.open_complaints, accent: stats.open_complaints > 0 ? "text-text-secondary" : "" },
         ].map((s) => (
           <div key={s.label} className="rounded-lg border border-hairline bg-surface p-4">
-            <p className="text-label uppercase text-text-secondary">{s.label}</p>
+            <p className="text-label text-text-secondary">{s.label}</p>
             <p className={` text-2xl font-black tracking-tight mt-1 ${s.accent || ""}`}>{s.value}</p>
           </div>
         ))}
@@ -122,9 +122,9 @@ export default function OperatingScore() {
       {/* Employee leaderboard */}
       <div className="flex items-center gap-2 mb-4">
         <Trophy size={18} weight="bold" className="text-primary-text" />
-        <h2 className="text-xl font-extrabold uppercase tracking-tight">Team Execution</h2>
+        <h2 className="text-xl font-extrabold tracking-tight">Team Execution</h2>
       </div>
-      <p className="text-label uppercase text-text-secondary mb-3">Tap any member to see their full activity &amp; AI coaching.</p>
+      <p className="text-label text-text-secondary mb-3">Tap any member to see their full activity &amp; AI coaching.</p>
       <div className="rounded-lg border border-hairline bg-surface divide-y divide-black/10" data-testid="operating-employees">
         {rankedEmployees.map((e, i) => (
           <Link key={e.id} to={`/coach?user=${e.id}`} data-testid={`operating-emp-${e.id}`}
@@ -132,9 +132,9 @@ export default function OperatingScore() {
             <span className="text-lg font-black text-text-tertiary w-6">{i + 1}</span>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold truncate group-hover:text-destructive-text transition-colors">{e.name}</p>
-              <p className="text-label uppercase text-text-secondary">{e.role} · {e.done} done · {e.open} open{e.overdue > 0 ? ` · ${e.overdue} overdue` : ""}</p>
+              <p className="text-label text-text-secondary">{e.role} · {e.done} done · {e.open} open{e.overdue > 0 ? ` · ${e.overdue} overdue` : ""}</p>
             </div>
-            <span className="hidden sm:flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-text-secondary group-hover:text-destructive-text transition-colors shrink-0">
+            <span className="hidden sm:flex items-center gap-1 text-xs font-semibold text-text-secondary group-hover:text-destructive-text transition-colors shrink-0">
               <Sparkle size={13} weight="bold" /> Details
             </span>
             <div className="w-14 h-14 flex flex-col items-center justify-center border-2 border-hairline bg-surface shrink-0">

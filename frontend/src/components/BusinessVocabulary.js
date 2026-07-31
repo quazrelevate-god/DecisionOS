@@ -5,7 +5,7 @@ import { lex } from "../lib/lexicon";
 import { toast } from "sonner";
 import { Translate, FloppyDisk, Sparkle } from "@phosphor-icons/react";
 
-const inp = "w-full border border-hairline rounded-lg px-3 py-2 text-sm text-label uppercase bg-surface focus:outline-none focus:ring-2 focus:ring-ring/40";
+const inp = "w-full border border-hairline rounded-lg px-3 py-2 text-sm text-label bg-surface focus:outline-none focus:ring-2 focus:ring-ring/40";
 
 const WF_KEYS = [
   { key: "production", hint: "Core delivery / fulfilment pipeline" },
@@ -17,7 +17,7 @@ const TT_KEYS = ["operational", "sales", "purchase", "production", "finance", "h
 function Row({ label, hint, value, onChange, testid }) {
   return (
     <label className="block">
-      <span className="text-label uppercase text-text-secondary">{label}</span>
+      <span className="text-label text-text-secondary">{label}</span>
       <input data-testid={testid} className={`${inp} mt-1`} value={value} onChange={(e) => onChange(e.target.value)} />
       {hint && <span className="text-[11px] text-text-secondary">{hint}</span>}
     </label>
@@ -65,7 +65,7 @@ export function BusinessVocabulary() {
     <div className="rounded-lg border border-hairline bg-surface p-5" data-testid="settings-vocabulary-card">
       <div className="flex items-center gap-2 mb-1">
         <Translate size={20} weight="bold" className="text-primary-text" />
-        <h2 className="text-lg font-extrabold uppercase tracking-tight">Business Vocabulary</h2>
+        <h2 className="text-lg font-extrabold tracking-tight">Business Vocabulary</h2>
       </div>
       <p className="text-xs text-text-secondary mb-4">
         The words DecisionOS uses across the app, tailored to <span className="font-semibold">{tenant?.industry || "your industry"}</span>. Edit them to match how your team talks, or let AI regenerate from your industry.
@@ -80,7 +80,7 @@ export function BusinessVocabulary() {
         </div>
 
         <div>
-          <p className="text-label uppercase text-primary-text mb-2">Workflow pipelines</p>
+          <p className="text-label text-primary-text mb-2">Workflow pipelines</p>
           <div className="space-y-3">
             {WF_KEYS.map(({ key, hint }) => (
               <div key={key} className="grid grid-cols-2 gap-3">
@@ -92,7 +92,7 @@ export function BusinessVocabulary() {
         </div>
 
         <div>
-          <p className="text-label uppercase text-primary-text mb-2">Task type / department labels</p>
+          <p className="text-label text-primary-text mb-2">Task type / department labels</p>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             {TT_KEYS.map((k) => (
               <Row key={k} label={k} testid={`vocab-tt-${k}`} value={form.task_types[k]} onChange={(v) => setTt(k, v)} />
@@ -103,11 +103,11 @@ export function BusinessVocabulary() {
 
       <div className="mt-6 flex flex-wrap gap-3">
         <button onClick={save} disabled={saving} data-testid="vocab-save"
-          className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2 text-sm font-semibold uppercase tracking-wider rounded-lg hover:shadow-xs transition-all disabled:opacity-60">
+          className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2 text-sm font-semibold rounded-lg hover:shadow-xs transition-all disabled:opacity-60">
           <FloppyDisk size={16} weight="bold" /> {saving ? "Saving…" : "Save Vocabulary"}
         </button>
         <button onClick={regenerate} disabled={regen} data-testid="vocab-regenerate"
-          className="flex items-center gap-2 border border-hairline px-5 py-2 text-sm font-semibold uppercase tracking-wider rounded-lg hover:bg-surface-hover transition-all disabled:opacity-60">
+          className="flex items-center gap-2 border border-hairline px-5 py-2 text-sm font-semibold rounded-lg hover:bg-surface-hover transition-all disabled:opacity-60">
           <Sparkle size={16} weight="bold" /> {regen ? "Regenerating…" : "Regenerate with AI"}
         </button>
       </div>

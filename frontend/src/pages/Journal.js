@@ -71,14 +71,14 @@ function TimelineDialog({ decisionId, open, onClose }) {
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg rounded-md border-2 border-hairline" data-testid="timeline-dialog">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-black uppercase tracking-tighter pr-6">
+          <DialogTitle className="text-2xl font-black tracking-tighter pr-6">
             {data?.title || "Decision Timeline"}
           </DialogTitle>
           <DialogDescription className="sr-only">Git-style history of this decision</DialogDescription>
         </DialogHeader>
         {data?.status && <Chip value={data.status} className="w-fit" />}
         {isLoading ? (
-          <p className="text-label uppercase text-sm py-6">Loading timeline…</p>
+          <p className="text-label text-sm py-6">Loading timeline…</p>
         ) : events.length === 0 ? (
           <p className="text-sm text-text-secondary py-6">No history recorded yet for this decision.</p>
         ) : (
@@ -92,7 +92,7 @@ function TimelineDialog({ decisionId, open, onClose }) {
                     <Icon size={13} weight="bold" className={color} />
                   </span>
                   <p className="text-sm font-medium leading-tight">{e.label}</p>
-                  <p className="text-label uppercase text-text-secondary mt-1">
+                  <p className="text-label text-text-secondary mt-1">
                     {e.actor || "System"} · {fmtTime(e.ts)}
                   </p>
                 </li>
@@ -125,7 +125,7 @@ export default function Journal() {
         onSubmit={(e) => { e.preventDefault(); setTerm(q); }}
         className="flex gap-2 mb-8 max-w-xl"
       >
-        <div className="flex-1 flex items-center border border-hairline bg-surface">
+        <div className="flex-1 flex items-center border border-hairline bg-surface rounded-md">
           <MagnifyingGlass size={18} weight="bold" className="ml-3 text-text-secondary" />
           <input
             value={q}
@@ -138,14 +138,14 @@ export default function Journal() {
         <button
           type="submit"
           data-testid="journal-search-btn"
-          className="px-5 py-2.5 text-sm font-semibold uppercase tracking-wider bg-primary text-primary-foreground hover:bg-primary-hover transition-colors"
+          className="px-5 py-2.5 text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary-hover transition-colors"
         >
           Search
         </button>
       </form>
 
       {isLoading ? (
-        <p className="text-label uppercase text-sm">Loading journal…</p>
+        <p className="text-label text-sm">Loading journal…</p>
       ) : !hasContent ? (
         <EmptyState title="Nothing logged yet" hint="Decisions you capture and approve will appear here, grouped by day." />
       ) : (
@@ -153,9 +153,9 @@ export default function Journal() {
           {visibleDays.map((day) => (
             <section key={day.date} data-testid={`journal-day-${day.date}`}>
               <div className="flex items-center gap-3 mb-4">
-                <h2 className="text-xl font-black uppercase tracking-tight">{fmtDay(day.date)}</h2>
+                <h2 className="text-xl font-black tracking-tight">{fmtDay(day.date)}</h2>
                 <div className="flex-1 h-px bg-black/20" />
-                <span className="text-label uppercase text-text-secondary">
+                <span className="text-label text-text-secondary">
                   {day.decisions.length} decision{day.decisions.length !== 1 ? "s" : ""}
                 </span>
               </div>
@@ -176,7 +176,7 @@ export default function Journal() {
                           <Chip value={d.status} />
                         </div>
                         <p className="text-sm font-medium leading-tight">{d.title}</p>
-                        <span className="text-label uppercase text-primary-text mt-auto">View timeline →</span>
+                        <span className="text-label text-primary-text mt-auto">View timeline →</span>
                       </button>
                     ))}
                   </div>

@@ -47,7 +47,7 @@ function Section({ id, title, intro, children }) {
 }
 
 function Label({ children }) {
-  return <p className="text-label uppercase text-text-tertiary">{children}</p>;
+  return <p className="text-label text-text-tertiary">{children}</p>;
 }
 
 /** AA verdict chip. Uses the same thresholds as the token test suite. */
@@ -96,7 +96,7 @@ function RoleScale({ role }) {
                 className="h-14 rounded-md border border-hairline"
                 style={{ backgroundColor: `hsl(${value})` }}
               />
-              <p className="text-label uppercase text-text-tertiary mt-1.5">{step}</p>
+              <p className="text-label text-text-tertiary mt-1.5">{step}</p>
               <p className="text-[11px] text-text-secondary tabular-nums truncate">{hslTripletToHex(value)}</p>
               <p className="text-[11px] text-text-tertiary tabular-nums" title="contrast against white">
                 {onWhite.toFixed(1)}:1
@@ -118,9 +118,9 @@ function SemanticTable() {
       <table className="w-full text-small">
         <thead className="bg-surface-sunken">
           <tr className="text-left">
-            <th className="p-3 text-label uppercase text-text-tertiary font-semibold">Token</th>
-            <th className="p-3 text-label uppercase text-text-tertiary font-semibold" colSpan={2}>Light (canonical)</th>
-            <th className="p-3 text-label uppercase text-text-tertiary font-semibold" colSpan={2}>Dark</th>
+            <th className="p-3 text-label text-text-tertiary font-semibold">Token</th>
+            <th className="p-3 text-label text-text-tertiary font-semibold" colSpan={2}>Light (canonical)</th>
+            <th className="p-3 text-label text-text-tertiary font-semibold" colSpan={2}>Dark</th>
           </tr>
         </thead>
         <tbody>
@@ -164,7 +164,7 @@ function TintPreview({ label, base, theme }) {
   return (
     <div className="flex items-center gap-3">
       <span
-        className="inline-block rounded-pill px-2.5 py-1 text-badge uppercase font-semibold whitespace-nowrap"
+        className="inline-block rounded-pill px-2.5 py-1 text-badge font-semibold whitespace-nowrap"
         style={{ backgroundColor: `hsl(${bg})`, color: `hsl(${fg})` }}
       >
         {label}
@@ -185,7 +185,7 @@ export default function DesignSystem() {
       <header className="sticky top-0 z-10 border-b border-hairline bg-background/85 backdrop-blur-xl">
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-label uppercase text-text-tertiary">DecisionOS / System reference</p>
+            <p className="text-label text-text-tertiary">DecisionOS / System reference</p>
             <p className="text-body-strong text-text truncate">Tokens, primitives, composites, app controls</p>
           </div>
           <button
@@ -279,7 +279,7 @@ export default function DesignSystem() {
                 <span className="w-1 shrink-0" style={{ backgroundColor: `hsl(${semantic.light[token]})` }} />
                 <div className="flex-1 flex items-center justify-between gap-4 px-4 py-3 min-w-0">
                   <div className="min-w-0">
-                    <p className="text-label uppercase text-text-tertiary">{group}</p>
+                    <p className="text-label text-text-tertiary">{group}</p>
                     <p className="text-body text-text truncate">{sample}</p>
                   </div>
                   {token === "urgency-later" ? (
@@ -315,7 +315,7 @@ export default function DesignSystem() {
                   // class is the subject, not a stray usage. sweep.js skips
                   // this file for the same reason.
                   className={`min-w-0 ${name === "code" ? "font-mono" : ""} ${
-                    name === "label" || name === "badge" ? "uppercase" : ""
+                    name === "label" || name === "badge" ? "" : ""
                   }`}
                   style={{
                     fontSize: size,
@@ -347,7 +347,7 @@ export default function DesignSystem() {
               <div className="mt-3 space-y-2">
                 {Object.entries(radius).map(([k, v]) => (
                   <div key={k} className="flex items-center gap-3">
-                    <span className="w-10 h-10 bg-primary-tint border border-hairline" style={{ borderRadius: v }} />
+                    <span className="w-10 h-10 bg-primary-tint border border-hairline rounded-md" style={{ borderRadius: v }} />
                     <span className="text-small text-text-secondary tabular-nums">{k} · {v}</span>
                   </div>
                 ))}

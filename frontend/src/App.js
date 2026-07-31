@@ -33,10 +33,10 @@ function AccessDenied() {
       <div className="w-16 h-16 mx-auto flex items-center justify-center border-2 border-black bg-primary text-primary-foreground mb-6">
         <LockKey size={30} weight="bold" />
       </div>
-      <h1 className="font-heading text-4xl font-black tracking-tighter uppercase">Access Denied</h1>
+      <h1 className="font-heading text-4xl font-black tracking-tighter">Access Denied</h1>
       <p className="text-muted-foreground mt-3">You don't have permission to open this page. Ask your owner to grant access from Team settings.</p>
       <button onClick={() => navigate("/my-work")} data-testid="access-denied-home"
-        className="mt-6 bg-primary text-primary-foreground px-6 py-2.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-sm transition-all">
+        className="mt-6 bg-primary text-primary-foreground px-6 py-2.5 text-sm font-semibold border border-black hover:shadow-sm transition-all rounded-md">
         Go to My Work
       </button>
     </div>
@@ -47,7 +47,7 @@ function Protected({ children, perm, perms, ownerOnly }) {
   const { user, loading } = useAuth();
   if (loading)
     return (
-      <div className="min-h-screen flex items-center justify-center font-mono text-sm uppercase tracking-widest">
+      <div className="min-h-screen flex items-center justify-center font-mono text-sm">
         Loading…
       </div>
     );
@@ -63,7 +63,7 @@ function Home() {
   const { user, loading } = useAuth();
   if (loading)
     return (
-      <div className="min-h-screen flex items-center justify-center font-mono text-sm uppercase tracking-widest">
+      <div className="min-h-screen flex items-center justify-center font-mono text-sm">
         Loading…
       </div>
     );

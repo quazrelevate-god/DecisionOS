@@ -37,7 +37,7 @@ export function Field({ label, helper, error, required = false, disabled = false
       {label && (
         <label
           htmlFor={id}
-          className={cn("text-label uppercase", disabled ? "text-text-disabled" : "text-text-secondary")}
+          className={cn("text-label", disabled ? "text-text-disabled" : "text-text-secondary")}
         >
           {label}
           {required && <span className="ml-1 text-text-tertiary">*</span>}

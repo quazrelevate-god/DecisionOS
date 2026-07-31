@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 
 const TYPES = ["customer", "dealer", "vendor"];
 const STATUSES = ["lead", "active", "inactive"];
-const inp = "w-full border border-hairline px-3 py-2 text-sm text-label uppercase focus:outline-none focus:shadow-xs";
+const inp = "w-full border border-hairline px-3 py-2 text-sm text-label focus:outline-none focus:shadow-xs";
 
 function ComplaintDialog({ contact, onSaved }) {
   const [open, setOpen] = useState(false);
@@ -31,10 +31,10 @@ function ComplaintDialog({ contact, onSaved }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <button data-testid={`log-complaint-${contact.id}`} className="w-8 h-8 flex items-center justify-center border border-hairline hover:bg-purple-600 hover:text-white transition-colors"><Warning size={14} weight="bold" /></button>
+        <button data-testid={`log-complaint-${contact.id}`} className="w-8 h-8 flex items-center justify-center border border-hairline hover:bg-purple-600 hover:text-white transition-colors rounded-md"><Warning size={14} weight="bold" /></button>
       </DialogTrigger>
       <DialogContent className="border border-hairline rounded-md">
-        <DialogHeader><DialogTitle className="uppercase tracking-tight">Log complaint — {contact.name}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="tracking-tight">Log complaint — {contact.name}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <textarea data-testid="complaint-text-input" className={inp} rows={3} placeholder="What went wrong?" value={text} onChange={(e) => setText(e.target.value)} />
           <select className={inp} value={severity} onChange={(e) => setSeverity(e.target.value)}>
@@ -42,7 +42,7 @@ function ComplaintDialog({ contact, onSaved }) {
           </select>
         </div>
         <DialogFooter>
-          <button data-testid="complaint-save-button" onClick={save} className="bg-purple-600 text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline hover:shadow-xs transition-all">Log complaint</button>
+          <button data-testid="complaint-save-button" onClick={save} className="bg-purple-600 text-white px-5 py-2 text-sm font-semibold border border-hairline hover:shadow-xs transition-all rounded-md">Log complaint</button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -87,7 +87,7 @@ function ContactDialog({ trigger, initial, onSaved, users, defaultType }) {
     <Dialog open={open} onOpenChange={openChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="border border-hairline rounded-md max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle className="uppercase tracking-tight">{initial ? "Edit contact" : "New contact"}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="tracking-tight">{initial ? "Edit contact" : "New contact"}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <select data-testid="contact-type-select" className={inp} value={form.type} onChange={set("type")}>
@@ -109,7 +109,7 @@ function ContactDialog({ trigger, initial, onSaved, users, defaultType }) {
             <input className={inp} placeholder="Tags (comma separated)" value={form.tags} onChange={set("tags")} />
           </div>
           <div>
-            <label className="text-label uppercase text-text-secondary">Birthday (optional)</label>
+            <label className="text-label text-text-secondary">Birthday (optional)</label>
             <input type="date" data-testid="contact-birthday-input" className={inp} value={form.birthday} onChange={set("birthday")} />
           </div>
           <select data-testid="contact-assigned-select" className={inp} value={form.assigned_id} onChange={set("assigned_id")}>
@@ -119,7 +119,7 @@ function ContactDialog({ trigger, initial, onSaved, users, defaultType }) {
           <textarea className={inp} rows={2} placeholder="Notes" value={form.notes} onChange={set("notes")} />
         </div>
         <DialogFooter>
-          <button data-testid="contact-save-button" onClick={save} className="bg-primary text-primary-foreground px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline hover:shadow-xs transition-all">
+          <button data-testid="contact-save-button" onClick={save} className="bg-primary text-primary-foreground px-5 py-2 text-sm font-semibold border border-hairline hover:shadow-xs transition-all rounded-md">
             {initial ? "Save changes" : "Add contact"}
           </button>
         </DialogFooter>
@@ -156,14 +156,14 @@ export function ContactsPanel({ types, addLabel = "Add Contact" }) {
     }
   };
 
-  const selectCls = "border border-hairline bg-surface px-3 py-2 text-sm text-label uppercase focus:outline-none";
+  const selectCls = "border border-hairline bg-surface px-3 py-2 text-sm text-label focus:outline-none";
 
   return (
     <div>
       <div className="flex flex-wrap items-center gap-2 mb-6">
-        <div className="flex items-center border border-hairline bg-surface px-3 flex-1 min-w-[200px]">
+        <div className="flex items-center border border-hairline bg-surface px-3 flex-1 min-w-[200px] rounded-md">
           <MagnifyingGlass size={16} weight="bold" className="text-text-secondary" />
-          <input data-testid="contact-search-input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, company, phone, email…" className="flex-1 py-2 px-2 text-sm text-label uppercase focus:outline-none" />
+          <input data-testid="contact-search-input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, company, phone, email…" className="flex-1 py-2 px-2 text-sm text-label focus:outline-none" />
         </div>
         <select data-testid="contact-status-filter" value={status} onChange={(e) => setStatus(e.target.value)} className={selectCls}>
           <option value="">All statuses</option>
@@ -175,7 +175,7 @@ export function ContactsPanel({ types, addLabel = "Add Contact" }) {
             defaultType={types[0]}
             onSaved={refresh}
             trigger={
-              <button data-testid="add-contact-button" className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline hover:shadow-sm transition-all">
+              <button data-testid="add-contact-button" className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold border border-hairline hover:shadow-sm transition-all rounded-md">
                 <Plus size={16} weight="bold" /> {addLabel}
               </button>
             }
@@ -196,18 +196,18 @@ export function ContactsPanel({ types, addLabel = "Add Contact" }) {
               {canManage && (
                 <div className="flex gap-1">
                   {can360 && (
-                    <button data-testid={`view-profile-${c.id}`} onClick={() => navigate(`/contacts/${c.id}`)} title="360° profile" className="w-8 h-8 flex items-center justify-center border border-hairline hover:bg-primary hover:text-white transition-colors"><Eye size={14} weight="bold" /></button>
+                    <button data-testid={`view-profile-${c.id}`} onClick={() => navigate(`/contacts/${c.id}`)} title="360° profile" className="w-8 h-8 flex items-center justify-center border border-hairline hover:bg-primary hover:text-white transition-colors rounded-md"><Eye size={14} weight="bold" /></button>
                   )}
                   {c.type === "customer" && <ComplaintDialog contact={c} onSaved={refresh} />}
                   <ContactDialog
                     users={users} initial={c} onSaved={refresh}
-                    trigger={<button data-testid={`edit-contact-${c.id}`} className="w-8 h-8 flex items-center justify-center border border-hairline hover:bg-surface-hover transition-colors"><PencilSimple size={14} weight="bold" /></button>}
+                    trigger={<button data-testid={`edit-contact-${c.id}`} className="w-8 h-8 flex items-center justify-center border border-hairline hover:bg-surface-hover transition-colors rounded-md"><PencilSimple size={14} weight="bold" /></button>}
                   />
-                  <button data-testid={`delete-contact-${c.id}`} onClick={() => remove(c.id)} className="w-8 h-8 flex items-center justify-center border border-hairline hover:bg-destructive-tint transition-colors"><Trash size={14} weight="bold" /></button>
+                  <button data-testid={`delete-contact-${c.id}`} onClick={() => remove(c.id)} className="w-8 h-8 flex items-center justify-center border border-hairline hover:bg-destructive-tint transition-colors rounded-md"><Trash size={14} weight="bold" /></button>
                 </div>
               )}
               {!canManage && can360 && (
-                <button data-testid={`view-profile-${c.id}`} onClick={() => navigate(`/contacts/${c.id}`)} title="360° profile" className="w-8 h-8 flex items-center justify-center border border-hairline hover:bg-primary hover:text-white transition-colors"><Eye size={14} weight="bold" /></button>
+                <button data-testid={`view-profile-${c.id}`} onClick={() => navigate(`/contacts/${c.id}`)} title="360° profile" className="w-8 h-8 flex items-center justify-center border border-hairline hover:bg-primary hover:text-white transition-colors rounded-md"><Eye size={14} weight="bold" /></button>
               )}
             </div>
             <p className="font-bold text-lg leading-tight">{c.name}</p>
@@ -219,12 +219,12 @@ export function ContactsPanel({ types, addLabel = "Add Contact" }) {
             </div>
             {(c.tags || []).length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-3">
-                {c.tags.map((t) => <span key={t} className="text-[10px] uppercase tracking-wider border border-hairline px-1.5 py-0.5">{t}</span>)}
+                {c.tags.map((t) => <span key={t} className="text-[10px] border border-hairline px-1.5 py-0.5 rounded-md">{t}</span>)}
               </div>
             )}
             <div className="flex items-center justify-between mt-4 pt-3 border-t border-hairline text-xs text-text-secondary">
               <span>{c.assigned_name ? `Owner: ${c.assigned_name}` : "Unassigned"}</span>
-              {c.tax_id && <span className="text-label uppercase">{c.tax_id}</span>}
+              {c.tax_id && <span className="text-label">{c.tax_id}</span>}
             </div>
             {c.notes && <p className="text-xs text-text-secondary mt-2 italic">{c.notes}</p>}
           </div>

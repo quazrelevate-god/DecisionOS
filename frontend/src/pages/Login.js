@@ -21,7 +21,7 @@ const DEMO = [
 ];
 
 const inputCls = "w-full border border-hairline bg-surface px-4 py-3 text-sm font-mono focus:outline-none focus:shadow-xs transition-shadow";
-const labelCls = "text-label uppercase text-text-secondary";
+const labelCls = "text-label text-text-secondary";
 
 // Masks a phone to show only the last 4 digits, e.g. +91 98765 43210 -> +91 ••••• •3210
 const maskPhone = (raw) => {
@@ -82,7 +82,7 @@ const OtpBoxes = ({ value, onChange, disabled }) => {
           onChange={handleChange(i)}
           onKeyDown={handleKeyDown(i)}
           onFocus={(e) => e.target.select()}
-          className="w-full aspect-square min-w-0 border border-hairline bg-surface text-center text-xl font-black focus:outline-none focus:shadow-xs focus:border-primary transition-all disabled:opacity-50"
+          className="w-full aspect-square min-w-0 border border-hairline bg-surface text-center text-xl font-black focus:outline-none focus:shadow-xs focus:border-primary transition-all disabled:opacity-50 rounded-md"
         />
       ))}
     </div>
@@ -357,7 +357,7 @@ export default function Login() {
         data-testid="login-theme-toggle"
         title={isDark ? "Switch to light mode" : "Switch to dark mode"}
         aria-label="Toggle dark mode"
-        className="fixed top-4 right-4 z-50 w-10 h-10 flex items-center justify-center border border-hairline bg-surface text-text hover:bg-primary hover:text-white transition-colors"
+        className="fixed top-4 right-4 z-50 w-10 h-10 flex items-center justify-center border border-hairline bg-surface text-text hover:bg-primary hover:text-white transition-colors rounded-md"
       >
         {isDark ? <Sun size={18} weight="bold" /> : <MoonStars size={18} weight="bold" />}
       </button>
@@ -365,11 +365,11 @@ export default function Login() {
       <div className="hidden lg:flex flex-col justify-between bg-neutral-900 text-text-inverse p-12 border-r border-hairline">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center"><span className="font-logo font-black text-white text-xl">D</span></div>
-          <span className="font-logo font-black text-2xl tracking-tight uppercase leading-none"><span className="text-white">Decision</span><span className="text-brand-400">OS</span></span>
+          <span className="font-logo font-black text-2xl tracking-tight leading-none"><span className="text-white">Decision</span><span className="text-brand-400">OS</span></span>
         </div>
         <div>
-          <p className="text-label uppercase text-brand-400 mb-4">The operational brain for founder-led SMEs</p>
-          <h1 className="text-5xl xl:text-6xl font-black uppercase tracking-tighter leading-[0.95]">
+          <p className="text-label text-brand-400 mb-4">The operational brain for founder-led SMEs</p>
+          <h1 className="text-5xl xl:text-6xl font-black tracking-tighter leading-[0.95]">
             {mode === "register" ? <>Set up your<br /><span className="text-brand-400">executive office.</span></> : <>Speak the decision.<br /><span className="text-brand-400">We run</span> the company.</>}
           </h1>
           <p className="mt-6 text-white/70 text-sm max-w-md leading-relaxed">
@@ -386,21 +386,21 @@ export default function Login() {
         <div className="w-full max-w-md">
           <div className="lg:hidden flex items-center gap-2 mb-8">
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center"><span className="font-logo font-black text-white">D</span></div>
-            <span className="font-logo font-black text-xl tracking-tight uppercase leading-none"><span className="text-text">Decision</span><span className="text-brand-400">OS</span></span>
+            <span className="font-logo font-black text-xl tracking-tight leading-none"><span className="text-text">Decision</span><span className="text-brand-400">OS</span></span>
           </div>
 
           {mode === "login" && (
             <>
-              <h2 className="text-3xl font-black uppercase tracking-tighter mb-1">Sign in</h2>
+              <h2 className="text-3xl font-black tracking-tighter mb-1">Sign in</h2>
               <p className="text-sm text-text-secondary mb-6">Access your company brain.</p>
 
-              <div className="flex border border-hairline mb-5" data-testid="login-tabs">
+              <div className="flex border border-hairline mb-5 rounded-md" data-testid="login-tabs">
                 <button onClick={() => { setLoginTab("password"); setError(""); }} data-testid="login-tab-password"
-                  className={`flex-1 px-3 py-2 text-xs font-semibold uppercase tracking-wider border-r border-hairline transition-colors ${loginTab === "password" ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>
+                  className={`flex-1 px-3 py-2 text-xs font-semibold  border-r border-hairline transition-colors ${loginTab === "password" ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>
                   Email &amp; Password
                 </button>
                 <button onClick={() => { setLoginTab("otp"); setError(""); }} data-testid="login-tab-otp"
-                  className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold uppercase tracking-wider transition-colors ${loginTab === "otp" ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>
+                  className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold  transition-colors ${loginTab === "otp" ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>
                   <DeviceMobile size={14} weight="bold" /> Mobile OTP
                 </button>
               </div>
@@ -410,15 +410,15 @@ export default function Login() {
                   <input data-testid="login-email-input" type="email" className={inputCls} placeholder="Email" value={form.email} onChange={set("email")} required />
                   <input data-testid="login-password-input" type="password" className={inputCls} placeholder="Password" value={form.password} onChange={set("password")} required />
                   {error && <p data-testid="auth-error" className="text-sm text-destructive-text font-semibold">{error}</p>}
-                  <button type="submit" disabled={busy} data-testid="auth-submit-button" className="w-full bg-primary text-white font-semibold uppercase tracking-wider py-3 border border-hairline hover:shadow-sm transition-all disabled:opacity-50">{busy ? "…" : "Sign in"}</button>
+                  <button type="submit" disabled={busy} data-testid="auth-submit-button" className="w-full bg-primary text-white font-semibold py-3 border border-hairline hover:shadow-sm transition-all disabled:opacity-50 rounded-md">{busy ? "…" : "Sign in"}</button>
                 </form>
               )}
 
               {loginTab === "otp" && (
                 <form onSubmit={otpSent ? submitOtp : requestOtp} className="space-y-4" data-testid="otp-form">
                   {invite && (
-                    <div className="border border-hairline bg-status-pending-bg/40 p-3" data-testid="invite-welcome">
-                      <p className="font-bold uppercase tracking-tight text-sm">Welcome, {invite.name}</p>
+                    <div className="border border-hairline bg-status-pending-bg/40 p-3 rounded-md" data-testid="invite-welcome">
+                      <p className="font-bold tracking-tight text-sm">Welcome, {invite.name}</p>
                       <p className="text-xs text-text-secondary mt-0.5">You've been invited to <strong>{invite.company}</strong>. Enter the code we sent to {invite.phone_masked} to sign in — no password needed.</p>
                     </div>
                   )}
@@ -429,19 +429,19 @@ export default function Login() {
                         <input data-testid="otp-phone-input" type="tel" className={`${inputCls} mt-1`} placeholder="Registered mobile number" value={otpPhone} onChange={(e) => setOtpPhone(e.target.value)} required />
                       </div>
                       {error && <p data-testid="auth-error" className="text-sm text-destructive-text font-semibold">{error}</p>}
-                      <button type="submit" disabled={busy} data-testid="otp-submit-button" className="w-full bg-primary text-white font-semibold uppercase tracking-wider py-3 border border-hairline hover:shadow-sm transition-all disabled:opacity-50">
+                      <button type="submit" disabled={busy} data-testid="otp-submit-button" className="w-full bg-primary text-white font-semibold py-3 border border-hairline hover:shadow-sm transition-all disabled:opacity-50 rounded-md">
                         {busy ? "Sending…" : "Send OTP"}
                       </button>
                     </>
                   ) : (
                     <>
-                      <div className="flex items-center justify-between border border-hairline bg-surface px-3 py-2.5" data-testid="otp-phone-confirm">
+                      <div className="flex items-center justify-between border border-hairline bg-surface px-3 py-2.5 rounded-md" data-testid="otp-phone-confirm">
                         <div className="flex items-center gap-2 min-w-0">
                           <DeviceMobile size={16} weight="bold" className="text-primary-text shrink-0" />
                           <span className="text-sm font-mono truncate">Code sent to <strong>{invite?.phone_masked || maskPhone(otpPhone)}</strong></span>
                         </div>
                         <button type="button" onClick={() => { setOtpSent(false); setOtpCode(""); setError(""); setResendIn(0); }} data-testid="otp-change-number"
-                          className="text-xs font-semibold uppercase text-primary-text hover:underline whitespace-nowrap ml-2 shrink-0">Change</button>
+                          className="text-xs font-semibold text-primary-text hover:underline whitespace-nowrap ml-2 shrink-0">Change</button>
                       </div>
                       <div>
                         <label className={labelCls}>Enter 6-digit code</label>
@@ -450,7 +450,7 @@ export default function Login() {
                         </div>
                       </div>
                       {error && <p data-testid="auth-error" className="text-sm text-destructive-text font-semibold">{error}</p>}
-                      <button type="submit" disabled={busy || otpCode.length !== 6} data-testid="otp-submit-button" className="w-full bg-primary text-white font-semibold uppercase tracking-wider py-3 border border-hairline hover:shadow-sm transition-all disabled:opacity-50">
+                      <button type="submit" disabled={busy || otpCode.length !== 6} data-testid="otp-submit-button" className="w-full bg-primary text-white font-semibold py-3 border border-hairline hover:shadow-sm transition-all disabled:opacity-50 rounded-md">
                         {busy ? "Verifying…" : "Verify & sign in"}
                       </button>
                       <div className="text-center text-sm" data-testid="otp-resend-row">
@@ -467,10 +467,10 @@ export default function Login() {
 
               <button onClick={goToRegister} data-testid="toggle-auth-mode" className="mt-4 text-sm text-primary-text font-semibold hover:underline">Need a workspace? Register →</button>
               <div className="mt-8 border-t border-hairline pt-6">
-                <p className="text-label uppercase text-text-secondary mb-3">Try the Sharma demo</p>
+                <p className="text-label text-text-secondary mb-3">Try the Sharma demo</p>
                 <div className="grid grid-cols-2 gap-2">
                   {DEMO.map((d) => (
-                    <button key={d.email} onClick={() => demoLogin(d.email)} data-testid={`demo-login-${d.role.toLowerCase()}`} className="border border-hairline px-3 py-2 text-xs font-semibold uppercase tracking-wider hover:bg-primary hover:text-white transition-colors">{d.role}</button>
+                    <button key={d.email} onClick={() => demoLogin(d.email)} data-testid={`demo-login-${d.role.toLowerCase()}`} className="border border-hairline px-3 py-2 text-xs font-semibold hover:bg-primary hover:text-white transition-colors rounded-md">{d.role}</button>
                   ))}
                 </div>
               </div>
@@ -480,12 +480,12 @@ export default function Login() {
           {mode === "register" && (
             <>
               <div className="flex items-center justify-between mb-1">
-                <h2 className="text-2xl font-black uppercase tracking-tighter">Digital Executive Office</h2>
-                <span className="text-label uppercase text-text-secondary" data-testid="onboarding-step">Step {step}/{TOTAL}</span>
+                <h2 className="text-2xl font-black tracking-tighter">Digital Executive Office</h2>
+                <span className="text-label text-text-secondary" data-testid="onboarding-step">Step {step}/{TOTAL}</span>
               </div>
               <div className="flex gap-1 mb-6">
                 {Array.from({ length: TOTAL }).map((_, i) => (
-                  <div key={`step-seg-${i}`} className={`h-1.5 flex-1 border border-hairline ${i + 1 <= step ? "bg-primary" : "bg-surface"}`} />
+                  <div key={`step-seg-${i}`} className={`h-1.5 flex-1 border border-hairline ${i + 1 <= step ? "bg-primary" : "bg-surface"} rounded-md`} />
                 ))}
               </div>
 
@@ -531,7 +531,7 @@ export default function Login() {
                     <input data-testid="register-branches-input" className={inputCls} placeholder="Branches (e.g. 2)" value={form.branches} onChange={set("branches")} />
                   </div>
                   {error && <p data-testid="auth-error" className="text-sm text-destructive-text font-semibold">{error}</p>}
-                  <button disabled={!stepValid1} data-testid="onboarding-next-1" onClick={() => { setError(""); setStep(2); }} className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground font-semibold uppercase tracking-wider py-3 border border-hairline hover:shadow-sm transition-all disabled:opacity-40">Next <ArrowRight size={16} weight="bold" /></button>
+                  <button disabled={!stepValid1} data-testid="onboarding-next-1" onClick={() => { setError(""); setStep(2); }} className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground font-semibold py-3 border border-hairline hover:shadow-sm transition-all disabled:opacity-40 rounded-md">Next <ArrowRight size={16} weight="bold" /></button>
                 </div>
               )}
 
@@ -564,8 +564,8 @@ export default function Login() {
                   </div>
                   <input data-testid="region-input" className={inputCls} placeholder="Region / Country" value={form.region} onChange={set("region")} />
                   <div className="flex gap-2">
-                    <button onClick={() => setStep(1)} className="flex items-center gap-2 px-4 py-3 border border-hairline text-sm font-semibold uppercase tracking-wider hover:bg-surface-hover"><ArrowLeft size={16} weight="bold" /></button>
-                    <button data-testid="onboarding-next-2" onClick={() => setStep(3)} className="flex-1 flex items-center justify-center gap-2 bg-primary text-primary-foreground font-semibold uppercase tracking-wider py-3 border border-hairline hover:shadow-sm transition-all">Next <ArrowRight size={16} weight="bold" /></button>
+                    <button onClick={() => setStep(1)} className="flex items-center gap-2 px-4 py-3 border border-hairline text-sm font-semibold hover:bg-surface-hover rounded-md"><ArrowLeft size={16} weight="bold" /></button>
+                    <button data-testid="onboarding-next-2" onClick={() => setStep(3)} className="flex-1 flex items-center justify-center gap-2 bg-primary text-primary-foreground font-semibold py-3 border border-hairline hover:shadow-sm transition-all rounded-md">Next <ArrowRight size={16} weight="bold" /></button>
                   </div>
                 </div>
               )}
@@ -579,9 +579,9 @@ export default function Login() {
                       const on = software.includes(s.key);
                       return (
                         <button key={s.key} data-testid={`software-${s.key.toLowerCase()}`} onClick={() => toggleSoftware(s.key)}
-                          className={`flex items-center justify-between gap-2 border border-hairline px-4 py-3 text-sm font-semibold transition-colors ${on ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>
+                          className={`flex items-center justify-between gap-2 border border-hairline px-4 py-3 text-sm font-semibold transition-colors ${on ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"} rounded-md`}>
                           <span>{s.key}</span>
-                          <span className={`w-5 h-5 flex items-center justify-center border border-current ${on ? "bg-primary text-primary-foreground border-hairline" : ""}`}>{on && <Check size={12} weight="bold" />}</span>
+                          <span className={`w-5 h-5 flex items-center justify-center border border-current ${on ? "bg-primary text-primary-foreground border-hairline" : ""} rounded-md`}>{on && <Check size={12} weight="bold" />}</span>
                         </button>
                       );
                     })}
@@ -591,8 +591,8 @@ export default function Login() {
                   )}
                   {error && <p data-testid="auth-error" className="text-sm text-destructive-text font-semibold">{error}</p>}
                   <div className="flex gap-2">
-                    <button onClick={() => setStep(2)} className="flex items-center gap-2 px-4 py-3 border border-hairline text-sm font-semibold uppercase tracking-wider hover:bg-surface-hover"><ArrowLeft size={16} weight="bold" /></button>
-                    <button data-testid="onboarding-next-3" onClick={goToTeamStep} className="flex-1 flex items-center justify-center gap-2 bg-primary text-primary-foreground font-semibold uppercase tracking-wider py-3 border border-hairline hover:shadow-sm transition-all">Next <ArrowRight size={16} weight="bold" /></button>
+                    <button onClick={() => setStep(2)} className="flex items-center gap-2 px-4 py-3 border border-hairline text-sm font-semibold hover:bg-surface-hover rounded-md"><ArrowLeft size={16} weight="bold" /></button>
+                    <button data-testid="onboarding-next-3" onClick={goToTeamStep} className="flex-1 flex items-center justify-center gap-2 bg-primary text-primary-foreground font-semibold py-3 border border-hairline hover:shadow-sm transition-all rounded-md">Next <ArrowRight size={16} weight="bold" /></button>
                   </div>
                 </div>
               )}
@@ -623,26 +623,26 @@ export default function Login() {
               {step === 5 && (
                 <div className="space-y-4" data-testid="onboarding-step-5">
                   <p className="text-sm text-text-secondary flex items-center gap-1.5"><UploadSimple size={16} weight="bold" className="text-text-tertiary" />  Connect your business data</p>
-                  <label data-testid="connect-excel" className={`border border-hairline p-5 flex flex-col items-center text-center cursor-pointer hover:shadow-xs transition-all ${uploading ? "opacity-60 pointer-events-none" : ""}`}>
+                  <label data-testid="connect-excel" className={`border border-hairline p-5 flex flex-col items-center text-center cursor-pointer hover:shadow-xs transition-all ${uploading ? "opacity-60 pointer-events-none" : ""} rounded-md`}>
                     <TableIcon size={30} weight="bold" className="text-primary-text mb-2" />
-                    <span className="font-bold uppercase tracking-tight">{uploading ? "Importing…" : "Upload Excel / CSV"}</span>
+                    <span className="font-bold tracking-tight">{uploading ? "Importing…" : "Upload Excel / CSV"}</span>
                     <span className="text-xs text-text-secondary mt-1">Customers, suppliers, sales or payment list</span>
                     <input type="file" data-testid="connect-excel-input" accept=".csv,.xlsx,.xls" className="hidden" onChange={(e) => { uploadExcel(e.target.files); e.target.value = ""; }} />
                   </label>
                   {importSummary && (
-                    <p data-testid="import-summary" className="text-sm text-text border border-hairline bg-status-pending-bg/40 p-2">Imported {importSummary.contacts} contacts · {importSummary.invoices} invoices · {importSummary.payments} payments</p>
+                    <p data-testid="import-summary" className="text-sm text-text border border-hairline bg-status-pending-bg/40 p-2 rounded-md">Imported {importSummary.contacts} contacts · {importSummary.invoices} invoices · {importSummary.payments} payments</p>
                   )}
                   <div className="grid grid-cols-2 gap-3">
                     {[{ k: "Tally" }, { k: "Zoho" }].map((c) => (
-                      <div key={c.k} data-testid={`connect-${c.k.toLowerCase()}`} className="border border-dashed border-hairline p-4 flex flex-col items-center text-center opacity-70">
-                        <span className="font-bold uppercase tracking-tight">{c.k}</span>
-                        <span className="text-label uppercase text-text-secondary mt-1">Coming soon</span>
+                      <div key={c.k} data-testid={`connect-${c.k.toLowerCase()}`} className="border border-dashed border-hairline p-4 flex flex-col items-center text-center opacity-70 rounded-md">
+                        <span className="font-bold tracking-tight">{c.k}</span>
+                        <span className="text-label text-text-secondary mt-1">Coming soon</span>
                       </div>
                     ))}
                   </div>
                   <div className="flex gap-2">
-                    <button data-testid="onboarding-skip-5" onClick={() => setStep(6)} className="flex-1 px-4 py-3 border border-hairline text-sm font-semibold uppercase tracking-wider hover:bg-surface-hover">Skip</button>
-                    <button data-testid="onboarding-next-5" onClick={() => setStep(6)} className="flex-1 flex items-center justify-center gap-2 bg-primary text-primary-foreground font-semibold uppercase tracking-wider py-3 border border-hairline hover:shadow-sm transition-all">Continue <ArrowRight size={16} weight="bold" /></button>
+                    <button data-testid="onboarding-skip-5" onClick={() => setStep(6)} className="flex-1 px-4 py-3 border border-hairline text-sm font-semibold hover:bg-surface-hover rounded-md">Skip</button>
+                    <button data-testid="onboarding-next-5" onClick={() => setStep(6)} className="flex-1 flex items-center justify-center gap-2 bg-primary text-primary-foreground font-semibold py-3 border border-hairline hover:shadow-sm transition-all rounded-md">Continue <ArrowRight size={16} weight="bold" /></button>
                   </div>
                 </div>
               )}
@@ -653,11 +653,11 @@ export default function Login() {
                   <p className="text-sm text-text-secondary flex items-center gap-1.5"><DeviceMobile size={16} weight="bold" className="text-text-tertiary" />  Invite your team by mobile number</p>
                   <div className="flex gap-2">
                     <input data-testid="invite-phone-input" className={inputCls} placeholder="e.g. +91 98765 43210" value={phoneInput} onChange={(e) => setPhoneInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addPhone(); } }} />
-                    <button onClick={addPhone} data-testid="add-phone-button" className="px-4 border border-hairline bg-primary text-primary-foreground hover:shadow-xs transition-all"><Plus size={16} weight="bold" /></button>
+                    <button onClick={addPhone} data-testid="add-phone-button" className="px-4 border border-hairline bg-primary text-primary-foreground hover:shadow-xs transition-all rounded-md"><Plus size={16} weight="bold" /></button>
                   </div>
                   <div className="flex flex-wrap gap-2" data-testid="invite-list">
                     {phones.map((p) => (
-                      <span key={p} className="inline-flex items-center gap-1.5 border border-hairline bg-surface px-2.5 py-1 text-xs font-mono">
+                      <span key={p} className="inline-flex items-center gap-1.5 border border-hairline bg-surface px-2.5 py-1 text-xs font-mono rounded-md">
                         {p}<button onClick={() => setPhones(phones.filter((x) => x !== p))} className="hover:text-destructive-text"><X size={12} weight="bold" /></button>
                       </span>
                     ))}
@@ -665,8 +665,8 @@ export default function Login() {
                   </div>
                   <p className="text-xs text-text-secondary">SMS invites are queued and sent once your SMS provider is connected.</p>
                   <div className="flex gap-2">
-                    <button data-testid="onboarding-skip-6" onClick={() => setStep(7)} className="flex-1 px-4 py-3 border border-hairline text-sm font-semibold uppercase tracking-wider hover:bg-surface-hover">Skip</button>
-                    <button disabled={busy} data-testid="onboarding-invite-button" onClick={sendInvites} className="flex-1 flex items-center justify-center gap-2 bg-primary text-primary-foreground font-semibold uppercase tracking-wider py-3 border border-hairline hover:shadow-sm transition-all disabled:opacity-50">Continue <ArrowRight size={16} weight="bold" /></button>
+                    <button data-testid="onboarding-skip-6" onClick={() => setStep(7)} className="flex-1 px-4 py-3 border border-hairline text-sm font-semibold hover:bg-surface-hover rounded-md">Skip</button>
+                    <button disabled={busy} data-testid="onboarding-invite-button" onClick={sendInvites} className="flex-1 flex items-center justify-center gap-2 bg-primary text-primary-foreground font-semibold py-3 border border-hairline hover:shadow-sm transition-all disabled:opacity-50 rounded-md">Continue <ArrowRight size={16} weight="bold" /></button>
                   </div>
                 </div>
               )}
@@ -681,7 +681,7 @@ export default function Login() {
                       const active = aiProgress === i;
                       const Icon = s.icon;
                       return (
-                        <div key={s.label} data-testid={`ai-step-${i}`} className={`flex items-center gap-3 border border-hairline px-4 py-3 transition-colors ${done ? "bg-primary text-primary-foreground" : "bg-surface"}`}>
+                        <div key={s.label} data-testid={`ai-step-${i}`} className={`flex items-center gap-3 border border-hairline px-4 py-3 transition-colors ${done ? "bg-primary text-primary-foreground" : "bg-surface"} rounded-md`}>
                           <span className="w-6 h-6 flex items-center justify-center">
                             {done ? <CheckCircle size={20} weight="fill" /> : active ? <CircleNotch size={18} className="animate-spin" /> : <Icon size={18} weight="bold" />}
                           </span>
@@ -690,7 +690,7 @@ export default function Login() {
                       );
                     })}
                   </div>
-                  <button disabled={aiProgress < AI_STEPS.length} data-testid="onboarding-enter-button" onClick={() => navigate("/")} className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground font-semibold uppercase tracking-wider py-3 border border-hairline hover:shadow-sm transition-all disabled:opacity-40">
+                  <button disabled={aiProgress < AI_STEPS.length} data-testid="onboarding-enter-button" onClick={() => navigate("/")} className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground font-semibold py-3 border border-hairline hover:shadow-sm transition-all disabled:opacity-40 rounded-md">
                     {aiProgress < AI_STEPS.length ? "Setting up…" : <>Enter DecisionOS <ArrowRight size={16} weight="bold" /></>}
                   </button>
                 </div>

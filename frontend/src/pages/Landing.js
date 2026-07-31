@@ -13,7 +13,7 @@ const Logo = ({ size = "md" }) => {
       <div className={`${box} bg-primary rounded-lg flex items-center justify-center shrink-0`}>
         <span className={`font-logo font-black text-white ${dtext} leading-none`}>D</span>
       </div>
-      <span className={`font-logo font-black ${word} tracking-tight uppercase leading-none`}>
+      <span className={`font-logo font-black ${word} tracking-tight leading-none`}>
         <span className="text-white">Decision</span><span className="text-brand-400">OS</span>
       </span>
     </div>
@@ -26,11 +26,11 @@ const NavBar = () => (
       <Logo />
       <div className="flex items-center gap-2 sm:gap-3">
         <Link to="/login" data-testid="landing-login-btn"
-          className="text-white/90 hover:text-white text-sm font-semibold uppercase tracking-wider px-3 sm:px-4 py-2 transition-colors">
+          className="text-white/90 hover:text-white text-sm font-semibold px-3 sm:px-4 py-2 transition-colors">
           Log in
         </Link>
         <Link to="/login?signup=1" data-testid="landing-signup-btn"
-          className="bg-primary text-primary-foreground text-sm font-semibold uppercase tracking-wider px-4 sm:px-5 py-2 border border-primary hover:bg-surface hover:text-brand-400 transition-colors">
+          className="bg-primary text-primary-foreground text-sm font-semibold px-4 sm:px-5 py-2 border border-primary hover:bg-surface hover:text-brand-400 transition-colors rounded-md">
           Sign up
         </Link>
       </div>
@@ -39,13 +39,13 @@ const NavBar = () => (
 );
 
 const Kicker = ({ children, big }) => (
-  <div className={`text-label uppercase uppercase tracking-[0.25em] mb-4 text-brand-400 ${big ? "text-sm sm:text-base" : "text-xs"}`}>{children}</div>
+  <div className={`text-label tracking-[0.25em] mb-4 text-brand-400 ${big ? "text-sm sm:text-base" : "text-xs"}`}>{children}</div>
 );
 
 const Dept = ({ icon: Icon, tag, title, children }) => (
   <div className="border-2 border-hairline bg-surface p-6 hover:shadow-sm transition-all">
-    <div className="flex items-center gap-2 text-brand-400 mb-2"><Icon size={18} weight="bold" /><span className="text-label uppercase text-[11px] uppercase tracking-widest">{tag}</span></div>
-    <h3 className="font-extrabold uppercase tracking-tight text-lg">{title}</h3>
+    <div className="flex items-center gap-2 text-brand-400 mb-2"><Icon size={18} weight="bold" /><span className="text-label text-[11px]">{tag}</span></div>
+    <h3 className="font-extrabold tracking-tight text-lg">{title}</h3>
     <p className="text-sm text-text-secondary mt-1">{children}</p>
   </div>
 );
@@ -68,14 +68,14 @@ export default function Landing() {
           </p>
           <div className="flex flex-wrap gap-3 mt-10">
             <Link to="/login?signup=1" data-testid="hero-signup-btn"
-              className="flex items-center gap-2 bg-primary text-primary-foreground text-sm font-semibold uppercase tracking-wider px-6 py-3 border border-primary hover:bg-surface hover:text-brand-400 transition-colors">
+              className="flex items-center gap-2 bg-primary text-primary-foreground text-sm font-semibold px-6 py-3 border border-primary hover:bg-surface hover:text-brand-400 transition-colors rounded-md">
               Get started free <ArrowRight size={16} weight="bold" />
             </Link>
-            <a href="#how" className="flex items-center gap-2 border border-white/40 text-white text-sm font-semibold uppercase tracking-wider px-6 py-3 hover:bg-surface hover:text-[#16161a] transition-colors">
+            <a href="#how" className="flex items-center gap-2 border border-white/40 text-white text-sm font-semibold px-6 py-3 hover:bg-surface hover:text-[#16161a] transition-colors rounded-md">
               See how it works
             </a>
           </div>
-          <p className="text-label uppercase text-[11px] uppercase tracking-widest text-white/40 mt-8">Voice · Text · WhatsApp · Documents — captured once, executed forever</p>
+          <p className="text-label text-[11px] text-white/40 mt-8">Voice · Text · WhatsApp · Documents — captured once, executed forever</p>
         </div>
       </section>
 
@@ -86,11 +86,11 @@ export default function Landing() {
           <h2 className="font-black tracking-tight text-3xl sm:text-4xl leading-tight max-w-2xl">Your business lives inside your head. That's the risk.</h2>
           <div className="grid sm:grid-cols-2 gap-5 mt-10">
             <div className="border-2 border-[#16161a] bg-[#16161a] text-white p-6">
-              <div className="text-label uppercase text-xs uppercase tracking-widest text-white/50 mb-2">The old way</div>
+              <div className="text-label text-xs text-white/50 mb-2">The old way</div>
               <p className="text-white/90">Founder remembers → tells someone → hopes it happens → chases → repeats. Decisions evaporate, work scatters, nothing is provable, and you become the bottleneck.</p>
             </div>
             <div className="border-2 border-[#16161a] bg-surface p-6">
-              <div className="text-label uppercase text-xs uppercase tracking-widest text-brand-400 mb-2">The DecisionOS way</div>
+              <div className="text-label text-xs text-brand-400 mb-2">The DecisionOS way</div>
               <p>Founder speaks → AI captures, routes, assigns, tracks, chases, and remembers it forever. One place where nothing is lost, ignored, or left undone.</p>
             </div>
           </div>
@@ -104,20 +104,20 @@ export default function Landing() {
           <h2 className="font-black tracking-tight text-3xl sm:text-4xl leading-tight max-w-3xl">One sentence. A company-wide rule, <span className="text-brand-400">enforced.</span></h2>
           <div className="mt-10 space-y-4 max-w-3xl">
             <div className="border-l-4 border-primary pl-5 py-2">
-              <div className="text-label uppercase text-[11px] uppercase tracking-widest text-brand-400/90">Second 0 — the owner speaks</div>
+              <div className="text-label text-[11px] text-brand-400/90">Second 0 — the owner speaks</div>
               <p className="font-black text-xl sm:text-2xl mt-1 leading-snug">"From today, stop any dispatch that doesn't have payment approval."</p>
             </div>
             <div className="border-l-4 border-primary pl-5 py-2">
-              <div className="text-label uppercase text-[11px] uppercase tracking-widest text-brand-400/90">Second 3 — the AI understands</div>
+              <div className="text-label text-[11px] text-brand-400/90">Second 3 — the AI understands</div>
               <div className="mt-2 flex flex-wrap gap-2">
                 {["Operating Rule", "Trigger: Dispatch", "Condition: Payment approved", "Scope: Company-wide"].map((c, i) => (
-                  <span key={c} className={`text-xs font-semibold rounded-full px-3 py-1 ${i === 0 ? "bg-primary text-primary-foreground" : "bg-surface/10 text-white border border-white/20"}`}>{c}</span>
+                  <span key={c} className={`text-xs font-semibold rounded-pill px-3 py-1 ${i === 0 ? "bg-primary text-primary-foreground" : "bg-surface/10 text-white border border-white/20"}`}>{c}</span>
                 ))}
               </div>
             </div>
             <div className="border-l-4 border-primary pl-5 py-2">
-              <div className="text-label uppercase text-[11px] uppercase tracking-widest text-brand-400/90">Second 10 — the business changes</div>
-              <div className="mt-2 border border-white/15 bg-surface/5 p-4 rounded">
+              <div className="text-label text-[11px] text-brand-400/90">Second 10 — the business changes</div>
+              <div className="mt-2 border border-white/15 bg-surface/5 p-4 rounded-md">
                 <p className="text-white/90"><CheckCircle size={16} weight="fill" className="inline text-brand-400 mr-1" /> Rule live across the dispatch workflow · teams notified · exceptions escalate to the owner · filed to the Company Brain.</p>
               </div>
             </div>
@@ -140,7 +140,7 @@ export default function Landing() {
               <div key={s.t} className="border-2 border-hairline p-6 relative">
                 <div className="font-black text-5xl text-text/10 absolute top-4 right-5">{i + 1}</div>
                 <s.icon size={26} weight="bold" className="text-brand-400" />
-                <h3 className="font-extrabold uppercase tracking-tight text-xl mt-3">{s.t}</h3>
+                <h3 className="font-extrabold tracking-tight text-xl mt-3">{s.t}</h3>
                 <p className="text-sm text-text-secondary mt-2">{s.d}</p>
               </div>
             ))}
@@ -162,7 +162,7 @@ export default function Landing() {
               { t: "Workload", a: "A teammate has 5 open, 1 overdue.", r: "→ Reassign or extend." },
             ].map((x) => (
               <div key={x.t} className="border-2 border-hairline bg-surface p-5">
-                <div className="flex items-center gap-2 text-brand-400 mb-2"><WarningCircle size={16} weight="bold" /><span className="text-label uppercase text-[11px] uppercase tracking-widest">{x.t}</span></div>
+                <div className="flex items-center gap-2 text-brand-400 mb-2"><WarningCircle size={16} weight="bold" /><span className="text-label text-[11px]">{x.t}</span></div>
                 <p className="font-semibold text-sm">{x.a}</p>
                 <p className="text-sm text-text-secondary mt-1">{x.r}</p>
               </div>
@@ -199,9 +199,9 @@ export default function Landing() {
               { t: "Turns talk into action", d: "Tasks, records and rules — executed. Not text out, not manual data entry." },
               { t: "Learns how you operate", d: "Your Business DNA compounds over time — the foundation for AI managers." },
             ].map((x) => (
-              <div key={x.t} className="border border-white/15 bg-surface/5 p-6">
+              <div key={x.t} className="border border-white/15 bg-surface/5 p-6 rounded-md">
                 <Lightning size={20} weight="bold" className="text-brand-400" />
-                <h3 className="font-extrabold uppercase tracking-tight text-base mt-3">{x.t}</h3>
+                <h3 className="font-extrabold tracking-tight text-base mt-3">{x.t}</h3>
                 <p className="text-sm text-white/60 mt-1">{x.d}</p>
               </div>
             ))}
@@ -216,11 +216,11 @@ export default function Landing() {
           <h2 className="font-black tracking-tight text-3xl sm:text-5xl leading-tight max-w-3xl mx-auto">Every business decision — remembered, organized, and executed.</h2>
           <div className="flex flex-wrap gap-3 justify-center mt-10">
             <Link to="/login?signup=1" data-testid="cta-signup-btn"
-              className="flex items-center gap-2 bg-surface text-brand-400 text-sm font-semibold uppercase tracking-wider px-7 py-3 border border-white hover:bg-transparent hover:text-white transition-colors">
+              className="flex items-center gap-2 bg-surface text-brand-400 text-sm font-semibold px-7 py-3 border border-white hover:bg-transparent hover:text-white transition-colors rounded-md">
               Start free <ArrowRight size={16} weight="bold" />
             </Link>
             <Link to="/login" data-testid="cta-login-btn"
-              className="border border-white/60 text-white text-sm font-semibold uppercase tracking-wider px-7 py-3 hover:bg-surface hover:text-brand-400 transition-colors">
+              className="border border-white/60 text-white text-sm font-semibold px-7 py-3 hover:bg-surface hover:text-brand-400 transition-colors rounded-md">
               Log in
             </Link>
           </div>
@@ -236,7 +236,7 @@ export default function Landing() {
             <Link to="/login" className="hover:text-white transition-colors">Log in</Link>
             <Link to="/login?signup=1" className="hover:text-white transition-colors">Sign up</Link>
           </div>
-          <div className="text-label uppercase text-[11px] uppercase tracking-widest">© 2026 DecisionOS</div>
+          <div className="text-label text-[11px]">© 2026 DecisionOS</div>
         </div>
       </footer>
     </div>

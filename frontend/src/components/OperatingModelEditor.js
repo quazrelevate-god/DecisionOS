@@ -113,13 +113,13 @@ export function OperatingModelEditor() {
     <div className="rounded-lg border border-hairline bg-surface p-5" data-testid="settings-operating-model-card">
       <div className="flex items-center gap-2 mb-1">
         <FlowArrow size={20} weight="bold" className="text-primary-text" />
-        <h2 className="text-lg font-extrabold uppercase tracking-tight">Operating Model</h2>
+        <h2 className="text-lg font-extrabold tracking-tight">Operating Model</h2>
       </div>
       <p className="text-xs text-text-secondary mb-4">
         The workflow pipelines and task categories that shape your Workflows board and My Work — tailored to <span className="font-semibold">{tenant?.industry || "your industry"}</span>. Add your own or let AI regenerate them.
       </p>
 
-      <p className="text-label uppercase text-primary-text mb-2">Workflow pipelines</p>
+      <p className="text-label text-primary-text mb-2">Workflow pipelines</p>
       <div className="space-y-4">
         {model.pipelines.map((p, pi) => (
           <div key={p._uid} className="border border-hairline rounded-lg p-3" data-testid={`op-pipeline-${pi}`}>
@@ -134,7 +134,7 @@ export function OperatingModelEditor() {
             </div>
 
             <div className="mt-3 space-y-1.5">
-              <span className="text-label uppercase text-text-secondary">Stages (in order)</span>
+              <span className="text-label text-text-secondary">Stages (in order)</span>
               {p.stages.map((s, si) => (
                 <div key={s._uid} className="flex items-center gap-1.5" data-testid={`op-stage-${pi}-${si}`}>
                   <input className={`${smInp} flex-1`} placeholder="Stage name" value={s.label} onChange={(e) => setStage(pi, si, { label: e.target.value })} />
@@ -150,7 +150,7 @@ export function OperatingModelEditor() {
 
             <div className="mt-3 flex items-center gap-2">
               <ShieldCheck size={14} weight="bold" className="text-text-secondary" />
-              <span className="text-label uppercase text-text-secondary">Owner sign-off stage</span>
+              <span className="text-label text-text-secondary">Owner sign-off stage</span>
               <select data-testid={`op-approval-${pi}`} className={smInp} value={p.approval_stage} onChange={(e) => setPipeline(pi, { approval_stage: e.target.value })}>
                 <option value="">None</option>
                 {p.stages.filter((s) => s.key).map((s) => <option key={s._uid} value={s.key}>{s.label}</option>)}
@@ -164,7 +164,7 @@ export function OperatingModelEditor() {
         <Plus size={14} weight="bold" /> Add pipeline
       </button>
 
-      <p className="text-label uppercase text-primary-text mt-6 mb-2">Task categories</p>
+      <p className="text-label text-primary-text mt-6 mb-2">Task categories</p>
       <div className="flex flex-wrap gap-2">
         {model.task_categories.map((c, i) => (
           <div key={c._uid} className="flex items-center gap-1 border border-hairline rounded-md pl-2 pr-1 py-1" data-testid={`op-cat-${i}`}>
@@ -179,11 +179,11 @@ export function OperatingModelEditor() {
 
       <div className="mt-6 flex flex-wrap gap-3">
         <button onClick={save} disabled={saving} data-testid="op-save"
-          className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2 text-sm font-semibold uppercase tracking-wider rounded-lg hover:shadow-xs transition-all disabled:opacity-60">
+          className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2 text-sm font-semibold rounded-lg hover:shadow-xs transition-all disabled:opacity-60">
           <FloppyDisk size={16} weight="bold" /> {saving ? "Saving…" : "Save Model"}
         </button>
         <button onClick={regenerate} disabled={regen} data-testid="op-regenerate"
-          className="flex items-center gap-2 border border-hairline px-5 py-2 text-sm font-semibold uppercase tracking-wider rounded-lg hover:bg-surface-hover transition-all disabled:opacity-60">
+          className="flex items-center gap-2 border border-hairline px-5 py-2 text-sm font-semibold rounded-lg hover:bg-surface-hover transition-all disabled:opacity-60">
           <Sparkle size={16} weight="bold" /> {regen ? "Regenerating…" : "Regenerate with AI"}
         </button>
       </div>

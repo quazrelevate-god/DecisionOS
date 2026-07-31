@@ -23,7 +23,7 @@ import {
   File, FileArrowUp, Lightbulb, Info,
 } from "@phosphor-icons/react";
 
-const CTRL = "flex items-center justify-center gap-1.5 px-2 lg:px-4 py-2 text-[11px] lg:text-sm font-semibold uppercase tracking-wider border border-hairline transition-all text-center leading-tight";
+const CTRL = "flex items-center justify-center gap-1.5 px-2 lg:px-4 py-2 text-[11px] lg:text-sm font-semibold  border border-hairline transition-all text-center leading-tight";
 
 const STATUS_OPTIONS = [
   { key: "todo", label: "Not Started" },
@@ -71,13 +71,13 @@ function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel }) 
   ];
 
   return (
-    <div className="border border-dashed border-hairline p-3 space-y-2 bg-background" data-testid={`update-form-${taskId}`}>
+    <div className="border border-dashed border-hairline p-3 space-y-2 bg-background rounded-md" data-testid={`update-form-${taskId}`}>
       <textarea rows={2} value={text} onChange={(e) => setText(e.target.value)} data-testid={`update-text-${taskId}`}
         placeholder="What did you find? e.g. Logistics can't commit to a date — supplier issue" className={inp} />
       <div className="flex gap-1">
         {ACTIONS.map((a) => (
           <button key={a.key} onClick={() => setAction(a.key)} data-testid={`update-action-${a.key}-${taskId}`}
-            className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-semibold uppercase tracking-wider border border-hairline transition-colors ${action === a.key ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>
+            className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-semibold  border border-hairline transition-colors ${action === a.key ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"} rounded-md`}>
             <a.icon size={13} weight="bold" /> {a.label}
           </button>
         ))}
@@ -97,10 +97,10 @@ function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel }) 
       {action === "escalate" && <p className="text-xs text-text-secondary">This will alert the owner and create a follow-up for them.</p>}
       <div className="flex gap-2">
         <button onClick={submit} disabled={busy} data-testid={`update-submit-${taskId}`}
-          className="flex-1 bg-primary text-primary-foreground py-1.5 text-xs font-semibold uppercase tracking-wider rounded-md hover:bg-primary-hover transition-all disabled:opacity-50">
+          className="flex-1 bg-primary text-primary-foreground py-1.5 text-xs font-semibold rounded-md hover:bg-primary-hover transition-all disabled:opacity-50">
           {busy ? "Posting…" : "Post"}
         </button>
-        <button onClick={onCancel} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-hairline hover:bg-surface-hover">Cancel</button>
+        <button onClick={onCancel} className="px-3 py-1.5 text-xs font-semibold border border-hairline hover:bg-surface-hover rounded-md">Cancel</button>
       </div>
     </div>
   );
@@ -114,12 +114,12 @@ function TaskTrail({ t, members, roleOptions, onChange }) {
   return (
     <div className="mt-4 border-t border-hairline pt-4" data-testid={`task-trail-${t.id}`}>
       <div className="flex items-center justify-between mb-2">
-        <span className="flex items-center gap-2 font-extrabold uppercase tracking-tight text-sm">
+        <span className="flex items-center gap-2 font-extrabold tracking-tight text-sm">
           <ChatCircleText size={16} weight="bold" className="text-text-tertiary" /> Activity &amp; Handoffs
         </span>
         {!open && (
           <button onClick={() => setOpen(true)} data-testid={`add-update-${t.id}`}
-            className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-hairline px-2 py-1 hover:bg-surface-hover transition-colors">
+            className="flex items-center gap-1 text-xs font-semibold border border-hairline px-2 py-1 hover:bg-surface-hover transition-colors rounded-md">
             <Plus size={12} weight="bold" /> Update / Escalate
           </button>
         )}
@@ -129,12 +129,12 @@ function TaskTrail({ t, members, roleOptions, onChange }) {
           {updates.map((u) => {
             const Icon = UPDATE_ICON[u.kind] || ChatText;
             return (
-              <li key={u.id} className="flex items-start gap-2 border border-hairline p-2.5">
+              <li key={u.id} className="flex items-start gap-2 border border-hairline p-2.5 rounded-md">
                 <Icon size={15} weight="bold" className={`mt-0.5 shrink-0 ${u.kind === "escalate" ? "text-destructive-text" : u.kind === "handoff" ? "text-primary-text" : "text-text-secondary"}`} />
                 <div className="min-w-0 flex-1">
-                  {u.step_text && <p className="text-label uppercase text-text-secondary">On: {u.step_text}</p>}
+                  {u.step_text && <p className="text-label text-text-secondary">On: {u.step_text}</p>}
                   <p className="text-sm">{u.text}</p>
-                  <p className="text-label uppercase text-text-secondary mt-1">
+                  <p className="text-label text-text-secondary mt-1">
                     {u.author_name}
                     {u.to_name && <> <ArrowRight size={10} weight="bold" className="inline" /> {u.to_name}</>}
                     {" · "}{new Date(u.created_at).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
@@ -256,11 +256,11 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
     return (
       <div className="mt-4 flex flex-col sm:flex-row gap-2" data-testid={`exec-plan-empty-${t.id}`}>
         <button onClick={generate} disabled={busy} data-testid={`generate-plan-${t.id}`}
-          className="flex-1 flex items-center justify-center gap-2 border border-dashed border-hairline-strong text-primary-text py-2.5 text-sm font-semibold uppercase tracking-wider hover:bg-destructive-tint transition-colors disabled:opacity-50">
+          className="flex-1 flex items-center justify-center gap-2 border border-dashed border-hairline-strong text-primary-text py-2.5 text-sm font-semibold hover:bg-destructive-tint transition-colors disabled:opacity-50 rounded-md">
           <Sparkle size={16} weight="bold" /> {busy ? "Thinking…" : "Generate AI plan"}
         </button>
         <button onClick={startManual} disabled={busy} data-testid={`manual-plan-${t.id}`}
-          className="flex-1 flex items-center justify-center gap-2 border border-dashed border-hairline text-text py-2.5 text-sm font-semibold uppercase tracking-wider hover:bg-surface-hover transition-colors disabled:opacity-50">
+          className="flex-1 flex items-center justify-center gap-2 border border-dashed border-hairline text-text py-2.5 text-sm font-semibold hover:bg-surface-hover transition-colors disabled:opacity-50 rounded-md">
           <PencilSimple size={16} weight="bold" /> Manual execution plan
         </button>
       </div>
@@ -270,12 +270,12 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
   return (
     <div className="mt-4 border-t border-hairline pt-4" data-testid={`exec-plan-${t.id}`}>
       <div className="flex items-center justify-between mb-2">
-        <span className="flex items-center gap-2 font-extrabold uppercase tracking-tight text-sm">
+        <span className="flex items-center gap-2 font-extrabold tracking-tight text-sm">
           <ListChecks size={16} weight="bold" className="text-text-tertiary" /> AI Execution Guide
         </span>
-        <span className="text-label uppercase" data-testid={`exec-progress-${t.id}`}>{progress}%</span>
+        <span className="text-label" data-testid={`exec-progress-${t.id}`}>{progress}%</span>
       </div>
-      <div className="h-2 bg-surface-sunken border border-hairline mb-3">
+      <div className="h-2 bg-surface-sunken border border-hairline mb-3 rounded-md">
         <div className="h-full bg-primary transition-all" style={{ width: `${progress}%` }} />
       </div>
 
@@ -288,27 +288,27 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
                   <textarea value={s.text} onChange={(e) => editStep(i, e.target.value)} rows={2}
                     className={`${inp} w-full resize-y leading-snug`} />
                   <div className="flex gap-1 shrink-0 self-end sm:self-start">
-                    <button onClick={() => setViewStep(s)} data-testid={`exec-expand-${t.id}-${i}`} className="p-2 sm:p-1 border border-hairline hover:bg-primary hover:text-white" title="View full"><ArrowsOutSimple size={14} weight="bold" /></button>
-                    <button onClick={() => moveStep(i, -1)} className="p-2 sm:p-1 border border-hairline hover:bg-surface-hover" title="Up"><ArrowUp size={14} weight="bold" /></button>
-                    <button onClick={() => moveStep(i, 1)} className="p-2 sm:p-1 border border-hairline hover:bg-surface-hover" title="Down"><ArrowDown size={14} weight="bold" /></button>
-                    <button onClick={() => removeStep(i)} data-testid={`exec-remove-${t.id}-${i}`} className="p-2 sm:p-1 border border-hairline hover:bg-destructive-tint" title="Remove"><Trash size={14} weight="bold" /></button>
+                    <button onClick={() => setViewStep(s)} data-testid={`exec-expand-${t.id}-${i}`} className="p-2 sm:p-1 border border-hairline hover:bg-primary hover:text-white rounded-md" title="View full"><ArrowsOutSimple size={14} weight="bold" /></button>
+                    <button onClick={() => moveStep(i, -1)} className="p-2 sm:p-1 border border-hairline hover:bg-surface-hover rounded-md" title="Up"><ArrowUp size={14} weight="bold" /></button>
+                    <button onClick={() => moveStep(i, 1)} className="p-2 sm:p-1 border border-hairline hover:bg-surface-hover rounded-md" title="Down"><ArrowDown size={14} weight="bold" /></button>
+                    <button onClick={() => removeStep(i)} data-testid={`exec-remove-${t.id}-${i}`} className="p-2 sm:p-1 border border-hairline hover:bg-destructive-tint rounded-md" title="Remove"><Trash size={14} weight="bold" /></button>
                   </div>
                 </>
               ) : (
                 <>
                   <button onClick={() => toggle(i)} data-testid={`exec-toggle-${t.id}-${i}`}
-                    className={`w-5 h-5 shrink-0 mt-0.5 border border-hairline flex items-center justify-center ${s.done ? "bg-success-600 text-text-inverse" : "bg-surface"}`}>
+                    className={`w-5 h-5 shrink-0 mt-0.5 border border-hairline flex items-center justify-center ${s.done ? "bg-success-600 text-text-inverse" : "bg-surface"} rounded-md`}>
                     {s.done && <CheckCircle size={13} weight="bold" />}
                   </button>
                   <button onClick={() => setViewStep(s)} data-testid={`exec-view-${t.id}-${i}`}
                     className={`text-sm flex-1 min-w-0 text-left break-words hover:underline decoration-dotted ${s.done ? "line-through text-text-secondary" : ""}`}>{s.text}</button>
                   <div className="flex gap-1 shrink-0">
                     <button onClick={() => askAI(s)} data-testid={`exec-ask-${t.id}-${i}`}
-                      className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-hairline px-2 py-1 hover:bg-surface-hover transition-colors">
+                      className="flex items-center gap-1 text-xs font-semibold border border-hairline px-2 py-1 hover:bg-surface-hover transition-colors rounded-md">
                       <Sparkle size={12} weight="bold" /> Ask AI
                     </button>
                     <button onClick={() => setUpdStep(updStep === s.id ? null : s.id)} data-testid={`exec-update-${t.id}-${i}`}
-                      className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-hairline px-2 py-1 hover:bg-primary hover:text-white transition-colors">
+                      className="flex items-center gap-1 text-xs font-semibold border border-hairline px-2 py-1 hover:bg-primary hover:text-white transition-colors rounded-md">
                       <ArrowBendUpRight size={12} weight="bold" /> Update
                     </button>
                   </div>
@@ -322,21 +322,21 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
               </div>
             )}
             {ask[s.id] && (
-              <div className="ml-7 mt-1.5 mb-2 border border-hairline bg-background p-2.5 text-xs" data-testid={`exec-ask-result-${t.id}-${i}`}>
-                {ask[s.id].loading ? <p className="text-label uppercase">AI is thinking…</p>
+              <div className="ml-7 mt-1.5 mb-2 border border-hairline bg-background p-2.5 text-xs rounded-md" data-testid={`exec-ask-result-${t.id}-${i}`}>
+                {ask[s.id].loading ? <p className="text-label">AI is thinking…</p>
                   : ask[s.id].error ? <p className="text-primary-text">Couldn't fetch a suggestion.</p>
                   : (
                     <>
                       <p className="flex items-start gap-1.5"><Robot size={13} weight="bold" className="text-primary-text mt-0.5 shrink-0" /><span>{ask[s.id].data.suggestion}</span></p>
                       {(ask[s.id].data.objections || []).length > 0 && (
                         <div className="mt-2 space-y-1.5">
-                          <p className="text-label uppercase text-text-secondary">If they push back:</p>
+                          <p className="text-label text-text-secondary">If they push back:</p>
                           {ask[s.id].data.objections.map((o, k) => (
                             <p key={`${o.objection}-${k}`}><span className="font-semibold">“{o.objection}”</span> — {o.response}</p>
                           ))}
                         </div>
                       )}
-                      <button onClick={() => setAsk((a) => ({ ...a, [s.id]: undefined }))} className="mt-2 text-label uppercase text-primary-text">dismiss</button>
+                      <button onClick={() => setAsk((a) => ({ ...a, [s.id]: undefined }))} className="mt-2 text-label text-primary-text">dismiss</button>
                     </>
                   )}
               </div>
@@ -349,7 +349,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
         <div className="flex gap-2 mt-3">
           <input value={newStep} onChange={(e) => setNewStep(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addStep()}
             placeholder="Add your own step…" data-testid={`exec-newstep-${t.id}`} className={inp} />
-          <button onClick={addStep} data-testid={`exec-add-${t.id}`} className="px-3 border border-hairline hover:bg-surface-hover"><Plus size={14} weight="bold" /></button>
+          <button onClick={addStep} data-testid={`exec-add-${t.id}`} className="px-3 border border-hairline hover:bg-surface-hover rounded-md"><Plus size={14} weight="bold" /></button>
         </div>
       )}
 
@@ -357,22 +357,22 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
         {editing ? (
           <>
             <button onClick={() => save("accepted")} disabled={busy} data-testid={`exec-accept-${t.id}`}
-              className="flex-1 min-w-[140px] flex items-center justify-center gap-2 bg-primary text-primary-foreground py-2 text-sm font-semibold uppercase tracking-wider border border-hairline hover:shadow-xs transition-all disabled:opacity-50">
+              className="flex-1 min-w-[140px] flex items-center justify-center gap-2 bg-primary text-primary-foreground py-2 text-sm font-semibold border border-hairline hover:shadow-xs transition-all disabled:opacity-50 rounded-md">
               <CheckCircle size={16} weight="bold" /> Accept plan
             </button>
             <button onClick={generate} disabled={busy} data-testid={`exec-regenerate-${t.id}`}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline hover:bg-surface-hover transition-colors disabled:opacity-50">
+              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold border border-hairline hover:bg-surface-hover transition-colors disabled:opacity-50 rounded-md">
               <ArrowClockwise size={15} weight="bold" /> Regenerate
             </button>
             <button onClick={cancelAIPlan} disabled={busy} data-testid={`exec-cancel-plan-${t.id}`}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline text-primary-text hover:bg-destructive-tint transition-colors disabled:opacity-50">
+              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold border border-hairline text-primary-text hover:bg-destructive-tint transition-colors disabled:opacity-50 rounded-md">
               <XCircle size={15} weight="bold" /> Cancel plan
             </button>
           </>
         ) : (
           t.status !== "done" && (
             <button onClick={() => setEditing(true)} data-testid={`exec-edit-${t.id}`}
-              className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider border border-hairline px-4 py-2 hover:bg-surface-hover transition-colors">
+              className="flex items-center gap-2 text-sm font-semibold border border-hairline px-4 py-2 hover:bg-surface-hover transition-colors rounded-md">
               <PencilSimple size={15} weight="bold" /> Customize steps
             </button>
           )
@@ -382,10 +382,10 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
       <Dialog open={!!viewStep} onOpenChange={(o) => !o && setViewStep(null)}>
         <DialogContent className="border border-hairline rounded-md">
           <DialogHeader>
-            <DialogTitle className="uppercase tracking-tight text-base flex items-center gap-2"><ListChecks size={18} weight="bold" className="text-primary-text" /> Execution Step</DialogTitle>
+            <DialogTitle className="tracking-tight text-base flex items-center gap-2"><ListChecks size={18} weight="bold" className="text-primary-text" /> Execution Step</DialogTitle>
           </DialogHeader>
           <p className="text-sm leading-relaxed whitespace-pre-wrap break-words" data-testid={`exec-step-detail-${t.id}`}>{viewStep?.text}</p>
-          <p className="text-label uppercase text-text-secondary mt-1">Tap outside to close</p>
+          <p className="text-label text-text-secondary mt-1">Tap outside to close</p>
         </DialogContent>
       </Dialog>
     </div>
@@ -401,9 +401,9 @@ const PRIORITY_AXES = [
 
 function PriorityScoreBars({ scores }) {
   return (
-    <div className="mt-3 border border-hairline bg-black/[0.02] p-3" data-testid="priority-score-bars">
+    <div className="mt-3 border border-hairline bg-black/[0.02] p-3 rounded-md" data-testid="priority-score-bars">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-label uppercase text-text-secondary flex items-center gap-1"><Sparkle size={12} weight="bold" className="text-text-tertiary" /> AI Priority</span>
+        <span className="text-label text-text-secondary flex items-center gap-1"><Sparkle size={12} weight="bold" className="text-text-tertiary" /> AI Priority</span>
         {scores.priority_score != null && (
           <span className="font-black text-lg leading-none" data-testid="priority-score-value">{scores.priority_score}</span>
         )}
@@ -411,11 +411,11 @@ function PriorityScoreBars({ scores }) {
       <div className="space-y-1.5">
         {PRIORITY_AXES.map((a) => (
           <div key={a.key} className="flex items-center gap-2" data-testid={`axis-${a.key}`}>
-            <span className="text-label uppercase w-16 shrink-0 text-text-secondary">{a.label}</span>
-            <div className="flex-1 h-2 bg-surface-sunken border border-hairline">
+            <span className="text-label w-16 shrink-0 text-text-secondary">{a.label}</span>
+            <div className="flex-1 h-2 bg-surface-sunken border border-hairline rounded-md">
               <div className={`h-full ${a.color}`} style={{ width: `${scores[a.key] || 0}%` }} />
             </div>
-            <span className="text-label uppercase w-7 text-right">{scores[a.key] || 0}</span>
+            <span className="text-label w-7 text-right">{scores[a.key] || 0}</span>
           </div>
         ))}
       </div>
@@ -456,26 +456,26 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
     <Dialog open={open} onOpenChange={(o) => { if (!o) { setZoom(null); setConfirmDel(false); } onOpenChange(o); }}>
       <DialogContent className="border border-hairline rounded-md max-w-2xl max-h-[90vh] overflow-y-auto" data-testid={`task-detail-${t.id}`}>
         <DialogHeader>
-          <DialogTitle className="uppercase tracking-tight text-base pr-6">{t.title}</DialogTitle>
+          <DialogTitle className="tracking-tight text-base pr-6">{t.title}</DialogTitle>
         </DialogHeader>
         {zoom ? (
           <div className="space-y-3">
-            <button onClick={() => setZoom(null)} data-testid={`detail-zoom-back-${t.id}`} className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-hairline px-2 py-1 hover:bg-surface-hover"><X size={14} weight="bold" /> Back to details</button>
-            <img src={zoom} alt="proof full" className="w-full h-auto max-h-[70vh] object-contain border border-hairline" />
+            <button onClick={() => setZoom(null)} data-testid={`detail-zoom-back-${t.id}`} className="flex items-center gap-1 text-xs font-semibold border border-hairline px-2 py-1 hover:bg-surface-hover rounded-md"><X size={14} weight="bold" /> Back to details</button>
+            <img src={zoom} alt="proof full" className="w-full h-auto max-h-[70vh] object-contain border border-hairline rounded-md" />
           </div>
         ) : (
           <div className="space-y-5">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-hairline bg-surface">{STATUS_LABEL[t.status] || t.status}</span>
+              <span className="px-2 py-0.5 text-xs font-semibold border border-hairline bg-surface rounded-md">{STATUS_LABEL[t.status] || t.status}</span>
               {t.assignee_name && <span className="inline-flex items-center gap-1 text-xs text-text-secondary"><UserCircle size={13} weight="bold" /> {t.assignee_name}</span>}
               {t.due_date && <span className="text-xs text-text-secondary">due {new Date(t.due_date).toLocaleDateString()}</span>}
-              <span className="text-label uppercase text-text-secondary ml-auto">{t.progress || 0}%</span>
+              <span className="text-label text-text-secondary ml-auto">{t.progress || 0}%</span>
             </div>
             {t.description && <p className="text-sm text-text-secondary">{t.description}</p>}
 
             {steps.length > 0 && (
               <div>
-                <p className="flex items-center gap-2 font-extrabold uppercase tracking-tight text-sm mb-2"><ListChecks size={16} weight="bold" className="text-text-tertiary" /> What was done</p>
+                <p className="flex items-center gap-2 font-extrabold tracking-tight text-sm mb-2"><ListChecks size={16} weight="bold" className="text-text-tertiary" /> What was done</p>
                 <ul className="space-y-1.5">
                   {steps.map((s) => (
                     <li key={s.id} className="flex items-start gap-2 text-sm" data-testid={`detail-step-${t.id}-${s.id}`}>
@@ -489,26 +489,26 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
 
             {refs.length > 0 && (
               <div data-testid={`detail-reference-${t.id}`}>
-                <p className="flex items-center gap-2 font-extrabold uppercase tracking-tight text-sm mb-2"><Paperclip size={15} weight="bold" className="text-primary-text" /> Reference material · {refs.length}</p>
+                <p className="flex items-center gap-2 font-extrabold tracking-tight text-sm mb-2"><Paperclip size={15} weight="bold" className="text-primary-text" /> Reference material · {refs.length}</p>
                 <div className="flex flex-wrap gap-2 items-center">
                   {refs.map((a) => (
                     isImg(a)
                       ? <button key={a.url} type="button" onClick={() => setZoom(url(a.url))} data-testid={`detail-ref-photo-${t.id}-${a.url}`}
-                          className="relative w-24 h-24 border border-hairline overflow-hidden group" title="Click to view full image">
+                          className="relative w-24 h-24 border border-hairline overflow-hidden group rounded-md" title="Click to view full image">
                           <img src={url(a.url)} alt={a.filename || "reference"} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
                           <span className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"><MagnifyingGlassPlus size={20} weight="bold" className="text-white" /></span>
                         </button>
                       : isAudio(a)
                         ? <audio key={a.url} controls preload="none" src={url(a.url)} className="h-9 w-full" data-testid={`detail-ref-voice-${t.id}-${a.url}`} />
                         : <a key={a.url} href={url(a.url)} target="_blank" rel="noreferrer" data-testid={`detail-ref-file-${t.id}-${a.url}`}
-                            className="inline-flex items-center gap-1.5 border border-hairline bg-surface px-2.5 py-1.5 text-xs text-label uppercase hover:bg-surface-hover transition-colors max-w-[220px]">
+                            className="inline-flex items-center gap-1.5 border border-hairline bg-surface px-2.5 py-1.5 text-xs text-label hover:bg-surface-hover transition-colors max-w-[220px] rounded-md">
                             <File size={14} weight="bold" /> <span className="truncate">{a.filename || "file"}</span>
                           </a>
                   ))}
                 </div>
                 {insights.map((ins, i) => (
-                  <div key={i} className="mt-3 border border-hairline-strong/40 bg-primary/[0.04] p-3" data-testid={`detail-ref-insight-${t.id}-${i}`}>
-                    <p className="flex items-center gap-1.5 text-label uppercase text-primary-text mb-1"><Lightbulb size={13} weight="fill" className="text-status-pending-fg" /> AI read this reference{ins.filename ? ` · ${ins.filename}` : ""}</p>
+                  <div key={i} className="mt-3 border border-hairline-strong/40 bg-primary/[0.04] p-3 rounded-md" data-testid={`detail-ref-insight-${t.id}-${i}`}>
+                    <p className="flex items-center gap-1.5 text-label text-primary-text mb-1"><Lightbulb size={13} weight="fill" className="text-status-pending-fg" /> AI read this reference{ins.filename ? ` · ${ins.filename}` : ""}</p>
                     <p className="text-sm">{ins.summary}</p>
                     {(ins.points || []).length > 0 && (
                       <ul className="mt-2 space-y-1">
@@ -521,7 +521,7 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
             )}
 
             <div>
-              <p className="flex items-center gap-2 font-extrabold uppercase tracking-tight text-sm mb-2"><Paperclip size={15} weight="bold" className="text-primary-text" /> Proof of work{proof.length > 0 ? ` · ${proof.length}` : ""}</p>
+              <p className="flex items-center gap-2 font-extrabold tracking-tight text-sm mb-2"><Paperclip size={15} weight="bold" className="text-primary-text" /> Proof of work{proof.length > 0 ? ` · ${proof.length}` : ""}</p>
               {proof.length === 0 ? (
                 <p className="text-sm text-text-secondary" data-testid={`detail-no-proof-${t.id}`}>No proof uploaded for this task.</p>
               ) : (
@@ -530,7 +530,7 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
                     <div className="flex flex-wrap gap-2">
                       {photos.map((a) => (
                         <button key={a.url} type="button" onClick={() => setZoom(url(a.url))} data-testid={`detail-photo-${t.id}-${a.url}`}
-                          className="relative w-24 h-24 border border-hairline overflow-hidden group" title="Click to view full photo">
+                          className="relative w-24 h-24 border border-hairline overflow-hidden group rounded-md" title="Click to view full photo">
                           <img src={url(a.url)} alt="proof" className="w-full h-full object-cover transition-transform group-hover:scale-105" />
                           <span className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"><MagnifyingGlassPlus size={20} weight="bold" className="text-white" /></span>
                         </button>
@@ -541,7 +541,7 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
                     isAudio(a)
                       ? <audio key={a.url} controls preload="none" src={url(a.url)} className="h-9 w-full" data-testid={`detail-voice-${t.id}-${a.url}`} />
                       : <a key={a.url} href={url(a.url)} target="_blank" rel="noreferrer" data-testid={`detail-proof-file-${t.id}-${a.url}`}
-                          className="inline-flex items-center gap-1.5 border border-hairline bg-surface px-2.5 py-1.5 text-xs text-label uppercase hover:bg-surface-hover transition-colors max-w-[220px]">
+                          className="inline-flex items-center gap-1.5 border border-hairline bg-surface px-2.5 py-1.5 text-xs text-label hover:bg-surface-hover transition-colors max-w-[220px] rounded-md">
                           <File size={14} weight="bold" /> <span className="truncate">{a.filename || "file"}</span>
                         </a>
                   ))}
@@ -551,15 +551,15 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
 
             {updates.length > 0 && (
               <div>
-                <p className="flex items-center gap-2 font-extrabold uppercase tracking-tight text-sm mb-2"><ChatCircleText size={16} weight="bold" className="text-text-tertiary" /> Activity &amp; Handoffs</p>
+                <p className="flex items-center gap-2 font-extrabold tracking-tight text-sm mb-2"><ChatCircleText size={16} weight="bold" className="text-text-tertiary" /> Activity &amp; Handoffs</p>
                 <ul className="space-y-2">
                   {updates.map((u) => (
-                    <li key={u.id} className="flex items-start gap-2 border border-hairline p-2.5">
+                    <li key={u.id} className="flex items-start gap-2 border border-hairline p-2.5 rounded-md">
                       <ChatText size={15} weight="bold" className="mt-0.5 shrink-0 text-text-secondary" />
                       <div className="min-w-0 flex-1">
-                        {u.step_text && <p className="text-label uppercase text-text-secondary">On: {u.step_text}</p>}
+                        {u.step_text && <p className="text-label text-text-secondary">On: {u.step_text}</p>}
                         <p className="text-sm">{u.text}</p>
-                        <p className="text-label uppercase text-text-secondary mt-1">{u.author_name}{u.to_name && <> <ArrowRight size={10} weight="bold" className="inline" /> {u.to_name}</>}{" · "}{new Date(u.created_at).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
+                        <p className="text-label text-text-secondary mt-1">{u.author_name}{u.to_name && <> <ArrowRight size={10} weight="bold" className="inline" /> {u.to_name}</>}{" · "}{new Date(u.created_at).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
                       </div>
                     </li>
                   ))}
@@ -571,18 +571,18 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
               <div className="border-t border-hairline pt-3">
                 {!confirmDel ? (
                   <button onClick={() => setConfirmDel(true)} data-testid={`delete-task-${t.id}`}
-                    className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-primary-text border border-hairline-strong px-3 py-1.5 hover:bg-destructive-tint transition-colors">
+                    className="flex items-center gap-1.5 text-xs font-semibold text-primary-text border border-hairline-strong px-3 py-1.5 hover:bg-destructive-tint transition-colors rounded-md">
                     <Trash size={13} weight="bold" /> Delete task
                   </button>
                 ) : (
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs font-semibold">Delete this task permanently?</span>
                     <button onClick={doDelete} disabled={deleting} data-testid={`delete-task-confirm-${t.id}`}
-                      className="text-xs font-semibold uppercase tracking-wider bg-primary text-primary-foreground px-3 py-1.5 border border-hairline-strong hover:shadow-xs transition-all disabled:opacity-60">
+                      className="text-xs font-semibold bg-primary text-primary-foreground px-3 py-1.5 border border-hairline-strong hover:shadow-xs transition-all disabled:opacity-60 rounded-md">
                       {deleting ? "Deleting…" : "Yes, delete"}
                     </button>
                     <button onClick={() => setConfirmDel(false)} disabled={deleting}
-                      className="text-xs font-semibold uppercase tracking-wider border border-hairline px-3 py-1.5 hover:bg-surface-hover transition-colors">
+                      className="text-xs font-semibold border border-hairline px-3 py-1.5 hover:bg-surface-hover transition-colors rounded-md">
                       Cancel
                     </button>
                   </div>
@@ -722,7 +722,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
   };
 
   const isOp = t.task_type === "operational" || !!t.op_category;
-  const selCls = "border border-hairline px-2 py-1 text-xs text-label uppercase bg-surface focus:outline-none";
+  const selCls = "border border-hairline px-2 py-1 text-xs text-label bg-surface focus:outline-none";
 
   return (
     <div id={`task-card-${t.id}`} data-testid={`mywork-task-${t.id}`} className={`rounded-lg border border-hairline bg-surface p-5 transition-all ${highlight ? "ring-4 ring-ring ring-offset-2 ring-offset-background" : ""}`}>
@@ -732,7 +732,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
       </div>
       {t.description && <p className="text-sm text-text-secondary mt-1">{t.description}</p>}
       {showAssignee && !isOp && (
-        <p className="text-label uppercase text-text-secondary mt-2 flex items-center gap-1" data-testid={`assignee-line-${t.id}`}>
+        <p className="text-label text-text-secondary mt-2 flex items-center gap-1" data-testid={`assignee-line-${t.id}`}>
           <UserCircle size={13} weight="bold" />
           {t.assignee_name ? t.assignee_name : (t.assignee_role ? `${t.assignee_role} team` : "Unassigned")}
         </p>
@@ -741,11 +741,11 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
 
       {isOp && (
         <div className="mt-3 flex flex-wrap items-center gap-2" data-testid={`op-meta-${t.id}`}>
-          {t.op_category && <span className="inline-flex items-center gap-1 border border-hairline px-2 py-0.5 text-xs font-semibold uppercase tracking-wider bg-status-pending-bg"><Tag size={11} weight="bold" /> {t.op_category}</span>}
+          {t.op_category && <span className="inline-flex items-center gap-1 border border-hairline px-2 py-0.5 text-xs font-semibold bg-status-pending-bg rounded-md"><Tag size={11} weight="bold" /> {t.op_category}</span>}
           {t.assignee_name && <span className="inline-flex items-center gap-1 text-xs text-text-secondary"><UserCircle size={13} weight="bold" /> {t.assignee_name}</span>}
           {t.support_name && <span className="text-xs text-text-secondary">+ {t.support_name}</span>}
           {t.approval_required && (
-            <span data-testid={`op-approval-${t.id}`} className={`inline-flex items-center gap-1 border border-hairline px-2 py-0.5 text-xs font-semibold uppercase tracking-wider ${t.approval_status === "approved" ? "bg-success-600 text-white" : t.approval_status === "pending" ? "bg-status-pending-bg" : t.approval_status === "rejected" ? "bg-primary text-primary-foreground" : "bg-background"}`}>
+            <span data-testid={`op-approval-${t.id}`} className={`inline-flex items-center gap-1 border border-hairline px-2 py-0.5 text-xs font-semibold  ${t.approval_status === "approved" ? "bg-success-600 text-white" : t.approval_status === "pending" ? "bg-status-pending-bg" : t.approval_status === "rejected" ? "bg-primary text-primary-foreground" : "bg-background"} rounded-md`}>
               <ShieldCheck size={11} weight="bold" /> {t.approval_status === "approved" ? "Approved" : t.approval_status === "pending" ? "Pending approval" : t.approval_status === "rejected" ? "Changes requested" : `${t.approver_name || "Approval"} required`}
             </span>
           )}
@@ -753,19 +753,19 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
       )}
 
       <div className="flex items-center flex-wrap gap-1.5 mt-3">
-        <span data-testid={`status-chip-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-hairline bg-surface">{STATUS_LABEL[t.status] || t.status}</span>
-        {isOverdue(t) && <span data-testid={`overdue-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider rounded-pill bg-status-overdue-bg text-status-overdue-fg">Overdue</span>}
-        {t.source === "escalation" && <span data-testid={`badge-escalation-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-hairline bg-primary text-primary-foreground">Escalation</span>}
-        {t.source === "handoff" && <span data-testid={`badge-handoff-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-hairline bg-primary text-primary-foreground">Handoff</span>}
+        <span data-testid={`status-chip-${t.id}`} className="px-2 py-0.5 text-xs font-semibold border border-hairline bg-surface rounded-md">{STATUS_LABEL[t.status] || t.status}</span>
+        {isOverdue(t) && <span data-testid={`overdue-${t.id}`} className="px-2 py-0.5 text-xs font-semibold rounded-pill bg-status-overdue-bg text-status-overdue-fg">Overdue</span>}
+        {t.source === "escalation" && <span data-testid={`badge-escalation-${t.id}`} className="px-2 py-0.5 text-xs font-semibold border border-hairline bg-primary text-primary-foreground rounded-md">Escalation</span>}
+        {t.source === "handoff" && <span data-testid={`badge-handoff-${t.id}`} className="px-2 py-0.5 text-xs font-semibold border border-hairline bg-primary text-primary-foreground rounded-md">Handoff</span>}
         {(t.attachment_count || 0) > 0 && <span data-testid={`att-count-${t.id}`} className="inline-flex items-center gap-1 text-xs text-text-secondary"><Paperclip size={12} weight="bold" /> {t.attachment_count}</span>}
         {t.due_date && <span className="text-xs text-text-secondary">due {new Date(t.due_date).toLocaleString(undefined, { day: "numeric", month: "short", ...(t.due_date.includes("T") ? { hour: "2-digit", minute: "2-digit" } : {}) })}</span>}
-        <button onClick={() => setDetailOpen(true)} data-testid={`view-details-${t.id}`} className="ml-auto inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-hairline px-2 py-0.5 hover:bg-surface-hover transition-colors">
+        <button onClick={() => setDetailOpen(true)} data-testid={`view-details-${t.id}`} className="ml-auto inline-flex items-center gap-1 text-xs font-semibold border border-hairline px-2 py-0.5 hover:bg-surface-hover transition-colors rounded-md">
           <Eye size={13} weight="bold" /> View details
         </button>
       </div>
 
       {t.updated_at && (
-        <p className="text-label uppercase text-text-secondary mt-2 flex items-center gap-1" data-testid={`task-updated-${t.id}`} title={fullTime(t.updated_at)}>
+        <p className="text-label text-text-secondary mt-2 flex items-center gap-1" data-testid={`task-updated-${t.id}`} title={fullTime(t.updated_at)}>
           <ClockCounterClockwise size={12} weight="bold" />
           {t.last_action || "Updated"} · {timeAgo(t.updated_at)}
         </p>
@@ -773,19 +773,19 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
 
       <div className="mt-3">
         <div className="flex items-center justify-between mb-1">
-          <span className="text-label uppercase text-text-secondary">Progress</span>
-          <span className="text-label uppercase" data-testid={`progress-value-${t.id}`}>{t.progress || 0}%</span>
+          <span className="text-label text-text-secondary">Progress</span>
+          <span className="text-label" data-testid={`progress-value-${t.id}`}>{t.progress || 0}%</span>
         </div>
-        <div className="h-2 bg-surface-sunken border border-hairline"><div className="h-full bg-primary transition-all" style={{ width: `${t.progress || 0}%` }} /></div>
+        <div className="h-2 bg-surface-sunken border border-hairline rounded-md"><div className="h-full bg-primary transition-all" style={{ width: `${t.progress || 0}%` }} /></div>
       </div>
 
       {!isTerminal(t) && !awaitingApproval && (
         <div className="flex flex-wrap items-center gap-2 mt-3">
-          <label className="text-label uppercase text-text-secondary">Status</label>
+          <label className="text-label text-text-secondary">Status</label>
           <select data-testid={`status-select-${t.id}`} value={t.status === "blocked" ? "todo" : t.status} onChange={(e) => setStatus(e.target.value)} className={selCls}>
             {STATUS_OPTIONS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
           </select>
-          <label className="text-label uppercase text-text-secondary ml-1">Set progress</label>
+          <label className="text-label text-text-secondary ml-1">Set progress</label>
           <select data-testid={`progress-select-${t.id}`} value={PROGRESS_OPTIONS.includes(t.progress) ? t.progress : 0} onChange={(e) => setProgress(e.target.value)} className={selCls}>
             {PROGRESS_OPTIONS.map((p) => <option key={p} value={p}>{p}%</option>)}
           </select>
@@ -803,7 +803,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
         const renderAtt = (a) => (
           isImg(a)
             ? <button key={a.url} type="button" onClick={() => setLightbox(`${beUrl}${a.url}`)}
-                className="relative w-20 h-20 border border-hairline overflow-hidden group" title="Click to view full image"
+                className="relative w-20 h-20 border border-hairline overflow-hidden group rounded-md" title="Click to view full image"
                 data-testid={`att-photo-${t.id}-${a.url}`}>
                 <img src={`${beUrl}${a.url}`} alt={a.filename || "attachment"} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
                 <span className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
@@ -813,15 +813,15 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
             : isAudio(a)
               ? <audio key={a.url} controls preload="none" src={`${beUrl}${a.url}`} className="h-9" data-testid={`att-voice-${t.id}-${a.url}`} />
               : <a key={a.url} href={`${beUrl}${a.url}`} target="_blank" rel="noreferrer" data-testid={`att-file-${t.id}-${a.url}`}
-                  className="inline-flex items-center gap-1.5 border border-hairline bg-surface px-2.5 py-1.5 text-xs text-label uppercase hover:bg-surface-hover transition-colors max-w-[180px]">
+                  className="inline-flex items-center gap-1.5 border border-hairline bg-surface px-2.5 py-1.5 text-xs text-label hover:bg-surface-hover transition-colors max-w-[180px] rounded-md">
                   <File size={13} weight="bold" /> <span className="truncate">{a.filename || "file"}</span>
                 </a>
         );
         return (
           <>
             {refs.length > 0 && (
-              <div className="mt-3 border border-hairline-strong/40 bg-primary/[0.04] p-3" data-testid={`reference-block-${t.id}`}>
-                <p className="text-label uppercase text-primary-text flex items-center gap-1.5 mb-2">
+              <div className="mt-3 border border-hairline-strong/40 bg-primary/[0.04] p-3 rounded-md" data-testid={`reference-block-${t.id}`}>
+                <p className="text-label text-primary-text flex items-center gap-1.5 mb-2">
                   <Paperclip size={13} weight="bold" /> Reference material · {refs.length}
                 </p>
                 <div className="flex flex-wrap gap-2 items-center">{refs.map(renderAtt)}</div>
@@ -834,8 +834,8 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
               </div>
             )}
             {proof.length > 0 && (
-              <div className="mt-3 border border-hairline bg-black/[0.02] p-3" data-testid={`proof-block-${t.id}`}>
-                <p className="text-label uppercase text-text-secondary flex items-center gap-1.5 mb-2">
+              <div className="mt-3 border border-hairline bg-black/[0.02] p-3 rounded-md" data-testid={`proof-block-${t.id}`}>
+                <p className="text-label text-text-secondary flex items-center gap-1.5 mb-2">
                   <Paperclip size={13} weight="bold" /> Proof of work · {proof.length}
                 </p>
                 <div className="flex flex-wrap gap-2 items-center">{proof.map(renderAtt)}</div>
@@ -855,26 +855,26 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
       </Dialog>
 
       {canApprove && awaitingApproval && (
-        <div className="flex flex-wrap gap-2 mt-4 border border-hairline bg-status-pending-bg p-3" data-testid={`approval-actions-${t.id}`}>
-          <span className="w-full text-label uppercase text-text-secondary">This task needs your approval before {t.assignee_name || "the assignee"} can start work.</span>
+        <div className="flex flex-wrap gap-2 mt-4 border border-hairline bg-status-pending-bg p-3 rounded-md" data-testid={`approval-actions-${t.id}`}>
+          <span className="w-full text-label text-text-secondary">This task needs your approval before {t.assignee_name || "the assignee"} can start work.</span>
           {t.approval_status === "rejected" && t.rejection_reason && <span className="w-full text-xs text-primary-text">Previously requested: {t.rejection_reason}</span>}
-          <button onClick={approveTask} data-testid={`approve-${t.id}`} className="flex items-center gap-2 bg-success-600 text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline hover:shadow-xs transition-all">
+          <button onClick={approveTask} data-testid={`approve-${t.id}`} className="flex items-center gap-2 bg-success-600 text-white px-4 py-2 text-sm font-semibold border border-hairline hover:shadow-xs transition-all rounded-md">
             <CheckCircle size={16} weight="bold" /> Approve
           </button>
-          <button onClick={rejectTask} data-testid={`reject-${t.id}`} className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline hover:shadow-xs transition-all">
+          <button onClick={rejectTask} data-testid={`reject-${t.id}`} className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold border border-hairline hover:shadow-xs transition-all rounded-md">
             <WarningCircle size={16} weight="bold" /> Request changes
           </button>
-          <button onClick={clarifyTask} data-testid={`clarify-${t.id}`} className="flex items-center gap-2 bg-orange-500 text-text px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline hover:shadow-xs transition-all">
+          <button onClick={clarifyTask} data-testid={`clarify-${t.id}`} className="flex items-center gap-2 bg-orange-500 text-text px-4 py-2 text-sm font-semibold border border-hairline hover:shadow-xs transition-all rounded-md">
             <ChatText size={16} weight="bold" /> Ask clarification
           </button>
         </div>
       )}
 
       {lockedForAssignee && (
-        <div className="flex items-start gap-2 mt-4 border border-hairline bg-background p-3" data-testid={`approval-locked-${t.id}`}>
+        <div className="flex items-start gap-2 mt-4 border border-hairline bg-background p-3 rounded-md" data-testid={`approval-locked-${t.id}`}>
           <LockKey size={18} weight="bold" className="text-primary-text shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-bold uppercase tracking-tight">{t.approval_status === "rejected" ? "Changes requested" : "Awaiting approval"}</p>
+            <p className="text-sm font-bold tracking-tight">{t.approval_status === "rejected" ? "Changes requested" : "Awaiting approval"}</p>
             <p className="text-xs text-text-secondary">You can start once {t.approver_name || "the approver"} approves this task. Status, progress and the execution plan are locked until then.</p>
             {t.approval_status === "rejected" && t.rejection_reason && <p className="text-xs text-primary-text mt-1">Note: {t.rejection_reason}</p>}
           </div>
@@ -882,7 +882,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
       )}
 
       {t.evidence_required && !isTerminal(t) && !awaitingApproval && (
-        <div className={`mt-3 flex items-start gap-2 border border-hairline p-2.5 ${hasEvidence ? "bg-success-600/10" : "bg-status-pending-bg/30"}`} data-testid={`evidence-required-${t.id}`}>
+        <div className={`mt-3 flex items-start gap-2 border border-hairline p-2.5 ${hasEvidence ? "bg-success-600/10" : "bg-status-pending-bg/30"} rounded-md`} data-testid={`evidence-required-${t.id}`}>
           {hasEvidence ? <CheckCircle size={16} weight="fill" className="text-status-completed-fg shrink-0 mt-0.5" /> : <Info size={16} weight="bold" className="text-primary-text shrink-0 mt-0.5" />}
           <p className="text-xs">{hasEvidence
             ? "Proof attached — you can mark this task complete."
@@ -892,22 +892,22 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
 
       {!isTerminal(t) && !awaitingApproval && (
         <div className="flex flex-wrap gap-2 mt-4">
-          <button onClick={complete} disabled={t.evidence_required && !hasEvidence} data-testid={`complete-${t.id}`} className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline hover:shadow-xs transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+          <button onClick={complete} disabled={t.evidence_required && !hasEvidence} data-testid={`complete-${t.id}`} className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold border border-hairline hover:shadow-xs transition-all disabled:opacity-40 disabled:cursor-not-allowed rounded-md">
             <CheckCircle size={16} weight="bold" /> Complete
           </button>
-          <button onClick={() => fileRef.current?.click()} disabled={uploading} data-testid={`photo-${t.id}`} className="flex items-center gap-2 border border-hairline px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-surface-hover">
+          <button onClick={() => fileRef.current?.click()} disabled={uploading} data-testid={`photo-${t.id}`} className="flex items-center gap-2 border border-hairline px-4 py-2 text-sm font-semibold hover:bg-surface-hover rounded-md">
             <Camera size={16} weight="bold" /> Photo
           </button>
           <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onPhoto} />
-          <button onClick={() => evidenceRef.current?.click()} disabled={uploading} data-testid={`upload-file-${t.id}`} className="flex items-center gap-2 border border-hairline px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-surface-hover">
+          <button onClick={() => evidenceRef.current?.click()} disabled={uploading} data-testid={`upload-file-${t.id}`} className="flex items-center gap-2 border border-hairline px-4 py-2 text-sm font-semibold hover:bg-surface-hover rounded-md">
             <FileArrowUp size={16} weight="bold" /> Upload file
           </button>
           <input ref={evidenceRef} type="file" className="hidden" onChange={onEvidence} />
-          <button onClick={toggleVoice} data-testid={`voice-${t.id}`} className={`flex items-center gap-2 border border-hairline px-4 py-2 text-sm font-semibold uppercase tracking-wider transition-colors ${recording ? "bg-primary text-primary-foreground" : "hover:bg-surface-hover"}`}>
+          <button onClick={toggleVoice} data-testid={`voice-${t.id}`} className={`flex items-center gap-2 border border-hairline px-4 py-2 text-sm font-semibold  transition-colors ${recording ? "bg-primary text-primary-foreground" : "hover:bg-surface-hover"} rounded-md`}>
             {recording ? <Stop size={16} weight="fill" /> : <Microphone size={16} weight="bold" />} {recording ? "Stop & send" : "Voice reply"}
           </button>
           {recording && (
-            <button onClick={cancelVoice} data-testid={`voice-cancel-${t.id}`} className="flex items-center gap-2 border border-hairline px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-surface-hover">
+            <button onClick={cancelVoice} data-testid={`voice-cancel-${t.id}`} className="flex items-center gap-2 border border-hairline px-4 py-2 text-sm font-semibold hover:bg-surface-hover rounded-md">
               <X size={16} weight="bold" /> Cancel
             </button>
           )}
@@ -916,7 +916,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
 
       {isTerminal(t) && !awaitingApproval && (
         <div className="flex flex-wrap gap-2 mt-4" data-testid={`reopen-actions-${t.id}`}>
-          <button onClick={reopen} data-testid={`reopen-${t.id}`} className="flex items-center gap-2 bg-surface px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline hover:bg-surface-hover transition-colors">
+          <button onClick={reopen} data-testid={`reopen-${t.id}`} className="flex items-center gap-2 bg-surface px-4 py-2 text-sm font-semibold border border-hairline hover:bg-surface-hover transition-colors rounded-md">
             <ArrowClockwise size={16} weight="bold" /> Reopen
           </button>
           <span className="flex items-center text-xs text-text-secondary">Completed by mistake? Reopen brings it back to your active work.</span>
@@ -1074,7 +1074,7 @@ export default function MyWork() {
         <div data-testid="access-restricted-banner" className="rounded-lg border border-hairline bg-surface p-4 mb-6 bg-primary text-primary-foreground flex items-center gap-3">
           <LockKey size={22} weight="bold" className="shrink-0" />
           <div>
-            <p className="font-bold uppercase tracking-tight">{t("mywork.access_restricted")}</p>
+            <p className="font-bold tracking-tight">{t("mywork.access_restricted")}</p>
             <p className="text-sm opacity-90">{t("mywork.access_restricted_desc")}</p>
           </div>
         </div>
@@ -1084,11 +1084,11 @@ export default function MyWork() {
         <div data-testid="workflows-hub">
           <div className="flex flex-wrap gap-1.5 mb-5 border-b border-hairline pb-3" data-testid="workflows-subtabs">
             <button onClick={() => setWfTab("pipelines")} data-testid="wf-subtab-pipelines"
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-hairline transition-colors ${wfTab === "pipelines" ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold  border border-hairline transition-colors ${wfTab === "pipelines" ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"} rounded-md`}>
               <ArrowRight size={14} weight="bold" /> {t("mywork.wf_pipelines")}
             </button>
             <button onClick={() => setWfTab("board")} data-testid="wf-subtab-board"
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-hairline transition-colors ${wfTab === "board" ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold  border border-hairline transition-colors ${wfTab === "board" ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"} rounded-md`}>
               <Kanban size={14} weight="bold" /> {t("mywork.wf_task_board")}
             </button>
           </div>
@@ -1102,9 +1102,9 @@ export default function MyWork() {
           <div className="flex flex-wrap gap-1.5 mb-5 border-b border-hairline pb-3" data-testid="work-tabs">
             {WORK_TABS.map((tb) => (
               <button key={tb.key} onClick={() => setTab(tb.key)} data-testid={`work-tab-${tb.key}`}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-hairline transition-colors ${tab === tb.key ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold  border border-hairline transition-colors ${tab === tb.key ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"} rounded-md`}>
                 {tb.label}
-                <span className={`px-1.5 py-0.5 text-[10px] leading-none border ${tab === tb.key ? "border-white/40" : "border-hairline text-text-secondary"}`}>{countFor(tb.key)}</span>
+                <span className={`px-1.5 py-0.5 text-[10px] leading-none border ${tab === tb.key ? "border-white/40" : "border-hairline text-text-secondary"} rounded-md`}>{countFor(tb.key)}</span>
               </button>
             ))}
           </div>

@@ -22,7 +22,7 @@ function MeetingDialog({ id, open, onClose }) {
     <div className="mb-5">
       <div className="flex items-center gap-2 mb-2">
         <Icon size={16} weight="bold" className="text-primary-text" />
-        <h3 className="font-extrabold uppercase tracking-tight text-sm">{title}</h3>
+        <h3 className="font-extrabold tracking-tight text-sm">{title}</h3>
       </div>
       <ul className="space-y-1.5">
         {items.map((it, i) => (
@@ -38,11 +38,11 @@ function MeetingDialog({ id, open, onClose }) {
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-2xl rounded-md border-2 border-hairline max-h-[85vh] overflow-y-auto" data-testid="meeting-dialog">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-black uppercase tracking-tighter pr-6">{m?.title || "Meeting"}</DialogTitle>
+          <DialogTitle className="text-2xl font-black tracking-tighter pr-6">{m?.title || "Meeting"}</DialogTitle>
           <DialogDescription className="sr-only">Meeting minutes and action items</DialogDescription>
         </DialogHeader>
         {!m || PROCESSING.includes(m.status) ? (
-          <p className="text-label uppercase text-sm py-6">Processing meeting notes…</p>
+          <p className="text-label text-sm py-6">Processing meeting notes…</p>
         ) : m.status === "failed" ? (
           <p className="text-sm text-primary-text py-6">Could not process this recording. Try again.</p>
         ) : (
@@ -53,7 +53,7 @@ function MeetingDialog({ id, open, onClose }) {
             <Block icon={ListChecks} title={`Action Items (${(m.action_items || []).length})`} items={m.action_items} />
             {m.transcript && (
               <details className="mt-4 border-t border-hairline pt-3">
-                <summary className="text-label uppercase text-text-secondary cursor-pointer">Full transcript</summary>
+                <summary className="text-label text-text-secondary cursor-pointer">Full transcript</summary>
                 <p className="text-sm mt-2 whitespace-pre-wrap text-text-secondary">{m.transcript}</p>
               </details>
             )}
@@ -128,32 +128,32 @@ export default function Meetings() {
           onClick={recording ? stopRec : startRec}
           disabled={busy}
           data-testid="meeting-record-button"
-          className={`w-24 h-24 flex items-center justify-center border border-hairline transition-all ${recording ? "bg-primary text-primary-foreground recording-pulse" : "bg-primary text-primary-foreground hover:shadow-sm"}`}
+          className={`w-24 h-24 flex items-center justify-center border border-hairline transition-all ${recording ? "bg-primary text-primary-foreground recording-pulse" : "bg-primary text-primary-foreground hover:shadow-sm"} rounded-md`}
         >
           {recording ? <Stop size={38} weight="fill" /> : <Microphone size={38} weight="fill" />}
         </button>
-        <p className="mt-4 font-bold uppercase tracking-tight">
+        <p className="mt-4 font-bold tracking-tight">
           {recording ? "Recording…" : busy ? "Uploading…" : "Tap to record a meeting"}
         </p>
-        <p className="text-label uppercase text-sm text-text-secondary mt-1">AI transcribes & extracts action items</p>
+        <p className="text-label text-sm text-text-secondary mt-1">AI transcribes & extracts action items</p>
         <button onClick={() => setShowText((s) => !s)} data-testid="meeting-paste-toggle"
-          className="mt-5 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider border border-hairline px-4 py-2 hover:bg-surface-hover transition-colors">
+          className="mt-5 flex items-center gap-2 text-sm font-semibold border border-hairline px-4 py-2 hover:bg-surface-hover transition-colors rounded-md">
           <TextT size={15} weight="bold" /> Paste transcript instead
         </button>
         {showText && (
           <div className="w-full max-w-xl mt-4">
             <textarea data-testid="meeting-text-input" rows={5} value={text} onChange={(e) => setText(e.target.value)}
               placeholder="Paste or type the meeting transcript…"
-              className="w-full border border-hairline p-3 text-sm text-label uppercase focus:outline-none" />
+              className="w-full border border-hairline p-3 text-sm text-label focus:outline-none rounded-md" />
             <button onClick={submitText} disabled={busy || !text.trim()} data-testid="meeting-text-submit"
-              className="mt-2 w-full py-2.5 text-sm font-semibold uppercase tracking-wider bg-primary text-primary-foreground hover:bg-primary-hover transition-colors disabled:opacity-50">
+              className="mt-2 w-full py-2.5 text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary-hover transition-colors disabled:opacity-50">
               Generate notes
             </button>
           </div>
         )}
       </div>
 
-      <h2 className="text-xl font-extrabold uppercase tracking-tight mb-4">Past Meetings</h2>
+      <h2 className="text-xl font-extrabold tracking-tight mb-4">Past Meetings</h2>
       {meetings.length === 0 ? (
         <EmptyState title="No meetings yet" hint="Record your first meeting and AI will write the minutes." />
       ) : (
@@ -167,7 +167,7 @@ export default function Meetings() {
               </div>
               <p className="text-sm font-semibold leading-tight">{m.title}</p>
               {m.summary && <p className="text-xs text-text-secondary mt-1 line-clamp-2">{m.summary}</p>}
-              <p className="text-label uppercase text-text-secondary mt-2 flex items-center gap-1">
+              <p className="text-label text-text-secondary mt-2 flex items-center gap-1">
                 <ClockCounterClockwise size={12} weight="bold" />
                 {(m.created_by_name || "")}{" · "}{(m.created_at || "").slice(0, 10)}
                 {(m.action_items || []).length > 0 && ` · ${m.action_items.length} action item(s)`}

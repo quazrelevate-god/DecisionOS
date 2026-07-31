@@ -45,7 +45,7 @@ export function GroupHeader({ className, group, count, ...props }) {
       )}
       {...props}
     >
-      <span className="text-label uppercase text-text-secondary">{GROUP_LABELS[group] || group}</span>
+      <span className="text-label text-text-secondary">{GROUP_LABELS[group] || group}</span>
       {typeof count === "number" && (
         <span data-numeric className="text-small tabular-nums text-text-tertiary">
           {count}

@@ -10,7 +10,7 @@ import {
 function Stat({ label, value, suffix = "", accent = "" }) {
   return (
     <div className="rounded-lg border border-hairline bg-surface p-4" data-testid={`coach-stat-${label.toLowerCase().replace(/\s/g, "-")}`}>
-      <p className="text-label uppercase text-text-secondary">{label}</p>
+      <p className="text-label text-text-secondary">{label}</p>
       <p className={` text-3xl font-black tracking-tight mt-1 ${accent}`}>{value}{suffix}</p>
     </div>
   );
@@ -40,7 +40,7 @@ export default function WorkCoach() {
         <PageHeader eyebrow="AI Work Coach" title="Access denied" />
         <div className="rounded-lg border border-hairline bg-surface p-8 text-center" data-testid="coach-error">
           <ShieldWarning size={32} weight="bold" className="text-primary-text mx-auto mb-3" />
-          <p className="text-lg font-extrabold uppercase tracking-tight">
+          <p className="text-lg font-extrabold tracking-tight">
             {status === 403 ? "Not allowed" : "Couldn't load coaching"}
           </p>
           <p className="text-sm text-text-secondary mt-1">
@@ -48,14 +48,14 @@ export default function WorkCoach() {
               ? "Only the owner can view another team member's coaching. You can always view your own."
               : "Something went wrong. Please try again."}
           </p>
-          <Link to="/coach" className="inline-block mt-4 border border-hairline px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-surface-hover transition-colors">
+          <Link to="/coach" className="inline-block mt-4 border border-hairline px-4 py-2 text-sm font-semibold hover:bg-surface-hover transition-colors rounded-md">
             View my coach
           </Link>
         </div>
       </div>
     );
   }
-  if (isLoading || !data) return <div className="text-label uppercase text-sm py-20 text-center">Loading your coach…</div>;
+  if (isLoading || !data) return <div className="text-label text-sm py-20 text-center">Loading your coach…</div>;
 
   const { target, stats, summary } = data;
   const s = refresh.data?.summary || summary;
@@ -64,7 +64,7 @@ export default function WorkCoach() {
     <div>
       <PageHeader eyebrow={`${target.name} · ${target.role}`} title="AI Work Coach">
         <button onClick={() => refresh.mutate()} disabled={refresh.isPending} data-testid="coach-refresh-btn"
-          className="flex items-center gap-2 border border-hairline px-4 py-2 text-sm font-semibold uppercase tracking-wider bg-status-pending-bg hover:shadow-xs transition-all disabled:opacity-50">
+          className="flex items-center gap-2 border border-hairline px-4 py-2 text-sm font-semibold bg-status-pending-bg hover:shadow-xs transition-all disabled:opacity-50 rounded-md">
           <Sparkle size={16} weight="bold" /> {refresh.isPending ? "Analyzing…" : s ? "Refresh" : "Generate coaching"}
         </button>
       </PageHeader>
@@ -79,19 +79,19 @@ export default function WorkCoach() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
         <div className="rounded-lg border border-hairline bg-surface p-4 flex items-center gap-3">
           <SealCheck size={22} weight="bold" className="text-primary-text" />
-          <div><p className="text-label uppercase text-text-secondary">Proof uploads</p><p className="text-xl font-black">{stats.proof_upload_rate}%</p></div>
+          <div><p className="text-label text-text-secondary">Proof uploads</p><p className="text-xl font-black">{stats.proof_upload_rate}%</p></div>
         </div>
         <div className="rounded-lg border border-hairline bg-surface p-4 flex items-center gap-3">
           <Target size={22} weight="bold" className="text-primary-text" />
-          <div><p className="text-label uppercase text-text-secondary">Plans used</p><p className="text-xl font-black">{stats.plans_used}</p></div>
+          <div><p className="text-label text-text-secondary">Plans used</p><p className="text-xl font-black">{stats.plans_used}</p></div>
         </div>
         <div className="rounded-lg border border-hairline bg-surface p-4 flex items-center gap-3">
           <Camera size={22} weight="bold" className="text-text" />
-          <div><p className="text-label uppercase text-text-secondary">Photos</p><p className="text-xl font-black">{stats.photos_uploaded}</p></div>
+          <div><p className="text-label text-text-secondary">Photos</p><p className="text-xl font-black">{stats.photos_uploaded}</p></div>
         </div>
         <div className="rounded-lg border border-hairline bg-surface p-4 flex items-center gap-3">
           <Microphone size={22} weight="bold" className="text-text" />
-          <div><p className="text-label uppercase text-text-secondary">Voice updates</p><p className="text-xl font-black">{stats.voice_updates}</p></div>
+          <div><p className="text-label text-text-secondary">Voice updates</p><p className="text-xl font-black">{stats.voice_updates}</p></div>
         </div>
       </div>
 
@@ -99,7 +99,7 @@ export default function WorkCoach() {
       {!s ? (
         <div className="rounded-lg border border-hairline bg-surface p-8 text-center" data-testid="coach-empty">
           <Trophy size={32} weight="bold" className="text-primary-text mx-auto mb-3" />
-          <p className="text-lg font-extrabold uppercase tracking-tight">No coaching yet</p>
+          <p className="text-lg font-extrabold tracking-tight">No coaching yet</p>
           <p className="text-sm text-text-secondary mt-1">Generate an AI performance review based on the stats above.</p>
         </div>
       ) : (
@@ -114,7 +114,7 @@ export default function WorkCoach() {
             <div className="rounded-lg border border-hairline bg-surface p-5" data-testid="coach-strengths">
               <div className="flex items-center gap-2 mb-3">
                 <TrendUp size={18} weight="bold" className="text-status-completed-fg" />
-                <h2 className="font-extrabold uppercase tracking-tight">Strengths</h2>
+                <h2 className="font-extrabold tracking-tight">Strengths</h2>
               </div>
               <ul className="space-y-2">
                 {s.strengths.map((it, i) => (
@@ -127,7 +127,7 @@ export default function WorkCoach() {
             <div className="rounded-lg border border-hairline bg-surface p-5" data-testid="coach-improvements">
               <div className="flex items-center gap-2 mb-3">
                 <Lightbulb size={18} weight="bold" className="text-status-pending-fg" />
-                <h2 className="font-extrabold uppercase tracking-tight">Areas to improve</h2>
+                <h2 className="font-extrabold tracking-tight">Areas to improve</h2>
               </div>
               <ul className="space-y-2">
                 {s.improvements.map((it, i) => (
@@ -140,11 +140,11 @@ export default function WorkCoach() {
           </div>
 
           <div className="rounded-lg border border-hairline bg-surface p-5 border-l-4 border-l-urgency-overdue" data-testid="coach-recommendation">
-            <p className="text-label uppercase text-primary-text mb-1">AI Recommendation</p>
+            <p className="text-label text-primary-text mb-1">AI Recommendation</p>
             <p className="text-sm font-medium leading-relaxed">{s.recommendation}</p>
           </div>
 
-          {s.generated_at && <p className="text-label uppercase text-text-secondary">Updated {new Date(s.generated_at).toLocaleString()}</p>}
+          {s.generated_at && <p className="text-label text-text-secondary">Updated {new Date(s.generated_at).toLocaleString()}</p>}
         </div>
       )}
     </div>

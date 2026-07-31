@@ -48,7 +48,7 @@ export default function Calendar() {
         <button
           onClick={() => setFilter("all")}
           data-testid="cal-filter-all"
-          className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline transition-colors ${filter === "all" ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold  border border-hairline transition-colors ${filter === "all" ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"} rounded-md`}
         >
           <CalendarBlank size={15} weight="bold" /> All ({data?.total || 0})
         </button>
@@ -57,7 +57,7 @@ export default function Calendar() {
             key={key}
             onClick={() => setFilter(key)}
             data-testid={`cal-filter-${key}`}
-            className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-hairline transition-colors ${filter === key ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold  border border-hairline transition-colors ${filter === key ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"} rounded-md`}
           >
             <t.icon size={15} weight="bold" /> {t.label} ({counts[key] || 0})
           </button>
@@ -65,7 +65,7 @@ export default function Calendar() {
       </div>
 
       {isLoading ? (
-        <p className="text-label uppercase text-sm">Loading calendar…</p>
+        <p className="text-label text-sm">Loading calendar…</p>
       ) : days.length === 0 ? (
         <EmptyState title="Nothing scheduled" hint="Payment due dates, task deadlines, deliveries and complaints will appear here." />
       ) : (
@@ -73,10 +73,10 @@ export default function Calendar() {
           {days.map((day) => (
             <section key={day.date} data-testid={`cal-day-${day.date}`}>
               <div className="flex items-center gap-3 mb-3">
-                <span className={` text-lg font-black uppercase tracking-tight ${day.date < new Date().toISOString().slice(0, 10) ? "text-primary-text" : ""}`}>
+                <span className={` text-lg font-black tracking-tight ${day.date < new Date().toISOString().slice(0, 10) ? "text-primary-text" : ""}`}>
                   {fmtDay(day.date)}
                 </span>
-                <span className="text-label uppercase text-text-secondary">{day.date}</span>
+                <span className="text-label text-text-secondary">{day.date}</span>
                 <div className="flex-1 h-px bg-black/20" />
               </div>
               <div className="space-y-2">
@@ -89,14 +89,14 @@ export default function Calendar() {
                       onClick={() => e.contact_id && navigate(`/contacts/${e.contact_id}`)}
                       className={`rounded-lg border border-hairline bg-surface p-3 flex items-center gap-3 ${e.contact_id ? "cursor-pointer shadow-hover" : ""}`}
                     >
-                      <div className={`w-9 h-9 flex items-center justify-center border border-hairline text-white shrink-0 ${t.color}`}>
+                      <div className={`w-9 h-9 flex items-center justify-center border border-hairline text-white shrink-0 ${t.color} rounded-md`}>
                         <t.icon size={17} weight="bold" />
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold leading-tight truncate">{e.title}</p>
-                        {e.subtitle && <p className="text-label uppercase text-text-secondary truncate">{e.subtitle}</p>}
+                        {e.subtitle && <p className="text-label text-text-secondary truncate">{e.subtitle}</p>}
                       </div>
-                      {e.overdue && <span className="px-2 py-0.5 text-xs uppercase tracking-wider font-semibold border border-hairline bg-primary text-primary-foreground shrink-0">Overdue</span>}
+                      {e.overdue && <span className="px-2 py-0.5 text-xs font-semibold border border-hairline bg-primary text-primary-foreground shrink-0 rounded-md">Overdue</span>}
                     </div>
                   );
                 })}

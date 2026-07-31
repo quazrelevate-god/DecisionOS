@@ -33,7 +33,7 @@ export function AskPanel() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-16rem)] lg:h-[calc(100vh-13rem)]">
-      <div className="flex-1 border border-hairline bg-primary text-primary-foreground text-label uppercase text-sm overflow-y-auto p-6 space-y-4">
+      <div className="flex-1 border border-hairline bg-primary text-primary-foreground text-label text-sm overflow-y-auto p-6 space-y-4 rounded-md">
         {log.length === 0 && (
           <div className="text-white/50">
             <p>{t("ask.intro1")}</p>
@@ -49,10 +49,10 @@ export function AskPanel() {
                 <p className="text-white whitespace-pre-wrap leading-relaxed">{m.text}</p>
                 {(m.citations || []).length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mt-2" data-testid={`citations-${i}`}>
-                    <span className="text-white/40 text-xs uppercase tracking-wider mr-1">{t("ask.sources")}</span>
+                    <span className="text-white/40 text-xs mr-1">{t("ask.sources")}</span>
                     {m.citations.map((c, ci) => (
-                      <span key={`${c.type}-${c.title}-${ci}`} data-testid="citation-chip" className="inline-flex items-center gap-1 border border-white/40 text-white/80 px-2 py-0.5 text-[11px]">
-                        <span className="text-primary-text uppercase">{c.type}</span> {c.title}
+                      <span key={`${c.type}-${c.title}-${ci}`} data-testid="citation-chip" className="inline-flex items-center gap-1 border border-white/40 text-white/80 px-2 py-0.5 text-[11px] rounded-md">
+                        <span className="text-primary-text">{c.type}</span> {c.title}
                       </span>
                     ))}
                   </div>
@@ -68,14 +68,14 @@ export function AskPanel() {
       <div className="flex gap-2 flex-wrap my-3">
         {SUGGESTIONS.map((s) => (
           <button key={s} onClick={() => ask(s)} data-testid="ask-suggestion"
-            className="text-xs border border-hairline px-3 py-1.5 hover:bg-surface-hover transition-colors">
+            className="text-xs border border-hairline px-3 py-1.5 hover:bg-surface-hover transition-colors rounded-md">
             {s}
           </button>
         ))}
       </div>
 
       <form onSubmit={(e) => { e.preventDefault(); ask(); }} className="flex gap-2">
-        <div className="flex-1 flex items-center border border-hairline bg-surface px-4 text-label uppercase">
+        <div className="flex-1 flex items-center border border-hairline bg-surface px-4 text-label rounded-md">
           <span className="text-primary-text font-bold">{">"}</span>
           <input
             data-testid="ask-input"
@@ -86,7 +86,7 @@ export function AskPanel() {
           />
         </div>
         <MicDictateButton className="px-4" title={t("ask.speak_q")} onText={(t) => setQ((v) => (v ? `${v} ${t}` : t))} />
-        <button data-testid="ask-submit" disabled={busy} className="relative z-[10000] bg-primary text-primary-foreground px-6 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider border border-hairline hover:shadow-sm transition-all disabled:opacity-50">
+        <button data-testid="ask-submit" disabled={busy} className="relative z-[10000] bg-primary text-primary-foreground px-6 flex items-center gap-2 text-sm font-semibold border border-hairline hover:shadow-sm transition-all disabled:opacity-50 rounded-md">
           <PaperPlaneTilt size={16} weight="bold" /> {t("ask.btn")}
         </button>
       </form>

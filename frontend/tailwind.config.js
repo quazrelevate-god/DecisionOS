@@ -54,17 +54,9 @@ module.exports = {
 
             colors: {
                 /* ---- Role scales: the primary colour API ---- */
-                brand: {
-                    ...scale('brand'),
-                    /* Brand identity, insulated from the danger scale. Legal on
-                       the wordmark and hero surfaces and nowhere else — the
-                       brand artifacts (red app icon, red-and-black brochure)
-                       settle that red is real identity here, while the UI
-                       system keeps red for danger. `brand.red` is gone; the
-                       legacy palette is fully dead. */
-                    mark: v('brand-mark'),
-                    hero: v('brand-hero'),
-                },
+                /* Indigo is the brand and the accent, with no identity
+                   exceptions. Red exists only as `danger`. */
+                brand: scale('brand'),
                 danger: scale('danger'),
                 caution: scale('caution'),
                 success: scale('success'),

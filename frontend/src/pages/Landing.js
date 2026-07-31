@@ -10,11 +10,11 @@ const Logo = ({ size = "md" }) => {
   const word = size === "sm" ? "text-xl" : "text-2xl";
   return (
     <div className="flex items-center gap-2.5">
-      <div className={`${box} bg-brand-mark rounded-lg flex items-center justify-center shrink-0`}>
+      <div className={`${box} bg-primary rounded-lg flex items-center justify-center shrink-0`}>
         <span className={`font-logo font-black text-white ${dtext} leading-none`}>D</span>
       </div>
       <span className={`font-logo font-black ${word} tracking-tight uppercase leading-none`}>
-        <span className="text-white">Decision</span><span className="text-brand-mark">OS</span>
+        <span className="text-white">Decision</span><span className="text-brand-400">OS</span>
       </span>
     </div>
   );
@@ -30,7 +30,7 @@ const NavBar = () => (
           Log in
         </Link>
         <Link to="/login?signup=1" data-testid="landing-signup-btn"
-          className="bg-primary text-primary-foreground text-sm font-semibold uppercase tracking-wider px-4 sm:px-5 py-2 border border-brand-hero hover:bg-surface hover:text-brand-hero transition-colors">
+          className="bg-primary text-primary-foreground text-sm font-semibold uppercase tracking-wider px-4 sm:px-5 py-2 border border-primary hover:bg-surface hover:text-brand-400 transition-colors">
           Sign up
         </Link>
       </div>
@@ -39,12 +39,12 @@ const NavBar = () => (
 );
 
 const Kicker = ({ children, big }) => (
-  <div className={`text-label uppercase uppercase tracking-[0.25em] mb-4 text-brand-hero ${big ? "text-sm sm:text-base" : "text-xs"}`}>{children}</div>
+  <div className={`text-label uppercase uppercase tracking-[0.25em] mb-4 text-brand-400 ${big ? "text-sm sm:text-base" : "text-xs"}`}>{children}</div>
 );
 
 const Dept = ({ icon: Icon, tag, title, children }) => (
   <div className="border-2 border-hairline bg-surface p-6 hover:shadow-sm transition-all">
-    <div className="flex items-center gap-2 text-brand-hero mb-2"><Icon size={18} weight="bold" /><span className="text-label uppercase text-[11px] uppercase tracking-widest">{tag}</span></div>
+    <div className="flex items-center gap-2 text-brand-400 mb-2"><Icon size={18} weight="bold" /><span className="text-label uppercase text-[11px] uppercase tracking-widest">{tag}</span></div>
     <h3 className="font-extrabold uppercase tracking-tight text-lg">{title}</h3>
     <p className="text-sm text-text-secondary mt-1">{children}</p>
   </div>
@@ -60,15 +60,15 @@ export default function Landing() {
         <div className="max-w-6xl mx-auto px-5 sm:px-8 py-24 sm:py-32">
           <Kicker big>The Operating Brain for Founder-Led Businesses</Kicker>
           <h1 className="font-black tracking-tight text-5xl sm:text-6xl lg:text-7xl leading-[1.02]">
-            Speak the decision.<br /><span className="text-brand-hero">We run</span> the company.
+            Speak the decision.<br /><span className="text-brand-400">We run</span> the company.
           </h1>
-          <div className="h-1.5 w-20 bg-brand-hero my-8" />
+          <div className="h-1.5 w-20 bg-primary my-8" />
           <p className="text-lg sm:text-xl text-white/70 max-w-2xl leading-relaxed">
             The AI operating system that remembers every decision, organises every task, and executes the way your business actually runs — from voice notes and WhatsApp to paper bills.
           </p>
           <div className="flex flex-wrap gap-3 mt-10">
             <Link to="/login?signup=1" data-testid="hero-signup-btn"
-              className="flex items-center gap-2 bg-primary text-primary-foreground text-sm font-semibold uppercase tracking-wider px-6 py-3 border border-brand-hero hover:bg-surface hover:text-brand-hero transition-colors">
+              className="flex items-center gap-2 bg-primary text-primary-foreground text-sm font-semibold uppercase tracking-wider px-6 py-3 border border-primary hover:bg-surface hover:text-brand-400 transition-colors">
               Get started free <ArrowRight size={16} weight="bold" />
             </Link>
             <a href="#how" className="flex items-center gap-2 border border-white/40 text-white text-sm font-semibold uppercase tracking-wider px-6 py-3 hover:bg-surface hover:text-[#16161a] transition-colors">
@@ -90,7 +90,7 @@ export default function Landing() {
               <p className="text-white/90">Founder remembers → tells someone → hopes it happens → chases → repeats. Decisions evaporate, work scatters, nothing is provable, and you become the bottleneck.</p>
             </div>
             <div className="border-2 border-[#16161a] bg-surface p-6">
-              <div className="text-label uppercase text-xs uppercase tracking-widest text-brand-hero mb-2">The DecisionOS way</div>
+              <div className="text-label uppercase text-xs uppercase tracking-widest text-brand-400 mb-2">The DecisionOS way</div>
               <p>Founder speaks → AI captures, routes, assigns, tracks, chases, and remembers it forever. One place where nothing is lost, ignored, or left undone.</p>
             </div>
           </div>
@@ -101,28 +101,28 @@ export default function Landing() {
       <section className="bg-[#16161a] text-white">
         <div className="max-w-6xl mx-auto px-5 sm:px-8 py-20">
           <Kicker dark>The 10-Second Wow</Kicker>
-          <h2 className="font-black tracking-tight text-3xl sm:text-4xl leading-tight max-w-3xl">One sentence. A company-wide rule, <span className="text-brand-hero">enforced.</span></h2>
+          <h2 className="font-black tracking-tight text-3xl sm:text-4xl leading-tight max-w-3xl">One sentence. A company-wide rule, <span className="text-brand-400">enforced.</span></h2>
           <div className="mt-10 space-y-4 max-w-3xl">
-            <div className="border-l-4 border-brand-hero pl-5 py-2">
-              <div className="text-label uppercase text-[11px] uppercase tracking-widest text-brand-hero/90">Second 0 — the owner speaks</div>
+            <div className="border-l-4 border-primary pl-5 py-2">
+              <div className="text-label uppercase text-[11px] uppercase tracking-widest text-brand-400/90">Second 0 — the owner speaks</div>
               <p className="font-black text-xl sm:text-2xl mt-1 leading-snug">"From today, stop any dispatch that doesn't have payment approval."</p>
             </div>
-            <div className="border-l-4 border-brand-hero pl-5 py-2">
-              <div className="text-label uppercase text-[11px] uppercase tracking-widest text-brand-hero/90">Second 3 — the AI understands</div>
+            <div className="border-l-4 border-primary pl-5 py-2">
+              <div className="text-label uppercase text-[11px] uppercase tracking-widest text-brand-400/90">Second 3 — the AI understands</div>
               <div className="mt-2 flex flex-wrap gap-2">
                 {["Operating Rule", "Trigger: Dispatch", "Condition: Payment approved", "Scope: Company-wide"].map((c, i) => (
                   <span key={c} className={`text-xs font-semibold rounded-full px-3 py-1 ${i === 0 ? "bg-primary text-primary-foreground" : "bg-surface/10 text-white border border-white/20"}`}>{c}</span>
                 ))}
               </div>
             </div>
-            <div className="border-l-4 border-brand-hero pl-5 py-2">
-              <div className="text-label uppercase text-[11px] uppercase tracking-widest text-brand-hero/90">Second 10 — the business changes</div>
+            <div className="border-l-4 border-primary pl-5 py-2">
+              <div className="text-label uppercase text-[11px] uppercase tracking-widest text-brand-400/90">Second 10 — the business changes</div>
               <div className="mt-2 border border-white/15 bg-surface/5 p-4 rounded">
-                <p className="text-white/90"><CheckCircle size={16} weight="fill" className="inline text-brand-hero mr-1" /> Rule live across the dispatch workflow · teams notified · exceptions escalate to the owner · filed to the Company Brain.</p>
+                <p className="text-white/90"><CheckCircle size={16} weight="fill" className="inline text-brand-400 mr-1" /> Rule live across the dispatch workflow · teams notified · exceptions escalate to the owner · filed to the Company Brain.</p>
               </div>
             </div>
           </div>
-          <p className="text-lg mt-8 max-w-2xl">Not a to-do — <span className="text-brand-hero font-semibold">an operational change, running itself.</span></p>
+          <p className="text-lg mt-8 max-w-2xl">Not a to-do — <span className="text-brand-400 font-semibold">an operational change, running itself.</span></p>
         </div>
       </section>
 
@@ -139,7 +139,7 @@ export default function Landing() {
             ].map((s, i) => (
               <div key={s.t} className="border-2 border-hairline p-6 relative">
                 <div className="font-black text-5xl text-text/10 absolute top-4 right-5">{i + 1}</div>
-                <s.icon size={26} weight="bold" className="text-brand-hero" />
+                <s.icon size={26} weight="bold" className="text-brand-400" />
                 <h3 className="font-extrabold uppercase tracking-tight text-xl mt-3">{s.t}</h3>
                 <p className="text-sm text-text-secondary mt-2">{s.d}</p>
               </div>
@@ -162,13 +162,13 @@ export default function Landing() {
               { t: "Workload", a: "A teammate has 5 open, 1 overdue.", r: "→ Reassign or extend." },
             ].map((x) => (
               <div key={x.t} className="border-2 border-hairline bg-surface p-5">
-                <div className="flex items-center gap-2 text-brand-hero mb-2"><WarningCircle size={16} weight="bold" /><span className="text-label uppercase text-[11px] uppercase tracking-widest">{x.t}</span></div>
+                <div className="flex items-center gap-2 text-brand-400 mb-2"><WarningCircle size={16} weight="bold" /><span className="text-label uppercase text-[11px] uppercase tracking-widest">{x.t}</span></div>
                 <p className="font-semibold text-sm">{x.a}</p>
                 <p className="text-sm text-text-secondary mt-1">{x.r}</p>
               </div>
             ))}
           </div>
-          <p className="mt-6 text-lg">Every alert is <span className="text-brand-hero font-semibold">one tap from action</span> — turn it into a task, assign it, done.</p>
+          <p className="mt-6 text-lg">Every alert is <span className="text-brand-400 font-semibold">one tap from action</span> — turn it into a task, assign it, done.</p>
         </div>
       </section>
 
@@ -192,7 +192,7 @@ export default function Landing() {
       <section className="bg-[#16161a] text-white">
         <div className="max-w-6xl mx-auto px-5 sm:px-8 py-20">
           <Kicker dark>Why DecisionOS?</Kicker>
-          <h2 className="font-black tracking-tight text-3xl sm:text-4xl leading-tight">Not a chatbot. Not a clunky ERP. <span className="text-brand-hero">An operating brain.</span></h2>
+          <h2 className="font-black tracking-tight text-3xl sm:text-4xl leading-tight">Not a chatbot. Not a clunky ERP. <span className="text-brand-400">An operating brain.</span></h2>
           <div className="grid sm:grid-cols-3 gap-5 mt-10">
             {[
               { t: "Permanent company memory", d: "Every decision & record remembered — not forgotten each chat, not just rows of data." },
@@ -200,7 +200,7 @@ export default function Landing() {
               { t: "Learns how you operate", d: "Your Business DNA compounds over time — the foundation for AI managers." },
             ].map((x) => (
               <div key={x.t} className="border border-white/15 bg-surface/5 p-6">
-                <Lightning size={20} weight="bold" className="text-brand-hero" />
+                <Lightning size={20} weight="bold" className="text-brand-400" />
                 <h3 className="font-extrabold uppercase tracking-tight text-base mt-3">{x.t}</h3>
                 <p className="text-sm text-white/60 mt-1">{x.d}</p>
               </div>
@@ -216,11 +216,11 @@ export default function Landing() {
           <h2 className="font-black tracking-tight text-3xl sm:text-5xl leading-tight max-w-3xl mx-auto">Every business decision — remembered, organized, and executed.</h2>
           <div className="flex flex-wrap gap-3 justify-center mt-10">
             <Link to="/login?signup=1" data-testid="cta-signup-btn"
-              className="flex items-center gap-2 bg-surface text-brand-hero text-sm font-semibold uppercase tracking-wider px-7 py-3 border border-white hover:bg-transparent hover:text-white transition-colors">
+              className="flex items-center gap-2 bg-surface text-brand-400 text-sm font-semibold uppercase tracking-wider px-7 py-3 border border-white hover:bg-transparent hover:text-white transition-colors">
               Start free <ArrowRight size={16} weight="bold" />
             </Link>
             <Link to="/login" data-testid="cta-login-btn"
-              className="border border-white/60 text-white text-sm font-semibold uppercase tracking-wider px-7 py-3 hover:bg-surface hover:text-brand-hero transition-colors">
+              className="border border-white/60 text-white text-sm font-semibold uppercase tracking-wider px-7 py-3 hover:bg-surface hover:text-brand-400 transition-colors">
               Log in
             </Link>
           </div>

@@ -154,7 +154,31 @@ reading is that the class sweep is complete and the last differences come from
 element-level rendering the shim used to pin.
 
 
-## Hero / wordmark brand ruling — CLOSED (KEEP)
+## Hero / wordmark brand ruling — REVERSED (indigo, no identity red)
+
+**Superseded** by the palette override below. The KEEP analysis is kept for the
+record because the evidence was real; the decision went the other way.
+
+## Brand artifacts are now out of step with the product
+
+**Found:** palette override. **Status:** open — brand task, not a code task.
+
+The product now has zero identity red: indigo carries the wordmark, the hero and
+every accent, and red means danger only. The brand artifacts still carry the old
+red identity:
+
+- `frontend/public/icon-*.png` and `favicon.ico` — the app icon is a red tile.
+- `brochure_assets/` — the investor deck's palette is near-black plus red
+  (`#FF2D20`, 16 uses), no indigo.
+- `design_guidelines.json` — still states *"retaining the core Red/Black identity
+  as the hero signature"*.
+
+A red logo sitting on an indigo app reads as unfinished. **Update the brand
+artifacts to the indigo identity** — icon set, deck, guidelines doc. That is design
+work outside this codebase, and it also settles the two-reds discrepancy below by
+making it moot.
+
+## Hero / wordmark brand ruling — the superseded KEEP analysis
 
 **Ruled:** post-M7. **Evidence:** the brand artifacts in this repo, checked directly.
 

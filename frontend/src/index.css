@@ -113,10 +113,6 @@
         --urgency-week: 32 95% 44%;
         --urgency-later: 219 14% 81%;
 
-        /* Brand identity — not a semantic role; see brandIdentity */
-        --brand-mark: 4 100% 59%;
-        --brand-hero: 4 100% 59%;
-
         /* Company Brain terminal — dark in both themes */
         --terminal-bg: 221 39% 11%;
         --terminal-bg-raised: 221 35% 15%;

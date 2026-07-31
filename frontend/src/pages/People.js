@@ -30,7 +30,7 @@ export default function People() {
         <div className="flex border border-hairline rounded-md" data-testid="people-tabs">
           {TABS.map((t) => (
             <button key={t.key} onClick={() => setTab(t.key)} data-testid={`people-tab-${t.key}`}
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold  border-r border-hairline last:border-r-0 transition-colors ${tab === t.key ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold  border-r-hairline last:border-r-0 transition-colors ${tab === t.key ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>
               <t.icon size={16} weight="bold" /> {t.label}
             </button>
           ))}

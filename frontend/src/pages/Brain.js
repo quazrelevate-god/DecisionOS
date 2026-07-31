@@ -67,7 +67,7 @@ function SearchPanel() {
                     <p className="font-semibold text-sm">{d.title}</p>
                     <p className="text-xs text-text-secondary mt-1 line-clamp-3">{d.summary}</p>
                     {d.tasks?.length > 0 && (
-                      <div className="mt-3 border-t border-hairline pt-2">
+                      <div className="mt-3 border-t-hairline pt-2">
                         <p className="text-label text-text-secondary mb-1">{t("brain.linked_tasks")}</p>
                         {d.tasks.map((tk) => <p key={tk.id} className="text-xs">→ {tk.title}</p>)}
                       </div>
@@ -153,7 +153,7 @@ export default function Brain() {
         <div className="flex flex-col gap-1" data-testid="brain-tabs-wrap">
           <div className="flex border border-hairline w-fit rounded-md" data-testid="brain-tabs">
             <button onClick={() => setTab("ask")} data-testid="brain-tab-ask"
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold  border-r border-hairline transition-colors ${tab === "ask" ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold  border-r-hairline transition-colors ${tab === "ask" ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>
               <ChatCircleText size={16} weight="bold" /> {t("brain.ask")}
             </button>
             <button onClick={() => setTab("search")} data-testid="brain-tab-search"

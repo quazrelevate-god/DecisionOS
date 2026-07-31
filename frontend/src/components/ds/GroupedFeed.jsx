@@ -40,7 +40,7 @@ export function GroupHeader({ className, group, count, ...props }) {
   return (
     <div
       className={cn(
-        "sticky top-0 z-10 flex items-baseline gap-2 border-b border-hairline bg-surface-sunken px-4 py-2 backdrop-blur",
+        "sticky top-0 z-10 flex items-baseline gap-2 border-b-hairline bg-surface-sunken px-4 py-2 backdrop-blur",
         className
       )}
       {...props}

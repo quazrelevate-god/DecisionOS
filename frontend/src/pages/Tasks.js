@@ -258,7 +258,7 @@ export function TaskBoard() {
           const cards = (data || []).filter((t) => t.status === col.key);
           return (
             <div key={col.key} data-testid={`task-column-${col.key}`} className="border border-hairline bg-surface rounded-md">
-              <div className="px-4 py-3 border-b border-hairline flex items-center justify-between bg-background">
+              <div className="px-4 py-3 border-b-hairline flex items-center justify-between bg-background">
                 <p className="text-label">{col.label}</p>
                 <span className="font-black">{cards.length}</span>
               </div>

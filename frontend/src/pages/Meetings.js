@@ -52,7 +52,7 @@ function MeetingDialog({ id, open, onClose }) {
             <Block icon={Gavel} title="Decisions" items={m.decisions} />
             <Block icon={ListChecks} title={`Action Items (${(m.action_items || []).length})`} items={m.action_items} />
             {m.transcript && (
-              <details className="mt-4 border-t border-hairline pt-3">
+              <details className="mt-4 border-t-hairline pt-3">
                 <summary className="text-label text-text-secondary cursor-pointer">Full transcript</summary>
                 <p className="text-sm mt-2 whitespace-pre-wrap text-text-secondary">{m.transcript}</p>
               </details>

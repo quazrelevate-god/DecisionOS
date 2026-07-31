@@ -81,7 +81,7 @@ export const ListRow = React.forwardRef(
         onClick={onClick}
         disabled={onClick ? disabled : undefined}
         className={cn(
-          "group flex w-full items-stretch border-b border-hairline bg-surface text-left transition-colors last:border-0",
+          "group flex w-full items-stretch border-b-hairline bg-surface text-left transition-colors last:border-0",
           onClick &&
             !disabled &&
             "hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-focus focus-visible:ring-ring focus-visible:-ring-offset-1",

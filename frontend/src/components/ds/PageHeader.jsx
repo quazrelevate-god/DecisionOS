@@ -44,7 +44,7 @@ export const PageHeader = React.forwardRef(
     <header
       ref={ref}
       className={cn(
-        "border-b border-hairline bg-background pb-4",
+        "border-b-hairline bg-background pb-4",
         sticky && "sticky top-0 z-10 backdrop-blur-xl",
         className
       )}

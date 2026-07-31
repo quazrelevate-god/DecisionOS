@@ -122,7 +122,7 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite, member
               <button type="button" data-testid="login-method-password" onClick={() => setForm({ ...form, passwordless: false })}
                 className={`flex-1 px-3 py-2 text-xs font-semibold  transition-colors ${!form.passwordless ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>Password login</button>
               <button type="button" data-testid="login-method-otp" onClick={() => setForm({ ...form, passwordless: true })}
-                className={`flex-1 px-3 py-2 text-xs font-semibold  border-l border-hairline transition-colors ${form.passwordless ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>Mobile OTP</button>
+                className={`flex-1 px-3 py-2 text-xs font-semibold  border-l-hairline transition-colors ${form.passwordless ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>Mobile OTP</button>
             </div>
             {!form.passwordless && (
               <input data-testid="member-password-input" className={inp} type="password" placeholder="Temp password (min 6)" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
@@ -170,7 +170,7 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite, member
               })}
             </div>
 
-            <div className="mt-4 border-t border-hairline pt-3" data-testid="menu-preview">
+            <div className="mt-4 border-t-hairline pt-3" data-testid="menu-preview">
               <p className="text-label text-text-secondary mb-2">This member will see these menus</p>
               <div className="flex flex-wrap gap-1.5">
                 {MENU_PREVIEW.map((m) => {

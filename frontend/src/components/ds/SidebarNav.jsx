@@ -49,10 +49,10 @@ export const SidebarNav = React.forwardRef(({ className, items = [], activeKey, 
   <nav
     ref={ref}
     aria-label="Main"
-    className={cn("flex h-full flex-col border-r border-hairline bg-surface", className)}
+    className={cn("flex h-full flex-col border-r-hairline bg-surface", className)}
     {...props}
   >
-    {header && <div className="border-b border-hairline p-4">{header}</div>}
+    {header && <div className="border-b-hairline p-4">{header}</div>}
 
     <ul className="min-h-0 flex-1 overflow-y-auto p-2">
       {items.map((item) => {
@@ -108,7 +108,7 @@ export const SidebarNav = React.forwardRef(({ className, items = [], activeKey, 
       })}
     </ul>
 
-    {footer && <div className="border-t border-hairline p-4">{footer}</div>}
+    {footer && <div className="border-t-hairline p-4">{footer}</div>}
   </nav>
 ));
 SidebarNav.displayName = "SidebarNav";

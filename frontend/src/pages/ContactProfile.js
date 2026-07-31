@@ -156,7 +156,7 @@ export default function ContactProfile() {
       <Section icon={Receipt} title={isVendor ? "Purchase Bills" : "Sales Bills"} count={invoices.length}>
         {invoices.length === 0 ? <p className="text-sm text-text-secondary">No bills recorded.</p> : (
           <Table head={["Number", "Amount", "Date", "Due", "Status"]} rows={invoices.map((inv) => (
-            <tr key={inv.id} data-testid={`profile-invoice-${inv.id}`} className="border-t border-hairline">
+            <tr key={inv.id} data-testid={`profile-invoice-${inv.id}`} className="border-t-hairline">
               <td className="px-3 py-2 text-label">{inv.number || "—"}</td>
               <td className="px-3 py-2 font-semibold">{money(inv.amount, inv.currency)}</td>
               <td className="px-3 py-2 text-label text-xs">{inv.date || "—"}</td>
@@ -170,7 +170,7 @@ export default function ContactProfile() {
       <Section icon={CurrencyCircleDollar} title="Payments" count={payments.length}>
         {payments.length === 0 ? <p className="text-sm text-text-secondary">No payments recorded.</p> : (
           <Table head={["Direction", "Amount", "Method", "Reference", "Date"]} rows={payments.map((p) => (
-            <tr key={p.id} data-testid={`profile-payment-${p.id}`} className="border-t border-hairline">
+            <tr key={p.id} data-testid={`profile-payment-${p.id}`} className="border-t-hairline">
               <td className="px-3 py-2"><Chip value={p.direction === "in" ? "received" : "paid"} className={p.direction === "in" ? "bg-primary text-primary-foreground" : "bg-status-pending-bg text-text"} /></td>
               <td className="px-3 py-2 font-semibold">{money(p.amount, p.currency)}</td>
               <td className="px-3 py-2">{p.method || "—"}</td>
@@ -196,7 +196,7 @@ export default function ContactProfile() {
       {isVendor && price_history.length > 0 && (
         <Section icon={TrendUp} title="Price History" count={price_history.length}>
           <Table head={["Item", "Rate", "Date"]} rows={price_history.map((h, i) => (
-            <tr key={`${h.item || "row"}-${h.date || ""}-${i}`} className="border-t border-hairline">
+            <tr key={`${h.item || "row"}-${h.date || ""}-${i}`} className="border-t-hairline">
               <td className="px-3 py-2">{h.item}</td>
               <td className="px-3 py-2 font-semibold">{money(h.rate, cur)}</td>
               <td className="px-3 py-2 text-label text-xs">{h.date || "—"}</td>

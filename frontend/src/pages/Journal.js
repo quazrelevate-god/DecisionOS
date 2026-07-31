@@ -82,7 +82,7 @@ function TimelineDialog({ decisionId, open, onClose }) {
         ) : events.length === 0 ? (
           <p className="text-sm text-text-secondary py-6">No history recorded yet for this decision.</p>
         ) : (
-          <ol className="mt-4 relative border-l-2 border-hairline ml-2" data-testid="timeline-events">
+          <ol className="mt-4 relative border-l-2 ml-2" data-testid="timeline-events">
             {events.map((e, i) => {
               const Icon = EVENT_ICON[e.kind] || Circle;
               const color = EVENT_COLOR[e.kind] || "text-text-secondary";

@@ -38,7 +38,7 @@ const ratio = (a, b) => Math.round(contrastRatio(a, b) * 100) / 100;
 
 function Section({ id, title, intro, children }) {
   return (
-    <section id={id} className="scroll-mt-24 border-t border-hairline pt-10 mt-10 first:border-0 first:mt-0 first:pt-0">
+    <section id={id} className="scroll-mt-24 border-t-hairline pt-10 mt-10 first:border-0 first:mt-0 first:pt-0">
       <h2 className="text-h2 text-text">{title}</h2>
       {intro && <p className="text-body text-text-secondary mt-2 max-w-3xl">{intro}</p>}
       <div className="mt-6">{children}</div>
@@ -125,7 +125,7 @@ function SemanticTable() {
         </thead>
         <tbody>
           {keys.map((k) => (
-            <tr key={k} className="border-t border-hairline">
+            <tr key={k} className="border-t-hairline">
               <td className="p-3 font-medium text-text whitespace-nowrap">--{k}</td>
               <td className="p-3 w-8">
                 <span className="block w-6 h-6 rounded-sm border border-hairline" style={{ backgroundColor: `hsl(${semantic.light[k]})` }} />
@@ -182,7 +182,7 @@ export default function DesignSystem() {
 
   return (
     <div className="min-h-screen bg-background text-text">
-      <header className="sticky top-0 z-10 border-b border-hairline bg-background/85 backdrop-blur-xl">
+      <header className="sticky top-0 z-10 border-b-hairline bg-background/85 backdrop-blur-xl">
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between gap-4">
           <div className="min-w-0">
             <p className="text-label text-text-tertiary">DecisionOS / System reference</p>
@@ -252,7 +252,7 @@ export default function DesignSystem() {
               <TintPreview key={base} label={label} base={base} theme={tintTheme} />
             ))}
           </div>
-          <div className="grid sm:grid-cols-3 gap-4 mt-6 pt-6 border-t border-hairline">
+          <div className="grid sm:grid-cols-3 gap-4 mt-6 pt-6 border-t-hairline">
             {PRIORITIES.map(([label, base]) => (
               <TintPreview key={base} label={label} base={base} theme={tintTheme} />
             ))}
@@ -275,7 +275,7 @@ export default function DesignSystem() {
               ["This week", "urgency-week", "Reconcile packaging invoice"],
               ["Later", "urgency-later", "Review quarterly headcount"],
             ].map(([group, token, sample]) => (
-              <div key={token} className="flex items-stretch border-b border-hairline last:border-0 bg-surface">
+              <div key={token} className="flex items-stretch border-b-hairline last:border-0 bg-surface">
                 <span className="w-1 shrink-0" style={{ backgroundColor: `hsl(${semantic.light[token]})` }} />
                 <div className="flex-1 flex items-center justify-between gap-4 px-4 py-3 min-w-0">
                   <div className="min-w-0">
@@ -302,7 +302,7 @@ export default function DesignSystem() {
         >
           <div className="space-y-5">
             {Object.entries(typography.scale).map(([name, [size, meta]]) => (
-              <div key={name} className="flex flex-wrap items-baseline gap-x-6 gap-y-1 border-b border-hairline pb-4">
+              <div key={name} className="flex flex-wrap items-baseline gap-x-6 gap-y-1 border-b-hairline pb-4">
                 <div className="w-28 shrink-0">
                   <Label>{name}</Label>
                   <p className="text-[11px] text-text-tertiary tabular-nums">

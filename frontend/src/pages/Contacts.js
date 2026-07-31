@@ -222,7 +222,7 @@ export function ContactsPanel({ types, addLabel = "Add Contact" }) {
                 {c.tags.map((t) => <span key={t} className="text-[10px] border border-hairline px-1.5 py-0.5 rounded-md">{t}</span>)}
               </div>
             )}
-            <div className="flex items-center justify-between mt-4 pt-3 border-t border-hairline text-xs text-text-secondary">
+            <div className="flex items-center justify-between mt-4 pt-3 border-t-hairline text-xs text-text-secondary">
               <span>{c.assigned_name ? `Owner: ${c.assigned_name}` : "Unassigned"}</span>
               {c.tax_id && <span className="text-label">{c.tax_id}</span>}
             </div>

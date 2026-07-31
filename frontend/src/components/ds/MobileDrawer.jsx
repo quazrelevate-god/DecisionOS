@@ -120,17 +120,17 @@ export const MobileDrawer = React.forwardRef(
           aria-label={title}
           className={cn(
             "absolute inset-y-0 flex w-72 max-w-[85vw] flex-col bg-surface shadow-lg",
-            side === "left" ? "left-0 border-r border-hairline" : "right-0 border-l border-hairline"
+            side === "left" ? "left-0 border-r-hairline" : "right-0 border-l-hairline"
           )}
         >
-          <div className="flex items-center justify-between gap-3 border-b border-hairline px-4 py-3">
+          <div className="flex items-center justify-between gap-3 border-b-hairline px-4 py-3">
             <p className={cn("text-body-strong text-text", hideTitle && "sr-only")}>{title}</p>
             <IconButton size="sm" label={`Close ${title}`} icon={<X />} onClick={onClose} className="ml-auto" />
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
 
-          {footer && <div className="border-t border-hairline p-4">{footer}</div>}
+          {footer && <div className="border-t-hairline p-4">{footer}</div>}
         </div>
       </div>
     );

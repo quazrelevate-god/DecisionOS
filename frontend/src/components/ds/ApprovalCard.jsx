@@ -157,7 +157,7 @@ export const ApprovalCard = React.forwardRef(
         {summary && <p className="mt-3 text-body text-text-secondary">{summary}</p>}
 
         {tasks.length > 0 && (
-          <div className="mt-4 border-t border-hairline pt-3">
+          <div className="mt-4 border-t-hairline pt-3">
             <p className="mb-1 text-label text-text-tertiary">
               {tasks.length === 1 ? "Task it will unblock" : "Tasks it will unblock"}
             </p>
@@ -165,7 +165,7 @@ export const ApprovalCard = React.forwardRef(
               {tasks.map((t) => (
                 <li
                   key={t.id || t.title}
-                  className="flex items-center justify-between gap-3 border-b border-hairline py-2 last:border-0"
+                  className="flex items-center justify-between gap-3 border-b-hairline py-2 last:border-0"
                 >
                   <span className="min-w-0 truncate text-body text-text">{t.title}</span>
                   <AssigneeChip

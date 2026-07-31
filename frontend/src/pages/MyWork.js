@@ -132,7 +132,7 @@ function TaskTrail({ t, members, roleOptions, onChange }) {
   const [open, setOpen] = useState(false);
   const updates = t.updates || [];
   return (
-    <div className="mt-4 border-t border-hairline pt-4" data-testid={`task-trail-${t.id}`}>
+    <div className="mt-4 border-t-hairline pt-4" data-testid={`task-trail-${t.id}`}>
       <div className="flex items-center justify-between mb-2">
         <span className="flex items-center gap-2 font-extrabold tracking-tight text-sm">
           <ChatCircleText size={16} weight="bold" className="text-text-tertiary" /> Activity &amp; Handoffs
@@ -288,7 +288,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
   }
 
   return (
-    <div className="mt-4 border-t border-hairline pt-4" data-testid={`exec-plan-${t.id}`}>
+    <div className="mt-4 border-t-hairline pt-4" data-testid={`exec-plan-${t.id}`}>
       <div className="flex items-center justify-between mb-2">
         <span className="flex items-center gap-2 font-extrabold tracking-tight text-sm">
           <ListChecks size={16} weight="bold" className="text-text-tertiary" /> AI Execution Guide
@@ -588,7 +588,7 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
             )}
 
             {isOwner && (
-              <div className="border-t border-hairline pt-3">
+              <div className="border-t-hairline pt-3">
                 {!confirmDel ? (
                   <button onClick={() => setConfirmDel(true)} data-testid={`delete-task-${t.id}`}
                     className="flex items-center gap-1.5 text-xs font-semibold text-primary-text border border-hairline-strong px-3 py-1.5 hover:bg-destructive-tint transition-colors rounded-md">
@@ -1139,7 +1139,7 @@ export default function MyWork() {
 
       {view === "workflows" && canSeeWorkflows ? (
         <div data-testid="workflows-hub">
-          <div className="flex flex-wrap gap-1.5 mb-5 border-b border-hairline pb-3" data-testid="workflows-subtabs">
+          <div className="flex flex-wrap gap-1.5 mb-5 border-b-hairline pb-3" data-testid="workflows-subtabs">
             <button onClick={() => setWfTab("pipelines")} data-testid="wf-subtab-pipelines"
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold  border border-hairline transition-colors ${wfTab === "pipelines" ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"} rounded-md`}>
               <ArrowRight size={14} weight="bold" /> {t("mywork.wf_pipelines")}
@@ -1156,7 +1156,7 @@ export default function MyWork() {
       ) : (
       <div data-testid="mywork-list">
         <div>
-          <div className="flex flex-wrap gap-1.5 mb-5 border-b border-hairline pb-3" data-testid="work-tabs">
+          <div className="flex flex-wrap gap-1.5 mb-5 border-b-hairline pb-3" data-testid="work-tabs">
             {WORK_TABS.map((tb) => (
               <button key={tb.key} onClick={() => setTab(tb.key)} data-testid={`work-tab-${tb.key}`}
                 className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold  border border-hairline transition-colors ${tab === tb.key ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"} rounded-md`}>

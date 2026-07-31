@@ -559,7 +559,7 @@ export default function Ingest() {
                 </tr></thead>
                 <tbody>
                   {invoices.map((inv) => (
-                    <tr key={inv.id} data-testid={`invoice-row-${inv.id}`} className="border-t border-hairline">
+                    <tr key={inv.id} data-testid={`invoice-row-${inv.id}`} className="border-t-hairline">
                       <td className="px-3 py-2"><Chip value={inv.type === "sales_invoice" ? "sales" : "purchase"} className={inv.type === "sales_invoice" ? "bg-primary text-primary-foreground" : "bg-status-pending-bg text-text"} /></td>
                       <td className="px-3 py-2 text-label">{inv.number || "—"}</td>
                       <td className="px-3 py-2">{inv.contact_name || "—"}</td>
@@ -583,7 +583,7 @@ export default function Ingest() {
                 </tr></thead>
                 <tbody>
                   {payments.map((p) => (
-                    <tr key={p.id} data-testid={`payment-row-${p.id}`} className="border-t border-hairline">
+                    <tr key={p.id} data-testid={`payment-row-${p.id}`} className="border-t-hairline">
                       <td className="px-3 py-2"><Chip value={p.direction === "in" ? "received" : "paid"} className={p.direction === "in" ? "bg-primary text-primary-foreground" : "bg-status-pending-bg text-text"} /></td>
                       <td className="px-3 py-2 font-semibold">{money(p.amount, p.currency)}</td>
                       <td className="px-3 py-2">{p.contact_name || "—"}</td>

@@ -134,7 +134,7 @@ function DetailDialog({ row, period, open, onClose }) {
                 </div>
 
                 {Array.isArray(it.proof) && it.proof.length > 0 && (
-                  <div className="mt-3 border-t border-hairline pt-3" data-testid={`brief-proof-${it.id}`} onClick={(e) => e.stopPropagation()}>
+                  <div className="mt-3 border-t-hairline pt-3" data-testid={`brief-proof-${it.id}`} onClick={(e) => e.stopPropagation()}>
                     <p className="text-label text-text-secondary mb-2 flex items-center gap-1"><Paperclip size={12} weight="bold" /> Proof of work · {it.proof.length}</p>
                     <div className="flex flex-wrap gap-2 items-center">
                       {it.proof.map((a, idx) => (
@@ -206,7 +206,7 @@ export default function CEOBrief() {
         <div className="flex border border-hairline w-full lg:w-fit rounded-md">
           {PERIODS.map((p) => (
             <button key={p.key} onClick={() => setPeriod(p.key)} data-testid={`brief-period-${p.key}`}
-              className={`flex-1 lg:flex-none px-4 lg:px-5 py-2.5 text-sm font-semibold  border-r border-hairline last:border-r-0 transition-colors ${period === p.key ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>
+              className={`flex-1 lg:flex-none px-4 lg:px-5 py-2.5 text-sm font-semibold  border-r-hairline last:border-r-0 transition-colors ${period === p.key ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>
               {p.label}
             </button>
           ))}

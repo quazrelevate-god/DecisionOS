@@ -258,7 +258,7 @@ export function CompanyDialog({ trigger }) {
         </div>
 
         {canManage && (
-          <div className="mt-6 border-t border-hairline pt-4" data-testid="os-blueprint-section">
+          <div className="mt-6 border-t-hairline pt-4" data-testid="os-blueprint-section">
             <div className="flex items-center gap-2 mb-1">
               <Kanban size={18} weight="bold" className="text-primary-text" />
               <h3 className="font-extrabold tracking-tight">Operating System</h3>

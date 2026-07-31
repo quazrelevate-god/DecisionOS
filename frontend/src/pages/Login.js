@@ -362,7 +362,7 @@ export default function Login() {
         {isDark ? <Sun size={18} weight="bold" /> : <MoonStars size={18} weight="bold" />}
       </button>
       {/* Left brand panel */}
-      <div className="hidden lg:flex flex-col justify-between bg-neutral-900 text-text-inverse p-12 border-r border-hairline">
+      <div className="hidden lg:flex flex-col justify-between bg-neutral-900 text-text-inverse p-12 border-r-hairline">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center"><span className="font-logo font-black text-white text-xl">D</span></div>
           <span className="font-logo font-black text-2xl tracking-tight leading-none"><span className="text-white">Decision</span><span className="text-brand-400">OS</span></span>
@@ -396,7 +396,7 @@ export default function Login() {
 
               <div className="flex border border-hairline mb-5 rounded-md" data-testid="login-tabs">
                 <button onClick={() => { setLoginTab("password"); setError(""); }} data-testid="login-tab-password"
-                  className={`flex-1 px-3 py-2 text-xs font-semibold  border-r border-hairline transition-colors ${loginTab === "password" ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>
+                  className={`flex-1 px-3 py-2 text-xs font-semibold  border-r-hairline transition-colors ${loginTab === "password" ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>
                   Email &amp; Password
                 </button>
                 <button onClick={() => { setLoginTab("otp"); setError(""); }} data-testid="login-tab-otp"
@@ -466,7 +466,7 @@ export default function Login() {
               )}
 
               <button onClick={goToRegister} data-testid="toggle-auth-mode" className="mt-4 text-sm text-primary-text font-semibold hover:underline">Need a workspace? Register →</button>
-              <div className="mt-8 border-t border-hairline pt-6">
+              <div className="mt-8 border-t-hairline pt-6">
                 <p className="text-label text-text-secondary mb-3">Try the Sharma demo</p>
                 <div className="grid grid-cols-2 gap-2">
                   {DEMO.map((d) => (

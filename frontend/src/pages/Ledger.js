@@ -480,7 +480,7 @@ function AiPanel({ scope, variant = "inline" }) {
         </>
       )}
 
-      <div className="border-t border-hairline pt-4">
+      <div className="border-t-hairline pt-4">
         <div className="flex items-center gap-1.5 mb-2 text-text-secondary"><Brain size={15} weight="bold" /><span className="text-label text-xs">{scope === "brief" ? t("finance.ask_about_fin") : t("finance.ask_about", { scope })}</span></div>
         <div className="flex gap-2">
           <input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && ask()} data-testid={`ai-ask-input-${scope}`} placeholder={t("finance.ask_ph")} className={inp} />
@@ -538,7 +538,7 @@ function InvoicePicker({ open, value, onChange, cur, testid }) {
       {show && (
         <div className="absolute z-30 mt-1 w-full sm:w-[280px] bg-surface border-2 border-hairline shadow-sm max-h-64 overflow-hidden flex flex-col rounded-lg">
           <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} data-testid={`${testid}-search`}
-            placeholder="Search invoice # or name…" className="px-3 py-2 text-sm border-b border-hairline focus:outline-none bg-transparent" />
+            placeholder="Search invoice # or name…" className="px-3 py-2 text-sm border-b-hairline focus:outline-none bg-transparent" />
           <div className="overflow-y-auto">
             {filtered.length === 0 && <div className="px-3 py-3 text-xs text-text-secondary">No matching invoices</div>}
             {filtered.map((o) => (
@@ -630,7 +630,7 @@ function RevenueTab({ data, cur, onDelete, onChange }) {
         ) : (
           <div className="rounded-lg border border-hairline bg-surface overflow-x-auto" data-testid="revenue-invoices-table">
             <table className="w-full text-sm">
-              <thead><tr className="border-b border-hairline text-left text-label text-xs text-text-secondary">
+              <thead><tr className="border-b-hairline text-left text-label text-xs text-text-secondary">
                 <th className="p-3">For / Invoice</th><th className="p-3">Customer</th><th className="p-3">Date</th><th className="p-3">Status</th><th className="p-3 text-right">Amount</th><th className="p-3"></th>
               </tr></thead>
               <tbody>
@@ -657,7 +657,7 @@ function RevenueTab({ data, cur, onDelete, onChange }) {
           <h3 className="font-extrabold tracking-tight text-sm mb-3">Payments Received ({payments.length})</h3>
           <div className="rounded-lg border border-hairline bg-surface overflow-x-auto" data-testid="revenue-payments-table">
             <table className="w-full text-sm">
-              <thead><tr className="border-b border-hairline text-left text-label text-xs text-text-secondary">
+              <thead><tr className="border-b-hairline text-left text-label text-xs text-text-secondary">
                 <th className="p-3">Date</th><th className="p-3">Customer</th><th className="p-3">Method</th><th className="p-3">Reference</th><th className="p-3 text-right">Amount</th><th className="p-3"></th>
               </tr></thead>
               <tbody>
@@ -758,7 +758,7 @@ function ExpensesTable({ rows, cur, onDelete }) {
   return (
     <div className="rounded-lg border border-hairline bg-surface overflow-x-auto" data-testid="expenses-table">
       <table className="w-full text-sm">
-        <thead><tr className="border-b border-hairline text-left text-label text-xs text-text-secondary">
+        <thead><tr className="border-b-hairline text-left text-label text-xs text-text-secondary">
           <th className="p-3">{t("finance.c_title")}</th><th className="p-3">{t("finance.c_category")}</th><th className="p-3">{t("finance.c_vendor")}</th><th className="p-3">{t("finance.c_date")}</th><th className="p-3">{t("finance.c_status")}</th><th className="p-3 text-right">{t("finance.c_amount")}</th><th className="p-3"></th>
         </tr></thead>
         <tbody>
@@ -786,7 +786,7 @@ function AssetsTable({ rows, cur, onDelete }) {
   return (
     <div className="rounded-lg border border-hairline bg-surface overflow-x-auto" data-testid="assets-table">
       <table className="w-full text-sm">
-        <thead><tr className="border-b border-hairline text-left text-label text-xs text-text-secondary">
+        <thead><tr className="border-b-hairline text-left text-label text-xs text-text-secondary">
           <th className="p-3">{t("finance.a_asset")}</th><th className="p-3">{t("finance.c_category")}</th><th className="p-3">{t("finance.c_vendor")}</th><th className="p-3">{t("finance.a_bought")}</th><th className="p-3">{t("finance.c_status")}</th><th className="p-3 text-right">{t("finance.a_value")}</th><th className="p-3"></th>
         </tr></thead>
         <tbody>
@@ -814,7 +814,7 @@ function InventoryTable({ rows, cur, onDelete }) {
   return (
     <div className="rounded-lg border border-hairline bg-surface overflow-x-auto" data-testid="inventory-table">
       <table className="w-full text-sm">
-        <thead><tr className="border-b border-hairline text-left text-label text-xs text-text-secondary">
+        <thead><tr className="border-b-hairline text-left text-label text-xs text-text-secondary">
           <th className="p-3">{t("finance.i_item")}</th><th className="p-3">{t("finance.i_sku")}</th><th className="p-3">{t("finance.i_qty")}</th><th className="p-3">{t("finance.i_unitcost")}</th><th className="p-3">{t("finance.c_vendor")}</th><th className="p-3 text-right">{t("finance.i_value")}</th><th className="p-3"></th>
         </tr></thead>
         <tbody>

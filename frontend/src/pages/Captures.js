@@ -196,7 +196,7 @@ function CaptureCard({ c, user, onChange }) {
               parts.push(pct >= 80 ? `high AI confidence (${pct}%)` : pct >= 50 ? `medium confidence (${pct}%) — worth a check` : `low confidence (${pct}%) — please verify`);
             }
             return (
-              <p data-testid={`capture-why-${c.id}`} className="text-xs text-text-secondary mt-1 border-l-2 border-hairline pl-2">
+              <p data-testid={`capture-why-${c.id}`} className="text-xs text-text-secondary mt-1 border-l-2 pl-2">
                 <span className="font-semibold text-text">Why AI routed this:</span> {parts.join(" · ")}.
               </p>
             );
@@ -252,7 +252,7 @@ function CaptureCard({ c, user, onChange }) {
       </div>
 
       {edit && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3 border-t border-hairline pt-3" data-testid={`capture-edit-${c.id}`}>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3 border-t-hairline pt-3" data-testid={`capture-edit-${c.id}`}>
           <label className="block"><span className="text-label text-text-secondary text-[10px]">Type</span>
             <input className={inp} value={form.classification} onChange={(e) => setForm({ ...form, classification: e.target.value })} /></label>
           <label className="block"><span className="text-label text-text-secondary text-[10px]">Reviewer role</span>
@@ -278,7 +278,7 @@ function CaptureCard({ c, user, onChange }) {
       )}
 
       {isPending && (
-        <div className="flex flex-wrap gap-2 mt-3 border-t border-hairline pt-3">
+        <div className="flex flex-wrap gap-2 mt-3 border-t-hairline pt-3">
           {edit ? (
             <>
               <button data-testid={`capture-save-${c.id}`} disabled={busy} onClick={saveEdit} className="px-3 py-1.5 text-xs font-semibold border-2 border-hairline transition-all hover:shadow-xs disabled:opacity-50 bg-primary text-primary-foreground flex items-center gap-1 rounded-md"><PencilSimple size={14} weight="bold" /> Save</button>

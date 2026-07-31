@@ -100,14 +100,14 @@ function EscalationCard({ t, onRespond, highlight }) {
       <p className="font-bold text-lg leading-tight">{t.title}</p>
       {t.description && <p className="text-sm text-text-secondary mt-2">{t.description}</p>}
       {t.raised_step_text && (
-        <p className="text-xs text-text-secondary mt-2 border-l-2 border-hairline pl-2 italic">On step: {t.raised_step_text}</p>
+        <p className="text-xs text-text-secondary mt-2 border-l-2 pl-2 italic">On step: {t.raised_step_text}</p>
       )}
       {t.raised_by_name && (
         <p className="text-label text-text-secondary mt-3 flex items-center gap-1">
           <User size={12} weight="bold" /> Raised by {t.raised_by_name}
         </p>
       )}
-      <div className="mt-4 border-t border-hairline pt-3">
+      <div className="mt-4 border-t-hairline pt-3">
         <textarea data-testid={`escalation-response-${t.id}`} value={text} onChange={(e) => setText(e.target.value)} rows={2}
           placeholder={isEsc ? `Type your decision — this goes back to ${t.raised_by_name || "the person who raised it"}` : `Reply to ${t.raised_by_name || "the sender"}`}
           className="w-full border border-hairline p-2.5 text-sm text-label focus:outline-none focus:shadow-xs transition-shadow resize-none rounded-md" />
@@ -275,7 +275,7 @@ function PendingApprovalCard({ d, members, roleOptions, onApprove, onReject, onR
         </p>
       )}
       {d.tasks?.length > 0 && (
-        <div className="mt-4 border-t border-hairline pt-3">
+        <div className="mt-4 border-t-hairline pt-3">
           <p className="mb-1 text-label text-text-tertiary">
             {d.tasks.length === 1 ? "Task it will unblock" : "Tasks it will unblock"}
           </p>

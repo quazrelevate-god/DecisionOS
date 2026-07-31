@@ -140,7 +140,7 @@ export default function Layout({ children }) {
           </span>
         </PopoverAnchor>
         <PopoverContent align="end" className="w-80 p-0 border border-hairline shadow-sm rounded-md" data-testid="notif-dropdown">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-hairline">
+          <div className="flex items-center justify-between px-4 py-3 border-b-hairline">
             <p className="text-sm font-bold tracking-tight">{t("header.notifications")}</p>
             {unread > 0 && <span className="text-label text-primary-text">{unread} {t("header.new")}</span>}
           </div>
@@ -165,7 +165,7 @@ export default function Layout({ children }) {
             })}
           </div>
           <button onClick={() => navigate("/notifications")} data-testid="notif-view-all"
-            className="w-full px-4 py-3 border-t border-hairline text-sm font-semibold hover:bg-primary hover:text-white transition-colors">
+            className="w-full px-4 py-3 border-t-hairline text-sm font-semibold hover:bg-primary hover:text-white transition-colors">
             {t("header.view_all")}
           </button>
         </PopoverContent>
@@ -236,8 +236,8 @@ export default function Layout({ children }) {
   return (
     <div className="min-h-screen flex bg-background text-text">
       {/* Desktop sidebar */}
-      <aside className="hidden lg:flex w-64 shrink-0 border-r border-hairline bg-surface flex-col sticky top-0 h-screen">
-        <div className="px-6 py-6 border-b border-hairline">
+      <aside className="hidden lg:flex w-64 shrink-0 border-r-hairline bg-surface flex-col sticky top-0 h-screen">
+        <div className="px-6 py-6 border-b-hairline">
           <Logo />
           <p data-testid="tenant-name" className="mt-3 text-label text-text-secondary truncate">
             {tenant?.name}
@@ -247,7 +247,7 @@ export default function Layout({ children }) {
         <nav className="flex-1 min-h-0 overflow-y-auto py-4">
           <NavItems />
         </nav>
-        <div className="border-t border-hairline p-4 pb-6 shrink-0">
+        <div className="border-t-hairline p-4 pb-6 shrink-0">
           <div className="mb-2 leading-tight" data-testid="current-user">
             <p className="text-sm font-semibold truncate">{user?.name}</p>
             <p className="text-label text-text-secondary truncate">{user?.email}</p>
@@ -265,7 +265,7 @@ export default function Layout({ children }) {
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Desktop top bar */}
-        <header className="hidden lg:flex h-16 border-b border-hairline bg-background/70 backdrop-blur-xl items-center justify-between px-8 sticky top-0 z-10">
+        <header className="hidden lg:flex h-16 border-b-hairline bg-background/70 backdrop-blur-xl items-center justify-between px-8 sticky top-0 z-10">
           <div className="flex items-center gap-3">
             <span className="text-label text-text-secondary">{t("header.signed_in_as")}</span>
             <span className="font-semibold text-sm" data-testid="current-user-name">{user?.name}</span>
@@ -304,7 +304,7 @@ export default function Layout({ children }) {
         </header>
 
         {/* Mobile top app bar */}
-        <header className="lg:hidden h-14 border-b border-hairline bg-background/80 backdrop-blur-xl flex items-center justify-between px-4 sticky top-0 z-20">
+        <header className="lg:hidden h-14 border-b-hairline bg-background/80 backdrop-blur-xl flex items-center justify-between px-4 sticky top-0 z-20">
           <Logo />
           <div className="flex items-center gap-2">
             <LanguageSwitcher />
@@ -320,10 +320,10 @@ export default function Layout({ children }) {
                 <ListIcon size={20} weight="bold" />
               </button>
             </SheetTrigger>
-            <SheetContent side="left" className="w-72 p-0 border-r border-hairline rounded-md bg-surface flex flex-col" data-testid="mobile-drawer">
+            <SheetContent side="left" className="w-72 p-0 border-r-hairline rounded-md bg-surface flex flex-col" data-testid="mobile-drawer">
               <SheetTitle className="sr-only">Navigation</SheetTitle>
               <SheetDescription className="sr-only">Main navigation menu</SheetDescription>
-              <div className="px-6 py-5 border-b border-hairline">
+              <div className="px-6 py-5 border-b-hairline">
                 <Logo />
                 <p className="mt-2 text-label text-text-secondary truncate">{tenant?.name}</p>
                 <div className="mt-3 flex items-center gap-2">
@@ -336,7 +336,7 @@ export default function Layout({ children }) {
               <nav className="flex-1 py-3 overflow-y-auto">
                 <NavItems onNavigate={() => setDrawerOpen(false)} />
               </nav>
-              <div className="border-t border-hairline p-4 space-y-2 pb-24">
+              <div className="border-t-hairline p-4 space-y-2 pb-24">
                 {user?.role === "owner" && (
                   <Button
                     variant="tertiary"
@@ -365,7 +365,7 @@ export default function Layout({ children }) {
       </div>
 
       {/* Mobile bottom tab bar */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 border-t border-hairline bg-surface flex z-[10000]" data-testid="mobile-bottom-nav">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 border-t-hairline bg-surface flex z-[10000]" data-testid="mobile-bottom-nav">
         {navBottom.map(({ to, label, tkey, icon: Icon }) => {
           const active = to === "/" ? location.pathname === "/" : location.pathname.startsWith(to);
           return (
@@ -374,7 +374,7 @@ export default function Layout({ children }) {
               to={to}
               end={to === "/"}
               data-testid={`bottomnav-${to === "/" ? "dashboard" : to.slice(1)}`}
-              className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 border-r border-hairline last:border-r-0 transition-colors ${
+              className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 border-r-hairline last:border-r-0 transition-colors ${
                 active ? "bg-primary text-white" : "text-text hover:bg-surface-hover"
               }`}
             >

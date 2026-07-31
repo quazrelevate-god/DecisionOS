@@ -88,7 +88,7 @@ function RequestLeaveDialog({ onDone }) {
             <button type="button" onClick={() => setForm({ ...form, day_portion: "full" })}
               className={`flex-1 px-3 py-2 text-xs font-semibold  transition-colors ${form.day_portion === "full" ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>Full Day</button>
             <button type="button" onClick={() => setForm({ ...form, day_portion: "half" })}
-              className={`flex-1 px-3 py-2 text-xs font-semibold  border-l border-hairline transition-colors ${form.day_portion === "half" ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>Half Day</button>
+              className={`flex-1 px-3 py-2 text-xs font-semibold  border-l-hairline transition-colors ${form.day_portion === "half" ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>Half Day</button>
           </div>
           <textarea data-testid="leave-reason-input" className={inp} rows={2} placeholder="Reason" value={form.reason} onChange={set("reason")} />
         </div>
@@ -451,7 +451,7 @@ export default function Leave({ embedded = false }) {
       <div className="flex border border-hairline mb-6 w-fit rounded-md" data-testid="leave-tabs">
         {TABS.map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)} data-testid={`leave-tab-${t.key}`}
-            className={`flex items-center gap-2 px-5 py-2.5 text-sm font-semibold  border-r border-hairline last:border-r-0 transition-colors ${tab === t.key ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>
+            className={`flex items-center gap-2 px-5 py-2.5 text-sm font-semibold  border-r-hairline last:border-r-0 transition-colors ${tab === t.key ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>
             {t.label}
             {t.n > 0 && <span className={`min-w-5 h-5 px-1 flex items-center justify-center text-[10px] border border-hairline ${tab === t.key ? "bg-surface text-text" : "bg-primary text-primary-foreground"} rounded-md`}>{t.n}</span>}
           </button>

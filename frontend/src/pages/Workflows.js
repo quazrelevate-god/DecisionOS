@@ -152,7 +152,7 @@ export default function Workflows({ embedded = false }) {
       <div className="flex flex-wrap border border-hairline mb-6 w-fit rounded-md">
         {pipelines.map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)} data-testid={`workflow-tab-${t.key}`}
-            className={`px-5 py-2.5 text-left border-r border-hairline last:border-r-0 transition-colors ${activeKey === t.key ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>
+            className={`px-5 py-2.5 text-left border-r-hairline last:border-r-0 transition-colors ${activeKey === t.key ? "bg-primary text-primary-foreground" : "bg-surface hover:bg-surface-hover"}`}>
             <span className="block text-sm font-semibold">{t.label}</span>
             <span className={`block text-[10px]  ${activeKey === t.key ? "text-white/60" : "text-text-secondary"}`}>{t.sub}</span>
           </button>
@@ -165,8 +165,8 @@ export default function Workflows({ embedded = false }) {
           {stages.map((stg) => {
             const cards = (data || []).filter((w) => w.stage === stg.key);
             return (
-              <div key={stg.key} className="w-64 shrink-0 border-r border-hairline last:border-r-0" data-testid={`stage-column-${stg.key}`}>
-                <div className="px-3 py-2 border-b border-hairline bg-background sticky top-0">
+              <div key={stg.key} className="w-64 shrink-0 border-r-hairline last:border-r-0" data-testid={`stage-column-${stg.key}`}>
+                <div className="px-3 py-2 border-b-hairline bg-background sticky top-0">
                   <p className="text-label">{stg.label}</p>
                   <p className="font-black text-lg">{cards.length}</p>
                 </div>

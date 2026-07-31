@@ -88,7 +88,7 @@ export function DecisionDialog({ decisionId, open, onClose }) {
                 </ul>
               </div>
             )}
-            <div className="mt-3 border-t border-hairline pt-3">
+            <div className="mt-3 border-t-hairline pt-3">
               <p className="text-label text-text-secondary mb-2 flex items-center gap-1"><ChatCircleText size={14} weight="bold" /> Discussion &amp; activity</p>
               <div className="space-y-2 max-h-56 overflow-y-auto" data-testid="decision-timeline">
                 {timeline.length === 0 && <p className="text-sm text-text-secondary">No activity yet. Start the discussion below.</p>}

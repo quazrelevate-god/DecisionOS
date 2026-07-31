@@ -350,8 +350,10 @@ export function TenantsSection() {
     }
   };
 
+  const nameMatches = toDelete && confirmText.trim().toLowerCase() === toDelete.name.trim().toLowerCase();
+
   const doDelete = async () => {
-    if (!toDelete || confirmText.trim() !== toDelete.name) return;
+    if (!toDelete || !nameMatches) return;
     setDeleting(true);
     try {
       const { data } = await api.delete(`/admin/tenants/${toDelete.id}`);
@@ -432,7 +434,7 @@ export function TenantsSection() {
               every other record. <span className="text-[#e5484d]">This cannot be undone.</span>
             </p>
             <p className="font-mono text-[11px] uppercase tracking-wider text-white/40 mt-4 mb-1.5">
-              Type <span className="text-white">{toDelete.name}</span> to confirm
+              Type <span className="text-white normal-case tracking-normal">{toDelete.name}</span> to confirm
             </p>
             <input
               autoFocus
@@ -451,7 +453,7 @@ export function TenantsSection() {
               <button
                 data-testid="tenant-delete-confirm"
                 onClick={doDelete}
-                disabled={confirmText.trim() !== toDelete.name || deleting}
+                disabled={!nameMatches || deleting}
                 className={BTN + " border-[#e5484d] bg-[#e5484d]/15 text-[#e5484d] hover:bg-[#e5484d]/25 flex items-center gap-1.5 disabled:opacity-30 disabled:cursor-not-allowed"}>
                 {deleting ? <Spinner size={13} className="animate-spin" /> : <Trash size={13} />}
                 {deleting ? "Deleting…" : "Delete forever"}

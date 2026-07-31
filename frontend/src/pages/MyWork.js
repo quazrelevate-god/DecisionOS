@@ -41,6 +41,26 @@ const PROGRESS_OPTIONS = [0, 25, 50, 75, 100];
 const isTerminal = (t) => t.status === "done" || t.status === "cancelled";
 const isOverdue = (t) => t.due_date && new Date(t.due_date) < new Date() && !isTerminal(t);
 
+const URGENCY_GROUPS = [
+  { key: "overdue", label: "Overdue" },
+  { key: "today", label: "Today" },
+  { key: "week", label: "This week" },
+  { key: "later", label: "Later" },
+];
+
+/** Which bucket a task falls in. Undated work is "Later", never "Overdue". */
+function urgencyOf(t) {
+  if (isOverdue(t)) return "overdue";
+  if (!t.due_date) return "later";
+  const due = new Date(t.due_date);
+  const now = new Date();
+  const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+  if (due <= endOfToday) return "today";
+  const endOfWeek = new Date(endOfToday);
+  endOfWeek.setDate(endOfWeek.getDate() + 7);
+  return due <= endOfWeek ? "week" : "later";
+}
+
 function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel }) {
   const [text, setText] = useState("");
   const [action, setAction] = useState("note");
@@ -953,6 +973,8 @@ export default function MyWork() {
   const [scope, setScope] = useState("mine");
   const [tab, setTab] = useState("all");
   const [aiPriority, setAiPriority] = useState(false);
+  // Groups start open; collapsing is for folding away a long tail, not hiding work.
+  const [collapsedGroups, setCollapsedGroups] = useState({});
   const mine = !(isOwner && scope === "all");
   const showAssignee = isOwner && scope === "all";
   const tasksQ = useQuery({ queryKey: ["tasks", mine], queryFn: () => api.get(`/tasks?mine=${mine}`).then((r) => r.data) });
@@ -1109,8 +1131,38 @@ export default function MyWork() {
             ))}
           </div>
           {list.length === 0 && <EmptyState title={tab === "completed" ? t("mywork.empty_completed_title") : t("mywork.empty_title")} hint={tab === "all" ? t("mywork.empty_all_hint") : t("mywork.empty_cat_hint")} />}
+          {/* Urgency grouping.
+              An undifferentiated list makes the reader do the triage the app
+              should have done: work out which of these is late. Grouping by
+              when it is due answers that before anything is read, and each
+              group collapses so a long tail folds away without losing its
+              count. Urgency stays in the header and the row edge — never a
+              wash over the row. AI Priority deliberately bypasses grouping,
+              because its whole purpose is a single ranked order. */}
           <div className="space-y-4">
-            {list.map((t) => <TaskCard key={t.id} t={t} onChange={refresh} members={members} roleOptions={roleOptions} showAssignee={showAssignee} highlight={t.id === focusTaskId} scores={aiPriority && tab !== "completed" ? scoreMap[t.id] : undefined} />)}
+            {aiPriority && tab !== "completed"
+              ? list.map((t) => <TaskCard key={t.id} t={t} onChange={refresh} members={members} roleOptions={roleOptions} showAssignee={showAssignee} highlight={t.id === focusTaskId} scores={aiPriority && tab !== "completed" ? scoreMap[t.id] : undefined} />)
+              : URGENCY_GROUPS.map(({ key, label }) => {
+                  const rows = list.filter((t) => urgencyOf(t) === key);
+                  if (!rows.length) return null;
+                  const collapsed = collapsedGroups[key];
+                  return (
+                    <section key={key} data-testid={`mywork-group-${key}`}>
+                      <button
+                        type="button"
+                        onClick={() => setCollapsedGroups((c) => ({ ...c, [key]: !c[key] }))}
+                        aria-expanded={!collapsed}
+                        data-testid={`mywork-group-toggle-${key}`}
+                        className="mb-2 flex w-full items-center gap-2 rounded-md px-1 py-2 text-left transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-focus focus-visible:ring-ring"
+                      >
+                        <CaretDown size={13} weight="bold" className={`text-text-tertiary transition-transform ${collapsed ? "-rotate-90" : ""}`} />
+                        <span className="text-label text-text-secondary">{label}</span>
+                        <span data-numeric className="text-small tabular-nums text-text-tertiary">{rows.length}</span>
+                      </button>
+                      {!collapsed && <div className="space-y-4">{rows.map((t) => <TaskCard key={t.id} t={t} onChange={refresh} members={members} roleOptions={roleOptions} showAssignee={showAssignee} highlight={t.id === focusTaskId} scores={aiPriority && tab !== "completed" ? scoreMap[t.id] : undefined} />)}</div>}
+                    </section>
+                  );
+                })}
           </div>
         </div>
       </div>

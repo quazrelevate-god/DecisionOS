@@ -203,6 +203,70 @@ is legal in exactly those two places; everywhere else red is danger.
 is `#FF3B30`. Close, but not the same red. Nobody has reconciled them, and the
 brand should probably pick one.
 
+## Command palette (⌘K) — a real gap, but a feature
+
+**Found:** shadcn adoption review. **Status:** open, needs its own scoping.
+
+Thirty routes and no search. For a founder who lives on the Desk, jump-to-
+decision / jump-to-task / jump-to-screen is a genuine capability, and Command
+is the one registry component that is hard to hand-roll well — filtering,
+keyboard loop, and the focus behaviour are the whole component.
+
+Deliberately **not** taken as part of the Desk finish. It is a new feature,
+not a finish-line task: it needs a decision about what is searchable, what
+ranking it uses (and whether that is `whatMatters()` or something else), and
+what happens on an empty query. `cmdk` also brings its own DOM with
+`[cmdk-*]` selectors, so the skinning is more than a class swap.
+
+## Sheet vs MobileDrawer — one of them should go
+
+**Found:** shadcn adoption review. **Status:** open, resolve by deleting.
+
+`Layout` opens the mobile nav with shadcn `ui/sheet`, and the design system
+also ships a hand-built `ds/MobileDrawer` with focus-trap and scroll-lock
+tests. Two answers to one question.
+
+The tested one is `MobileDrawer`, so the likely resolution is to move Layout
+onto it and delete `ui/sheet` — but that is a behaviour change to the mobile
+navigation and wants its own before/after. **Resolve by deleting one, not by
+adopting a third.**
+
+## The 36 unused registry primitives
+
+**Found:** shadcn adoption review. **Status:** open, recommend deletion.
+
+`components/ui/` holds 44 shadcn primitives. Five are wired (dialog, popover,
+sheet, sonner, tooltip). The other 39 are imported by nothing.
+
+They are not free. Sixteen carry `lucide-react` imports against a Phosphor
+app, which is why the Lucide ban in `eslint.config.mjs` needs an explicit
+sixteen-file exemption list — dead code forcing a hole in live enforcement.
+The token bans do apply to them.
+
+**Recommendation: delete them.** They can be re-added from the registry in
+one command whenever they are genuinely wanted, and re-adding is the moment
+the skinning work should happen anyway. Left in place, the next person
+reasonably assumes they are usable as-is.
+
+## `border-2` is off the border token scale
+
+**Found:** border-hairline fix. **Status:** open, small.
+
+The border scale is `hairline: 1px` and `focus: 2px`. Three sites use
+`border-2`/`border-l-4` with `hairline-strong`, which is a colour-only token,
+so those genuinely render 2px and 4px — off the scale. Not urgent, and not
+folded into the border fix because that commit's claim was pixel-neutrality.
+
+## My Work mobile is not deterministic
+
+**Found:** Desk batch. **Status:** open, blocks byte-diffing that one screen.
+
+`/my-work` at 390×844 measured 6402px, 6374px and 6374px across three
+identical runs with no code change between them — a 28px swing. Every other
+screen is stable. Until it is understood, a byte diff on my-work mobile
+cannot distinguish a regression from noise, which is a hole in the one
+safety net this project relies on.
+
 ---
 
 # Backend-blocked — specs for handoff

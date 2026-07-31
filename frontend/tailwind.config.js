@@ -56,14 +56,14 @@ module.exports = {
                 /* ---- Role scales: the primary colour API ---- */
                 brand: {
                     ...scale('brand'),
-                    /* The wordmark, and only the wordmark. Same hex as the old
-                       identity red, but insulated from the danger scale. */
+                    /* Brand identity, insulated from the danger scale. Legal on
+                       the wordmark and hero surfaces and nowhere else — the
+                       brand artifacts (red app icon, red-and-black brochure)
+                       settle that red is real identity here, while the UI
+                       system keeps red for danger. `brand.red` is gone; the
+                       legacy palette is fully dead. */
                     mark: v('brand-mark'),
-                    /* `red` survives ONLY for the Landing/Login hero, which is
-                       parked pending a brand ruling. blue/yellow/ink/paper are
-                       gone — nothing consumes them. When the hero is ruled on,
-                       this key goes too and the legacy palette is fully dead. */
-                    red: '#FF3B30',
+                    hero: v('brand-hero'),
                 },
                 danger: scale('danger'),
                 caution: scale('caution'),

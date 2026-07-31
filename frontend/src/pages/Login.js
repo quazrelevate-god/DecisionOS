@@ -362,15 +362,15 @@ export default function Login() {
         {isDark ? <Sun size={18} weight="bold" /> : <MoonStars size={18} weight="bold" />}
       </button>
       {/* Left brand panel */}
-      <div className="hidden lg:flex flex-col justify-between bg-primary text-primary-foreground p-12 border-r border-hairline">
+      <div className="hidden lg:flex flex-col justify-between bg-neutral-900 text-text-inverse p-12 border-r border-hairline">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-brand-mark rounded-lg flex items-center justify-center"><span className="font-logo font-black text-white text-xl">D</span></div>
           <span className="font-logo font-black text-2xl tracking-tight uppercase leading-none"><span className="text-white">Decision</span><span className="text-brand-mark">OS</span></span>
         </div>
         <div>
-          <p className="text-label uppercase text-brand-red mb-4">The operational brain for founder-led SMEs</p>
+          <p className="text-label uppercase text-brand-hero mb-4">The operational brain for founder-led SMEs</p>
           <h1 className="text-5xl xl:text-6xl font-black uppercase tracking-tighter leading-[0.95]">
-            {mode === "register" ? <>Set up your<br /><span className="text-brand-red">executive office.</span></> : <>Speak the decision.<br /><span className="text-primary-text">We run</span> the company.</>}
+            {mode === "register" ? <>Set up your<br /><span className="text-brand-hero">executive office.</span></> : <>Speak the decision.<br /><span className="text-brand-hero">We run</span> the company.</>}
           </h1>
           <p className="mt-6 text-white/70 text-sm max-w-md leading-relaxed">
             {mode === "register"

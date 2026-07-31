@@ -152,3 +152,29 @@ rendering, concentrated in dark mode and on Ledger (34 raw controls). Explainabl
 and small, but not zero, so it is recorded rather than rounded away. The honest
 reading is that the class sweep is complete and the last differences come from
 element-level rendering the shim used to pin.
+
+
+## Hero / wordmark brand ruling — CLOSED (KEEP)
+
+**Ruled:** post-M7. **Evidence:** the brand artifacts in this repo, checked directly.
+
+- `frontend/public/icon-512.png` and every other icon size: the shipped app logo is
+  a **red tile with a white D**. That is the mark on every home screen and tab.
+- `brochure_assets/brochure.html` (the investor deck): palette is `#111111` (20
+  uses) and **red `#FF2D20` (16 uses)**, plus two greys. **No indigo at all.**
+- `brochure_assets/hero.png`: red is the dominant accent throughout.
+- `design_guidelines.json`, in-repo: *"Retaining the core Red/Black identity as the
+  hero signature."*
+
+So red **is** DecisionOS brand identity. The Framer system reference putting indigo
+in its own wordmark slot was the UI system demoing itself — a palette ruling about
+product chrome, not a brand ruling. On brand surfaces, brand wins.
+
+**Applied:** `brand.red` deleted. `brandIdentity` in tokens.js now feeds two vars,
+`--brand-mark` (wordmark) and `--brand-hero` (hero copy, eyebrows, rules, quote
+bars), so they cannot drift and neither moves if the danger scale is retuned. Red
+is legal in exactly those two places; everywhere else red is danger.
+
+**Discrepancy worth someone's attention:** the deck's red is `#FF2D20` and the app's
+is `#FF3B30`. Close, but not the same red. Nobody has reconciled them, and the
+brand should probably pick one.

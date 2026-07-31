@@ -103,14 +103,20 @@ const neutral = {
 };
 
 /**
- * The wordmark red — identity, and deliberately NOT part of the semantic system.
+ * DecisionOS red — brand identity, and deliberately NOT part of the semantic system.
  *
- * It shares its hex with the old brand red, but not its name: a logo is not a
- * status, nobody reads a wordmark as danger, and the mark must not shift the
- * day someone retunes the danger scale. Legal to use in exactly one place: the
- * DecisionOS logo. Everything else that is red is danger.
+ * The brand artifacts settle this: the shipped app icon is a red tile, and the
+ * investor brochure's palette is near-black plus this red (16 uses) with no
+ * indigo anywhere. The Framer system reference puts indigo in its own wordmark
+ * slot, but that document is a UI-palette ruling — "red = danger, never
+ * branding" governs product chrome, not the brand. On brand surfaces, brand wins.
+ *
+ * Legal in exactly two places: the wordmark (--brand-mark) and hero surfaces
+ * (--brand-hero). Both emit from this one value so they cannot drift, and both
+ * are insulated from the danger scale — retuning danger must never move the logo.
+ * Everything else that is red is danger.
  */
-export const brandMark = '4 100% 59%';
+export const brandIdentity = '4 100% 59%';
 
 export const palette = { brand, danger, caution, success, neutral };
 
@@ -446,8 +452,9 @@ export function renderTokenCss() {
     `${i}/* Semantic — light (canonical) */`,
     emitVars(Object.entries(light), i),
     '',
-    `${i}/* Wordmark identity — not a semantic role; see brandMark */`,
-    `${i}--brand-mark: ${brandMark};`,
+    `${i}/* Brand identity — not a semantic role; see brandIdentity */`,
+    `${i}--brand-mark: ${brandIdentity};`,
+    `${i}--brand-hero: ${brandIdentity};`,
     '',
     `${i}/* Company Brain terminal — dark in both themes */`,
     emitVars(Object.entries(terminal).map(([k, v]) => [`terminal-${k}`, v]), i),

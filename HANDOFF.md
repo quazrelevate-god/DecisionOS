@@ -1,7 +1,7 @@
 # DecisionOS — design system & UX handoff
 
 Written for a session with **no memory of the previous conversation**. Everything
-here is verified against the branch as of `0e25fe2`.
+here is verified against the branch as of `cd68e6d`.
 
 Read this with `MIGRATION-FOLLOWUPS.md`, which is the standing backlog and the
 backend spec sheet. This file is the state of play; that one is the work queue.
@@ -13,8 +13,8 @@ backend spec sheet. This file is the state of play; that one is the work queue.
 | | |
 |---|---|
 | Branch | `design-system-migration` (off `design-system`, off `main`) |
-| HEAD | `0e25fe2`, pushed |
-| Latest tag | `ux-frontend-batch` |
+| HEAD | `cd68e6d`, pushed |
+| Latest tag | `ux-frontend-batch` at `ea49d47` — the three docs commits since it are untagged |
 | `origin/main` | **`da5b238` — untouched. Nothing has been merged.** |
 | Tests | 136 passing, 7 suites |
 | DS components | 23 in `frontend/src/components/ds/` |

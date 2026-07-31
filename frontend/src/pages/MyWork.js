@@ -725,7 +725,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
   const selCls = "border border-hairline px-2 py-1 text-xs text-label uppercase bg-surface focus:outline-none";
 
   return (
-    <div id={`task-card-${t.id}`} data-testid={`mywork-task-${t.id}`} className={`rounded-lg border border-hairline bg-surface p-5 transition-all ${highlight ? "ring-4 ring-ring ring-offset-2 ring-offset-brand-paper" : ""}`}>
+    <div id={`task-card-${t.id}`} data-testid={`mywork-task-${t.id}`} className={`rounded-lg border border-hairline bg-surface p-5 transition-all ${highlight ? "ring-4 ring-ring ring-offset-2 ring-offset-background" : ""}`}>
       <div className="flex items-start justify-between gap-2">
         <p className="font-bold text-lg leading-tight">{t.title}</p>
         <Chip value={t.priority} />

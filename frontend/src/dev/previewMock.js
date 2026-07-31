@@ -169,18 +169,31 @@ const ROUTES = [
   [
     '/inbox',
     {
-      open_total: 6,
-      counts: { customer: 2, supplier: 1, invoice: 1, payment: 0, complaint: 1, task: 1, approval: 1, reminder: 0 },
+      open_total: 11,
+      counts: { customer: 2, supplier: 2, invoice: 1, payment: 1, complaint: 1, task: 3, approval: 1, reminder: 1 },
+      /* ref_id joins to a real decision or task id. It has to: the feed's
+         "needs you today" is derived from the ranked record behind each row,
+         so a row pointing at an id that does not exist is not "not today" —
+         it is unrankable, and it would silently fall into the hidden half. */
       items: [
         { id: 'i1', ref_type: 'decision', ref_id: 'd1', classification: 'supplier', source: 'voice', title: 'Approve supplier payment timing', preview: 'Move the ₹4,80,000 payment to Friday to preserve payroll headroom.', amount: 480000, status: 'open' },
         { id: 'i2', ref_type: 'decision', ref_id: 'd2', classification: 'customer', source: 'whatsapp', title: 'Delhi retailer wants revised quote', preview: 'Asked for 8% off on the packaging line.', amount: null, status: 'open' },
-        { id: 'i3', ref_type: 'task', ref_id: 't3', classification: 'invoice', source: 'text', title: 'Reconcile packaging invoice', preview: 'Two line items do not match the GRN.', amount: 121000, status: 'open' },
-        { id: 'i4', ref_type: 'task', ref_id: 't4', classification: 'complaint', source: 'whatsapp', title: 'Damaged carton reported by Chennai stockist', preview: 'Third complaint this month from the same route.', amount: null, status: 'open' },
-        { id: 'i5', ref_type: 'task', ref_id: 't5', classification: 'task', source: 'text', title: 'Confirm dispatch schedule with transporter', preview: '', amount: null, status: 'open' },
-        { id: 'i6', ref_type: 'task', ref_id: 't6', classification: 'approval', source: 'text', title: 'Leave request — Ravi Kumar', preview: '2 days, next week.', amount: null, status: 'done' },
+        { id: 'i3', ref_type: 'task', ref_id: 'to6', classification: 'invoice', source: 'text', title: 'Reconcile packaging invoice against the GRN', preview: 'Two line items do not match the GRN.', amount: 240000, status: 'open' },
+        { id: 'i4', ref_type: 'task', ref_id: 'to3a', classification: 'payment', source: 'text', title: 'Release the quarterly distributor payout', preview: 'Due to fourteen distributors.', amount: 1800000, status: 'open' },
+        { id: 'i5', ref_type: 'task', ref_id: 'td1', classification: 'task', source: 'text', title: 'Confirm dispatch schedule with the transporter', preview: '', amount: 420000, status: 'open' },
+        { id: 'i6', ref_type: 'task', ref_id: 'te1', classification: 'complaint', source: 'whatsapp', title: 'Chennai stockist wants a callback today', preview: 'Third complaint this month from the same route.', amount: null, status: 'open' },
         // The same invoice parsed twice — what duplicate collapse is for.
-        { id: 'i7', ref_type: 'task', ref_id: 't3', classification: 'invoice', source: 'whatsapp', title: 'Reconcile packaging invoice', preview: 'Two line items do not match the GRN.', amount: 121000, status: 'open' },
-        { id: 'i8', ref_type: 'task', ref_id: 't3', classification: 'invoice', source: 'text', title: 'Reconcile packaging invoice', preview: 'Two line items do not match the GRN.', amount: 121000, status: 'open' },
+        { id: 'i7', ref_type: 'task', ref_id: 'to6', classification: 'invoice', source: 'whatsapp', title: 'Reconcile packaging invoice against the GRN', preview: 'Two line items do not match the GRN.', amount: 240000, status: 'open' },
+        { id: 'i8', ref_type: 'task', ref_id: 'to6', classification: 'invoice', source: 'text', title: 'Reconcile packaging invoice against the GRN', preview: 'Two line items do not match the GRN.', amount: 240000, status: 'open' },
+
+        /* Rows that are real work but not today's — the half the feed default
+           holds back, and therefore the half the "Show everything" count has
+           to be able to account for. */
+        { id: 'i9', ref_type: 'task', ref_id: 'tf1', classification: 'task', source: 'text', title: 'Plan the Diwali dispatch schedule', preview: 'Six weeks out.', amount: null, status: 'open' },
+        { id: 'i10', ref_type: 'task', ref_id: 'tx1', classification: 'approval', source: 'text', title: 'Leave request — Ravi Kumar', preview: '2 days, next week.', amount: null, status: 'done' },
+        { id: 'i11', ref_type: 'task', ref_id: 'th1', classification: 'customer', source: 'whatsapp', title: 'Take over the Trichy dealer conversation', preview: 'Ravi is on leave from Monday.', amount: null, status: 'open' },
+        { id: 'i12', ref_type: 'ingestion', ref_id: 'ing1', classification: 'reminder', source: 'text', title: 'Renew the godown insurance', preview: 'Policy lapses next quarter.', amount: null, status: 'open' },
+        { id: 'i13', ref_type: 'task', ref_id: 'to1', classification: 'supplier', source: 'text', title: 'Confirm the monsoon leak repair quote', preview: 'Two quotes received.', amount: 610000, status: 'open' },
       ],
     },
   ],

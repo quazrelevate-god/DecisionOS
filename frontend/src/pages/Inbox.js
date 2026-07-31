@@ -13,6 +13,7 @@ import { money, timeAgo } from "../lib/format";
 import { toast } from "sonner";
 import { Button, ApprovalCard, FilterPills } from "@/components/ds";
 import { TodayBrief } from "../components/TodayBrief";
+import { whatMatters } from "../lib/whatMatters";
 import {
   Microphone, Stop, PaperPlaneTilt, CheckCircle, XCircle, Spinner,
   UsersThree, Truck, Receipt, CurrencyCircleDollar, Warning, CheckSquare,
@@ -392,6 +393,7 @@ export default function Inbox() {
   const [filter, setFilter] = useState("all");
   const [captureOpen, setCaptureOpen] = useState(false);
   const [approvalsExpanded, setApprovalsExpanded] = useState(false);
+  const [feedShowAll, setFeedShowAll] = useState(false);
   const [submittedNoteId, setSubmittedNoteId] = useState(null);
   const [execPanel, setExecPanel] = useState(null);
   const [voiceFiles, setVoiceFiles] = useState([]);
@@ -614,6 +616,24 @@ export default function Inbox() {
   (decisionsQ.data || []).forEach((d) => { decMap[d.id] = d; });
   const escalations = (myTasksQ.data || []).filter((t) => (t.source === "escalation" || t.source === "handoff") && t.status !== "done");
 
+  /* The feed's "today" is the brief's "today" — literally the same function,
+     not a second implementation that agrees with it for now. Three endpoints
+     with three definitions of a countable task is exactly the bug this app
+     already has at the backend (MIGRATION-FOLLOWUPS.md B1); adding a fourth
+     definition in the frontend would be doing it to ourselves on purpose. */
+  const todayIds = new Set(
+    whatMatters({ decisions: decisionsQ.data || [], tasks: myTasksQ.data || [], limit: Infinity }).items.map((i) => i.id)
+  );
+  const matchesToday = (it) => todayIds.has(it.ref_id);
+
+  /* The feed defaults to what needs you today. This is the change on this page
+     that could most easily become concealment, so the disclosure is
+     unconditional: the control below the feed renders whether or not anything
+     is hidden, and it carries the total — "Show everything (11)" — rather than
+     a bare "Show more". A founder must never have to wonder whether the app is
+     holding something back. */
+  const feedItems = feedShowAll ? items : items.filter(matchesToday);
+  const feedHiddenCount = items.length - feedItems.length;
 
   // Live status of any voice/text note still being processed (non-blocking indicator)
   const procNotes = (notesQ.data || []).filter((n) => PROCESSING.includes(n.status));
@@ -1030,9 +1050,14 @@ export default function Inbox() {
       <p className="sm:hidden text-[11px] text-text-secondary mb-2 flex items-center gap-2" data-testid="inbox-swipe-hint">
         <Eye size={12} weight="bold" /> {t("inbox.swipe_hint")}
       </p>
-      <div className="space-y-2 mb-10" data-testid="inbox-feed">
-        {items.length === 0 && <EmptyState title={t("inbox.inbox_zero")} hint={t("inbox.inbox_zero_hint")} />}
-        {items.map((it) => {
+      <div className="space-y-2 mb-4" data-testid="inbox-feed">
+        {feedItems.length === 0 && (
+          <EmptyState
+            title={feedShowAll ? t("inbox.inbox_zero") : "Nothing in the feed needs you today"}
+            hint={feedShowAll ? t("inbox.inbox_zero_hint") : "Everything here is either scheduled for later or already closed."}
+          />
+        )}
+        {feedItems.map((it) => {
           const meta = CLASS_META[it.classification] || CLASS_META.task;
           const Icon = meta.icon;
           const done = it.status === "done";
@@ -1097,6 +1122,25 @@ export default function Inbox() {
         })}
       </div>
 
+      {/* Always rendered, never conditional on something being hidden. A
+          disclosure that appears only when it has something to disclose is a
+          disclosure you cannot trust the absence of. */}
+      <div className="mb-10 flex items-center gap-3" data-testid="feed-disclosure">
+        <Button
+          variant="secondary"
+          onClick={() => setFeedShowAll((v) => !v)}
+          data-testid="feed-show-all"
+        >
+          {feedShowAll ? "Show only what needs you today" : `Show everything (${items.length})`}
+        </Button>
+        <span className="text-sm text-text-secondary" data-testid="feed-hidden-count">
+          {feedShowAll
+            ? `Showing all ${items.length}.`
+            : feedHiddenCount === 0
+            ? "Nothing is hidden."
+            : `${feedHiddenCount} not needed today — scheduled later or already closed.`}
+        </span>
+      </div>
     </div>
   );
 }

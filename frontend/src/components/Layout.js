@@ -96,6 +96,11 @@ export default function Layout({ children }) {
   const fires = brief?.counters?.fires || 0;
   const { data: capPending } = useQuery({ queryKey: ["captures-pending"], queryFn: () => api.get("/captures/pending-count").then((r) => r.data), refetchInterval: 30000 });
   const captureCount = capPending?.count || 0;
+  /* Decisions waiting on this person, on the Desk's own nav item. Same query
+     key as the Desk, so visiting it costs nothing extra and the badge and the
+     page can never disagree. */
+  const { data: decisionsForBadge } = useQuery({ queryKey: ["decisions"], queryFn: () => api.get("/decisions").then((r) => r.data), refetchInterval: 60000 });
+  const pendingApprovals = (decisionsForBadge || []).filter((d) => d.status === "pending_approval").length;
 
   const openNotif = async (n) => {
     if (!n.read) {
@@ -196,8 +201,18 @@ export default function Layout({ children }) {
     testid,
     overdueCount: to === "/brief" && fires > 0 ? fires : undefined,
     overdueTestid: "nav-fires-badge",
-    count: to === "/ingest" && captureCount > 0 ? captureCount : undefined,
-    countTestid: "nav-review-badge",
+    /* Approvals waiting on you get the neutral count, not the danger badge.
+       They are blocking someone, which is why they lead the brief — but they
+       are not late, and red here would make every normal morning look like an
+       incident. The loudness belongs in the sentence, which says "6 decisions
+       need you" in words; a red pip would be decoration wearing urgency. */
+    count:
+      to === "/ingest" && captureCount > 0
+        ? captureCount
+        : to === "/" && pendingApprovals > 0
+        ? pendingApprovals
+        : undefined,
+    countTestid: to === "/" ? "nav-approvals-badge" : "nav-review-badge",
   }));
 
   const activeKey =

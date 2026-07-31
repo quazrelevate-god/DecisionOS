@@ -391,6 +391,7 @@ export default function Inbox() {
   const [language, setLanguage] = useState("auto");
   const [filter, setFilter] = useState("all");
   const [captureOpen, setCaptureOpen] = useState(false);
+  const [approvalsExpanded, setApprovalsExpanded] = useState(false);
   const [submittedNoteId, setSubmittedNoteId] = useState(null);
   const [execPanel, setExecPanel] = useState(null);
   const [voiceFiles, setVoiceFiles] = useState([]);
@@ -604,9 +605,15 @@ export default function Inbox() {
     return [...seen.values()];
   })();
   const pending = (decisionsQ.data || []).filter((d) => d.status === "pending_approval");
+  /* The Desk shows the decisions that have waited longest first, so "here is
+     the one that has waited longest" is a true statement about the card above
+     it and not just a label. Undated records sort last rather than winning by
+     accident. */
+  pending.sort((a, b) => new Date(a.created_at || 8.64e15) - new Date(b.created_at || 8.64e15));
   const decMap = {};
   (decisionsQ.data || []).forEach((d) => { decMap[d.id] = d; });
   const escalations = (myTasksQ.data || []).filter((t) => (t.source === "escalation" || t.source === "handoff") && t.status !== "done");
+
 
   // Live status of any voice/text note still being processed (non-blocking indicator)
   const procNotes = (notesQ.data || []).filter((n) => PROCESSING.includes(n.status));
@@ -933,12 +940,26 @@ export default function Inbox() {
       {/* Everything the brief counted but did not show starts here. */}
       <div ref={restRef} aria-hidden="true" data-testid="desk-rest-anchor" />
 
-      {/* Pending approvals (owner) */}
+      {/* Pending approvals (owner).
+          One card, not six. Six full approval cards is 1,800px of identical
+          chrome demanding the same act six times, and the sixth is no more
+          decidable than the first — a queue rendered at full size reads as a
+          workload, not as a decision.
+
+          The count is stated in words above the card, because "5 more" in
+          grey is exactly the subtlety that made the old Desk feel like it was
+          managing the founder's attention rather than reporting to them. */}
       {hasPerm(user, "decisions_approve") && pending.length > 0 && (
-        <div className="mb-10">
-          <h2 className="text-2xl font-extrabold tracking-tight mb-4">{t("inbox.decision_approvals")}</h2>
+        <div className="mb-10" data-testid="approvals-section">
+          <h2 className="text-2xl font-extrabold tracking-tight mb-1">{t("inbox.decision_approvals")}</h2>
+          <p className="text-lg text-text-secondary mb-4" data-testid="approvals-waiting-line">
+            {pending.length === 1
+              ? "1 decision still needs you."
+              : `${pending.length} decisions still need you.`}
+            {!approvalsExpanded && pending.length > 1 && " Here is the one that has waited longest."}
+          </p>
           <div className="grid md:grid-cols-2 gap-4">
-            {pending.map((d) => (
+            {(approvalsExpanded ? pending : pending.slice(0, 1)).map((d) => (
               <PendingApprovalCard
                 key={d.id}
                 d={d}
@@ -952,6 +973,19 @@ export default function Inbox() {
               />
             ))}
           </div>
+          {pending.length > 1 && (
+            <div className="mt-4">
+              <Button
+                variant="secondary"
+                onClick={() => setApprovalsExpanded((v) => !v)}
+                data-testid="approvals-toggle"
+              >
+                {approvalsExpanded
+                  ? "Show only the longest waiting"
+                  : `Show all ${pending.length} decisions`}
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
@@ -1062,6 +1096,7 @@ export default function Inbox() {
           );
         })}
       </div>
+
     </div>
   );
 }

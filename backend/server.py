@@ -5031,10 +5031,14 @@ async def list_inbox(classification: Optional[str] = None, status: Optional[str]
         query["status"] = status
     items = await db.inbox.find(query, {"_id": 0}).sort("created_at", -1).to_list(300)
     counts = {}
-    async for row in db.inbox.aggregate([
+    # PyMongo Async: aggregate() returns a coroutine yielding the cursor, so
+    # it must be awaited BEFORE `async for` iteration (Motor let you skip the
+    # await — a subtle drop-in-migration gotcha).
+    agg_cursor = await db.inbox.aggregate([
         {"$match": {"tenant_id": tid, "status": "open"}},
         {"$group": {"_id": "$classification", "n": {"$sum": 1}}},
-    ]):
+    ])
+    async for row in agg_cursor:
         counts[row["_id"]] = row["n"]
     open_total = await db.inbox.count_documents({"tenant_id": tid, "status": "open"})
     return {"items": items, "counts": counts, "open_total": open_total}

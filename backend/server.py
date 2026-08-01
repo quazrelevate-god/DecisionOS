@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field, EmailStr
 from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
 from emergentintegrations.llm.openai import OpenAISpeechToText
 import obj_store
+import brain_context
 
 from core import (
     db, client, logger, DEFAULT_ROLES,
@@ -2547,6 +2548,13 @@ async def approve_decision(decision_id: str, user: dict = Depends(require_perm("
         who = who or t.get("assignee_role") or "team"
         await add_decision_event(decision_id, f"Task assigned to {who}: {t['title']}", user["name"], "assigned")
     await log_activity(user["tenant_id"], user["id"], "decision_approved", f"Approved '{d['title']}' — tasks unblocked", "decision", decision_id)
+    await brain_context.record_context(
+        tenant_id=user["tenant_id"], kind="decision", title=d.get("title") or "Decision approved",
+        outcome="approved", why=d.get("summary") or d.get("description") or "",
+        tags=d.get("tags") or [], source_type="decision", source_id=decision_id,
+        actor_id=user["id"], actor_name=user.get("name") or "",
+        department=user.get("role") or "", visibility="public",
+    )
     return await enrich_decision(await db.decisions.find_one({"id": decision_id}, {"_id": 0}))
 
 
@@ -2563,6 +2571,13 @@ async def reject_decision(decision_id: str, user: dict = Depends(require_perm("d
     await db.inbox.update_many({"tenant_id": user["tenant_id"], "ref_type": "decision", "ref_id": decision_id}, {"$set": {"status": "dismissed"}})
     await add_decision_event(decision_id, f"Rejected — removed {tasks_del.deleted_count} task(s), {wf_del.deleted_count} workflow(s)", user["name"], "rejected")
     await log_activity(user["tenant_id"], user["id"], "decision_rejected", f"Rejected '{d['title']}' — removed {tasks_del.deleted_count} task(s), {wf_del.deleted_count} workflow(s)", "decision", decision_id)
+    await brain_context.record_context(
+        tenant_id=user["tenant_id"], kind="decision", title=d.get("title") or "Decision rejected",
+        outcome="rejected", why=d.get("summary") or d.get("description") or "",
+        tags=d.get("tags") or [], source_type="decision", source_id=decision_id,
+        actor_id=user["id"], actor_name=user.get("name") or "",
+        department=user.get("role") or "", visibility="public",
+    )
     return await enrich_decision(await db.decisions.find_one({"id": decision_id}, {"_id": 0}))
 
 
@@ -2820,6 +2835,14 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
             await add_decision_event(t["decision_id"], f"{t['title']} → {updates['status'].replace('_',' ')}", user["name"], "task")
         if updates.get("status") == "done":
             await log_activity(user["tenant_id"], user["id"], "task_done", f"Completed task '{t['title']}'", "task", task_id)
+            await brain_context.record_context(
+                tenant_id=user["tenant_id"], kind="task_done", title=t.get("title") or "Task completed",
+                outcome="done", why=t.get("description") or "",
+                tags=[t.get("category")] if t.get("category") else [],
+                source_type="task", source_id=task_id,
+                actor_id=user["id"], actor_name=user.get("name") or "",
+                department=user.get("role") or "", visibility="dept",
+            )
         elif updates.get("assignee_id"):
             member = await db.users.find_one({"id": updates["assignee_id"]}, {"_id": 0, "name": 1})
             await log_activity(user["tenant_id"], user["id"], "task_assigned",
@@ -2903,6 +2926,14 @@ async def approve_task(task_id: str, user: dict = Depends(get_current_user)):
         await push_notification(user["tenant_id"], [t["assignee_id"]], 1, f"Approved: you can start '{t['title']}'", "task", task_id,
                                 ntype="approved", title=t["title"], sender=user["name"])
     await log_activity(user["tenant_id"], user["id"], "task_approved", f"Approved '{t['title']}'", "task", task_id)
+    await brain_context.record_context(
+        tenant_id=user["tenant_id"], kind="approval", title=t.get("title") or "Task approved",
+        outcome="approved", why=t.get("description") or "",
+        tags=[t.get("category")] if t.get("category") else [],
+        source_type="task", source_id=task_id,
+        actor_id=user["id"], actor_name=user.get("name") or "",
+        department=user.get("role") or "", visibility="dept",
+    )
     return await enrich_task(await db.tasks.find_one({"id": task_id}, {"_id": 0}))
 
 
@@ -2927,6 +2958,14 @@ async def reject_task(task_id: str, inp: TaskRejectInput, user: dict = Depends(g
         await push_notification(user["tenant_id"], [t["assignee_id"]], 2, msg, "task", task_id,
                                 ntype="rejected", title=t["title"], sender=user["name"])
     await log_activity(user["tenant_id"], user["id"], "task_rejected", f"Requested changes on '{t['title']}'", "task", task_id)
+    await brain_context.record_context(
+        tenant_id=user["tenant_id"], kind="approval", title=t.get("title") or "Task rejected",
+        outcome="rejected", why=reason or t.get("description") or "",
+        tags=[t.get("category")] if t.get("category") else [],
+        source_type="task", source_id=task_id,
+        actor_id=user["id"], actor_name=user.get("name") or "",
+        department=user.get("role") or "", visibility="dept",
+    )
     return await enrich_task(await db.tasks.find_one({"id": task_id}, {"_id": 0}))
 
 
@@ -3987,9 +4026,19 @@ async def list_complaints(status: Optional[str] = None, user: dict = Depends(get
 
 @api.patch("/complaints/{cid}/resolve")
 async def resolve_complaint(cid: str, user: dict = Depends(require_role("owner", "sales"))):
+    c = await db.complaints.find_one({"id": cid, "tenant_id": user["tenant_id"]}, {"_id": 0})
     res = await db.complaints.update_one({"id": cid, "tenant_id": user["tenant_id"]}, {"$set": {"status": "resolved", "resolved_at": now_iso()}})
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Not found")
+    if c:
+        await brain_context.record_context(
+            tenant_id=user["tenant_id"], kind="resolution",
+            title=f"Resolved complaint: {(c.get('text') or '')[:120]}",
+            outcome="resolved", why=c.get("text") or "",
+            tags=["complaint"], source_type="complaint", source_id=cid,
+            actor_id=user["id"], actor_name=user.get("name") or "",
+            department=user.get("role") or "", visibility="public",
+        )
     return {"ok": True}
 
 
@@ -6423,6 +6472,10 @@ async def _bootstrap():
         await db.brain_documents.create_index([("tenant_id", 1), ("kind", 1)])
         await db.brain_documents.create_index([("tenant_id", 1), ("keywords", 1)])
         await db.brain_documents.create_index([("tenant_id", 1), ("tags", 1)])
+        # Company Brain — decision/approval/resolution context (P2) indexes.
+        await db.brain_context.create_index([("tenant_id", 1), ("created_at", -1)])
+        await db.brain_context.create_index([("tenant_id", 1), ("kind", 1), ("created_at", -1)])
+        await db.brain_context.create_index([("tenant_id", 1), ("source_type", 1), ("source_id", 1)])
         try:
             await obj_store.init_storage()
         except Exception as e:
@@ -6491,6 +6544,8 @@ from routers.brain import router as brain_router  # noqa: E402
 app.include_router(brain_router)
 from routers.brain_docs import router as brain_docs_router  # noqa: E402
 app.include_router(brain_docs_router)
+from routers.brain_context_api import router as brain_context_router  # noqa: E402
+app.include_router(brain_context_router)
 from routers.signup import router as signup_router  # noqa: E402
 app.include_router(signup_router)
 _cors_env = os.environ.get('CORS_ORIGINS', '*').strip()

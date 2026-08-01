@@ -13,7 +13,12 @@ Design:
     failure NEVER breaks the parent request that produced the event.
   • DEPARTMENT-AWARE — visibility mirrors the Documents catalog (public/dept/private).
   • SMALL — one record per event, ~1KB. Chunking/embeddings are P5.
+  • AUTO-TAGGED — a lightweight keyword tagger enriches each row with canonical
+    tags (finance, hr, vendor, customer, sales, ops, compliance, quality,
+    procurement, capex) so the P3 router can retrieve by intent without
+    owners having to type tags manually.
 """
+import re
 from typing import List, Optional
 
 from core import db, new_id, now_iso, logger
@@ -21,6 +26,42 @@ from core import db, new_id, now_iso, logger
 
 KIND_VALUES = {"decision", "approval", "task_done", "resolution", "note"}
 VISIBILITY_VALUES = {"public", "dept", "private"}
+
+
+# ---------------------------------------------------------------------------
+# Auto-tagger — deterministic, zero-latency keyword vocabulary.
+# ---------------------------------------------------------------------------
+# Ordered from most specific to most generic so overlapping matches prefer
+# the sharper canonical tag (e.g. "invoice" → finance, not just ops).
+_TAG_VOCAB: List[tuple] = [
+    ("finance",     r"\b(invoice|gst|tds|payroll|payment|receivable|payable|expense|cash|bank|refund|advance|discount|ledger|reconcil|salary|bonus|budget|revenue|profit|loss|billing|charge)\b"),
+    ("compliance",  r"\b(compliance|regulation|regulator|licence|license|audit|filing|statutory|legal|contract|nda|policy)\b"),
+    ("hr",          r"\b(hire|hiring|recruit|resign|resignation|onboard|leave|attendance|holiday|maternity|paternity|appraisal|review|performance|training|hr|human resource|employee)\b"),
+    ("procurement", r"\b(purchase|procure|procurement|po\b|vendor|supplier|rfq|quotation|tender)\b"),
+    ("vendor",      r"\b(vendor|supplier|partner|contractor|dealer)\b"),
+    ("customer",    r"\b(customer|client|buyer|order|complaint|refund|churn|renew)\b"),
+    ("sales",       r"\b(sales|lead|quote|deal|pipeline|conversion|discount|offer|campaign)\b"),
+    ("ops",         r"\b(operation|delivery|logistics|shipment|dispatch|inventory|stock|warehouse|production)\b"),
+    ("quality",     r"\b(quality|defect|reject|return|warranty|inspection)\b"),
+    ("capex",       r"\b(capex|capital|machine|equipment|asset|infrastructure|building|expansion)\b"),
+]
+
+
+def auto_tags(*parts: str, existing: Optional[List[str]] = None, cap: int = 6) -> List[str]:
+    """Return canonical tags found in the joined text plus any existing tags,
+    de-duplicated and capped. Deterministic and fast — no LLM call."""
+    text = " ".join(p or "" for p in parts).lower()
+    seen: List[str] = []
+    for e in existing or []:
+        e = str(e).strip().lower()
+        if e and e not in seen:
+            seen.append(e)
+    for tag, pattern in _TAG_VOCAB:
+        if tag in seen:
+            continue
+        if re.search(pattern, text):
+            seen.append(tag)
+    return seen[:cap]
 
 
 async def record_context(
@@ -46,6 +87,8 @@ async def record_context(
         v = (visibility or "public").lower()
         if v not in VISIBILITY_VALUES:
             v = "public"
+        # Enrich tags automatically from title + why (owners don't type tags).
+        enriched = auto_tags(title, why, existing=tags)
         doc = {
             "id": new_id(),
             "tenant_id": tenant_id,
@@ -53,7 +96,7 @@ async def record_context(
             "title": (title or "")[:220].strip(),
             "outcome": (outcome or "")[:60].strip(),
             "why": (why or "")[:800].strip(),
-            "tags": [t.lower().strip() for t in (tags or []) if t and isinstance(t, str)][:12],
+            "tags": enriched,
             "source_type": (source_type or "").strip()[:40],
             "source_id": (source_id or "").strip()[:64],
             "actor_id": actor_id or "",

@@ -6546,6 +6546,8 @@ from routers.brain_docs import router as brain_docs_router  # noqa: E402
 app.include_router(brain_docs_router)
 from routers.brain_context_api import router as brain_context_router  # noqa: E402
 app.include_router(brain_context_router)
+from routers.brain_router import router as brain_agent_router  # noqa: E402
+app.include_router(brain_agent_router)
 from routers.signup import router as signup_router  # noqa: E402
 app.include_router(signup_router)
 _cors_env = os.environ.get('CORS_ORIGINS', '*').strip()

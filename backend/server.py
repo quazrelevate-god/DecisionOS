@@ -6463,14 +6463,41 @@ async def _bootstrap():
     """Idempotent bootstrap (indexes, migrations, demo seed). Runs in the background so it
     never blocks the app from becoming ready, and never crashes the process on failure."""
     try:
+        # Core tenant-scoped indexes (P0 for multi-tenant scale — every read
+        # of these collections filters by tenant_id, so unindexed = full scans).
         await db.users.create_index("email", unique=True)
-        await db.decisions.create_index("tenant_id")
-        await db.tasks.create_index("tenant_id")
+        await db.users.create_index([("tenant_id", 1), ("role", 1)])
+        await db.decisions.create_index([("tenant_id", 1), ("created_at", -1)])
+        await db.tasks.create_index([("tenant_id", 1), ("status", 1), ("due_date", 1)])
+        await db.tasks.create_index([("tenant_id", 1), ("assignee_id", 1), ("status", 1)])
         await db.workflows.create_index("tenant_id")
         await db.platform_admins.create_index("email", unique=True)
         await db.usage_events.create_index([("tenant_id", 1), ("created_at", -1)])
         await db.usage_events.create_index("created_at")
         await db.files.create_index([("tenant_id", 1), ("task_id", 1)])
+        # High-volume collections — these were doing full scans pre-1.0.
+        await db.activity.create_index([("tenant_id", 1), ("created_at", -1)])
+        await db.notifications.create_index([("tenant_id", 1), ("user_id", 1), ("read", 1), ("created_at", -1)])
+        await db.inbox.create_index([("tenant_id", 1), ("status", 1), ("created_at", -1)])
+        await db.inbox.create_index([("tenant_id", 1), ("classification", 1)])
+        await db.voice_notes.create_index([("tenant_id", 1), ("created_at", -1)])
+        await db.memory.create_index([("tenant_id", 1), ("created_at", -1)])
+        await db.brain_audit.create_index([("tenant_id", 1), ("created_at", -1)])
+        await db.brain_contexts.create_index([("tenant_id", 1), ("created_at", -1)])
+        await db.brain_contexts.create_index("id")
+        await db.leaves.create_index([("tenant_id", 1), ("status", 1), ("from_date", -1)])
+        await db.contacts.create_index([("tenant_id", 1), ("name", 1)])
+        await db.contacts.create_index([("tenant_id", 1), ("kind", 1)])
+        await db.invoices.create_index([("tenant_id", 1), ("status", 1), ("due_date", 1)])
+        await db.invoices.create_index([("tenant_id", 1), ("contact_name", 1)])
+        await db.payments.create_index([("tenant_id", 1), ("invoice_id", 1)])
+        await db.expenses.create_index([("tenant_id", 1), ("date", -1)])
+        await db.complaints.create_index([("tenant_id", 1), ("status", 1), ("created_at", -1)])
+        await db.calendar_events.create_index([("tenant_id", 1), ("date", 1)])
+        await db.meetings.create_index([("tenant_id", 1), ("created_at", -1)])
+        await db.platform_audit.create_index([("admin_id", 1), ("created_at", -1)])
+        await db.signup_sessions.create_index("id")
+        await db.tenants.create_index("id")
         # Company Brain — documents catalog (P1) indexes.
         await db.brain_documents.create_index([("tenant_id", 1), ("is_deleted", 1), ("created_at", -1)])
         await db.brain_documents.create_index([("tenant_id", 1), ("kind", 1)])

@@ -1283,87 +1283,6 @@ async def backfill_operating_model(tenant: dict) -> dict:
     })
 
 
-@api.post("/auth/register")
-async def register(inp: RegisterInput, response: Response):
-    email = inp.email.lower()
-    if await db.users.find_one({"email": email}):
-        raise HTTPException(status_code=400, detail="Email already registered")
-    tenant_id = new_id()
-    set_usage_tenant(tenant_id)
-    bp = normalize_os_blueprint(inp.os_blueprint) if inp.os_blueprint else None
-    # Departments from the generated OS become the tenant's roles (single source of truth for RBAC).
-    provided_roles = [r.model_dump() for r in (inp.roles or [])]
-    if not provided_roles and bp and bp["departments"]:
-        provided_roles = bp["departments"]
-    roles = provided_roles or DEFAULT_ROLES
-    # de-dupe + drop any 'owner' role (implicit)
-    seen, clean_roles = set(), []
-    for r in roles:
-        k = r.get("key")
-        if k and k != "owner" and k not in seen:
-            seen.add(k)
-            clean_roles.append({"key": k, "label": r.get("label") or k.replace("_", " ").title()})
-    tenant_doc = {
-        "id": tenant_id, "name": inp.company_name,
-        "industry": inp.industry or "General",
-        "description": (inp.description or "").strip(),
-        "company_size": inp.company_size or "",
-        "region": inp.region or "",
-        "currency": (inp.currency or "INR").upper(),
-        "gst": inp.gst or "",
-        "branches": inp.branches or "",
-        "business_scale": inp.business_scale or {},
-        "current_software": inp.current_software or [],
-        "invited_employees": [],
-        "roles": clean_roles or DEFAULT_ROLES,
-        "products": [p.model_dump() for p in (inp.products or [])],
-        "workflow_templates": bp["workflows"] if bp else [],
-        "operational_task_templates": bp["operational_tasks"] if bp else [],
-        "approval_rules": bp["approval_rules"] if bp else [],
-        "lexicon": await ai_generate_lexicon(inp.industry, inp.company_size, clean_roles, inp.description or ""),
-        "operating_model": await ai_generate_operating_model(inp.industry, inp.company_size, clean_roles, inp.description or ""),
-        "finance_categories": await ai_generate_finance_categories(inp.industry, inp.company_size, clean_roles, inp.description or ""),
-        "created_at": now_iso(),
-    }
-    await db.tenants.insert_one(tenant_doc)
-    user_id = new_id()
-    await db.users.insert_one({
-        "id": user_id, "tenant_id": tenant_id, "name": inp.name, "email": email,
-        "phone": (inp.phone or "").strip(),
-        "password_hash": hash_password(inp.password), "role": "owner", "created_at": now_iso(),
-    })
-    token = create_token(user_id, tenant_id, "owner")
-    user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
-    tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0})
-    set_auth_cookie(response, token)
-    os_summary = {
-        "departments": len(clean_roles),
-        "workflows": len(tenant_doc["workflow_templates"]),
-        "operational_tasks": len(tenant_doc["operational_task_templates"]),
-        "approval_rules": len(tenant_doc["approval_rules"]),
-    }
-    return {"token": token, "user": user, "tenant": tenant, "os_summary": os_summary}
-
-
-@api.post("/auth/login")
-async def login(inp: LoginInput, response: Response):
-    email = inp.email.lower()
-    user = await db.users.find_one({"email": email})
-    if not user or not verify_password(inp.password, user["password_hash"]):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
-    token = create_token(user["id"], user["tenant_id"], user["role"])
-    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
-    user.pop("_id", None)
-    user.pop("password_hash", None)
-    set_auth_cookie(response, token)
-    return {"token": token, "user": user, "tenant": tenant}
-
-
-@api.post("/auth/logout")
-async def logout(response: Response):
-    clear_auth_cookie(response)
-    return {"ok": True}
-
 
 # ---------------------------------------------------------------------------
 # Mobile + OTP login (alternate auth). DEV mode returns OTP until Twilio keys added.
@@ -1534,26 +1453,6 @@ async def verify_otp(inp: OtpVerifyInput, response: Response):
 
 
 
-@api.get("/auth/me")
-async def me(user: dict = Depends(get_current_user)):
-    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
-    if tenant and not tenant.get("lexicon"):
-        # Backfill industry vocabulary once for pre-existing workspaces.
-        lex = await ai_generate_lexicon(tenant.get("industry"), tenant.get("company_size"), tenant.get("roles"), tenant.get("description") or "")
-        await db.tenants.update_one({"id": tenant["id"]}, {"$set": {"lexicon": lex}})
-        tenant["lexicon"] = lex
-    if tenant and not (tenant.get("operating_model") or {}).get("pipelines"):
-        # Backfill the industry operating model (pipelines + task categories) once,
-        # preserving any pipeline/category that already has data (non-destructive).
-        om = await backfill_operating_model(tenant)
-        await db.tenants.update_one({"id": tenant["id"]}, {"$set": {"operating_model": om}})
-        tenant["operating_model"] = om
-    if tenant and not (tenant.get("finance_categories") or {}).get("expense"):
-        # Backfill AI-generated, per-company finance categories once for existing workspaces.
-        fc = await ai_generate_finance_categories(tenant.get("industry"), tenant.get("company_size"), tenant.get("roles"), tenant.get("description") or "")
-        await db.tenants.update_one({"id": tenant["id"]}, {"$set": {"finance_categories": fc}})
-        tenant["finance_categories"] = fc
-    return {"user": user, "tenant": tenant}
 
 
 class LexiconInput(BaseModel):
@@ -1643,40 +1542,6 @@ class ChangePasswordInput(BaseModel):
     new_password: str = Field(min_length=6)
 
 
-@api.patch("/auth/profile")
-async def update_profile(inp: ProfileUpdateInput, user: dict = Depends(get_current_user)):
-    updates = {}
-    if inp.name is not None and inp.name.strip():
-        updates["name"] = inp.name.strip()
-    if inp.phone is not None:
-        # Changing your number should re-enable WhatsApp matching for it.
-        updates["phone"] = inp.phone.strip()
-        updates["wa_phone_obsolete"] = False
-    if inp.language is not None and inp.language in ("en", "hi", "ta"):
-        updates["language"] = inp.language
-    if not updates:
-        raise HTTPException(status_code=400, detail="Nothing to update")
-    updates["updated_at"] = now_iso()
-    await db.users.update_one({"id": user["id"]}, {"$set": updates})
-    fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0, "password_hash": 0, "password": 0})
-    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
-    return {"user": fresh, "tenant": tenant}
-
-
-@api.post("/auth/change-password")
-async def change_password(inp: ChangePasswordInput, user: dict = Depends(get_current_user)):
-    if user.get("passwordless"):
-        raise HTTPException(status_code=400, detail="Your account signs in with mobile OTP and has no password to change.")
-    full = await db.users.find_one({"id": user["id"]})
-    if not full or not verify_password(inp.current_password, full.get("password_hash", "")):
-        raise HTTPException(status_code=400, detail="Current password is incorrect")
-    if inp.new_password == inp.current_password:
-        raise HTTPException(status_code=400, detail="New password must be different from your current password")
-    await db.users.update_one(
-        {"id": user["id"]},
-        {"$set": {"password_hash": hash_password(inp.new_password), "updated_at": now_iso()}},
-    )
-    return {"ok": True}
 
 
 @api.patch("/tenant")
@@ -2699,22 +2564,6 @@ async def enrich_tasks(tasks: list) -> list:
     return tasks
 
 
-@api.get("/tasks")
-async def list_tasks(status: Optional[str] = None, mine: Optional[bool] = False, user: dict = Depends(get_current_user)):
-    q = {"tenant_id": user["tenant_id"]}
-    if status:
-        q["status"] = status
-    # ?mine=true (My Work / personal): only tasks assigned to ME + unclaimed role-pool tasks.
-    #   Excludes tasks assigned to other specific members of my role.
-    # Non-owner team board (mine=false): the whole role lane (any member of my role + role-level tasks).
-    # Owner (mine=false): everything.
-    if mine:
-        q["$or"] = [{"assignee_id": user["id"]}, {"assignee_id": None, "assignee_role": user["role"]}]
-    elif user["role"] != "owner":
-        q["$or"] = [{"assignee_id": user["id"]}, {"assignee_role": user["role"]}]
-    tasks = await db.tasks.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
-    return await enrich_tasks(tasks)
-
 
 @api.post("/tasks")
 async def create_task(inp: TaskCreateInput, background: BackgroundTasks, user: dict = Depends(get_current_user)):
@@ -2767,16 +2616,6 @@ async def create_task(inp: TaskCreateInput, background: BackgroundTasks, user: d
     await log_activity(user["tenant_id"], user["id"], "task_created", f"Created task '{inp.title}'", "task", tid)
     return await enrich_task(await db.tasks.find_one({"id": tid}, {"_id": 0}))
 
-
-@api.delete("/tasks/{task_id}")
-async def delete_task(task_id: str, user: dict = Depends(get_current_user)):
-    if user.get("role") != "owner":
-        raise HTTPException(status_code=403, detail="Only the owner can delete tasks")
-    t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]}, {"_id": 0, "id": 1})
-    if not t:
-        raise HTTPException(status_code=404, detail="Not found")
-    await db.tasks.delete_one({"id": task_id, "tenant_id": user["tenant_id"]})
-    return {"ok": True, "deleted": task_id}
 
 
 @api.patch("/tasks/{task_id}")
@@ -2995,17 +2834,6 @@ async def clarify_task(task_id: str, inp: TaskRejectInput, user: dict = Depends(
     return await enrich_task(await db.tasks.find_one({"id": task_id}, {"_id": 0}))
 
 
-@api.get("/tasks/{task_id}")
-async def get_task(task_id: str, user: dict = Depends(get_current_user)):
-    t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
-    if not t:
-        raise HTTPException(status_code=404, detail="Task not found")
-    allowed = (user.get("role") == "owner" or _can_work_task(user, t)
-               or t.get("approver_id") == user["id"] or t.get("created_by") == user["id"]
-               or t.get("support_id") == user["id"])
-    if not allowed:
-        raise HTTPException(status_code=403, detail="You don't have access to this work")
-    return await enrich_task(t)
 
 
 # ---------------------------------------------------------------------------
@@ -6604,6 +6432,10 @@ from routers.brain_router import router as brain_agent_router  # noqa: E402
 app.include_router(brain_agent_router)
 from routers.signup import router as signup_router  # noqa: E402
 app.include_router(signup_router)
+from routers.auth import router as auth_router  # noqa: E402
+app.include_router(auth_router)
+from routers.tasks import router as tasks_router  # noqa: E402
+app.include_router(tasks_router)
 _cors_env = os.environ.get('CORS_ORIGINS', '*').strip()
 _cors_kwargs = dict(allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 if _cors_env == '*':

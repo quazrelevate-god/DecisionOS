@@ -13,8 +13,8 @@ backend/
 │   ├── auth.py, tasks.py, tenants.py, brain.py, ledger.py, signup.py, admin.py
 │
 ├── routers/                    # 🟡 FastAPI endpoint groups (partial)
-│   ├── auth.py                 # ⏳ /api/auth/*
-│   ├── tasks.py                # ⏳ /api/tasks/*
+│   ├── auth.py                 # ✅ /api/auth/register /login /logout /me /profile /change-password
+│   ├── tasks.py                # 🟡 /api/tasks list/get/delete extracted; create/update/approve/reject/exec-plan/respond/attachment/reassign/prioritize still in server.py
 │   ├── decisions.py            # ⏳ /api/decisions/*
 │   ├── inbox.py                # ⏳ /api/inbox
 │   ├── team.py                 # ⏳ /api/users, /api/leaves

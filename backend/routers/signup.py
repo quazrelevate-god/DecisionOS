@@ -25,7 +25,11 @@ from core import (
 
 router = APIRouter(prefix="/api/signup")
 
-MAX_QUESTIONS = 4
+# Interview length is DYNAMIC. Dex may finish as early as MIN_QUESTIONS if the
+# founder has already painted a clear operational picture, and stretches up to
+# MAX_QUESTIONS if the picture is still fuzzy. Progress UI shows "up to N".
+MIN_QUESTIONS = 2
+MAX_QUESTIONS = 6
 TTS_SPEAKER = os.environ.get("SARVAM_TTS_SPEAKER", "shubh").strip() or "shubh"
 
 # Languages Sarvam TTS (bulbul:v3) can speak. Keep in sync with the frontend chip.
@@ -216,20 +220,64 @@ def _qa_block(qa: list) -> str:
 
 
 INTERVIEW_SYSTEM = (
-    "You are Dex, the DecisionOS onboarding interviewer — a sharp, warm COO having a quick chat with a founder "
-    "to understand how their company actually runs, so DecisionOS can build a REALISTIC operating system "
-    "(departments, workflows, recurring tasks, approval rules) — not a generic template.\n"
-    "The founder has ALREADY answered the opening question about what the company does and how it operates. "
-    f"Rules: at most {MAX_QUESTIONS} questions TOTAL including that opener, so every question must earn its place. "
-    "Ask exactly ONE question at a time, under 28 words, conversational, and built on what they just said. "
-    "Questions must be OPERATIONAL — never strategic, visionary, or about goals/growth plans. "
-    "Dig into the mechanics: how work flows from order/enquiry to delivery, handoffs between people, where things get stuck or slip, "
-    "who approves money/decisions, what the founder personally checks daily.\n"
-    "Never re-ask what you already know (industry, size, products, what the company does). Adapt to company size: "
-    "a 5-person shop runs on the founder; a 200-person company has managers, approvals and handoffs — ask accordingly.\n"
+    "You are Dex, the DecisionOS onboarding interviewer — a sharp, warm COO having a real chat with a founder "
+    "so DecisionOS can build a REALISTIC operating system for THEIR company (departments, workflows, recurring tasks, "
+    "approval rules) — never a generic template.\n\n"
+
+    "INTERVIEW LENGTH IS DYNAMIC. You have a range: "
+    f"MINIMUM {MIN_QUESTIONS} answers, MAXIMUM {MAX_QUESTIONS} answers (including the opening question already answered). "
+    "End early (set enough=true) the moment the operational picture is genuinely clear — do NOT pad. "
+    "Keep going up to the max if the picture is still fuzzy on the checklist below. Never end before the minimum.\n\n"
+
+    "TAILOR EVERY QUESTION TO THEIR INDUSTRY + TEAM SIZE. This is not optional.\n"
+    "  • 1–10 person team → It's the FOUNDER doing everything. There are usually NO departments, no formal approvals, "
+    "no hierarchy. Ask how THEY personally juggle sales, delivery, money, and clients. Ask who covers when they're sick "
+    "or travelling. Don't invent structure they don't have.\n"
+    "  • 11–50 person team → Early handoffs, one or two informal leads, founder still in most decisions. Ask who owns "
+    "which slice, how the founder finds out things went wrong, what they still personally sign off on.\n"
+    "  • 50+ person team → Real departments, managers, formal approvals, escalation paths. Ask about department "
+    "structure, approval limits, review cadences, cross-team handoffs.\n"
+    "Industry matters too — a beauty salon runs on appointments + stylists + walk-ins; a textile manufacturer runs "
+    "on orders + raw material + production + dispatch; an agency runs on clients + projects + retainers. Speak their "
+    "world, not a generic one.\n\n"
+
+    "OPERATIONAL COVERAGE CHECKLIST (mentally verify before setting enough=true):\n"
+    "  1. End-to-end flow — from customer enquiry/order right through to delivery + payment.\n"
+    "  2. Who does what — roles (or departments if 50+), key handoffs, backups.\n"
+    "  3. Approvals & money — who signs off on spends, discounts, hires, refunds.\n"
+    "  4. Where things slip — the pain points the founder feels weekly.\n"
+    "  5. Founder's daily/weekly touchpoints — what they personally check, chase, or approve.\n"
+    "If ANY of 1–5 is still fuzzy, keep asking (until you hit the max). If all are clear enough to design "
+    "departments/workflows/tasks/approvals, set enough=true.\n\n"
+
+    "QUESTION RULES:\n"
+    "  • Exactly ONE question at a time, under 28 words, warm and conversational.\n"
+    "  • Build on what they just said — reference their words.\n"
+    "  • Purely OPERATIONAL — never strategic, visionary, growth-plan, or 'where do you see the company in 5 years' style.\n"
+    "  • Never re-ask what you already know (industry, size, products, what they do).\n\n"
+
     "Return ONLY valid JSON: {\"question\": string, \"why\": string (under 10 words, why this matters), "
-    "\"enough\": boolean (true if you already have enough to design their OS — only allowed after 2+ answers)}."
+    f"\"enough\": boolean (true only if the checklist is covered AND at least {MIN_QUESTIONS} answers exist)}}."
 )
+
+
+def _team_size_hint(size_str: str) -> str:
+    """Turn '11-50' / '50+' / '5' etc. into an explicit interviewer directive."""
+    s = (size_str or "").strip().lower()
+    # Extract the largest number in the string to make a sensible band.
+    nums = [int(n) for n in re.findall(r"\d+", s)]
+    if not nums:
+        return ""
+    top = max(nums)
+    if top <= 10:
+        band = "1-10 (FOUNDER-LED — no departments yet; the founder personally does most operational work)"
+    elif top <= 50:
+        band = "11-50 (early structure — one or two informal leads, founder still signs off on most things)"
+    elif top <= 200:
+        band = "50-200 (departments and managers exist, formal approval limits, cross-team handoffs)"
+    else:
+        band = "200+ (full department structure, layered approvals, review cadences)"
+    return f"TEAM SIZE BAND: {band}. Every question and the resulting OS design MUST fit this reality."
 
 
 def _lang_directive(code: str) -> str:
@@ -310,10 +358,17 @@ async def interview_answer(inp: InterviewAnswerInput):
         await db.signup_sessions.update_one({"id": s["id"]}, {"$set": {"qa": qa, "pending_q": None, "language_code": lang, "status": "done"}})
         return {"done": True, "index": len(qa), "max": MAX_QUESTIONS, "language_code": lang}
 
+    size_hint = _team_size_hint(s.get("team_size") or "")
+    remaining = MAX_QUESTIONS - len(qa)
     prompt = (
-        f"{_profile_block(s)}\n\nConversation so far:\n{_qa_block(qa)}\n\n"
-        f"That was answer {len(qa)} of max {MAX_QUESTIONS}. If you have enough to design a realistic operating system, "
-        "set enough=true. Otherwise ask the single most valuable OPERATIONAL next question (build on their answers, don't repeat)."
+        f"{_profile_block(s)}\n\n"
+        f"{size_hint}\n\n"
+        f"Conversation so far:\n{_qa_block(qa)}\n\n"
+        f"You have already collected {len(qa)} answer(s). You may ask up to {remaining} more question(s) "
+        f"(hard cap {MAX_QUESTIONS} total). Minimum {MIN_QUESTIONS} answers before you're allowed to end.\n"
+        "Walk through the operational-coverage checklist. If ANY item is still fuzzy, ask the single most valuable "
+        "next question that closes the biggest gap — built on what they just said, matched to their team-size band "
+        "and industry. If the picture is genuinely clear enough to design their OS, set enough=true."
     )
     system = INTERVIEW_SYSTEM + _lang_directive(lang)
     try:
@@ -321,8 +376,8 @@ async def interview_answer(inp: InterviewAnswerInput):
         data = _extract_json(await chat.send_message(UserMessage(text=prompt))) or {}
     except Exception as e:
         logger.error(f"interview answer failed: {e}")
-        data = {"enough": len(qa) >= 2}
-    if data.get("enough") and len(qa) >= 2:
+        data = {"enough": len(qa) >= MIN_QUESTIONS}
+    if data.get("enough") and len(qa) >= MIN_QUESTIONS:
         await db.signup_sessions.update_one({"id": s["id"]}, {"$set": {"qa": qa, "pending_q": None, "language_code": lang, "status": "done"}})
         return {"done": True, "index": len(qa), "max": MAX_QUESTIONS, "language_code": lang}
     question = (data.get("question") or "").strip() or "What part of the business slips through the cracks most often when things get busy?"
@@ -362,12 +417,16 @@ async def interview_blueprint(inp: InterviewSessionInput):
             f"{lang_name} (native script). Keep all other fields (departments, workflow names, "
             f"task titles, categories, approval names) in English."
         )
+    size_hint = _team_size_hint(s.get("team_size") or "")
+    refinement = (s.get("refinement") or "").strip()
+    refine_block = f"\n\nFounder's follow-up refinement (they added this after seeing the first draft — reflect it faithfully):\n{refinement}" if refinement else ""
     prompt = (
-        f"{_profile_block(s)}\n\nInterview transcript:\n{_qa_block(s.get('qa') or [])}\n\n"
-        "Design this company's operating system now."
+        f"{_profile_block(s)}\n\n{size_hint}\n\n"
+        f"Interview transcript:\n{_qa_block(s.get('qa') or [])}{refine_block}\n\n"
+        "Design this company's operating system now — sized to their team band, worded in their industry."
     )
     try:
-        chat = claude_chat(session_id=f"bp-{s['id']}", system_message=BLUEPRINT_SYSTEM + welcome_note).with_model(*LLM_MODEL)
+        chat = claude_chat(session_id=f"bp-{s['id']}-{len(refinement)}", system_message=BLUEPRINT_SYSTEM + welcome_note).with_model(*LLM_MODEL)
         data = _extract_json(await chat.send_message(UserMessage(text=prompt))) or {}
     except Exception as e:
         logger.error(f"interview blueprint failed: {e}")
@@ -380,6 +439,28 @@ async def interview_blueprint(inp: InterviewSessionInput):
               for p in (s.get("products") or []) if (p.get("name") or "").strip()][:5]
     await db.signup_sessions.update_one({"id": s["id"]}, {"$set": {"status": "blueprint_ready"}})
     return {**bp, "products": products, "welcome_line": (data.get("welcome_line") or "").strip()}
+
+
+class InterviewRefineInput(BaseModel):
+    session_id: str = Field(max_length=64)
+    refinement: str = Field(max_length=4000)
+    language_code: Optional[str] = Field(default="", max_length=16)
+
+
+@router.post("/interview/refine")
+async def interview_refine(inp: InterviewRefineInput):
+    """Founder saw the first draft blueprint and wants to add/correct something.
+    Store the refinement on the session, then re-run blueprint with it in context."""
+    s = await db.signup_sessions.find_one({"id": inp.session_id}, {"_id": 0})
+    if not s:
+        raise HTTPException(status_code=404, detail="Interview session not found")
+    refinement = inp.refinement.strip()
+    if not refinement:
+        raise HTTPException(status_code=400, detail="Refinement is empty")
+    await db.signup_sessions.update_one(
+        {"id": s["id"]}, {"$set": {"refinement": refinement}}
+    )
+    return await interview_blueprint(InterviewSessionInput(session_id=s["id"], language_code=inp.language_code))
 
 
 # --------------------------------------------------------------------------

@@ -101,7 +101,7 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
   const [question, setQuestion] = useState("");
   const [why, setWhy] = useState("");
   const [index, setIndex] = useState(1);
-  const [max, setMax] = useState(4);
+  const [max, setMax] = useState(6);
   const [answer, setAnswer] = useState("");
   const [thinking, setThinking] = useState(false);
   const [speaking, setSpeaking] = useState(false);
@@ -247,7 +247,7 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
           <div>
             <p className="font-heading font-black uppercase tracking-tight leading-none">Dex · your COO interview</p>
             <p className="text-xs text-muted-foreground mt-1 font-mono" data-testid="interview-progress">
-              {starting ? "warming up…" : `Question ${index} of ${max} · ${orbState === "listening" ? "listening" : orbState === "speaking" ? "speaking" : "ready"}`}
+              {starting ? "warming up…" : `Question ${index} · up to ${max} · ${orbState === "listening" ? "listening" : orbState === "speaking" ? "speaking" : "ready"}`}
             </p>
           </div>
         </div>

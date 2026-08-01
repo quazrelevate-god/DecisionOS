@@ -1,4 +1,15 @@
 ## Changelog
+- 2026-08 (latest): **Backend refactor — Phase B step 5 SHIPPED (ALL 14 remaining complex Task flows extracted).**
+
+  **What moved.** The 14 remaining `/api/tasks/*` endpoints (create, patch, reassign, approve, reject, clarify, execution-plan/{generate,PATCH,delete}, steps/ask, updates, respond, prioritize, attachment) are now in `routers/tasks.py` — which now owns the entire 17-endpoint task-lifecycle surface. Pydantic input classes (`TaskReassignInput`, `TaskRejectInput`, `ExecStep`, `ExecPlanInput`, `StepAskInput`, `TaskUpdateNoteInput`, `RespondInput`) consolidated into `models/tasks.py` (9 classes total). Task-scoped helpers pushed into `services/tasks.py`: `_tenant_industry` (relocated for cross-router reuse) and `_attach_reference_ids` (with deferred imports of `_file_public` + `_analyze_reference_file` to break the cycle). Task-router-local helpers stay in the router: `_can_approve_task`, `_resolve_task_handoff`.
+
+  **Route-ordering guarantee.** `POST /api/tasks/prioritize` (no `{task_id}` path param) registered AFTER all `/tasks/{task_id}/*` subresources — FastAPI matches literal paths first, so no risk of shadowing.
+
+  **Size delta.** `server.py`: **6177 → 5584 lines (-593 lines, -9.6%)**. Total codebase: server.py 5584 · routers/tasks.py 700 · routers/decisions.py 234 · services/tasks.py 137 · models/tasks.py 77.
+
+  **Testing agent (iteration 81): 78/78 PASS** (48 new endpoint-level tests + 30 iteration-80 regression replay). Zero behavioural regressions.  `/app/test_reports/iteration_81.json`.
+
+
 - 2026-08 (later): **Backend refactor — Phase B Part 2 SHIPPED (Services relocated + Decisions router extracted + Task helpers/models split).**
 
   **Services relocated.** `obj_store.py`, `brain_context.py`, `brain_rbac.py` moved from `backend/` → `backend/services/`. Top-level files kept as **compat shims** (each re-exports the public API from `services/X`) so any lingering `import obj_store` / `import brain_context` / `import brain_rbac` in tests, scripts, or forgotten call sites keeps resolving. Active call sites in `routers/brain_docs.py`, `routers/brain_router.py`, `routers/brain_context_api.py`, `routers/brain.py`, and `server.py` migrated to `from services import X`.

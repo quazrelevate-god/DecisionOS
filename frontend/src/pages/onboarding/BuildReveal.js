@@ -19,17 +19,22 @@ const WAIT_LINES = [
 ];
 
 // Small building block for the preview list of what Dex designed.
+// `items` may be an array of strings, or of objects with .label / .name — we
+// normalize per-item so the caller can pass whatever the backend returned.
+const itemText = (it) => (typeof it === "string" ? it : (it?.label || it?.name || ""));
+
 const PreviewBlock = ({ label, items, tint }) => {
-  if (!items || items.length === 0) return null;
+  const strs = (items || []).map(itemText).filter(Boolean);
+  if (strs.length === 0) return null;
   return (
     <div>
       <p className="label-mono text-muted-foreground mb-2">{label}</p>
       <div className="flex flex-wrap gap-1.5">
-        {items.slice(0, 10).map((it, i) => (
+        {strs.slice(0, 10).map((s, i) => (
           <motion.span
-            key={`${label}-${it}-${i}`}
+            key={`${label}-${s}-${i}`}
             initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
-            className={`px-3 py-1.5 border border-black text-xs font-mono ${tint}`}>{it}</motion.span>
+            className={`px-3 py-1.5 border border-black text-xs font-mono ${tint}`}>{s}</motion.span>
         ))}
       </div>
     </div>

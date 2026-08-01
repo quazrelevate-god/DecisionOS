@@ -29,6 +29,7 @@ from emergentintegrations.llm.chat import UserMessage
 
 import obj_store
 import brain_context
+import brain_rbac
 from core import (
     db, claude_chat, LLM_MODEL, _extract_json, new_id, now_iso, logger,
     get_current_user, user_perms,
@@ -51,43 +52,49 @@ _ALL_TOOLS = ("metadata_search", "mongo_query", "knowledge_lookup", "file_open")
 # Planner — Claude picks which tools to run for this question.
 # ---------------------------------------------------------------------------
 _PLANNER_SYSTEM = (
-    "You are Dex's Router — you pick which of four specialist tools should run "
-    "to answer a founder's question about their company. Return ONLY valid JSON: "
-    "{\"tools\": [{\"name\": one of "
+    "You are Dex's Router — you classify a founder/employee question and pick "
+    "which of four specialist tools should run. Return ONLY valid JSON: "
+    "{\"intent\": one of "
+    "[finance, sales, hr, procurement, operations, org_analytics, "
+    "policy, personal, general], "
+    "\"tools\": [{\"name\": one of "
     "[metadata_search, mongo_query, knowledge_lookup, file_open], "
     "\"query\": string (what to search — 1-6 words, keep the founder's own nouns), "
     "\"doc_id\": string (ONLY for file_open, otherwise omit)}], "
-    "\"reasoning\": string (under 20 words, why these tools)}\n\n"
+    "\"reasoning\": string (under 20 words, why this intent and these tools)}\n\n"
+
+    "INTENT PICKING GUIDE (be strict — it drives access control):\n"
+    "  • finance      — money, invoices, GST, tax, revenue, cash flow, payments, banking, expenses.\n"
+    "  • sales        — pipeline, deals, leads, discounts, customer revenue targets.\n"
+    "  • hr           — hiring, resignations, salary, appraisal, attendance, leaves of others.\n"
+    "  • procurement  — vendors, purchase orders, RFQs, supplier terms.\n"
+    "  • operations   — production, inventory, delivery, quality, workflows.\n"
+    "  • org_analytics — cross-department KPIs, company-wide health.\n"
+    "  • policy       — reading a company policy/SOP/filing/contract document.\n"
+    "  • personal     — the ASKER'S OWN tasks, activity, leaves.\n"
+    "  • general      — greetings, help, non-sensitive small talk.\n\n"
 
     "TOOL PICKING GUIDE:\n"
-    "  • metadata_search — for questions about documents/files the company "
-    "uploaded (policies, filings, contracts, SOPs, reports). Use when the "
-    "founder says 'the leave policy', 'GST filing', 'my contract with Acme'.\n"
-    "  • mongo_query — for numbers/lists/analytics over live operational data "
-    "(overdue tasks, unpaid invoices, employees, decisions, activity, KPIs). "
-    "Use when the founder asks 'how many', 'show me overdue', 'top customers'.\n"
-    "  • knowledge_lookup — for past decisions / how the company handled "
-    "something before (approvals given, complaints resolved, decisions taken). "
-    "Use when the founder says 'how did we handle X last time', 'previous "
-    "decisions on Y', 'what have I approved recently'.\n"
-    "  • file_open — ONLY when the founder asks to READ or QUOTE a specific "
-    "document that was mentioned by title or id in the conversation.\n\n"
+    "  • metadata_search — documents (policies, filings, contracts, SOPs).\n"
+    "  • mongo_query    — live analytics over operational data (tasks, invoices, activity).\n"
+    "  • knowledge_lookup — past decisions/approvals/resolutions.\n"
+    "  • file_open      — ONLY when a specific document was already named.\n\n"
 
-    "You may pick 1-3 tools; prefer the minimum. If the question is broad "
-    "(e.g. 'how is my business doing?') pick mongo_query + knowledge_lookup. "
-    "Never guess a doc_id — leave file_open out unless a specific document is "
-    "known."
+    "Pick 1-3 tools; prefer the minimum. Never guess a doc_id."
 )
 
 
 async def _plan(question: str) -> dict:
-    prompt = f"Founder question: {question!r}\nPick the right tool(s)."
+    prompt = f"Question: {question!r}\nClassify intent and pick tool(s)."
     try:
         chat = claude_chat(session_id=f"brain-agent-plan-{new_id()}", system_message=_PLANNER_SYSTEM).with_model(*LLM_MODEL)
         data = _extract_json(await chat.send_message(UserMessage(text=prompt))) or {}
     except Exception as e:
         logger.warning(f"brain agent planner failed: {e}")
         data = {}
+    intent = str(data.get("intent") or "").strip().lower()
+    if intent not in brain_rbac.INTENTS:
+        intent = "general"
     tools = []
     for t in (data.get("tools") or [])[:3]:
         name = str(t.get("name") or "").strip()
@@ -103,7 +110,7 @@ async def _plan(question: str) -> dict:
             {"name": "metadata_search", "query": question[:200], "doc_id": None},
             {"name": "knowledge_lookup", "query": question[:200], "doc_id": None},
         ]
-    return {"tools": tools, "reasoning": (data.get("reasoning") or "").strip()[:200]}
+    return {"intent": intent, "tools": tools, "reasoning": (data.get("reasoning") or "").strip()[:200]}
 
 
 # ---------------------------------------------------------------------------
@@ -428,6 +435,34 @@ async def ask_agent(inp: AgentRequest, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Ask me something about your company")
 
     plan = await _plan(q)
+    intent = plan["intent"]
+    allowed = brain_rbac.allowed_intents(user)
+
+    # RBAC gate — fail closed. Never even run the tools if the classified
+    # intent is off-limits for this user's role/permissions.
+    if intent not in allowed:
+        try:
+            await db.brain_audit.insert_one({
+                "id": new_id(), "tenant_id": user["tenant_id"], "user_id": user["id"],
+                "question": q, "intent": intent, "denied": True,
+                "user_role": user.get("role"),
+                "tools_used": [],
+                "result_type": "AGENT_DENIED", "created_at": now_iso(),
+            })
+        except Exception:
+            pass
+        return {
+            "answer": brain_rbac.refusal_message(user, intent),
+            "reasoning": f"blocked · intent={intent} not permitted for role={user.get('role')}",
+            "citations": [],
+            "suggested_tasks": [],
+            "follow_ups": [],
+            "tools_used": [],
+            "intent": intent,
+            "denied": True,
+            "allowed_intents": sorted(allowed),
+        }
+
     tool_outputs = await _run_tools(plan["tools"], user)
     synth = await _synthesize(q, tool_outputs, user.get("language"))
 
@@ -441,7 +476,8 @@ async def ask_agent(inp: AgentRequest, user: dict = Depends(get_current_user)):
     try:
         await db.brain_audit.insert_one({
             "id": new_id(), "tenant_id": user["tenant_id"], "user_id": user["id"],
-            "question": q, "intent": "agent",
+            "question": q, "intent": intent, "denied": False,
+            "user_role": user.get("role"),
             "tools_used": [t["name"] for t in tools_used],
             "result_type": "AGENT_ANSWER", "created_at": now_iso(),
         })
@@ -455,4 +491,6 @@ async def ask_agent(inp: AgentRequest, user: dict = Depends(get_current_user)):
         "suggested_tasks": synth["suggested_tasks"],
         "follow_ups": synth["follow_ups"],
         "tools_used": tools_used,
+        "intent": intent,
+        "denied": False,
     }

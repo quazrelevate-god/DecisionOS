@@ -632,6 +632,18 @@ async def ask(inp: AskRequest, user: dict = Depends(require_perm("ask"))):
     if not q:
         raise HTTPException(status_code=400, detail="Ask a question")
 
+    # RBAC gate — fail closed on intent BEFORE we plan/retrieve/compute so a
+    # random employee cannot ask "what are our sales?" and get a real answer.
+    import brain_rbac
+    intent = brain_rbac.classify_intent(q)
+    allowed = brain_rbac.allowed_intents(user)
+    if intent not in allowed:
+        await _audit(tid, scope["uid"], q, {"intent": intent}, [], "PERMISSION_DENIED")
+        return {"type": "PERMISSION_DENIED",
+                "message": brain_rbac.refusal_message(user, intent),
+                "intent": intent,
+                "allowed_intents": sorted(allowed)}
+
     prev = None
     if inp.context_id:
         prev = await db.brain_contexts.find_one(

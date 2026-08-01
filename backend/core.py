@@ -19,11 +19,14 @@ import bcrypt
 import jwt
 from fastapi import Depends, HTTPException, Request, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import AsyncMongoClient
 
 # --- Config -----------------------------------------------------------------
 mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
+# PyMongo Async (the official successor to Motor, which reaches EOL May 2026).
+# API is a drop-in replacement for AsyncIOMotorClient — `find()` returns an
+# AsyncCursor, `to_list(N)` and `insert_one`/`update_one` etc. all remain awaitable.
+client = AsyncMongoClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 EMERGENT_LLM_KEY = os.environ['EMERGENT_LLM_KEY']

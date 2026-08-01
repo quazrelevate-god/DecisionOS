@@ -2,8 +2,9 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import api from "../lib/api";
 import { PageHeader, Chip, EmptyState } from "../components/common";
-import { MagnifyingGlass, ChatCircleText, Lock } from "@phosphor-icons/react";
+import { MagnifyingGlass, ChatCircleText, Lock, Books } from "@phosphor-icons/react";
 import { AskPanel } from "./AskAI";
+import { DocumentsPanel } from "./BrainDocuments";
 import { MicDictateButton } from "../components/MicDictateButton";
 
 function SearchPanel() {
@@ -157,15 +158,19 @@ export default function Brain() {
               <ChatCircleText size={16} weight="bold" /> {t("brain.ask")}
             </button>
             <button onClick={() => setTab("search")} data-testid="brain-tab-search"
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider transition-colors ${tab === "search" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border-r border-black transition-colors ${tab === "search" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
               <MagnifyingGlass size={16} weight="bold" /> {t("brain.search")}
+            </button>
+            <button onClick={() => setTab("documents")} data-testid="brain-tab-documents"
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider transition-colors ${tab === "documents" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+              <Books size={16} weight="bold" /> Documents
             </button>
           </div>
           <p className="text-xs text-muted-foreground" data-testid="brain-tabs-hint">{t("brain.tabs_hint")}</p>
         </div>
       </PageHeader>
 
-      {tab === "ask" ? <AskPanel /> : <SearchPanel />}
+      {tab === "ask" ? <AskPanel /> : tab === "search" ? <SearchPanel /> : <DocumentsPanel />}
     </div>
   );
 }

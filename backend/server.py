@@ -6418,6 +6418,11 @@ async def _bootstrap():
         await db.usage_events.create_index([("tenant_id", 1), ("created_at", -1)])
         await db.usage_events.create_index("created_at")
         await db.files.create_index([("tenant_id", 1), ("task_id", 1)])
+        # Company Brain — documents catalog (P1) indexes.
+        await db.brain_documents.create_index([("tenant_id", 1), ("is_deleted", 1), ("created_at", -1)])
+        await db.brain_documents.create_index([("tenant_id", 1), ("kind", 1)])
+        await db.brain_documents.create_index([("tenant_id", 1), ("keywords", 1)])
+        await db.brain_documents.create_index([("tenant_id", 1), ("tags", 1)])
         try:
             await obj_store.init_storage()
         except Exception as e:
@@ -6484,6 +6489,8 @@ from routers.admin import router as admin_router  # noqa: E402
 app.include_router(admin_router)
 from routers.brain import router as brain_router  # noqa: E402
 app.include_router(brain_router)
+from routers.brain_docs import router as brain_docs_router  # noqa: E402
+app.include_router(brain_docs_router)
 from routers.signup import router as signup_router  # noqa: E402
 app.include_router(signup_router)
 _cors_env = os.environ.get('CORS_ORIGINS', '*').strip()
@@ -6498,4 +6505,5 @@ app.add_middleware(CORSMiddleware, **_cors_kwargs)
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    client.close()
+    # PyMongo AsyncMongoClient.close() is a coroutine — must be awaited.
+    await client.close()

@@ -1,12 +1,13 @@
-"""Foundation module: config, DB client, auth helpers, permissions and small
-shared utilities. Imported by both server.py and the route modules under
-routers/ so that no router needs to import from server.py (breaks the
-circular dependency).
-"""
-from dotenv import load_dotenv
-from pathlib import Path
+"""Foundation module: shared helpers, permissions and legacy re-exports.
 
-load_dotenv(Path(__file__).parent / '.env')
+Historical single-file config/DB/auth/LLM home. As of Phase A of the
+modular refactor, the pure config and database wiring live in dedicated
+files (`config.py`, `database.py`). This module still re-exports every
+symbol so `from core import db, get_current_user, ...` keeps working
+across the whole codebase — Phase B will migrate imports one router at
+a time.
+"""
+from pathlib import Path
 
 import os
 import json
@@ -19,38 +20,28 @@ import bcrypt
 import jwt
 from fastapi import Depends, HTTPException, Request, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pymongo import AsyncMongoClient
 
-# --- Config -----------------------------------------------------------------
-mongo_url = os.environ['MONGO_URL']
-# PyMongo Async (the official successor to Motor, which reaches EOL May 2026).
-# API is a drop-in replacement for AsyncIOMotorClient — `find()` returns an
-# AsyncCursor, `to_list(N)` and `insert_one`/`update_one` etc. all remain awaitable.
-client = AsyncMongoClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+# --- Re-exported foundation -------------------------------------------------
+# config.py owns all env-driven constants. Importing them here keeps the
+# public surface of `core` unchanged for every existing consumer.
+from config import (  # noqa: F401 — re-exports
+    MONGO_URL, DB_NAME,
+    JWT_SECRET, JWT_ALGORITHM,
+    AUTH_COOKIE_NAME, AUTH_COOKIE_MAX_AGE, ADMIN_COOKIE_NAME,
+    EMERGENT_LLM_KEY, CLAUDE_KEY,
+    LLM_MODEL, VISION_MODEL,
+    ROLES, PERMISSION_KEYS, DEFAULT_ROLES,
+    AI_KEY_PROVIDERS, _AI_KEY_ENV,
+    _PROVIDER_RATES, _OPENAI_STT_PER_MIN, _SARVAM_STT_PER_MIN,
+    _COST_IN_PER_M, _COST_OUT_PER_M,
+)
 
-EMERGENT_LLM_KEY = os.environ['EMERGENT_LLM_KEY']
-# All Claude Sonnet 4.6 calls use the user's own Anthropic key when set, else the Emergent universal key.
-CLAUDE_KEY = os.environ.get('ANTHROPIC_API_KEY', '').strip() or EMERGENT_LLM_KEY
-JWT_SECRET = os.environ['JWT_SECRET']
-JWT_ALGORITHM = "HS256"
-LLM_MODEL = ("anthropic", "claude-sonnet-4-6")
-VISION_MODEL = ("gemini", "gemini-2.5-flash")
+# database.py owns the AsyncMongoClient + shared `db` handle.
+from database import client, db  # noqa: F401 — re-exports
 
-ROLES = ["owner", "sales", "production", "finance"]
+mongo_url = MONGO_URL  # legacy alias kept for anything reading `core.mongo_url`
 
-# --- Runtime AI provider keys (platform-admin updatable, DB-backed w/ env fallback) ---
-# Effective keys live in memory; env provides the initial/fallback value and a DB
-# doc (platform_settings id="ai_keys") can override them at runtime without a restart.
-_AI_KEY_ENV = {
-    "anthropic": os.environ.get('ANTHROPIC_API_KEY', '').strip(),
-    "openai": os.environ.get('OPENAI_API_KEY', '').strip(),
-    "gemini": os.environ.get('GEMINI_API_KEY', '').strip(),
-    "sarvam": os.environ.get('SARVAM_API_KEY', '').strip(),
-    "wa_access_token": os.environ.get('WA_ACCESS_TOKEN', '').strip(),
-    "wa_phone_number_id": os.environ.get('WA_PHONE_NUMBER_ID', '').strip(),
-}
-AI_KEY_PROVIDERS = list(_AI_KEY_ENV.keys())
+# --- Runtime AI provider keys (mutable at runtime by platform admin) --------
 _ai_keys = dict(_AI_KEY_ENV)
 
 
@@ -100,17 +91,6 @@ def claude_key() -> str:
 # --- Usage tracking + provider outage alerts (platform admin) ---------------
 import contextvars  # noqa: E402
 _ctx_tenant = contextvars.ContextVar("dos_tenant", default=None)
-
-# Rough per-provider rates ($/1M tokens: input, output) — estimates, not real billing.
-_PROVIDER_RATES = {
-    "anthropic": (3.0, 15.0),   # Claude Sonnet
-    "emergent": (3.0, 15.0),    # Emergent proxies Claude Sonnet
-    "gemini": (0.30, 2.50),     # Gemini 2.5 Flash
-}
-_OPENAI_STT_PER_MIN = 0.006     # transcription $/minute (approx)
-_SARVAM_STT_PER_MIN = 0.0072    # Sarvam Saaras STT ~ Rs 0.60/min (approx, estimate)
-_COST_IN_PER_M = 3.0
-_COST_OUT_PER_M = 15.0
 
 
 def set_usage_tenant(tenant_id):
@@ -234,9 +214,6 @@ logger = logging.getLogger("decisionos")
 
 security = HTTPBearer(auto_error=False)
 
-AUTH_COOKIE_NAME = "dos_token"
-AUTH_COOKIE_MAX_AGE = 7 * 24 * 60 * 60  # 7 days, matches token exp
-
 
 def set_auth_cookie(response: Response, token: str) -> None:
     response.set_cookie(
@@ -250,7 +227,6 @@ def clear_auth_cookie(response: Response) -> None:
 
 
 # --- Platform super-admin auth (separate from tenant users) -----------------
-ADMIN_COOKIE_NAME = "dos_admin_token"
 
 
 def create_admin_token(admin_id: str) -> str:
@@ -353,7 +329,7 @@ def require_role(*roles):
 
 
 # --- Module-level access permissions ---------------------------------------
-PERMISSION_KEYS = ["inbox", "voice_capture", "data_input", "people", "finance", "ledger", "workflows", "tasks", "brain", "ask", "approvals", "decisions_approve", "leave_approve", "team_manage"]
+# PERMISSION_KEYS + DEFAULT_ROLES come from `config.py` (re-exported above).
 _BASE_PERMS = {"inbox", "data_input", "people", "workflows", "tasks", "brain", "ask"}
 ROLE_DEFAULT_PERMS = {
     "sales": _BASE_PERMS,
@@ -387,13 +363,6 @@ def require_perm(perm):
             raise HTTPException(status_code=403, detail="You don't have access to this feature")
         return user
     return checker
-
-
-DEFAULT_ROLES = [
-    {"key": "sales", "label": "Sales"},
-    {"key": "operations", "label": "Operations"},
-    {"key": "finance", "label": "Finance"},
-]
 
 
 async def tenant_role_keys(tenant_id: str) -> set:

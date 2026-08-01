@@ -6476,6 +6476,29 @@ async def _bootstrap():
         await db.brain_context.create_index([("tenant_id", 1), ("created_at", -1)])
         await db.brain_context.create_index([("tenant_id", 1), ("kind", 1), ("created_at", -1)])
         await db.brain_context.create_index([("tenant_id", 1), ("source_type", 1), ("source_id", 1)])
+        # P5 — Mongo native full-text index so knowledge_lookup can rank by
+        # relevance (not just regex hits). Wrapped in try/except because a
+        # collection can only have ONE text index — this call is a no-op the
+        # second time it's run with the same fields.
+        try:
+            await db.brain_context.create_index(
+                [("title", "text"), ("why", "text"), ("tags", "text")],
+                weights={"title": 6, "tags": 3, "why": 1},
+                name="brain_context_text_v1",
+                default_language="none",
+            )
+        except Exception as e:
+            logger.warning(f"brain_context text index: {e}")
+        try:
+            await db.brain_documents.create_index(
+                [("title", "text"), ("summary", "text"),
+                 ("original_filename", "text"), ("keywords", "text"), ("tags", "text")],
+                weights={"title": 8, "tags": 4, "keywords": 3, "summary": 2, "original_filename": 1},
+                name="brain_documents_text_v1",
+                default_language="none",
+            )
+        except Exception as e:
+            logger.warning(f"brain_documents text index: {e}")
         try:
             await obj_store.init_storage()
         except Exception as e:

@@ -135,18 +135,36 @@ async def query_context(
     limit: int = 25,
 ) -> list:
     """Read a slice of the Brain context for the current tenant, permission-gated.
-    Owner and team_manage see everything; others get the visibility filter."""
+    Owner and team_manage see everything; others get the visibility filter.
+    When `q` is set, results are ranked by Mongo's native text-index score
+    (title weight 6, tags 3, why 1) — falls back to regex if the text index
+    is unavailable (e.g. fresh DB before bootstrap ran)."""
     from core import user_perms  # local import to avoid cycles at module load
     filt: dict = {"tenant_id": tenant_id}
     if kind and kind.lower() in KIND_VALUES:
         filt["kind"] = kind.lower()
     if tag:
         filt["tags"] = tag.lower()
-    if q:
-        filt["$or"] = [{"title": {"$regex": q, "$options": "i"}},
-                       {"why": {"$regex": q, "$options": "i"}}]
     is_privileged = user.get("role") == "owner" or "team_manage" in user_perms(user)
     if not is_privileged:
         filt.setdefault("$and", []).append(_visibility_filter(user))
+
+    if q:
+        # Primary path — ranked full-text search.
+        try:
+            text_filt = {**filt, "$text": {"$search": q}}
+            rows = await db.brain_context.find(
+                text_filt,
+                {"_id": 0, "score": {"$meta": "textScore"}},
+            ).sort([("score", {"$meta": "textScore"})]).limit(limit).to_list(limit)
+            if rows:
+                return rows
+        except Exception as e:
+            logger.warning(f"brain_context text search fallback: {e}")
+        # Fallback — regex on title / why so we still return something when the
+        # text index hasn't caught up (e.g. immediately after a fresh insert).
+        filt["$or"] = [{"title": {"$regex": q, "$options": "i"}},
+                       {"why":   {"$regex": q, "$options": "i"}}]
+
     rows = await db.brain_context.find(filt, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
     return rows

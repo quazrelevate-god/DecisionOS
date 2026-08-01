@@ -110,20 +110,37 @@ async def _plan(question: str) -> dict:
 # Tool implementations
 # ---------------------------------------------------------------------------
 async def _tool_metadata_search(query: str, user: dict) -> dict:
-    filt: dict = {"tenant_id": user["tenant_id"], "is_deleted": False}
-    tokens = _docs_keywords(query)
-    if tokens:
-        filt.setdefault("$and", []).append({"$or": [
-            {"title":              {"$regex": query, "$options": "i"}},
-            {"summary":            {"$regex": query, "$options": "i"}},
-            {"original_filename":  {"$regex": query, "$options": "i"}},
-            {"keywords":           {"$in": tokens}},
-            {"tags":               {"$in": tokens}},
-        ]})
+    base: dict = {"tenant_id": user["tenant_id"], "is_deleted": False}
     if user.get("role") != "owner" and "team_manage" not in user_perms(user):
-        filt.setdefault("$and", []).append(_docs_visibility_filter(user))
-    rows = await db.brain_documents.find(filt, {"_id": 0, "keywords": 0, "storage_path": 0}) \
-        .sort("created_at", -1).limit(_MAX_DOCS).to_list(_MAX_DOCS)
+        base.setdefault("$and", []).append(_docs_visibility_filter(user))
+
+    rows: list = []
+    if query:
+        # Primary — ranked full-text search using the brain_documents_text_v1 index.
+        try:
+            rows = await db.brain_documents.find(
+                {**base, "$text": {"$search": query}},
+                {"_id": 0, "keywords": 0, "storage_path": 0, "score": {"$meta": "textScore"}},
+            ).sort([("score", {"$meta": "textScore"})]).limit(_MAX_DOCS).to_list(_MAX_DOCS)
+        except Exception as e:
+            logger.warning(f"brain_documents text search fallback: {e}")
+            rows = []
+        if not rows:
+            # Fallback to the older keyword+regex path (matches the /brain/documents
+            # list endpoint behaviour so results stay predictable).
+            tokens = _docs_keywords(query)
+            regex_or = [{"title":              {"$regex": query, "$options": "i"}},
+                        {"summary":            {"$regex": query, "$options": "i"}},
+                        {"original_filename":  {"$regex": query, "$options": "i"}}]
+            if tokens:
+                regex_or += [{"keywords": {"$in": tokens}}, {"tags": {"$in": tokens}}]
+            filt = {**base}
+            filt.setdefault("$and", []).append({"$or": regex_or})
+            rows = await db.brain_documents.find(filt, {"_id": 0, "keywords": 0, "storage_path": 0}) \
+                .sort("created_at", -1).limit(_MAX_DOCS).to_list(_MAX_DOCS)
+    else:
+        rows = await db.brain_documents.find(base, {"_id": 0, "keywords": 0, "storage_path": 0}) \
+            .sort("created_at", -1).limit(_MAX_DOCS).to_list(_MAX_DOCS)
     return {"tool": "metadata_search", "query": query, "count": len(rows), "hits": rows}
 
 
@@ -339,6 +356,69 @@ async def _synthesize(question: str, tool_outputs: List[dict], lang: Optional[st
 # ---------------------------------------------------------------------------
 class AgentRequest(BaseModel):
     question: str = Field(max_length=800)
+
+
+class SuggestedTaskInput(BaseModel):
+    """Shape returned by the synthesizer's `suggested_tasks` list — plus optional
+    source refs so we can close the loop back into `brain_context`."""
+    title: str = Field(max_length=200)
+    why: str = Field(default="", max_length=500)
+    priority: Optional[str] = Field(default="medium", max_length=20)
+    source_kind: Optional[str] = Field(default=None, max_length=40)   # e.g. "document" / "context"
+    source_ref: Optional[str] = Field(default=None, max_length=64)    # doc_id or context_id
+    source_label: Optional[str] = Field(default=None, max_length=200)
+    question: Optional[str] = Field(default=None, max_length=400)     # what founder asked
+
+
+@router.post("/create-task")
+async def create_task_from_suggestion(inp: SuggestedTaskInput, user: dict = Depends(get_current_user)):
+    """One-tap create a task from an agent-suggested action. Keeps the answer
+    → action → brain_context loop closed so tomorrow's router benefits from
+    today's picks."""
+    title = (inp.title or "").strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="A task needs a title")
+
+    # Build a description that carries the reason + provenance so the assignee
+    # sees WHY this task exists without needing to re-ask Dex.
+    parts: List[str] = []
+    if inp.why:
+        parts.append(inp.why.strip())
+    if inp.question:
+        parts.append(f"Suggested by Dex in response to: “{inp.question.strip()}”")
+    if inp.source_label:
+        parts.append(f"Source: {inp.source_label.strip()}")
+    description = "\n\n".join(parts)[:1600]
+
+    task_doc = {
+        "id": new_id(),
+        "tenant_id": user["tenant_id"],
+        "title": title[:200],
+        "description": description,
+        "status": "pending",
+        "priority": (inp.priority or "medium").lower(),
+        "assignee_id": user["id"],
+        "assignee_role": user.get("role"),
+        "created_by": user["id"],
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+        "source": {"type": "brain_agent", "ref": inp.source_ref, "kind": inp.source_kind},
+    }
+    await db.tasks.insert_one(dict(task_doc))
+    task_doc.pop("_id", None)
+
+    # Close the loop: capture this pick in brain_context so the router learns
+    # the founder actually acts on Dex's suggestions.
+    await brain_context.record_context(
+        tenant_id=user["tenant_id"], kind="note",
+        title=f"Created task from Dex suggestion: {title[:120]}",
+        outcome="task_created", why=inp.why or "",
+        tags=[t for t in ["dex-suggestion", inp.source_kind] if t],
+        source_type="agent_suggestion", source_id=task_doc["id"],
+        actor_id=user["id"], actor_name=user.get("name") or "",
+        department=user.get("role") or "", visibility="dept",
+    )
+    return {"ok": True, "task": task_doc}
 
 
 @router.post("")

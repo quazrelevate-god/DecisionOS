@@ -80,6 +80,11 @@ _PLANNER_SYSTEM = (
     "  • knowledge_lookup — past decisions/approvals/resolutions.\n"
     "  • file_open      — ONLY when a specific document was already named.\n\n"
 
+    "COUNT + AGGREGATION RULE: For any question containing 'how many', 'count', "
+    "'total', 'overdue', 'this week', 'this month', 'top N', 'average', "
+    "'unpaid', 'pending' — ALWAYS include mongo_query as one of the picks. "
+    "That tool is the ONLY one that runs live aggregations.\n\n"
+
     "Pick 1-3 tools; prefer the minimum. Never guess a doc_id."
 )
 
@@ -437,6 +442,16 @@ async def ask_agent(inp: AgentRequest, user: dict = Depends(get_current_user)):
     plan = await _plan(q)
     intent = plan["intent"]
     allowed = brain_rbac.allowed_intents(user)
+
+    # DEFENCE-IN-DEPTH: Claude's classifier is stochastic — for specific
+    # finance phrasings ("how many unpaid invoices this month?") it can
+    # return intent=general and bypass the gate. Consult the deterministic
+    # regex classifier too and TAKE THE STRICTER of the two. This closes
+    # the mismatch between /api/ask (regex, tight) and /api/brain/agent
+    # (LLM, previously loose).
+    regex_intent = brain_rbac.classify_intent(q)
+    if regex_intent != "general" and regex_intent not in allowed:
+        intent = regex_intent
 
     # RBAC gate — fail closed. Never even run the tools if the classified
     # intent is off-limits for this user's role/permissions.

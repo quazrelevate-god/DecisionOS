@@ -25,7 +25,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
-import obj_store
+from services import obj_store
 from core import db, get_current_user, new_id, now_iso, logger, user_perms
 
 

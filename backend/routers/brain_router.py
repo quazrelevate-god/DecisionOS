@@ -27,9 +27,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from emergentintegrations.llm.chat import UserMessage
 
-import obj_store
-import brain_context
-import brain_rbac
+from services import obj_store
+from services import brain_context
+from services import brain_rbac
 from core import (
     db, claude_chat, LLM_MODEL, _extract_json, new_id, now_iso, logger,
     get_current_user, user_perms,

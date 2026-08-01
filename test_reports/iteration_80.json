@@ -1,0 +1,55 @@
+{
+  "summary": "Iteration 80 — Phase B Part 2 backend refactor regression harness. 30/30 new tests PASS in test_iteration80_phaseb_refactor.py + 46/46 iteration 79 pre-launch tests still PASS (regression replay). ZERO behavioural regressions from the refactor. Coverage: (a) Import cycle sanity — services.obj_store / services.brain_context / services.brain_rbac / services.tasks and top-level compat shims (obj_store.py, brain_context.py, brain_rbac.py) all resolve; models.tasks (TaskCreateInput, TaskUpdateInput) importable; (b) Auth /api/auth/me for owner+sales+finance — all 200 with correct role in {user, tenant} envelope; (c) NEW decisions router (routers/decisions.py) — GET /api/decisions (105 rows), status=approved filter, /api/decisions/{invalid}→404, /api/journal + ?q= filter, GET /api/decisions/{id}, GET /api/decisions/{id}/timeline all 200; POST /decisions/{id}/tasks spawns blocked task while parent pending, POST /decisions/{id}/approve unblocks child task (blocked→todo verified in Mongo), POST /decisions/{id}/reject cascade-deletes spawned tasks+workflows (verified 0 tasks remaining), POST /decisions/{id}/comment allowed for participant (owner) + 403 for non-participant (sales) + 400 on empty text — the deferred-import pattern for enrich_decision/add_decision_event/log_activity/push_notification/tenant_role_keys works cleanly, no circular-import errors on cold start or hot-reload; (d) RBAC hardening intact — sales user CANNOT approve or reject a fresh pending_approval decision (both return 403); (e) Tasks router regression — GET /api/tasks (184 tasks — was 189+, drop is because Sharma dedup removed 5 duplicate INV-2045 chase tasks; still healthy), GET /api/tasks/{id} has enriched fields (task_type, attachment_count from services.tasks.enrich_task), POST create + PATCH status=in_progress + DELETE owner-only + GET-after-DELETE→404 all work; sales cannot delete task (403); (f) Brain endpoints — /api/brain/context 200, /api/brain/documents 200, /api/ask owner→200 with real Claude answer, /api/ask sales asking 'how many unpaid invoices this month?'→200 with type=PERMISSION_DENIED intent=finance (regex classifier fail-closes correctly), /api/brain/agent owner→200 with real Claude answer; (g) /api/files upload + /api/files/{id}/download roundtrip returns exact bytes; (h) /api/brief owner→200 with counters+finance_amounts intact; /api/inbox 5 back-to-back calls all 200 (PyMongo aggregate migration still holding, ZERO 500s post-restart); (i) brain_context capture on decision approve — Mongo brain_context count grows by 1 with source_type=decision, source_id=<did>, outcome=approved (services.brain_context.record_context still fires correctly after the relocation); (j) Sharma demo dedup — exactly 0 tasks reference INV-2045 (P1 duplicate cleanup complete — before cleanup there were 5). ALL requested regressions verified.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "/api/tasks",
+        "issue": "Sharma seed now returns 184 tasks (down from ~189 mentioned in the review request). This is EXPECTED because the P1 duplicate cleanup removed 5 duplicated INV-2045 chase tasks — the review request itself asked to verify at most 1 chase task remains. Currently ZERO INV-2045 chase tasks remain (rx match returns empty). If keeping exactly 1 authoritative chase task is the intent (rather than deleting all of them), main agent may want to re-insert a single canonical 'Chase Sharma Textiles for INV-2045' task in the seed."
+      },
+      {
+        "endpoint": "/api/brain/agent",
+        "issue": "CARRIED FROM ITERATION 79 (not this refactor's fault): the LLM planner mis-classifies 'how many unpaid invoices this month?' as intent=general in 3/3 runs when asked by sales user, letting the request past the RBAC gate with denied=false. Fix requires adding brain_rbac.classify_intent(q) as a belt-and-suspenders check in routers/brain_router.py:ask_agent(). Not in scope for Phase B refactor but should be picked up next."
+      }
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration80_phaseb_refactor.py",
+    "/app/test_reports/pytest/iter80.xml",
+    "/app/test_reports/pytest/iter79_replay.xml"
+  ],
+  "action_items": [
+    "No action items for this refactor — Phase B Part 2 is behaviour-identical and safe to ship.",
+    "OPTIONAL: If the Sharma seed should retain exactly 1 canonical INV-2045 chase task (rather than 0), re-insert one in bootstrap_demo_data(). Currently 0 tasks reference INV-2045 — the dedup went from 5→0 instead of 5→1.",
+    "CARRIED FROM ITER 79 (HIGH, unrelated to refactor): fix /api/brain/agent RBAC bypass by adding brain_rbac.classify_intent as a second gate before the allowed-set check in routers/brain_router.py:ask_agent (union stricter of Claude+regex intent)."
+  ],
+  "critical_code_review_comments": [
+    "routers/decisions.py: deferred-import pattern (from server import ... inside handler) is the correct workaround for the server.py↔routers/decisions.py cycle. Same pattern used by routers/auth.py and routers/tasks.py — consistent. No re-import on hot reload, no start-up ImportError.",
+    "routers/decisions.py:_decision_participants (line 38-47) correctly walks {creator, task assignees, tenant owners}. Comment on decision returns 403 for a non-participant (sales, no assignee) — verified in test_comment_on_decision_participant_only.",
+    "routers/decisions.py:add_decision_task (line 109-152) correctly sets status='blocked' when parent decision is pending_approval, 'cancelled' when rejected, else 'todo'. Verified: task spawned under a pending decision goes blocked; then decision approve moves it to todo (Mongo state matched).",
+    "routers/decisions.py:approve_decision (line 155-187) correctly (a) unblocks child tasks, (b) auto-advances purchase_payment workflows requested→approved, (c) writes a brain_context row via services.brain_context.record_context. All three verified in tests. Cascade-delete on reject (tasks+workflows+calendar_events+inbox dismiss) also verified — Mongo shows 0 tasks after reject.",
+    "services/tasks.py: TASK_STATUSES set has all 7 states {blocked,todo,in_progress,waiting,review,done,cancelled}. enrich_task/enrich_tasks batch the user lookup via one db.users.find({id:{$in:ids}}) query — good N+1 avoidance. _can_work_task is a simple boolean that reflects owner/assignee/role — matches server.py's old inline predicate.",
+    "obj_store/brain_context/brain_rbac compat shims — three-line re-exports, correctly declare noqa: F401 for lint. Downstream callers that still do `import obj_store` continue to work; new code should adopt `from services import obj_store` (already done in routers/decisions.py).",
+    "models/tasks.py: TaskCreateInput/TaskUpdateInput are simple Pydantic models. Consider adding validators (e.g., priority ∈ {'low','medium','high'}, due_in_days ≥ 0) — currently accepted as free strings/ints. Not blocking.",
+    "server.py:1041 still has a direct db.decisions.insert_one — this is the voice-note path (via /api/voice-notes/{id}/process). Consider extracting the DecisionCreateInput shape into models/decisions.py in a future PR for symmetry with TaskCreateInput.",
+    "No POST /api/decisions endpoint exists — decisions are always spawned by voice-notes, brain/agent, or seed. This is intentional but non-obvious; consider adding a comment in routers/decisions.py header explaining that create is decision-source-specific and not part of this router.",
+    "Sharma dedup (P1 cleanup): went from 5→0 INV-2045 chase tasks. If the intent was 'exactly 1 canonical row', re-insert one; if the intent was 'purge all duplicates', the current state is fine. Test asserts <=1 so both states pass."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration80_phaseb_refactor.py",
+    "/app/test_reports/pytest/iter80.xml",
+    "/app/test_reports/pytest/iter79_replay.xml",
+    "/app/test_reports/iteration_80.json"
+  ],
+  "success_rate": {
+    "backend": "100% (30/30 iteration-80 refactor tests + 46/46 iteration-79 regression replay = 76/76)",
+    "frontend": "not tested (backend-only per request)"
+  },
+  "test_credentials": "owner@sharma.com/demo1234 (owner), sales@sharma.com/demo1234 (sales), finance@sharma.com/demo1234 (finance), production@sharma.com/demo1234 (production) — all verified working via /api/auth/login.",
+  "seed_data_creation": "Test suite creates and cleans up: (a) ~6-8 pending_approval decisions inserted directly into Mongo with TEST_iter80_* titles + cleanup via _cleanup_decision (removes decision+tasks+workflows+calendar_events); (b) 2 TEST_iter80 tasks (crud + owner-only-delete), both deleted at end; (c) 1 TEST_iter80 file uploaded via /api/files (small text, not cleaned but self-identifying). brain_context rows from the approve-capture test also cleaned up by source_id. Persistent seed data (Sharma tenant) is untouched.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "test_iteration80_phaseb_refactor.py is the Phase B refactor's regression harness — 30 tests covering imports/shims + auth + decisions router (all 8 endpoints + RBAC + participants gate) + tasks router + brain endpoints + object storage + brief/inbox + brain_context capture + Sharma dedup. Full run is ~17s. Run it before touching services/, models/, or routers/decisions.py again. The iteration-79 harness (test_iteration79_prelaunch.py) is also still green and remains the primary phase-1-launch gate. Notes: (1) POST /api/decisions does NOT exist as an endpoint — decisions are created via voice-notes/brain/seed only, so the test suite uses direct pymongo insert_one for approve/reject/cascade cases; (2) /api/auth/me returns {user, tenant}, not a flat user object; (3) /api/ask denial shape is {type: 'PERMISSION_DENIED', message, intent, allowed_intents} — no `denied` key.",
+  "rca of the issue": "N/A — no issues found in this refactor. All Phase B Part 2 changes (relocate services, extract decisions router, move task helpers, extract TaskCreate/UpdateInput models) are behaviour-identical to iteration 79. The one CARRIED issue (/api/brain/agent Claude-intent RBAC bypass) is unrelated to this refactor and documented in iteration 79's report."
+}

@@ -5,22 +5,25 @@ This first pass owns the SAFE leaf endpoints:
   • GET  /api/tasks/{id}         — detail
   • DELETE /api/tasks/{id}       — owner-only delete
 
+Enrichment / permission helpers now live in `services/tasks.py`
+(`enrich_task`, `enrich_tasks`, `_can_work_task`, `TASK_STATUSES`,
+`_plan_progress`) so both this router and the still-monolithic complex
+task flows in `server.py` share one canonical implementation.
+
 The complex flows (create/update/approve/reject/reassign/execution-plan/
 respond/attachment/prioritize) stay in `server.py` for now because they
 transitively pull in ~15 inline helpers (`_attach_reference_ids`,
 `_approver_ids`, `pick_least_loaded_member`, `_route_task_via_ai`,
-`_maybe_generate_execution_plan`, etc.). Those helpers will move into
-`services/tasks.py` in a follow-up PR before the remaining endpoints
-can be extracted safely.
-
-Server-local helpers (`enrich_task`, `enrich_tasks`, `_can_work_task`)
-are deferred-imported inside handlers to avoid a circular import.
+`_maybe_generate_execution_plan`, etc.) that hold onto AI/notification
+side effects. Those helpers will move into `services/tasks.py` in a
+follow-up PR before the remaining endpoints can be extracted safely.
 """
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 
 from core import db, get_current_user
+from services.tasks import enrich_task, enrich_tasks, _can_work_task
 
 
 router = APIRouter(prefix="/api/tasks")
@@ -32,7 +35,6 @@ async def list_tasks(
     mine: Optional[bool] = False,
     user: dict = Depends(get_current_user),
 ):
-    from server import enrich_tasks  # deferred to break the cycle
     q: dict = {"tenant_id": user["tenant_id"]}
     if status:
         q["status"] = status
@@ -50,7 +52,6 @@ async def list_tasks(
 
 @router.get("/{task_id}")
 async def get_task(task_id: str, user: dict = Depends(get_current_user)):
-    from server import enrich_task, _can_work_task  # deferred to break the cycle
     t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
     if not t:
         raise HTTPException(status_code=404, detail="Task not found")

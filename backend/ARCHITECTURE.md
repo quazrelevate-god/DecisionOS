@@ -9,13 +9,14 @@ backend/
 ├── database.py                 # ✅ AsyncMongoClient + shared `db`
 ├── dependencies.py             # ⏳ get_current_user, require_perm, require_role
 │
-├── models/                     # ⏳ Pydantic request/response, grouped by domain
-│   ├── auth.py, tasks.py, tenants.py, brain.py, ledger.py, signup.py, admin.py
+├── models/                     # 🟡 Pydantic request/response, grouped by domain
+│   ├── tasks.py                # ✅ TaskCreateInput, TaskUpdateInput
+│   ├── auth.py, tenants.py, brain.py, ledger.py, signup.py, admin.py  # ⏳
 │
 ├── routers/                    # 🟡 FastAPI endpoint groups (partial)
 │   ├── auth.py                 # ✅ /api/auth/register /login /logout /me /profile /change-password
 │   ├── tasks.py                # 🟡 /api/tasks list/get/delete extracted; create/update/approve/reject/exec-plan/respond/attachment/reassign/prioritize still in server.py
-│   ├── decisions.py            # ⏳ /api/decisions/*
+│   ├── decisions.py            # ✅ /api/decisions/*, /api/journal
 │   ├── inbox.py                # ⏳ /api/inbox
 │   ├── team.py                 # ⏳ /api/users, /api/leaves
 │   ├── brief.py                # ⏳ /api/brief
@@ -28,15 +29,17 @@ backend/
 │       ├── documents.py        # ✅ routers/brain_docs.py
 │       ├── agent.py            # ✅ routers/brain_router.py
 │       ├── context.py          # ✅ routers/brain_context_api.py
-│       └── rbac.py             # ✅ brain_rbac.py (to move to services/)
+│       └── rbac.py             # ✅ services/brain_rbac.py
 │
-├── services/                   # ⏳ third-party integrations + business services
-│   ├── llm.py                  # Claude chat helper
-│   ├── sarvam.py               # STT/TTS
-│   ├── obj_store.py            # (today: backend/obj_store.py)
-│   ├── brain_context.py        # (today: backend/brain_context.py)
-│   ├── ai_keys.py              # runtime AI key management
-│   └── usage.py                # LLM usage / cost telemetry
+├── services/                   # 🟡 third-party integrations + business services
+│   ├── obj_store.py            # ✅ (compat shim: backend/obj_store.py)
+│   ├── brain_context.py        # ✅ (compat shim: backend/brain_context.py)
+│   ├── brain_rbac.py           # ✅ (compat shim: backend/brain_rbac.py)
+│   ├── tasks.py                # ✅ enrich_task, enrich_tasks, _can_work_task, TASK_STATUSES, _plan_progress
+│   ├── llm.py                  # ⏳ Claude chat helper
+│   ├── sarvam.py               # ⏳ STT/TTS
+│   ├── ai_keys.py              # ⏳ runtime AI key management
+│   └── usage.py                # ⏳ LLM usage / cost telemetry
 │
 ├── utils/                      # ⏳ tiny cross-cutting helpers
 │   ├── ids.py                  # new_id, slug
@@ -61,14 +64,15 @@ Behaviour change: **none**. Every endpoint, every helper, every dependency conti
 
 Order (safest → hardest):
 
-1. **auth** — `/api/auth/register`, `/login`, `/logout`, `/me` → `routers/auth.py`
-2. **tasks** — `/api/tasks/*` (largest single domain, ~500 lines) → `routers/tasks.py`
-3. **decisions** — `/api/decisions/*` → `routers/decisions.py`
-4. **inbox** — `/api/inbox`, `/inbox/{id}/act` → `routers/inbox.py`
-5. **team** — `/api/users`, `/api/leaves`, `/api/attendance` → `routers/team.py`
-6. **brief** — `/api/brief`, `/api/notifications` → `routers/brief.py`
-7. **finance/ledger** — extract remaining pieces still in server.py
-8. **misc** — voice, calendar, meetings, complaints, workflows
+1. **auth** — `/api/auth/register`, `/login`, `/logout`, `/me` → `routers/auth.py` ✅
+2. **tasks** — `/api/tasks/*` (largest single domain, ~500 lines) → `routers/tasks.py` 🟡 (leaf endpoints + shared helpers moved; 14 complex flows still in server.py)
+3. **services relocation** — `obj_store`, `brain_context`, `brain_rbac` → `services/` with compat shims ✅
+4. **decisions** — `/api/decisions/*` + `/api/journal` → `routers/decisions.py` ✅
+5. **inbox** — `/api/inbox`, `/inbox/{id}/act` → `routers/inbox.py` ⏳
+6. **team** — `/api/users`, `/api/leaves`, `/api/attendance` → `routers/team.py` ⏳
+7. **brief** — `/api/brief`, `/api/notifications` → `routers/brief.py` ⏳
+8. **finance/ledger** — extract remaining pieces still in server.py ⏳
+9. **misc** — voice, calendar, meetings, complaints, workflows ⏳
 
 For each PR:
 - Move `@api.post/get/...` handlers verbatim into the new router.

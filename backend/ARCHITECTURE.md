@@ -10,12 +10,12 @@ backend/
 ├── dependencies.py             # ⏳ get_current_user, require_perm, require_role
 │
 ├── models/                     # 🟡 Pydantic request/response, grouped by domain
-│   ├── tasks.py                # ✅ TaskCreateInput, TaskUpdateInput
+│   ├── tasks.py                # ✅ TaskCreateInput, TaskUpdateInput, TaskReassignInput, TaskRejectInput, ExecStep, ExecPlanInput, StepAskInput, TaskUpdateNoteInput, RespondInput
 │   ├── auth.py, tenants.py, brain.py, ledger.py, signup.py, admin.py  # ⏳
 │
 ├── routers/                    # 🟡 FastAPI endpoint groups (partial)
 │   ├── auth.py                 # ✅ /api/auth/register /login /logout /me /profile /change-password
-│   ├── tasks.py                # 🟡 /api/tasks list/get/delete extracted; create/update/approve/reject/exec-plan/respond/attachment/reassign/prioritize still in server.py
+│   ├── tasks.py                # ✅ ALL 17 /api/tasks/* endpoints (list, get, delete, create, patch, reassign, approve, reject, clarify, execution-plan/* × 3, steps/ask, updates, respond, prioritize, attachment)
 │   ├── decisions.py            # ✅ /api/decisions/*, /api/journal
 │   ├── inbox.py                # ⏳ /api/inbox
 │   ├── team.py                 # ⏳ /api/users, /api/leaves
@@ -35,7 +35,7 @@ backend/
 │   ├── obj_store.py            # ✅ (compat shim: backend/obj_store.py)
 │   ├── brain_context.py        # ✅ (compat shim: backend/brain_context.py)
 │   ├── brain_rbac.py           # ✅ (compat shim: backend/brain_rbac.py)
-│   ├── tasks.py                # ✅ enrich_task, enrich_tasks, _can_work_task, TASK_STATUSES, _plan_progress
+│   ├── tasks.py                # ✅ enrich_task, enrich_tasks, _can_work_task, TASK_STATUSES, _plan_progress, _tenant_industry, _attach_reference_ids, _derive_task_type, _task_activity
 │   ├── llm.py                  # ⏳ Claude chat helper
 │   ├── sarvam.py               # ⏳ STT/TTS
 │   ├── ai_keys.py              # ⏳ runtime AI key management
@@ -65,7 +65,7 @@ Behaviour change: **none**. Every endpoint, every helper, every dependency conti
 Order (safest → hardest):
 
 1. **auth** — `/api/auth/register`, `/login`, `/logout`, `/me` → `routers/auth.py` ✅
-2. **tasks** — `/api/tasks/*` (largest single domain, ~500 lines) → `routers/tasks.py` 🟡 (leaf endpoints + shared helpers moved; 14 complex flows still in server.py)
+2. **tasks** — `/api/tasks/*` (largest single domain, ~600 lines) → `routers/tasks.py` ✅ (all 17 endpoints extracted; helpers in services/tasks.py; inputs in models/tasks.py)
 3. **services relocation** — `obj_store`, `brain_context`, `brain_rbac` → `services/` with compat shims ✅
 4. **decisions** — `/api/decisions/*` + `/api/journal` → `routers/decisions.py` ✅
 5. **inbox** — `/api/inbox`, `/inbox/{id}/act` → `routers/inbox.py` ⏳

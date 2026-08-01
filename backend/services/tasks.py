@@ -111,3 +111,27 @@ def _plan_progress(steps: list) -> int:
         return 0
     done = sum(1 for s in steps if s.get("done"))
     return round(done / len(steps) * 100)
+
+
+async def _tenant_industry(tenant_id: str) -> str:
+    t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "industry": 1})
+    return (t or {}).get("industry") or "general"
+
+
+async def _attach_reference_ids(tenant_id, user_id, task_id, file_ids, background=None):
+    """Link previously-staged reference files (POST /files) to a task.
+
+    `_file_public` and `_analyze_reference_file` still live in `server.py` (they
+    depend on obj_store + Claude + LLM_MODEL); imported here on demand to avoid
+    the `server.py ↔ services.tasks` cycle.
+    """
+    from server import _file_public, _analyze_reference_file  # deferred
+    for fid in (file_ids or []):
+        rec = await db.files.find_one({"id": fid, "tenant_id": tenant_id, "is_deleted": False}, {"_id": 0})
+        if not rec:
+            continue
+        await db.files.update_one({"id": fid}, {"$set": {"task_id": task_id, "kind": "reference"}})
+        rec["kind"] = "reference"
+        await db.tasks.update_one({"id": task_id}, {"$push": {"attachments": _file_public(rec)}})
+        if background is not None:
+            background.add_task(_analyze_reference_file, tenant_id, task_id, rec)

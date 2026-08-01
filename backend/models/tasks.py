@@ -38,3 +38,40 @@ class TaskUpdateInput(BaseModel):
     priority: Optional[str] = None
     progress: Optional[int] = None
     evidence_required: Optional[bool] = None
+
+
+class TaskReassignInput(BaseModel):
+    assignee_id: Optional[str] = None
+    assignee_role: Optional[str] = None
+
+
+class TaskRejectInput(BaseModel):
+    """Also used by /clarify (`reason` doubles as clarification text)."""
+    reason: Optional[str] = ""
+
+
+class ExecStep(BaseModel):
+    id: Optional[str] = None
+    text: str
+    done: Optional[bool] = False
+
+
+class ExecPlanInput(BaseModel):
+    steps: List[ExecStep]
+    status: Optional[str] = None
+
+
+class StepAskInput(BaseModel):
+    step_text: str
+
+
+class TaskUpdateNoteInput(BaseModel):
+    text: str
+    step_id: Optional[str] = None
+    action: str = "note"  # "note" | "handoff" | "escalate"
+    to_id: Optional[str] = None      # member id (handoff to a person)
+    to_role: Optional[str] = None    # role key (handoff to a team)
+
+
+class RespondInput(BaseModel):
+    text: str

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Microphone, Stop, PaperPlaneRight, CircleNotch, SpeakerHigh, SpeakerSlash, Waveform, CaretDown, Check,
+  Microphone, Stop, PaperPlaneRight, CircleNotch, SpeakerHigh, SpeakerSlash, Waveform, CaretDown, CaretLeft, Check, Translate,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import api from "../../lib/api";
@@ -19,8 +19,8 @@ const Bars = ({ active }) => (
   </div>
 );
 
-// Small chip in the header showing the assistant voice language + a picker to override.
-const LangChip = ({ value, autoDetected, onChange, disabled }) => {
+// Small chip in the header showing the assistant voice language + a picker to override mid-interview.
+const LangChip = ({ value, onChange, disabled }) => {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
@@ -34,11 +34,10 @@ const LangChip = ({ value, autoDetected, onChange, disabled }) => {
         data-testid="interview-lang-chip"
         onClick={() => !disabled && setOpen((o) => !o)}
         disabled={disabled}
-        title={autoDetected ? "Voice auto-detected — click to change" : "Change voice language"}
+        title="Change voice language"
         className="flex items-center gap-1.5 px-2.5 h-10 border border-black bg-white text-[11px] font-semibold uppercase tracking-wider hover:bg-black/5 disabled:opacity-40"
       >
         <span>{langLabel(value)}</span>
-        {autoDetected && <span className="w-1.5 h-1.5 rounded-full bg-brand-red" title="Auto-detected" />}
         <CaretDown size={12} weight="bold" />
       </button>
       <AnimatePresence>
@@ -66,6 +65,37 @@ const LangChip = ({ value, autoDetected, onChange, disabled }) => {
   );
 };
 
+// Step 0 — the founder picks the interview language before Dex starts.
+const LanguagePick = ({ onPick, onSkip }) => (
+  <div className="w-full max-w-2xl mx-auto" data-testid="signup-lang-pick">
+    <p className="label-mono text-brand-red mb-3 flex items-center gap-2"><Translate size={14} weight="bold" /> Your interview</p>
+    <h1 className="font-heading text-3xl sm:text-4xl lg:text-5xl font-black uppercase tracking-tighter leading-[1.02] mb-2">
+      Which language should Dex speak?
+    </h1>
+    <p className="text-sm text-muted-foreground mb-8">Dex will ask every question — voice and text — in the language you pick. You can answer by speaking or typing.</p>
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
+      {SPOKEN_LANGS.map((l, i) => (
+        <motion.button
+          key={l.code}
+          data-testid={`lang-pick-${l.code}`}
+          initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
+          onClick={() => onPick(l.code)}
+          className="group border border-black bg-white p-4 text-left hover:bg-brand-ink hover:text-white hover:shadow-brutal hover:-translate-y-0.5 transition-all"
+        >
+          <p className="font-heading text-2xl font-black leading-none">{l.short}</p>
+          <p className="mt-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground group-hover:text-white/70">{l.label}</p>
+        </motion.button>
+      ))}
+    </div>
+    <div className="mt-8">
+      <button onClick={onSkip} data-testid="interview-skip"
+        className="text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-brand-ink underline underline-offset-4 transition-colors">
+        Skip the interview — build from what you have
+      </button>
+    </div>
+  </div>
+);
+
 export function VoiceInterview({ profile, onComplete, onSkip }) {
   const [session, setSession] = useState(null);
   const [question, setQuestion] = useState("");
@@ -76,12 +106,10 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
   const [thinking, setThinking] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [muted, setMuted] = useState(false);
-  const [starting, setStarting] = useState(true);
+  const [phase, setPhase] = useState("pick"); // pick | starting | live
   const [lang, setLang] = useState("en-IN");
-  const [langAuto, setLangAuto] = useState(false); // true when detected from STT
   const audioRef = useRef(null);
   const mutedRef = useRef(false);
-  const startedRef = useRef(false);
   const inputRef = useRef(null);
   const langRef = useRef("en-IN"); // stable read for async closures
   const answerRef = useRef(""); // mirrors `answer` for async recorder callbacks
@@ -90,6 +118,7 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
     if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
     setSpeaking(false);
   };
+  useEffect(() => stopAudio, []);
 
   const speak = useCallback(async (text, langCode) => {
     if (mutedRef.current || !text) return;
@@ -111,7 +140,7 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
     const apply = () => {
       setQuestion(data.question); setWhy(data.why || "");
       setIndex(data.index); setMax(data.max);
-      setStarting(false);
+      setPhase("live");
     };
     if (mutedRef.current) { apply(); return; }
     try {
@@ -125,8 +154,19 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
     } catch { apply(); setSpeaking(false); }
   }, []);
 
-  const setLangBoth = (code, auto = false) => {
-    setLang(code); langRef.current = code; setLangAuto(auto);
+  const setLangBoth = (code) => { setLang(code); langRef.current = code; };
+
+  const startInterview = async (code) => {
+    setLangBoth(code);
+    setPhase("starting");
+    try {
+      const { data } = await api.post("/signup/interview/start", { ...profile, language_code: code });
+      setSession(data.session_id);
+      await presentQuestion(data, code);
+    } catch {
+      toast.error("The interviewer is unavailable — building from what we have");
+      onSkip(null, code);
+    }
   };
 
   const toggleMute = () => {
@@ -138,37 +178,11 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
 
   const pickLang = (code) => {
     if (code === langRef.current) return;
-    setLangBoth(code, false);
+    setLangBoth(code);
     if (question && !mutedRef.current) speak(question, code);
   };
 
-  // Kick off the interview once.
-  useEffect(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
-    (async () => {
-      try {
-        const { data } = await api.post("/signup/interview/start", profile);
-        setSession(data.session_id);
-        await presentQuestion(data, "en-IN");
-      } catch {
-        toast.error("The interviewer is unavailable — building from what we have");
-        onSkip(null);
-      }
-    })();
-    return stopAudio;
-  }, []);
-
-  const recorder = useAnswerRecorder(({ text, language_code }) => {
-    // Adapt to founder's spoken language on the first successful detection,
-    // but never overwrite an explicit manual pick (langAuto=false already).
-    if (language_code && langAuto === false && langRef.current === "en-IN" && language_code !== "en-IN") {
-      setLangBoth(language_code, true);
-      toast.success(`Switched voice to ${langLabel(language_code)}`);
-    } else if (language_code && langAuto && language_code !== langRef.current) {
-      // Still auto — refine to latest detected language
-      setLangBoth(language_code, true);
-    }
+  const recorder = useAnswerRecorder(({ text }) => {
     // Voice answers go straight to the interviewer — no extra tap needed.
     const full = (answerRef.current ? `${answerRef.current} ${text}` : text).trim();
     setAnswer(full); answerRef.current = full;
@@ -192,6 +206,26 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
     } finally { setThinking(false); }
   };
 
+  // Step back to the previous question with the earlier answer prefilled for editing.
+  const goBack = async () => {
+    if (thinking || index <= 1) return;
+    stopAudio();
+    setThinking(true);
+    try {
+      const { data } = await api.post("/signup/interview/back", { session_id: session });
+      setAnswer(data.prev_answer || ""); answerRef.current = data.prev_answer || "";
+      await presentQuestion({ question: data.question, why: "", index: data.index, max: data.max });
+      inputRef.current?.focus();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Couldn't go back");
+    } finally { setThinking(false); }
+  };
+
+  if (phase === "pick") {
+    return <LanguagePick onPick={startInterview} onSkip={() => { stopAudio(); onSkip(null, langRef.current); }} />;
+  }
+
+  const starting = phase === "starting";
   const orbState = recorder.recording ? "listening" : speaking ? "speaking" : (thinking || starting) ? "thinking" : "idle";
 
   return (
@@ -219,7 +253,7 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
         </div>
         <div className="flex items-center gap-2">
           <Bars active={speaking} />
-          <LangChip value={lang} autoDetected={langAuto} onChange={pickLang} disabled={starting} />
+          <LangChip value={lang} onChange={pickLang} disabled={starting} />
           <button onClick={toggleMute} data-testid="interview-mute-toggle" title={muted ? "Unmute voice" : "Mute voice"}
             className={`w-10 h-10 flex items-center justify-center border border-black transition-colors ${muted ? "bg-white text-muted-foreground" : "bg-brand-ink text-white"}`}>
             {muted ? <SpeakerSlash size={18} weight="bold" /> : <SpeakerHigh size={18} weight="bold" />}
@@ -291,10 +325,20 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
       </div>
 
       <div className="mt-6 flex items-center justify-between">
-        <div className="flex gap-1.5">
-          {Array.from({ length: max }).map((_, i) => (
-            <div key={`qdot-${i}`} className={`w-8 h-1.5 border border-black transition-colors ${i + 1 < index ? "bg-brand-ink" : i + 1 === index ? "bg-brand-red" : "bg-white"}`} />
-          ))}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={goBack}
+            disabled={index <= 1 || thinking || starting}
+            data-testid="interview-back"
+            title="Go back to the previous question"
+            className="flex items-center gap-1 px-3 py-1.5 border border-black bg-white text-[11px] font-semibold uppercase tracking-wider hover:bg-black/5 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+            <CaretLeft size={12} weight="bold" /> Back
+          </button>
+          <div className="flex gap-1.5">
+            {Array.from({ length: max }).map((_, i) => (
+              <div key={`qdot-${i}`} className={`w-8 h-1.5 border border-black transition-colors ${i + 1 < index ? "bg-brand-ink" : i + 1 === index ? "bg-brand-red" : "bg-white"}`} />
+            ))}
+          </div>
         </div>
         <button onClick={() => { stopAudio(); onSkip(session, langRef.current); }} data-testid="interview-skip"
           className="text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-brand-ink underline underline-offset-4 transition-colors">

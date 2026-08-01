@@ -1,0 +1,39 @@
+{
+  "summary": "Iteration 77 — verified NEW signup onboarding language-pick + back-button flow end-to-end. Backend pytest 12/12 green: (a) /interview/start ta-IN returns instant Tamil opener 'வணக்கம் Priya — Kaveri Threads பற்றி சொல்லுங்கள்...' in <3s with correct Tamil unicode chars; (b) hi-IN with empty founder_name returns Hindi opener 'नमस्ते — मुझे Kaveri Threads के बारे में...' (no dangling name/space); (c) unknown 'zz-ZZ' + missing language_code both fall back to en-IN opener; (d) /interview/answer on ta-IN session returns Q2 in Tamil native script AND language persists in session without resending language_code (proved by omitting language_code in POST body); (e) /interview/back with empty qa returns 400 'Already at the first question'; unknown session_id returns 404; happy path pops last Q&A and returns prev_answer + previous question + index=1, then re-answering advances to Q2 again; (f) /signup/tts returns valid RIFF/WAVE base64 audio (>1KB) for en-IN, hi-IN, ta-IN, pa-IN with per-language speakers. Frontend E2E on /signup (fresh langpick+<ts>@test.com): basics → website skip → manual (Textile & Apparel + B2B + continue) → LANGUAGE PICK screen appears with all 11 language cards + interview-skip link → clicked lang-pick-en-IN → Q1 caption is EXACTLY 'Hi Priya — tell me about Kaveri Threads — what do you do, and how do your day-to-day operations actually run?' with interview-back DISABLED → typed answer, clicked interview-send-button → Q2 'Where do orders most often get stuck or delayed — scheduling, weaving, QC, or dispatch?' arrived + interview-back is ENABLED → clicked interview-back → Q1 restored, textarea prefilled with exact prev_answer (152 chars, byte-for-byte match) → edited + re-sent → Q2 (reworded, still operational) appeared again → interview-skip → BuildReveal → build-counts rendered → clicked signup-enter-button → navigated to /brief and signed in as Priya Menon (Kaveri Threads / Textile & Apparel). Separate Tamil quick check with a NEW email: clicked lang-pick-ta-IN → Q1 caption rendered in Tamil native script and language chip shows 'TAMIL'.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration77_signup_lang_back.py",
+    "/app/test_reports/pytest/iter77.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "signup.py OPENERS dict + _speaker_for + LANG_SPEAKERS are correct — all 11 languages have distinct native-script openers and their Tier-1 Sarvam speakers wired in. Verified TTS audio bytes for 4 languages.",
+    "interview_start correctly formats founder name as ' <first>' when present and '' when empty — the empty-name Hindi case produced 'नमस्ते — मुझे Kaveri Threads ...' with no stray space, confirmed by regex.",
+    "interview_back is idempotent-safe: pops qa[-1] and sets pending_q back to last.q so the client sees the SAME question text. Returns index = len(qa) BEFORE pop = 1 for Q1 which matches the frontend progress indicator.",
+    "interview_answer reads language_code from `inp.language_code or s.get('language_code')` — confirmed by omitting language_code on the second POST and still receiving a Tamil follow-up.",
+    "VoiceInterview.js presentQuestion fetches TTS FIRST, applies caption + starts playback synchronously — no caption-before-voice gap; measured ~1-3s from send click to Q2 caption reveal.",
+    "goBack() sets both answer (state) and answerRef.current from data.prev_answer, then re-presents the previous question via presentQuestion({ index: data.index, ... }) — confirmed textarea prefill matches byte-for-byte in Playwright test.",
+    "Back button is disabled via `index <= 1 || thinking || starting` — verified at Q1 (disabled=true) and Q2 (disabled=false).",
+    "The old auto-language-detection toast is confirmed removed from VoiceInterview.js — no branch reacts to STT-returned language_code beyond passing it through to the recorder; language is user-chosen via the pick screen or the header chip."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration77_signup_lang_back.py",
+    "/app/test_reports/iteration_77.json",
+    "/app/test_reports/pytest/iter77.xml"
+  ],
+  "success_rate": {"backend": "100% (12/12)", "frontend": "100% (basics → lang-pick → EN Q1 fixed opener → Back disabled at Q1 → send → Q2 → Back enabled → Q1 restored + prev_answer prefilled → re-send → Q2 again → skip → build → reveal → /brief; separately Tamil Q1 rendered in native script)"},
+  "test_credentials": "Fresh accounts created during E2E: langpick+<ts>@test.com / demo1234 (Kaveri Threads, Textile & Apparel, B2B, team 11-50). A second Tamil-flow account tamilpick+<ts>@test.com was created up to the interview screen only (did not complete build).",
+  "seed_data_creation": "One real tenant+user was created via /signup happy path (register runs inside BuildReveal.run after English interview skip). Interview sessions persist in db.signup_sessions. Fresh timestamped emails keep this idempotent for reruns.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All 4 iteration-77 features are working: (1) language pick before Q1 with 11 cards + skip; (2) instant localized fixed opener in the chosen language; (3) Back button that returns prev_answer + previous question (disabled at Q1, 400 on empty qa server-side); (4) per-language TTS with Tier-1 Sarvam speakers. If retesting, note that Claude Q2 latency can be 3-15s so use generous waits (this run took ~4-10s). Frontend real STT/mic path is still `unverified: mic-record-auto-send-e2e` — needs Chromium fake-audio-capture wired to a real WAV fixture; backend /signup/stt contract itself was covered by iteration 75. Do not touch React hook deps (known infinite-loop history from earlier iterations).",
+  "rca of the issue": "N/A — no defects found."
+}

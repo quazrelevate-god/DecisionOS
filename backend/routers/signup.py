@@ -35,6 +35,35 @@ SUPPORTED_TTS_LANGS = {
     "pa-IN": "Punjabi", "ta-IN": "Tamil", "te-IN": "Telugu",
 }
 
+# Best bulbul:v3 speaker per language, from Sarvam's official production
+# recommendations (docs.sarvam.ai → "Recommended Speakers by Language",
+# ranked by Critical Error Rate; priya/ishita/mani are Tier-1).
+LANG_SPEAKERS = {
+    "en-IN": "ishita", "hi-IN": "priya", "bn-IN": "roopa", "gu-IN": "priya",
+    "kn-IN": "ishita", "ml-IN": "pooja", "mr-IN": "priya", "od-IN": "pooja",
+    "pa-IN": "mani", "ta-IN": "ishita", "te-IN": "priya",
+}
+
+
+def _speaker_for(lang: str) -> str:
+    return LANG_SPEAKERS.get(lang, TTS_SPEAKER)
+
+# Fixed interview opener per language — no LLM call, instant start.
+# "{name}" is replaced with " <founder first name>" (or "" when unknown).
+OPENERS = {
+    "en-IN": "Hi{name} — tell me about {company} — what do you do, and how do your day-to-day operations actually run?",
+    "hi-IN": "नमस्ते{name} — मुझे {company} के बारे में बताइए — आप क्या करते हैं, और आपका रोज़ का कामकाज कैसे चलता है?",
+    "bn-IN": "নমস্কার{name} — {company} সম্পর্কে বলুন — আপনি কী করেন, এবং আপনার দৈনন্দিন কাজকর্ম কীভাবে চলে?",
+    "gu-IN": "નમસ્તે{name} — મને {company} વિશે જણાવો — તમે શું કરો છો, અને તમારું રોજિંદું કામકાજ કેવી રીતે ચાલે છે?",
+    "kn-IN": "ನಮಸ್ಕಾರ{name} — {company} ಬಗ್ಗೆ ಹೇಳಿ — ನೀವು ಏನು ಮಾಡುತ್ತೀರಿ, ಮತ್ತು ನಿಮ್ಮ ದೈನಂದಿನ ಕೆಲಸ ಹೇಗೆ ನಡೆಯುತ್ತದೆ?",
+    "ml-IN": "നമസ്കാരം{name} — {company} എന്ന സ്ഥാപനത്തെക്കുറിച്ച് പറയൂ — നിങ്ങൾ എന്താണ് ചെയ്യുന്നത്, ദൈനംദിന പ്രവർത്തനങ്ങൾ എങ്ങനെയാണ് നടക്കുന്നത്?",
+    "mr-IN": "नमस्कार{name} — मला {company} बद्दल सांगा — तुम्ही काय करता, आणि तुमचं रोजचं कामकाज कसं चालतं?",
+    "od-IN": "ନମସ୍କାର{name} — ମୋତେ {company} ବିଷୟରେ କୁହନ୍ତୁ — ଆପଣ କଣ କରନ୍ତି, ଏବଂ ଆପଣଙ୍କ ଦୈନନ୍ଦିନ କାର୍ଯ୍ୟ କିପରି ଚାଲେ?",
+    "pa-IN": "ਸਤ ਸ੍ਰੀ ਅਕਾਲ{name} — ਮੈਨੂੰ {company} ਬਾਰੇ ਦੱਸੋ — ਤੁਸੀਂ ਕੀ ਕਰਦੇ ਹੋ, ਅਤੇ ਤੁਹਾਡਾ ਰੋਜ਼ਾਨਾ ਕੰਮਕਾਜ ਕਿਵੇਂ ਚੱਲਦਾ ਹੈ?",
+    "ta-IN": "வணக்கம்{name} — {company} பற்றி சொல்லுங்கள் — நீங்கள் என்ன செய்கிறீர்கள், உங்கள் அன்றாட வேலைகள் எப்படி நடக்கின்றன?",
+    "te-IN": "నమస్తే{name} — {company} గురించి చెప్పండి — మీరు ఏమి చేస్తారు, మీ రోజువారీ కార్యకలాపాలు ఎలా జరుగుతాయి?",
+}
+
 
 def _norm_lang(code: str) -> str:
     """Coerce whatever STT/frontend sends to a supported Sarvam code, defaulting to en-IN."""
@@ -152,6 +181,7 @@ class InterviewStartInput(BaseModel):
     description: Optional[str] = Field(default="", max_length=2000)
     website_summary: Optional[str] = Field(default="", max_length=2000)
     products: Optional[List[dict]] = None
+    language_code: Optional[str] = Field(default="en-IN", max_length=16)
 
 
 class InterviewAnswerInput(BaseModel):
@@ -216,6 +246,7 @@ def _lang_directive(code: str) -> str:
 
 @router.post("/interview/start")
 async def interview_start(inp: InterviewStartInput):
+    lang = _norm_lang(inp.language_code)
     session = {
         "id": new_id(),
         "company_name": inp.company_name.strip(),
@@ -228,23 +259,41 @@ async def interview_start(inp: InterviewStartInput):
         "products": inp.products or [],
         "qa": [],
         "pending_q": None,
-        "language_code": "en-IN",
+        "language_code": lang,
         "status": "active",
         "created_at": now_iso(),
     }
-    # Question 1 is always the standard opener — no LLM call, so the interview
-    # starts instantly. Everything after builds on this answer.
+    # Question 1 is always the standard opener, in the founder's chosen
+    # language — no LLM call, so the interview starts instantly.
     founder_first = (session["founder_name"].split() or [""])[0]
-    greeting = f"Hi {founder_first} — tell" if founder_first else "Tell"
-    question = (
-        f"{greeting} me about {session['company_name']} — what do you do, "
-        "and how do your day-to-day operations actually run?"
+    question = OPENERS.get(lang, OPENERS["en-IN"]).format(
+        name=f" {founder_first}" if founder_first else "",
+        company=session["company_name"],
     )
     session["pending_q"] = question
     await db.signup_sessions.insert_one(session)
     return {"session_id": session["id"], "question": question,
             "why": "Your own words become your OS",
-            "index": 1, "max": MAX_QUESTIONS, "language_code": "en-IN"}
+            "index": 1, "max": MAX_QUESTIONS, "language_code": lang}
+
+
+@router.post("/interview/back")
+async def interview_back(inp: InterviewSessionInput):
+    """Step back one question: pop the last answered Q&A and re-open it,
+    returning the previous answer so the founder can edit and re-send."""
+    s = await db.signup_sessions.find_one({"id": inp.session_id}, {"_id": 0})
+    if not s:
+        raise HTTPException(status_code=404, detail="Interview session not found")
+    qa = s.get("qa") or []
+    if not qa:
+        raise HTTPException(status_code=400, detail="Already at the first question")
+    last = qa[-1]
+    await db.signup_sessions.update_one(
+        {"id": s["id"]},
+        {"$set": {"qa": qa[:-1], "pending_q": last.get("q") or "", "status": "active"}},
+    )
+    return {"question": last.get("q") or "", "prev_answer": last.get("a") or "",
+            "index": len(qa), "max": MAX_QUESTIONS}
 
 
 @router.post("/interview/answer")
@@ -356,7 +405,7 @@ async def signup_tts(inp: TTSInput):
                 "https://api.sarvam.ai/text-to-speech",
                 headers={"api-subscription-key": key, "Content-Type": "application/json"},
                 json={"text": text, "target_language_code": lang, "model": "bulbul:v3",
-                      "speaker": TTS_SPEAKER, "pace": 1.0},
+                      "speaker": _speaker_for(lang), "pace": 1.0},
             )
         r.raise_for_status()
         audios = r.json().get("audios") or []

@@ -387,7 +387,7 @@ export default function Layout({ children }) {
               }`}
             >
               <Icon size={20} weight={active ? "fill" : "bold"} />
-              <span className="text-[10px] tracking-wide font-semibold leading-none">{t(`bottomnav.${tkey}`)}</span>
+              <span className="text-[10px] font-semibold leading-none">{t(`bottomnav.${tkey}`)}</span>
             </NavLink>
           );
         })}

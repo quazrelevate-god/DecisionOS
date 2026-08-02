@@ -97,7 +97,7 @@ export default function OperatingScore() {
             return (
               <div key={c.key} data-testid={`operating-cat-${c.key}`}>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="flex items-center gap-2 text-sm font-semibold tracking-wide">
+                  <span className="flex items-center gap-2 text-sm font-semibold">
                     <c.icon size={15} weight="bold" className="text-text-secondary" /> {c.label}
                   </span>
                   <span className={` font-black ${scoreColor(v)}`}>{has ? v : "—"}</span>

@@ -694,11 +694,11 @@ function OverviewTab({ summary }) {
           {summary.by_month.length ? (
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={summary.by_month} margin={CHART_MARGIN}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#00000010" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--hairline))" vertical={false} />
                 <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} width={48} tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />
                 <Tooltip formatter={(v) => f(v)} />
-                <Bar dataKey="amount" fill="#E63946" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="amount" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : <p className="text-sm text-text-secondary">{t("finance.no_spend")}</p>}

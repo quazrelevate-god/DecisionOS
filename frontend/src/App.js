@@ -48,7 +48,7 @@ function Protected({ children, perm, perms, ownerOnly }) {
   const { user, loading } = useAuth();
   if (loading)
     return (
-      <div className="min-h-screen flex items-center justify-center font-mono text-sm">
+      <div className="min-h-screen flex items-center justify-center text-sm">
         Loading…
       </div>
     );
@@ -64,7 +64,7 @@ function Home() {
   const { user, loading } = useAuth();
   if (loading)
     return (
-      <div className="min-h-screen flex items-center justify-center font-mono text-sm">
+      <div className="min-h-screen flex items-center justify-center text-sm">
         Loading…
       </div>
     );

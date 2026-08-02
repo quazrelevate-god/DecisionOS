@@ -80,7 +80,7 @@ export default function ContactProfile() {
         <div className="w-14 h-14 flex flex-col items-center justify-center border-hairline bg-surface shrink-0 rounded-md">
           <span className={` text-2xl font-black leading-none ${color}`}>{value != null ? value : "—"}</span>
         </div>
-        <div className="flex items-center gap-1.5 text-sm font-semibold tracking-wide">
+        <div className="flex items-center gap-1.5 text-sm font-semibold">
           <Icon size={16} weight="bold" className="text-text-secondary" /> {label}
         </div>
       </div>

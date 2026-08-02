@@ -346,7 +346,7 @@ function ThinkingOverlay({ show }) {
           <div className="absolute inset-[28%] rounded-pill bg-primary-tint blur-[70px] animate-pulse" aria-hidden />
           <ThinkingCanvas active={show} />
         </div>
-        <p className="text-sm text-text-secondary text-label -mt-4 tracking-wide">DecisionOS is connecting the dots…</p>
+        <p className="text-sm text-text-secondary text-label -mt-4">DecisionOS is connecting the dots…</p>
       </div>
     </div>
   );

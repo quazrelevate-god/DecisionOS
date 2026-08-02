@@ -20,7 +20,7 @@ const DEMO = [
   { role: "Finance", email: "finance@sharma.com" },
 ];
 
-const inputCls = "w-full border border-hairline bg-surface px-4 py-3 text-sm font-mono focus:outline-none focus:shadow-xs transition-shadow";
+const inputCls = "w-full border border-hairline bg-surface px-4 py-3 text-sm focus:outline-none focus:shadow-xs transition-shadow";
 const labelCls = "text-label text-text-secondary";
 
 // Masks a phone to show only the last 4 digits, e.g. +91 98765 43210 -> +91 ••••• •3210
@@ -438,7 +438,7 @@ export default function Login() {
                       <div className="flex items-center justify-between border border-hairline bg-surface px-3 py-2.5 rounded-md" data-testid="otp-phone-confirm">
                         <div className="flex items-center gap-2 min-w-0">
                           <DeviceMobile size={16} weight="bold" className="text-primary-text shrink-0" />
-                          <span className="text-sm font-mono truncate">Code sent to <strong>{invite?.phone_masked || maskPhone(otpPhone)}</strong></span>
+                          <span className="text-sm truncate">Code sent to <strong>{invite?.phone_masked || maskPhone(otpPhone)}</strong></span>
                         </div>
                         <button type="button" onClick={() => { setOtpSent(false); setOtpCode(""); setError(""); setResendIn(0); }} data-testid="otp-change-number"
                           className="text-xs font-semibold text-primary-text hover:underline whitespace-nowrap ml-2 shrink-0">Change</button>
@@ -657,7 +657,7 @@ export default function Login() {
                   </div>
                   <div className="flex flex-wrap gap-2" data-testid="invite-list">
                     {phones.map((p) => (
-                      <span key={p} className="inline-flex items-center gap-1.5 border border-hairline bg-surface px-2.5 py-1 text-xs font-mono rounded-md">
+                      <span key={p} className="inline-flex items-center gap-1.5 border border-hairline bg-surface px-2.5 py-1 text-xs rounded-md">
                         {p}<button onClick={() => setPhones(phones.filter((x) => x !== p))} className="hover:text-destructive-text"><X size={12} weight="bold" /></button>
                       </span>
                     ))}

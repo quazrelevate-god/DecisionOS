@@ -2,6 +2,14 @@
 const path = require("path");
 require("dotenv").config();
 
+/* Give REACT_APP_DEMO a default so it is ALWAYS defined at build time.
+ * CRA's DefinePlugin only inlines REACT_APP_* variables that are actually set;
+ * an unset one stays a runtime lookup, so webpack cannot prove the demo branch
+ * in src/index.js is dead and bundles the whole preview fixture into ordinary
+ * production builds. Defaulting it to "0" restores the dead-code elimination —
+ * the fixture ships only when someone explicitly asks for a demo build. */
+process.env.REACT_APP_DEMO = process.env.REACT_APP_DEMO || "0";
+
 // Check if we're in development/preview mode (not production build)
 // Craco sets NODE_ENV=development for start, NODE_ENV=production for build
 const isDevServer = process.env.NODE_ENV !== "production";

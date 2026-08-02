@@ -3,6 +3,7 @@ import "./App.css";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { Toaster } from "./components/ui/sonner";
 import { TooltipProvider } from "@/components/ds";
+import { DemoBanner } from "./components/DemoBanner";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { hasPerm } from "./lib/perms";
 import { LockKey } from "@phosphor-icons/react";
@@ -75,6 +76,7 @@ function Home() {
 function App() {
   return (
     <div className="App">
+      <DemoBanner />
       <AuthProvider>
         {/* One provider for the whole app: it owns the shared open/close timing,
             so moving between two icon buttons shows the second immediately

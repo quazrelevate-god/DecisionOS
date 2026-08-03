@@ -226,7 +226,8 @@ WORKFLOW_OWNER_ROLE = {
 # ---------------------------------------------------------------------------
 # Unified Inbox
 # ---------------------------------------------------------------------------
-INBOX_CLASSES = ("customer", "supplier", "invoice", "payment", "complaint", "task", "approval", "reminder", "decision")
+# Inbox classifications live in `models/inbox.py` (Phase B step 6).
+from models.inbox import INBOX_CLASSES  # noqa: F401
 
 
 async def add_inbox_item(tenant_id, created_by, source, classification, title,
@@ -3978,42 +3979,8 @@ async def list_payments(user: dict = Depends(require_perm("finance"))):
 # ---------------------------------------------------------------------------
 # Unified Inbox feed
 # ---------------------------------------------------------------------------
-@api.get("/inbox")
-async def list_inbox(classification: Optional[str] = None, status: Optional[str] = None,
-                     user: dict = Depends(get_current_user)):
-    tid = user["tenant_id"]
-    query = {"tenant_id": tid}
-    if classification and classification in INBOX_CLASSES:
-        query["classification"] = classification
-    if status in ("open", "done", "dismissed"):
-        query["status"] = status
-    items = await db.inbox.find(query, {"_id": 0}).sort("created_at", -1).to_list(300)
-    counts = {}
-    # PyMongo Async: aggregate() returns a coroutine yielding the cursor, so
-    # it must be awaited BEFORE `async for` iteration (Motor let you skip the
-    # await — a subtle drop-in-migration gotcha).
-    agg_cursor = await db.inbox.aggregate([
-        {"$match": {"tenant_id": tid, "status": "open"}},
-        {"$group": {"_id": "$classification", "n": {"$sum": 1}}},
-    ])
-    async for row in agg_cursor:
-        counts[row["_id"]] = row["n"]
-    open_total = await db.inbox.count_documents({"tenant_id": tid, "status": "open"})
-    return {"items": items, "counts": counts, "open_total": open_total}
-
-
-class InboxStatusInput(BaseModel):
-    status: str
-
-
-@api.post("/inbox/{item_id}/status")
-async def set_inbox_status(item_id: str, inp: InboxStatusInput, user: dict = Depends(get_current_user)):
-    if inp.status not in ("open", "done", "dismissed"):
-        raise HTTPException(status_code=400, detail="Invalid status")
-    res = await db.inbox.update_one({"id": item_id, "tenant_id": user["tenant_id"]}, {"$set": {"status": inp.status}})
-    if res.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Not found")
-    return {"ok": True, "status": inp.status}
+# Inbox endpoints moved to routers/inbox.py in Phase B step 6.
+# `push_inbox()` (the writer) stays in this module — many domain workflows still call it inline.
 
 
 # ---------------------------------------------------------------------------
@@ -5568,6 +5535,8 @@ from routers.tasks import router as tasks_router  # noqa: E402
 app.include_router(tasks_router)
 from routers.decisions import router as decisions_router  # noqa: E402
 app.include_router(decisions_router)
+from routers.inbox import router as inbox_router  # noqa: E402
+app.include_router(inbox_router)
 _cors_env = os.environ.get('CORS_ORIGINS', '*').strip()
 _cors_kwargs = dict(allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 if _cors_env == '*':

@@ -11,13 +11,14 @@ backend/
 │
 ├── models/                     # 🟡 Pydantic request/response, grouped by domain
 │   ├── tasks.py                # ✅ TaskCreateInput, TaskUpdateInput, TaskReassignInput, TaskRejectInput, ExecStep, ExecPlanInput, StepAskInput, TaskUpdateNoteInput, RespondInput
+│   ├── inbox.py                # ✅ INBOX_CLASSES, InboxStatusInput
 │   ├── auth.py, tenants.py, brain.py, ledger.py, signup.py, admin.py  # ⏳
 │
 ├── routers/                    # 🟡 FastAPI endpoint groups (partial)
 │   ├── auth.py                 # ✅ /api/auth/register /login /logout /me /profile /change-password
 │   ├── tasks.py                # ✅ ALL 17 /api/tasks/* endpoints (list, get, delete, create, patch, reassign, approve, reject, clarify, execution-plan/* × 3, steps/ask, updates, respond, prioritize, attachment)
 │   ├── decisions.py            # ✅ /api/decisions/*, /api/journal
-│   ├── inbox.py                # ⏳ /api/inbox
+│   ├── inbox.py                # ✅ /api/inbox, /inbox/{id}/status
 │   ├── team.py                 # ⏳ /api/users, /api/leaves
 │   ├── brief.py                # ⏳ /api/brief
 │   ├── ledger.py               # ✅ invoices, expenses, payments
@@ -68,7 +69,7 @@ Order (safest → hardest):
 2. **tasks** — `/api/tasks/*` (largest single domain, ~600 lines) → `routers/tasks.py` ✅ (all 17 endpoints extracted; helpers in services/tasks.py; inputs in models/tasks.py)
 3. **services relocation** — `obj_store`, `brain_context`, `brain_rbac` → `services/` with compat shims ✅
 4. **decisions** — `/api/decisions/*` + `/api/journal` → `routers/decisions.py` ✅
-5. **inbox** — `/api/inbox`, `/inbox/{id}/act` → `routers/inbox.py` ⏳
+5. **inbox** — `/api/inbox`, `/inbox/{id}/status` → `routers/inbox.py` ✅
 6. **team** — `/api/users`, `/api/leaves`, `/api/attendance` → `routers/team.py` ⏳
 7. **brief** — `/api/brief`, `/api/notifications` → `routers/brief.py` ⏳
 8. **finance/ledger** — extract remaining pieces still in server.py ⏳

@@ -1,5 +1,16 @@
 ## Changelog
-- 2026-08 (latest): **Backend refactor — Phase B step 5 SHIPPED (ALL 14 remaining complex Task flows extracted).**
+- 2026-08 (latest): **Backend refactor — Phase B step 6 SHIPPED (Inbox router + Brain `_compute` split).**
+
+  **(A) Inbox extracted.** New `routers/inbox.py` (60 lines) owns `GET /api/inbox` (with `?classification` + `?status` filters, returns items+counts+open_total) and `POST /api/inbox/{id}/status` (accepts open/done/dismissed). `INBOX_CLASSES` tuple + `InboxStatusInput` moved to `models/inbox.py` (13 lines). The `push_inbox()` WRITER stays in `server.py` because many domain workflows (invoice ingest, complaint escalation, decision publish, task escalation) call it inline — moving it would create a fan-out risk not worth the churn. Router only owns the READ + STATUS-mutation surface.
+
+  **(B) Brain `_compute` split.** The 292-line `if entity == ...` chain in `routers/brain.py:_compute` broken into 11 small per-entity async handlers each ~40 lines: `_compute_tasks_completion` (the specialised join-with-activity path), `_compute_employees`, `_compute_tasks`, `_compute_invoices`, `_compute_payments`, `_compute_expenses`, `_compute_contacts`, `_compute_decisions`, `_compute_workflows`, `_compute_leaves`, `_compute_memory`. All share the `(ctx, plan, recs) → (kpis, table, cites)` contract via a shared `ctx = {tid, umap, uname, start, end, scope}`. A `_COMPUTE_HANDLERS` dispatch dict maps entity → handler; `_compute` itself is now a 20-line dispatcher. Future intents (procurement, production, inventory) can be added as `_compute_<entity>` + one dict entry — no more monolithic if-chain.
+
+  **Size delta.** `server.py`: 5584 → **5553 lines** (-31 lines; the small inbox surface). `routers/brain.py`: 812 → **876 lines** (+64 lines because per-handler column definitions are no longer shared — intentional trade-off for handler locality and independent testability).
+
+  **Testing agent (iteration 82): 32/32 PASS.** Both surfaces behaviour-identical: inbox shape matches pre-split, all 11 brain entity handlers return the same KPI labels + column keys as before, RBAC-privileged filtering in the tasks-completion path still works. `/app/test_reports/iteration_82.json`.
+
+
+- 2026-08 (latest-1): **Backend refactor — Phase B step 5 SHIPPED (ALL 14 remaining complex Task flows extracted).**
 
   **What moved.** The 14 remaining `/api/tasks/*` endpoints (create, patch, reassign, approve, reject, clarify, execution-plan/{generate,PATCH,delete}, steps/ask, updates, respond, prioritize, attachment) are now in `routers/tasks.py` — which now owns the entire 17-endpoint task-lifecycle surface. Pydantic input classes (`TaskReassignInput`, `TaskRejectInput`, `ExecStep`, `ExecPlanInput`, `StepAskInput`, `TaskUpdateNoteInput`, `RespondInput`) consolidated into `models/tasks.py` (9 classes total). Task-scoped helpers pushed into `services/tasks.py`: `_tenant_industry` (relocated for cross-router reuse) and `_attach_reference_ids` (with deferred imports of `_file_public` + `_analyze_reference_file` to break the cycle). Task-router-local helpers stay in the router: `_can_approve_task`, `_resolve_task_handoff`.
 

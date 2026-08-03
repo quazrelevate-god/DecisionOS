@@ -1650,117 +1650,6 @@ async def add_invites(inp: InviteInput, user: dict = Depends(require_perm("team_
 # ---------------------------------------------------------------------------
 # Team / users
 # ---------------------------------------------------------------------------
-@api.get("/users")
-async def list_users(user: dict = Depends(get_current_user)):
-    users = await db.users.find({"tenant_id": user["tenant_id"]}, {"_id": 0, "password_hash": 0, "invite_token": 0, "invite_expires_at": 0}).to_list(500)
-    return users
-
-
-@api.post("/users")
-async def create_user(inp: UserCreateInput, user: dict = Depends(require_perm("team_manage"))):
-    role_keys = await tenant_role_keys(user["tenant_id"])
-    if inp.role == "owner":
-        if user.get("role") != "owner":
-            raise HTTPException(status_code=403, detail="Only an owner can create another owner")
-    elif inp.role not in role_keys:
-        raise HTTPException(status_code=400, detail="Invalid role")
-    email = inp.email.lower()
-    if await db.users.find_one({"email": email}):
-        raise HTTPException(status_code=400, detail="Email already registered")
-    phone = (inp.phone or "").strip()
-    pwd = (inp.password or "").strip()
-    passwordless = not pwd
-    if passwordless:
-        if len(_norm_phone(phone)) < 10:
-            raise HTTPException(status_code=400, detail="A valid mobile number is required for passwordless (OTP) members")
-        # No usable password — this member logs in only via mobile OTP.
-        password_hash = hash_password(new_id() + new_id())
-    else:
-        if len(pwd) < 6:
-            raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
-        password_hash = hash_password(pwd)
-    uid = new_id()
-    invite_token = None
-    doc = {
-        "id": uid, "tenant_id": user["tenant_id"], "name": inp.name, "email": email,
-        "phone": phone, "passwordless": passwordless,
-        "password_hash": password_hash, "role": inp.role,
-        "permissions": clean_perms(inp.permissions), "created_at": now_iso(),
-    }
-    if inp.reporting_manager_id:
-        mgr = await db.users.find_one({"id": inp.reporting_manager_id, "tenant_id": user["tenant_id"]}, {"_id": 0, "id": 1})
-        if mgr:
-            doc["reporting_manager_id"] = inp.reporting_manager_id
-    if len(_norm_phone(phone)) >= 10:
-        invite_token = new_id()
-        doc["invite_token"] = invite_token
-        doc["invite_expires_at"] = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
-    await db.users.insert_one(doc)
-    await log_activity(user["tenant_id"], user["id"], "user_added",
-                       f"Added {inp.name} as {inp.role}" + (" (mobile OTP login)" if passwordless else ""))
-    out = await db.users.find_one({"id": uid}, {"_id": 0, "password_hash": 0})
-    if invite_token:
-        out["invite_token"] = invite_token
-    return out
-
-
-@api.post("/users/{user_id}/invite")
-async def regenerate_invite(user_id: str, user: dict = Depends(require_perm("team_manage"))):
-    target = await db.users.find_one({"id": user_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
-    if not target:
-        raise HTTPException(status_code=404, detail="Member not found")
-    if len(_norm_phone(target.get("phone", ""))) < 10:
-        raise HTTPException(status_code=400, detail="Add a mobile number for this member first")
-    token = new_id()
-    await db.users.update_one({"id": user_id}, {"$set": {
-        "invite_token": token,
-        "invite_expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
-    }})
-    return {"invite_token": token, "name": target.get("name"), "phone_masked": _mask_phone(target.get("phone", ""))}
-
-
-@api.patch("/users/{user_id}")
-async def update_user(user_id: str, inp: UserUpdateInput, user: dict = Depends(require_perm("team_manage"))):
-    target = await db.users.find_one({"id": user_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
-    if not target:
-        raise HTTPException(status_code=404, detail="Member not found")
-    acting_is_owner = user.get("role") == "owner"
-    # Only an owner may change another owner's access (e.g. to demote them).
-    if target["role"] == "owner" and not acting_is_owner:
-        raise HTTPException(status_code=403, detail="Only an owner can change another owner's access")
-    updates = {}
-    new_role = target["role"]
-    if inp.role is not None and inp.role != target["role"]:
-        role_keys = await tenant_role_keys(user["tenant_id"])
-        if inp.role == "owner":
-            if not acting_is_owner:
-                raise HTTPException(status_code=403, detail="Only an owner can grant the Owner role")
-        else:
-            if inp.role not in role_keys:
-                raise HTTPException(status_code=400, detail="Invalid role")
-            # Never leave the company without an owner.
-            if target["role"] == "owner":
-                owner_count = await db.users.count_documents({"tenant_id": user["tenant_id"], "role": "owner"})
-                if owner_count <= 1:
-                    raise HTTPException(status_code=400, detail="Cannot demote the last owner — assign another owner first")
-        new_role = inp.role
-        updates["role"] = inp.role
-    if inp.permissions is not None:
-        updates["permissions"] = clean_perms(inp.permissions)
-    if new_role == "owner":
-        updates["permissions"] = list(PERMISSION_KEYS)
-    if inp.phone is not None:
-        updates["phone"] = inp.phone.strip()
-    if inp.reporting_manager_id is not None:
-        rm = inp.reporting_manager_id.strip()
-        if rm and rm != user_id:
-            mgr = await db.users.find_one({"id": rm, "tenant_id": user["tenant_id"]}, {"_id": 0, "id": 1})
-            updates["reporting_manager_id"] = rm if mgr else None
-        else:
-            updates["reporting_manager_id"] = None
-    if updates:
-        await db.users.update_one({"id": user_id}, {"$set": updates})
-    return await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
 
 
 # ---------------------------------------------------------------------------
@@ -2641,28 +2530,6 @@ DIGEST_I18N = {
 
 
 
-@api.post("/brief/send-digest")
-async def send_digest(user: dict = Depends(require_role("owner"))):
-    data = await dashboard(user)  # reuse
-    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
-    stats = data["stats"]
-    L = DIGEST_I18N.get(user.get("language") or "en", DIGEST_I18N["en"])
-    html = f"""
-    <h2>DecisionOS {L['brief']} — {tenant['name']}</h2>
-    <p>{stats['pending_approvals']} {L['pending']} · {stats['open_tasks']} {L['open']} · {len(data['overdue_tasks'])} {L['overdue']} · {stats['active_workflows']} {L['active']}</p>
-    <h3>{L['pending_h']}</h3>
-    <ul>{''.join(f"<li>{d['title']}</li>" for d in data['pending_decisions']) or f'<li>{L["none"]}</li>'}</ul>
-    <h3>{L['overdue_h']}</h3>
-    <ul>{''.join(f"<li>{t['title']}</li>" for t in data['overdue_tasks']) or f'<li>{L["none"]}</li>'}</ul>
-    """
-    result = await send_email(user["email"], f"DecisionOS {L['brief']} — {tenant['name']}", html)
-    if result.get("sent"):
-        return {"sent": True, "to": user["email"], "provider": result["provider"]}
-    if result.get("error") == "smtp_auth_failed":
-        raise HTTPException(status_code=400, detail="Gmail rejected the sender login. The account needs a 16-character Gmail App Password (enable 2-Step Verification, then create an App Password) — the normal account password won't work for sending.")
-    if result.get("error"):
-        raise HTTPException(status_code=400, detail="Couldn't send the email. Please check the sender email settings.")
-    return {"sent": False, "mocked": True, "to": user["email"], "preview_html": html}
 
 
 # ---------------------------------------------------------------------------
@@ -2937,23 +2804,6 @@ async def _notify_provider_outages():
         logger.info(f"[outage-alert] notified admin about {a['provider']} ({a.get('status')})")
 
 
-@api.get("/notifications")
-async def list_notifications(user: dict = Depends(get_current_user)):
-    await run_followup(user["tenant_id"])
-    items = await db.notifications.find({"tenant_id": user["tenant_id"], "user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(100)
-    return {"notifications": items, "unread": sum(1 for n in items if not n.get("read"))}
-
-
-@api.post("/notifications/{nid}/read")
-async def read_notification(nid: str, user: dict = Depends(get_current_user)):
-    await db.notifications.update_one({"id": nid, "tenant_id": user["tenant_id"], "user_id": user["id"]}, {"$set": {"read": True}})
-    return {"ok": True}
-
-
-@api.post("/notifications/read-all")
-async def read_all_notifications(user: dict = Depends(get_current_user)):
-    await db.notifications.update_many({"tenant_id": user["tenant_id"], "user_id": user["id"], "read": False}, {"$set": {"read": True}})
-    return {"ok": True}
 
 
 @api.post("/follow-up/run")
@@ -2962,22 +2812,6 @@ async def followup_run(user: dict = Depends(get_current_user)):
     return {"ok": True}
 
 
-@api.post("/attendance")
-async def mark_attendance(inp: AttendanceInput, user: dict = Depends(require_role("owner"))):
-    date = inp.date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    await db.attendance.update_one(
-        {"tenant_id": user["tenant_id"], "user_id": inp.user_id, "date": date},
-        {"$set": {"status": inp.status, "marked_by": user["id"], "updated_at": now_iso()},
-         "$setOnInsert": {"id": new_id(), "created_at": now_iso()}},
-        upsert=True,
-    )
-    return {"ok": True}
-
-
-@api.get("/attendance")
-async def list_attendance(date: Optional[str] = None, user: dict = Depends(get_current_user)):
-    date = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    return await db.attendance.find({"tenant_id": user["tenant_id"], "date": date}, {"_id": 0}).to_list(500)
 
 
 @api.post("/complaints")
@@ -3041,239 +2875,6 @@ async def add_memory(inp: MemoryInput, user: dict = Depends(get_current_user)):
     return doc
 
 
-@api.get("/brief")
-async def ceo_brief(period: str = "morning", user: dict = Depends(get_current_user)):
-    tid = user["tenant_id"]
-    await run_followup(tid)
-    now = datetime.now(timezone.utc)
-    today = now.strftime("%Y-%m-%d")
-    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    if period == "weekly":
-        start_iso = (now - timedelta(days=7)).isoformat()
-    elif period == "monthly":
-        start_iso = (now - timedelta(days=30)).isoformat()
-    else:
-        start_iso = midnight.isoformat()
-    is_owner = user["role"] == "owner"
-    greet = "Good morning" if period in ("morning", "weekly", "monthly") else "Good evening"
-
-    if period == "morning":
-        y_start = (midnight - timedelta(days=1)).isoformat()
-        completed_range = {"$gte": y_start, "$lt": midnight.isoformat()}
-        completed_label = "completed yesterday"
-    else:
-        completed_range = {"$gte": start_iso}
-        completed_label = f"completed ({period})"
-
-    if is_owner:
-        delayed = await db.tasks.count_documents({"tenant_id": tid, "status": {"$in": ["todo", "in_progress"]}, "due_date": {"$lt": now.isoformat(), "$ne": None}})
-        completed = await db.activity.count_documents({"tenant_id": tid, "kind": "task_done", "created_at": completed_range})
-        pending_dec = await db.decisions.count_documents({"tenant_id": tid, "status": "pending_approval"})
-        pending_pur = await db.workflows.count_documents({"tenant_id": tid, "type": "purchase_payment", "stage": "requested"})
-        absent = await db.attendance.count_documents({"tenant_id": tid, "date": today, "status": "absent"})
-        complaints = await db.complaints.count_documents({"tenant_id": tid, "status": "open"})
-        payment_overdue = await db.workflows.count_documents({"tenant_id": tid, "type": "purchase_payment", "stage": "payment_pending"})
-        fires = await db.tasks.count_documents({"tenant_id": tid, "source": "escalation", "status": {"$ne": "done"}})
-        on_leave = await db.leaves.count_documents({"tenant_id": tid, "status": "approved", "from_date": {"$lte": today}, "to_date": {"$gte": today}})
-        recv = await _overdue_receivables(tid)
-        bills = await _bills_due_or_overdue(tid)
-        unmatched = await _unmatched_payments(tid)
-        counters = {"delayed": delayed, "completed": completed, "awaiting_approval": pending_dec + pending_pur,
-                    "absent": absent, "complaints": complaints, "payment_overdue": payment_overdue, "fires": fires,
-                    "on_leave": on_leave,
-                    "receivables_overdue": len(recv), "bills_due": len(bills), "unmatched_payments": len(unmatched)}
-        finance_amounts = {
-            "receivables_overdue": round(sum(_inv_remaining(r) for r in recv), 2),
-            "bills_due": round(sum(_inv_remaining(r) for r in bills), 2),
-            "unmatched_payments": round(sum(_pay_remaining_amt(p) for p in unmatched), 2),
-        }
-    else:
-        mine = {"$or": [{"assignee_id": user["id"]}, {"assignee_role": user["role"]}]}
-
-        def mq(extra):
-            return {"tenant_id": tid, **mine, **extra}
-        delayed = await db.tasks.count_documents(mq({"status": {"$in": ["todo", "in_progress"]}, "due_date": {"$lt": now.isoformat(), "$ne": None}}))
-        todo = await db.tasks.count_documents(mq({"status": "todo"}))
-        in_progress = await db.tasks.count_documents(mq({"status": "in_progress"}))
-        completed = await db.activity.count_documents({"tenant_id": tid, "kind": "task_done", "actor": user["id"], "created_at": completed_range})
-        escalations = await db.tasks.count_documents(mq({"source": "escalation", "status": {"$ne": "done"}}))
-        handoffs = await db.tasks.count_documents(mq({"source": "handoff", "status": {"$ne": "done"}}))
-        counters = {"delayed": delayed, "todo": todo, "in_progress": in_progress,
-                    "completed": completed, "escalations": escalations, "handoffs": handoffs}
-        finance_amounts = {}
-
-    return {
-        "period": period,
-        "role": user["role"],
-        "greeting": f"{greet}, {user['name'].split(' ')[0]}",
-        "completed_label": completed_label,
-        "counters": counters,
-        "finance_amounts": finance_amounts,
-    }
-
-
-@api.get("/brief/details")
-async def brief_details(key: str, period: str = "morning", user: dict = Depends(get_current_user)):
-    """Drill-down items behind a CEO Brief counter block."""
-    tid = user["tenant_id"]
-    now = datetime.now(timezone.utc)
-    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    today = now.strftime("%Y-%m-%d")
-    if period == "weekly":
-        start_iso = (now - timedelta(days=7)).isoformat()
-    elif period == "monthly":
-        start_iso = (now - timedelta(days=30)).isoformat()
-    else:
-        start_iso = midnight.isoformat()
-
-    items = []
-    actionable = False
-    is_owner = user["role"] == "owner"
-    mine = None if is_owner else {"$or": [{"assignee_id": user["id"]}, {"assignee_role": user["role"]}]}
-
-    def scope(q):
-        return q if not mine else {**q, **mine}
-
-    if key in {"awaiting_approval", "absent", "complaints", "payment_overdue", "fires", "on_leave",
-               "receivables_overdue", "bills_due", "unmatched_payments"} and not is_owner:
-        return {"key": key, "actionable": False, "items": []}
-
-    if key == "on_leave":
-        lvs = await db.leaves.find({"tenant_id": tid, "status": "approved", "from_date": {"$lte": today}, "to_date": {"$gte": today}}, {"_id": 0}).to_list(200)
-        for lv in lvs:
-            portion = " · half day" if lv.get("day_portion") == "half" else ""
-            items.append({"id": lv["id"], "title": lv.get("user_name"),
-                          "subtitle": f"{(lv.get('leave_type') or 'leave').title()} until {lv.get('to_date')}{portion}",
-                          "meta": lv.get("user_role"), "kind": "leave"})
-        return {"key": key, "actionable": False, "items": items}
-
-    if key == "delayed":
-        tasks = await db.tasks.find(
-            scope({"tenant_id": tid, "status": {"$in": ["todo", "in_progress"]}, "due_date": {"$lt": now.isoformat(), "$ne": None}}),
-            {"_id": 0}).sort("due_date", 1).to_list(200)
-        tasks = await enrich_tasks(tasks)
-        for t in tasks:
-            items.append({"id": t["id"], "title": t["title"],
-                          "subtitle": t.get("assignee_name") or t.get("assignee_role") or "unassigned",
-                          "meta": t.get("priority"), "kind": "task", "due_date": t.get("due_date")})
-
-    elif key in ("todo", "in_progress"):
-        tasks = await db.tasks.find(scope({"tenant_id": tid, "status": key}), {"_id": 0}).sort("created_at", -1).to_list(200)
-        tasks = await enrich_tasks(tasks)
-        for t in tasks:
-            items.append({"id": t["id"], "title": t["title"],
-                          "subtitle": t.get("assignee_name") or t.get("assignee_role") or "unassigned",
-                          "meta": t.get("priority"), "kind": "task"})
-
-    elif key in ("escalations", "handoffs"):
-        src = "escalation" if key == "escalations" else "handoff"
-        tasks = await db.tasks.find(scope({"tenant_id": tid, "source": src, "status": {"$ne": "done"}}), {"_id": 0}).sort("created_at", -1).to_list(200)
-        tasks = await enrich_tasks(tasks)
-        for t in tasks:
-            sub = f"Raised by {t['raised_by_name']}" if t.get("raised_by_name") else (t.get("assignee_name") or "")
-            items.append({"id": t["id"], "title": t["title"], "subtitle": sub, "meta": t.get("priority"), "kind": "task"})
-
-    elif key == "completed":
-        if period == "morning":
-            y_start = (midnight - timedelta(days=1)).isoformat()
-            trange = {"$gte": y_start, "$lt": midnight.isoformat()}
-        else:
-            trange = {"$gte": start_iso}
-        aq = {"tenant_id": tid, "kind": "task_done", "created_at": trange}
-        if not is_owner:
-            aq["actor"] = user["id"]
-        acts = await db.activity.find(aq, {"_id": 0}).sort("created_at", -1).to_list(200)
-        tids = [a.get("entity_id") for a in acts if a.get("entity_id")]
-        tmap = {}
-        if tids:
-            for tk in await db.tasks.find({"tenant_id": tid, "id": {"$in": tids}},
-                                          {"_id": 0, "id": 1, "attachments": 1, "assignee_id": 1}).to_list(300):
-                tmap[tk["id"]] = tk
-        aids = list({tk.get("assignee_id") for tk in tmap.values() if tk.get("assignee_id")})
-        umap = {}
-        if aids:
-            for u in await db.users.find({"id": {"$in": aids}}, {"_id": 0, "id": 1, "name": 1}).to_list(300):
-                umap[u["id"]] = u["name"]
-        for a in acts:
-            tk = tmap.get(a.get("entity_id"))
-            proof = [{"kind": at.get("kind"), "url": at.get("url")} for at in ((tk or {}).get("attachments") or [])]
-            sub = umap.get((tk or {}).get("assignee_id")) or ""
-            items.append({"id": a.get("entity_id") or a["id"], "title": a.get("message"),
-                          "subtitle": sub, "kind": "task" if tk else "activity", "proof": proof})
-
-    elif key == "awaiting_approval":
-        actionable = True
-        decisions = await db.decisions.find({"tenant_id": tid, "status": "pending_approval"}, {"_id": 0}).to_list(50)
-        decisions = await enrich_decisions(decisions)
-        for d in decisions:
-            items.append({"id": d["id"], "title": d["title"], "subtitle": d.get("summary") or "",
-                          "meta": f"{len(d.get('tasks', []))} task(s) blocked", "kind": "decision"})
-        purchases = await db.workflows.find({"tenant_id": tid, "type": "purchase_payment", "stage": "requested"}, {"_id": 0}).to_list(50)
-        for w in purchases:
-            items.append({"id": w["id"], "title": w.get("title"), "subtitle": w.get("counterparty") or "",
-                          "meta": w.get("amount"), "kind": "purchase", "wf_type": w.get("type")})
-
-    elif key == "absent":
-        recs = await db.attendance.find({"tenant_id": tid, "date": today, "status": "absent"}, {"_id": 0}).to_list(200)
-        uids = [r["user_id"] for r in recs if r.get("user_id")]
-        umap = {}
-        if uids:
-            for u in await db.users.find({"id": {"$in": uids}}, {"_id": 0, "id": 1, "name": 1, "role": 1}).to_list(200):
-                umap[u["id"]] = u
-        for r in recs:
-            u = umap.get(r.get("user_id"), {})
-            items.append({"id": r.get("user_id") or new_id(), "title": u.get("name", "Unknown"), "subtitle": u.get("role", ""), "kind": "absent"})
-
-    elif key == "complaints":
-        actionable = True
-        recs = await db.complaints.find({"tenant_id": tid, "status": "open"}, {"_id": 0}).sort("created_at", -1).to_list(200)
-        for c in recs:
-            items.append({"id": c["id"], "title": c.get("text"), "subtitle": c.get("customer_name") or "Unknown",
-                          "meta": c.get("severity"), "kind": "complaint", "customer_id": c.get("customer_id")})
-
-    elif key == "payment_overdue":
-        recs = await db.workflows.find({"tenant_id": tid, "type": "purchase_payment", "stage": "payment_pending"}, {"_id": 0}).to_list(200)
-        for w in recs:
-            items.append({"id": w["id"], "title": w.get("title"), "subtitle": w.get("counterparty") or "",
-                          "meta": w.get("amount"), "kind": "payment", "wf_type": w.get("type")})
-
-    elif key == "fires":
-        tasks = await db.tasks.find({"tenant_id": tid, "source": "escalation", "status": {"$ne": "done"}}, {"_id": 0}).sort("created_at", -1).to_list(200)
-        tasks = await enrich_tasks(tasks)
-        for t in tasks:
-            sub = f"Raised by {t['raised_by_name']}" if t.get("raised_by_name") else (t.get("assignee_name") or "")
-            items.append({"id": t["id"], "title": t["title"], "subtitle": sub, "meta": t.get("priority"), "kind": "escalation"})
-
-    elif key == "receivables_overdue":
-        for inv in sorted(await _overdue_receivables(tid), key=lambda r: str(r.get("due_date") or "")):
-            num = str(inv.get("number") or "").strip()
-            due = str(inv.get("due_date") or "")[:10]
-            items.append({"id": inv["id"], "kind": "receivable",
-                          "title": f"{inv.get('contact_name') or 'Customer'}" + (f" · {num}" if num else ""),
-                          "subtitle": f"Overdue since {due}" if due else "Overdue",
-                          "meta": _inv_remaining(inv)})
-
-    elif key == "bills_due":
-        for inv in sorted(await _bills_due_or_overdue(tid), key=lambda r: str(r.get("due_date") or "")):
-            num = str(inv.get("number") or "").strip()
-            due = str(inv.get("due_date") or "")[:10]
-            overdue = bool(due and due < today)
-            items.append({"id": inv["id"], "kind": "bill",
-                          "title": f"{inv.get('contact_name') or 'Supplier'}" + (f" · {num}" if num else ""),
-                          "subtitle": (f"Overdue since {due}" if overdue else (f"Due {due}" if due else "Due soon")),
-                          "meta": _inv_remaining(inv)})
-
-    elif key == "unmatched_payments":
-        for p in sorted(await _unmatched_payments(tid), key=lambda x: str(x.get("date") or ""), reverse=True):
-            arrow = "Received" if p.get("direction") == "in" else "Paid out"
-            party = (p.get("contact_name") or "").strip() or "Unidentified party"
-            dt = str(p.get("date") or "")[:10]
-            items.append({"id": p["id"], "kind": "unmatched", "direction": p.get("direction"),
-                          "title": f"{arrow} · {party}",
-                          "subtitle": (f"{dt} · needs matching" if dt else "Needs matching"),
-                          "meta": _pay_remaining_amt(p)})
-
-    return {"key": key, "actionable": actionable, "items": items}
 
 
 
@@ -4075,35 +3676,21 @@ async def rescore_contact(contact_id: str, user: dict = Depends(require_perm("fi
 # ---------------------------------------------------------------------------
 # Leave & Absence Management (Phase 1)
 # ---------------------------------------------------------------------------
-LEAVE_TYPES = {"casual", "sick", "earned", "permission", "wfh", "other"}
-ABSENCE_REASONS = {"sick", "family_emergency", "personal", "other"}
+# Leave endpoints + task-local helpers (_can_approve_leave, _decide_leave, leave_impact)
+# moved to routers/team.py in Phase B step 7. Constants + Pydantic inputs now live in
+# models/team.py. Keep the following still-referenced-inline pieces in this module:
+#   • LeaveApproverMapInput + PATCH /tenant/leave-approvers (settings surface)
+#   • _resolve_leave_approver + _create_leave (called from voice / inbox / capture flows)
+#   • ai_leave_impact (deferred-imported by routers/team.py:leave_impact)
+from models.team import LEAVE_TYPES, ABSENCE_REASONS  # noqa: F401
 
 
-class LeaveRequestInput(BaseModel):
-    leave_type: str
-    from_date: str
-    to_date: str
-    day_portion: Optional[str] = "full"  # full | half
-    reason: Optional[str] = ""
-
-
-class AbsenceInput(BaseModel):
-    reason: str
-    note: Optional[str] = ""
-
-
-class LeaveDecisionInput(BaseModel):
-    note: Optional[str] = ""
 
 
 class LeaveApproverMapInput(BaseModel):
     approvers: dict  # { role_key: approver_user_id }
 
 
-def _can_approve_leave(user: dict, leave: dict) -> bool:
-    return (user.get("role") == "owner"
-            or user["id"] == leave.get("approver_id")
-            or "leave_approve" in user_perms(user))
 
 
 async def _resolve_leave_approver(tenant_id: str, requester: dict):
@@ -4164,98 +3751,10 @@ async def _create_leave(tenant_id, requester, leave_type, from_date, to_date, da
     return doc
 
 
-@api.post("/leaves")
-async def create_leave(inp: LeaveRequestInput, user: dict = Depends(get_current_user)):
-    if inp.leave_type not in LEAVE_TYPES:
-        raise HTTPException(status_code=400, detail="Invalid leave type")
-    if inp.to_date[:10] < inp.from_date[:10]:
-        raise HTTPException(status_code=400, detail="End date cannot be before start date")
-    return await _create_leave(user["tenant_id"], user, inp.leave_type, inp.from_date, inp.to_date,
-                               inp.day_portion, inp.reason, is_emergency=False)
 
 
-@api.post("/leaves/absence")
-async def report_absence(inp: AbsenceInput, user: dict = Depends(get_current_user)):
-    if inp.reason not in ABSENCE_REASONS:
-        raise HTTPException(status_code=400, detail="Invalid reason")
-    today = datetime.now(timezone.utc).date().isoformat()
-    reason = inp.reason.replace("_", " ").title() + ((" — " + inp.note.strip()) if inp.note else "")
-    return await _create_leave(user["tenant_id"], user, "sick" if inp.reason == "sick" else "other",
-                               today, today, "full", reason, is_emergency=True)
 
 
-@api.get("/leaves")
-async def list_leaves(scope: str = "mine", user: dict = Depends(get_current_user)):
-    tid = user["tenant_id"]
-    can_approve_all = user.get("role") == "owner" or "leave_approve" in user_perms(user)
-    q = {"tenant_id": tid}
-    if scope == "mine":
-        q["user_id"] = user["id"]
-    elif scope == "approvals":
-        if not can_approve_all:
-            q["approver_id"] = user["id"]
-    elif scope == "all":
-        if not can_approve_all:
-            q["user_id"] = user["id"]
-    leaves = await db.leaves.find(q, {"_id": 0}).sort("created_at", -1).to_list(300)
-    return leaves
-
-
-@api.get("/leaves/on-leave")
-async def leaves_on_leave_today(user: dict = Depends(get_current_user)):
-    tid = user["tenant_id"]
-    today = datetime.now(timezone.utc).date().isoformat()
-    docs = await db.leaves.find({"tenant_id": tid, "status": "approved",
-                                 "from_date": {"$lte": today}, "to_date": {"$gte": today}},
-                                {"_id": 0, "user_id": 1, "user_name": 1, "user_role": 1, "leave_type": 1, "to_date": 1}).to_list(200)
-    return docs
-
-
-@api.get("/leaves/{leave_id}")
-async def get_leave(leave_id: str, user: dict = Depends(get_current_user)):
-    lv = await db.leaves.find_one({"id": leave_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
-    if not lv:
-        raise HTTPException(status_code=404, detail="Not found")
-    if lv["user_id"] != user["id"] and not _can_approve_leave(user, lv):
-        raise HTTPException(status_code=403, detail="You don't have access to this leave request")
-    return lv
-
-
-async def _decide_leave(leave_id, user, new_status, note, ntype, employee_msg):
-    lv = await db.leaves.find_one({"id": leave_id, "tenant_id": user["tenant_id"]})
-    if not lv:
-        raise HTTPException(status_code=404, detail="Not found")
-    if not _can_approve_leave(user, lv):
-        raise HTTPException(status_code=403, detail="You cannot act on this leave request")
-    entry = {"action": new_status, "by": user["id"], "by_name": user.get("name"), "note": note or "", "at": now_iso()}
-    updates = {"status": new_status, "decided_at": now_iso(), "decided_by": user["id"]}
-    if new_status == "info_requested":
-        updates = {"status": new_status, "info_note": note or ""}
-    await db.leaves.update_one({"id": leave_id}, {"$set": updates, "$push": {"history": entry}})
-    await push_notification(user["tenant_id"], [lv["user_id"]], 2, employee_msg,
-                            entity_type="leave", entity_id=leave_id, ntype=ntype,
-                            title=f"{lv.get('leave_type', 'Leave').title()} leave", sender=user.get("name"))
-    await log_activity(user["tenant_id"], user["id"], f"leave_{new_status}",
-                       f"{new_status.replace('_', ' ').title()} {lv.get('user_name')}'s leave", "leave", leave_id)
-    return await db.leaves.find_one({"id": leave_id}, {"_id": 0})
-
-
-@api.post("/leaves/{leave_id}/approve")
-async def approve_leave(leave_id: str, inp: LeaveDecisionInput, user: dict = Depends(get_current_user)):
-    return await _decide_leave(leave_id, user, "approved", inp.note, "approved",
-                               f"Your leave request was approved by {user.get('name')}")
-
-
-@api.post("/leaves/{leave_id}/reject")
-async def reject_leave(leave_id: str, inp: LeaveDecisionInput, user: dict = Depends(get_current_user)):
-    return await _decide_leave(leave_id, user, "rejected", inp.note, "rejected",
-                               f"Your leave request was rejected by {user.get('name')}" + (f": {inp.note}" if inp.note else ""))
-
-
-@api.post("/leaves/{leave_id}/request-info")
-async def request_leave_info(leave_id: str, inp: LeaveDecisionInput, user: dict = Depends(get_current_user)):
-    return await _decide_leave(leave_id, user, "info_requested", inp.note, "clarification",
-                               f"{user.get('name')} needs more info on your leave request" + (f": {inp.note}" if inp.note else ""))
 
 
 # --- Leave & Absence Phase 2: AI Impact Analysis on approval ---
@@ -4289,55 +3788,6 @@ async def ai_leave_impact(person_name: str, from_date: str, to_date: str, tasks:
     return data if isinstance(data, dict) else {"summary": "", "suggestions": []}
 
 
-@api.get("/leaves/{leave_id}/impact")
-async def leave_impact(leave_id: str, user: dict = Depends(get_current_user)):
-    tid = user["tenant_id"]
-    lv = await db.leaves.find_one({"id": leave_id, "tenant_id": tid})
-    if not lv:
-        raise HTTPException(status_code=404, detail="Not found")
-    if not _can_approve_leave(user, lv) and lv["user_id"] != user["id"]:
-        raise HTTPException(status_code=403, detail="You don't have access to this leave request")
-    from_date, to_date = lv["from_date"][:10], lv["to_date"][:10]
-    # Active tasks of the person on leave that are at risk during the absence.
-    all_tasks = await db.tasks.find(
-        {"tenant_id": tid, "assignee_id": lv["user_id"], "status": {"$nin": ["done", "cancelled"]}},
-        {"_id": 0}).to_list(300)
-    at_risk = [t for t in all_tasks
-               if ((t.get("due_date") or "")[:10] and (t.get("due_date") or "")[:10] <= to_date)
-               or t.get("status") == "in_progress"]
-    # Available teammates: everyone except the person on leave and anyone else on approved overlapping leave.
-    users = await db.users.find({"tenant_id": tid}, {"_id": 0, "id": 1, "name": 1, "role": 1}).to_list(500)
-    overlapping = await db.leaves.find(
-        {"tenant_id": tid, "status": "approved", "from_date": {"$lte": to_date}, "to_date": {"$gte": from_date}},
-        {"_id": 0, "user_id": 1}).to_list(300)
-    busy = {o["user_id"] for o in overlapping} | {lv["user_id"]}
-    members = []
-    for u in users:
-        if u["id"] in busy:
-            continue
-        load = await db.tasks.count_documents(
-            {"tenant_id": tid, "assignee_id": u["id"], "status": {"$nin": ["done", "cancelled"]}})
-        members.append({"id": u["id"], "name": u["name"], "role": u["role"], "load": load})
-    analysis = await ai_leave_impact(lv["user_name"], from_date, to_date, at_risk, members)
-    sug = {s.get("task_id"): s for s in (analysis.get("suggestions") or []) if isinstance(s, dict)}
-    valid_ids = {m["id"] for m in members}
-    tasks_out = []
-    for t in at_risk:
-        s = sug.get(t["id"], {})
-        action = s.get("action") if s.get("action") in ("reassign", "extend", "monitor") else "monitor"
-        aid = s.get("assignee_id") if s.get("assignee_id") in valid_ids else None
-        if action == "reassign" and not aid:
-            action = "monitor"
-        tasks_out.append({
-            "id": t["id"], "title": t.get("title"), "priority": t.get("priority"),
-            "status": t.get("status"), "due_date": (t.get("due_date") or "")[:10],
-            "action": action, "assignee_id": aid, "assignee_name": s.get("assignee_name"),
-            "suggested_due_date": (s.get("due_date") or "")[:10] if action == "extend" else None,
-            "reason": s.get("reason", ""),
-        })
-    return {"leave_id": leave_id, "person": lv["user_name"], "from_date": from_date, "to_date": to_date,
-            "summary": analysis.get("summary", ""), "tasks": tasks_out,
-            "available_members": [{"id": m["id"], "name": m["name"], "role": m["role"]} for m in members]}
 
 
 @api.get("/calendar")
@@ -5537,6 +4987,10 @@ from routers.decisions import router as decisions_router  # noqa: E402
 app.include_router(decisions_router)
 from routers.inbox import router as inbox_router  # noqa: E402
 app.include_router(inbox_router)
+from routers.brief import router as brief_router  # noqa: E402
+app.include_router(brief_router)
+from routers.team import router as team_router  # noqa: E402
+app.include_router(team_router)
 _cors_env = os.environ.get('CORS_ORIGINS', '*').strip()
 _cors_kwargs = dict(allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 if _cors_env == '*':

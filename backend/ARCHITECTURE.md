@@ -19,8 +19,8 @@ backend/
 │   ├── tasks.py                # ✅ ALL 17 /api/tasks/* endpoints (list, get, delete, create, patch, reassign, approve, reject, clarify, execution-plan/* × 3, steps/ask, updates, respond, prioritize, attachment)
 │   ├── decisions.py            # ✅ /api/decisions/*, /api/journal
 │   ├── inbox.py                # ✅ /api/inbox, /inbox/{id}/status
-│   ├── team.py                 # ⏳ /api/users, /api/leaves
-│   ├── brief.py                # ⏳ /api/brief
+│   ├── team.py                 # ✅ /api/users, /api/leaves, /api/attendance (15 endpoints)
+│   ├── brief.py                # ✅ /api/brief, /api/brief/details, /api/brief/send-digest, /api/notifications (× 3)
 │   ├── ledger.py               # ✅ invoices, expenses, payments
 │   ├── signup.py               # ✅ voice interview
 │   ├── admin.py                # ✅ superadmin
@@ -70,8 +70,8 @@ Order (safest → hardest):
 3. **services relocation** — `obj_store`, `brain_context`, `brain_rbac` → `services/` with compat shims ✅
 4. **decisions** — `/api/decisions/*` + `/api/journal` → `routers/decisions.py` ✅
 5. **inbox** — `/api/inbox`, `/inbox/{id}/status` → `routers/inbox.py` ✅
-6. **team** — `/api/users`, `/api/leaves`, `/api/attendance` → `routers/team.py` ⏳
-7. **brief** — `/api/brief`, `/api/notifications` → `routers/brief.py` ⏳
+6. **team** — `/api/users`, `/api/leaves`, `/api/attendance` → `routers/team.py` ✅
+7. **brief** — `/api/brief`, `/api/notifications` → `routers/brief.py` ✅
 8. **finance/ledger** — extract remaining pieces still in server.py ⏳
 9. **misc** — voice, calendar, meetings, complaints, workflows ⏳
 
@@ -88,4 +88,6 @@ For each PR:
 - **Every write to a tenant collection** must scope by `tenant_id` in the Mongo filter.
 - **Every read of financial/HR/sales data** goes through `brain_rbac` before returning.
 - **Use `now_iso()` and `new_id()`** — never `datetime.utcnow()` or bare `uuid4()`.
+- **Fire-and-forget audit writes** (`brain_context.record_context`, `log_activity`) go inside `try/except` so a Brain write can't 500 the parent request.
+ow()` or bare `uuid4()`.
 - **Fire-and-forget audit writes** (`brain_context.record_context`, `log_activity`) go inside `try/except` so a Brain write can't 500 the parent request.

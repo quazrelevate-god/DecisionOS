@@ -1,5 +1,20 @@
 ## Changelog
-- 2026-08 (latest): **Backend refactor — Phase B step 6 SHIPPED (Inbox router + Brain `_compute` split).**
+- 2026-08 (latest): **Backend refactor — Phase B step 7 SHIPPED (Brief + Team routers extracted).**
+
+  **(A) Brief router extracted.** New `routers/brief.py` (331 lines) owns 6 endpoints: `GET /api/brief` (role-scoped dashboard counters: owner sees 11 counter keys + finance_amounts; non-owners see 6 personal counter keys), `GET /api/brief/details?key=` (drill-down for delayed/todo/in_progress/completed/escalations/handoffs/awaiting_approval/absent/complaints/payment_overdue/fires/on_leave/receivables_overdue/bills_due/unmatched_payments), `POST /api/brief/send-digest` (owner-only email digest), `GET /api/notifications` + `POST /api/notifications/{id}/read` + `POST /api/notifications/read-all`.
+
+  **(B) Team router extracted.** New `routers/team.py` (388 lines) owns 15 endpoints across three sub-domains: **Users** (`GET/POST /users`, `POST /users/{id}/invite`, `PATCH /users/{id}` — with last-owner-protection + owner-only owner-role grants), **Attendance** (`POST /attendance` owner-only, `GET /attendance`), **Leaves** (`POST /leaves` request, `POST /leaves/absence` emergency, `GET /leaves?scope=mine|approvals|all` with RBAC filtering, `GET /leaves/on-leave`, `GET /leaves/{id}` with participant gate, `POST /leaves/{id}/approve|reject|request-info`, `GET /leaves/{id}/impact` for AI-driven at-risk task suggestions via Claude). Task-local helpers `_can_approve_leave` + `_decide_leave` moved INTO the router.
+
+  **Models.** New `models/team.py` (49 lines): `LEAVE_TYPES`, `ABSENCE_REASONS` constants + `UserCreateInput`, `UserUpdateInput`, `AttendanceInput`, `LeaveRequestInput`, `AbsenceInput`, `LeaveDecisionInput`.
+
+  **Kept in server.py.** Cross-domain helpers that other flows still call inline: `_norm_phone`, `_mask_phone` (used by signup + capture flows), `_create_leave` (called by voice + inbox + capture flows), `ai_leave_impact` (Claude wrapper — deferred-imported by team router), `_resolve_leave_approver` + `LeaveApproverMapInput` + `PATCH /tenant/leave-approvers` (settings surface), `run_followup`, `_overdue_receivables`, `_bills_due_or_overdue`, `_unmatched_payments`, `_inv_remaining`, `_pay_remaining_amt`, `enrich_decisions`, `dashboard`, `send_email`, `DIGEST_I18N`, `push_notification`. All accessed via deferred imports inside the new router handlers.
+
+  **Size delta.** `server.py`: **5553 → 5007 lines (-546 lines, -9.8%)**. Total codebase: server.py 5007 · routers/tasks.py 700 · routers/brain.py 876 · routers/team.py 388 · routers/brief.py 331 · routers/decisions.py 234 · routers/inbox.py 60 · services/tasks.py 137 · models/tasks.py 77 · models/team.py 49 · models/inbox.py 13.
+
+  **Testing agent (iteration 83): 47/47 PASS in ~32s.** Brief response shape verified identical (owner 11 counters + non-owner 6 counters + owner-only lockdown on finance keys), leave lifecycle (create → approve → reject → info_requested) all wired, AI leave impact returns valid suggestions, users last-owner-protection preserved. `/app/test_reports/iteration_83.json`.
+
+
+- 2026-08 (latest-1): **Backend refactor — Phase B step 6 SHIPPED (Inbox router + Brain `_compute` split).**
 
   **(A) Inbox extracted.** New `routers/inbox.py` (60 lines) owns `GET /api/inbox` (with `?classification` + `?status` filters, returns items+counts+open_total) and `POST /api/inbox/{id}/status` (accepts open/done/dismissed). `INBOX_CLASSES` tuple + `InboxStatusInput` moved to `models/inbox.py` (13 lines). The `push_inbox()` WRITER stays in `server.py` because many domain workflows (invoice ingest, complaint escalation, decision publish, task escalation) call it inline — moving it would create a fan-out risk not worth the churn. Router only owns the READ + STATUS-mutation surface.
 

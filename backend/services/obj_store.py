@@ -65,3 +65,33 @@ async def get_object(path: str):
             r = await c.get(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key})
         r.raise_for_status()
         return r.content, r.headers.get("Content-Type", "application/octet-stream")
+
+
+async def delete_object(path: str) -> bool:
+    """Delete an object from storage. Returns True if deleted or already
+    absent, False if the deletion failed. Never raises — deletion is
+    best-effort so a single missing/failed file cannot block tenant
+    deletion (GDPR/DPDP compliance requires the DB rows go regardless).
+
+    Added by FIX-001-E so `admin_delete_tenant` can wipe all uploaded
+    files alongside the DB records — previously files lingered forever
+    in the shared bucket after a tenant was deleted.
+    """
+    if not path:
+        return True
+    try:
+        key = await init_storage()
+        async with httpx.AsyncClient(timeout=30) as c:
+            r = await c.delete(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key})
+            if r.status_code == 403:  # storage key expired -> refresh once
+                key = await init_storage(force=True)
+                r = await c.delete(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key})
+            # 200/204 = deleted; 404 = already gone (both are success from a
+            # "make sure it's gone" perspective).
+            if r.status_code in (200, 204, 404):
+                return True
+            logger.warning(f"obj_store.delete_object({path}) returned HTTP {r.status_code}")
+            return False
+    except Exception as e:
+        logger.warning(f"obj_store.delete_object({path}) failed: {e}")
+        return False

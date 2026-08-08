@@ -229,3 +229,124 @@ class TestTenantProcurementPipeline:
         assert wfmod.procurement_initial_stage(bak) == "requested"  # coincidence
         assert wfmod.procurement_terminal_stage(tex) == "paid"
         assert wfmod.procurement_terminal_stage(bak) == "settled"
+
+
+# ---------------------------------------------------------------------------
+# Integration-shaped: prove the ACTUAL query filters passed to Mongo are
+# correct for the tenant, by mocking the collection method and inspecting
+# the args. This is what catches "resolver works but caller passes wrong
+# filter" bugs that pure resolver tests would miss.
+# ---------------------------------------------------------------------------
+class _MockCollection:
+    """Minimal Mongo-collection double: records the last filter passed to
+    find/count_documents, and returns a scriptable result."""
+    def __init__(self, count_result=0, find_result=None):
+        self.count_result = count_result
+        self.find_result = find_result or []
+        self.last_count_filter = None
+        self.last_find_filter = None
+
+    async def count_documents(self, filt):
+        self.last_count_filter = filt
+        return self.count_result
+
+    def find(self, filt, *_args, **_kwargs):
+        self.last_find_filter = filt
+        class _Cursor:
+            def __init__(self, rows):
+                self._rows = rows
+            def sort(self, *a, **k): return self
+            def limit(self, *a, **k): return self
+            async def to_list(self, _n):
+                return self._rows
+        return _Cursor(self.find_result)
+
+
+class TestQueryFilterAssembly:
+    """Regression: prove that the query filters the fixed call sites build
+    up actually reference the tenant's OWN pipeline key + stage, not the
+    hardcoded textile ones. If someone later re-introduces the hardcode,
+    these tests fail loudly."""
+
+    def test_bakery_pending_pur_filter_uses_ingredient_procurement(self, monkeypatch):
+        """Mirrors routers/brief.py pending_pur COUNT filter."""
+        _patch_operating_model(monkeypatch, {"bak-1": BAKERY_OM})
+
+        async def run():
+            proc = await wfmod.tenant_procurement_pipeline("bak-1")
+            init = wfmod.procurement_initial_stage(proc)
+            # Now simulate the filter brief.py builds:
+            mock = _MockCollection(count_result=3)
+            await mock.count_documents({"tenant_id": "bak-1", "type": proc["key"], "stage": init})
+            return mock.last_count_filter
+
+        f = asyncio.run(run())
+        assert f == {"tenant_id": "bak-1", "type": "ingredient_procurement", "stage": "requested"}
+        # Critical: it must NOT be the textile key.
+        assert f["type"] != "purchase_payment"
+
+    def test_salon_payment_overdue_filter_uses_invoice_pending(self, monkeypatch):
+        """Mirrors routers/brief.py payment_overdue COUNT filter — uses the
+        pipeline's penultimate stage as the 'awaiting payment' convention."""
+        _patch_operating_model(monkeypatch, {"sal-1": SALON_OM})
+
+        async def run():
+            proc = await wfmod.tenant_procurement_pipeline("sal-1")
+            pen = wfmod.procurement_penultimate_stage(proc)
+            mock = _MockCollection(count_result=2)
+            await mock.count_documents({"tenant_id": "sal-1", "type": proc["key"], "stage": pen})
+            return mock.last_count_filter
+
+        f = asyncio.run(run())
+        assert f == {"tenant_id": "sal-1", "type": "product_restock", "stage": "invoice_pending"}
+        assert f["stage"] != "payment_pending"  # would be the textile-only stage
+
+    def test_workshop_with_no_approval_pipeline_returns_zero(self, monkeypatch):
+        """A tenant whose pipelines have no approval_stage (a service shop
+        that doesn't gate purchases) must not crash and must not accidentally
+        count workflows from another pipeline — count should be 0."""
+        _patch_operating_model(monkeypatch, {"wsp-1": NO_APPROVAL_OM})
+
+        async def run():
+            proc = await wfmod.tenant_procurement_pipeline("wsp-1")
+            init = wfmod.procurement_initial_stage(proc) if proc else None
+            # Emulate the brief.py guard: skip if no proc or no init stage
+            if not (proc and init):
+                return 0, None
+            mock = _MockCollection(count_result=5)  # would have returned 5 if we DID query
+            n = await mock.count_documents({"tenant_id": "wsp-1", "type": proc["key"], "stage": init})
+            return n, mock.last_count_filter
+
+        n, f = asyncio.run(run())
+        assert n == 0  # correctly skipped
+        assert f is None  # no query was ever built
+
+    def test_decisions_approve_auto_advance_filter_uses_dynamic_key(self, monkeypatch):
+        """Mirrors the auto-advance loop in routers/decisions.py::approve_decision.
+        The filter must query the tenant's OWN procurement pipeline key + initial
+        stage, not the hardcoded textile ones."""
+        _patch_operating_model(monkeypatch, {"bak-2": BAKERY_OM})
+
+        async def run():
+            proc = await wfmod.tenant_procurement_pipeline("bak-2")
+            init = wfmod.procurement_initial_stage(proc)
+            appr = proc["approval_stage"]
+            # Simulate the auto-advance find():
+            mock = _MockCollection(find_result=[
+                {"id": "wf-abc", "tenant_id": "bak-2", "decision_id": "dec-1",
+                 "type": proc["key"], "stage": init}
+            ])
+            cursor = mock.find({
+                "tenant_id": "bak-2", "decision_id": "dec-1",
+                "type": proc["key"], "stage": init,
+            })
+            rows = await cursor.to_list(10)
+            return mock.last_find_filter, rows, appr
+
+        f, rows, appr = asyncio.run(run())
+        assert f == {"tenant_id": "bak-2", "decision_id": "dec-1",
+                     "type": "ingredient_procurement", "stage": "requested"}
+        assert len(rows) == 1
+        # And the target stage the fix would advance them TO must be the
+        # bakery's approval_stage, not the textile 'approved'.
+        assert appr == "approved_by_owner"

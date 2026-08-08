@@ -2426,7 +2426,15 @@ async def dashboard(user: dict = Depends(get_current_user)):
     await run_followup(tid)
     now = datetime.now(timezone.utc).isoformat()
     pending_decisions = await db.decisions.find({"tenant_id": tid, "status": "pending_approval"}, {"_id": 0}).to_list(50)
-    pending_purchases = await db.workflows.find({"tenant_id": tid, "type": "purchase_payment", "stage": "requested"}, {"_id": 0}).to_list(50)
+    # FIX-001-A: resolve the tenant's actual procurement pipeline instead of the textile 'purchase_payment' hardcode.
+    from services.workflows import tenant_procurement_pipeline, procurement_initial_stage
+    _proc = await tenant_procurement_pipeline(tid)
+    if _proc and procurement_initial_stage(_proc):
+        pending_purchases = await db.workflows.find(
+            {"tenant_id": tid, "type": _proc["key"], "stage": procurement_initial_stage(_proc)}, {"_id": 0}
+        ).to_list(50)
+    else:
+        pending_purchases = []
     overdue = await db.tasks.find({"tenant_id": tid, "status": {"$in": ["todo", "in_progress"]}, "due_date": {"$lt": now, "$ne": None}}, {"_id": 0}).to_list(50)
     open_tasks = await db.tasks.count_documents({"tenant_id": tid, "status": {"$in": ["todo", "in_progress"]}})
     done_tasks = await db.tasks.count_documents({"tenant_id": tid, "status": "done"})

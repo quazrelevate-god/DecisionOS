@@ -92,10 +92,15 @@ async def ceo_brief(period: str = "morning", user: dict = Depends(get_current_us
         delayed = await db.tasks.count_documents({"tenant_id": tid, "status": {"$in": ["todo", "in_progress"]}, "due_date": {"$lt": now.isoformat(), "$ne": None}})
         completed = await db.activity.count_documents({"tenant_id": tid, "kind": "task_done", "created_at": completed_range})
         pending_dec = await db.decisions.count_documents({"tenant_id": tid, "status": "pending_approval"})
-        pending_pur = await db.workflows.count_documents({"tenant_id": tid, "type": "purchase_payment", "stage": "requested"})
+        # FIX-001-A: resolve the tenant's actual procurement pipeline dynamically instead of the textile 'purchase_payment' hardcode.
+        from services.workflows import tenant_procurement_pipeline, procurement_initial_stage, procurement_penultimate_stage
+        _proc = await tenant_procurement_pipeline(tid)
+        _proc_init = procurement_initial_stage(_proc) if _proc else None
+        _proc_pen = procurement_penultimate_stage(_proc) if _proc else None
+        pending_pur = await db.workflows.count_documents({"tenant_id": tid, "type": _proc["key"], "stage": _proc_init}) if (_proc and _proc_init) else 0
         absent = await db.attendance.count_documents({"tenant_id": tid, "date": today, "status": "absent"})
         complaints = await db.complaints.count_documents({"tenant_id": tid, "status": "open"})
-        payment_overdue = await db.workflows.count_documents({"tenant_id": tid, "type": "purchase_payment", "stage": "payment_pending"})
+        payment_overdue = await db.workflows.count_documents({"tenant_id": tid, "type": _proc["key"], "stage": _proc_pen}) if (_proc and _proc_pen) else 0
         fires = await db.tasks.count_documents({"tenant_id": tid, "source": "escalation", "status": {"$ne": "done"}})
         on_leave = await db.leaves.count_documents({"tenant_id": tid, "status": "approved", "from_date": {"$lte": today}, "to_date": {"$gte": today}})
         recv = await _overdue_receivables(tid)
@@ -235,7 +240,11 @@ async def brief_details(key: str, period: str = "morning", user: dict = Depends(
         for d in decisions:
             items.append({"id": d["id"], "title": d["title"], "subtitle": d.get("summary") or "",
                           "meta": f"{len(d.get('tasks', []))} task(s) blocked", "kind": "decision"})
-        purchases = await db.workflows.find({"tenant_id": tid, "type": "purchase_payment", "stage": "requested"}, {"_id": 0}).to_list(50)
+        # FIX-001-A: dynamic procurement pipeline resolution.
+        from services.workflows import tenant_procurement_pipeline, procurement_initial_stage
+        _proc = await tenant_procurement_pipeline(tid)
+        _init = procurement_initial_stage(_proc) if _proc else None
+        purchases = await db.workflows.find({"tenant_id": tid, "type": _proc["key"], "stage": _init}, {"_id": 0}).to_list(50) if (_proc and _init) else []
         for w in purchases:
             items.append({"id": w["id"], "title": w.get("title"), "subtitle": w.get("counterparty") or "",
                           "meta": w.get("amount"), "kind": "purchase", "wf_type": w.get("type")})
@@ -259,7 +268,12 @@ async def brief_details(key: str, period: str = "morning", user: dict = Depends(
                           "meta": c.get("severity"), "kind": "complaint", "customer_id": c.get("customer_id")})
 
     elif key == "payment_overdue":
-        recs = await db.workflows.find({"tenant_id": tid, "type": "purchase_payment", "stage": "payment_pending"}, {"_id": 0}).to_list(200)
+        # FIX-001-A: dynamic procurement pipeline resolution; penultimate stage
+        # is the convention for "awaiting payment" across AI-designed pipelines.
+        from services.workflows import tenant_procurement_pipeline, procurement_penultimate_stage
+        _proc = await tenant_procurement_pipeline(tid)
+        _pen = procurement_penultimate_stage(_proc) if _proc else None
+        recs = await db.workflows.find({"tenant_id": tid, "type": _proc["key"], "stage": _pen}, {"_id": 0}).to_list(200) if (_proc and _pen) else []
         for w in recs:
             items.append({"id": w["id"], "title": w.get("title"), "subtitle": w.get("counterparty") or "",
                           "meta": w.get("amount"), "kind": "payment", "wf_type": w.get("type")})

@@ -161,14 +161,27 @@ async def approve_decision(decision_id: str, user: dict = Depends(require_perm("
     await db.decisions.update_one({"id": decision_id}, {"$set": {"status": "approved", "decided_at": now_iso()}})
     await db.tasks.update_many({"decision_id": decision_id, "status": "blocked"}, {"$set": {"status": "todo"}})
     await add_decision_event(decision_id, "Approved — tasks unblocked", user["name"], "approved")
-    # Auto-advance any Procurement (purchase_payment) workflows spawned by this decision from requested → approved.
+    # Auto-advance any Procurement workflows spawned by this decision from their
+    # initial "requested" stage to the pipeline's approval_stage. FIX-001-A:
+    # previously hardcoded to type='purchase_payment' + stage='requested', which
+    # silently broke for any non-textile tenant whose AI-designed procurement
+    # pipeline is keyed differently (e.g. 'procurement', 'ingredient_purchase').
+    from services.workflows import tenant_procurement_pipeline, procurement_initial_stage
+    proc = await tenant_procurement_pipeline(user["tenant_id"])
     wf_advanced = 0
-    async for wf in db.workflows.find({"tenant_id": user["tenant_id"], "decision_id": decision_id, "type": "purchase_payment", "stage": "requested"}):
-        entry = {"stage": "approved", "note": f"Auto-approved with decision by {user['name']}", "by": user["id"], "at": now_iso()}
-        await db.workflows.update_one({"id": wf["id"]}, {"$set": {"stage": "approved"}, "$push": {"history": entry}})
-        wf_advanced += 1
+    if proc and proc.get("approval_stage"):
+        init_stage = procurement_initial_stage(proc)
+        appr_stage = proc["approval_stage"]
+        if init_stage and appr_stage != init_stage:
+            async for wf in db.workflows.find({
+                "tenant_id": user["tenant_id"], "decision_id": decision_id,
+                "type": proc["key"], "stage": init_stage,
+            }):
+                entry = {"stage": appr_stage, "note": f"Auto-approved with decision by {user['name']}", "by": user["id"], "at": now_iso()}
+                await db.workflows.update_one({"id": wf["id"]}, {"$set": {"stage": appr_stage}, "$push": {"history": entry}})
+                wf_advanced += 1
     if wf_advanced:
-        await add_decision_event(decision_id, f"{wf_advanced} procurement workflow(s) advanced to Approved", user["name"], "workflow")
+        await add_decision_event(decision_id, f"{wf_advanced} procurement workflow(s) advanced to {proc.get('approval_stage')}", user["name"], "workflow")
     for t in await db.tasks.find({"decision_id": decision_id}, {"_id": 0}).to_list(100):
         who = None
         if t.get("assignee_id"):

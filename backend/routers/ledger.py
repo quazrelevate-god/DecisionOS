@@ -229,15 +229,22 @@ async def create_expense(tenant_id: str, user_id: str, data: dict, source: str =
             guess_expense_category(f"{data.get('title', '')} {data.get('vendor_name', '')} {data.get('notes', '')}"),
             cats, "Other")
     eid = new_id()
+    # FIX-001-B: allow `awaiting_bill` status so a completed procurement workflow
+    # can pre-create a placeholder expense that Finance later confirms by
+    # uploading the actual bill (see server.py::advance_workflow). The two new
+    # fields (workflow_id, workflow_type) let the Finance UI trace the expense
+    # back to the source workflow card.
     doc = {
         "id": eid, "tenant_id": tenant_id, "title": (data.get("title") or "Expense").strip(),
         "amount": amount, "currency": currency, "category": category,
         "vendor_name": (data.get("vendor_name") or "").strip(), "vendor_id": data.get("vendor_id"),
         "date": data.get("date") or now_iso()[:10],
-        "status": data.get("status") if data.get("status") in ("paid", "unpaid") else "unpaid",
+        "status": data.get("status") if data.get("status") in ("paid", "unpaid", "awaiting_bill") else "unpaid",
         "notes": (data.get("notes") or "").strip(), "source": source,
         "invoice_id": data.get("invoice_id"), "payment_id": data.get("payment_id"),
         "ingestion_id": data.get("ingestion_id"),
+        "workflow_id": data.get("workflow_id"),
+        "workflow_type": data.get("workflow_type"),
         "attachment": data.get("attachment"),
         "created_by": user_id, "created_at": now_iso(),
     }

@@ -2235,6 +2235,7 @@ async def create_workflow(inp: WorkflowCreateInput, user: dict = Depends(get_cur
 
 @api.patch("/workflows/{workflow_id}/advance")
 async def advance_workflow(workflow_id: str, inp: WorkflowAdvanceInput, user: dict = Depends(require_perm("workflows"))):
+    from services.tenancy import tenant_filter  # FIX-001-C carried over: writes below now tenant-scoped
     wf = await db.workflows.find_one({"id": workflow_id, "tenant_id": user["tenant_id"]})
     if not wf:
         raise HTTPException(status_code=404, detail="Not found")
@@ -2251,9 +2252,67 @@ async def advance_workflow(workflow_id: str, inp: WorkflowAdvanceInput, user: di
     if appr_stage and inp.stage == appr_stage and user["role"] != "owner":
         raise HTTPException(status_code=403, detail="Only the owner can approve this stage")
     entry = {"stage": inp.stage, "note": inp.note or "", "by": user["id"], "at": now_iso()}
-    await db.workflows.update_one({"id": workflow_id}, {"$set": {"stage": inp.stage}, "$push": {"history": entry}})
+    await db.workflows.update_one(
+        tenant_filter(workflow_id, user["tenant_id"]),
+        {"$set": {"stage": inp.stage}, "$push": {"history": entry}},
+    )
     await log_activity(user["tenant_id"], user["id"], "workflow_advanced", f"'{wf['title']}' → {inp.stage}", "workflow", workflow_id)
-    return await db.workflows.find_one({"id": workflow_id}, {"_id": 0})
+
+    # FIX-001-B: workflow -> Finance handoff. When a procurement workflow
+    # advances to its final stage ("paid" / "settled" / "invoice_paid" etc.,
+    # whatever the tenant's AI-designed pipeline calls it), auto-create a
+    # PENDING-BILL expense in Finance so the founder doesn't have to record
+    # the same purchase twice. Idempotent: never double-creates for the
+    # same workflow_id, so re-advancing (or later stage tweaks) don't
+    # spawn duplicate expenses. All failures are best-effort try/except so
+    # a Finance-side hiccup can't 500 the workflow advance itself.
+    try:
+        from services.workflows import tenant_procurement_pipeline, procurement_terminal_stage
+        proc = await tenant_procurement_pipeline(user["tenant_id"])
+        if proc and proc.get("key") == wf["type"]:
+            term = procurement_terminal_stage(proc)
+            if term and inp.stage == term:
+                existing = await db.expenses.find_one(
+                    {"tenant_id": user["tenant_id"], "workflow_id": workflow_id},
+                    {"_id": 0, "id": 1},
+                )
+                if not existing:
+                    from routers.ledger import create_expense
+                    est_amt = wf.get("amount") if isinstance(wf.get("amount"), (int, float)) else 0.0
+                    exp = await create_expense(
+                        user["tenant_id"], user["id"],
+                        {
+                            "title": wf.get("title") or "Procurement expense",
+                            "amount": est_amt,
+                            "vendor_name": wf.get("counterparty") or "",
+                            "status": "awaiting_bill",
+                            "notes": f"Auto-created from procurement workflow: {wf.get('title')}. "
+                                     f"Estimated amount from the workflow card; upload the actual bill to reconcile.",
+                            "workflow_id": workflow_id,
+                            "workflow_type": wf.get("type"),
+                        },
+                        source="workflow", write_brain=True,
+                    )
+                    # Notify Finance role so they know to upload the bill.
+                    finance_ids = await _finance_user_ids(user["tenant_id"])
+                    # Don't ping the person who just advanced the workflow if they
+                    # ARE finance — they already know.
+                    finance_ids = [u for u in finance_ids if u and u != user["id"]]
+                    if finance_ids:
+                        cur = await _tenant_currency(user["tenant_id"])
+                        est_txt = f"{cur} {int(est_amt):,}" if est_amt else f"amount not on card"
+                        await push_notification(
+                            user["tenant_id"], finance_ids, 2,
+                            f"Upload bill for '{wf.get('title')}' (est. {est_txt}) — auto-created from a completed workflow",
+                            "expense", exp["id"],
+                            ntype="bill_upload", title=wf.get("title"),
+                            sender=user.get("name"),
+                        )
+    except Exception as e:
+        # Fire-and-forget: never let the Finance handoff block the workflow advance.
+        logger.warning(f"FIX-001-B: workflow->expense auto-create failed for {workflow_id}: {e}")
+
+    return await db.workflows.find_one(tenant_filter(workflow_id, user["tenant_id"]), {"_id": 0})
 
 
 @api.delete("/workflows/{workflow_id}")
@@ -2571,6 +2630,19 @@ async def _approver_ids(tenant_id: str) -> list:
     """Owners plus any user granted the 'approvals' access — they can approve unassigned items."""
     ids = set(await _owner_ids(tenant_id))
     async for u in db.users.find({"tenant_id": tenant_id, "permissions": "approvals"}, {"_id": 0, "id": 1}):
+        ids.add(u["id"])
+    return list(ids)
+
+
+async def _finance_user_ids(tenant_id: str) -> list:
+    """Users who should be notified about a bill needing upload: owners, plus
+    anyone with the 'finance' or 'ledger' module permission. Introduced by
+    FIX-001-B for the workflow→Finance handoff on procurement completion."""
+    ids = set(await _owner_ids(tenant_id))
+    async for u in db.users.find(
+        {"tenant_id": tenant_id, "permissions": {"$in": ["finance", "ledger"]}},
+        {"_id": 0, "id": 1},
+    ):
         ids.add(u["id"])
     return list(ids)
 

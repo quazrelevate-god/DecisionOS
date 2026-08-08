@@ -26,6 +26,7 @@ from pydantic import BaseModel
 from core import db, get_current_user, require_perm, new_id, now_iso
 from models.tasks import TaskCreateInput
 from services import brain_context
+from services.tenancy import ensure_owned, tenant_filter  # FIX-001-C
 
 
 router = APIRouter(prefix="/api")
@@ -141,7 +142,8 @@ async def add_decision_task(decision_id: str, inp: TaskCreateInput, user: dict =
         "assignee_role": role, "assignee_id": assignee_id, "priority": inp.priority or "medium",
         "status": status, "due_date": due, "decision_id": decision_id, "source": "manual", "created_at": now_iso(),
     })
-    await db.decisions.update_one({"id": decision_id}, {"$push": {"task_ids": tid}})
+    # FIX-001-C: tenant-scoped write (was update_one({"id": ...}) alone).
+    await db.decisions.update_one(tenant_filter(decision_id, user["tenant_id"]), {"$push": {"task_ids": tid}})
     who = None
     if assignee_id:
         who = (member or {}).get("name")
@@ -149,17 +151,20 @@ async def add_decision_task(decision_id: str, inp: TaskCreateInput, user: dict =
     await add_decision_event(decision_id, f"Task added for {who}: {inp.title}", user["name"], "assigned")
     await log_activity(user["tenant_id"], user["id"], "decision_task_added",
                        f"Added task '{inp.title}' to '{d['title']}' for {who}", "decision", decision_id)
-    return await enrich_decision(await db.decisions.find_one({"id": decision_id}, {"_id": 0}))
+    return await enrich_decision(await db.decisions.find_one(tenant_filter(decision_id, user["tenant_id"]), {"_id": 0}))
 
 
 @router.post("/decisions/{decision_id}/approve")
 async def approve_decision(decision_id: str, user: dict = Depends(require_perm("decisions_approve"))):
     from server import add_decision_event, log_activity, enrich_decision  # deferred
-    d = await db.decisions.find_one({"id": decision_id, "tenant_id": user["tenant_id"]})
-    if not d:
-        raise HTTPException(status_code=404, detail="Not found")
-    await db.decisions.update_one({"id": decision_id}, {"$set": {"status": "approved", "decided_at": now_iso()}})
-    await db.tasks.update_many({"decision_id": decision_id, "status": "blocked"}, {"$set": {"status": "todo"}})
+    # FIX-001-C: ensure_owned wraps the read + 404 in one call.
+    d = await ensure_owned(db.decisions, decision_id, user["tenant_id"], projection=None)
+    # FIX-001-C: all writes below now include tenant_id in the filter.
+    await db.decisions.update_one(tenant_filter(decision_id, user["tenant_id"]),
+                                  {"$set": {"status": "approved", "decided_at": now_iso()}})
+    await db.tasks.update_many(
+        {"tenant_id": user["tenant_id"], "decision_id": decision_id, "status": "blocked"},
+        {"$set": {"status": "todo"}})
     await add_decision_event(decision_id, "Approved — tasks unblocked", user["name"], "approved")
     # Auto-advance any Procurement workflows spawned by this decision from their
     # initial "requested" stage to the pipeline's approval_stage. FIX-001-A:
@@ -178,14 +183,17 @@ async def approve_decision(decision_id: str, user: dict = Depends(require_perm("
                 "type": proc["key"], "stage": init_stage,
             }):
                 entry = {"stage": appr_stage, "note": f"Auto-approved with decision by {user['name']}", "by": user["id"], "at": now_iso()}
-                await db.workflows.update_one({"id": wf["id"]}, {"$set": {"stage": appr_stage}, "$push": {"history": entry}})
+                # FIX-001-C: tenant-scoped write on the workflow.
+                await db.workflows.update_one(tenant_filter(wf["id"], user["tenant_id"]),
+                                              {"$set": {"stage": appr_stage}, "$push": {"history": entry}})
                 wf_advanced += 1
     if wf_advanced:
         await add_decision_event(decision_id, f"{wf_advanced} procurement workflow(s) advanced to {proc.get('approval_stage')}", user["name"], "workflow")
-    for t in await db.tasks.find({"decision_id": decision_id}, {"_id": 0}).to_list(100):
+    # FIX-001-C: read spawned tasks with tenant filter too (defense-in-depth).
+    for t in await db.tasks.find({"tenant_id": user["tenant_id"], "decision_id": decision_id}, {"_id": 0}).to_list(100):
         who = None
         if t.get("assignee_id"):
-            m = await db.users.find_one({"id": t["assignee_id"]}, {"_id": 0, "name": 1})
+            m = await db.users.find_one({"id": t["assignee_id"], "tenant_id": user["tenant_id"]}, {"_id": 0, "name": 1})
             who = (m or {}).get("name")
         who = who or t.get("assignee_role") or "team"
         await add_decision_event(decision_id, f"Task assigned to {who}: {t['title']}", user["name"], "assigned")
@@ -197,16 +205,15 @@ async def approve_decision(decision_id: str, user: dict = Depends(require_perm("
         actor_id=user["id"], actor_name=user.get("name") or "",
         department=user.get("role") or "", visibility="public",
     )
-    return await enrich_decision(await db.decisions.find_one({"id": decision_id}, {"_id": 0}))
+    return await enrich_decision(await db.decisions.find_one(tenant_filter(decision_id, user["tenant_id"]), {"_id": 0}))
 
 
 @router.post("/decisions/{decision_id}/reject")
 async def reject_decision(decision_id: str, user: dict = Depends(require_perm("decisions_approve"))):
     from server import add_decision_event, log_activity, enrich_decision  # deferred
-    d = await db.decisions.find_one({"id": decision_id, "tenant_id": user["tenant_id"]})
-    if not d:
-        raise HTTPException(status_code=404, detail="Not found")
-    await db.decisions.update_one({"id": decision_id}, {"$set": {"status": "rejected", "decided_at": now_iso()}})
+    d = await ensure_owned(db.decisions, decision_id, user["tenant_id"], projection=None)
+    await db.decisions.update_one(tenant_filter(decision_id, user["tenant_id"]),
+                                  {"$set": {"status": "rejected", "decided_at": now_iso()}})
     # Remove everything this decision spawned so it disappears from all tasks & processes.
     tasks_del = await db.tasks.delete_many({"tenant_id": user["tenant_id"], "decision_id": decision_id})
     wf_del = await db.workflows.delete_many({"tenant_id": user["tenant_id"], "decision_id": decision_id})
@@ -221,15 +228,13 @@ async def reject_decision(decision_id: str, user: dict = Depends(require_perm("d
         actor_id=user["id"], actor_name=user.get("name") or "",
         department=user.get("role") or "", visibility="public",
     )
-    return await enrich_decision(await db.decisions.find_one({"id": decision_id}, {"_id": 0}))
+    return await enrich_decision(await db.decisions.find_one(tenant_filter(decision_id, user["tenant_id"]), {"_id": 0}))
 
 
 @router.post("/decisions/{decision_id}/comment")
 async def comment_decision(decision_id: str, inp: DecisionCommentInput, user: dict = Depends(get_current_user)):
     from server import push_notification, log_activity, enrich_decision  # deferred
-    d = await db.decisions.find_one({"id": decision_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
-    if not d:
-        raise HTTPException(status_code=404, detail="Not found")
+    d = await ensure_owned(db.decisions, decision_id, user["tenant_id"])
     participants = await _decision_participants(user["tenant_id"], d)
     if user["id"] not in participants:
         raise HTTPException(status_code=403, detail="You don't have access to this decision")
@@ -237,11 +242,11 @@ async def comment_decision(decision_id: str, inp: DecisionCommentInput, user: di
     if not text:
         raise HTTPException(status_code=400, detail="Comment can't be empty")
     entry = {"ts": now_iso(), "label": text, "actor": user.get("name"), "actor_id": user["id"], "kind": "comment"}
-    await db.decisions.update_one({"id": decision_id}, {"$push": {"timeline": entry}})
+    await db.decisions.update_one(tenant_filter(decision_id, user["tenant_id"]), {"$push": {"timeline": entry}})
     recipients = [p for p in participants if p != user["id"]]
     if recipients:
         await push_notification(user["tenant_id"], recipients, 1,
                                 f"New comment on '{d['title']}' from {user['name']}: {text[:100]}",
                                 "decision", decision_id, ntype="comment", title=d["title"], sender=user["name"])
     await log_activity(user["tenant_id"], user["id"], "decision_comment", f"Commented on '{d['title']}'", "decision", decision_id)
-    return await enrich_decision(await db.decisions.find_one({"id": decision_id}, {"_id": 0}))
+    return await enrich_decision(await db.decisions.find_one(tenant_filter(decision_id, user["tenant_id"]), {"_id": 0}))

@@ -4448,7 +4448,7 @@ async def execute_capture(d: dict, user: dict):
         await db.ingestions.insert_one(dict(doc))
         inbox_id = await add_inbox_item(tenant_id, user["id"], "whatsapp", _classify_ingestion(doc),
                                         doc["summary"] or doc["filename"], doc["filename"], "ingestion", ing_id, status="done")
-        await db.ingestions.update_one({"id": ing_id}, {"$set": {"inbox_id": inbox_id}})
+        await db.ingestions.update_one({"id": ing_id, "tenant_id": tenant_id}, {"$set": {"inbox_id": inbox_id}})  # FIX-001-C
         return {"type": "ingestion", "id": ing_id, "created": created}
     # Text / instruction drafts → run the structuring pipeline, then apply reviewer overrides + release.
     note_id = new_id()
@@ -4472,10 +4472,12 @@ async def execute_capture(d: dict, user: dict):
         if overrides:
             overrides["updated_at"] = now_iso()
             overrides["last_action"] = "Set by reviewer"
-            await db.tasks.update_many({"decision_id": decision_id}, {"$set": overrides})
+            # FIX-001-C: all writes below scope by tenant_id so a leaked/guessed
+            # decision_id can never touch another tenant's tasks or decision.
+            await db.tasks.update_many({"tenant_id": tenant_id, "decision_id": decision_id}, {"$set": overrides})
         # Reviewer approved the capture → release the decision's blocked tasks.
-        await db.decisions.update_one({"id": decision_id}, {"$set": {"status": "approved"}})
-        await db.tasks.update_many({"decision_id": decision_id, "status": "blocked"},
+        await db.decisions.update_one({"id": decision_id, "tenant_id": tenant_id}, {"$set": {"status": "approved"}})
+        await db.tasks.update_many({"tenant_id": tenant_id, "decision_id": decision_id, "status": "blocked"},
                                    {"$set": {"status": "todo", "updated_at": now_iso(), "last_action": "Approved via capture"}})
     return {"type": "decision", "id": decision_id}
 

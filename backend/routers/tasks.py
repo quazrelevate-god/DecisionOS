@@ -63,6 +63,7 @@ from models.tasks import (
     RespondInput,
 )
 from services import brain_context
+from services.tenancy import tenant_filter  # FIX-001-C
 from services.tasks import (
     TASK_STATUSES,
     _attach_reference_ids,
@@ -288,7 +289,7 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
         else:
             updates["last_action"] = "Updated"
         updates["updated_at"] = now_iso()
-        await db.tasks.update_one({"id": task_id}, {"$set": updates})
+        await db.tasks.update_one(tenant_filter(task_id, user["tenant_id"]), {"$set": updates})  # FIX-001-C
         if updates.get("assignee_id") and updates["assignee_id"] != user["id"]:
             await push_notification(user["tenant_id"], [updates["assignee_id"]], 1,
                                     f"Work assigned to you: '{t['title']}'", "task", task_id,
@@ -314,7 +315,7 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
             member = await db.users.find_one({"id": updates["assignee_id"]}, {"_id": 0, "name": 1})
             await log_activity(user["tenant_id"], user["id"], "task_assigned",
                                f"Assigned '{t['title']}' to {(member or {}).get('name', 'a member')}", "task", task_id)
-    return await enrich_task(await db.tasks.find_one({"id": task_id}, {"_id": 0}))
+    return await enrich_task(await db.tasks.find_one(tenant_filter(task_id, user["tenant_id"]), {"_id": 0}))  # FIX-001-C
 
 
 # ---------------------------------------------------------------------------
@@ -349,7 +350,7 @@ async def reassign_task(task_id: str, inp: TaskReassignInput, user: dict = Depen
         who = inp.assignee_role
     else:
         raise HTTPException(status_code=400, detail="Pick a member or a role")
-    await db.tasks.update_one({"id": task_id}, {"$set": updates})
+    await db.tasks.update_one(tenant_filter(task_id, user["tenant_id"]), {"$set": updates})  # FIX-001-C
     if new_assignee_id and new_assignee_id != user["id"]:
         await push_notification(user["tenant_id"], [new_assignee_id], 1,
                                 f"Work assigned to you: '{t['title']}'", "task", task_id,
@@ -357,7 +358,7 @@ async def reassign_task(task_id: str, inp: TaskReassignInput, user: dict = Depen
     await log_activity(user["tenant_id"], user["id"], "task_assigned", f"Reassigned '{t['title']}' to {who}", "task", task_id)
     if t.get("decision_id"):
         await add_decision_event(t["decision_id"], f"{t['title']} reassigned to {who}", user["name"], "task")
-    return await enrich_task(await db.tasks.find_one({"id": task_id}, {"_id": 0}))
+    return await enrich_task(await db.tasks.find_one(tenant_filter(task_id, user["tenant_id"]), {"_id": 0}))  # FIX-001-C
 
 
 # ---------------------------------------------------------------------------
@@ -375,7 +376,7 @@ async def approve_task(task_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Only the assigned approver or an owner can approve this task")
     # Pre-execution approval: unlock the task so the assignee can start working on it.
     new_status = "todo" if t.get("status") == "blocked" else t.get("status")
-    await db.tasks.update_one({"id": task_id}, {"$set": {
+    await db.tasks.update_one(tenant_filter(task_id, user["tenant_id"]), {"$set": {  # FIX-001-C
         "status": new_status, "approval_status": "approved",
         "approved_by": user["id"], "approved_at": now_iso(),
         "updated_at": now_iso(), "last_action": "Approved — work can start",
@@ -392,7 +393,7 @@ async def approve_task(task_id: str, user: dict = Depends(get_current_user)):
         actor_id=user["id"], actor_name=user.get("name") or "",
         department=user.get("role") or "", visibility="dept",
     )
-    return await enrich_task(await db.tasks.find_one({"id": task_id}, {"_id": 0}))
+    return await enrich_task(await db.tasks.find_one(tenant_filter(task_id, user["tenant_id"]), {"_id": 0}))  # FIX-001-C
 
 
 @router.post("/tasks/{task_id}/reject")
@@ -407,7 +408,7 @@ async def reject_task(task_id: str, inp: TaskRejectInput, user: dict = Depends(g
         raise HTTPException(status_code=403, detail="Only the assigned approver or an owner can reject this task")
     reason = (inp.reason or "").strip()
     # Keep the task locked (blocked) so work still cannot start until it's approved.
-    await db.tasks.update_one({"id": task_id}, {"$set": {
+    await db.tasks.update_one(tenant_filter(task_id, user["tenant_id"]), {"$set": {  # FIX-001-C
         "status": "blocked", "approval_status": "rejected",
         "rejected_by": user["id"], "rejected_at": now_iso(), "rejection_reason": reason,
         "updated_at": now_iso(), "last_action": "Changes requested",
@@ -425,7 +426,7 @@ async def reject_task(task_id: str, inp: TaskRejectInput, user: dict = Depends(g
         actor_id=user["id"], actor_name=user.get("name") or "",
         department=user.get("role") or "", visibility="dept",
     )
-    return await enrich_task(await db.tasks.find_one({"id": task_id}, {"_id": 0}))
+    return await enrich_task(await db.tasks.find_one(tenant_filter(task_id, user["tenant_id"]), {"_id": 0}))  # FIX-001-C
 
 
 @router.post("/tasks/{task_id}/clarify")
@@ -440,8 +441,8 @@ async def clarify_task(task_id: str, inp: TaskRejectInput, user: dict = Depends(
     note = (inp.reason or "").strip()
     if not note:
         raise HTTPException(status_code=400, detail="Add what you need clarified")
-    await db.tasks.update_one({"id": task_id}, {"$set": {"updated_at": now_iso(), "last_action": "Clarification requested"}})
-    await db.tasks.update_one({"id": task_id}, {"$push": {"updates": {
+    await db.tasks.update_one(tenant_filter(task_id, user["tenant_id"]), {"$set": {"updated_at": now_iso(), "last_action": "Clarification requested"}})  # FIX-001-C
+    await db.tasks.update_one(tenant_filter(task_id, user["tenant_id"]), {"$push": {"updates": {  # FIX-001-C
         "id": new_id(), "kind": "note", "text": f"Clarification requested: {note}",
         "step_id": None, "step_text": None, "author_id": user["id"], "author_name": user.get("name"),
         "to_id": t.get("assignee_id"), "to_role": None, "to_name": t.get("assignee_name"),
@@ -452,7 +453,7 @@ async def clarify_task(task_id: str, inp: TaskRejectInput, user: dict = Depends(
                                 f"Clarification needed on '{t['title']}': {note[:120]}", "task", task_id,
                                 ntype="clarification", title=t["title"], sender=user["name"])
     await log_activity(user["tenant_id"], user["id"], "task_clarify", f"Requested clarification on '{t['title']}'", "task", task_id)
-    return await enrich_task(await db.tasks.find_one({"id": task_id}, {"_id": 0}))
+    return await enrich_task(await db.tasks.find_one(tenant_filter(task_id, user["tenant_id"]), {"_id": 0}))  # FIX-001-C
 
 
 # ---------------------------------------------------------------------------
@@ -474,8 +475,8 @@ async def generate_execution_plan(task_id: str, user: dict = Depends(get_current
     steps = [{"id": new_id(), "text": s, "done": False} for s in gen["steps"]]
     plan = {"status": "draft", "task_type": gen["task_type"], "steps": steps,
             "progress": 0, "generated_at": now_iso(), "updated_at": now_iso()}
-    await db.tasks.update_one({"id": task_id}, {"$set": {"execution_plan": plan}})
-    return await enrich_task(await db.tasks.find_one({"id": task_id}, {"_id": 0}))
+    await db.tasks.update_one(tenant_filter(task_id, user["tenant_id"]), {"$set": {"execution_plan": plan}})  # FIX-001-C
+    return await enrich_task(await db.tasks.find_one(tenant_filter(task_id, user["tenant_id"]), {"_id": 0}))  # FIX-001-C
 
 
 @router.patch("/tasks/{task_id}/execution-plan")
@@ -503,12 +504,12 @@ async def save_execution_plan(task_id: str, inp: ExecPlanInput, user: dict = Dep
             updates["status"] = "done"
         elif plan["progress"] > 0 and t.get("status") == "todo":
             updates["status"] = "in_progress"
-    await db.tasks.update_one({"id": task_id}, {"$set": updates})
+    await db.tasks.update_one(tenant_filter(task_id, user["tenant_id"]), {"$set": updates})  # FIX-001-C
     if updates.get("status") == "done":
         await log_activity(user["tenant_id"], user["id"], "task_done", f"Completed task '{t['title']}'", "task", task_id)
         if t.get("decision_id"):
             await add_decision_event(t["decision_id"], f"{t['title']} → done", user["name"], "task")
-    return await enrich_task(await db.tasks.find_one({"id": task_id}, {"_id": 0}))
+    return await enrich_task(await db.tasks.find_one(tenant_filter(task_id, user["tenant_id"]), {"_id": 0}))  # FIX-001-C
 
 
 @router.delete("/tasks/{task_id}/execution-plan")
@@ -518,8 +519,8 @@ async def delete_execution_plan(task_id: str, user: dict = Depends(get_current_u
         raise HTTPException(status_code=404, detail="Not found")
     if not _can_work_task(user, t):
         raise HTTPException(status_code=403, detail="Only the assignee or owner can clear this plan")
-    await db.tasks.update_one({"id": task_id}, {"$unset": {"execution_plan": ""}, "$set": {"updated_at": now_iso()}})
-    return await enrich_task(await db.tasks.find_one({"id": task_id}, {"_id": 0}))
+    await db.tasks.update_one(tenant_filter(task_id, user["tenant_id"]), {"$unset": {"execution_plan": ""}, "$set": {"updated_at": now_iso()}})  # FIX-001-C
+    return await enrich_task(await db.tasks.find_one(tenant_filter(task_id, user["tenant_id"]), {"_id": 0}))  # FIX-001-C
 
 
 @router.post("/tasks/{task_id}/steps/ask")
@@ -574,7 +575,7 @@ async def add_task_update(task_id: str, inp: TaskUpdateNoteInput, user: dict = D
         "to_id": to_id, "to_role": to_role, "to_name": to_name,
         "followup_task_id": followup_task_id, "created_at": now_iso(),
     }
-    await db.tasks.update_one({"id": task_id}, {"$push": {"updates": entry}})
+    await db.tasks.update_one(tenant_filter(task_id, user["tenant_id"]), {"$push": {"updates": entry}})  # FIX-001-C
 
     if action == "note":
         await log_activity(tenant_id, user["id"], "task_note", f"Note on '{t.get('title')}': {text[:80]}", "task", task_id)
@@ -595,7 +596,7 @@ async def add_task_update(task_id: str, inp: TaskUpdateNoteInput, user: dict = D
         if t.get("decision_id"):
             await add_decision_event(t["decision_id"], f"{t.get('title')} {verb} {to_name}", user["name"], "assigned")
 
-    return await enrich_task(await db.tasks.find_one({"id": task_id}, {"_id": 0}))
+    return await enrich_task(await db.tasks.find_one(tenant_filter(task_id, user["tenant_id"]), {"_id": 0}))  # FIX-001-C
 
 
 @router.post("/tasks/{task_id}/respond")
@@ -615,7 +616,7 @@ async def respond_to_handoff(task_id: str, inp: RespondInput, user: dict = Depen
 
     tenant_id = user["tenant_id"]
     parent_id = t["parent_task_id"]
-    parent = await db.tasks.find_one({"id": parent_id}, {"_id": 0})
+    parent = await db.tasks.find_one({"id": parent_id, "tenant_id": tenant_id}, {"_id": 0})  # FIX-001-C
     # Route the reply back to whoever raised it; fall back to the original task's assignee for legacy items.
     raised_by = t.get("raised_by") or (parent or {}).get("assignee_id")
     raised_by_name = t.get("raised_by_name")
@@ -633,9 +634,9 @@ async def respond_to_handoff(task_id: str, inp: RespondInput, user: dict = Depen
         "followup_task_id": None, "created_at": now_iso(),
     }
     if parent_id:
-        await db.tasks.update_one({"id": parent_id}, {"$push": {"updates": entry}})
+        await db.tasks.update_one(tenant_filter(parent_id, tenant_id), {"$push": {"updates": entry}})  # FIX-001-C
     # Resolve this follow-up.
-    await db.tasks.update_one({"id": task_id}, {"$set": {"status": "done", "resolved_at": now_iso()}})
+    await db.tasks.update_one(tenant_filter(task_id, tenant_id), {"$set": {"status": "done", "resolved_at": now_iso()}})  # FIX-001-C
 
     ptitle = (parent or {}).get("title", "your task")
     if raised_by:
@@ -646,7 +647,7 @@ async def respond_to_handoff(task_id: str, inp: RespondInput, user: dict = Depen
                        f"{user['name']} responded to {raised_by_name or 'the requester'} on '{ptitle}'", "task", parent_id)
     if parent and parent.get("decision_id"):
         await add_decision_event(parent["decision_id"], f"{user['name']} responded: {text[:80]}", user["name"], "event")
-    return await enrich_task(await db.tasks.find_one({"id": task_id}, {"_id": 0}))
+    return await enrich_task(await db.tasks.find_one(tenant_filter(task_id, user["tenant_id"]), {"_id": 0}))  # FIX-001-C
 
 
 # ---------------------------------------------------------------------------
@@ -674,7 +675,7 @@ async def prioritize_tasks(force: bool = False, limit: int = 25, user: dict = De
                     t["ai_scores"] = s
                     t["scored_at"] = now
                     scored_n += 1
-                    await db.tasks.update_one({"id": t["id"]}, {"$set": {"ai_scores": s, "scored_at": now}})
+                    await db.tasks.update_one(tenant_filter(t["id"], tid), {"$set": {"ai_scores": s, "scored_at": now}})  # FIX-001-C
     open_tasks = await enrich_tasks(open_tasks)
     open_tasks.sort(key=lambda t: (t.get("ai_scores") or {}).get("priority_score", -1), reverse=True)
     return {"tasks": open_tasks, "scored": scored_n}
@@ -693,7 +694,7 @@ async def upload_task_attachment(task_id: str, file: UploadFile = File(...), kin
     kind = kind if kind in ("reference", "evidence", "photo", "voice") else "evidence"
     rec = await _store_file(user["tenant_id"], user["id"], file, kind, task_id=task_id)
     att = _file_public(rec)
-    await db.tasks.update_one({"id": task_id}, {"$push": {"attachments": att},
+    await db.tasks.update_one(tenant_filter(task_id, user["tenant_id"]), {"$push": {"attachments": att},  # FIX-001-C
                               "$set": {"updated_at": now_iso(), "last_action": f"{kind.title()} attached"}})
     if kind == "reference" and background is not None:
         background.add_task(_analyze_reference_file, user["tenant_id"], task_id, rec)

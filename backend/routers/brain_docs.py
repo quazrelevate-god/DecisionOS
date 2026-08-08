@@ -26,6 +26,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from services import obj_store
+from services.tenancy import tenant_filter  # FIX-001-C
 from core import db, get_current_user, new_id, now_iso, logger, user_perms
 
 
@@ -317,7 +318,7 @@ async def update_document(doc_id: str, inp: PatchInput, user: dict = Depends(get
                                   merged.get("summary") or "",
                                   merged.get("original_filename") or "")
 
-    await db.brain_documents.update_one({"id": doc_id}, {"$set": patch})
+    await db.brain_documents.update_one(tenant_filter(doc_id, user["tenant_id"]), {"$set": patch})  # FIX-001-C
     return _public({**doc, **patch})
 
 
@@ -326,7 +327,7 @@ async def delete_document(doc_id: str, user: dict = Depends(get_current_user)):
     doc = await _fetch(doc_id, user["tenant_id"])
     if not (_can_manage(user) or doc.get("uploaded_by") == user["id"]):
         raise HTTPException(status_code=403, detail="Only the uploader or a manager can delete this document")
-    await db.brain_documents.update_one({"id": doc_id}, {"$set": {"is_deleted": True, "updated_at": now_iso()}})
+    await db.brain_documents.update_one(tenant_filter(doc_id, user["tenant_id"]), {"$set": {"is_deleted": True, "updated_at": now_iso()}})  # FIX-001-C
     return {"ok": True, "deleted": doc_id}
 
 

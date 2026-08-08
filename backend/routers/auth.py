@@ -41,8 +41,8 @@ class ProductItem(BaseModel):
 
 
 class RegisterInput(BaseModel):
-    company_name: str
-    name: str
+    company_name: Optional[str] = None  # can be sourced from draft
+    name: Optional[str] = None
     email: EmailStr
     password: str = Field(min_length=6)
     phone: Optional[str] = None
@@ -58,6 +58,10 @@ class RegisterInput(BaseModel):
     roles: Optional[List[RoleItem]] = None
     products: Optional[List[ProductItem]] = None
     os_blueprint: Optional[dict] = None
+    # FIX-001-D: optional draft_id to source wizard data from server-side
+    # draft (prevents "user typed 7 steps then /register 500'd and lost
+    # everything"). Client-provided values still win over draft values.
+    draft_id: Optional[str] = None
 
 
 class LoginInput(BaseModel):
@@ -82,11 +86,25 @@ class ChangePasswordInput(BaseModel):
 @router.post("/register")
 async def register(inp: RegisterInput, response: Response):
     # Deferred to break the server.py ↔ routers/auth.py cycle.
-    from server import (
-        normalize_os_blueprint, ai_generate_lexicon, ai_generate_operating_model,
-        ai_generate_finance_categories,
-    )
+    from server import normalize_os_blueprint
     from core import DEFAULT_ROLES
+    # FIX-001-D imports — status-aware AI + draft merge/complete
+    from services import ai_setup as ai_setup_svc
+    from services import onboarding_drafts as drafts_svc
+
+    # FIX-001-D: if a draft_id was passed, merge saved wizard state
+    # underneath the request body. Client-provided values still win.
+    draft = None
+    if inp.draft_id:
+        draft = await drafts_svc.get_draft(db, inp.draft_id)
+    if draft:
+        raw = drafts_svc.merge_draft_into_register_input(draft, inp.model_dump())
+        # Re-validate through the model so downstream code sees typed fields
+        # without touching the request path.
+        inp = RegisterInput(**{k: v for k, v in raw.items() if v is not None})
+
+    if not inp.company_name or not inp.name:
+        raise HTTPException(status_code=400, detail="Company name and your name are required")
 
     email = inp.email.lower()
     if await db.users.find_one({"email": email}):
@@ -106,6 +124,23 @@ async def register(inp: RegisterInput, response: Response):
         if k and k != "owner" and k not in seen:
             seen.add(k)
             clean_roles.append({"key": k, "label": r.get("label") or k.replace("_", " ").title()})
+
+    # FIX-001-D: use status-aware AI wrappers so a silent LLM failure /
+    # default-fallback is RECORDED on the tenant doc as `ai_setup_status`.
+    # Frontend can then show "AI setup incomplete — click to regenerate."
+    # The `/api/tenant/ai-setup/retry` endpoint uses the same wrappers.
+    lexicon, lex_status = await ai_setup_svc.ai_generate_lexicon_with_status(
+        inp.industry, inp.company_size, clean_roles, inp.description or "")
+    om, om_status = await ai_setup_svc.ai_generate_operating_model_with_status(
+        inp.industry, inp.company_size, clean_roles, inp.description or "")
+    fc, fc_status = await ai_setup_svc.ai_generate_finance_categories_with_status(
+        inp.industry, inp.company_size, clean_roles, inp.description or "")
+    ai_setup_status = {
+        "lexicon": lex_status,
+        "operating_model": om_status,
+        "finance_categories": fc_status,
+    }
+
     tenant_doc = {
         "id": tenant_id, "name": inp.company_name,
         "industry": inp.industry or "General",
@@ -123,9 +158,10 @@ async def register(inp: RegisterInput, response: Response):
         "workflow_templates": bp["workflows"] if bp else [],
         "operational_task_templates": bp["operational_tasks"] if bp else [],
         "approval_rules": bp["approval_rules"] if bp else [],
-        "lexicon": await ai_generate_lexicon(inp.industry, inp.company_size, clean_roles, inp.description or ""),
-        "operating_model": await ai_generate_operating_model(inp.industry, inp.company_size, clean_roles, inp.description or ""),
-        "finance_categories": await ai_generate_finance_categories(inp.industry, inp.company_size, clean_roles, inp.description or ""),
+        "lexicon": lexicon,
+        "operating_model": om,
+        "finance_categories": fc,
+        "ai_setup_status": ai_setup_status,  # FIX-001-D
         "created_at": now_iso(),
     }
     await db.tenants.insert_one(tenant_doc)
@@ -135,6 +171,14 @@ async def register(inp: RegisterInput, response: Response):
         "phone": (inp.phone or "").strip(),
         "password_hash": hash_password(inp.password), "role": "owner", "created_at": now_iso(),
     })
+
+    # FIX-001-D: consume the draft (if any) so it can't be reused.
+    if draft:
+        try:
+            await drafts_svc.mark_completed(db, draft["id"], tenant_id)
+        except Exception:
+            pass  # best-effort; tenant is real regardless
+
     token = create_token(user_id, tenant_id, "owner")
     user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
     tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0})
@@ -145,7 +189,12 @@ async def register(inp: RegisterInput, response: Response):
         "operational_tasks": len(tenant_doc["operational_task_templates"]),
         "approval_rules": len(tenant_doc["approval_rules"]),
     }
-    return {"token": token, "user": user, "tenant": tenant, "os_summary": os_summary}
+    return {
+        "token": token, "user": user, "tenant": tenant, "os_summary": os_summary,
+        # FIX-001-D: surface AI setup status so the frontend can prompt
+        # regeneration when needed instead of silently using defaults.
+        "ai_setup_status": ai_setup_svc.summarize_ai_setup_status(ai_setup_status),
+    }
 
 
 @router.post("/login")

@@ -11,9 +11,12 @@ from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 from core import (
     db, EMERGENT_LLM_KEY, CLAUDE_KEY, claude_key, claude_chat, LLM_MODEL,
-    _extract_json, new_id, logger, DEFAULT_ROLES,
-    normalize_os_blueprint, require_perm, log_activity,
+    _extract_json, new_id, now_iso, logger, DEFAULT_ROLES,
+    normalize_os_blueprint, require_perm, require_role, log_activity,
+    get_current_user,
 )
+from services import onboarding_drafts as drafts_svc  # FIX-001-D
+from services import ai_setup as ai_setup_svc          # FIX-001-D
 
 router = APIRouter(prefix="/api")
 
@@ -115,3 +118,115 @@ async def update_os_blueprint(inp: OSBlueprintInput, user: dict = Depends(requir
         await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": updates})
         await log_activity(user["tenant_id"], user["id"], "os_blueprint_updated", f"{user['name']} updated the operating system templates")
     return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+
+
+# ============================================================================
+# FIX-001-D: Onboarding drafts (pre-registration) + AI setup retry (post)
+# ============================================================================
+
+
+class DraftCreateInput(BaseModel):
+    email: Optional[str] = None
+
+
+class DraftPatchInput(BaseModel):
+    step: str
+    data: dict
+
+
+@router.post("/onboarding/draft")
+async def create_onboarding_draft(inp: DraftCreateInput):
+    """Create a server-side onboarding draft. Client keeps the returned
+    draft_id and PATCHes it as each wizard step completes so a page
+    refresh / network drop never wipes user input."""
+    doc = await drafts_svc.create_draft(db, email=inp.email)
+    return {"draft_id": doc["id"], "created_at": doc["created_at"]}
+
+
+@router.get("/onboarding/draft/{draft_id}")
+async def get_onboarding_draft(draft_id: str):
+    """Resume from a saved draft. Returns the full draft doc so the client
+    can restore every step's inputs."""
+    doc = await drafts_svc.get_draft(db, draft_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Draft not found or already completed")
+    return doc
+
+
+@router.patch("/onboarding/draft/{draft_id}")
+async def patch_onboarding_draft(draft_id: str, inp: DraftPatchInput):
+    """Save one wizard step's data onto the draft. Unknown step keys are
+    rejected (fail-safe: don't let a client stash arbitrary data)."""
+    if inp.step not in drafts_svc.VALID_STEP_KEYS:
+        raise HTTPException(status_code=400, detail=f"Invalid step '{inp.step}'")
+    doc = await drafts_svc.patch_draft(db, draft_id, inp.step, inp.data)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Draft not found or already completed")
+    return doc
+
+
+@router.post("/tenant/ai-setup/retry")
+async def retry_ai_setup(user: dict = Depends(require_role("owner"))):
+    """Re-run any AI generators marked `defaulted` or `failed` on this
+    tenant. Owner-only. Idempotent: safe to call repeatedly. Uses the
+    tenant's stored industry/roles/description as inputs.
+
+    Introduced by FIX-001-D so a founder whose AI setup silently
+    fell back to defaults during signup can retry without needing
+    admin intervention or starting a new workspace."""
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    industry = tenant.get("industry") or "General"
+    company_size = tenant.get("company_size") or ""
+    roles = tenant.get("roles") or DEFAULT_ROLES
+    description = tenant.get("description") or ""
+
+    status_map = dict(tenant.get("ai_setup_status") or {})
+    updates = {}
+
+    # Retry lexicon if not already generated
+    if status_map.get("lexicon") != ai_setup_svc.STATUS_GENERATED:
+        lex, lex_status = await ai_setup_svc.ai_generate_lexicon_with_status(
+            industry, company_size, roles, description)
+        if lex_status == ai_setup_svc.STATUS_GENERATED:
+            updates["lexicon"] = lex
+        status_map["lexicon"] = lex_status
+
+    # Retry operating model
+    if status_map.get("operating_model") != ai_setup_svc.STATUS_GENERATED:
+        om, om_status = await ai_setup_svc.ai_generate_operating_model_with_status(
+            industry, company_size, roles, description)
+        if om_status == ai_setup_svc.STATUS_GENERATED:
+            updates["operating_model"] = om
+        status_map["operating_model"] = om_status
+
+    # Retry finance categories
+    if status_map.get("finance_categories") != ai_setup_svc.STATUS_GENERATED:
+        fc, fc_status = await ai_setup_svc.ai_generate_finance_categories_with_status(
+            industry, company_size, roles, description)
+        if fc_status == ai_setup_svc.STATUS_GENERATED:
+            updates["finance_categories"] = fc
+        status_map["finance_categories"] = fc_status
+
+    updates["ai_setup_status"] = status_map
+    updates["ai_setup_retried_at"] = now_iso()
+    await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": updates})
+    await log_activity(user["tenant_id"], user["id"], "ai_setup_retried",
+                       f"{user['name']} retried AI setup",
+                       "tenant", user["tenant_id"])
+    return {
+        "status": "ok",
+        "ai_setup_status": ai_setup_svc.summarize_ai_setup_status(status_map),
+    }
+
+
+@router.get("/tenant/ai-setup/status")
+async def get_ai_setup_status(user: dict = Depends(get_current_user)):
+    """Read the AI setup status for the current tenant. Frontend uses
+    this to decide whether to show the 'AI setup incomplete, click to
+    regenerate' banner."""
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]},
+                                       {"_id": 0, "ai_setup_status": 1})
+    return ai_setup_svc.summarize_ai_setup_status((tenant or {}).get("ai_setup_status") or {})

@@ -1,0 +1,39 @@
+# Keep the image small + safe: exclude everything the runtime doesn't need.
+# Order roughly by size + risk (secrets first).
+
+# --- SECRETS (never bake into image) ---
+.env
+.env.*
+*.env
+!/.env.example
+
+# --- Python virtualenvs / caches ---
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- Local dev artifacts ---
+uploads/          # local-disk uploads (FIX-002-E moved these to obj_store)
+logs/
+*.log
+
+# --- Tests + fixtures (not needed at runtime) ---
+tests/
+test_reports/
+
+# --- Git + VCS ---
+.git/
+.gitignore
+.github/
+
+# --- Editor / OS junk ---
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

@@ -1,0 +1,9 @@
+# FIX-002-F: Procfile for platforms that read it (Heroku, some Render
+# setups, older Railway configs). Railway with a Dockerfile ignores this
+# and uses the Dockerfile's CMD; the Procfile is a safe fallback for any
+# platform that prefers process-type declarations over container images.
+#
+# Kept in lockstep with the Dockerfile CMD — same worker count, same
+# graceful shutdown, same proxy-headers handling.
+
+web: uvicorn server:app --host 0.0.0.0 --port $PORT --workers ${WEB_CONCURRENCY:-2} --timeout-keep-alive 30 --timeout-graceful-shutdown 60 --proxy-headers --forwarded-allow-ips '*'

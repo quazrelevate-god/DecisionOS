@@ -584,3 +584,18 @@ async def admin_health(admin: dict = Depends(get_platform_admin)):
         },
         "emergent_key": "configured" if EMERGENT_LLM_KEY else "missing",
     }
+
+
+# FIX-002-C: expose the migration ledger so ops can see which migrations
+# have run + when. Platform-admin only.
+@router.get("/migrations")
+async def admin_migrations(admin: dict = Depends(get_platform_admin)):
+    """List every migration recorded in the ledger. Useful for verifying
+    a deploy actually applied its migrations, or diagnosing 'why does
+    tenant X still have old shape?'"""
+    from services.migrations import applied_migrations
+    rows = await applied_migrations(db)
+    # Also include any failed rows so ops see the trail.
+    failed = await db["migrations_applied"].find(
+        {"status": "failed"}, {"_id": 0}).sort("failed_at", -1).to_list(100)
+    return {"applied": rows, "failed": failed, "total_applied": len(rows)}

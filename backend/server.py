@@ -4957,20 +4957,30 @@ async def _bootstrap():
             partialFilterExpression={"phone_norm": {"$type": "string", "$gt": ""}},
             name="users_phone_norm_partial",
         )
-        # One-time backfill: any pre-existing user with `phone` but no
-        # `phone_norm` gets one computed from their stored phone. Idempotent
-        # (only touches docs missing the field).
-        try:
+        # FIX-002-C: phone_norm backfill routed through the migration ledger.
+        # Idempotent internally (only touches docs missing the field) AND
+        # tracked in db.migrations_applied so subsequent boots skip cleanly.
+        from services.migrations import apply_migration as _apply_migration
+
+        async def _backfill_phone_norm(_db):
             from services.phone import norm_phone as _np
-            async for _u in db.users.find(
+            async for _u in _db.users.find(
                 {"phone": {"$type": "string", "$gt": ""}, "phone_norm": {"$exists": False}},
                 {"_id": 0, "id": 1, "phone": 1},
             ):
                 _pn = _np(_u.get("phone") or "")
                 if _pn:
-                    await db.users.update_one({"id": _u["id"]}, {"$set": {"phone_norm": _pn}})
+                    await _db.users.update_one({"id": _u["id"]}, {"$set": {"phone_norm": _pn}})
+
+        try:
+            _result = await _apply_migration(
+                db, "backfill_users_phone_norm_v1", _backfill_phone_norm,
+                description="FIX-002-A: compute phone_norm for pre-migration users",
+            )
+            if _result == "applied":
+                logger.info("Migration applied: backfill_users_phone_norm_v1")
         except Exception as e:
-            logger.warning(f"phone_norm backfill: {e}")
+            logger.warning(f"phone_norm backfill migration: {e}")
         await db.decisions.create_index([("tenant_id", 1), ("created_at", -1)])
         await db.tasks.create_index([("tenant_id", 1), ("status", 1), ("due_date", 1)])
         await db.tasks.create_index([("tenant_id", 1), ("assignee_id", 1), ("status", 1)])
@@ -5041,7 +5051,18 @@ async def _bootstrap():
         await load_ai_keys_from_db()
         await seed_platform_admin()
         await seed_demo()
-        await migrate_tenants()
+        # FIX-002-C: route through the migration ledger so it runs exactly
+        # once instead of scanning every tenant on every boot.
+        try:
+            _tres = await _apply_migration(
+                db, "migrate_tenants_backfill_roles_v1",
+                lambda _db: migrate_tenants(),
+                description="Backfill industry/roles/products on pre-onboarding tenants",
+            )
+            if _tres == "applied":
+                logger.info("Migration applied: migrate_tenants_backfill_roles_v1")
+        except Exception as e:
+            logger.warning(f"migrate_tenants migration: {e}")
         await fixup_demo_tenant()
         await write_test_credentials()
         logger.info("Bootstrap complete.")

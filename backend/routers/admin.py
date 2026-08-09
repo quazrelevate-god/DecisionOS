@@ -599,3 +599,25 @@ async def admin_migrations(admin: dict = Depends(get_platform_admin)):
     failed = await db["migrations_applied"].find(
         {"status": "failed"}, {"_id": 0}).sort("failed_at", -1).to_list(100)
     return {"applied": rows, "failed": failed, "total_applied": len(rows)}
+
+
+# FIX-002-D: expose the scheduler leader lock so ops can see WHICH
+# replica is currently the leader (and confirm exactly one is). Useful
+# for debugging "why isn't the follow-up sweep running?" or "why did
+# I get duplicate emails?"
+@router.get("/scheduler-locks")
+async def admin_scheduler_locks(admin: dict = Depends(get_platform_admin)):
+    """List every leader lock currently in scheduler_locks. Includes a
+    derived is_expired flag so ops can spot stale locks that TTL hasn't
+    cleaned yet (Mongo TTL sweep runs every ~60s)."""
+    from services.leader_lock import LOCK_COLLECTION
+    from datetime import datetime, timezone
+    now_iso = datetime.now(timezone.utc).isoformat()
+    rows = await db[LOCK_COLLECTION].find({}, {"_id": 1, "holder": 1,
+                                               "acquired_at": 1, "expires_at": 1,
+                                               "lease_seconds": 1}).to_list(50)
+    for r in rows:
+        r["name"] = r.pop("_id")
+        exp = r.get("expires_at")
+        r["is_expired"] = bool(exp and exp < now_iso)
+    return {"locks": rows, "total": len(rows)}

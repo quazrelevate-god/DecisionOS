@@ -2852,25 +2852,54 @@ FOLLOWUP_INTERVAL_SECONDS = int(os.environ.get("FOLLOWUP_INTERVAL_SECONDS", "300
 
 
 async def _followup_scheduler_loop():
+    # FIX-002-D: distributed leader lock. Every replica keeps ticking on
+    # its own timer, but only the replica that acquires the Mongo lock
+    # runs the sweep for a given tick. Prevents 3x duplicate escalation
+    # emails / platform alerts under multi-replica deploys (and the
+    # sweep still fires with only 1 replica — natural single-tenancy of
+    # the lock). Lease of 2x the tick interval gives a comfortable
+    # margin over normal sweep duration (~seconds); a crashed leader's
+    # lock naturally expires on the next tick's attempt.
+    from services.leader_lock import try_acquire, release, make_holder_id
+    holder_id = make_holder_id("followup-scheduler")
+    lease_seconds = max(FOLLOWUP_INTERVAL_SECONDS * 2, 120)
     # Small initial delay so startup/bootstrap finishes first.
     await asyncio.sleep(30)
     while True:
+        got_lock = False
         try:
-            tenant_ids = await db.tenants.distinct("id")
-            for tid in tenant_ids:
+            got_lock = await try_acquire(db, "followup_sweep", holder_id, lease_seconds=lease_seconds)
+            if not got_lock:
+                logger.debug("[followup-scheduler] another replica is leader this tick; skipping")
+                await asyncio.sleep(FOLLOWUP_INTERVAL_SECONDS)
+                continue
+            try:
+                tenant_ids = await db.tenants.distinct("id")
+                for tid in tenant_ids:
+                    try:
+                        # Bypass the per-tenant 60s poll throttle for the timer sweep.
+                        _followup_last_run.pop(tid, None)
+                        await run_followup(tid)
+                    except Exception as e:
+                        logger.warning(f"[followup-scheduler] tenant {tid} failed: {e}")
+                logger.info(f"[followup-scheduler] leader swept {len(tenant_ids)} tenant(s); next in {FOLLOWUP_INTERVAL_SECONDS}s")
+            except Exception as e:
+                logger.warning(f"[followup-scheduler] sweep failed: {e}")
+            try:
+                await _notify_provider_outages()
+            except Exception as e:
+                logger.warning(f"[followup-scheduler] outage-alert check failed: {e}")
+        except Exception as e:
+            # Never let a lock or DB error stop the loop — next tick retries.
+            logger.exception(f"[followup-scheduler] tick error: {e}")
+        finally:
+            if got_lock:
+                # Clean release so a redeploy hands the lock over immediately
+                # instead of waiting for lease expiry.
                 try:
-                    # Bypass the per-tenant 60s poll throttle for the timer sweep.
-                    _followup_last_run.pop(tid, None)
-                    await run_followup(tid)
-                except Exception as e:
-                    logger.warning(f"[followup-scheduler] tenant {tid} failed: {e}")
-            logger.info(f"[followup-scheduler] swept {len(tenant_ids)} tenant(s); next in {FOLLOWUP_INTERVAL_SECONDS}s")
-        except Exception as e:
-            logger.warning(f"[followup-scheduler] sweep failed: {e}")
-        try:
-            await _notify_provider_outages()
-        except Exception as e:
-            logger.warning(f"[followup-scheduler] outage-alert check failed: {e}")
+                    await release(db, "followup_sweep", holder_id)
+                except Exception:
+                    pass  # natural TTL expiry handles it
         await asyncio.sleep(FOLLOWUP_INTERVAL_SECONDS)
 
 
@@ -4948,6 +4977,18 @@ async def _bootstrap():
         # of these collections filters by tenant_id, so unindexed = full scans).
         await db.users.create_index("email", unique=True)
         await db.users.create_index([("tenant_id", 1), ("role", 1)])
+        # FIX-002-D: TTL index on scheduler_locks so expired leader locks
+        # get auto-cleaned by Mongo (no separate GC job needed). Sorts by
+        # expires_at with expireAfterSeconds=0 = "delete when expires_at
+        # is in the past." Doesn't interfere with acquire logic; only
+        # removes stale rows for hygiene.
+        try:
+            await db.scheduler_locks.create_index(
+                "expires_at", expireAfterSeconds=0,
+                name="scheduler_locks_expires_at_ttl",
+            )
+        except Exception as e:
+            logger.warning(f"scheduler_locks TTL index: {e}")
         # FIX-002-A: index the normalized 10-digit form so OTP login + WhatsApp
         # routing are exact-match lookups instead of full-collection scans.
         # Partial index — only users who actually have a phone contribute; keeps

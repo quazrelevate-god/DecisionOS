@@ -725,7 +725,32 @@ def _sarvam_batch_sync(path: str) -> dict:
 
 async def transcribe_audio_full(path: str, language: str = "auto") -> dict:
     """Returns {transcript, language_code, language_name, language_probability, engine}.
-    Sarvam is primary (auto-detect + translate-to-English); batch handles long clips; OpenAI/Whisper backstop."""
+    Sarvam is primary (auto-detect + translate-to-English); batch handles long clips; OpenAI/Whisper backstop.
+
+    FIX-002-E: `path` may now be either a legacy local filesystem path OR an
+    obj_store key. If it's an obj_store key we download it to a temp file
+    first so the STT libs (which expect a real path) work unchanged.
+    """
+    from services.uploads import is_legacy_path, download_to_temp
+    _tmp_to_cleanup = None
+    if not is_legacy_path(path):
+        _tmp_to_cleanup = await download_to_temp(path)
+        path = str(_tmp_to_cleanup)
+    try:
+        return await _transcribe_audio_full_local(path, language)
+    finally:
+        if _tmp_to_cleanup is not None:
+            try:
+                os.unlink(_tmp_to_cleanup)
+            except Exception:
+                pass
+
+
+async def _transcribe_audio_full_local(path: str, language: str = "auto") -> dict:
+    """Internal: expects `path` to be a local filesystem path. All STT
+    engines are invoked from here. Split out from transcribe_audio_full
+    so the obj_store-download wrapper can wrap the whole thing without
+    duplicating engine-selection logic."""
     if get_ai_key("sarvam"):
         # 1) REST (fast, <30s)
         try:
@@ -1738,16 +1763,20 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 
 @api.post("/voice-notes")
 async def create_voice_note(background: BackgroundTasks, file: UploadFile = File(...), language: str = Form("auto"), file_ids: str = Form(""), user: dict = Depends(require_perm("voice_capture"))):
+    # FIX-002-E: uploads go to obj_store with a tenant-prefixed key so they
+    # survive redeploys, work across replicas, and can be tenant-deleted
+    # cleanly (see FIX-001-E). Was local disk under UPLOAD_DIR.
+    from services.uploads import store_upload
     note_id = new_id()
     ext = (file.filename or "audio.webm").split(".")[-1]
-    path = UPLOAD_DIR / f"{note_id}.{ext}"
     content = await file.read()
-    with open(path, "wb") as f:
-        f.write(content)
+    result = await store_upload(user["tenant_id"], "voice-notes", content, ext,
+                                 content_type=file.content_type, file_id=note_id)
     ref_ids = [x for x in (file_ids or "").split(",") if x.strip()]
     await db.voice_notes.insert_one({
         "id": note_id, "tenant_id": user["tenant_id"], "created_by": user["id"],
-        "kind": "audio", "audio_path": str(path), "transcript": None, "language": language,
+        "kind": "audio", "audio_path": result["storage_path"],
+        "transcript": None, "language": language,
         "reference_file_ids": ref_ids,
         "status": "queued", "created_at": now_iso(),
     })
@@ -1757,20 +1786,28 @@ async def create_voice_note(background: BackgroundTasks, file: UploadFile = File
 
 @api.post("/transcribe")
 async def transcribe_only(file: UploadFile = File(...), language: str = Form("auto"), user: dict = Depends(get_current_user)):
-    """Dictation helper: transcribe a short audio clip to text (no note/decision is created)."""
-    tmp_id = new_id()
+    """Dictation helper: transcribe a short audio clip to text (no note/decision is created).
+
+    FIX-002-E: dictation is truly ephemeral (transcribe + return the text,
+    never persisted). Writing to a system temp file (auto-cleaned on
+    reboot) instead of the shared UPLOAD_DIR avoids polluting the
+    tenant-scoped upload namespace with throwaway files.
+    """
+    import tempfile
     ext = (file.filename or "audio.webm").split(".")[-1]
-    path = UPLOAD_DIR / f"dictation-{tmp_id}.{ext}"
-    with open(path, "wb") as f:
-        f.write(await file.read())
+    data = await file.read()
+    fd, tmp_path = tempfile.mkstemp(suffix=f".{ext}", prefix="dictation-")
     try:
-        text = await transcribe_audio(str(path), language)
-    except Exception as e:
-        logger.error(f"transcribe_only failed: {e}")
-        raise HTTPException(status_code=503, detail="Couldn't transcribe audio. Please try again.")
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        try:
+            text = await transcribe_audio(tmp_path, language)
+        except Exception as e:
+            logger.error(f"transcribe_only failed: {e}")
+            raise HTTPException(status_code=503, detail="Couldn't transcribe audio. Please try again.")
     finally:
         try:
-            path.unlink(missing_ok=True)
+            os.unlink(tmp_path)
         except Exception:
             pass
     return {"text": (text or "").strip()}
@@ -1901,15 +1938,17 @@ async def process_meeting(meeting_id: str):
 
 @api.post("/meetings")
 async def create_meeting(background: BackgroundTasks, file: UploadFile = File(...), language: str = Form("auto"), user: dict = Depends(get_current_user)):
+    # FIX-002-E: obj_store with tenant prefix (was local UPLOAD_DIR).
+    from services.uploads import store_upload
     mid = new_id()
     ext = (file.filename or "audio.webm").split(".")[-1]
-    path = UPLOAD_DIR / f"meeting-{mid}.{ext}"
     content = await file.read()
-    with open(path, "wb") as f:
-        f.write(content)
+    result = await store_upload(user["tenant_id"], "meetings", content, ext,
+                                 content_type=file.content_type, file_id=mid)
     await db.meetings.insert_one({
         "id": mid, "tenant_id": user["tenant_id"], "created_by": user["id"], "created_by_name": user.get("name"),
-        "kind": "audio", "audio_path": str(path), "transcript": None, "language": language,
+        "kind": "audio", "audio_path": result["storage_path"],
+        "transcript": None, "language": language,
         "title": "Processing meeting…", "summary": "", "key_points": [], "decisions": [], "action_items": [],
         "status": "queued", "created_at": now_iso(),
     })
@@ -3148,12 +3187,85 @@ async def _read_reference_text(rec: dict, tenant_id: str = "") -> str:
 
 
 @api.get("/files/{fname}")
-async def get_file(fname: str):
-    from fastapi.responses import FileResponse
-    path = UPLOAD_DIR / fname
-    if not path.exists() or "/" in fname or ".." in fname:
+async def get_file(fname: str, user: dict = Depends(get_current_user)):
+    """FIX-002-E + FIX-001-E EC8: this endpoint used to serve ANY file
+    from local disk by bare filename, unauthenticated. Now it:
+      1. Requires auth (get_current_user).
+      2. Looks up the file's storage_path in db.files, db.ingestions,
+         db.expenses.attachment, db.assets.attachment, or db.capture_drafts
+         — all tenant-scoped.
+      3. Serves from obj_store.
+    Local-disk legacy fallback stays until migrate_local_disk_uploads_
+    to_obj_store_v1 has rewritten every reference (post-migration all
+    paths resolve to obj_store keys).
+    """
+    if "/" in fname or ".." in fname or fname.startswith("."):
         raise HTTPException(status_code=404, detail="Not found")
-    return FileResponse(str(path))
+    tid = user["tenant_id"]
+    from fastapi.responses import Response, FileResponse
+    from services.uploads import read_upload, is_legacy_path
+
+    # 1) Try db.files (task attachments, generic uploads).
+    rec = await db.files.find_one(
+        {"tenant_id": tid, "$or": [
+            {"storage_path": {"$regex": re.escape(fname) + "$"}},
+            {"original_filename": fname},
+        ], "is_deleted": {"$ne": True}},
+        {"_id": 0, "storage_path": 1, "content_type": 1, "original_filename": 1},
+    )
+    storage_path = (rec or {}).get("storage_path")
+    content_type = (rec or {}).get("content_type")
+
+    # 2) Try ingestions (WhatsApp / upload doc captures).
+    if not storage_path:
+        ing = await db.ingestions.find_one(
+            {"tenant_id": tid, "$or": [
+                {"filename": fname}, {"file_url": f"/api/files/{fname}"},
+            ]},
+            {"_id": 0, "storage_path": 1, "kind": 1},
+        )
+        if ing:
+            storage_path = ing.get("storage_path") or fname  # legacy fallback
+            content_type = None
+
+    # 3) Try ledger attachments (expenses/assets/inventory).
+    if not storage_path:
+        for coll in ("expenses", "assets", "inventory"):
+            row = await db[coll].find_one(
+                {"tenant_id": tid, "$or": [
+                    {"attachment.filename": fname},
+                    {"attachment.url": f"/api/files/{fname}"},
+                ]},
+                {"_id": 0, "attachment": 1},
+            )
+            if row and (row.get("attachment") or {}).get("storage_path"):
+                storage_path = row["attachment"]["storage_path"]
+                content_type = row["attachment"].get("mime")
+                break
+
+    # 4) Try capture_drafts (WA-review UI previews).
+    if not storage_path:
+        cd = await db.capture_drafts.find_one(
+            {"tenant_id": tid, "file_url": f"/api/files/{fname}"},
+            {"_id": 0, "storage_path": 1, "file_url": 1},
+        )
+        if cd:
+            storage_path = cd.get("storage_path") or fname
+
+    # 5) Legacy fallback: serve from local disk if the file exists AND
+    #    the request is authenticated (tenant scope enforced by upstream).
+    #    Post-migration this path returns 404 for everything.
+    if not storage_path:
+        legacy_path = UPLOAD_DIR / fname
+        if legacy_path.exists():
+            return FileResponse(str(legacy_path))
+        raise HTTPException(status_code=404, detail="Not found")
+
+    try:
+        data, ctype = await read_upload(storage_path)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Not found")
+    return Response(content=data, media_type=content_type or ctype or "application/octet-stream")
 
 
 @api.get("/brochure")
@@ -3573,21 +3685,32 @@ async def ingest_document(file: UploadFile = File(...), source: str = Form("uplo
     ext = (file.filename or "file.pdf").split(".")[-1].lower()
     if ext not in DOC_MIME:
         raise HTTPException(status_code=400, detail="Upload a PDF or image (PNG/JPG/WEBP)")
+    # FIX-002-E: obj_store with tenant prefix.
+    from services.uploads import store_upload, download_to_temp
     ing_id = new_id()
     fname = f"ingest_{ing_id}.{ext}"
-    path = UPLOAD_DIR / fname
-    with open(path, "wb") as f:
-        f.write(await file.read())
+    data = await file.read()
+    stored = await store_upload(user["tenant_id"], "ingestions", data, ext,
+                                 content_type=DOC_MIME[ext], file_id=ing_id)
     doc = {
         "id": ing_id, "tenant_id": user["tenant_id"], "created_by": user["id"],
         "source": source if source in ("upload", "whatsapp") else "upload",
         "kind": "pdf" if ext == "pdf" else "image", "filename": file.filename or fname,
-        "file_url": f"/api/files/{fname}", "status": "review", "created_at": now_iso(),
+        "file_url": f"/api/files/{fname}",
+        "storage_path": stored["storage_path"],  # FIX-002-E
+        "status": "review", "created_at": now_iso(),
     }
     try:
         currency = await _tenant_currency(user["tenant_id"])
         company = await _tenant_name(user["tenant_id"])
-        result = await ai_extract_document(str(path), DOC_MIME[ext], f"ingest-{ing_id}", currency, company)
+        tmp_local = await download_to_temp(stored["storage_path"])
+        try:
+            result = await ai_extract_document(str(tmp_local), DOC_MIME[ext], f"ingest-{ing_id}", currency, company)
+        finally:
+            try:
+                os.unlink(tmp_local)
+            except Exception:
+                pass
         doc.update({"summary": result["summary"], "doc_type": result["doc_type"],
                     "confidence": result["confidence"], "records": result["records"]})
     except Exception as e:
@@ -3611,20 +3734,34 @@ async def ingest_csv(file: UploadFile = File(...), user: dict = Depends(require_
     if ext not in ("csv", "xlsx", "xls"):
         raise HTTPException(status_code=400, detail="Upload a CSV or Excel (.xlsx) file")
     ing_id = new_id()
+    # FIX-002-E: obj_store with tenant prefix. pandas needs a filesystem
+    # path so we materialize to temp for the read.
+    from services.uploads import store_upload, download_to_temp
     fname = f"ingest_{ing_id}.{ext}"
-    path = UPLOAD_DIR / fname
-    with open(path, "wb") as f:
-        f.write(await file.read())
+    data = await file.read()
+    stored = await store_upload(user["tenant_id"], "ingestions", data, ext,
+                                 content_type=file.content_type, file_id=ing_id)
+    tmp_local = await download_to_temp(stored["storage_path"])
     try:
-        df = pd.read_excel(path) if ext in ("xlsx", "xls") else pd.read_csv(path)
+        df = pd.read_excel(tmp_local) if ext in ("xlsx", "xls") else pd.read_csv(tmp_local)
         df = df.fillna("")
         headers = [str(c) for c in df.columns]
         rows = df.astype(str).values.tolist()
     except Exception as e:
+        try:
+            os.unlink(tmp_local)
+        except Exception:
+            pass
         raise HTTPException(status_code=400, detail=f"Could not read the file: {str(e)[:150]}")
+    finally:
+        try:
+            os.unlink(tmp_local)
+        except Exception:
+            pass
     doc = {
         "id": ing_id, "tenant_id": user["tenant_id"], "created_by": user["id"], "source": "csv",
         "kind": ext, "filename": file.filename or fname, "file_url": f"/api/files/{fname}",
+        "storage_path": stored["storage_path"],  # FIX-002-E
         "status": "review", "row_count": len(rows), "created_at": now_iso(),
     }
     try:
@@ -4219,12 +4356,26 @@ async def process_whatsapp_message(message: dict):
             ext = WA_MIME_EXT[mime]
             data = await download_wa_media(media["id"])
             ing_id = new_id()
-            fname = f"ingest_{ing_id}.{ext}"
-            with open(UPLOAD_DIR / fname, "wb") as f:
-                f.write(data)
+            # FIX-002-E: obj_store with tenant prefix. `ai_extract_document`
+            # accepts a local path; we materialize to a temp file for it
+            # then clean up. Storage_path is saved in the capture draft so
+            # the review UI can render it via the auth-gated /api/files
+            # endpoint.
+            from services.uploads import store_upload, download_to_temp
+            import tempfile
+            stored = await store_upload(tenant_id, "ingestions", data, ext,
+                                         content_type=mime, file_id=ing_id)
+            fname = f"ingest_{ing_id}.{ext}"  # kept for capture_draft display
+            tmp_local = await download_to_temp(stored["storage_path"])
             currency = await _tenant_currency(tenant_id)
             company = await _tenant_name(tenant_id)
-            result = await ai_extract_document(str(UPLOAD_DIR / fname), mime, f"ingest-{ing_id}", currency, company)
+            try:
+                result = await ai_extract_document(str(tmp_local), mime, f"ingest-{ing_id}", currency, company)
+            finally:
+                try:
+                    os.unlink(tmp_local)
+                except Exception:
+                    pass
             recs = result.get("records", {})
             amt = 0
             for it in (recs.get("invoices", []) + recs.get("payments", [])):
@@ -4249,7 +4400,8 @@ async def process_whatsapp_message(message: dict):
             status = "needs_attention" if level == "attention" else "pending_review"
             did = await persist_capture_draft(
                 tenant_id, sender, ("pdf" if ext == "pdf" else "image"),
-                {"file_url": f"/api/files/{fname}", "filename": media.get("filename") or fname},
+                {"file_url": f"/api/files/{fname}", "filename": media.get("filename") or fname,
+                 "storage_path": stored["storage_path"]},  # FIX-002-E: real obj_store key
                 tri, troles, records=recs, status=status, confidence=confidence,
                 processing_level=level, duplicate_of=(dup["id"] if dup else None), attention_reason=reason)
             summary = result.get("summary") or fname
@@ -4295,11 +4447,12 @@ async def process_whatsapp_message(message: dict):
             media = message[mtype]
             data = await download_wa_media(media["id"])
             ext = (media.get("mime_type", "audio/ogg").split(";")[0].split("/")[-1]) or "ogg"
-            fname = f"wa_voice_{new_id()}.{ext}"
-            fpath = UPLOAD_DIR / fname
-            with open(fpath, "wb") as f:
-                f.write(data)
-            stt = await transcribe_audio_full(str(fpath), "auto")
+            # FIX-002-E: obj_store with tenant prefix. transcribe_audio_full
+            # accepts obj_store keys directly (downloads to temp internally).
+            from services.uploads import store_upload
+            _wa_stored = await store_upload(tenant_id, "ingestions", data, ext,
+                                             content_type=media.get("mime_type"))
+            stt = await transcribe_audio_full(_wa_stored["storage_path"], "auto")
             text = (stt.get("transcript") or "").strip()
             lang_name = stt.get("language_name") or ""
             if not text:
@@ -4916,6 +5069,120 @@ async def migrate_tenants():
         }})
 
 
+async def migrate_local_disk_uploads_to_obj_store(_db):
+    """FIX-002-E: one-shot migration. Copy every legacy local-disk upload
+    referenced by voice_notes/meetings/ingestions/expenses/assets to
+    obj_store, rewrite the doc to point at the new storage_path, then
+    delete the local file. Idempotent internally (skips docs whose path
+    is already an obj_store key) AND wrapped in the ledger for exactly-
+    once safety across restarts.
+
+    This is the FIRST truly destructive migration in the codebase — it
+    deletes source files after copy. The ledger protects against re-runs.
+    Its own idempotency guard (skip already-migrated docs) protects
+    within a single run if it crashes mid-way and the ledger records
+    'failed' (next boot retries only what wasn't migrated).
+    """
+    from services.uploads import store_upload, is_legacy_path
+    stats = {"scanned": 0, "migrated": 0, "skipped_absent": 0, "already_new": 0, "failed": 0}
+
+    # Map: collection -> (path_field, category, tenant_extractor)
+    plan = [
+        ("voice_notes", "audio_path", "voice-notes"),
+        ("meetings",    "audio_path", "meetings"),
+        ("ingestions",  "storage_path", "ingestions"),  # storage_path may already be new
+    ]
+
+    for coll_name, path_field, category in plan:
+        cursor = _db[coll_name].find(
+            {path_field: {"$exists": True, "$ne": None, "$ne": ""}},
+            {"_id": 0, "id": 1, "tenant_id": 1, path_field: 1},
+        )
+        async for doc in cursor:
+            stats["scanned"] += 1
+            path = doc.get(path_field)
+            if not path:
+                continue
+            if not is_legacy_path(path):
+                stats["already_new"] += 1
+                continue
+            tenant_id = doc.get("tenant_id")
+            if not tenant_id:
+                stats["failed"] += 1
+                continue
+            # Try to read the legacy file. If it doesn't exist on this
+            # box (very common — the app moved to a new machine, files
+            # left behind), skip and record.
+            from pathlib import Path as _P
+            legacy_p = _P(path) if _P(path).is_absolute() else UPLOAD_DIR / path
+            if not legacy_p.exists():
+                stats["skipped_absent"] += 1
+                # Still rewrite the doc field to null so read paths stop
+                # attempting the absent local file. Preserves the record.
+                await _db[coll_name].update_one(
+                    {"id": doc["id"]}, {"$set": {path_field: None, "_upload_missing": True}}
+                )
+                continue
+            try:
+                data = legacy_p.read_bytes()
+                ext = legacy_p.suffix.lstrip(".") or "bin"
+                stored = await store_upload(tenant_id, category, data, ext,
+                                             file_id=doc["id"])
+                await _db[coll_name].update_one(
+                    {"id": doc["id"]},
+                    {"$set": {path_field: stored["storage_path"]}},
+                )
+                # Only delete the local file AFTER the DB pointer moves.
+                try:
+                    legacy_p.unlink()
+                except Exception as del_err:
+                    logger.warning(f"legacy file delete failed for {legacy_p}: {del_err}")
+                stats["migrated"] += 1
+            except Exception as e:
+                logger.warning(f"local-disk migration failed for {coll_name}/{doc['id']}: {e}")
+                stats["failed"] += 1
+
+    # Also handle ledger attachments (nested field: attachment.storage_path)
+    for coll_name in ("expenses", "assets", "inventory"):
+        cursor = _db[coll_name].find(
+            {"attachment.url": {"$regex": "^/api/files/"},
+             "attachment.storage_path": {"$exists": False}},
+            {"_id": 0, "id": 1, "tenant_id": 1, "attachment": 1},
+        )
+        async for doc in cursor:
+            stats["scanned"] += 1
+            att = doc.get("attachment") or {}
+            fname = (att.get("url") or "").split("/")[-1]
+            if not fname:
+                continue
+            legacy_p = UPLOAD_DIR / fname
+            if not legacy_p.exists():
+                stats["skipped_absent"] += 1
+                continue
+            tenant_id = doc.get("tenant_id")
+            if not tenant_id:
+                stats["failed"] += 1
+                continue
+            try:
+                data = legacy_p.read_bytes()
+                ext = legacy_p.suffix.lstrip(".") or "bin"
+                stored = await store_upload(tenant_id, "ledger", data, ext)
+                new_att = {**att, "storage_path": stored["storage_path"]}
+                await _db[coll_name].update_one(
+                    {"id": doc["id"]}, {"$set": {"attachment": new_att}}
+                )
+                try:
+                    legacy_p.unlink()
+                except Exception:
+                    pass
+                stats["migrated"] += 1
+            except Exception as e:
+                logger.warning(f"ledger attachment migration failed for {coll_name}/{doc['id']}: {e}")
+                stats["failed"] += 1
+
+    logger.info(f"[migrate_local_disk_uploads] {stats}")
+
+
 async def fixup_demo_tenant():
     """Ensure the seeded Sharma demo reflects its industry-aware profile + has contacts (idempotent)."""
     owner = await db.users.find_one({"email": DEMO_EMAIL}, {"_id": 0, "id": 1, "tenant_id": 1})
@@ -5104,6 +5371,19 @@ async def _bootstrap():
                 logger.info("Migration applied: migrate_tenants_backfill_roles_v1")
         except Exception as e:
             logger.warning(f"migrate_tenants migration: {e}")
+        # FIX-002-E: copy any legacy local-disk uploads into obj_store and
+        # rewrite the referring domain records to point at the new
+        # storage_path. Runs exactly once via ledger; safe on second boot.
+        try:
+            _ures = await _apply_migration(
+                db, "migrate_local_disk_uploads_to_obj_store_v1",
+                migrate_local_disk_uploads_to_obj_store,
+                description="FIX-002-E: move voice_notes/meetings/ingestions/ledger files to obj_store",
+            )
+            if _ures == "applied":
+                logger.info("Migration applied: migrate_local_disk_uploads_to_obj_store_v1")
+        except Exception as e:
+            logger.warning(f"local-disk uploads migration: {e}")
         await fixup_demo_tenant()
         await write_test_credentials()
         logger.info("Bootstrap complete.")

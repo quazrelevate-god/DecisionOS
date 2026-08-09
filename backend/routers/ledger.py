@@ -140,12 +140,23 @@ async def _write_brain(tenant_id: str, user_id: str, text: str, tag: str) -> Non
 
 
 # --- Attachment + AI vision extraction from an uploaded bill/photo ----------
-def _save_upload_sync(content: bytes, filename: str) -> dict:
+async def _save_upload_async(tenant_id: str, content: bytes, filename: str,
+                             content_type: str = None) -> dict:
+    """FIX-002-E: uploads go to obj_store under `decisionos/{tenant}/ledger/`.
+    Returns storage_path so the caller can materialize to temp for OCR."""
+    from services.uploads import store_upload
     ext = (filename.rsplit(".", 1)[-1] if "." in (filename or "") else "bin").lower()
-    fname = f"ledger-{new_id()}.{ext}"
-    (UPLOAD_DIR / fname).write_bytes(content)
-    return {"fname": fname, "path": str(UPLOAD_DIR / fname), "url": f"/api/files/{fname}",
-            "filename": filename or fname}
+    stored = await store_upload(tenant_id, "ledger", content, ext, content_type=content_type)
+    # Keep the fname + url shape so existing frontends continue rendering the
+    # attachment (the /api/files endpoint resolves storage_path via db lookup).
+    fid = stored["file_id"]
+    fname = f"ledger-{fid}.{ext}"
+    return {
+        "fname": fname,
+        "storage_path": stored["storage_path"],
+        "url": f"/api/files/{fname}",
+        "filename": filename or fname,
+    }
 
 
 _LEDGER_FIELDS = {
@@ -547,18 +558,28 @@ async def _read_attachment(file: Optional[UploadFile], kind: str, tenant_id: str
         content = await file.read()
         if len(content) > MAX_UPLOAD_BYTES:
             raise HTTPException(status_code=413, detail="File is too large (max 15 MB)")
-        saved = await asyncio.to_thread(_save_upload_sync, content, file.filename)
-        attachment = {"filename": saved["filename"], "url": saved["url"], "mime": mime}
+        # FIX-002-E: obj_store with tenant prefix; materialize to temp for OCR.
+        saved = await _save_upload_async(tenant_id, content, file.filename, content_type=mime)
+        attachment = {"filename": saved["filename"], "url": saved["url"], "mime": mime,
+                      "storage_path": saved["storage_path"]}
+        from services.uploads import download_to_temp
+        import os as _os
+        tmp = await download_to_temp(saved["storage_path"])
         try:
             currency = await _currency(tenant_id)
             cats = None
             if kind in ("expense", "asset"):
                 fc = await get_finance_categories(tenant_id)
                 cats = fc["expense"] if kind == "expense" else fc["asset"]
-            ai = await ai_extract_ledger_file(saved["path"], mime or "application/octet-stream", kind, currency, typed, categories=cats)
+            ai = await ai_extract_ledger_file(str(tmp), mime or "application/octet-stream", kind, currency, typed, categories=cats)
             data = _merge_typed(ai, typed)
         except Exception as e:  # noqa: BLE001
             logger.warning(f"Ledger {kind} OCR failed, using typed values: {e}")
+        finally:
+            try:
+                _os.unlink(tmp)
+            except Exception:
+                pass
         data["attachment"] = attachment
     return data, attachment
 

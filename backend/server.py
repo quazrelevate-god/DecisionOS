@@ -107,11 +107,21 @@ class LoginInput(BaseModel):
 
 class OtpRequestInput(BaseModel):
     phone: str
+    # FIX-003-A (S2-03): tenant hint. Optional so the single-tenant fast
+    # path stays backward-compatible; required when the phone is
+    # registered in more than one workspace (the request returns
+    # {"ambiguous": true, "choices": [...]} in that case and the
+    # frontend re-sends with tenant_id filled in).
+    tenant_id: Optional[str] = None
 
 
 class OtpVerifyInput(BaseModel):
     phone: str
     code: str
+    # FIX-003-A (S2-03): tenant hint. Same rules as OtpRequestInput —
+    # the OTP code is keyed by (phone, tenant_id) so verifying without
+    # a tenant on a multi-tenant phone is a 409.
+    tenant_id: Optional[str] = None
 
 
 class UserCreateInput(BaseModel):
@@ -1344,10 +1354,27 @@ async def _send_otp_sms(phone: str, code: str) -> bool:
         return False
 
 
-async def _issue_otp(norm: str, display_phone: str, enforce_cooldown: bool = True):
-    """Generate + store a 6-digit OTP for a normalized phone and (try to) send it."""
+async def _issue_otp(norm: str, display_phone: str, tenant_id: str,
+                     enforce_cooldown: bool = True):
+    """Generate + store a 6-digit OTP for a normalized phone (scoped to a
+    tenant) and try to send it.
+
+    FIX-003-A (S2-03): the ``otp_codes`` row is keyed by
+    ``(phone, tenant_id)``, not by phone alone. Two tenants that share a
+    phone can each hold their own live OTP without overwriting each
+    other's code. The 30s resend cooldown is likewise scoped per tenant
+    — hitting the cooldown for workspace A does NOT lock the user out
+    of workspace B.
+    """
+    if not tenant_id:
+        # Defensive: every caller in the flow (request/verify/invite)
+        # resolves a concrete tenant_id before calling us. A missing
+        # tenant here is a code bug, not user input, so surface it
+        # loudly instead of silently writing an untethered OTP.
+        raise HTTPException(status_code=500, detail="Internal error: OTP issued without tenant scope")
+    key = {"phone": norm, "tenant_id": tenant_id}
     if enforce_cooldown:
-        existing = await db.otp_codes.find_one({"phone": norm}, {"_id": 0})
+        existing = await db.otp_codes.find_one(key, {"_id": 0})
         if existing:
             age = (datetime.now(timezone.utc) - datetime.fromisoformat(existing["created_at"])).total_seconds()
             if age < OTP_RESEND_COOLDOWN:
@@ -1364,13 +1391,14 @@ async def _issue_otp(norm: str, display_phone: str, enforce_cooldown: bool = Tru
         sent = await _send_otp_sms(display_phone, code)
         dev = not TWILIO_ENABLED
     await db.otp_codes.update_one(
-        {"phone": norm},
-        {"$set": {"phone": norm, "code_hash": _hash_otp(code, norm),
+        key,
+        {"$set": {"phone": norm, "tenant_id": tenant_id,
+                  "code_hash": _hash_otp(code, norm),
                   "expires_at": (now + timedelta(seconds=OTP_TTL_SECONDS)).isoformat(),
                   "created_at": now.isoformat(), "attempts": 0}},
         upsert=True,
     )
-    resp = {"sent": sent, "dev_mode": dev}
+    resp = {"sent": sent, "dev_mode": dev, "tenant_id": tenant_id}
     if dev:
         resp["dev_otp"] = code  # DEV ONLY — omitted once real SMS (APM/Twilio) is live
     return resp
@@ -1381,13 +1409,43 @@ async def request_otp(inp: OtpRequestInput):
     norm = _norm_phone(inp.phone)
     if len(norm) < 10:
         raise HTTPException(status_code=400, detail="Enter a valid mobile number")
-    # FIX-002-A: exact-match lookup on the indexed phone_norm field
-    # (was a full-collection scan capped at 2000 users that silently
-    # blocked login for user #2001+).
-    match = await db.users.find_one({"phone_norm": norm}, {"_id": 0, "id": 1})
-    if not match:
+    # FIX-003-A (S2-03): multi-tenant-safe resolution. Returns one
+    # entry per DISTINCT tenant that has this phone on a non-obsolete
+    # user. See services/phone.find_tenant_choices_for_phone for why
+    # calling db.users.find_one({"phone_norm": ...}) directly is a bug.
+    from services.phone import find_tenant_choices_for_phone
+    choices = await find_tenant_choices_for_phone(db, norm)
+    if not choices:
         raise HTTPException(status_code=404, detail="No account is registered with this mobile number")
-    return await _issue_otp(norm, inp.phone)
+    if inp.tenant_id:
+        # Caller already knows which workspace to log into (either
+        # single-tenant match on a prior attempt, or user picked from
+        # the ambiguity picker). Only issue if the hint actually maps
+        # to a real membership — never trust a client-supplied id.
+        picked = next((c for c in choices if c["tenant_id"] == inp.tenant_id), None)
+        if not picked:
+            raise HTTPException(status_code=404, detail="This number is not registered in the selected workspace")
+        return await _issue_otp(norm, inp.phone, tenant_id=picked["tenant_id"])
+    if len(choices) == 1:
+        # Single-tenant fast path: keeps backward compat with every
+        # existing OTP client that doesn't know about tenant_id yet.
+        return await _issue_otp(norm, inp.phone, tenant_id=choices[0]["tenant_id"])
+    # Multi-tenant collision: the caller must disambiguate. We do NOT
+    # send an OTP — sending one and picking a tenant at verify would
+    # leak "you're registered in workspace X" (workspace_name is a
+    # low-sensitivity leak but still avoidable) and would let the
+    # attacker learn the workspace list of an arbitrary phone.
+    # HTTP 200 with an ambiguity payload keeps the flow simple; the
+    # frontend just re-POSTs with tenant_id filled in.
+    return {
+        "ambiguous": True,
+        "detail": "This number is registered in multiple workspaces. Choose one to continue.",
+        "choices": [
+            {"tenant_id": c["tenant_id"], "tenant_name": c["tenant_name"],
+             "user_name": c["user_name"]}
+            for c in choices
+        ],
+    }
 
 
 def _mask_phone(phone: str) -> str:
@@ -1422,7 +1480,11 @@ async def invite_start(token: str):
     norm = _norm_phone(phone)
     if len(norm) < 10:
         raise HTTPException(status_code=400, detail="No mobile number on file for this invite")
-    resp = await _issue_otp(norm, phone, enforce_cooldown=False)
+    # FIX-003-A: invite already carries the exact tenant we're joining;
+    # no ambiguity to resolve, but the OTP row still needs the tenant
+    # scope so /auth/otp/verify can find it.
+    resp = await _issue_otp(norm, phone, tenant_id=user["tenant_id"],
+                             enforce_cooldown=False)
     resp["phone"] = phone  # returned so the invitee's device can verify
     resp["name"] = user.get("name")
     return resp
@@ -1431,23 +1493,68 @@ async def invite_start(token: str):
 @api.post("/auth/otp/verify")
 async def verify_otp(inp: OtpVerifyInput, response: Response):
     norm = _norm_phone(inp.phone)
-    rec = await db.otp_codes.find_one({"phone": norm}, {"_id": 0})
+    if len(norm) < 10:
+        raise HTTPException(status_code=400, detail="Enter a valid mobile number")
+    # FIX-003-A (S2-03): resolve which tenant the OTP was issued for
+    # BEFORE looking up the code — the same phone can hold live OTPs in
+    # multiple tenants simultaneously and each is a distinct row keyed
+    # by (phone, tenant_id).
+    from services.phone import find_tenant_choices_for_phone
+    choices = await find_tenant_choices_for_phone(db, norm)
+    if not choices:
+        raise HTTPException(status_code=404, detail="Account not found")
+    if inp.tenant_id:
+        target = next((c for c in choices if c["tenant_id"] == inp.tenant_id), None)
+        if not target:
+            raise HTTPException(status_code=404, detail="Account not found in the selected workspace")
+    elif len(choices) == 1:
+        target = choices[0]
+    else:
+        # Multi-tenant match with no tenant hint — same ambiguity as
+        # /request, surface it the same way so the frontend can pick.
+        # 409 (not 400) because the request was well-formed; the state
+        # of the world is what forces disambiguation.
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "ambiguous_tenant",
+                "message": "This number is registered in multiple workspaces. Include tenant_id in the request.",
+                "choices": [
+                    {"tenant_id": c["tenant_id"], "tenant_name": c["tenant_name"],
+                     "user_name": c["user_name"]}
+                    for c in choices
+                ],
+            },
+        )
+    tenant_id = target["tenant_id"]
+    key = {"phone": norm, "tenant_id": tenant_id}
+    rec = await db.otp_codes.find_one(key, {"_id": 0})
     if not rec:
         raise HTTPException(status_code=400, detail="Request an OTP first")
     if datetime.now(timezone.utc) > datetime.fromisoformat(rec["expires_at"]):
-        await db.otp_codes.delete_one({"phone": norm})
+        await db.otp_codes.delete_one(key)
         raise HTTPException(status_code=400, detail="OTP expired. Request a new one")
     if rec.get("attempts", 0) >= OTP_MAX_ATTEMPTS:
-        await db.otp_codes.delete_one({"phone": norm})
+        await db.otp_codes.delete_one(key)
         raise HTTPException(status_code=429, detail="Too many attempts. Request a new OTP")
     if _hash_otp((inp.code or "").strip(), norm) != rec["code_hash"]:
-        await db.otp_codes.update_one({"phone": norm}, {"$inc": {"attempts": 1}})
+        await db.otp_codes.update_one(key, {"$inc": {"attempts": 1}})
         raise HTTPException(status_code=401, detail="Incorrect OTP")
 
-    await db.otp_codes.delete_one({"phone": norm})
-    # FIX-002-A: exact-match on indexed phone_norm; was a full-collection scan.
-    user = await db.users.find_one({"phone_norm": norm}, {"_id": 0})
+    await db.otp_codes.delete_one(key)
+    # FIX-003-A: fetch the exact user in the chosen tenant. Even if
+    # target["user_id"] is populated from the choices list, re-fetch
+    # so we get the full user record (roles, name, avatar, etc.) and
+    # avoid a stale copy from the choices projection.
+    user = await db.users.find_one(
+        {"tenant_id": tenant_id, "phone_norm": norm,
+         "wa_phone_obsolete": {"$ne": True}},
+        {"_id": 0},
+    )
     if not user:
+        # Should be unreachable given `choices` was just resolved, but
+        # a concurrent user deletion between /request and /verify can
+        # get here. Refuse rather than issue a token for a ghost.
         raise HTTPException(status_code=404, detail="Account not found")
     token = create_token(user["id"], user["tenant_id"], user["role"])
     tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
@@ -4259,13 +4366,46 @@ async def whatsapp_logs(user: dict = Depends(get_current_user)):
     if user.get("role") != "owner":
         raise HTTPException(status_code=403, detail="Owner access required")
     tid = user["tenant_id"]
+    # FIX-003-A / S2-04: strict tenant filter. The old code OR-included
+    # events with tenant_id=None (received-but-unrouted messages) — that
+    # leaked platform-wide unrouted traffic (senders, timestamps,
+    # message types from OTHER tenants' potential customers) into every
+    # tenant's log view. Unrouted events belong to platform ops, not
+    # to any single tenant, so they're hidden from tenant-facing UI.
     rows = await db.wa_events.find(
-        {"$or": [{"tenant_id": tid}, {"tenant_id": None}]}, {"_id": 0}
+        {"tenant_id": tid}, {"_id": 0}
     ).sort("created_at", -1).to_list(50)
     return rows
 
 
 async def resolve_wa_tenant(sender: str):
+    """Route an inbound WhatsApp sender's phone to a tenant workspace.
+
+    Ordering:
+      1. Sender phone matches exactly one tenant (across non-obsolete
+         users) — route there. If that tenant has a within-tenant
+         duplicate (same phone on 2+ users in the SAME workspace),
+         resolve it by marking older duplicates obsolete inside that
+         tenant only — that's a legitimate cleanup because the
+         workspace itself has redundant records.
+      2. Sender phone matches users in MULTIPLE tenants — a legitimate
+         SME scenario (accountant/consultant serves multiple client
+         workspaces on one phone). We CANNOT silently pick a winner:
+         picking one and marking the other's user obsolete orphans
+         that workspace's WhatsApp routing until an admin notices.
+         Instead: log a warning, notify each affected tenant's owner
+         so both know the collision exists, and fall through to the
+         WA_TENANT_ID fallback (or drop if no fallback is set).
+      3. Legacy: sender matches an invited_employees entry on a tenant
+         doc that predates the users-first flow. Kept for back-compat
+         with pre-v0.8 tenants.
+      4. WA_TENANT_ID env fallback (or None → message is dropped).
+
+    FIX-003-A (S2-03) changed step 2. The prior code silently promoted
+    the newest user and marked ALL other cross-tenant users obsolete,
+    which was a hard multi-tenant safety break: the "losing" tenant's
+    WhatsApp routing was severed with no visible signal to their owner.
+    """
     sp = _norm_phone(sender)
     if not sp:
         return os.environ.get("WA_TENANT_ID") or None
@@ -4277,25 +4417,73 @@ async def resolve_wa_tenant(sender: str):
         {"_id": 0, "id": 1, "tenant_id": 1, "phone": 1, "name": 1, "created_at": 1},
     ).to_list(50)
     if matches:
-        if len(matches) > 1:
-            # Same number on multiple people: route to the most recently added, mark the
-            # older records obsolete so they stop claiming the number, and alert the owner.
-            matches.sort(key=lambda u: u.get("created_at") or "", reverse=True)
-            latest, older = matches[0], matches[1:]
-            await db.users.update_many({"id": {"$in": [u["id"] for u in older]}},
-                                       {"$set": {"wa_phone_obsolete": True, "updated_at": now_iso()}})
+        distinct_tenants = {m["tenant_id"] for m in matches}
+        if len(distinct_tenants) > 1:
+            # FIX-003-A: cross-tenant collision. Alert BOTH tenants and
+            # fall back to WA_TENANT_ID — never orphan any workspace's
+            # WhatsApp routing implicitly.
+            fallback = os.environ.get("WA_TENANT_ID") or None
+            logger.warning(
+                "[WHATSAPP] Sender %s matches users across %d tenants (%s); "
+                "routing to WA_TENANT_ID=%s (fallback). No user was marked obsolete.",
+                sender, len(distinct_tenants), sorted(distinct_tenants), fallback,
+            )
+            for tid in distinct_tenants:
+                try:
+                    await push_notification(
+                        tid, await _owner_ids(tid), 2,
+                        f"Incoming WhatsApp from {sender} could not be routed to your workspace unambiguously — "
+                        f"this number is also registered in another workspace. Ask the sender to remove one "
+                        f"registration, or configure a dedicated WhatsApp number per workspace.",
+                        "whatsapp", None, ntype="reminder",
+                        title="WhatsApp cross-workspace conflict", sender="System",
+                    )
+                except Exception:
+                    # Notification failure must not break routing — the
+                    # log line above is the durable record.
+                    logger.exception("[WHATSAPP] cross-tenant collision notify failed for %s", tid)
+            return fallback
+        tenant_id = matches[0]["tenant_id"]
+        # WITHIN-tenant duplicates: the same workspace has 2+ users on
+        # this phone. That's a workspace-internal cleanup — the tenant
+        # guard on update_many makes sure we CANNOT accidentally touch
+        # another tenant's user rows.
+        same_tenant = [m for m in matches if m["tenant_id"] == tenant_id]
+        if len(same_tenant) > 1:
+            same_tenant.sort(key=lambda u: u.get("created_at") or "", reverse=True)
+            latest, older = same_tenant[0], same_tenant[1:]
+            await db.users.update_many(
+                # tenant_id filter is defensive: at this point all rows
+                # share the same tenant, but if the query ever grows a
+                # cross-tenant leak we want update_many to fail closed.
+                {"id": {"$in": [u["id"] for u in older]}, "tenant_id": tenant_id},
+                {"$set": {"wa_phone_obsolete": True, "updated_at": now_iso()}},
+            )
             await push_notification(
-                latest["tenant_id"], await _owner_ids(latest["tenant_id"]), 2,
-                f"WhatsApp number {sender} was linked to {len(matches)} people. Routing to the latest — {latest.get('name')}. {len(older)} older record(s) marked obsolete; please review in People.",
+                tenant_id, await _owner_ids(tenant_id), 2,
+                f"WhatsApp number {sender} was linked to {len(same_tenant)} people in this workspace. "
+                f"Routing to the most recent — {latest.get('name')}. {len(older)} older record(s) marked "
+                f"obsolete; please review in People.",
                 "user", latest["id"], ntype="reminder",
                 title="Duplicate WhatsApp number resolved", sender="System")
-            return latest["tenant_id"]
-        return matches[0]["tenant_id"]
+        return tenant_id
     # Secondary: legacy invited_employees list on the tenant document.
+    # Same cross-tenant concern applies — collect all matches first,
+    # then decide. In practice this list is small (pre-v0.8 tenants).
+    invited_hits = []
     async for t in db.tenants.find({"invited_employees.0": {"$exists": True}}, {"_id": 0, "id": 1, "invited_employees": 1}):
         for inv in t.get("invited_employees", []):
             if _norm_phone(inv.get("phone")) == sp:
-                return t["id"]
+                invited_hits.append(t["id"])
+                break
+    if len(invited_hits) == 1:
+        return invited_hits[0]
+    if len(invited_hits) > 1:
+        logger.warning(
+            "[WHATSAPP] Sender %s matches invited_employees entries in %d tenants (%s); "
+            "falling back to WA_TENANT_ID.",
+            sender, len(invited_hits), invited_hits,
+        )
     return os.environ.get("WA_TENANT_ID") or None
 
 
@@ -5289,6 +5477,67 @@ async def _bootstrap():
                 logger.info("Migration applied: backfill_users_phone_norm_v1")
         except Exception as e:
             logger.warning(f"phone_norm backfill migration: {e}")
+        # FIX-003-A (S2-03): otp_codes are keyed by (phone, tenant_id) so
+        # two tenants that share a phone can each hold their own live
+        # OTP. The migration ledger call:
+        #   1) drops the old single-column {phone: 1} unique index
+        #      (created implicitly by early code paths); leaving it in
+        #      place would prevent the compound insert.
+        #   2) deletes any pre-existing otp_codes rows that lack a
+        #      tenant_id — they'd fail the new compound-unique index
+        #      and they're TTL'd anyway (300s), so we're not losing
+        #      anything a user needs.
+        # After the migration runs once, we create the new compound
+        # unique index. Both are idempotent — safe on every boot.
+        async def _prepare_otp_codes_tenant_scope(_db):
+            # Drop any index whose spec is exactly {"phone": 1} — that's
+            # the old single-column index we need to replace.
+            try:
+                info = await _db.otp_codes.index_information()
+                for idx_name, spec in info.items():
+                    key = spec.get("key") or []
+                    # spec['key'] is a list of (field, direction) tuples
+                    if [(k, d) for k, d in key] == [("phone", 1)]:
+                        try:
+                            await _db.otp_codes.drop_index(idx_name)
+                            logger.info(f"[FIX-003-A] dropped legacy otp_codes index {idx_name}")
+                        except Exception as _e:
+                            logger.warning(f"[FIX-003-A] could not drop {idx_name}: {_e}")
+            except Exception as _e:
+                logger.warning(f"[FIX-003-A] otp_codes index scan failed: {_e}")
+            # Delete rows missing tenant_id — they're short-lived and
+            # would fail the new compound-unique index.
+            try:
+                res = await _db.otp_codes.delete_many({"tenant_id": {"$in": [None, ""]}})
+                if res.deleted_count:
+                    logger.info(f"[FIX-003-A] cleared {res.deleted_count} pre-migration otp_codes rows")
+            except Exception as _e:
+                logger.warning(f"[FIX-003-A] otp_codes cleanup failed: {_e}")
+            try:
+                res2 = await _db.otp_codes.delete_many({"tenant_id": {"$exists": False}})
+                if res2.deleted_count:
+                    logger.info(f"[FIX-003-A] cleared {res2.deleted_count} tenant_id-less otp_codes rows")
+            except Exception as _e:
+                logger.warning(f"[FIX-003-A] otp_codes cleanup (missing field) failed: {_e}")
+
+        try:
+            _fix003_res = await _apply_migration(
+                db, "otp_codes_tenant_scope_v1", _prepare_otp_codes_tenant_scope,
+                description="FIX-003-A: drop legacy {phone:1} unique index and clear tenant-less otp_codes rows",
+            )
+            if _fix003_res == "applied":
+                logger.info("Migration applied: otp_codes_tenant_scope_v1")
+        except Exception as e:
+            logger.warning(f"otp_codes tenant-scope migration: {e}")
+        # New compound unique index — one live OTP per (phone, tenant).
+        try:
+            await db.otp_codes.create_index(
+                [("phone", 1), ("tenant_id", 1)],
+                unique=True,
+                name="otp_codes_phone_tenant_unique",
+            )
+        except Exception as e:
+            logger.warning(f"otp_codes compound unique index: {e}")
         await db.decisions.create_index([("tenant_id", 1), ("created_at", -1)])
         await db.tasks.create_index([("tenant_id", 1), ("status", 1), ("due_date", 1)])
         await db.tasks.create_index([("tenant_id", 1), ("assignee_id", 1), ("status", 1)])

@@ -166,9 +166,13 @@ async def register(inp: RegisterInput, response: Response):
     }
     await db.tenants.insert_one(tenant_doc)
     user_id = new_id()
+    # FIX-002-A: also write phone_norm so OTP login + WhatsApp routing
+    # can query by exact-match on the indexed field.
+    from services.phone import norm_phone
+    _raw_phone = (inp.phone or "").strip()
     await db.users.insert_one({
         "id": user_id, "tenant_id": tenant_id, "name": inp.name, "email": email,
-        "phone": (inp.phone or "").strip(),
+        "phone": _raw_phone, "phone_norm": norm_phone(_raw_phone),
         "password_hash": hash_password(inp.password), "role": "owner", "created_at": now_iso(),
     })
 
@@ -251,7 +255,10 @@ async def update_profile(inp: ProfileUpdateInput, user: dict = Depends(get_curre
         updates["name"] = inp.name.strip()
     if inp.phone is not None:
         # Changing your number should re-enable WhatsApp matching for it.
-        updates["phone"] = inp.phone.strip()
+        from services.phone import norm_phone  # FIX-002-A
+        _new_phone = inp.phone.strip()
+        updates["phone"] = _new_phone
+        updates["phone_norm"] = norm_phone(_new_phone)  # keep index-searchable form in sync
         updates["wa_phone_obsolete"] = False
     if inp.language is not None and inp.language in ("en", "hi", "ta"):
         updates["language"] = inp.language

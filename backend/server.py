@@ -1353,9 +1353,10 @@ async def request_otp(inp: OtpRequestInput):
     norm = _norm_phone(inp.phone)
     if len(norm) < 10:
         raise HTTPException(status_code=400, detail="Enter a valid mobile number")
-    # Match a registered user by last-10-digit phone
-    candidates = await db.users.find({"phone": {"$exists": True, "$ne": ""}}, {"_id": 0, "id": 1, "phone": 1}).to_list(2000)
-    match = next((u for u in candidates if _norm_phone(u.get("phone", "")) == norm), None)
+    # FIX-002-A: exact-match lookup on the indexed phone_norm field
+    # (was a full-collection scan capped at 2000 users that silently
+    # blocked login for user #2001+).
+    match = await db.users.find_one({"phone_norm": norm}, {"_id": 0, "id": 1})
     if not match:
         raise HTTPException(status_code=404, detail="No account is registered with this mobile number")
     return await _issue_otp(norm, inp.phone)
@@ -1416,8 +1417,8 @@ async def verify_otp(inp: OtpVerifyInput, response: Response):
         raise HTTPException(status_code=401, detail="Incorrect OTP")
 
     await db.otp_codes.delete_one({"phone": norm})
-    candidates = await db.users.find({"phone": {"$exists": True, "$ne": ""}}).to_list(2000)
-    user = next((u for u in candidates if _norm_phone(u.get("phone", "")) == norm), None)
+    # FIX-002-A: exact-match on indexed phone_norm; was a full-collection scan.
+    user = await db.users.find_one({"phone_norm": norm}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=404, detail="Account not found")
     token = create_token(user["id"], user["tenant_id"], user["role"])
@@ -4096,12 +4097,13 @@ async def resolve_wa_tenant(sender: str):
     sp = _norm_phone(sender)
     if not sp:
         return os.environ.get("WA_TENANT_ID") or None
-    # Primary: match a registered teammate by their phone (same normalization as OTP login).
-    candidates = await db.users.find(
-        {"phone": {"$exists": True, "$ne": ""}},
-        {"_id": 0, "id": 1, "tenant_id": 1, "phone": 1, "name": 1, "created_at": 1, "wa_phone_obsolete": 1},
-    ).to_list(5000)
-    matches = [u for u in candidates if not u.get("wa_phone_obsolete") and _norm_phone(u.get("phone", "")) == sp]
+    # FIX-002-A: indexed exact-match lookup + exclude obsolete records at the
+    # DB level. Was a full-collection scan of every user across every tenant
+    # (silently capped at 5000, so user #5001+ never got matched).
+    matches = await db.users.find(
+        {"phone_norm": sp, "wa_phone_obsolete": {"$ne": True}},
+        {"_id": 0, "id": 1, "tenant_id": 1, "phone": 1, "name": 1, "created_at": 1},
+    ).to_list(50)
     if matches:
         if len(matches) > 1:
             # Same number on multiple people: route to the most recently added, mark the
@@ -4940,6 +4942,29 @@ async def _bootstrap():
         # of these collections filters by tenant_id, so unindexed = full scans).
         await db.users.create_index("email", unique=True)
         await db.users.create_index([("tenant_id", 1), ("role", 1)])
+        # FIX-002-A: index the normalized 10-digit form so OTP login + WhatsApp
+        # routing are exact-match lookups instead of full-collection scans.
+        # Partial index — only users who actually have a phone contribute; keeps
+        # the index small and skips users with phone_norm = None/"".
+        await db.users.create_index(
+            [("phone_norm", 1)],
+            partialFilterExpression={"phone_norm": {"$type": "string", "$gt": ""}},
+            name="users_phone_norm_partial",
+        )
+        # One-time backfill: any pre-existing user with `phone` but no
+        # `phone_norm` gets one computed from their stored phone. Idempotent
+        # (only touches docs missing the field).
+        try:
+            from services.phone import norm_phone as _np
+            async for _u in db.users.find(
+                {"phone": {"$type": "string", "$gt": ""}, "phone_norm": {"$exists": False}},
+                {"_id": 0, "id": 1, "phone": 1},
+            ):
+                _pn = _np(_u.get("phone") or "")
+                if _pn:
+                    await db.users.update_one({"id": _u["id"]}, {"$set": {"phone_norm": _pn}})
+        except Exception as e:
+            logger.warning(f"phone_norm backfill: {e}")
         await db.decisions.create_index([("tenant_id", 1), ("created_at", -1)])
         await db.tasks.create_index([("tenant_id", 1), ("status", 1), ("due_date", 1)])
         await db.tasks.create_index([("tenant_id", 1), ("assignee_id", 1), ("status", 1)])

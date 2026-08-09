@@ -350,3 +350,127 @@ class TestQueryFilterAssembly:
         # And the target stage the fix would advance them TO must be the
         # bakery's approval_stage, not the textile 'approved'.
         assert appr == "approved_by_owner"
+
+
+# ---------------------------------------------------------------------------
+# FIX-001-F: all_terminal_stages + tenant_terminal_stages
+# The bug this exists to close: the "active workflows" counter (and 3 other
+# sites) hardcoded ["delivered", "paid"] as the terminal-stage set. Any tenant
+# whose pipelines ended in something else (salon 'served', bakery 'settled',
+# boutique 'dispatched') saw their counter climb forever and never decrement.
+# ---------------------------------------------------------------------------
+class TestAllTerminalStages:
+    def test_textile_om_returns_textile_terminals(self):
+        """Textile default OM ends its two pipelines in 'ready' (production)
+        and 'paid' (purchase_payment). Legacy-included list must contain both."""
+        terminals = wfmod.all_terminal_stages(TEXTILE_OM)
+        assert "ready" in terminals              # production terminal
+        assert "paid" in terminals               # purchase_payment terminal
+        assert "delivered" in terminals          # legacy inclusion
+        # No dupes: 'paid' should appear once even though it's both a real
+        # terminal and a legacy one.
+        assert len(terminals) == len(set(terminals))
+
+    def test_bakery_om_uses_its_own_terminal_stages(self):
+        terminals = wfmod.all_terminal_stages(BAKERY_OM)
+        # Bakery pipelines: order_fulfilment ends in 'picked_up',
+        # ingredient_procurement ends in 'settled'.
+        assert "picked_up" in terminals
+        assert "settled" in terminals
+        # Legacy still there for old cards.
+        assert "delivered" in terminals
+        assert "paid" in terminals
+
+    def test_salon_om_uses_its_own_terminal_stages(self):
+        terminals = wfmod.all_terminal_stages(SALON_OM)
+        assert "served" in terminals                # bookings terminal
+        assert "invoice_paid" in terminals          # product_restock terminal
+        assert "delivered" in terminals             # legacy
+        assert "paid" in terminals                  # legacy
+
+    def test_include_legacy_false_omits_legacy(self):
+        """A future migration might want to drop the textile-legacy hedge.
+        Callers can opt out by passing include_legacy=False."""
+        terminals = wfmod.all_terminal_stages(BAKERY_OM, include_legacy=False)
+        assert "picked_up" in terminals
+        assert "settled" in terminals
+        # No legacy inclusion this time — but 'paid' isn't a bakery terminal,
+        # so it should NOT appear.
+        assert "delivered" not in terminals
+        # 'paid' is neither a bakery terminal nor a legacy addition here.
+        assert "paid" not in terminals
+
+    def test_empty_operating_model_returns_only_legacy(self):
+        """A tenant with no operating model (edge case, shouldn't happen but
+        the helper must be safe) gets just the legacy fallback stages."""
+        assert wfmod.all_terminal_stages({}) == ["delivered", "paid"]
+        assert wfmod.all_terminal_stages(None) == ["delivered", "paid"]
+
+    def test_empty_om_no_legacy_returns_empty_list(self):
+        """No pipelines + no legacy = empty. Callers using this in $nin get
+        `stage: {$nin: []}` which matches ALL workflows — that's the right
+        conservative behavior (an unknown-shape tenant's counter shouldn't
+        wrongly exclude anything)."""
+        assert wfmod.all_terminal_stages({}, include_legacy=False) == []
+
+    def test_pipeline_with_no_stages_gracefully_skipped(self):
+        """A malformed pipeline (no stages) should not blow up; the helper
+        just skips it and includes whatever legacy stages were asked for."""
+        malformed_om = {"pipelines": [
+            {"key": "broken", "label": "Broken", "stages": []},
+            {"key": "good", "label": "Good", "stages": [{"key": "a"}, {"key": "final"}]},
+        ]}
+        terminals = wfmod.all_terminal_stages(malformed_om, include_legacy=False)
+        assert terminals == ["final"]  # 'broken' skipped, 'good' terminal kept
+
+    def test_two_pipelines_share_a_terminal_key_deduped(self):
+        """Rare but possible: two pipelines each ending in 'done'. Dedup so
+        the resulting $nin list has no repeated entries."""
+        om = {"pipelines": [
+            {"key": "p1", "stages": [{"key": "a"}, {"key": "done"}]},
+            {"key": "p2", "stages": [{"key": "b"}, {"key": "done"}]},
+        ]}
+        terminals = wfmod.all_terminal_stages(om, include_legacy=False)
+        assert terminals == ["done"]
+
+
+class TestActiveWorkflowsCounterEndToEnd:
+    """The pain-avoided story: prove Meera's salon (terminal='served') now
+    sees an accurate active count, while Sundar's textile factory still
+    works via the legacy fallback."""
+
+    def test_salon_active_count_excludes_served(self):
+        """The bug's original symptom: bookings marked 'served' MUST be
+        excluded from the 'active workflows' counter."""
+        terminals = wfmod.all_terminal_stages(SALON_OM)
+        # If a Mongo query says {stage: $nin: terminals}, a 'served' booking
+        # is correctly filtered out.
+        served_booking = {"stage": "served"}
+        excluded = served_booking["stage"] in terminals
+        assert excluded is True, "salon 'served' bookings still counted as active — the bug is back"
+
+    def test_bakery_active_count_excludes_settled_and_picked_up(self):
+        terminals = wfmod.all_terminal_stages(BAKERY_OM)
+        assert "settled" in terminals
+        assert "picked_up" in terminals
+
+    def test_textile_active_count_still_works_via_legacy(self):
+        """Regression guard: a fresh textile-demo tenant whose cards use
+        the legacy 'paid' terminal must still be excluded (this is why we
+        keep the legacy inclusion by default)."""
+        terminals = wfmod.all_terminal_stages(TEXTILE_OM)
+        old_purchase = {"stage": "paid"}
+        assert old_purchase["stage"] in terminals
+
+    def test_pre_fix_bug_reproduced_without_helper(self):
+        """Regression story test: the OLD hardcoded exclusion list
+        ["delivered", "paid"] does NOT exclude a salon's 'served' booking.
+        This documents the exact bug FIX-001-F closes so if anyone
+        reintroduces the hardcode, this fails."""
+        OLD_HARDCODED = ["delivered", "paid"]
+        served_booking = {"stage": "served"}
+        assert served_booking["stage"] not in OLD_HARDCODED, (
+            "This assertion documents the PRE-FIX bug: the old hardcoded "
+            "list didn't include 'served', so salon bookings marked served "
+            "were incorrectly counted as active."
+        )

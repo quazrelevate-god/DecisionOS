@@ -2497,7 +2497,12 @@ async def dashboard(user: dict = Depends(get_current_user)):
     overdue = await db.tasks.find({"tenant_id": tid, "status": {"$in": ["todo", "in_progress"]}, "due_date": {"$lt": now, "$ne": None}}, {"_id": 0}).to_list(50)
     open_tasks = await db.tasks.count_documents({"tenant_id": tid, "status": {"$in": ["todo", "in_progress"]}})
     done_tasks = await db.tasks.count_documents({"tenant_id": tid, "status": "done"})
-    active_wf = await db.workflows.count_documents({"tenant_id": tid, "stage": {"$nin": ["delivered", "paid"]}})
+    # FIX-001-F: exclude the tenant's actual terminal stages, not just the
+    # textile ones. A salon's 'served' or a bakery's 'settled' now correctly
+    # marks a workflow as done so the counter stops climbing forever.
+    from services.workflows import tenant_terminal_stages
+    _term_stages = await tenant_terminal_stages(tid)
+    active_wf = await db.workflows.count_documents({"tenant_id": tid, "stage": {"$nin": _term_stages}})
     activity = await db.activity.find({"tenant_id": tid}, {"_id": 0}).sort("created_at", -1).to_list(15)
     today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
     wins = await db.activity.find(
@@ -3694,7 +3699,10 @@ async def contact_profile(contact_id: str, user: dict = Depends(require_perm("fi
 
     # follow-ups = reminder tasks + open workflows
     follow_ups = [t for t in tasks if t.get("source") in ("reminder", "ingest")]
-    pending_deliveries = [w for w in workflows if w.get("stage") not in ("delivered", "paid")]
+    # FIX-001-F: dynamic terminal stages per tenant (salon 'served', bakery 'settled', etc.).
+    from services.workflows import tenant_terminal_stages
+    _term_stages_360 = set(await tenant_terminal_stages(tid))
+    pending_deliveries = [w for w in workflows if w.get("stage") not in _term_stages_360]
 
     # price history for suppliers, from purchase bill line items
     price_history = []
@@ -3738,11 +3746,14 @@ async def rescore_contact(contact_id: str, user: dict = Depends(require_perm("fi
     workflows = await db.workflows.find({"tenant_id": tid, "contact_id": contact_id}, {"_id": 0, "stage": 1}).to_list(200)
     total_billed = sum(float(i.get("amount") or 0) for i in invoices)
     total_paid = sum(float(p.get("amount") or 0) for p in payments)
+    # FIX-001-F: dynamic terminal stages per tenant.
+    from services.workflows import tenant_terminal_stages
+    _term_stages_rs = set(await tenant_terminal_stages(tid))
     metrics = {
         "outstanding": round(total_billed - total_paid, 2), "total_billed": round(total_billed, 2),
         "total_paid": round(total_paid, 2), "last_payment": payments[0].get("date") if payments else None,
         "open_complaints": len([x for x in complaints if x.get("status") != "resolved"]),
-        "pending_deliveries": len([w for w in workflows if w.get("stage") not in ("delivered", "paid")]),
+        "pending_deliveries": len([w for w in workflows if w.get("stage") not in _term_stages_rs]),
         "invoice_count": len(invoices), "payment_count": len(payments),
     }
     currency = await _tenant_currency(tid)
@@ -3907,8 +3918,13 @@ async def business_calendar(days: int = 45, user: dict = Depends(get_current_use
             (t.get("assignee_role") or "team"), None, t.get("id"))
 
     # Deliveries (open distribution workflows; includes legacy sales_dispatch cards)
+    # FIX-001-F: dynamic terminal stages (leave the type hardcode as a
+    # follow-up: needs a tenant_sales_pipeline resolver similar to the one
+    # tenant_procurement_pipeline provides — logged separately).
+    from services.workflows import tenant_terminal_stages as _tts
+    _cal_term = await _tts(tid)
     wfs = await db.workflows.find(
-        {"tenant_id": tid, "type": {"$in": ["distribution", "sales_dispatch"]}, "stage": {"$nin": ["delivered", "paid"]}},
+        {"tenant_id": tid, "type": {"$in": ["distribution", "sales_dispatch"]}, "stage": {"$nin": _cal_term}},
         {"_id": 0}).to_list(300)
     for w in wfs:
         dt = w.get("expected_date") or w.get("due_date")

@@ -86,3 +86,44 @@ def procurement_penultimate_stage(pipeline: dict) -> Optional[str]:
         return None
     pen = stages[-2]
     return pen.get("key") if isinstance(pen, dict) else pen
+
+
+def all_terminal_stages(operating_model: dict,
+                        *, include_legacy: bool = True) -> list:
+    """Return the set of stage keys that mark a workflow as COMPLETE for
+    this tenant. Used by dashboard counters + "pending deliveries" filters
+    that need to know "which stages mean 'done, stop counting me as active'."
+
+    Introduced by FIX-001-F to replace the textile-era hardcode
+    `["delivered", "paid"]` that made every non-textile tenant's "active
+    workflows" number climb forever (a salon's terminal stage might be
+    'served', a bakery's 'settled', a boutique's 'dispatched').
+
+    include_legacy=True (default) also includes 'delivered' and 'paid' so
+    legacy workflow cards created under the old textile default still get
+    excluded — otherwise a re-designed tenant's old cards would suddenly
+    reappear in the active counter. This is a compatibility hedge, not a
+    guess: those two stage names WILL be terminal for any pipeline whose
+    stages actually contain them anyway; the include_legacy adds them
+    unconditionally so pre-migration cards are covered.
+    """
+    out = []
+    for p in (operating_model or {}).get("pipelines") or []:
+        term = procurement_terminal_stage(p)
+        if term and term not in out:
+            out.append(term)
+    if include_legacy:
+        for legacy in ("delivered", "paid"):
+            if legacy not in out:
+                out.append(legacy)
+    return out
+
+
+async def tenant_terminal_stages(tenant_id: str,
+                                 *, include_legacy: bool = True) -> list:
+    """Same as `all_terminal_stages` but resolves the tenant's operating
+    model from the DB first. The natural call-site helper for dashboard
+    counters (`{"stage": {"$nin": await tenant_terminal_stages(tid)}}`)."""
+    from server import tenant_operating_model  # deferred: avoid import cycle
+    om = await tenant_operating_model(tenant_id)
+    return all_terminal_stages(om, include_legacy=include_legacy)

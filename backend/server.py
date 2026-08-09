@@ -636,7 +636,10 @@ async def ai_read_image_general(file_path: str, mime_type: str, session_id: str)
         fc = FileContentWithMimeType(file_path=file_path, mime_type=mime_type)
         chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=session_id or "read",
                        system_message=_IMAGE_READ_SYSTEM).with_model(*VISION_MODEL)
-        resp = await chat.send_message(UserMessage(text=user_text, file_contents=[fc]))
+        # FIX-002-B: semaphore + timeout guard shared across all LLM calls.
+        from services.llm_limits import guarded_llm
+        resp = await guarded_llm(chat.send_message(UserMessage(text=user_text, file_contents=[fc])),
+                                  label="gemini:doc-read")
         await log_usage((session_id or "read").split("-")[0], "gemini", model=VISION_MODEL[1],
                         tokens_in=_est_tokens(_IMAGE_READ_SYSTEM + user_text), tokens_out=_est_tokens(resp or ""),
                         units=1, unit_type="document")
@@ -3214,7 +3217,10 @@ async def ai_extract_document(file_path: str, mime_type: str, session_id: str, c
         fc = FileContentWithMimeType(file_path=file_path, mime_type=mime_type)
         chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=session_id,
                        system_message=system).with_model(*VISION_MODEL)
-        resp = await chat.send_message(UserMessage(text=user_text, file_contents=[fc]))
+        # FIX-002-B: guard.
+        from services.llm_limits import guarded_llm
+        resp = await guarded_llm(chat.send_message(UserMessage(text=user_text, file_contents=[fc])),
+                                  label="gemini:ocr-fallback")
         await log_usage((session_id or "ocr").split("-")[0], "gemini", model=VISION_MODEL[1],
                         tokens_in=_est_tokens(system + user_text), tokens_out=_est_tokens(resp or ""),
                         units=1, unit_type="document")

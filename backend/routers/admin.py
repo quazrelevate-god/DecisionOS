@@ -423,9 +423,14 @@ async def _probe_anthropic():
         return {"status": "fallback", "detail": "No key set — using Emergent universal key"}
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage
+        from services.llm_limits import guarded_llm  # FIX-002-B: share the semaphore
         chat = LlmChat(api_key=key, session_id=f"admin-probe-{new_id()}",
                        system_message="Reply with OK.").with_model(*LLM_MODEL)
-        await asyncio.wait_for(chat.send_message(UserMessage(text="ping")), timeout=25)
+        # Keep the tighter 25s probe timeout — a bad key should surface
+        # fast, not sit for the default 45s. Semaphore still applies so a
+        # spammy probe can't starve real user requests.
+        await guarded_llm(chat.send_message(UserMessage(text="ping")),
+                          label="claude:admin-probe", timeout=25)
         return {"status": "active", "detail": "Key working"}
     except Exception as e:
         msg = str(e).lower()

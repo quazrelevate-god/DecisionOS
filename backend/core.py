@@ -176,6 +176,10 @@ class _ResilientChat:
 
     async def send_message(self, message):
         from emergentintegrations.llm.chat import LlmChat
+        # FIX-002-B: bound in-flight LLM calls + per-call timeout so a burst
+        # of 50 concurrent voice captures can't pile up on the single shared
+        # Anthropic key and cascade into 429s / unbounded latency.
+        from services.llm_limits import guarded_llm
         anthropic = get_ai_key("anthropic")
         keys, seen = [], set()
         for k in (anthropic, EMERGENT_LLM_KEY):
@@ -188,8 +192,12 @@ class _ResilientChat:
             try:
                 chat = LlmChat(api_key=key, session_id=self.session_id,
                                system_message=self.system_message).with_model(*self.model)
-                resp = await chat.send_message(message)
-                provider = "anthropic" if (key == anthropic and anthropic) else "emergent"
+                # Guard the actual network call — chat construction is cheap and
+                # local, no need to hold a semaphore slot for it.
+                _prov_label = "anthropic" if (key == anthropic and anthropic) else "emergent"
+                resp = await guarded_llm(chat.send_message(message),
+                                          label=f"claude:{_prov_label}:{self.session_id[:24]}")
+                provider = _prov_label
                 if provider == "anthropic":
                     await _resolve_provider_alert("anthropic")
                 await _record_usage(tenant_id, self.session_id, provider, self.system_message, message, resp)

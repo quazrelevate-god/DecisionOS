@@ -202,7 +202,10 @@ async def ai_extract_ledger_file(file_path: str, mime_type: str, kind: str, curr
         fc = FileContentWithMimeType(file_path=file_path, mime_type=mime_type)
         chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=f"ledger-ocr-{kind}-{new_id()}",
                        system_message=system).with_model(*VISION_MODEL)
-        resp = await chat.send_message(UserMessage(text="Extract the JSON now.", file_contents=[fc]))
+        from services.llm_limits import guarded_llm  # FIX-002-B
+        resp = await guarded_llm(
+            chat.send_message(UserMessage(text="Extract the JSON now.", file_contents=[fc])),
+            label=f"gemini:ledger-ocr-{kind}")
         await log_usage(f"ledger-ocr-{kind}", "gemini", model=VISION_MODEL[1],
                         tokens_in=_est_tokens(system), tokens_out=_est_tokens(resp or ""),
                         units=1, unit_type="document")

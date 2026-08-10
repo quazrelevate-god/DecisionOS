@@ -7,6 +7,13 @@ import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
 import { Chip, EmptyState } from "../components/common";
 import { SwipeRow } from "../components/gestures";
+// Aliased wholesale: this page still renders its feed with Phosphor icons, and
+// several names collide. The composer below is lucide-only.
+import {
+  Mic as LMic, Square as LSquare, Pause as LPause, Play as LPlay, Send as LSend,
+  Paperclip as LPaperclip, Camera as LCamera, Upload as LUpload,
+  Sparkles as LSparkles, X as LX, CircleHelp as LHelp, Check as LCheck,
+} from "lucide-react";
 import { ThinkingCanvas } from "../components/ThinkingCanvas";
 import ExecutionSummary from "../components/ExecutionSummary";
 import { DecisionDialog, raisedByLabel, RaisedByIcon } from "../components/DecisionDialog";
@@ -264,6 +271,11 @@ function PendingApprovalCard({ d, members, roleOptions, onApprove, onReject, onR
   );
 }
 
+const CAP_BTN =
+  "inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium transition-[background-color,border-color,transform] duration-200 hover:bg-accent active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50";
+const CAP_BTN_PRIMARY =
+  "inline-flex items-center gap-1.5 rounded-lg bg-brand-gold px-3.5 py-2 text-sm font-semibold text-brand-ink shadow-xs transition-transform duration-200 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50";
+
 const PROCESSING = ["queued", "transcribing", "structuring"];
 
 function AttachChips({ files, onRemove, testid }) {
@@ -342,6 +354,10 @@ export default function Inbox() {
   const [voiceFiles, setVoiceFiles] = useState([]);
   const [textFiles, setTextFiles] = useState([]);
   const [uploadFiles, setUploadFiles] = useState([]);
+  // One composer, three input modes. Only the chosen mode is ever rendered —
+  // the old layout showed all three at once, which is what made this screen
+  // two full phone-screens tall before you reached any actual work.
+  const [mode, setMode] = useState("speak");
   const voiceAttachRef = useRef(null);
   const textAttachRef = useRef(null);
   const voiceCameraRef = useRef(null);
@@ -576,171 +592,218 @@ export default function Inbox() {
         </div>
       )}
 
-      {/* Capture — three ways to create a decision */}
+      {/* ---------------------------------------------------------------
+          Capture — a single composer. Speak / Type / Upload is a CHOICE,
+          not three parallel cards, so only the selected surface exists on
+          screen and the attachment tray is shared rather than triplicated.
+         --------------------------------------------------------------- */}
       {canCapture ? (
-        <div className="mb-8 space-y-4">
-          <div className="grid lg:grid-cols-2 gap-4">
-            {/* WAY 1 — Speak */}
-            <div className="card-brutal p-6 flex flex-col items-center justify-center text-center">
-              <p className="label-mono text-brand-red mb-2 self-start">Way 1 · Speak</p>
-              <button onClick={recording ? stopRec : startRec} disabled={busy} data-testid="voice-record-button"
-                className={`w-24 h-24 flex items-center justify-center border border-black transition-all ${recording ? (paused ? "bg-brand-ink text-white" : "bg-brand-red text-white recording-pulse") : "bg-brand-ink text-white hover:shadow-brutal"}`}>
-                {recording ? <Stop size={38} weight="fill" /> : <Microphone size={38} weight="fill" />}
-              </button>
-              <p className="mt-4 font-heading font-bold uppercase tracking-tight">{recording ? (paused ? t("inbox.paused") : t("inbox.recording")) : busy ? t("inbox.thinking") : t("inbox.tap_to_speak")}</p>
-              <p className="font-mono text-sm text-muted-foreground mt-1" data-testid="record-timer">{recording ? mmss : "Speak in any language — AI writes it up in English"}</p>
-              {recording && (
-                <div className="flex flex-wrap items-center justify-center gap-2 mt-3">
-                  {paused ? (
-                    <button onClick={resumeRec} data-testid="voice-resume-button"
-                      className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black bg-brand-ink text-white hover:shadow-brutal-sm transition-all">
-                      <Play size={15} weight="fill" /> Resume
-                    </button>
-                  ) : (
-                    <button onClick={pauseRec} data-testid="voice-pause-button"
-                      className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black bg-white hover:bg-black/5 transition-colors">
-                      <Pause size={15} weight="fill" /> Pause
-                    </button>
-                  )}
-                  <button onClick={stopRec} data-testid="voice-finalise-button"
-                    className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black bg-brand-red text-white hover:shadow-brutal-sm transition-all">
-                    <CheckCircle size={15} weight="bold" /> Finalise
-                  </button>
-                  <button onClick={cancelRec} data-testid="voice-cancel-button"
-                    className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:bg-black/5 transition-colors">
-                    <X size={15} weight="bold" /> Cancel
-                  </button>
-                </div>
-              )}
-              <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-                <button onClick={() => voiceAttachRef.current?.click()} data-testid="voice-attach-file"
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider border border-black px-3 py-1.5 hover:bg-brand-yellow transition-colors">
-                  <Paperclip size={13} weight="bold" /> Attach files
+        <section className="mb-8 overflow-hidden rounded-xl border border-border/70 bg-card/70 shadow-sm backdrop-blur-xl backdrop-saturate-150 dark:shadow-edge" data-testid="capture-composer">
+          {/* Mode selector */}
+          <div className="flex items-center gap-1 border-b border-border/70 bg-surface/40 p-1.5 backdrop-blur-xl">
+            {[
+              { key: "speak", label: "Speak", icon: LMic },
+              { key: "type", label: "Type", icon: LSend },
+              { key: "upload", label: "Upload", icon: LUpload },
+            ].map((m) => {
+              const active = mode === m.key;
+              return (
+                <button
+                  key={m.key}
+                  type="button"
+                  onClick={() => setMode(m.key)}
+                  data-testid={`capture-mode-${m.key}`}
+                  aria-pressed={active}
+                  className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-medium transition-[background-color,color,box-shadow,transform] duration-200 active:scale-[0.98] ${
+                    active ? "bg-card/90 text-foreground shadow-xs backdrop-blur-xl" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <m.icon size={16} strokeWidth={2} /> {m.label}
                 </button>
-                <button onClick={() => voiceCameraRef.current?.click()} data-testid="voice-capture-photo"
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider border border-black px-3 py-1.5 hover:bg-brand-yellow transition-colors">
-                  <Camera size={13} weight="bold" /> Add photo
-                </button>
-              </div>
-              <input ref={voiceAttachRef} type="file" multiple accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" className="hidden"
-                onChange={(e) => { setVoiceFiles((prev) => [...prev, ...Array.from(e.target.files || [])]); e.target.value = ""; }} />
-              <input ref={voiceCameraRef} type="file" accept="image/*" capture="environment" className="hidden"
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) setVoiceFiles((prev) => [...prev, f]); e.target.value = ""; }} />
-              <AttachChips files={voiceFiles} testid="voice-attachments" onRemove={(i) => setVoiceFiles(voiceFiles.filter((_, j) => j !== i))} />
-            </div>
-
-            {/* WAY 2 — Type */}
-            <div className="card-brutal p-6">
-              <p className="label-mono text-brand-red mb-2">Way 2 · Type</p>
-              <p className="label-mono text-muted-foreground mb-3">{t("inbox.type_directive")}</p>
-              <textarea data-testid="text-directive-input" value={text} onChange={(e) => setText(e.target.value)} rows={5}
-                placeholder="e.g. Tell sales to send the revised quote to the Delhi retailer by Friday and ask finance to clear the packaging invoice."
-                className="w-full border border-black p-3 text-sm font-mono focus:outline-none focus:shadow-brutal-sm transition-shadow resize-none" />
-
-              {clarify ? (
-                <div className="mt-3 border border-dashed border-brand-blue p-3" data-testid="clarify-panel">
-                  <p className="flex items-center gap-2 label-mono text-brand-blue mb-2">
-                    <Question size={15} weight="bold" /> A few quick details for a sharper plan
-                  </p>
-                  <div className="space-y-2">
-                    {clarify.questions.map((q) => (
-                      <div key={q.id} data-testid={`clarify-q-${q.id}`}>
-                        <label className="text-xs font-medium block mb-1">{q.question}</label>
-                        <input value={answers[q.id] || ""} onChange={(e) => setAnswers({ ...answers, [q.id]: e.target.value })}
-                          data-testid={`clarify-a-${q.id}`} placeholder={q.hint}
-                          className="w-full border border-black px-2 py-1.5 text-sm focus:outline-none" />
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex flex-wrap gap-2 mt-3">
-                    <button onClick={submitWithDetails} disabled={busy} data-testid="clarify-submit"
-                      className="flex items-center gap-2 bg-brand-red text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all disabled:opacity-50">
-                      <PaperPlaneTilt size={15} weight="bold" /> {busy ? "Thinking…" : "Submit with details"}
-                    </button>
-                    <button onClick={() => runCapture(text, textFiles)} disabled={busy} data-testid="clarify-skip"
-                      className="px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:bg-black/5 disabled:opacity-50">
-                      Skip &amp; structure anyway
-                    </button>
-                    <button onClick={() => setClarify(null)} data-testid="clarify-cancel"
-                      className="px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:bg-black/5">Cancel</button>
-                  </div>
-                </div>
-              ) : (
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <button onClick={submitText} disabled={busy || checking || !text.trim()} data-testid="submit-text-directive"
-                    className="flex items-center gap-2 bg-brand-red text-white px-5 py-2.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all disabled:opacity-50">
-                    <PaperPlaneTilt size={16} weight="bold" /> {checking ? "Checking…" : "Structure it"}
-                  </button>
-                  <button onClick={() => textAttachRef.current?.click()} data-testid="text-attach-file"
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider border border-black px-3 py-2 hover:bg-brand-yellow transition-colors">
-                    <Paperclip size={13} weight="bold" /> Attach files
-                  </button>
-                  <button onClick={() => textCameraRef.current?.click()} data-testid="text-capture-photo"
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider border border-black px-3 py-2 hover:bg-brand-yellow transition-colors">
-                    <Camera size={13} weight="bold" /> Add photo
-                  </button>
-                </div>
-              )}
-              <input ref={textAttachRef} type="file" multiple accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" className="hidden"
-                onChange={(e) => { setTextFiles((prev) => [...prev, ...Array.from(e.target.files || [])]); e.target.value = ""; }} />
-              <input ref={textCameraRef} type="file" accept="image/*" capture="environment" className="hidden"
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) setTextFiles((prev) => [...prev, f]); e.target.value = ""; }} />
-              {textFiles.length > 0 && (
-                <ul className="mt-3 flex flex-wrap gap-2" data-testid="text-attachments">
-                  {textFiles.map((f, i) => (
-                    <li key={`${f.name}-${f.size}-${f.lastModified}`} data-testid={`text-attachments-chip-${i}`} className="inline-flex items-center gap-1.5 border border-brand-blue/40 bg-brand-blue/[0.06] text-brand-blue px-2.5 py-1 text-xs font-mono max-w-[200px]">
-                      <FileIcon size={12} weight="bold" /> <span className="truncate">{f.name}</span>
-                      <button onClick={() => setTextFiles(textFiles.filter((_, j) => j !== i))} data-testid={`text-attachments-remove-${i}`} className="ml-0.5 hover:text-brand-red"><X size={12} weight="bold" /></button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+              );
+            })}
           </div>
 
-          {/* WAY 3 — Create from an image or file */}
-          <div className="card-brutal p-6" data-testid="capture-upload">
-            <p className="label-mono text-brand-red mb-2">Way 3 · Upload an image or file</p>
-            <div className="flex items-start gap-2 mb-4">
-              <UploadSimple size={20} weight="bold" className="text-brand-blue mt-0.5 shrink-0" />
-              <div>
-                <p className="font-heading font-bold uppercase tracking-tight text-sm">No need to speak or type — the file is the directive</p>
-                <p className="text-xs text-muted-foreground">Upload files or snap photos of an order, invoice, list, business card, PDF, Word or Excel. Add <strong>several pages together</strong> (e.g. front &amp; back of a card, a multi-page order) — AI reads them all as one and proposes the decision, tasks, assignments &amp; deadlines, then it goes to Review &amp; Approve.</p>
+          <div className="p-5">
+            {/* ---------------- SPEAK ---------------- */}
+            {mode === "speak" && (
+              <div className="flex flex-col items-center py-2 text-center">
+                <button
+                  onClick={recording ? stopRec : startRec}
+                  disabled={busy}
+                  data-testid="voice-record-button"
+                  aria-label={recording ? "Stop recording" : "Start recording"}
+                  className={`flex h-24 w-24 items-center justify-center rounded-full transition-[background-color,transform,box-shadow] duration-200 active:scale-95 ${
+                    recording && !paused
+                      ? "recording-pulse bg-destructive text-destructive-foreground"
+                      : "bg-brand-gold text-brand-ink shadow-md"
+                  }`}
+                >
+                  {recording ? <LSquare size={30} strokeWidth={2} fill="currentColor" /> : <LMic size={32} strokeWidth={1.9} />}
+                </button>
+
+                <p className="mt-5 text-heading">
+                  {recording ? (paused ? t("inbox.paused") : t("inbox.recording")) : busy ? t("inbox.thinking") : t("inbox.tap_to_speak")}
+                </p>
+                <p className="mt-1 font-mono text-sm text-muted-foreground" data-testid="record-timer">
+                  {recording ? mmss : "Any language — AI writes it up in English"}
+                </p>
+
+                {recording && (
+                  <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                    {paused ? (
+                      <button onClick={resumeRec} data-testid="voice-resume-button" className={CAP_BTN}>
+                        <LPlay size={15} strokeWidth={2} /> Resume
+                      </button>
+                    ) : (
+                      <button onClick={pauseRec} data-testid="voice-pause-button" className={CAP_BTN}>
+                        <LPause size={15} strokeWidth={2} /> Pause
+                      </button>
+                    )}
+                    <button onClick={stopRec} data-testid="voice-finalise-button" className={CAP_BTN_PRIMARY}>
+                      <LCheck size={15} strokeWidth={2.4} /> Finalise
+                    </button>
+                    <button onClick={cancelRec} data-testid="voice-cancel-button" className={CAP_BTN}>
+                      <LX size={15} strokeWidth={2} /> Cancel
+                    </button>
+                  </div>
+                )}
               </div>
+            )}
+
+            {/* ---------------- TYPE ---------------- */}
+            {mode === "type" && (
+              <div>
+                <textarea
+                  data-testid="text-directive-input"
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  rows={4}
+                  placeholder="e.g. Tell sales to send the revised quote to the Delhi retailer by Friday."
+                  className="w-full resize-none rounded-xl border border-input bg-card p-3.5 text-sm shadow-xs transition-[border-color,box-shadow] duration-200 placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25"
+                />
+
+                {clarify ? (
+                  <div className="mt-3 rounded-xl border border-primary/30 bg-primary-subtle p-4" data-testid="clarify-panel">
+                    <p className="label-mono mb-3 flex items-center gap-1.5 text-primary">
+                      <LHelp size={14} strokeWidth={2} /> A few details for a sharper plan
+                    </p>
+                    <div className="space-y-2.5">
+                      {clarify.questions.map((q) => (
+                        <div key={q.id} data-testid={`clarify-q-${q.id}`}>
+                          <label className="mb-1 block text-xs font-medium">{q.question}</label>
+                          <input
+                            value={answers[q.id] || ""}
+                            onChange={(e) => setAnswers({ ...answers, [q.id]: e.target.value })}
+                            data-testid={`clarify-a-${q.id}`}
+                            placeholder={q.hint}
+                            className="w-full rounded-lg border border-input bg-card px-2.5 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button onClick={submitWithDetails} disabled={busy} data-testid="clarify-submit" className={CAP_BTN_PRIMARY}>
+                        <LSend size={15} strokeWidth={2} /> {busy ? "Thinking…" : "Submit"}
+                      </button>
+                      <button onClick={() => runCapture(text, textFiles)} disabled={busy} data-testid="clarify-skip" className={CAP_BTN}>
+                        Skip &amp; structure
+                      </button>
+                      <button onClick={() => setClarify(null)} data-testid="clarify-cancel" className={CAP_BTN}>
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={submitText}
+                    disabled={busy || checking || !text.trim()}
+                    data-testid="submit-text-directive"
+                    className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-brand-gold py-3 text-sm font-semibold text-brand-ink shadow-xs transition-transform duration-200 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40"
+                  >
+                    <LSend size={16} strokeWidth={2} /> {checking ? "Checking…" : "Structure it"}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* ---------------- UPLOAD ---------------- */}
+            {mode === "upload" && (
+              <div data-testid="capture-upload">
+                <button
+                  onClick={() => uploadRef.current?.click()}
+                  data-testid="attach-file-button"
+                  className="flex w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border-strong bg-surface/50 px-4 py-8 text-center transition-[background-color,border-color] duration-200 hover:border-primary/50 hover:bg-primary-subtle/40"
+                >
+                  <LUpload size={26} strokeWidth={1.6} className="text-primary" />
+                  <span className="text-sm font-medium">Drop an order, invoice or photo</span>
+                  <span className="max-w-xs text-xs text-muted-foreground">
+                    Several pages are read as one. AI proposes the decision, tasks and deadlines.
+                  </span>
+                </button>
+
+                {uploadFiles.length > 0 && (
+                  <button
+                    onClick={structureFiles}
+                    disabled={busy}
+                    data-testid="structure-file-button"
+                    className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-brand-gold py-3 text-sm font-semibold text-brand-ink shadow-xs transition-transform duration-200 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40"
+                  >
+                    <LSparkles size={16} strokeWidth={2} /> Analyse &amp; structure
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* ---- Shared attachment tray: one row, whatever the mode ---- */}
+            <div className="mt-4 flex items-center gap-2 border-t border-border pt-3">
+              <button
+                onClick={() => (mode === "speak" ? voiceAttachRef : mode === "type" ? textAttachRef : uploadRef).current?.click()}
+                data-testid={mode === "speak" ? "voice-attach-file" : mode === "type" ? "text-attach-file" : "upload-attach-file"}
+                className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors duration-200 hover:bg-accent hover:text-foreground"
+              >
+                <LPaperclip size={14} strokeWidth={2} /> Attach
+              </button>
+              <button
+                onClick={() => (mode === "speak" ? voiceCameraRef : mode === "type" ? textCameraRef : uploadCameraRef).current?.click()}
+                data-testid={mode === "speak" ? "voice-capture-photo" : mode === "type" ? "text-capture-photo" : "capture-photo-button"}
+                className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors duration-200 hover:bg-accent hover:text-foreground"
+              >
+                <LCamera size={14} strokeWidth={2} /> Photo
+              </button>
+              {language !== undefined && (
+                <span className="label-mono ml-auto text-muted-foreground/70">{mode}</span>
+              )}
             </div>
-            <div className="flex flex-wrap gap-2">
-              <button onClick={() => uploadRef.current?.click()} data-testid="attach-file-button"
-                className="flex items-center gap-2 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-black/5 transition-colors">
-                <UploadSimple size={16} weight="bold" /> Upload image / PDF / doc
-              </button>
-              <input ref={uploadRef} type="file" multiple accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" className="hidden"
-                onChange={(e) => { setUploadFiles((prev) => [...prev, ...Array.from(e.target.files || [])]); e.target.value = ""; }} />
-              <button onClick={() => uploadCameraRef.current?.click()} data-testid="capture-photo-button"
-                className="flex items-center gap-2 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-black/5 transition-colors">
-                <Camera size={16} weight="bold" /> Capture photo
-              </button>
-              <input ref={uploadCameraRef} type="file" accept="image/*" capture="environment" className="hidden"
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) setUploadFiles((prev) => [...prev, f]); e.target.value = ""; }} />
-              <button onClick={structureFiles} disabled={busy || uploadFiles.length === 0} data-testid="structure-file-button"
-                className="flex items-center gap-2 bg-brand-blue text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed">
-                <Brain size={16} weight="bold" /> Analyse &amp; structure
-              </button>
-            </div>
-            {uploadFiles.length > 0 && (
-              <ul className="mt-3 flex flex-wrap gap-2" data-testid="attachment-chips">
-                {uploadFiles.map((f, i) => (
-                  <li key={`${f.name}-${f.size}-${f.lastModified}`} data-testid={`attachment-chip-${i}`} className="inline-flex items-center gap-1.5 border border-brand-blue/40 bg-brand-blue/[0.06] text-brand-blue px-2.5 py-1 text-xs font-mono max-w-[220px]">
-                    <FileIcon size={12} weight="bold" /> <span className="truncate">{f.name}</span>
-                    <button onClick={() => setUploadFiles(uploadFiles.filter((_, j) => j !== i))} data-testid={`attachment-remove-${i}`} className="ml-0.5 hover:text-brand-red"><X size={12} weight="bold" /></button>
-                  </li>
-                ))}
-              </ul>
+
+            {/* Hidden inputs — unchanged wiring, just gathered in one place. */}
+            <input ref={voiceAttachRef} type="file" multiple accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" className="hidden"
+              onChange={(e) => { setVoiceFiles((prev) => [...prev, ...Array.from(e.target.files || [])]); e.target.value = ""; }} />
+            <input ref={voiceCameraRef} type="file" accept="image/*" capture="environment" className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) setVoiceFiles((prev) => [...prev, f]); e.target.value = ""; }} />
+            <input ref={textAttachRef} type="file" multiple accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" className="hidden"
+              onChange={(e) => { setTextFiles((prev) => [...prev, ...Array.from(e.target.files || [])]); e.target.value = ""; }} />
+            <input ref={textCameraRef} type="file" accept="image/*" capture="environment" className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) setTextFiles((prev) => [...prev, f]); e.target.value = ""; }} />
+            <input ref={uploadRef} type="file" multiple accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" className="hidden"
+              onChange={(e) => { setUploadFiles((prev) => [...prev, ...Array.from(e.target.files || [])]); e.target.value = ""; }} />
+            <input ref={uploadCameraRef} type="file" accept="image/*" capture="environment" className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) setUploadFiles((prev) => [...prev, f]); e.target.value = ""; }} />
+
+            {mode === "speak" && (
+              <AttachChips files={voiceFiles} testid="voice-attachments" onRemove={(i) => setVoiceFiles(voiceFiles.filter((_, j) => j !== i))} />
+            )}
+            {mode === "type" && (
+              <AttachChips files={textFiles} testid="text-attachments" onRemove={(i) => setTextFiles(textFiles.filter((_, j) => j !== i))} />
+            )}
+            {mode === "upload" && (
+              <AttachChips files={uploadFiles} testid="attachment-chips" onRemove={(i) => setUploadFiles(uploadFiles.filter((_, j) => j !== i))} />
             )}
           </div>
-        </div>
+        </section>
       ) : (
-        <div className="border border-black bg-brand-yellow/40 p-4 text-sm mb-8" data-testid="owner-only-notice">
-          Voice/text capture isn't enabled for your access. Your inbox below shows everything happening across the business.
+        <div className="mb-8 rounded-xl border border-border bg-surface p-4 text-sm text-muted-foreground" data-testid="owner-only-notice">
+          Voice and text capture aren't enabled for your access. The feed below shows everything happening across the business.
         </div>
       )}
 

@@ -86,7 +86,7 @@ function Home() {
 function DemoBadge() {
   return (
     <div
-      className="pointer-events-none fixed bottom-[5.5rem] right-3 z-[9999] rounded-full border border-primary/30 bg-primary-subtle px-3 py-1 font-mono text-[10px] uppercase tracking-[0.1em] text-primary shadow-sm lg:bottom-3"
+      className="pointer-events-none fixed bottom-[5.5rem] right-3 z-[45] rounded-full border border-primary/30 bg-primary-subtle px-3 py-1 font-mono text-[10px] uppercase tracking-[0.1em] text-primary shadow-sm lg:bottom-3"
       data-testid="demo-mode-badge"
     >
       Demo data · no backend

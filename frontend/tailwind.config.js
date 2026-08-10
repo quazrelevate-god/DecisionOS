@@ -115,6 +115,19 @@ module.exports = {
                 'fade-up': { from: { opacity: '0', transform: 'translateY(6px)' }, to: { opacity: '1', transform: 'translateY(0)' } },
                 'fade-in': { from: { opacity: '0' }, to: { opacity: '1' } },
                 shimmer: { '100%': { transform: 'translateX(100%)' } },
+                // The launcher rises from the bottom edge.
+                'launcher-in': {
+                    from: { opacity: '0', transform: 'translateY(24px) scale(0.985)' },
+                    to: { opacity: '1', transform: 'translateY(0) scale(1)' },
+                },
+                // A single chevron drifting up and dissolving — the standing
+                // invitation to swipe. Two of these, staggered, read as motion
+                // without ever becoming a distraction.
+                'hint-up': {
+                    '0%': { opacity: '0', transform: 'translateY(3px)' },
+                    '35%': { opacity: '0.9' },
+                    '100%': { opacity: '0', transform: 'translateY(-5px)' },
+                },
             },
             animation: {
                 'accordion-down': 'accordion-down 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
@@ -124,6 +137,8 @@ module.exports = {
                 // Registered here (not used as an arbitrary value) so Tailwind
                 // actually emits the @keyframes block.
                 shimmer: 'shimmer 1.6s infinite',
+                'launcher-in': 'launcher-in 0.32s cubic-bezier(0.16, 1, 0.3, 1) both',
+                'hint-up': 'hint-up 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite',
             },
         },
     },

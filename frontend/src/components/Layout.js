@@ -5,18 +5,18 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   Bell,
-  CaretUpDown,
-  EnvelopeSimple,
-  GearSix,
-  List as ListIcon,
-  MagnifyingGlass,
-  Microphone,
-  MoonStars,
-  SidebarSimple,
-  SignOut,
+  ChevronsUpDown,
+  LayoutGrid,
+  Mail,
+  Mic,
+  Moon,
+  PanelLeft,
+  Search,
+  Settings2,
   Sun,
-  UserCircle,
-} from "@phosphor-icons/react";
+  UserRound,
+  LogOut,
+} from "lucide-react";
 
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../hooks/useTheme";
@@ -24,8 +24,8 @@ import api from "../lib/api";
 import { timeAgo } from "../lib/format";
 import { notifMeta, notifLink } from "../lib/notif";
 import { hasPerm } from "../lib/perms";
-import { visibleGroups, BOTTOM_NAV, canSee, activeItem } from "../lib/nav";
-import { useEdgeSwipe, useIsMobile, useLongPress, useSwipe } from "../lib/gestures";
+import { visibleGroups, activeItem } from "../lib/nav";
+import { useIsMobile, useSwipe } from "../lib/gestures";
 import { cn } from "../lib/utils";
 import { Chip } from "./common";
 import { PullToRefresh } from "./gestures";
@@ -39,8 +39,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
-import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from "./ui/sheet";
 import { ProfileDialog } from "./ProfileDialog";
+import { AppLauncher } from "./AppLauncher";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { WelcomeOverlay } from "./WelcomeOverlay";
 import { CommandPalette, openCommandPalette } from "./CommandPalette";
@@ -101,7 +101,7 @@ export default function Layout({ children }) {
   const qc = useQueryClient();
   const { isDark, toggle: toggleTheme } = useTheme();
 
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [launcherOpen, setLauncherOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem(SIDEBAR_KEY) === "1"
@@ -114,13 +114,10 @@ export default function Layout({ children }) {
 
   /* ---- gestures ---------------------------------------------------------- */
 
-  // Swipe in from the left bezel → navigation drawer (mobile only).
-  const edgeSwipe = useEdgeSwipe({
-    onOpen: () => setDrawerOpen(true),
-    edgeWidth: 16,
-  });
-  // Swipe the open drawer left → close it, mirroring how it arrived.
-  const drawerSwipe = useSwipe({ onLeft: () => setDrawerOpen(false) });
+  // Swipe up anywhere on the bottom control → open the launcher. The bar is
+  // the only navigation affordance on mobile, so this is the one gesture that
+  // has to be unmissable.
+  const launcherSwipe = useSwipe({ onUp: () => setLauncherOpen(true), threshold: 28 });
 
   // Pull down at the top of any screen → refetch everything on it.
   const refreshAll = useCallback(async () => {
@@ -131,7 +128,6 @@ export default function Layout({ children }) {
   }, [qc]);
 
   const groups = useMemo(() => visibleGroups(user), [user]);
-  const navBottom = useMemo(() => BOTTOM_NAV.filter((n) => canSee(user, n)), [user]);
   const current = activeItem(location.pathname);
 
   /* ---- live counters ---------------------------------------------------- */
@@ -184,14 +180,11 @@ export default function Layout({ children }) {
   // the header CTA, the mobile FAB and ⌘K all land on the right surface for
   // this user's permissions.
   const goCapture = useCallback(() => {
-    setDrawerOpen(false);
+    setLauncherOpen(false);
     if (hasPerm(user, "inbox") || hasPerm(user, "voice_capture")) navigate("/");
     else if (hasPerm(user, "data_input")) navigate("/ingest");
     else navigate("/my-work");
   }, [user, navigate]);
-
-  // FAB: tap = capture, long-press = command palette (the mobile "right click").
-  const fabLongPress = useLongPress(openCommandPalette);
 
   const openNotif = async (n) => {
     if (!n.read) {
@@ -224,7 +217,7 @@ export default function Layout({ children }) {
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             )}
           >
-            <Bell size={18} weight="bold" />
+            <Bell size={18} strokeWidth={2} />
             {unread > 0 && (
               <span
                 data-testid="notif-count"
@@ -313,7 +306,7 @@ export default function Layout({ children }) {
       data-testid="theme-toggle"
       label={isDark ? "Switch to light mode" : "Switch to dark mode"}
     >
-      {isDark ? <Sun size={18} weight="bold" /> : <MoonStars size={18} weight="bold" />}
+      {isDark ? <Sun size={18} strokeWidth={2} /> : <Moon size={18} strokeWidth={2} />}
     </IconButton>
   );
 
@@ -348,7 +341,7 @@ export default function Layout({ children }) {
                 isActive ? "opacity-100" : "opacity-0"
               )}
             />
-            <item.icon size={18} weight={isActive ? "fill" : "regular"} className="shrink-0" />
+            <item.icon size={18} strokeWidth={isActive ? 2.2 : 1.75} className="shrink-0" aria-hidden="true" />
             {!compact && <span className="truncate">{t(item.tkey, item.label)}</span>}
             {count > 0 &&
               (compact ? (
@@ -423,7 +416,7 @@ export default function Layout({ children }) {
             </span>
             <span className="block truncate text-xs text-muted-foreground">{user?.email}</span>
           </span>
-          <CaretUpDown size={14} className="shrink-0 text-muted-foreground" aria-hidden="true" />
+          <ChevronsUpDown size={14} className="shrink-0 text-muted-foreground" aria-hidden="true" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align={align} className="w-60 rounded-xl">
@@ -438,11 +431,11 @@ export default function Layout({ children }) {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => setProfileOpen(true)} data-testid="menu-profile">
-          <UserCircle size={16} weight="bold" /> Profile
+          <UserRound size={16} strokeWidth={2} /> Profile
         </DropdownMenuItem>
         {user?.role === "owner" && (
           <DropdownMenuItem onSelect={() => navigate("/settings")} data-testid="menu-settings">
-            <GearSix size={16} weight="bold" /> {t("nav.settings")}
+            <Settings2 size={16} strokeWidth={2} /> {t("nav.settings")}
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
@@ -451,7 +444,7 @@ export default function Layout({ children }) {
           data-testid="logout-button"
           className="text-destructive focus:text-destructive"
         >
-          <SignOut size={16} weight="bold" /> {t("header.sign_out")}
+          <LogOut size={16} strokeWidth={2} /> {t("header.sign_out")}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -461,10 +454,7 @@ export default function Layout({ children }) {
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div
-        className="flex min-h-screen bg-background text-foreground"
-        {...(isMobile ? edgeSwipe : {})}
-      >
+      <div className="flex min-h-screen bg-background text-foreground">
         <a href="#main-content" className="skip-link">
           Skip to content
         </a>
@@ -502,7 +492,7 @@ export default function Layout({ children }) {
                 data-testid="sidebar-collapse"
                 className="h-8 w-8"
               >
-                <SidebarSimple size={17} weight="bold" />
+                <PanelLeft size={17} strokeWidth={2} />
               </IconButton>
             )}
           </div>
@@ -514,7 +504,7 @@ export default function Layout({ children }) {
                 onClick={() => setCollapsed(false)}
                 data-testid="sidebar-expand"
               >
-                <SidebarSimple size={17} weight="bold" />
+                <PanelLeft size={17} strokeWidth={2} />
               </IconButton>
             </div>
           )}
@@ -544,7 +534,7 @@ export default function Layout({ children }) {
                     data-testid="sidebar-command-collapsed"
                     className="mx-auto"
                   >
-                    <MagnifyingGlass size={17} weight="bold" />
+                    <Search size={17} strokeWidth={2} />
                   </IconButton>
                 </TooltipTrigger>
                 <TooltipContent side="right">Search · ⌘K</TooltipContent>
@@ -561,7 +551,7 @@ export default function Layout({ children }) {
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 )}
               >
-                <MagnifyingGlass size={16} weight="bold" />
+                <Search size={16} strokeWidth={2} />
                 <span className="flex-1 text-left">{t("command.trigger", "Search…")}</span>
                 <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] leading-none text-muted-foreground">
                   ⌘K
@@ -588,7 +578,7 @@ export default function Layout({ children }) {
                     aria-label={t("header.sign_out")}
                     className="mx-auto flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-200 hover:bg-destructive/10 hover:text-destructive"
                   >
-                    <SignOut size={17} weight="bold" />
+                    <LogOut size={17} strokeWidth={2} />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="right">{t("header.sign_out")}</TooltipContent>
@@ -606,12 +596,7 @@ export default function Layout({ children }) {
             <div className="flex min-w-0 items-center gap-3">
               {current && (
                 <>
-                  <current.icon
-                    size={17}
-                    weight="bold"
-                    className="shrink-0 text-muted-foreground"
-                    aria-hidden="true"
-                  />
+                  <current.icon size={17} strokeWidth={1.9} className="shrink-0 text-muted-foreground" aria-hidden="true" />
                   <h2 className="truncate text-[15px] font-semibold tracking-tight">
                     {t(current.tkey, current.label)}
                   </h2>
@@ -631,7 +616,7 @@ export default function Layout({ children }) {
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 )}
               >
-                <Microphone size={16} weight="bold" />
+                <Mic size={16} strokeWidth={2} />
                 {t("header.capture", "Capture")}
               </button>
 
@@ -643,7 +628,7 @@ export default function Layout({ children }) {
                       data-testid="send-digest-button"
                       label={t("header.send_digest")}
                     >
-                      <EnvelopeSimple size={18} weight="bold" />
+                      <Mail size={18} strokeWidth={2} />
                     </IconButton>
                   </TooltipTrigger>
                   <TooltipContent>{t("header.send_digest")}</TooltipContent>
@@ -656,104 +641,28 @@ export default function Layout({ children }) {
             </div>
           </header>
 
-          {/* Mobile header */}
-          <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-2 border-b border-border glass px-3 lg:hidden">
-            <div className="flex min-w-0 items-center gap-2">
-              <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
-                <SheetTrigger asChild>
-                  <IconButton label="Open menu" data-testid="mobile-menu-button">
-                    <ListIcon size={20} weight="bold" />
-                  </IconButton>
-                </SheetTrigger>
-                <SheetContent
-                  side="left"
-                  className="flex w-[19rem] flex-col gap-0 border-r border-sidebar-border bg-sidebar p-0"
-                  data-testid="mobile-drawer"
-                  {...drawerSwipe}
-                >
-                  <SheetTitle className="sr-only">Navigation</SheetTitle>
-                  <SheetDescription className="sr-only">Main navigation menu</SheetDescription>
-
-                  <div className="border-b border-sidebar-border px-4 py-4">
-                    <Logo />
-                    <p className="mt-3 truncate text-sm font-medium">{tenant?.name}</p>
-                    {tenant?.industry && (
-                      <p className="label-mono mt-0.5 truncate text-muted-foreground">
-                        {tenant.industry}
-                      </p>
-                    )}
-                  </div>
-
-                  <nav
-                    aria-label="Main navigation"
-                    className="min-h-0 flex-1 overflow-y-auto py-4"
-                  >
-                    <NavTree onNavigate={() => setDrawerOpen(false)} />
-                  </nav>
-
-                  <div className="shrink-0 space-y-2 border-t border-sidebar-border p-3 pb-6">
-                    {/* Theme + language live here, not in the header — the
-                        header stays two icons, and these are set-and-forget. */}
-                    <div className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-1.5">
-                      <span className="text-sm text-muted-foreground">
-                        {t("drawer.appearance", "Theme & language")}
-                      </span>
-                      <div className="flex items-center gap-0.5">
-                        <ThemeToggle />
-                        <LanguageSwitcher />
-                      </div>
-                    </div>
-                    {user?.role === "owner" && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDrawerOpen(false);
-                          sendDigest();
-                        }}
-                        data-testid="mobile-send-digest-button"
-                        className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2.5 text-sm font-medium transition-colors duration-200 hover:bg-accent"
-                      >
-                        <EnvelopeSimple size={16} weight="bold" /> {t("header.send_digest")}
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={doLogout}
-                      data-testid="mobile-logout-button"
-                      className="flex w-full items-center justify-center gap-2 rounded-lg border border-destructive/25 bg-destructive-subtle px-3 py-2.5 text-sm font-medium text-destructive transition-colors duration-200 hover:bg-destructive/15"
-                    >
-                      <SignOut size={16} weight="bold" /> {t("header.sign_out")}
-                    </button>
-                  </div>
-                </SheetContent>
-              </Sheet>
-
-              {current ? (
-                <h2 className="truncate text-[15px] font-semibold tracking-tight">
-                  {t(current.tkey, current.label)}
-                </h2>
-              ) : (
-                <Logo />
-              )}
-            </div>
+          {/* Mobile header — title and the two things you reach for mid-task.
+              Navigation lives in the bottom launcher, not up here. */}
+          <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-2 border-b border-border glass px-4 lg:hidden">
+            <h2 className="min-w-0 flex-1 truncate text-[17px] font-semibold tracking-tight">
+              {current ? t(current.tkey, current.label) : "DecisionOS"}
+            </h2>
 
             <div className="flex shrink-0 items-center gap-0.5">
               <IconButton
-                label="Search and commands"
+                label={t("command.trigger", "Search")}
                 onClick={openCommandPalette}
                 data-testid="mobile-command"
               >
-                <MagnifyingGlass size={18} weight="bold" />
+                <Search size={19} strokeWidth={2} />
               </IconButton>
-              {/* On a phone the bell goes straight to the Notifications
-                  screen — a popover list in a 390px viewport is clutter. */}
               <IconButton
                 label={`${t("header.notifications")}${unread ? ` (${unread})` : ""}`}
                 onClick={() => navigate("/notifications")}
                 data-testid="notif-bell"
                 className="relative"
               >
-                <Bell size={18} weight="bold" />
+                <Bell size={19} strokeWidth={2} />
                 {unread > 0 && (
                   <span
                     data-testid="notif-count"
@@ -778,64 +687,61 @@ export default function Layout({ children }) {
           </main>
         </div>
 
-        {/* ---------------- Mobile bottom bar ---------------- */}
-        <nav
-          aria-label="Primary"
-          className="fixed bottom-0 left-0 right-0 z-40 flex items-stretch border-t border-border glass pb-[env(safe-area-inset-bottom)] lg:hidden"
+        {/* ---------------- Mobile bottom bar ----------------
+            One control, dead centre: it names where you are, and swiping up
+            from it opens the launcher. No tab row, no hamburger — the bar
+            carries a single affordance instead of five competing ones. */}
+        <div
+          className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:hidden"
           data-testid="mobile-bottom-nav"
         >
-          {navBottom.slice(0, 2).map((item) => (
-            <BottomTab key={item.to} item={item} location={location} t={t} />
-          ))}
+          <button
+            type="button"
+            onClick={() => setLauncherOpen(true)}
+            {...launcherSwipe}
+            aria-haspopup="dialog"
+            aria-expanded={launcherOpen}
+            aria-label={`${current ? t(current.tkey, current.label) : "Menu"} — open navigation`}
+            data-testid="bottomnav-launcher"
+            className={cn(
+              "pointer-events-auto relative flex h-14 w-14 items-center justify-center rounded-full",
+              "border border-border/70 bg-card/70 backdrop-blur-2xl backdrop-saturate-150 shadow-lg",
+              "text-primary transition-transform duration-200 active:scale-[0.92]",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            )}
+            style={{ touchAction: "none" }}
+          >
+            {/* A slow gold halo breathing outward — the only motion, and just
+                enough to read as "this is the live control". */}
+            <span
+              aria-hidden="true"
+              className="absolute inset-0 rounded-full ring-1 ring-primary/25 animate-hint-up"
+            />
+            {current ? (
+              <current.icon size={23} strokeWidth={1.9} aria-hidden="true" />
+            ) : (
+              <LayoutGrid size={23} strokeWidth={1.9} aria-hidden="true" />
+            )}
+            {(counters.fires > 0 || counters.captures > 0) && (
+              <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-destructive ring-2 ring-card" />
+            )}
+          </button>
+        </div>
 
-          {/* Capture takes the thumb position — it is the core gesture.
-              Tap = capture; long-press = command palette. Bright gold is
-              reserved for exactly this moment. */}
-          <div className="relative flex w-[4.5rem] shrink-0 items-start justify-center">
-            <button
-              type="button"
-              onClick={goCapture}
-              {...fabLongPress}
-              data-testid="bottomnav-capture"
-              aria-label={t("header.capture", "Capture")}
-              className={cn(
-                "-mt-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-gold text-brand-ink",
-                "shadow-lg ring-4 ring-background",
-                "transition-transform duration-200 active:scale-[0.94]",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              )}
-            >
-              <Microphone size={24} weight="fill" />
-            </button>
-          </div>
-
-          {navBottom.slice(2).map((item) => (
-            <BottomTab key={item.to} item={item} location={location} t={t} />
-          ))}
-        </nav>
+        <AppLauncher
+          open={launcherOpen}
+          onClose={() => setLauncherOpen(false)}
+          user={user}
+          tenant={tenant}
+          counters={{ ...counters, unread }}
+          isDark={isDark}
+          onToggleTheme={toggleTheme}
+          onCapture={goCapture}
+          onSearch={openCommandPalette}
+          onLogout={doLogout}
+          onProfile={() => setProfileOpen(true)}
+        />
       </div>
     </TooltipProvider>
-  );
-}
-
-/** A single mobile tab. Extracted so the FAB can sit between two halves. */
-function BottomTab({ item, location, t }) {
-  const active = item.end
-    ? location.pathname === item.to
-    : location.pathname.startsWith(item.to);
-  return (
-    <NavLink
-      to={item.to}
-      end={item.end}
-      data-testid={item.testid}
-      className={cn(
-        "flex flex-1 flex-col items-center justify-center gap-1 py-2.5",
-        "transition-colors duration-200",
-        active ? "text-primary" : "text-muted-foreground"
-      )}
-    >
-      <item.icon size={21} weight={active ? "fill" : "regular"} />
-      <span className="text-[10px] font-medium leading-none">{t(item.tkey, item.label)}</span>
-    </NavLink>
   );
 }

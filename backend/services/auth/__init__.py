@@ -53,3 +53,11 @@ from services.auth.membership import (  # noqa: F401
     resolve_login_choices,
     project_membership_onto_user,
 )
+from services.auth.session_tracking import (  # noqa: F401
+    COLLECTION as ACTIVE_SESSIONS_COLLECTION,
+    record_session,
+    touch_session,
+    list_sessions,
+    revoke_one_session,
+    revoke_all_sessions_for_user,
+)

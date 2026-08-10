@@ -335,6 +335,14 @@ async def get_current_user(
         from services.session_revocation import is_revoked as _is_revoked
         if await _is_revoked(db, jti):
             raise HTTPException(status_code=401, detail="Session ended, please log in again")
+        # FIX-004-G (RBAC-21): bump last_seen_at so /me/sessions
+        # shows accurate "active X minutes ago". Best-effort — a
+        # failed touch never fails the request.
+        from services.auth.session_tracking import touch_session as _touch
+        try:
+            await _touch(db, jti)
+        except Exception:
+            pass
     user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0})
     if not user:
         raise HTTPException(status_code=401, detail="User not found")

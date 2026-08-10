@@ -336,6 +336,21 @@ async def register(inp: RegisterInput, request: Request, response: Response):
     user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
     tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0})
     set_auth_cookie(response, token)
+    # FIX-004-G (RBAC-21): record the new session on registration.
+    import jwt as _jwt
+    from core import JWT_SECRET as _JS, JWT_ALGORITHM as _JA
+    from services.auth.session_tracking import record_session as _rec_sess
+    try:
+        _payload = _jwt.decode(token, _JS, algorithms=[_JA])
+        _reg_ctx = __import__("services", fromlist=["audit_log"]).audit_log.context_from(request, user)
+        await _rec_sess(
+            db, jti=_payload.get("jti"),
+            user_id=user_id, tenant_id=tenant_id,
+            exp=_payload.get("exp"),
+            ua=_reg_ctx.get("actor_ua"), ip=_reg_ctx.get("actor_ip"),
+        )
+    except Exception:
+        pass
     # FIX-004-F (RBAC-20): audit tenant + user creation. Two events
     # so a reader querying by action can find each independently.
     from services import audit_log as _audit
@@ -453,6 +468,22 @@ async def login(inp: LoginInput, request: Request, response: Response):
         meta={"tenant_id": tenant_id, "role": role},
         **_ctx,
     )
+    # FIX-004-G (RBAC-21): record the new session so /me/sessions can
+    # list it. Decode the jti out of the freshly-issued token so we
+    # track the exact one that will authenticate future requests.
+    import jwt as _jwt
+    from core import JWT_SECRET, JWT_ALGORITHM
+    from services.auth.session_tracking import record_session as _rec_sess
+    try:
+        _payload = _jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        await _rec_sess(
+            db, jti=_payload.get("jti"),
+            user_id=user["id"], tenant_id=tenant_id,
+            exp=_payload.get("exp"),
+            ua=_ctx.get("actor_ua"), ip=_ctx.get("actor_ip"),
+        )
+    except Exception:
+        pass  # best-effort — the JWT is still valid; session-mgmt is bonus
     return {"token": token, "user": user, "tenant": tenant}
 
 
@@ -472,7 +503,8 @@ async def list_my_workspaces(user: dict = Depends(get_current_user)):
 
 
 @router.post("/me/switch-workspace")
-async def switch_workspace(inp: SwitchWorkspaceInput, response: Response,
+async def switch_workspace(inp: SwitchWorkspaceInput, request: Request,
+                            response: Response,
                             user: dict = Depends(get_current_user)):
     """FIX-004-B (RBAC-13): re-issue the auth cookie/JWT with a
     different tenant_id claim. Refuses if the caller has no live
@@ -489,12 +521,106 @@ async def switch_workspace(inp: SwitchWorkspaceInput, response: Response,
     token = create_token(user["id"], inp.tenant_id, target.get("role") or "sales")
     tenant = await db.tenants.find_one({"id": inp.tenant_id}, {"_id": 0})
     set_auth_cookie(response, token)
+    # FIX-004-G (RBAC-21): the switch mints a NEW jti — record it.
+    # The old jti stays valid (a user with 2 tabs open in 2
+    # workspaces is a legitimate scenario).
+    import jwt as _jwt
+    from core import JWT_SECRET as _JS, JWT_ALGORITHM as _JA
+    from services.auth.session_tracking import record_session as _rec_sess
+    try:
+        _payload = _jwt.decode(token, _JS, algorithms=[_JA])
+        await _rec_sess(
+            db, jti=_payload.get("jti"),
+            user_id=user["id"], tenant_id=inp.tenant_id,
+            exp=_payload.get("exp"),
+            ua=request.headers.get("User-Agent") if hasattr(request, "headers") else None,
+            ip=(request.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
+                or (getattr(request.client, "host", None) if request.client else None),
+        )
+    except Exception:
+        pass
     return {
         "token": token,
         "tenant": tenant,
         "role": target.get("role"),
         "permissions": list(target.get("permissions") or []),
     }
+
+
+# ---------------------------------------------------------------------------
+# FIX-004-G (RBAC-21): session-management UI endpoints
+# ---------------------------------------------------------------------------
+@router.get("/me/sessions")
+async def list_my_sessions(request: Request,
+                             user: dict = Depends(get_current_user)):
+    """Every non-revoked, non-expired session for the current user.
+
+    Marks the current session with `is_current: true` so the UI can
+    render it distinctly (grey out the revoke button, etc.).
+    """
+    from services.auth.session_tracking import list_sessions
+    # Decode our own token to figure out which session is "current".
+    import jwt as _jwt
+    from core import JWT_SECRET, JWT_ALGORITHM, AUTH_COOKIE_NAME
+    current_jti = None
+    token = request.cookies.get(AUTH_COOKIE_NAME) or ""
+    if not token:
+        auth_hdr = request.headers.get("Authorization") or ""
+        if auth_hdr.lower().startswith("bearer "):
+            token = auth_hdr[7:].strip() or ""
+    if token:
+        try:
+            _p = _jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM],
+                              options={"verify_exp": False})
+            current_jti = _p.get("jti")
+        except Exception:
+            pass
+    sessions = await list_sessions(db, user["id"])
+    for s in sessions:
+        s["is_current"] = (s.get("jti") == current_jti)
+    return {"sessions": sessions, "count": len(sessions)}
+
+
+@router.delete("/me/sessions/{jti}")
+async def revoke_my_session(jti: str,
+                              user: dict = Depends(get_current_user)):
+    """Revoke a specific session by jti. Ownership-guarded: refuses
+    if the jti belongs to another user (prevents a caller from
+    revoking someone else's session by guessing the jti)."""
+    from services.auth.session_tracking import revoke_one_session
+    ok = await revoke_one_session(db, jti=jti, user_id=user["id"])
+    if not ok:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"ok": True, "revoked": True}
+
+
+@router.delete("/me/sessions")
+async def revoke_my_other_sessions(request: Request,
+                                     user: dict = Depends(get_current_user)):
+    """Revoke ALL of the user's sessions EXCEPT the current one.
+    Useful when the user says "log me out everywhere else" from a
+    trusted device."""
+    from services.auth.session_tracking import revoke_all_sessions_for_user
+    # Determine current jti so we preserve it.
+    import jwt as _jwt
+    from core import JWT_SECRET, JWT_ALGORITHM, AUTH_COOKIE_NAME
+    current_jti = None
+    token = request.cookies.get(AUTH_COOKIE_NAME) or ""
+    if not token:
+        auth_hdr = request.headers.get("Authorization") or ""
+        if auth_hdr.lower().startswith("bearer "):
+            token = auth_hdr[7:].strip() or ""
+    if token:
+        try:
+            _p = _jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM],
+                              options={"verify_exp": False})
+            current_jti = _p.get("jti")
+        except Exception:
+            pass
+    n = await revoke_all_sessions_for_user(
+        db, user_id=user["id"], keep_jti=current_jti,
+    )
+    return {"ok": True, "revoked_count": n}
 
 
 @router.post("/logout")

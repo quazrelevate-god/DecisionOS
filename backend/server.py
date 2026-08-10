@@ -5885,6 +5885,23 @@ async def _bootstrap():
             )
         except Exception as e:
             logger.warning(f"auth_email_tokens compound index: {e}")
+        # FIX-004-G (RBAC-21): active_sessions collection indexes.
+        # Two hot patterns: /me/sessions (find by user_id) and revoke
+        # (find by jti). TTL on `exp` cleans up expired-token rows.
+        try:
+            await db.active_sessions.create_index(
+                "jti", unique=True, name="active_sessions_jti_unique",
+            )
+            await db.active_sessions.create_index(
+                [("user_id", 1), ("created_at", -1)],
+                name="active_sessions_user_created",
+            )
+            await db.active_sessions.create_index(
+                "exp", expireAfterSeconds=0,
+                name="active_sessions_exp_ttl",
+            )
+        except Exception as e:
+            logger.warning(f"active_sessions indexes: {e}")
         # FIX-003-C (S2-06): revoked-token table for logout-invalidates-JWT.
         # `jti` is the lookup key on every authenticated request (see
         # core.get_current_user -> services.session_revocation.is_revoked),

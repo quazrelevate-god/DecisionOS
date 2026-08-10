@@ -33,7 +33,14 @@ LLM_MODEL = ("anthropic", "claude-sonnet-4-6")
 VISION_MODEL = ("gemini", "gemini-2.5-flash")
 
 # --- Roles & permissions ----------------------------------------------------
-ROLES = ["owner", "sales", "production", "finance"]
+# FIX-004-D (RBAC-16): canonical role list. Prior code had ROLES list
+# with "production" but DEFAULT_ROLES with "operations" — silent
+# inconsistency that meant code switching on ROLES missed tenants
+# who got 'operations' as their default. Canonical name is
+# "operations" (matches DEFAULT_ROLES + is the term SME founders
+# actually use). Migration below renames any legacy 'production'
+# role/membership to 'operations' at boot.
+ROLES = ["owner", "sales", "operations", "finance"]
 
 PERMISSION_KEYS = [
     "inbox", "voice_capture", "data_input", "people", "finance", "ledger",

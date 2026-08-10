@@ -1808,6 +1808,70 @@ async def delete_role(key: str, user: dict = Depends(require_perm("team_manage")
     return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
 
 
+# FIX-004-D (RBAC-14): per-role permission editor. Tenant-level roles
+# can now carry a permissions[] list — every member holding that role
+# picks up those perms via user_perms(). Was previously impossible:
+# creating a 'warehouse_manager' role gave every member _BASE_PERMS
+# only, and the only way to add e.g. 'finance' was editing each user
+# individually.
+class RolePermissionsInput(BaseModel):
+    permissions: List[str]
+
+
+@api.patch("/tenant/roles/{key}/permissions")
+async def update_role_permissions(key: str, inp: RolePermissionsInput,
+                                    user: dict = Depends(require_perm("team_manage"))):
+    """Set the permission list for a tenant-defined role. Unknown
+    permission keys are silently dropped (clean_perms filters to
+    PERMISSION_KEYS). Owner role is reserved — its perms come from the
+    all-perms shortcut minus owner_exclusions."""
+    if key == "owner":
+        raise HTTPException(
+            status_code=400,
+            detail="The Owner role's permissions are managed via owner-exclusions, not per-role.",
+        )
+    t = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0, "roles": 1})
+    roles = (t or {}).get("roles") or []
+    if not any(r.get("key") == key for r in roles):
+        raise HTTPException(status_code=404, detail="Role not found")
+    perms = clean_perms(inp.permissions)
+    for r in roles:
+        if r.get("key") == key:
+            r["permissions"] = perms
+    await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": {"roles": roles}})
+    await log_activity(
+        user["tenant_id"], user["id"], "role_permissions_updated",
+        f"{user['name']} updated permissions on role '{key}' to {len(perms)} perm(s)",
+    )
+    return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+
+
+# FIX-004-D (RBAC-15): owner exclusion list. Lets a tenant opt an
+# owner OUT of specific permissions. Solves the "co-founder with
+# everything EXCEPT finance visibility" ask that early-stage founders
+# make. Empty list = classic all-perms owner (backward compat).
+class OwnerExclusionsInput(BaseModel):
+    exclusions: List[str]
+
+
+@api.put("/tenant/owner-exclusions")
+async def update_owner_exclusions(inp: OwnerExclusionsInput,
+                                    user: dict = Depends(require_role("owner"))):
+    """Set the list of permission keys owner(s) do NOT get. Owner-only:
+    a non-owner cannot restrict what owners can see. `owner` role
+    itself cannot be excluded — the exclusion applies to specific
+    permissions, not the role."""
+    excl = clean_perms(inp.exclusions)
+    await db.tenants.update_one(
+        {"id": user["tenant_id"]}, {"$set": {"owner_exclusions": excl}},
+    )
+    await log_activity(
+        user["tenant_id"], user["id"], "owner_exclusions_updated",
+        f"{user['name']} set owner exclusions to {excl}",
+    )
+    return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+
+
 @api.get("/invites")
 async def list_invites(user: dict = Depends(get_current_user)):
     t = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0, "invited_employees": 1})
@@ -5672,6 +5736,53 @@ async def _bootstrap():
                 logger.info("Migration applied: backfill_memberships_v1")
         except Exception as e:
             logger.warning(f"backfill_memberships migration: {e}")
+        # FIX-004-D (RBAC-16): canonical role rename production -> operations.
+        # Prior code had config.ROLES with 'production' but
+        # config.DEFAULT_ROLES with 'operations' — silent inconsistency
+        # that hid tenants using 'operations'. Canonical name is
+        # 'operations'. Rewrites: tenant.roles[].key, users.role,
+        # memberships.role. Idempotent (skips rows already migrated).
+        async def _rename_production_to_operations(_db):
+            renamed_tenants = renamed_users = renamed_memberships = 0
+            # 1. Tenants: rewrite the tenant.roles[] array entries.
+            async for _t in _db.tenants.find(
+                {"roles.key": "production"}, {"_id": 0, "id": 1, "roles": 1},
+            ):
+                new_roles = []
+                changed = False
+                for _r in (_t.get("roles") or []):
+                    if _r.get("key") == "production":
+                        _r = {**_r, "key": "operations"}
+                        changed = True
+                    new_roles.append(_r)
+                if changed:
+                    await _db.tenants.update_one(
+                        {"id": _t["id"]}, {"$set": {"roles": new_roles}},
+                    )
+                    renamed_tenants += 1
+            # 2. Legacy users.role (compat until pre-membership sites migrated).
+            _ures = await _db.users.update_many(
+                {"role": "production"}, {"$set": {"role": "operations"}},
+            )
+            renamed_users = getattr(_ures, "modified_count", 0)
+            # 3. Memberships — the authoritative source post-Wave-2.
+            _mres = await _db.memberships.update_many(
+                {"role": "production"}, {"$set": {"role": "operations"}},
+            )
+            renamed_memberships = getattr(_mres, "modified_count", 0)
+            logger.info(
+                f"[FIX-004-D] rename_production_to_operations: "
+                f"tenants={renamed_tenants} users={renamed_users} memberships={renamed_memberships}"
+            )
+        try:
+            _rres = await _apply_migration(
+                db, "rename_production_role_v1", _rename_production_to_operations,
+                description="FIX-004-D: canonicalize role key 'production' -> 'operations'",
+            )
+            if _rres == "applied":
+                logger.info("Migration applied: rename_production_role_v1")
+        except Exception as e:
+            logger.warning(f"rename_production_role migration: {e}")
         # FIX-003-D (S2-07): auth_email_tokens for email verification +
         # password reset. Unique index on the token string, TTL index on
         # expires_at so used/expired rows auto-purge. Kind + email combo

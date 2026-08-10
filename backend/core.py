@@ -374,6 +374,24 @@ async def get_current_user(
             detail="You no longer have access to this workspace. Please log in again.",
         )
     user = _project(user, membership)
+    # FIX-004-D (RBAC-14 + RBAC-15): fetch tenant's role permission
+    # overrides + owner exclusions so user_perms() can honor them
+    # WITHOUT another DB round-trip. Kept on the user dict as
+    # underscore-prefixed keys (private convention) so no existing
+    # code reads them by accident.
+    _tenant = await db.tenants.find_one(
+        {"id": claimed_tenant},
+        {"_id": 0, "roles": 1, "owner_exclusions": 1},
+    )
+    if _tenant:
+        _role_perms_map = {}
+        for _r in (_tenant.get("roles") or []):
+            _k = _r.get("key")
+            _perms = _r.get("permissions")
+            if _k and isinstance(_perms, list) and _perms:
+                _role_perms_map[_k] = list(_perms)
+        user["_role_perms_map"] = _role_perms_map
+        user["_owner_exclusions"] = list(_tenant.get("owner_exclusions") or [])
     set_usage_tenant(user.get("tenant_id"))
     return user
 
@@ -396,12 +414,42 @@ ROLE_DEFAULT_PERMS = {
 
 
 def user_perms(user: dict) -> set:
-    if user.get("role") == "owner":
-        return set(PERMISSION_KEYS)
+    """Resolve the effective permission set for a user.
+
+    Order of precedence (most-specific wins):
+      1. Owner role -> ALL PERMISSION_KEYS, minus any owner_exclusions
+         the tenant configured (FIX-004-D / RBAC-15). Lets a tenant
+         opt an owner OUT of specific perms — e.g. "co-founder with
+         everything EXCEPT finance visibility."
+      2. Explicit per-user override (membership.permissions[] projected
+         onto user.permissions[]) — replaces role defaults.
+      3. Tenant-level role permissions (FIX-004-D / RBAC-14).
+         tenant.roles[i].permissions[] set by an admin via
+         PATCH /tenant/roles/{key}/permissions. Applies to every
+         member holding that role in the tenant.
+      4. Global ROLE_DEFAULT_PERMS map (baked into core.py for
+         legacy roles like sales/finance).
+      5. _BASE_PERMS fallback for custom roles with no explicit
+         config anywhere.
+
+    All the tenant-level bits (tenant_role_perms_map, owner_exclusions)
+    are stashed on the user dict by get_current_user under
+    underscore-prefixed keys so this function stays synchronous.
+    """
+    role = user.get("role")
+    if role == "owner":
+        excluded = set(user.get("_owner_exclusions") or [])
+        return set(PERMISSION_KEYS) - excluded
+    # 2. Explicit per-user override wins over any role default.
     p = user.get("permissions")
     if isinstance(p, list) and len(p) > 0:
         return {k for k in p if k in PERMISSION_KEYS}
-    return set(ROLE_DEFAULT_PERMS.get(user.get("role"), _BASE_PERMS))
+    # 3. Tenant-level role permissions.
+    role_map = user.get("_role_perms_map") or {}
+    if role and role in role_map:
+        return {k for k in role_map[role] if k in PERMISSION_KEYS}
+    # 4. Global ROLE_DEFAULT_PERMS, then 5. _BASE_PERMS fallback.
+    return set(ROLE_DEFAULT_PERMS.get(role, _BASE_PERMS))
 
 
 def clean_perms(perms) -> list:

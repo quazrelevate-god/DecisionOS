@@ -5576,6 +5576,30 @@ async def _bootstrap():
             )
         except Exception as e:
             logger.warning(f"scheduler_locks TTL index: {e}")
+        # FIX-003-D (S2-07): auth_email_tokens for email verification +
+        # password reset. Unique index on the token string, TTL index on
+        # expires_at so used/expired rows auto-purge. Kind + email combo
+        # is queried on issue() to reuse an existing token within the
+        # cooldown — add a compound index for that lookup too.
+        try:
+            await db.auth_email_tokens.create_index("token", unique=True,
+                                                    name="auth_email_tokens_token_unique")
+        except Exception as e:
+            logger.warning(f"auth_email_tokens token index: {e}")
+        try:
+            await db.auth_email_tokens.create_index(
+                "expires_at", expireAfterSeconds=0,
+                name="auth_email_tokens_expires_at_ttl",
+            )
+        except Exception as e:
+            logger.warning(f"auth_email_tokens TTL index: {e}")
+        try:
+            await db.auth_email_tokens.create_index(
+                [("kind", 1), ("email", 1), ("used_at", 1)],
+                name="auth_email_tokens_kind_email_used",
+            )
+        except Exception as e:
+            logger.warning(f"auth_email_tokens compound index: {e}")
         # FIX-003-C (S2-06): revoked-token table for logout-invalidates-JWT.
         # `jti` is the lookup key on every authenticated request (see
         # core.get_current_user -> services.session_revocation.is_revoked),

@@ -80,6 +80,16 @@ class ChangePasswordInput(BaseModel):
     new_password: str = Field(min_length=6)
 
 
+# FIX-003-D (S2-07): email verification + password reset input models.
+class PasswordForgotInput(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetInput(BaseModel):
+    token: str
+    new_password: str = Field(min_length=6)
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -229,6 +239,31 @@ async def register(inp: RegisterInput, response: Response):
         except Exception:
             pass  # best-effort; tenant is real regardless
 
+    # FIX-003-D (S2-07): send verification email on register.
+    # Best-effort — if SMTP is down or misconfigured, registration
+    # still succeeds. The user can re-request from Settings later
+    # (POST /auth/email/send-verification).
+    try:
+        from services import auth_emails
+        from server import send_email
+        _row = await auth_emails.issue(
+            db, kind=auth_emails.KIND_EMAIL_VERIFY,
+            user_id=user_id, tenant_id=tenant_id, email=email,
+        )
+        # Prefer explicit APP_BASE_URL then fall back through common vars.
+        import os as _os
+        _base = (_os.environ.get("APP_BASE_URL")
+                 or _os.environ.get("REACT_APP_BACKEND_URL")
+                 or _os.environ.get("FRONTEND_ORIGIN")
+                 or "http://localhost:3000").rstrip("/")
+        _verify_url = f"{_base}/verify-email?token={_row['token']}"
+        _html = auth_emails.render_verify_email(inp.name or "", _verify_url)
+        await send_email(email, "Verify your DecisionOS email", _html)
+    except Exception:
+        # Never fail registration on an email hiccup — the user is
+        # already logged in with a valid JWT below.
+        pass
+
     token = create_token(user_id, tenant_id, "owner")
     user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
     tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0})
@@ -370,5 +405,133 @@ async def change_password(inp: ChangePasswordInput, user: dict = Depends(get_cur
     await db.users.update_one(
         {"id": user["id"]},
         {"$set": {"password_hash": hash_password(inp.new_password), "updated_at": now_iso()}},
+    )
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# FIX-003-D (S2-07): email verification + password reset.
+# ---------------------------------------------------------------------------
+def _app_base_url() -> str:
+    """Where the verification / reset links point. Falls back to
+    the frontend origin env var. Trailing slashes stripped."""
+    import os as _os
+    url = (_os.environ.get("APP_BASE_URL")
+           or _os.environ.get("REACT_APP_BACKEND_URL")
+           or _os.environ.get("FRONTEND_ORIGIN")
+           or "http://localhost:3000").rstrip("/")
+    return url
+
+
+@router.post("/email/send-verification")
+async def send_verification_email(user: dict = Depends(get_current_user)):
+    """Issue (or reuse) an email-verification token and email it to
+    the current user. Idempotent — hitting this twice in the cooldown
+    window returns the same token and does NOT re-send."""
+    from services import auth_emails
+    from server import send_email  # deferred: server.py owns the SMTP helper
+    email = (user.get("email") or "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="No email on file for this account")
+    if user.get("email_verified_at"):
+        return {"ok": True, "already_verified": True, "sent": False}
+    row = await auth_emails.issue(
+        db, kind=auth_emails.KIND_EMAIL_VERIFY,
+        user_id=user["id"], tenant_id=user["tenant_id"], email=email,
+    )
+    verify_url = f"{_app_base_url()}/verify-email?token={row['token']}"
+    html = auth_emails.render_verify_email(user.get("name") or "", verify_url)
+    delivery = await send_email(email, "Verify your DecisionOS email", html)
+    # Response does NOT leak the token (it's in the email link only).
+    return {"ok": True, "sent": bool(delivery.get("sent")),
+            "provider": delivery.get("provider") or "mock"}
+
+
+@router.get("/email/verify/{token}")
+async def verify_email(token: str):
+    """Consume an email-verification token and mark the user's email
+    verified. Single-use, TTL-bounded (3 days)."""
+    from services import auth_emails
+    row = await auth_emails.consume(
+        db, token=token, kind=auth_emails.KIND_EMAIL_VERIFY,
+    )
+    if not row:
+        raise HTTPException(status_code=400, detail="This verification link is invalid or has expired")
+    await db.users.update_one(
+        {"id": row["user_id"], "tenant_id": row["tenant_id"]},
+        {"$set": {"email_verified_at": now_iso(), "updated_at": now_iso()}},
+    )
+    return {"ok": True, "verified": True, "email": row["email"]}
+
+
+@router.post("/password/forgot")
+async def password_forgot(inp: PasswordForgotInput):
+    """Send a password-reset email if the address exists. Response
+    shape is identical whether the address is registered or not —
+    prevents email enumeration ("does this email have an account?")
+    via response-diff or timing.
+
+    Callers should always show the same "if that email exists, we
+    sent a reset link" message.
+    """
+    from services import auth_emails
+    from server import send_email
+    email = inp.email.lower().strip()
+    # Same response shape regardless of what we find below.
+    canonical_response = {"ok": True,
+                           "detail": "If an account exists for that email, a reset link has been sent."}
+    if not email:
+        return canonical_response
+    user = await db.users.find_one({"email": email}, {"_id": 0, "id": 1,
+                                                       "tenant_id": 1, "name": 1,
+                                                       "passwordless": 1})
+    if not user or user.get("passwordless"):
+        # Password reset only makes sense for password-having accounts.
+        # OTP-only members can't have their password reset because they
+        # have none. Return canonical response anyway (no enumeration).
+        return canonical_response
+    row = await auth_emails.issue(
+        db, kind=auth_emails.KIND_PASSWORD_RESET,
+        user_id=user["id"], tenant_id=user["tenant_id"], email=email,
+    )
+    reset_url = f"{_app_base_url()}/reset-password?token={row['token']}"
+    html = auth_emails.render_reset_email(user.get("name") or "", reset_url)
+    # Best-effort email; if SMTP is down the user can retry.
+    await send_email(email, "Reset your DecisionOS password", html)
+    return canonical_response
+
+
+@router.post("/password/reset")
+async def password_reset(inp: PasswordResetInput):
+    """Consume a password-reset token and set a new password.
+
+    Also revokes every other outstanding reset link for this email
+    (single-outstanding-link invariant) so a stale email in a
+    compromised inbox becomes useless after the first successful
+    reset.
+    """
+    from services import auth_emails
+    row = await auth_emails.consume(
+        db, token=inp.token, kind=auth_emails.KIND_PASSWORD_RESET,
+    )
+    if not row:
+        raise HTTPException(status_code=400, detail="This reset link is invalid or has expired")
+    email = (row.get("email") or "").strip().lower()
+    user = await db.users.find_one({"id": row["user_id"], "tenant_id": row["tenant_id"]})
+    if not user:
+        # User was deleted between /forgot and /reset. Same "invalid"
+        # error rather than a distinctive 404 (no enumeration).
+        raise HTTPException(status_code=400, detail="This reset link is invalid or has expired")
+    if user.get("passwordless"):
+        raise HTTPException(status_code=400,
+                             detail="This account signs in with mobile OTP; no password to reset.")
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"password_hash": hash_password(inp.new_password),
+                  "updated_at": now_iso()}},
+    )
+    # Kill any other still-outstanding reset tokens for this email.
+    await auth_emails.invalidate_active_tokens(
+        db, kind=auth_emails.KIND_PASSWORD_RESET, email=email,
     )
     return {"ok": True}

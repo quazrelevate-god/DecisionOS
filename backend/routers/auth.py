@@ -72,6 +72,15 @@ class RegisterInput(BaseModel):
 class LoginInput(BaseModel):
     email: EmailStr
     password: str
+    # FIX-004-B (RBAC-12): when a user has multiple memberships, the
+    # frontend re-POSTs with tenant_id filled in from the choices
+    # returned in the ambiguity response. Optional — omitted for the
+    # single-workspace fast path.
+    tenant_id: Optional[str] = None
+
+
+class SwitchWorkspaceInput(BaseModel):
+    tenant_id: str
 
 
 class ProfileUpdateInput(BaseModel):
@@ -229,6 +238,12 @@ async def register(inp: RegisterInput, request: Request, response: Response):
     # request slipped past the pre-check, this insert loses the race
     # at the unique-index level. Roll back the orphan tenant so the
     # DB stays clean, then return the same friendly 400.
+    # FIX-004-B (RBAC-13): user doc keeps tenant_id/role for compat
+    # with pre-membership call sites during the transition window.
+    # The AUTHORITATIVE role source is the owner membership created
+    # right after. Once every downstream reader has been migrated to
+    # read from memberships, tenant_id/role can be dropped from the
+    # user doc entirely.
     try:
         await db.users.insert_one({
             "id": user_id, "tenant_id": tenant_id, "name": inp.name, "email": email,
@@ -260,6 +275,30 @@ async def register(inp: RegisterInput, request: Request, response: Response):
                 pass
             raise HTTPException(status_code=400, detail="Email already registered")
         raise
+
+    # FIX-004-B (RBAC-13): create the owner membership so the
+    # authoritative role/permissions live in the memberships table.
+    # Failure to create is a hard error — a workspace without an
+    # owner-membership is un-loginable via the new flow.
+    from services.auth.membership import create_membership as _create_membership
+    from core import PERMISSION_KEYS as _PERMISSION_KEYS
+    try:
+        await _create_membership(
+            db, user_id=user_id, tenant_id=tenant_id, role="owner",
+            permissions=list(_PERMISSION_KEYS),
+        )
+    except Exception as _membership_err:
+        # If membership creation fails, roll back tenant + user so we
+        # don't leave a half-provisioned workspace behind.
+        try:
+            await db.users.delete_one({"id": user_id})
+            await db.tenants.delete_one({"id": tenant_id})
+        except Exception:
+            pass
+        raise HTTPException(
+            status_code=500,
+            detail="Registration failed — please try again.",
+        ) from _membership_err
 
     # FIX-001-D: consume the draft (if any) so it can't be reused.
     if draft:
@@ -317,12 +356,104 @@ async def login(inp: LoginInput, response: Response):
     user = await db.users.find_one({"email": email})
     if not user or not verify_password(inp.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
-    token = create_token(user["id"], user["tenant_id"], user["role"])
-    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    # FIX-004-B (RBAC-12): resolve the target workspace via memberships.
+    # A person may hold memberships in multiple tenants — the caller
+    # must pick which one to log into. Single-membership users hit the
+    # fast path unchanged.
+    from services.auth.membership import (
+        resolve_login_choices as _choices,
+        find_membership as _find_m,
+        LIVE_STATUSES as _LIVE,
+    )
+    choices = await _choices(db, user["id"])
+    # Fallback: pre-migration users may not have a memberships row yet
+    # (backfill runs at bootstrap but a race is possible). Fall through
+    # to the legacy user.tenant_id/role so nobody is locked out.
+    if not choices:
+        if user.get("tenant_id") and user.get("role"):
+            tenant_id = user["tenant_id"]
+            role = user["role"]
+        else:
+            raise HTTPException(
+                status_code=403,
+                detail="Your account isn't linked to any workspace. Contact your administrator.",
+            )
+    elif inp.tenant_id:
+        picked = next((c for c in choices if c["tenant_id"] == inp.tenant_id), None)
+        if not picked:
+            raise HTTPException(
+                status_code=404,
+                detail="You don't have access to the selected workspace.",
+            )
+        tenant_id = picked["tenant_id"]
+        role = picked["role"]
+    elif len(choices) == 1:
+        tenant_id = choices[0]["tenant_id"]
+        role = choices[0]["role"]
+    else:
+        # Multiple memberships, no hint — surface the picker. HTTP 200
+        # because the request was well-formed; the caller just needs to
+        # re-POST with tenant_id chosen.
+        return {
+            "ambiguous": True,
+            "detail": "This email belongs to multiple workspaces. Choose one to continue.",
+            "choices": choices,
+        }
+    token = create_token(user["id"], tenant_id, role)
+    tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0})
     user.pop("_id", None)
     user.pop("password_hash", None)
+    # Project the membership onto the returned user dict so the
+    # /login response shape matches get_current_user's output.
+    membership = await _find_m(db, user["id"], tenant_id, statuses=_LIVE)
+    if membership:
+        user["tenant_id"] = tenant_id
+        user["role"] = role
+        user["permissions"] = list(membership.get("permissions") or [])
+        user["membership_id"] = membership.get("id")
     set_auth_cookie(response, token)
     return {"token": token, "user": user, "tenant": tenant}
+
+
+@router.get("/me/workspaces")
+async def list_my_workspaces(user: dict = Depends(get_current_user)):
+    """FIX-004-B (RBAC-13): every workspace the current user is a
+    member of. Powers the workspace-switcher UI.
+
+    Marks the currently-active workspace with `is_current: true` so
+    the UI can render it distinctly."""
+    from services.auth.membership import resolve_login_choices
+    choices = await resolve_login_choices(db, user["id"])
+    current_tid = user.get("tenant_id")
+    for c in choices:
+        c["is_current"] = (c["tenant_id"] == current_tid)
+    return {"workspaces": choices}
+
+
+@router.post("/me/switch-workspace")
+async def switch_workspace(inp: SwitchWorkspaceInput, response: Response,
+                            user: dict = Depends(get_current_user)):
+    """FIX-004-B (RBAC-13): re-issue the auth cookie/JWT with a
+    different tenant_id claim. Refuses if the caller has no live
+    membership in the target tenant."""
+    from services.auth.membership import find_membership, LIVE_STATUSES
+    target = await find_membership(
+        db, user["id"], inp.tenant_id, statuses=LIVE_STATUSES,
+    )
+    if not target:
+        raise HTTPException(
+            status_code=403,
+            detail="You don't have access to this workspace.",
+        )
+    token = create_token(user["id"], inp.tenant_id, target.get("role") or "sales")
+    tenant = await db.tenants.find_one({"id": inp.tenant_id}, {"_id": 0})
+    set_auth_cookie(response, token)
+    return {
+        "token": token,
+        "tenant": tenant,
+        "role": target.get("role"),
+        "permissions": list(target.get("permissions") or []),
+    }
 
 
 @router.post("/logout")

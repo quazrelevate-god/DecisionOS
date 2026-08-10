@@ -5576,6 +5576,71 @@ async def _bootstrap():
             )
         except Exception as e:
             logger.warning(f"scheduler_locks TTL index: {e}")
+        # FIX-004-B (RBAC-13): memberships collection indexes.
+        # Compound unique on (user_id, tenant_id) — one membership per
+        # (person, workspace). Query indexes for the two hot paths:
+        #   * list memberships for a user  (login-ambiguity picker,
+        #     /me/workspaces)
+        #   * list memberships for a tenant (GET /users, admin views)
+        try:
+            await db.memberships.create_index(
+                [("user_id", 1), ("tenant_id", 1)], unique=True,
+                name="memberships_user_tenant_unique",
+            )
+        except Exception as e:
+            logger.warning(f"memberships unique index: {e}")
+        try:
+            await db.memberships.create_index(
+                [("user_id", 1), ("status", 1)],
+                name="memberships_user_status",
+            )
+            await db.memberships.create_index(
+                [("tenant_id", 1), ("status", 1)],
+                name="memberships_tenant_status",
+            )
+        except Exception as e:
+            logger.warning(f"memberships query indexes: {e}")
+        # Backfill: for every existing user with a tenant_id (the
+        # legacy 1:1 model), synthesize the matching membership row.
+        # Idempotent: skips users who already have a row for that
+        # (user_id, tenant_id). Runs exactly once via the migration
+        # ledger so subsequent boots skip cleanly.
+        async def _backfill_memberships(_db):
+            from services.auth.membership import (
+                find_membership as _fm,
+                create_membership as _cm,
+                STATUS_ACTIVE as _ACTIVE,
+                STATUS_SUSPENDED as _SUSP,
+            )
+            scanned = created = 0
+            async for u in _db.users.find(
+                {"tenant_id": {"$type": "string", "$gt": ""}},
+                {"_id": 0, "id": 1, "tenant_id": 1, "role": 1,
+                 "permissions": 1, "suspended": 1},
+            ):
+                scanned += 1
+                if not u.get("id") or not u.get("tenant_id"):
+                    continue
+                if await _fm(_db, u["id"], u["tenant_id"]):
+                    continue
+                status = _SUSP if u.get("suspended") else _ACTIVE
+                await _cm(
+                    _db, user_id=u["id"], tenant_id=u["tenant_id"],
+                    role=u.get("role") or "sales",
+                    permissions=u.get("permissions") or [],
+                    status=status,
+                )
+                created += 1
+            logger.info(f"[FIX-004-B] backfill_memberships: scanned={scanned} created={created}")
+        try:
+            _mres = await _apply_migration(
+                db, "backfill_memberships_v1", _backfill_memberships,
+                description="FIX-004-B: create memberships rows for legacy user.tenant_id 1:1 model",
+            )
+            if _mres == "applied":
+                logger.info("Migration applied: backfill_memberships_v1")
+        except Exception as e:
+            logger.warning(f"backfill_memberships migration: {e}")
         # FIX-003-D (S2-07): auth_email_tokens for email verification +
         # password reset. Unique index on the token string, TTL index on
         # expires_at so used/expired rows auto-purge. Kind + email combo

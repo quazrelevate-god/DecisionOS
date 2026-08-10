@@ -37,3 +37,19 @@ from services.auth.draft_tokens import (  # noqa: F401
     sign_draft_id,
     verify_draft_token,
 )
+from services.auth.membership import (  # noqa: F401
+    COLLECTION as MEMBERSHIPS_COLLECTION,
+    STATUS_PENDING as MEMBERSHIP_STATUS_PENDING,
+    STATUS_ACTIVE as MEMBERSHIP_STATUS_ACTIVE,
+    STATUS_SUSPENDED as MEMBERSHIP_STATUS_SUSPENDED,
+    STATUS_REMOVED as MEMBERSHIP_STATUS_REMOVED,
+    LIVE_STATUSES as MEMBERSHIP_LIVE_STATUSES,
+    create_membership,
+    find_membership,
+    list_memberships_for_user,
+    list_memberships_for_tenant,
+    update_membership,
+    remove_membership,
+    resolve_login_choices,
+    project_membership_onto_user,
+)

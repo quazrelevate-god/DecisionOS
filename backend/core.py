@@ -340,6 +340,40 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail="User not found")
     if user.get("suspended") or user.get("tenant_suspended"):
         raise HTTPException(status_code=403, detail="Your account has been suspended. Contact your administrator.")
+    # FIX-004-B (RBAC-13): resolve the current-tenant membership. The
+    # JWT carries a `tenant_id` claim chosen at login (or via
+    # /me/switch-workspace); we look up the corresponding membership
+    # and project its role + permissions onto the user dict so ~430
+    # downstream call sites keep reading `user["role"]` /
+    # `user["permissions"]` unchanged. If the user has NO membership
+    # in the claimed tenant (removed by admin between login + this
+    # request), refuse the token.
+    from services.auth.membership import (
+        find_membership as _find_membership,
+        project_membership_onto_user as _project,
+        LIVE_STATUSES as _LIVE_STATUSES,
+    )
+    claimed_tenant = payload.get("tenant_id")
+    if not claimed_tenant:
+        # Legacy token issued before FIX-004-B (no tenant_id claim
+        # possible — the field has always been present). Fail closed.
+        raise HTTPException(status_code=401, detail="Invalid token — please log in again")
+    membership = await _find_membership(
+        db, user["id"], claimed_tenant, statuses=_LIVE_STATUSES,
+    )
+    if not membership:
+        # Compat: existing users still have the legacy tenant_id/role
+        # fields on the user doc until the backfill migration runs.
+        # If those exist AND match the JWT claim, trust them as a
+        # fallback so a mid-migration boot doesn't lock everyone out.
+        if user.get("tenant_id") == claimed_tenant and user.get("role"):
+            set_usage_tenant(user.get("tenant_id"))
+            return user
+        raise HTTPException(
+            status_code=403,
+            detail="You no longer have access to this workspace. Please log in again.",
+        )
+    user = _project(user, membership)
     set_usage_tenant(user.get("tenant_id"))
     return user
 

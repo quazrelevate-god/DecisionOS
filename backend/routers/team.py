@@ -156,6 +156,24 @@ async def create_user(inp: UserCreateInput, user: dict = Depends(require_perm("t
         doc["invite_token"] = invite_token
         doc["invite_expires_at"] = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
     await db.users.insert_one(doc)
+    # FIX-004-B (RBAC-13): mirror the tenant-scoped fields into a
+    # membership row. Legacy user.tenant_id/role/permissions/
+    # invite_token stay populated so pre-refactor read paths keep
+    # working; new authoritative source is the memberships table.
+    from services.auth.membership import (
+        create_membership as _create_membership,
+        STATUS_PENDING as _MSTATUS_PENDING,
+        STATUS_ACTIVE as _MSTATUS_ACTIVE,
+    )
+    _mstatus = _MSTATUS_PENDING if invite_token else _MSTATUS_ACTIVE
+    await _create_membership(
+        db, user_id=uid, tenant_id=user["tenant_id"], role=inp.role,
+        permissions=clean_perms(inp.permissions),
+        invited_by=user["id"],
+        status=_mstatus,
+        invite_token=invite_token,
+        invite_expires_at=doc.get("invite_expires_at"),
+    )
     await log_activity(user["tenant_id"], user["id"], "user_added",
                        f"Added {inp.name} as {inp.role}"
                        + (" (mobile OTP login)" if passwordless else ""))
@@ -228,6 +246,22 @@ async def update_user(user_id: str, inp: UserUpdateInput, user: dict = Depends(r
             updates["reporting_manager_id"] = None
     if updates:
         await db.users.update_one({"id": user_id}, {"$set": updates})
+        # FIX-004-B (RBAC-13): mirror role/permissions changes into
+        # the membership row for THIS tenant so the authoritative
+        # perms source stays in sync. Phone/manager updates don't
+        # need mirroring — those live on the user (identity) not
+        # the membership (tenant-scoped relationship).
+        membership_updates = {}
+        if "role" in updates:
+            membership_updates["role"] = updates["role"]
+        if "permissions" in updates:
+            membership_updates["permissions"] = updates["permissions"]
+        if membership_updates:
+            from services.auth.membership import update_membership as _um
+            await _um(
+                db, user_id=user_id, tenant_id=user["tenant_id"],
+                updates=membership_updates,
+            )
     return await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
 
 

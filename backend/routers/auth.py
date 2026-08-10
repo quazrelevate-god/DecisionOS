@@ -106,6 +106,22 @@ async def register(inp: RegisterInput, response: Response):
     if not inp.company_name or not inp.name:
         raise HTTPException(status_code=400, detail="Company name and your name are required")
 
+    # FIX-003-B (S2-10): concurrent-registration race.
+    # The historical pattern was `find_one -> insert_one`, which is
+    # not atomic — two requests with the same email that arrive in
+    # the ~10ms window between check and insert would BOTH pass the
+    # pre-check, then the second one's insert would fail with the
+    # `users.email` unique-index DuplicateKeyError, surface as a
+    # 500 to the client, and leave an orphaned tenant row (the tenant
+    # was created between the check and the crashing user insert).
+    #
+    # Fix:
+    #   * Normalize email at the same choke point every write uses
+    #     (already lower()'d).
+    #   * Keep the fast path (idempotent no-op 400 on the pre-check).
+    #   * Catch DuplicateKeyError on the user insert itself and roll
+    #     back the tenant we just created so the loser's failed race
+    #     leaves NOTHING behind.
     email = inp.email.lower()
     if await db.users.find_one({"email": email}):
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -170,11 +186,41 @@ async def register(inp: RegisterInput, response: Response):
     # can query by exact-match on the indexed field.
     from services.phone import norm_phone
     _raw_phone = (inp.phone or "").strip()
-    await db.users.insert_one({
-        "id": user_id, "tenant_id": tenant_id, "name": inp.name, "email": email,
-        "phone": _raw_phone, "phone_norm": norm_phone(_raw_phone),
-        "password_hash": hash_password(inp.password), "role": "owner", "created_at": now_iso(),
-    })
+    # FIX-003-B (S2-10): DuplicateKeyError-safe insert. If a concurrent
+    # request slipped past the pre-check, this insert loses the race
+    # at the unique-index level. Roll back the orphan tenant so the
+    # DB stays clean, then return the same friendly 400.
+    try:
+        await db.users.insert_one({
+            "id": user_id, "tenant_id": tenant_id, "name": inp.name, "email": email,
+            "phone": _raw_phone, "phone_norm": norm_phone(_raw_phone),
+            "password_hash": hash_password(inp.password), "role": "owner", "created_at": now_iso(),
+        })
+    except Exception as _register_err:
+        # pymongo.errors.DuplicateKeyError only fires when the unique
+        # index on users.email rejects the insert. Anything else is a
+        # genuine problem — re-raise so it surfaces in logs. We import
+        # lazily to avoid coupling this router to pymongo at module load.
+        try:
+            from pymongo.errors import DuplicateKeyError
+            is_dupe = isinstance(_register_err, DuplicateKeyError)
+        except Exception:
+            # Motor forwards DuplicateKeyError under the same name; if
+            # the import unexpectedly fails, fall back to message match.
+            is_dupe = "duplicate key" in str(_register_err).lower()
+        if is_dupe:
+            # Roll back the tenant we created before the failed user
+            # insert — leaving it would silently accumulate ghost
+            # tenants with no owner.
+            try:
+                await db.tenants.delete_one({"id": tenant_id})
+            except Exception:
+                # Log but don't mask the 400; a stray tenant is
+                # recoverable in admin, an unhandled 500 to the user
+                # is not.
+                pass
+            raise HTTPException(status_code=400, detail="Email already registered")
+        raise
 
     # FIX-001-D: consume the draft (if any) so it can't be reused.
     if draft:

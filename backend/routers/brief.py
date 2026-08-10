@@ -236,7 +236,8 @@ async def brief_details(key: str, period: str = "morning", user: dict = Depends(
     elif key == "awaiting_approval":
         actionable = True
         decisions = await db.decisions.find({"tenant_id": tid, "status": "pending_approval"}, {"_id": 0}).to_list(50)
-        decisions = await enrich_decisions(decisions)
+        # FIX-003-B (S2-05): explicit tenant_id for defense-in-depth.
+        decisions = await enrich_decisions(decisions, tenant_id=tid)
         for d in decisions:
             items.append({"id": d["id"], "title": d["title"], "subtitle": d.get("summary") or "",
                           "meta": f"{len(d.get('tasks', []))} task(s) blocked", "kind": "decision"})

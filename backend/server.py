@@ -2288,24 +2288,56 @@ async def refresh_work_coach(user_id: Optional[str] = None, user: dict = Depends
 
 # Decisions
 # ---------------------------------------------------------------------------
-async def enrich_decision(d: dict) -> dict:
-    tasks = await db.tasks.find({"id": {"$in": d.get("task_ids", [])}}, {"_id": 0}).to_list(200)
-    creator = await db.users.find_one({"id": d.get("created_by")}, {"_id": 0, "name": 1})
+async def enrich_decision(d: dict, tenant_id: Optional[str] = None) -> dict:
+    # FIX-003-B (S2-05): defense-in-depth tenant filter. In today's flow,
+    # a decision's task_ids and created_by are always same-tenant (the
+    # decision itself came from a tenant-scoped query), but the bare
+    # {"id": {"$in": ...}} lookup would happily return cross-tenant
+    # matches if any bug or corrupted document ever slipped a foreign
+    # id into task_ids. Filter defensively.
+    tid = tenant_id if tenant_id is not None else d.get("tenant_id")
+    task_q = {"id": {"$in": d.get("task_ids", [])}}
+    if tid:
+        task_q["tenant_id"] = tid
+    tasks = await db.tasks.find(task_q, {"_id": 0}).to_list(200)
+    user_q = {"id": d.get("created_by")}
+    if tid:
+        user_q["tenant_id"] = tid
+    creator = await db.users.find_one(user_q, {"_id": 0, "name": 1})
     d["tasks"] = await enrich_tasks(tasks)
     d["created_by_name"] = creator["name"] if creator else "Unknown"
     return d
 
 
-async def enrich_decisions(decisions: list) -> list:
+async def enrich_decisions(decisions: list, tenant_id: Optional[str] = None) -> list:
+    # FIX-003-B (S2-05): defense-in-depth tenant filter — see
+    # enrich_decision above. Same tenancy invariant applies at the
+    # batch level. The `tenant_id` argument is optional so existing
+    # callers keep working; when supplied it filters the id-lookups.
+    # If not supplied AND every decision has the same tenant_id, we
+    # infer it (the common case for a per-tenant caller). Only when
+    # the input mixes tenants (never happens in practice today, but a
+    # future admin cross-tenant sweep might) do we skip the filter.
     task_ids = list({tid for d in decisions for tid in d.get("task_ids", [])})
     creator_ids = list({d.get("created_by") for d in decisions if d.get("created_by")})
+    scope_tid = tenant_id
+    if scope_tid is None:
+        tids_in_batch = {d.get("tenant_id") for d in decisions if d.get("tenant_id")}
+        if len(tids_in_batch) == 1:
+            scope_tid = next(iter(tids_in_batch))
     tasks_map = {}
     if task_ids:
-        for t in await enrich_tasks(await db.tasks.find({"id": {"$in": task_ids}}, {"_id": 0}).to_list(2000)):
+        task_q = {"id": {"$in": task_ids}}
+        if scope_tid:
+            task_q["tenant_id"] = scope_tid
+        for t in await enrich_tasks(await db.tasks.find(task_q, {"_id": 0}).to_list(2000)):
             tasks_map[t["id"]] = t
     users_map = {}
     if creator_ids:
-        for u in await db.users.find({"id": {"$in": creator_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(500):
+        user_q = {"id": {"$in": creator_ids}}
+        if scope_tid:
+            user_q["tenant_id"] = scope_tid
+        for u in await db.users.find(user_q, {"_id": 0, "id": 1, "name": 1}).to_list(500):
             users_map[u["id"]] = u["name"]
     for d in decisions:
         d["tasks"] = [tasks_map[t] for t in d.get("task_ids", []) if t in tasks_map]
@@ -2522,7 +2554,11 @@ async def brain_search(q: str = "", user: dict = Depends(require_perm("brain")))
             if "amount" in w:
                 w["amount"] = None
     return {
-        "decisions": await enrich_decisions(decisions),
+        # FIX-003-B (S2-05): explicit tenant_id makes the tenant filter
+        # unconditional (auto-inference in enrich_decisions works, but
+        # explicit reads better and survives future refactors that may
+        # widen the query).
+        "decisions": await enrich_decisions(decisions, tenant_id=tid),
         "tasks": await enrich_tasks(tasks),
         "workflows": workflows,
         "contacts": await enrich_contacts(contacts),
@@ -2666,7 +2702,8 @@ async def dashboard(user: dict = Depends(get_current_user)):
     ).to_list(100)
     pending_leaves = await db.leaves.count_documents({"tenant_id": tid, "status": "pending"})
     return {
-        "pending_decisions": await enrich_decisions(pending_decisions),
+        # FIX-003-B (S2-05): explicit tenant_id (defense-in-depth).
+        "pending_decisions": await enrich_decisions(pending_decisions, tenant_id=tid),
         "pending_purchases": pending_purchases,
         "overdue_tasks": await enrich_tasks(overdue),
         "stats": {"open_tasks": open_tasks, "done_tasks": done_tasks, "active_workflows": active_wf,
@@ -5558,7 +5595,28 @@ async def _bootstrap():
         await db.brain_contexts.create_index("id")
         await db.leaves.create_index([("tenant_id", 1), ("status", 1), ("from_date", -1)])
         await db.contacts.create_index([("tenant_id", 1), ("name", 1)])
-        await db.contacts.create_index([("tenant_id", 1), ("kind", 1)])
+        # FIX-003-B (S2-08): the contacts collection field is `type`
+        # (customer|vendor), NOT `kind`. Every read (see server.py
+        # list_contacts + the enrich_contacts projection) uses `type`,
+        # so the old {tenant_id: 1, kind: 1} index was dead — index
+        # entries got created only for docs that happened to also
+        # carry a legacy `kind` field (none of them, in practice),
+        # and every `type=vendor` query fell back to a collection
+        # scan filtered by tenant_id only. Drop the dead one and
+        # replace with the real field.
+        await db.contacts.create_index([("tenant_id", 1), ("type", 1)])
+        try:
+            _ci_info = await db.contacts.index_information()
+            for _idx_name, _spec in _ci_info.items():
+                _key = _spec.get("key") or []
+                if [(k, d) for k, d in _key] == [("tenant_id", 1), ("kind", 1)]:
+                    try:
+                        await db.contacts.drop_index(_idx_name)
+                        logger.info(f"[FIX-003-B] dropped dead contacts index {_idx_name}")
+                    except Exception as _e:
+                        logger.warning(f"[FIX-003-B] could not drop contacts kind index: {_e}")
+        except Exception as _e:
+            logger.warning(f"[FIX-003-B] contacts index inspection failed: {_e}")
         await db.invoices.create_index([("tenant_id", 1), ("status", 1), ("due_date", 1)])
         await db.invoices.create_index([("tenant_id", 1), ("contact_name", 1)])
         await db.payments.create_index([("tenant_id", 1), ("invoice_id", 1)])

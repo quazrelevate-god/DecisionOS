@@ -55,7 +55,10 @@ async def list_decisions(status: Optional[str] = None, user: dict = Depends(get_
     if status:
         q["status"] = status
     decisions = await db.decisions.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
-    return await enrich_decisions(decisions)
+    # FIX-003-B (S2-05): explicit tenant_id makes the defense-in-depth
+    # filter unconditional even in the (unlikely) case where a decision
+    # doc lost its tenant_id field.
+    return await enrich_decisions(decisions, tenant_id=user["tenant_id"])
 
 
 @router.get("/decisions/{decision_id}")
@@ -66,7 +69,7 @@ async def get_decision(decision_id: str, user: dict = Depends(get_current_user))
         raise HTTPException(status_code=404, detail="Not found")
     if user["id"] not in await _decision_participants(user["tenant_id"], d):
         raise HTTPException(status_code=403, detail="You don't have access to this decision")
-    return await enrich_decision(d)
+    return await enrich_decision(d, tenant_id=user["tenant_id"])
 
 
 @router.get("/decisions/{decision_id}/timeline")
@@ -151,7 +154,11 @@ async def add_decision_task(decision_id: str, inp: TaskCreateInput, user: dict =
     await add_decision_event(decision_id, f"Task added for {who}: {inp.title}", user["name"], "assigned")
     await log_activity(user["tenant_id"], user["id"], "decision_task_added",
                        f"Added task '{inp.title}' to '{d['title']}' for {who}", "decision", decision_id)
-    return await enrich_decision(await db.decisions.find_one(tenant_filter(decision_id, user["tenant_id"]), {"_id": 0}))
+    # FIX-003-B (S2-05): explicit tenant_id for defense-in-depth.
+    return await enrich_decision(
+        await db.decisions.find_one(tenant_filter(decision_id, user["tenant_id"]), {"_id": 0}),
+        tenant_id=user["tenant_id"],
+    )
 
 
 @router.post("/decisions/{decision_id}/approve")
@@ -205,7 +212,11 @@ async def approve_decision(decision_id: str, user: dict = Depends(require_perm("
         actor_id=user["id"], actor_name=user.get("name") or "",
         department=user.get("role") or "", visibility="public",
     )
-    return await enrich_decision(await db.decisions.find_one(tenant_filter(decision_id, user["tenant_id"]), {"_id": 0}))
+    # FIX-003-B (S2-05): explicit tenant_id for defense-in-depth.
+    return await enrich_decision(
+        await db.decisions.find_one(tenant_filter(decision_id, user["tenant_id"]), {"_id": 0}),
+        tenant_id=user["tenant_id"],
+    )
 
 
 @router.post("/decisions/{decision_id}/reject")
@@ -228,7 +239,11 @@ async def reject_decision(decision_id: str, user: dict = Depends(require_perm("d
         actor_id=user["id"], actor_name=user.get("name") or "",
         department=user.get("role") or "", visibility="public",
     )
-    return await enrich_decision(await db.decisions.find_one(tenant_filter(decision_id, user["tenant_id"]), {"_id": 0}))
+    # FIX-003-B (S2-05): explicit tenant_id for defense-in-depth.
+    return await enrich_decision(
+        await db.decisions.find_one(tenant_filter(decision_id, user["tenant_id"]), {"_id": 0}),
+        tenant_id=user["tenant_id"],
+    )
 
 
 @router.post("/decisions/{decision_id}/comment")
@@ -249,4 +264,8 @@ async def comment_decision(decision_id: str, inp: DecisionCommentInput, user: di
                                 f"New comment on '{d['title']}' from {user['name']}: {text[:100]}",
                                 "decision", decision_id, ntype="comment", title=d["title"], sender=user["name"])
     await log_activity(user["tenant_id"], user["id"], "decision_comment", f"Commented on '{d['title']}'", "decision", decision_id)
-    return await enrich_decision(await db.decisions.find_one(tenant_filter(decision_id, user["tenant_id"]), {"_id": 0}))
+    # FIX-003-B (S2-05): explicit tenant_id for defense-in-depth.
+    return await enrich_decision(
+        await db.decisions.find_one(tenant_filter(decision_id, user["tenant_id"]), {"_id": 0}),
+        tenant_id=user["tenant_id"],
+    )

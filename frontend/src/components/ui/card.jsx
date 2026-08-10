@@ -2,10 +2,17 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
+/**
+ * Meridian card — hairline border + layered micro-depth in light, border and
+ * an inner highlight in dark. No hard offset boxes anywhere.
+ */
 const Card = React.forwardRef(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("rounded-xl border bg-card text-card-foreground shadow", className)}
+    className={cn(
+      "rounded-xl border border-border bg-card text-card-foreground shadow-sm dark:shadow-edge",
+      className
+    )}
     {...props} />
 ))
 Card.displayName = "Card"
@@ -21,7 +28,7 @@ CardHeader.displayName = "CardHeader"
 const CardTitle = React.forwardRef(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("font-semibold leading-none tracking-tight", className)}
+    className={cn("text-heading leading-none", className)}
     {...props} />
 ))
 CardTitle.displayName = "CardTitle"

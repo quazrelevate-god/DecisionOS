@@ -22,7 +22,10 @@ import {
   File, FileArrowUp, Lightbulb, Info,
 } from "@phosphor-icons/react";
 
-const CTRL = "flex items-center justify-center gap-1.5 px-2 lg:px-4 py-2 text-[11px] lg:text-sm font-semibold uppercase tracking-wider border border-black transition-all text-center leading-tight";
+// Shared control-button shape for this page. Retokenised onto Meridian: rounded,
+// hairline-bordered, sentence case, and transitioning only what actually moves.
+const CTRL =
+  "inline-flex items-center justify-center gap-1.5 rounded-lg border border-border px-2 lg:px-4 py-2 text-[11px] lg:text-sm font-medium text-center leading-tight shadow-xs transition-[background-color,border-color,color,transform] duration-200 active:scale-[0.98]";
 
 const STATUS_OPTIONS = [
   { key: "todo", label: "Not Started" },

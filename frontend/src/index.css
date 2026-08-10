@@ -1,198 +1,374 @@
-@import url('https://fonts.googleapis.com/css2?family=Chivo:wght@700;800;900&family=Geist:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================================
+   DecisionOS — "Meridian" design tokens
+   ----------------------------------------------------------------------------
+   Warm paper + graphite ink + International Klein Blue.
+   Klein blue is the system signature (primary actions, active nav, focus).
+   Red is NOT the brand — it is reserved as the urgency signal (fires, overdue,
+   destructive). Every surface is a token; nothing is hardcoded.
+   ========================================================================== */
+
 @layer base {
     :root {
-        --background: 240 6% 98%;
-        --foreground: 240 10% 4%;
+        /* Surfaces — warm neutral, slightly off-white so cards can sit above it */
+        --background: 40 22% 98%;
+        --surface: 40 16% 96%;
+        --surface-raised: 0 0% 100%;
+        --surface-sunken: 40 14% 94%;
+        --foreground: 225 18% 8%;
+
         --card: 0 0% 100%;
-        --card-foreground: 240 10% 4%;
+        --card-foreground: 225 18% 8%;
         --popover: 0 0% 100%;
-        --popover-foreground: 240 10% 4%;
-        --primary: 4 100% 59%;
+        --popover-foreground: 225 18% 8%;
+
+        /* Signature — International Klein Blue */
+        --primary: 226 100% 33%;
         --primary-foreground: 0 0% 100%;
-        --secondary: 240 5% 96%;
-        --secondary-foreground: 240 10% 4%;
-        --muted: 240 5% 96%;
-        --muted-foreground: 240 4% 44%;
-        --accent: 240 5% 95%;
-        --accent-foreground: 240 10% 4%;
-        --destructive: 4 100% 59%;
+        --primary-subtle: 226 100% 96%;
+        --primary-emphasis: 226 100% 26%;
+
+        --secondary: 40 14% 94%;
+        --secondary-foreground: 225 18% 12%;
+        --muted: 40 14% 95%;
+        --muted-foreground: 225 8% 42%;
+        --accent: 40 14% 93%;
+        --accent-foreground: 225 18% 10%;
+
+        /* Semantics */
+        --destructive: 4 78% 47%;
         --destructive-foreground: 0 0% 100%;
-        --border: 240 6% 90%;
-        --input: 240 6% 90%;
-        --ring: 4 100% 59%;
-        --radius: 0.625rem;
+        --destructive-subtle: 4 80% 96%;
+        --success: 158 78% 27%;
+        --success-foreground: 0 0% 100%;
+        --success-subtle: 158 60% 95%;
+        --warning: 32 92% 40%;
+        --warning-foreground: 0 0% 100%;
+        --warning-subtle: 38 92% 95%;
+        --info: 226 100% 33%;
+        --info-foreground: 0 0% 100%;
+        --info-subtle: 226 100% 96%;
+
+        --border: 40 10% 88%;
+        --border-strong: 40 8% 78%;
+        --input: 40 10% 85%;
+        --ring: 226 100% 42%;
+
+        /* App shell */
+        --sidebar: 40 18% 97%;
+        --sidebar-foreground: 225 18% 8%;
+        --sidebar-muted: 225 8% 44%;
+        --sidebar-border: 40 10% 88%;
+
+        --shadow-color: 225 25% 12%;
+        --edge-highlight: 0 0% 100%;
+
+        --chart-1: 226 100% 40%;
+        --chart-2: 158 68% 34%;
+        --chart-3: 32 92% 46%;
+        --chart-4: 268 62% 52%;
+        --chart-5: 4 74% 52%;
+
+        --radius: 0.75rem;
     }
 
     .dark {
-        --background: 240 6% 7%;
         color-scheme: dark;
-        --foreground: 0 0% 96%;
-        --card: 240 5% 10%;
-        --card-foreground: 0 0% 96%;
-        --popover: 240 6% 9%;
-        --popover-foreground: 0 0% 96%;
-        --primary: 4 100% 62%;
-        --primary-foreground: 0 0% 100%;
-        --secondary: 240 4% 15%;
-        --secondary-foreground: 0 0% 96%;
-        --muted: 240 4% 15%;
-        --muted-foreground: 240 5% 64%;
-        --accent: 240 4% 16%;
-        --accent-foreground: 0 0% 98%;
-        --destructive: 4 100% 62%;
-        --destructive-foreground: 0 0% 100%;
-        --border: 240 4% 18%;
-        --input: 240 4% 18%;
-        --ring: 4 100% 62%;
+
+        --background: 228 16% 6%;
+        --surface: 228 14% 9%;
+        --surface-raised: 228 13% 11%;
+        --surface-sunken: 228 18% 4%;
+        --foreground: 40 20% 96%;
+
+        --card: 228 13% 9%;
+        --card-foreground: 40 20% 96%;
+        --popover: 228 14% 10%;
+        --popover-foreground: 40 20% 96%;
+
+        /* Klein blue lifted for dark-surface legibility */
+        --primary: 226 100% 68%;
+        --primary-foreground: 228 40% 8%;
+        --primary-subtle: 226 60% 16%;
+        --primary-emphasis: 226 100% 76%;
+
+        --secondary: 228 10% 15%;
+        --secondary-foreground: 40 20% 96%;
+        --muted: 228 10% 14%;
+        --muted-foreground: 228 9% 64%;
+        --accent: 228 10% 17%;
+        --accent-foreground: 40 20% 97%;
+
+        /* Subtle tints stay near the page ground — a saturated fill at this size
+           reads as mud on a dark surface and drowns the number sitting on it. */
+        --destructive: 4 84% 62%;
+        --destructive-foreground: 228 40% 8%;
+        --destructive-subtle: 4 32% 12%;
+        --success: 158 62% 48%;
+        --success-foreground: 228 40% 8%;
+        --success-subtle: 158 30% 11%;
+        --warning: 36 92% 58%;
+        --warning-foreground: 228 40% 8%;
+        --warning-subtle: 36 34% 11%;
+        --info: 226 100% 68%;
+        --info-foreground: 228 40% 8%;
+        --info-subtle: 226 60% 16%;
+
+        --border: 228 10% 17%;
+        --border-strong: 228 9% 26%;
+        --input: 228 10% 20%;
+        --ring: 226 100% 68%;
+
+        --sidebar: 228 15% 7%;
+        --sidebar-foreground: 40 20% 96%;
+        --sidebar-muted: 228 9% 60%;
+        --sidebar-border: 228 10% 15%;
+
+        --shadow-color: 228 40% 2%;
+        --edge-highlight: 0 0% 100%;
+
+        --chart-1: 226 100% 70%;
+        --chart-2: 158 62% 50%;
+        --chart-3: 36 92% 60%;
+        --chart-4: 268 76% 70%;
+        --chart-5: 4 84% 64%;
     }
-}
-
-/* Modernize the legacy neo-brutalist utility usages centrally (both themes) */
-@layer utilities {
-    /* Hard black frames -> theme hairline borders everywhere */
-    .border-black { border-color: hsl(var(--border)); }
-    /* Soften every hardcoded square corner into a crisp modern radius */
-    .rounded-none { border-radius: 0.5rem; }
-
-    /* ---- Dark surfaces ---- */
-    .dark .bg-white { background-color: hsl(var(--card)); }
-    .dark .bg-brand-paper { background-color: hsl(240 6% 6%); }
-    .dark .bg-brand-cream, .dark .bg-\[\#F4F4F5\], .dark .bg-gray-50, .dark .bg-slate-50 { background-color: hsl(240 4% 13%); }
-    .dark .bg-brand-ink { background-color: hsl(240 4% 22%); }
-    .dark .hover\:bg-brand-ink:hover { background-color: hsl(240 4% 26%); }
-    .dark .bg-black { background-color: #000; }
-    .dark .bg-black\/5 { background-color: rgba(255,255,255,0.05); }
-    .dark .bg-black\/10 { background-color: rgba(255,255,255,0.09); }
-    .dark .bg-black\/20 { background-color: rgba(255,255,255,0.13); }
-    .dark .bg-black\/80 { background-color: rgba(0,0,0,0.8); }
-    .dark .hover\:bg-black\/5:hover { background-color: rgba(255,255,255,0.07); }
-    .dark .bg-brand-yellow\/40 { background-color: rgba(250, 204, 21, 0.14); }
-
-    /* ---- Borders ---- */
-    .dark .border-black { border-color: hsl(var(--border)); }
-    .dark .border-black\/10 { border-color: rgba(228,228,231,0.10); }
-    .dark .border-black\/15 { border-color: rgba(228,228,231,0.13); }
-    .dark .border-black\/20 { border-color: rgba(228,228,231,0.16); }
-    .dark .border-black\/30 { border-color: rgba(228,228,231,0.22); }
-    .dark .border-black\/40 { border-color: rgba(228,228,231,0.28); }
-    .dark .border-black\/50 { border-color: rgba(228,228,231,0.34); }
-
-    /* ---- Text ---- */
-    .dark .text-black { color: #f4f4f5; }
-    .dark .text-brand-ink { color: #f4f4f5; }
-    .dark .text-black\/30 { color: rgba(244,244,245,0.38); }
-    .dark .text-black\/40 { color: rgba(244,244,245,0.48); }
-    .dark .text-muted-foreground { color: hsl(240 5% 64%); }
-    .dark .text-brand-blue { color: #6ea8ff; }
-    .dark .hover\:text-brand-red:hover { color: #ff6b62; }
-    .dark .text-green-600 { color: #4ade80; }
-    .dark .text-amber-600 { color: #fbbf24; }
-    .dark .text-orange-600, .dark .text-orange-500 { color: #fb923c; }
-
-    /* accent surfaces keep readable dark text */
-    .dark .bg-brand-yellow { color: #0A0A0B !important; }
-
-    /* ---- Components / chrome ---- */
-    .dark .card-brutal { background-color: hsl(var(--card)); border-color: hsl(var(--border)); }
-    .dark .shadow-brutal, .dark .shadow-brutal-sm, .dark .shadow-brutal-lg {
-        box-shadow: inset 0 1px 0 0 rgba(255,255,255,0.04), 0 8px 24px -12px rgba(0,0,0,0.7) !important;
-    }
-    .dark .shadow-hover:hover { box-shadow: 0 10px 28px -12px rgba(0,0,0,0.75) !important; }
-    .dark ::-webkit-scrollbar-track { background: transparent; }
-    .dark ::-webkit-scrollbar-thumb { background: hsl(240 4% 24%); border-color: transparent; }
-    .dark input::placeholder, .dark textarea::placeholder { color: hsl(240 5% 50%); }
-    .dark textarea, .dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]) { background-color: hsl(var(--card)); color: #f4f4f5; }
-    .dark select:invalid, .dark select option { color: #f4f4f5; background-color: hsl(var(--card)); }
 }
 
 @layer base {
     * {
         @apply border-border;
     }
+
+    html {
+        -webkit-tap-highlight-color: transparent;
+    }
+
     body {
         @apply bg-background text-foreground;
-        font-family: 'Geist', system-ui, sans-serif;
+        font-family: 'Geist', system-ui, -apple-system, sans-serif;
         -webkit-font-smoothing: antialiased;
-        letter-spacing: -0.006em;
+        -moz-osx-font-smoothing: grayscale;
+        font-feature-settings: 'cv11', 'ss01';
+        letter-spacing: -0.008em;
     }
+
     h1, h2, h3, h4, .font-heading {
         font-family: 'Geist', system-ui, sans-serif;
-        letter-spacing: -0.02em;
+        letter-spacing: -0.024em;
+        font-weight: 600;
     }
-    .font-logo {
-        font-family: 'Chivo', sans-serif;
+
+    /* Tabular figures everywhere numbers are compared vertically. */
+    .tabular, table, [data-numeric] {
+        font-variant-numeric: tabular-nums;
     }
+
     ::selection {
-        background: #FF3B30;
-        color: #fff;
+        background: hsl(var(--primary));
+        color: hsl(var(--primary-foreground));
+    }
+
+    /* One consistent, visible focus treatment across the whole app. */
+    :focus-visible {
+        outline: 2px solid hsl(var(--ring));
+        outline-offset: 2px;
+        border-radius: calc(var(--radius) - 4px);
     }
 }
 
+/* ============================================================================
+   Component primitives
+   ========================================================================== */
+
 @layer components {
-    /* Modern card: hairline border + soft layered depth (was hard brutalist box) */
-    .card-brutal {
-        @apply bg-card border border-border rounded-xl;
-        box-shadow: 0 1px 2px rgba(10,10,11,0.04), 0 4px 16px -6px rgba(10,10,11,0.06);
+    /* The canonical surface. Hairline border + layered micro-depth in light;
+       border + inner highlight only in dark (drop shadows read as mud). */
+    .surface-card {
+        @apply bg-card border border-border rounded-xl shadow-sm;
     }
+    .dark .surface-card {
+        @apply shadow-edge;
+    }
+
+    /* Legacy alias — un-migrated pages inherit the new card automatically. */
+    .card-brutal {
+        @apply bg-card border border-border rounded-xl shadow-sm;
+    }
+    .dark .card-brutal {
+        @apply shadow-edge;
+    }
+
+    /* Interactive lift. Transform + shadow only — never `transition-all`. */
     .shadow-hover {
-        @apply transition-[transform,box-shadow] duration-200 ease-out;
+        @apply transition-[transform,box-shadow,border-color] duration-200 ease-out;
     }
     .shadow-hover:hover {
         transform: translateY(-2px);
-        box-shadow: 0 10px 28px -12px rgba(10,10,11,0.18);
+        @apply shadow-md border-border-strong;
     }
+    .shadow-hover:active {
+        transform: translateY(0) scale(0.995);
+    }
+
+    /* Mono micro-label — the system's "OS readout" voice. */
     .label-mono {
-        @apply font-mono text-xs uppercase tracking-[0.12em] font-medium;
+        @apply font-mono text-[11px] uppercase tracking-[0.11em] font-medium;
+    }
+
+    /* Sticky chrome: saturated glass, never fully transparent. */
+    .glass {
+        @apply bg-background/80 backdrop-blur-xl backdrop-saturate-150;
+    }
+
+    /* Skip link for keyboard users. */
+    .skip-link {
+        @apply sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[9999]
+               focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2
+               focus:text-sm focus:font-semibold focus:text-primary-foreground;
     }
 }
+
+/* ============================================================================
+   Legacy bridge
+   ----------------------------------------------------------------------------
+   ~900 neo-brutalist class usages still live in un-migrated pages. Rather than
+   let them render as hard black boxes against the new system, they are remapped
+   onto Meridian tokens here. Every rule in this block is temporary and should
+   disappear as each page is migrated to the primitives above.
+   ========================================================================== */
+
+@layer utilities {
+    /* Hard frames -> theme hairlines */
+    .border-black { border-color: hsl(var(--border)); }
+    .border-black\/10 { border-color: hsl(var(--border)); }
+    .border-black\/15 { border-color: hsl(var(--border)); }
+    .border-black\/20 { border-color: hsl(var(--border)); }
+    .border-black\/30 { border-color: hsl(var(--border-strong)); }
+    .border-black\/40 { border-color: hsl(var(--border-strong)); }
+    .border-black\/50 { border-color: hsl(var(--border-strong)); }
+    .divide-black\/10 > * + * { border-color: hsl(var(--border)); }
+
+    /* Square corners -> the system radius */
+    .rounded-none { border-radius: calc(var(--radius) - 4px); }
+
+    /* Surfaces */
+    .bg-white { background-color: hsl(var(--card)); }
+    .bg-brand-paper { background-color: hsl(var(--background)); }
+    .bg-brand-cream, .bg-\[\#F4F4F5\], .bg-gray-50, .bg-slate-50 { background-color: hsl(var(--surface)); }
+    .bg-brand-ink { background-color: hsl(var(--foreground)); color: hsl(var(--background)); }
+    .hover\:bg-brand-ink:hover { background-color: hsl(var(--foreground)); color: hsl(var(--background)); }
+    .bg-black\/5 { background-color: hsl(var(--muted)); }
+    .bg-black\/10 { background-color: hsl(var(--secondary)); }
+    .bg-black\/20 { background-color: hsl(var(--accent)); }
+    .hover\:bg-black\/5:hover { background-color: hsl(var(--muted)); }
+    .hover\:bg-black\/\[0\.03\]:hover { background-color: hsl(var(--muted)); }
+
+    /* Text */
+    .text-brand-ink { color: hsl(var(--foreground)); }
+    .text-black\/30 { color: hsl(var(--muted-foreground) / 0.7); }
+    .text-black\/40 { color: hsl(var(--muted-foreground)); }
+
+    /* The old identity's blue/yellow become true semantics. */
+    .bg-brand-blue { background-color: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
+    .text-brand-blue { color: hsl(var(--primary)); }
+    .border-brand-blue { border-color: hsl(var(--primary)); }
+    .bg-brand-yellow { background-color: hsl(var(--warning-subtle)); color: hsl(var(--warning)); }
+    .bg-brand-yellow\/40 { background-color: hsl(var(--warning-subtle)); }
+
+    /* Red keeps meaning — but only urgency. */
+    .bg-brand-red { background-color: hsl(var(--destructive)); color: hsl(var(--destructive-foreground)); }
+    .text-brand-red { color: hsl(var(--destructive)); }
+    .border-brand-red { border-color: hsl(var(--destructive)); }
+    .hover\:bg-brand-red:hover { background-color: hsl(var(--destructive)); color: hsl(var(--destructive-foreground)); }
+    .hover\:text-brand-red:hover { color: hsl(var(--destructive)); }
+    .ring-brand-red { --tw-ring-color: hsl(var(--destructive)); }
+
+    /* Ad-hoc semantic colors used across pages -> tokens */
+    .text-green-600, .text-green-500, .text-emerald-600 { color: hsl(var(--success)); }
+    .bg-green-600, .bg-emerald-600 { background-color: hsl(var(--success)); color: hsl(var(--success-foreground)); }
+    .text-amber-600, .text-yellow-600 { color: hsl(var(--warning)); }
+    .text-orange-600, .text-orange-500 { color: hsl(var(--warning)); }
+    .bg-orange-500 { background-color: hsl(var(--warning)); color: hsl(var(--warning-foreground)); }
+
+    /* Dark-mode-only corrections that can't be expressed above. */
+    .dark .text-black { color: hsl(var(--foreground)); }
+    .dark .bg-black { background-color: hsl(var(--surface-sunken)); }
+    .dark .bg-black\/80 { background-color: hsl(var(--surface-sunken) / 0.85); }
+    .dark .shadow-brutal, .dark .shadow-brutal-sm, .dark .shadow-brutal-lg {
+        box-shadow: inset 0 1px 0 0 hsl(var(--edge-highlight) / 0.05) !important;
+    }
+    .dark .shadow-hover:hover {
+        box-shadow: 0 16px 40px -20px hsl(var(--shadow-color) / 0.9) !important;
+    }
+    .dark input::placeholder, .dark textarea::placeholder { color: hsl(var(--muted-foreground)); }
+    .dark textarea,
+    .dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]) {
+        background-color: hsl(var(--card));
+        color: hsl(var(--foreground));
+    }
+    .dark select option { color: hsl(var(--foreground)); background-color: hsl(var(--card)); }
+}
+
+/* ============================================================================
+   Scrollbars, ambient canvas, motion
+   ========================================================================== */
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: hsl(240 6% 82%); border: 2px solid transparent; background-clip: padding-box; border-radius: 8px; }
+::-webkit-scrollbar-thumb {
+    background: hsl(var(--border-strong));
+    border: 3px solid transparent;
+    background-clip: padding-box;
+    border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.5); background-clip: padding-box; }
+* { scrollbar-width: thin; scrollbar-color: hsl(var(--border-strong)) transparent; }
+
+/* Ambient work surface: a faint Klein wash off the top edge + a precision grid. */
+.app-canvas {
+    background-color: hsl(var(--background));
+    background-image:
+        radial-gradient(80% 46% at 50% -10%, hsl(var(--primary) / 0.07), transparent 64%),
+        radial-gradient(hsl(var(--border)) 0.7px, transparent 0.7px);
+    background-size: 100% 100%, 28px 28px;
+    background-attachment: fixed, scroll;
+}
 
 @keyframes pulse-ring {
-    0% { box-shadow: 0 0 0 0 rgba(255,59,48,0.5); }
-    70% { box-shadow: 0 0 0 22px rgba(255,59,48,0); }
-    100% { box-shadow: 0 0 0 0 rgba(255,59,48,0); }
+    0% { box-shadow: 0 0 0 0 hsl(var(--destructive) / 0.45); }
+    70% { box-shadow: 0 0 0 22px hsl(var(--destructive) / 0); }
+    100% { box-shadow: 0 0 0 0 hsl(var(--destructive) / 0); }
 }
-.recording-pulse { animation: pulse-ring 1.5s infinite; }
+.recording-pulse { animation: pulse-ring 1.6s infinite; }
 
 /* Thinking overlay — Neural Constellation */
 @keyframes constellation-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 .constellation-spin { animation: constellation-spin 44s linear infinite; }
 @keyframes thinking-glow {
-    0%, 100% { opacity: 0.7; text-shadow: 0 0 18px rgba(255,59,48,0.35); }
-    50%      { opacity: 1;   text-shadow: 0 0 46px rgba(255,59,48,0.85); }
+    0%, 100% { opacity: 0.72; text-shadow: 0 0 18px hsl(var(--primary) / 0.35); }
+    50%      { opacity: 1;    text-shadow: 0 0 46px hsl(var(--primary) / 0.8); }
 }
 .thinking-text { animation: thinking-glow 2.2s ease-in-out infinite; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-/* Futuristic ambient canvas: soft red glow + faint dot-grid, theme-aware */
-.app-canvas {
-    background-color: hsl(var(--background));
-    background-image:
-        radial-gradient(70% 45% at 50% -6%, rgba(255,59,48,0.06), transparent 62%),
-        radial-gradient(hsl(var(--border)) 0.6px, transparent 0.6px);
-    background-size: 100% 100%, 24px 24px;
-    background-position: 0 0, 0 0;
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .recording-pulse { animation: none; }
-    .shadow-hover { transition: none; }
-    .constellation-spin { animation: none; }
-    .thinking-text { animation: none; }
-}
-
+/* Staggered entrance for feed items and dashboard tiles. */
 @keyframes es-reveal-kf {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
 }
-.es-reveal { opacity: 0; animation: es-reveal-kf 0.45s ease-out forwards; }
+.es-reveal { opacity: 0; animation: es-reveal-kf 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
 @media (prefers-reduced-motion: reduce) {
-  .es-reveal { animation: none; opacity: 1; }
+    *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+    }
+    .es-reveal { opacity: 1; }
+    .shadow-hover:hover { transform: none; }
 }

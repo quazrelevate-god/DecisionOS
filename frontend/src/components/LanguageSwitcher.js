@@ -29,9 +29,9 @@ export function LanguageSwitcher({ variant = "icon" }) {
     <div className="py-1" data-testid="language-options">
       {LANGUAGES.map((l) => (
         <button key={l.code} onClick={() => choose(l.code)} data-testid={`lang-option-${l.code}`}
-          className="w-full flex items-center justify-between gap-3 px-4 py-2.5 text-sm hover:bg-black/[0.04] transition-colors">
-          <span className={current === l.code ? "font-semibold" : ""}>{l.label}</span>
-          {current === l.code && <Check size={16} weight="bold" className="text-brand-red" />}
+          className="w-full flex items-center justify-between gap-3 px-4 py-2.5 text-sm transition-colors duration-200 hover:bg-accent">
+          <span className={current === l.code ? "font-medium" : "text-muted-foreground"}>{l.label}</span>
+          {current === l.code && <Check size={16} weight="bold" className="text-primary" />}
         </button>
       ))}
     </div>
@@ -42,7 +42,7 @@ export function LanguageSwitcher({ variant = "icon" }) {
       <div className="flex flex-wrap gap-2" data-testid="language-inline">
         {LANGUAGES.map((l) => (
           <button key={l.code} onClick={() => choose(l.code)} data-testid={`lang-option-${l.code}`}
-            className={`flex items-center gap-2 px-4 py-2 text-sm rounded-lg border transition-all ${current === l.code ? "bg-brand-ink text-white border-black" : "bg-card border-border hover:bg-black/[0.04]"}`}>
+            className={`flex items-center gap-2 px-4 py-2 text-sm rounded-lg border transition-[background-color,border-color,color,transform] duration-200 active:scale-[0.98] ${current === l.code ? "bg-primary-subtle text-primary border-primary/25 font-medium" : "bg-card border-border text-muted-foreground hover:bg-accent hover:text-foreground"}`}>
             <Globe size={15} weight="bold" /> {l.label}
             {current === l.code && <Check size={14} weight="bold" />}
           </button>
@@ -54,12 +54,12 @@ export function LanguageSwitcher({ variant = "icon" }) {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button data-testid="language-switcher" title={t("common.language")}
-          className="w-10 h-10 flex items-center justify-center border border-black hover:bg-brand-ink hover:text-white transition-colors">
+        <button data-testid="language-switcher" title={t("common.language")} aria-label={t("common.language")}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] duration-200 hover:bg-accent hover:text-foreground active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
           <Globe size={18} weight="bold" />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-44 p-0 border border-black shadow-brutal">
+      <PopoverContent align="end" sideOffset={8} className="w-44 overflow-hidden rounded-xl border border-border p-0 shadow-lg">
         <Options />
       </PopoverContent>
     </Popover>

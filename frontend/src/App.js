@@ -29,28 +29,42 @@ import AdminPortal from "./pages/admin/AdminPortal";
 function AccessDenied() {
   const navigate = useNavigate();
   return (
-    <div className="max-w-lg mx-auto text-center py-20" data-testid="access-denied">
-      <div className="w-16 h-16 mx-auto flex items-center justify-center border-2 border-black bg-brand-red text-white mb-6">
-        <LockKey size={30} weight="bold" />
+    <div className="mx-auto max-w-lg py-24 text-center" data-testid="access-denied">
+      <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-xl border border-border bg-muted text-muted-foreground">
+        <LockKey size={26} weight="bold" />
       </div>
-      <h1 className="font-heading text-4xl font-black tracking-tighter uppercase">Access Denied</h1>
-      <p className="text-muted-foreground mt-3">You don't have permission to open this page. Ask your owner to grant access from Team settings.</p>
-      <button onClick={() => navigate("/my-work")} data-testid="access-denied-home"
-        className="mt-6 bg-brand-ink text-white px-6 py-2.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
+      <h1 className="text-title">Access denied</h1>
+      <p className="mx-auto mt-3 max-w-md text-sm text-muted-foreground">
+        You don't have permission to open this page. Ask your owner to grant access from Team settings.
+      </p>
+      <button
+        onClick={() => navigate("/my-work")}
+        data-testid="access-denied-home"
+        className="mt-7 inline-flex items-center rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground shadow-xs transition-[background-color,transform,box-shadow] duration-200 hover:-translate-y-px hover:bg-primary-emphasis active:scale-[0.98]"
+      >
         Go to My Work
       </button>
     </div>
   );
 }
 
+/** Shared boot state — one treatment instead of three ad-hoc spinners. */
+function AppLoading() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background" role="status">
+      <div className="flex flex-col items-center gap-4">
+        <div className="flex h-10 w-10 animate-pulse items-center justify-center rounded-xl bg-primary text-primary-foreground">
+          <span className="text-lg font-semibold leading-none">D</span>
+        </div>
+        <p className="label-mono text-muted-foreground">Loading</p>
+      </div>
+    </div>
+  );
+}
+
 function Protected({ children, perm, perms, ownerOnly }) {
   const { user, loading } = useAuth();
-  if (loading)
-    return (
-      <div className="min-h-screen flex items-center justify-center font-mono text-sm uppercase tracking-widest">
-        Loading…
-      </div>
-    );
+  if (loading) return <AppLoading />;
   if (!user) return <Navigate to="/login" replace />;
   let denied = false;
   if (ownerOnly) denied = user.role !== "owner";
@@ -61,12 +75,7 @@ function Protected({ children, perm, perms, ownerOnly }) {
 
 function Home() {
   const { user, loading } = useAuth();
-  if (loading)
-    return (
-      <div className="min-h-screen flex items-center justify-center font-mono text-sm uppercase tracking-widest">
-        Loading…
-      </div>
-    );
+  if (loading) return <AppLoading />;
   if (user) return <Navigate to={hasPerm(user, "inbox") ? "/inbox" : "/my-work"} replace />;
   return <Landing />;
 }

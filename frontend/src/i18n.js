@@ -12,12 +12,21 @@ const resources = {
     translation: {
       nav: {
         inbox: "Decision Desk", brief: "CEO Brief", mywork: "My Work", people: "People",
-        brain: "Company Brain", finance: "Finance", capture: "Capture", meetings: "Meeting Notes", settings: "Settings",
+        brain: "Company Brain", finance: "Finance", capture: "Documents & Data", meetings: "Meeting Notes",
+        settings: "Settings", calendar: "Calendar", journal: "Journal", score: "Operating Score", coach: "Work Coach",
       },
+      navgroup: { today: "Today", capture: "Capture", business: "Business", workspace: "Workspace" },
       bottomnav: { desk: "Desk", brief: "Brief", work: "Work", people: "People", brain: "Brain" },
+      command: {
+        trigger: "Search…", placeholder: "Jump to a page or run a command…", empty: "No matches.",
+        actions: "Actions", account: "Account", capture: "Capture a decision",
+        search_brain: "Search the Company Brain", notifications: "Notifications",
+        theme_light: "Switch to light mode", theme_dark: "Switch to dark mode",
+      },
       header: {
         signed_in_as: "Signed in as", send_digest: "Send Daily Digest", sign_out: "Sign out",
         notifications: "Notifications", view_all: "View all", new: "new", all_caught_up: "You're all caught up.",
+        capture: "Capture",
       },
       common: { language: "Language", save: "Save", cancel: "Cancel", loading: "Loading…" },
       settings: {
@@ -127,12 +136,21 @@ const resources = {
     translation: {
       nav: {
         inbox: "निर्णय डेस्क", brief: "सीईओ ब्रीफ़", mywork: "मेरा काम", people: "लोग",
-        brain: "कंपनी ब्रेन", finance: "वित्त", capture: "कैप्चर", meetings: "मीटिंग नोट्स", settings: "सेटिंग्स",
+        brain: "कंपनी ब्रेन", finance: "वित्त", capture: "दस्तावेज़ और डेटा", meetings: "मीटिंग नोट्स",
+        settings: "सेटिंग्स", calendar: "कैलेंडर", journal: "जर्नल", score: "ऑपरेटिंग स्कोर", coach: "वर्क कोच",
       },
+      navgroup: { today: "आज", capture: "कैप्चर", business: "व्यवसाय", workspace: "वर्कस्पेस" },
       bottomnav: { desk: "डेस्क", brief: "ब्रीफ़", work: "काम", people: "लोग", brain: "ब्रेन" },
+      command: {
+        trigger: "खोजें…", placeholder: "कोई पेज खोलें या कमांड चलाएँ…", empty: "कुछ नहीं मिला।",
+        actions: "क्रियाएँ", account: "खाता", capture: "निर्णय कैप्चर करें",
+        search_brain: "कंपनी ब्रेन में खोजें", notifications: "सूचनाएँ",
+        theme_light: "लाइट मोड पर जाएँ", theme_dark: "डार्क मोड पर जाएँ",
+      },
       header: {
         signed_in_as: "साइन इन:", send_digest: "दैनिक डाइजेस्ट भेजें", sign_out: "साइन आउट",
         notifications: "सूचनाएँ", view_all: "सभी देखें", new: "नई", all_caught_up: "आप पूरी तरह अपडेट हैं।",
+        capture: "कैप्चर",
       },
       common: { language: "भाषा", save: "सहेजें", cancel: "रद्द करें", loading: "लोड हो रहा है…" },
       settings: {
@@ -241,12 +259,21 @@ const resources = {
     translation: {
       nav: {
         inbox: "முடிவு மேசை", brief: "தலைமை சுருக்கம்", mywork: "எனது வேலை", people: "நபர்கள்",
-        brain: "நிறுவன மூளை", finance: "நிதி", capture: "பதிவு", meetings: "கூட்டக் குறிப்புகள்", settings: "அமைப்புகள்",
+        brain: "நிறுவன மூளை", finance: "நிதி", capture: "ஆவணங்கள் & தரவு", meetings: "கூட்டக் குறிப்புகள்",
+        settings: "அமைப்புகள்", calendar: "நாட்காட்டி", journal: "நாட்குறிப்பு", score: "இயக்க மதிப்பெண்", coach: "பணிப் பயிற்சியாளர்",
       },
+      navgroup: { today: "இன்று", capture: "பதிவு", business: "வணிகம்", workspace: "பணியிடம்" },
       bottomnav: { desk: "மேசை", brief: "சுருக்கம்", work: "வேலை", people: "நபர்கள்", brain: "மூளை" },
+      command: {
+        trigger: "தேடு…", placeholder: "பக்கத்திற்குச் செல்லவும் அல்லது கட்டளையை இயக்கவும்…", empty: "பொருத்தம் இல்லை.",
+        actions: "செயல்கள்", account: "கணக்கு", capture: "ஒரு முடிவைப் பதிவு செய்",
+        search_brain: "நிறுவன மூளையில் தேடு", notifications: "அறிவிப்புகள்",
+        theme_light: "வெளிச்ச பயன்முறைக்கு மாறு", theme_dark: "இருள் பயன்முறைக்கு மாறு",
+      },
       header: {
         signed_in_as: "உள்நுழைந்தவர்", send_digest: "தினசரி சுருக்கம் அனுப்பு", sign_out: "வெளியேறு",
         notifications: "அறிவிப்புகள்", view_all: "அனைத்தையும் காண்க", new: "புதியவை", all_caught_up: "அனைத்தும் முடிந்தது.",
+        capture: "பதிவு",
       },
       common: { language: "மொழி", save: "சேமி", cancel: "ரத்து", loading: "ஏற்றுகிறது…" },
       settings: {

@@ -1855,12 +1855,16 @@ class OwnerExclusionsInput(BaseModel):
 
 
 @api.put("/tenant/owner-exclusions")
-async def update_owner_exclusions(inp: OwnerExclusionsInput,
+async def update_owner_exclusions(inp: OwnerExclusionsInput, request: Request,
                                     user: dict = Depends(require_role("owner"))):
     """Set the list of permission keys owner(s) do NOT get. Owner-only:
     a non-owner cannot restrict what owners can see. `owner` role
     itself cannot be excluded — the exclusion applies to specific
     permissions, not the role."""
+    from services import audit_log as _audit
+    tenant_before = await db.tenants.find_one(
+        {"id": user["tenant_id"]}, {"_id": 0, "owner_exclusions": 1},
+    )
     excl = clean_perms(inp.exclusions)
     await db.tenants.update_one(
         {"id": user["tenant_id"]}, {"$set": {"owner_exclusions": excl}},
@@ -1869,7 +1873,59 @@ async def update_owner_exclusions(inp: OwnerExclusionsInput,
         user["tenant_id"], user["id"], "owner_exclusions_updated",
         f"{user['name']} set owner exclusions to {excl}",
     )
+    # FIX-004-F (RBAC-20): audit-log the change — owner-exclusion
+    # edits are exactly the compliance events the audit table exists
+    # for. before/after captures the exact permission-scope shift.
+    _ctx = _audit.context_from(request, user)
+    await _audit.record(
+        db, action="owner_exclusions_updated",
+        entity_type="tenant", entity_id=user["tenant_id"],
+        before={"owner_exclusions": (tenant_before or {}).get("owner_exclusions") or []},
+        after={"owner_exclusions": excl},
+        **_ctx,
+    )
     return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+
+
+# FIX-004-F (RBAC-20): owner-facing audit-log read endpoint.
+# Read-only — this API deliberately does NOT expose update/delete
+# on audit rows. Tampering the log requires DB-level access.
+@api.get("/admin/audit-log")
+async def read_audit_log(
+    request: Request,
+    action: Optional[str] = None,
+    actor_id: Optional[str] = None,
+    entity_type: Optional[str] = None,
+    entity_id: Optional[str] = None,
+    since_ts: Optional[str] = None,
+    before_ts: Optional[str] = None,
+    limit: int = 100,
+    user: dict = Depends(require_role("owner")),
+):
+    """Read the tenant's audit log. Owner-only.
+
+    Query params act as filters — omit for the full recent-first list.
+    `before_ts` pages older entries (pass the timestamp of the last row
+    returned). `limit` capped at 500 by the service to keep responses
+    bounded.
+    """
+    from services import audit_log as _audit
+    filters = {}
+    if action:
+        filters["action"] = action
+    if actor_id:
+        filters["actor_id"] = actor_id
+    if entity_type:
+        filters["entity_type"] = entity_type
+    if entity_id:
+        filters["entity_id"] = entity_id
+    if since_ts:
+        filters["since_ts"] = since_ts
+    rows = await _audit.query(
+        db, tenant_id=user["tenant_id"],
+        filters=filters, limit=limit, before_ts=before_ts,
+    )
+    return {"rows": rows, "count": len(rows)}
 
 
 @api.get("/invites")
@@ -5671,6 +5727,28 @@ async def _bootstrap():
             )
         except Exception as e:
             logger.warning(f"scheduler_locks TTL index: {e}")
+        # FIX-004-F (RBAC-20): audit_log collection indexes.
+        # Two hot read patterns: "everything in tenant X since Monday"
+        # and "everything user Y did". Timestamp is a string (iso)
+        # but sorts lexicographically the same as chrono order — no
+        # BSON date conversion needed.
+        try:
+            await db.audit_log.create_index(
+                [("tenant_id", 1), ("timestamp", -1)],
+                name="audit_log_tenant_timestamp",
+            )
+            await db.audit_log.create_index(
+                [("actor_id", 1), ("timestamp", -1)],
+                name="audit_log_actor_timestamp",
+            )
+            # Bonus for the entity-scoped view ("everything that
+            # happened to this decision") — cheap secondary index.
+            await db.audit_log.create_index(
+                [("tenant_id", 1), ("entity_type", 1), ("entity_id", 1)],
+                name="audit_log_entity",
+            )
+        except Exception as e:
+            logger.warning(f"audit_log indexes: {e}")
         # FIX-004-B (RBAC-13): memberships collection indexes.
         # Compound unique on (user_id, tenant_id) — one membership per
         # (person, workspace). Query indexes for the two hot paths:

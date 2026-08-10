@@ -336,6 +336,23 @@ async def register(inp: RegisterInput, request: Request, response: Response):
     user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
     tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0})
     set_auth_cookie(response, token)
+    # FIX-004-F (RBAC-20): audit tenant + user creation. Two events
+    # so a reader querying by action can find each independently.
+    from services import audit_log as _audit
+    _ctx = _audit.context_from(request, {**user, "tenant_id": tenant_id})
+    await _audit.record(
+        db, action="tenant_created",
+        entity_type="tenant", entity_id=tenant_id,
+        meta={"industry": tenant_doc.get("industry"),
+               "company_size": tenant_doc.get("company_size")},
+        **_ctx,
+    )
+    await _audit.record(
+        db, action="user_created",
+        entity_type="user", entity_id=user_id,
+        after={"email": email, "role": "owner"},
+        **_ctx,
+    )
     os_summary = {
         "departments": len(clean_roles),
         "workflows": len(tenant_doc["workflow_templates"]),
@@ -351,10 +368,23 @@ async def register(inp: RegisterInput, request: Request, response: Response):
 
 
 @router.post("/login")
-async def login(inp: LoginInput, response: Response):
+async def login(inp: LoginInput, request: Request, response: Response):
+    from services import audit_log as _audit
     email = inp.email.lower()
     user = await db.users.find_one({"email": email})
     if not user or not verify_password(inp.password, user["password_hash"]):
+        # FIX-004-F (RBAC-20): audit-log login failure so brute-force
+        # + credential-stuffing attempts show up in ops review even
+        # when they never succeed. Tenant unknown for failures against
+        # non-existent emails; capture the email attempted regardless.
+        _ctx = _audit.context_from(request, user)
+        _ctx["actor_email"] = email  # attempted email even if user missing
+        _ctx["tenant_id"] = (user or {}).get("tenant_id") if user else None
+        await _audit.record(
+            db, action="login_failure",
+            meta={"reason": "invalid_credentials"},
+            **_ctx,
+        )
         raise HTTPException(status_code=401, detail="Invalid email or password")
     # FIX-004-B (RBAC-12): resolve the target workspace via memberships.
     # A person may hold memberships in multiple tenants — the caller
@@ -412,6 +442,17 @@ async def login(inp: LoginInput, response: Response):
         user["permissions"] = list(membership.get("permissions") or [])
         user["membership_id"] = membership.get("id")
     set_auth_cookie(response, token)
+    # FIX-004-F (RBAC-20): audit-log successful login. Captures the
+    # tenant chosen (for multi-membership users), the IP + UA, and
+    # the actor. Pairs with login_failure so ops can see the full
+    # auth pattern for a user.
+    _ctx = _audit.context_from(request, {**user, "tenant_id": tenant_id})
+    await _audit.record(
+        db, action="login_success",
+        entity_type="user", entity_id=user["id"],
+        meta={"tenant_id": tenant_id, "role": role},
+        **_ctx,
+    )
     return {"token": token, "user": user, "tenant": tenant}
 
 
@@ -481,6 +522,8 @@ async def logout(request: Request, response: Response):
         auth_hdr = request.headers.get("Authorization") or ""
         if auth_hdr.lower().startswith("bearer "):
             token = auth_hdr[7:].strip() or None
+    logout_actor_id = None
+    logout_tenant_id = None
     if token:
         try:
             # Accept even expired tokens for the revocation step —
@@ -493,6 +536,8 @@ async def logout(request: Request, response: Response):
             )
             jti = payload.get("jti")
             exp = payload.get("exp")
+            logout_actor_id = payload.get("sub")
+            logout_tenant_id = payload.get("tenant_id")
             if jti:
                 await _revoke(db, jti, exp=exp, reason="logout")
         except Exception:
@@ -500,6 +545,15 @@ async def logout(request: Request, response: Response):
             # Cookie clear below is still the visible logout signal.
             pass
     clear_auth_cookie(response)
+    # FIX-004-F (RBAC-20): audit the logout even if the token was
+    # already invalid — captures the "user actively signed out" event
+    # for the compliance timeline. actor_id/tenant_id come from the
+    # decoded token when possible.
+    from services import audit_log as _audit
+    _ctx = _audit.context_from(request, None)
+    _ctx["actor_id"] = logout_actor_id
+    _ctx["tenant_id"] = logout_tenant_id
+    await _audit.record(db, action="logout", **_ctx)
     return {"ok": True}
 
 

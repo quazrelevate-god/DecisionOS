@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-route
 import { Toaster } from "./components/ui/sonner";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { hasPerm } from "./lib/perms";
+import { DEMO_MODE } from "./lib/demoData";
 import { LockKey } from "@phosphor-icons/react";
 import Layout from "./components/Layout";
 import Login from "./pages/Login";
@@ -80,9 +81,23 @@ function Home() {
   return <Landing />;
 }
 
+/** Unmissable marker so demo fixtures are never mistaken for live data.
+ *  Positioned clear of the mobile tab bar and the desktop sidebar footer. */
+function DemoBadge() {
+  return (
+    <div
+      className="pointer-events-none fixed bottom-[5.5rem] right-3 z-[9999] rounded-full border border-primary/30 bg-primary-subtle px-3 py-1 font-mono text-[10px] uppercase tracking-[0.1em] text-primary shadow-sm lg:bottom-3"
+      data-testid="demo-mode-badge"
+    >
+      Demo data · no backend
+    </div>
+  );
+}
+
 function App() {
   return (
     <div className="App">
+      {DEMO_MODE && <DemoBadge />}
       <AuthProvider>
         <BrowserRouter>
           <Routes>

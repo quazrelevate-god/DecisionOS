@@ -787,7 +787,13 @@ async def _audit(tid, uid, question, plan, source_ids, result_type):
 
 
 @router.post("/brain/export")
-async def export(inp: ExportRequest, user: dict = Depends(require_perm("ask"))):
+async def export(inp: ExportRequest, user: dict = Depends(require_perm("brain_export"))):
+    # FIX-004-C (RBAC-10): export = bulk data extraction (search
+    # results + full context payload downloaded). Previously gated on
+    # `ask` (the query permission most employees have). Split into a
+    # distinct `brain_export` permission that is NOT in _BASE_PERMS —
+    # only owner (magic all-perms) or an explicit grant on
+    # user.permissions[]/membership.permissions[] can hit it.
     tid = user["tenant_id"]
     scope = {"tenant_id": tid, "uid": user.get("id"), "role": user.get("role"),
              "can_finance": _can_finance(user), "privileged": _privileged(user)}

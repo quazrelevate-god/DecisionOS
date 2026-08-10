@@ -51,6 +51,8 @@ from core import (
     tenant_role_keys,
     log_activity,
     add_decision_event,
+    require_role,
+    require_perm,
 )
 from models.tasks import (
     TaskCreateInput,
@@ -180,7 +182,11 @@ async def get_task(task_id: str, user: dict = Depends(get_current_user)):
 
 
 @router.delete("/tasks/{task_id}")
-async def delete_task(task_id: str, user: dict = Depends(get_current_user)):
+async def delete_task(task_id: str, user: dict = Depends(require_role("owner"))):
+    # FIX-004-C (RBAC-07): decorator gate now matches the inline
+    # `role != "owner"` check that already existed. Belt-and-braces —
+    # the decorator is what a reviewer reading the endpoint list will
+    # notice, so it's the authoritative signal.
     if user.get("role") != "owner":
         raise HTTPException(status_code=403, detail="Only the owner can delete tasks")
     t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]}, {"_id": 0, "id": 1})
@@ -322,8 +328,13 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
 # Assignment
 # ---------------------------------------------------------------------------
 @router.post("/tasks/{task_id}/reassign")
-async def reassign_task(task_id: str, inp: TaskReassignInput, user: dict = Depends(get_current_user)):
-    """Change who a task is assigned to — a specific member or a whole role/team."""
+async def reassign_task(task_id: str, inp: TaskReassignInput, user: dict = Depends(require_perm("team_manage"))):
+    """Change who a task is assigned to — a specific member or a whole role/team.
+
+    FIX-004-C (RBAC-07): decorator now requires team_manage permission.
+    Previously any employee could reassign any task (auth-only), which
+    let a disgruntled assignee dump their work back on the requester.
+    """
     from server import push_notification  # deferred
     perms = user_perms(user)
     if not (user["role"] == "owner" or "team_manage" in perms or "decisions_approve" in perms):
@@ -513,7 +524,11 @@ async def save_execution_plan(task_id: str, inp: ExecPlanInput, user: dict = Dep
 
 
 @router.delete("/tasks/{task_id}/execution-plan")
-async def delete_execution_plan(task_id: str, user: dict = Depends(get_current_user)):
+async def delete_execution_plan(task_id: str, user: dict = Depends(require_perm("team_manage"))):
+    # FIX-004-C (RBAC-07): deleting the execution plan wipes AI-
+    # generated steps that the assignee may be actively working
+    # through. Team-manage permission gates the action so an unrelated
+    # employee can't sabotage someone else's execution plan.
     t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
     if not t:
         raise HTTPException(status_code=404, detail="Not found")
@@ -654,7 +669,10 @@ async def respond_to_handoff(task_id: str, inp: RespondInput, user: dict = Depen
 # Ranking
 # ---------------------------------------------------------------------------
 @router.post("/tasks/prioritize")
-async def prioritize_tasks(force: bool = False, limit: int = 25, user: dict = Depends(get_current_user)):
+async def prioritize_tasks(force: bool = False, limit: int = 25, user: dict = Depends(require_perm("team_manage"))):
+    # FIX-004-C (RBAC-07): tenant-wide AI re-score of every open task.
+    # Costs Claude tokens and rewrites priority ordering the whole
+    # team sees — team-manage permission gates the action.
     from server import ai_score_tasks, _tenant_currency  # deferred
     tid = user["tenant_id"]
     q = {"tenant_id": tid, "status": {"$in": ["todo", "in_progress", "blocked"]}}

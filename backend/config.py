@@ -37,9 +37,14 @@ ROLES = ["owner", "sales", "production", "finance"]
 
 PERMISSION_KEYS = [
     "inbox", "voice_capture", "data_input", "people", "finance", "ledger",
-    "workflows", "tasks", "brain", "ask", "approvals", "decisions_approve",
-    "leave_approve", "team_manage",
+    "workflows", "tasks", "brain", "ask", "brain_export",
+    "approvals", "decisions_approve", "leave_approve", "team_manage",
 ]
+# FIX-004-C (RBAC-10): `brain_export` is INTENTIONALLY not in
+# ROLE_DEFAULT_PERMS or _BASE_PERMS — it's an elevated privilege
+# distinct from `ask` (query). Only owner gets it via the magic
+# all-perms shortcut in user_perms(); anyone else needs an explicit
+# grant on their user.permissions[] or membership.permissions[].
 
 DEFAULT_ROLES = [
     {"key": "sales", "label": "Sales"},

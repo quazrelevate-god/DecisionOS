@@ -354,20 +354,26 @@ async def get_leave(leave_id: str, user: dict = Depends(get_current_user)):
 
 
 @router.post("/leaves/{leave_id}/approve")
-async def approve_leave(leave_id: str, inp: LeaveDecisionInput, user: dict = Depends(get_current_user)):
+async def approve_leave(leave_id: str, inp: LeaveDecisionInput, user: dict = Depends(require_perm("leave_approve"))):
+    # FIX-004-C (RBAC-09): decorator gate makes the permission visible
+    # in the endpoint signature. Inline `_can_approve_leave` inside
+    # `_decide_leave` stays as defense-in-depth (checks the SPECIFIC
+    # leave's approver_id, not just the perm).
     return await _decide_leave(leave_id, user, "approved", inp.note, "approved",
                                f"Your leave request was approved by {user.get('name')}")
 
 
 @router.post("/leaves/{leave_id}/reject")
-async def reject_leave(leave_id: str, inp: LeaveDecisionInput, user: dict = Depends(get_current_user)):
+async def reject_leave(leave_id: str, inp: LeaveDecisionInput, user: dict = Depends(require_perm("leave_approve"))):
+    # FIX-004-C (RBAC-09): same as approve_leave — decorator gate.
     return await _decide_leave(leave_id, user, "rejected", inp.note, "rejected",
                                f"Your leave request was rejected by {user.get('name')}"
                                + (f": {inp.note}" if inp.note else ""))
 
 
 @router.post("/leaves/{leave_id}/request-info")
-async def request_leave_info(leave_id: str, inp: LeaveDecisionInput, user: dict = Depends(get_current_user)):
+async def request_leave_info(leave_id: str, inp: LeaveDecisionInput, user: dict = Depends(require_perm("leave_approve"))):
+    # FIX-004-C (RBAC-09): same as approve/reject — decorator gate.
     return await _decide_leave(leave_id, user, "info_requested", inp.note, "clarification",
                                f"{user.get('name')} needs more info on your leave request"
                                + (f": {inp.note}" if inp.note else ""))

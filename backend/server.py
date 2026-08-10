@@ -2139,7 +2139,12 @@ async def process_meeting(meeting_id: str):
 
 
 @api.post("/meetings")
-async def create_meeting(background: BackgroundTasks, file: UploadFile = File(...), language: str = Form("auto"), user: dict = Depends(get_current_user)):
+async def create_meeting(background: BackgroundTasks, file: UploadFile = File(...), language: str = Form("auto"), user: dict = Depends(require_perm("voice_capture"))):
+    # FIX-004-C (RBAC-08): meeting audio triggers STT (per-minute-
+    # billed) + downstream LLM summarization. Same voice_capture perm
+    # already gates /voice-notes; extending to meetings closes the
+    # inconsistency that let perm-less employees burn STT credits
+    # here.
     # FIX-002-E: obj_store with tenant prefix (was local UPLOAD_DIR).
     from services.uploads import store_upload
     mid = new_id()
@@ -2159,7 +2164,9 @@ async def create_meeting(background: BackgroundTasks, file: UploadFile = File(..
 
 
 @api.post("/meetings/text")
-async def create_meeting_text(inp: TextNoteInput, background: BackgroundTasks, user: dict = Depends(get_current_user)):
+async def create_meeting_text(inp: TextNoteInput, background: BackgroundTasks, user: dict = Depends(require_perm("voice_capture"))):
+    # FIX-004-C (RBAC-08): parity with /meetings audio — same LLM
+    # summarization path, same perm gate.
     mid = new_id()
     await db.meetings.insert_one({
         "id": mid, "tenant_id": user["tenant_id"], "created_by": user["id"], "created_by_name": user.get("name"),
@@ -2482,7 +2489,12 @@ async def list_workflows(type: Optional[str] = None, user: dict = Depends(get_cu
 
 
 @api.post("/workflows")
-async def create_workflow(inp: WorkflowCreateInput, user: dict = Depends(get_current_user)):
+async def create_workflow(inp: WorkflowCreateInput, user: dict = Depends(require_perm("workflows"))):
+    # FIX-004-C (RBAC-04): symmetric with DELETE /workflows/{id} which
+    # is role(owner). Previously ANY employee could create workflows
+    # (auth-only) while only owner could delete them. Now creation
+    # requires the same `workflows` permission a person needs to
+    # interact with the workflow board at all.
     om = await tenant_operating_model(user["tenant_id"])
     pipeline = next((p for p in om["pipelines"] if p["key"] == inp.type), None)
     if not pipeline:
@@ -3203,7 +3215,11 @@ async def _notify_provider_outages():
 
 
 @api.post("/follow-up/run")
-async def followup_run(user: dict = Depends(get_current_user)):
+async def followup_run(user: dict = Depends(require_perm("team_manage"))):
+    # FIX-004-C (RBAC-06): manual follow-up sweep runs the full tenant-
+    # wide overdue-task chase (LLM cost + notification spam potential).
+    # Restrict to team_manage (owner + designated team admins). Was
+    # auth-only which meant any employee could trigger it on-demand.
     await run_followup(user["tenant_id"])
     return {"ok": True}
 
@@ -3262,7 +3278,11 @@ async def list_memory(user: dict = Depends(get_current_user)):
 
 
 @api.post("/memory")
-async def add_memory(inp: MemoryInput, user: dict = Depends(get_current_user)):
+async def add_memory(inp: MemoryInput, user: dict = Depends(require_perm("brain"))):
+    # FIX-004-C (RBAC-11): writing to shared tenant memory (persistent
+    # facts the AI later cites) is a brain-permission action, not a
+    # read anyone can do. Read of memory stays open via /memory GET
+    # (no perm), only WRITE is gated.
     mid = new_id()
     doc = {"id": mid, "tenant_id": user["tenant_id"], "text": inp.text, "tag": inp.tag or "note",
            "created_by": user["id"], "created_at": now_iso()}
@@ -5174,7 +5194,12 @@ async def edit_capture(cid: str, inp: CaptureEditInput, user: dict = Depends(get
 
 
 @api.post("/captures/{cid}/reassign")
-async def reassign_capture(cid: str, inp: CaptureActionInput, user: dict = Depends(get_current_user)):
+async def reassign_capture(cid: str, inp: CaptureActionInput, user: dict = Depends(require_perm("approvals"))):
+    # FIX-004-C (RBAC-05): reassigning a captured draft rewrites the
+    # target person on a real record about to be committed. Only users
+    # with the approvals permission (owner + designated approvers)
+    # should do this — was auth-only, which meant any employee could
+    # steer an approval flow's target.
     await _get_draft(cid, user)
     updates = {}
     if inp.reviewer_role:
@@ -5187,7 +5212,8 @@ async def reassign_capture(cid: str, inp: CaptureActionInput, user: dict = Depen
 
 
 @api.post("/captures/{cid}/reject")
-async def reject_capture(cid: str, inp: CaptureActionInput, user: dict = Depends(get_current_user)):
+async def reject_capture(cid: str, inp: CaptureActionInput, user: dict = Depends(require_perm("approvals"))):
+    # FIX-004-C (RBAC-05): same rationale as reassign — approvals perm gate.
     await _get_draft(cid, user)
     await db.capture_drafts.update_one({"id": cid}, {"$set": {
         "status": "rejected", "review_action": "rejected", "reviewed_by": user["id"],
@@ -5197,7 +5223,9 @@ async def reject_capture(cid: str, inp: CaptureActionInput, user: dict = Depends
 
 
 @api.post("/captures/{cid}/clarify")
-async def clarify_capture(cid: str, inp: CaptureActionInput, user: dict = Depends(get_current_user)):
+async def clarify_capture(cid: str, inp: CaptureActionInput, user: dict = Depends(require_perm("approvals"))):
+    # FIX-004-C (RBAC-05): approvals perm gate — clarify shapes what
+    # the approver will see, same authority tier as approve/reject.
     d = await _get_draft(cid, user)
     await db.capture_drafts.update_one({"id": cid}, {"$set": {
         "status": "clarification_requested", "review_action": "clarify",
@@ -5209,7 +5237,10 @@ async def clarify_capture(cid: str, inp: CaptureActionInput, user: dict = Depend
 
 
 @api.post("/captures/{cid}/approve")
-async def approve_capture(cid: str, user: dict = Depends(get_current_user)):
+async def approve_capture(cid: str, user: dict = Depends(require_perm("approvals"))):
+    # FIX-004-C (RBAC-05): approving a capture creates real workflow /
+    # task / decision records. Explicit approvals-permission gate;
+    # was auth-only which let any employee commit captured drafts.
     d = await _get_draft(cid, user)
     if d["status"] not in ("pending_review", "clarification_requested", "needs_attention"):
         raise HTTPException(status_code=400, detail="Already processed")

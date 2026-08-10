@@ -12,6 +12,8 @@ import {
   Gauge,
   Compass,
   Settings2,
+  PieChart,
+  LayoutGrid,
 } from "lucide-react";
 
 import { hasPerm } from "./perms";
@@ -114,3 +116,17 @@ export function activeItem(pathname) {
     .filter((i) => path === i.to || path.startsWith(`${i.to}/`))
     .sort((a, b) => b.to.length - a.to.length)[0];
 }
+
+/**
+ * The floating pill at the bottom of every mobile screen, per the reference:
+ * four destinations plus a grid key that opens the full launcher. The active
+ * item gets a tinted pill behind it.
+ */
+export const PILL_NAV = [
+  { to: "/brief", label: "Brief", icon: PieChart, testid: "pill-brief", accent: "peri" },
+  { to: "/inbox", label: "Desk", icon: Inbox, testid: "pill-inbox", perm: "inbox", accent: "butter" },
+  { to: "/my-work", label: "Work", icon: Briefcase, testid: "pill-work", accent: "sage" },
+  { to: "/ledger", label: "Finance", icon: Wallet, testid: "pill-finance", perms: ["ledger", "finance"], accent: "peri" },
+];
+
+export const PILL_LAUNCHER = { label: "All sections", icon: LayoutGrid, testid: "pill-launcher" };

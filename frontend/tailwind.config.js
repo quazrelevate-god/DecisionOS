@@ -19,13 +19,14 @@ module.exports = {
         },
         extend: {
             fontFamily: {
-                sans: ['Geist', 'system-ui', '-apple-system', 'sans-serif'],
-                heading: ['Geist', 'system-ui', 'sans-serif'],
-                logo: ['Geist', 'system-ui', 'sans-serif'],
+                sans: ['"Plus Jakarta Sans"', 'system-ui', '-apple-system', 'sans-serif'],
+                heading: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+                logo: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
                 mono: ['"IBM Plex Mono"', 'ui-monospace', 'monospace'],
             },
             fontSize: {
                 // Optical scale — tighter tracking as size grows.
+                'figure': ['2.5rem', { lineHeight: '1', letterSpacing: '-0.04em', fontWeight: '800' }],
                 'display': ['2.75rem', { lineHeight: '1.05', letterSpacing: '-0.035em', fontWeight: '600' }],
                 'title': ['1.75rem', { lineHeight: '1.15', letterSpacing: '-0.028em', fontWeight: '600' }],
                 'heading': ['1.125rem', { lineHeight: '1.3', letterSpacing: '-0.018em', fontWeight: '600' }],
@@ -34,9 +35,10 @@ module.exports = {
             borderRadius: {
                 sm: 'calc(var(--radius) - 6px)',
                 md: 'calc(var(--radius) - 4px)',
-                lg: 'var(--radius)',
-                xl: 'calc(var(--radius) + 4px)',
-                '2xl': 'calc(var(--radius) + 8px)',
+                lg: 'calc(var(--radius) - 8px)',
+                xl: 'calc(var(--radius) - 4px)',
+                '2xl': 'var(--radius)',
+                '3xl': 'calc(var(--radius) + 8px)',
             },
             colors: {
                 background: 'hsl(var(--background))',
@@ -74,15 +76,22 @@ module.exports = {
                 // Signature palette. `gold` is the accent; `red` is retained ONLY
                 // as the urgency signal. blue/yellow keys survive for un-migrated
                 // markup — the legacy bridge in index.css re-tokens them anyway.
+                // Reference palette. Accents are pale on purpose — ink text
+                // sits on them, never white.
+                butter: { DEFAULT: 'hsl(var(--butter))', foreground: 'hsl(var(--butter-foreground))', subtle: 'hsl(var(--butter-subtle))' },
+                sage: { DEFAULT: 'hsl(var(--sage))', foreground: 'hsl(var(--sage-foreground))', subtle: 'hsl(var(--sage-subtle))' },
+                ink: { DEFAULT: 'hsl(var(--ink))', foreground: 'hsl(var(--ink-foreground))' },
                 brand: {
-                    gold: '#D8B24A',
-                    ink: '#0D0D0F',
-                    graphite: '#4E4F55',
-                    ivory: '#FFF4DE',
-                    paper: '#FFF4DE',
-                    red: '#E5342A',
-                    blue: '#002FA7',
-                    yellow: '#D97706',
+                    butter: '#F2D06B',
+                    peri: '#ADA7F2',
+                    sage: '#C6D3B8',
+                    ink: '#16161A',
+                    cream: '#F7F5EF',
+                    gold: '#F2D06B',
+                    paper: '#F7F5EF',
+                    red: '#E5484D',
+                    blue: '#ADA7F2',
+                    yellow: '#F2D06B',
                 },
                 chart: {
                     1: 'hsl(var(--chart-1))',

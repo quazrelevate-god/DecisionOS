@@ -1,148 +1,209 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
-import api from "../lib/api";
-import { PageHeader } from "../components/common";
-import { Gauge, Lightning, CurrencyCircleDollar, TrendUp, ChatCenteredDots, Trophy, Sparkle, CaretRight } from "@phosphor-icons/react";
+import { useNavigate } from "react-router-dom";
+import {
+  Zap, CircleDollarSign, TrendingUp, MessagesSquare, Trophy, Sparkles,
+  ChevronRight, Gauge, MoreHorizontal,
+} from "lucide-react";
 
+import api from "../lib/api";
+import { Skeleton } from "../components/common";
+import {
+  Donut, Legend, SectionHead, Row, IconTile, StatTriple, RoundButton, Pill,
+} from "../components/studio";
+import { cn } from "../lib/utils";
+
+/* Reference screen 2: a thick donut with value pills on the rim, a three-column
+   legend underneath, then a ranked list. Each category owns one accent. */
 const CATS = [
-  { key: "execution", label: "Execution", icon: Lightning, color: "bg-brand-blue" },
-  { key: "finance", label: "Finance", icon: CurrencyCircleDollar, color: "bg-green-600" },
-  { key: "sales", label: "Sales", icon: TrendUp, color: "bg-brand-yellow" },
-  { key: "responsiveness", label: "Responsiveness", icon: ChatCenteredDots, color: "bg-purple-600" },
+  { key: "execution", label: "Execution", icon: Zap, accent: "peri" },
+  { key: "finance", label: "Finance", icon: CircleDollarSign, accent: "butter" },
+  { key: "sales", label: "Sales", icon: TrendingUp, accent: "sage" },
+  { key: "responsiveness", label: "Responsiveness", icon: MessagesSquare, accent: "peri" },
 ];
 
-const scoreColor = (v) => v == null ? "text-black/30" : v >= 70 ? "text-green-600" : v >= 40 ? "text-amber-600" : "text-brand-red";
-
 export default function OperatingScore() {
+  const navigate = useNavigate();
   const { data, isLoading } = useQuery({
     queryKey: ["operating-score"],
     queryFn: () => api.get("/operating-score").then((r) => r.data),
   });
 
-  const rankedEmployees = useMemo(
+  const ranked = useMemo(
     () => (data?.employees || []).filter((e) => e.score != null || e.open > 0 || e.done > 0),
     [data]
   );
 
-  if (isLoading || !data) return <div className="font-mono text-sm py-20 text-center">Computing operating score…</div>;
+  const company = data?.company;
+  const stats = data?.stats;
+  // A payload without `company` (or without stats) is the not-ready state,
+  // not a crash — older tenants and partial responses both hit this.
+  const enough = !!company && !!stats && company.enough_data !== false;
 
-  const { company, stats } = data;
-  const overall = company.overall;
-  const enough = company.enough_data !== false;
+  // The donut reads the three categories that actually have a score, so the
+  // ring always sums to something meaningful rather than padding with zeroes.
+  const segments = useMemo(() => {
+    if (!company) return [];
+    return CATS.filter((c) => company.categories?.[c.key] != null)
+      .slice(0, 3)
+      .map((c) => ({ key: c.key, label: c.label, value: company.categories[c.key], accent: c.accent }));
+  }, [company]);
+
+  const segTotal = segments.reduce((n, s) => n + s.value, 0) || 1;
+
+  if (isLoading || !data || !stats) {
+    return (
+      <div className="mx-auto max-w-3xl pb-4">
+        <Skeleton className="h-8 w-48 rounded-full" />
+        <Skeleton className="mx-auto mt-8 h-56 w-56 rounded-full" />
+        <Skeleton className="mt-8 h-20 w-full rounded-3xl" />
+      </div>
+    );
+  }
 
   return (
-    <div>
-      <PageHeader eyebrow="How well the business is running" title="Operating Score" />
-
-      {!enough ? (
-        <div className="card-brutal p-8 mb-8 flex flex-col lg:flex-row items-center gap-8" data-testid="operating-overall">
-          <div className="flex flex-col items-center shrink-0">
-            <div className="w-36 h-36 flex flex-col items-center justify-center border-4 border-black bg-black/5 text-center px-3">
-              <Gauge size={30} weight="bold" className="text-muted-foreground mb-1" />
-              <span className="label-mono text-muted-foreground leading-tight" data-testid="operating-overall-score">Not enough data yet</span>
-            </div>
-            <div className="flex items-center gap-2 mt-3">
-              <Gauge size={16} weight="bold" className="text-brand-red" />
-              <span className="font-heading font-extrabold uppercase tracking-tight text-sm">Company Health</span>
-            </div>
-          </div>
-          <div className="flex-1 w-full" data-testid="operating-not-ready">
-            <p className="font-heading font-extrabold uppercase tracking-tight text-lg mb-2">We're still learning your business</p>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              The Operating Score kicks in once there's enough real activity to measure — roughly <strong>3+ actionable tasks</strong> or your <strong>first invoices</strong>.
-              Capture a few decisions on the Decision Desk and import or add invoices, and your score will start tracking automatically.
-            </p>
-            <div className="grid grid-cols-3 gap-3 mt-4">
-              <div className="border border-black/30 p-3 text-center">
-                <p className="font-heading text-2xl font-black">{stats.done + stats.open}</p>
-                <p className="label-mono text-muted-foreground">Actionable tasks</p>
-              </div>
-              <div className="border border-black/30 p-3 text-center">
-                <p className="font-heading text-2xl font-black">{stats.done}</p>
-                <p className="label-mono text-muted-foreground">Completed</p>
-              </div>
-              <div className="border border-black/30 p-3 text-center">
-                <p className="font-heading text-2xl font-black">{stats.total_decisions}</p>
-                <p className="label-mono text-muted-foreground">Decisions</p>
-              </div>
-            </div>
-          </div>
+    <div className="mx-auto max-w-3xl pb-4">
+      {/* Title row — mirrors the reference's "Monthly Profits" header */}
+      <div className="mb-6 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="truncate text-[26px] font-extrabold tracking-tight">Operating Score</h1>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {enough ? `Company health at ${company.overall} of 100` : "Still learning your business"}
+          </p>
         </div>
-      ) : (
-      /* Company overall */
-      <div className="card-brutal p-8 mb-8 flex flex-col lg:flex-row items-center gap-8" data-testid="operating-overall">
-        <div className="flex flex-col items-center shrink-0">
-          <div className="w-36 h-36 flex flex-col items-center justify-center border-4 border-black bg-white">
-            <span className={`font-heading text-6xl font-black leading-none ${scoreColor(overall)}`} data-testid="operating-overall-score">{overall}</span>
-            <span className="label-mono text-muted-foreground mt-1">/ 100</span>
-          </div>
-          <div className="flex items-center gap-2 mt-3">
-            <Gauge size={16} weight="bold" className="text-brand-red" />
-            <span className="font-heading font-extrabold uppercase tracking-tight text-sm">Company Health</span>
-          </div>
-        </div>
-        <div className="flex-1 w-full space-y-4">
-          {CATS.map((c) => {
-            const v = company.categories[c.key];
-            const has = v != null;
-            return (
-              <div key={c.key} data-testid={`operating-cat-${c.key}`}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide">
-                    <c.icon size={15} weight="bold" className="text-muted-foreground" /> {c.label}
-                  </span>
-                  <span className={`font-heading font-black ${scoreColor(v)}`}>{has ? v : "—"}</span>
-                </div>
-                <div className="h-3 bg-black/10 border border-black">
-                  <div className={`h-full ${c.color}`} style={{ width: `${has ? v : 0}%` }} />
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <RoundButton icon={MoreHorizontal} accent="plain" label="Score options" onClick={() => navigate("/coach")} />
       </div>
+
+      {enough ? (
+        <>
+          <div className="rounded-3xl bg-card px-4 py-8 shadow-sm" data-testid="operating-overall">
+            <Donut
+              segments={segments}
+              total={company.overall}
+              totalLabel="Overall"
+              format={(v) => `${v}`}
+              size={224}
+              thickness={30}
+            />
+            <p
+              data-testid="operating-overall-score"
+              className="sr-only"
+            >
+              {company.overall}
+            </p>
+
+            <Legend
+              className="mt-8"
+              items={segments.map((s) => ({
+                key: s.key,
+                label: s.label,
+                percent: Math.round((s.value / segTotal) * 100),
+                accent: s.accent,
+              }))}
+            />
+          </div>
+
+          {/* Any category the donut couldn't show still gets a readout */}
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            {CATS.map((c) => {
+              const v = company.categories?.[c.key];
+              return (
+                <div
+                  key={c.key}
+                  data-testid={`operating-cat-${c.key}`}
+                  className="flex items-center gap-2.5 rounded-2xl bg-card p-3.5 shadow-sm"
+                >
+                  <IconTile icon={c.icon} accent={c.accent} size="sm" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[11px] text-muted-foreground">{c.label}</span>
+                    <span data-numeric className="block text-lg font-extrabold tracking-tight">
+                      {v ?? "—"}
+                    </span>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      ) : (
+        <div className="rounded-3xl bg-card p-6 shadow-sm" data-testid="operating-not-ready">
+          <div className="flex items-center gap-3">
+            <IconTile icon={Gauge} accent="peri" size="lg" />
+            <div className="min-w-0">
+              <p className="text-[17px] font-bold tracking-tight">We're still learning your business</p>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                The score starts once there's real activity — roughly 3+ actionable tasks or your first invoices.
+              </p>
+            </div>
+          </div>
+          <StatTriple
+            className="mt-6"
+            items={[
+              { key: "tasks", label: "Actionable", value: stats.done + stats.open, icon: Zap, accent: "peri" },
+              { key: "done", label: "Completed", value: stats.done, icon: TrendingUp, accent: "sage" },
+              { key: "dec", label: "Decisions", value: stats.total_decisions, icon: Sparkles, accent: "butter" },
+            ]}
+          />
+        </div>
       )}
 
-      {/* Quick stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
+      {/* Quick figures */}
+      <div className="mt-6 grid grid-cols-4 gap-2">
         {[
-          { label: "Tasks Done", value: stats.done },
-          { label: "Open Tasks", value: stats.open },
-          { label: "Overdue", value: stats.overdue, accent: stats.overdue > 0 ? "text-brand-red" : "" },
-          { label: "Open Complaints", value: stats.open_complaints, accent: stats.open_complaints > 0 ? "text-purple-600" : "" },
+          { label: "Done", value: stats.done, accent: "sage" },
+          { label: "Open", value: stats.open, accent: "peri" },
+          { label: "Overdue", value: stats.overdue, urgent: stats.overdue > 0 },
+          { label: "Complaints", value: stats.open_complaints, urgent: stats.open_complaints > 0 },
         ].map((s) => (
-          <div key={s.label} className="card-brutal p-4">
-            <p className="label-mono text-muted-foreground">{s.label}</p>
-            <p className={`font-heading text-2xl font-black tracking-tight mt-1 ${s.accent || ""}`}>{s.value}</p>
+          <div key={s.label} className="rounded-2xl bg-card p-3 text-center shadow-sm">
+            <p
+              data-numeric
+              className={cn("text-xl font-extrabold tracking-tight", s.urgent && "text-destructive")}
+            >
+              {s.value}
+            </p>
+            <p className="mt-0.5 truncate text-[10px] text-muted-foreground">{s.label}</p>
           </div>
         ))}
       </div>
 
-      {/* Employee leaderboard */}
-      <div className="flex items-center gap-2 mb-4">
-        <Trophy size={18} weight="bold" className="text-brand-red" />
-        <h2 className="font-heading text-xl font-extrabold uppercase tracking-tight">Team Execution</h2>
+      {/* Team execution */}
+      <div className="mt-8">
+        <SectionHead
+          title="Team execution"
+          subtitle="Tap anyone for their full activity and AI coaching"
+          action={<Pill tone="sage">{ranked.length} people</Pill>}
+        />
+        <div className="divide-y divide-border rounded-3xl bg-card px-4 shadow-sm" data-testid="operating-employees">
+          {ranked.map((e, i) => (
+            <Row
+              key={e.id}
+              onClick={() => navigate(`/coach?user=${e.id}`)}
+              data-testid={`operating-emp-${e.id}`}
+              leading={
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-muted text-sm font-extrabold text-muted-foreground">
+                  {i + 1}
+                </span>
+              }
+              title={e.name}
+              subtitle={`${e.role} · ${e.done} done · ${e.open} open${e.overdue > 0 ? ` · ${e.overdue} overdue` : ""}`}
+              amount={e.score != null ? e.score : "—"}
+              trailing={<ChevronRight size={16} strokeWidth={2} className="ml-1 shrink-0 text-muted-foreground" />}
+            />
+          ))}
+          {ranked.length === 0 && (
+            <p className="py-10 text-center text-sm text-muted-foreground">
+              No team activity to rank yet.
+            </p>
+          )}
+        </div>
       </div>
-      <p className="label-mono text-muted-foreground mb-3">Tap any member to see their full activity &amp; AI coaching.</p>
-      <div className="card-brutal divide-y divide-black/10" data-testid="operating-employees">
-        {rankedEmployees.map((e, i) => (
-          <Link key={e.id} to={`/coach?user=${e.id}`} data-testid={`operating-emp-${e.id}`}
-            className="p-4 flex items-center gap-4 hover:bg-black/[0.03] transition-colors group cursor-pointer">
-            <span className="font-heading text-lg font-black text-black/30 w-6">{i + 1}</span>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold truncate group-hover:text-brand-red transition-colors">{e.name}</p>
-              <p className="label-mono text-muted-foreground">{e.role} · {e.done} done · {e.open} open{e.overdue > 0 ? ` · ${e.overdue} overdue` : ""}</p>
-            </div>
-            <span className="hidden sm:flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground group-hover:text-brand-red transition-colors shrink-0">
-              <Sparkle size={13} weight="bold" /> Details
-            </span>
-            <div className="w-14 h-14 flex flex-col items-center justify-center border-2 border-black bg-white shrink-0">
-              <span className={`font-heading text-2xl font-black leading-none ${scoreColor(e.score)}`}>{e.score != null ? e.score : "—"}</span>
-            </div>
-            <CaretRight size={16} weight="bold" className="text-black/30 group-hover:text-brand-red transition-colors shrink-0" />
-          </Link>
-        ))}
+
+      <div className="mt-5 flex items-center gap-2">
+        <IconTile icon={Trophy} accent="butter" size="sm" />
+        <p className="text-xs text-muted-foreground">
+          Scores update as work is completed and money moves.
+        </p>
       </div>
     </div>
   );

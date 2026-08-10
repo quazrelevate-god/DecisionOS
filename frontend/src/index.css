@@ -1,150 +1,161 @@
-@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 /* ============================================================================
-   DecisionOS — "Gilt" design tokens
+   DecisionOS — "Studio" design tokens
    ----------------------------------------------------------------------------
-   Ivory + graphite + gold.
-     · Light surfaces (#FFF4DE / #FFFFFF) are PRIMARY — the whole canvas.
-     · Dark graphite (#0D0D0F / #232427 / #4E4F55) is SECONDARY — the dark
-       theme and rare high-emphasis fills.
-     · Gold (#D8B24A) is the single accent: strokes, highlights, active
-       states, primary actions. On light surfaces it darkens to a "gold ink"
-       (#8A6914-range) wherever it carries text, so contrast never drops
-       below AA; the bright #D8B24A is reserved for fills that carry ink text
-       and for dark-theme accents where it reads at ~9:1.
-   Red stays a pure urgency signal. Every surface is a token.
+   Modelled on the supplied fintech reference:
+
+     · Cream canvas with pure-white cards floating on it.
+     · Near-black ink for the dark surface, the floating nav and chart bars.
+     · Three soft accent tints that carry meaning — periwinkle (primary /
+       active), butter (hero figures, highlights), sage (tertiary).
+     · Red only ever means a negative amount.
+
+   Accents are pale by design: text always sits on them in ink, never white,
+   which is what keeps the palette legible at these tints.
    ========================================================================== */
 
 @layer base {
     :root {
-        /* Surfaces — ivory canvas, white cards floating above it */
-        --background: 40 78% 96%;
-        --surface: 40 60% 93%;
+        /* Surfaces */
+        --background: 45 30% 95%;
+        --surface: 45 25% 92%;
         --surface-raised: 0 0% 100%;
-        --surface-sunken: 40 52% 90%;
-        --foreground: 240 7% 6%;
+        --surface-sunken: 44 20% 89%;
+        --foreground: 240 8% 9%;
 
         --card: 0 0% 100%;
-        --card-foreground: 240 7% 6%;
+        --card-foreground: 240 8% 9%;
         --popover: 0 0% 100%;
-        --popover-foreground: 240 7% 6%;
+        --popover-foreground: 240 8% 9%;
 
-        /* Signature — gold ink (readable on ivory); bright gold lives in
-           brand.gold for fills with dark text on top */
-        --primary: 43 72% 31%;
-        --primary-foreground: 40 100% 97%;
-        --primary-subtle: 44 78% 90%;
-        --primary-emphasis: 43 76% 24%;
+        /* Accents — periwinkle leads */
+        --primary: 245 68% 80%;
+        --primary-foreground: 245 45% 18%;
+        --primary-subtle: 245 70% 94%;
+        --primary-emphasis: 245 60% 72%;
 
-        --secondary: 40 48% 92%;
-        --secondary-foreground: 240 7% 10%;
-        --muted: 40 45% 93%;
-        --muted-foreground: 231 5% 34%;
-        --accent: 42 52% 90%;
-        --accent-foreground: 240 7% 8%;
+        --butter: 44 82% 68%;
+        --butter-foreground: 40 60% 14%;
+        --butter-subtle: 44 85% 92%;
+        --sage: 93 24% 77%;
+        --sage-foreground: 96 30% 16%;
+        --sage-subtle: 93 30% 91%;
+        --ink: 240 8% 9%;
+        --ink-foreground: 45 30% 96%;
 
-        /* Semantics — warning shifts to burnt orange so it never reads as
-           "the gold accent" */
-        --destructive: 4 78% 47%;
+        --secondary: 45 22% 93%;
+        --secondary-foreground: 240 8% 12%;
+        --muted: 45 20% 94%;
+        --muted-foreground: 240 5% 47%;
+        --accent: 45 22% 91%;
+        --accent-foreground: 240 8% 10%;
+
+        /* Semantics */
+        --destructive: 358 72% 56%;
         --destructive-foreground: 0 0% 100%;
-        --destructive-subtle: 4 80% 96%;
-        --success: 158 78% 27%;
+        --destructive-subtle: 358 80% 96%;
+        --success: 152 45% 40%;
         --success-foreground: 0 0% 100%;
-        --success-subtle: 158 60% 95%;
-        --warning: 24 88% 38%;
-        --warning-foreground: 0 0% 100%;
-        --warning-subtle: 26 90% 94%;
-        --info: 43 72% 31%;
-        --info-foreground: 40 100% 97%;
-        --info-subtle: 44 78% 90%;
+        --success-subtle: 152 40% 93%;
+        --warning: 38 78% 50%;
+        --warning-foreground: 40 60% 14%;
+        --warning-subtle: 44 85% 92%;
+        --info: 245 68% 80%;
+        --info-foreground: 245 45% 18%;
+        --info-subtle: 245 70% 94%;
 
-        --border: 40 34% 84%;
-        --border-strong: 41 28% 71%;
-        --input: 40 30% 80%;
-        --ring: 43 70% 38%;
+        --border: 44 18% 88%;
+        --border-strong: 44 12% 78%;
+        --input: 44 16% 85%;
+        --ring: 245 60% 70%;
 
-        /* App shell */
-        --sidebar: 41 72% 97%;
-        --sidebar-foreground: 240 7% 6%;
-        --sidebar-muted: 231 5% 38%;
-        --sidebar-border: 40 32% 86%;
+        --sidebar: 45 32% 96%;
+        --sidebar-foreground: 240 8% 9%;
+        --sidebar-muted: 240 5% 45%;
+        --sidebar-border: 44 18% 89%;
 
-        --shadow-color: 40 24% 12%;
+        --shadow-color: 44 25% 20%;
         --edge-highlight: 0 0% 100%;
 
-        --chart-1: 43 66% 44%;
-        --chart-2: 231 5% 40%;
-        --chart-3: 158 68% 32%;
-        --chart-4: 33 46% 58%;
-        --chart-5: 4 74% 52%;
+        --chart-1: 245 68% 80%;
+        --chart-2: 44 82% 68%;
+        --chart-3: 93 24% 77%;
+        --chart-4: 240 8% 20%;
+        --chart-5: 358 72% 62%;
 
-        --radius: 0.75rem;
+        --radius: 1.25rem;
     }
 
     .dark {
         color-scheme: dark;
 
-        /* Surfaces — the user's ink scale: #0D0D0F ground, #232427 raised */
-        --background: 240 7% 5%;
-        --surface: 225 5% 11%;
-        --surface-raised: 225 5% 15%;
-        --surface-sunken: 240 8% 3%;
-        --foreground: 40 100% 94%;
+        --background: 240 8% 7%;
+        --surface: 240 7% 11%;
+        --surface-raised: 240 7% 14%;
+        --surface-sunken: 240 10% 4%;
+        --foreground: 45 30% 95%;
 
-        --card: 225 5% 13%;
-        --card-foreground: 40 100% 94%;
-        --popover: 225 5% 14%;
-        --popover-foreground: 40 100% 94%;
+        --card: 240 7% 11%;
+        --card-foreground: 45 30% 95%;
+        --popover: 240 7% 13%;
+        --popover-foreground: 45 30% 95%;
 
-        /* Bright gold carries the dark theme (~9:1 on #0D0D0F) */
-        --primary: 44 64% 57%;
-        --primary-foreground: 240 7% 6%;
-        --primary-subtle: 44 42% 15%;
-        --primary-emphasis: 44 70% 66%;
+        --primary: 245 68% 78%;
+        --primary-foreground: 245 45% 14%;
+        --primary-subtle: 245 30% 20%;
+        --primary-emphasis: 245 72% 84%;
 
-        --secondary: 228 5% 18%;
-        --secondary-foreground: 40 100% 94%;
-        --muted: 228 5% 16%;
-        --muted-foreground: 231 7% 67%;
-        --accent: 228 5% 20%;
-        --accent-foreground: 40 100% 95%;
+        --butter: 44 82% 68%;
+        --butter-foreground: 40 60% 12%;
+        --butter-subtle: 44 30% 18%;
+        --sage: 93 24% 74%;
+        --sage-foreground: 96 30% 12%;
+        --sage-subtle: 93 18% 18%;
+        --ink: 240 10% 4%;
+        --ink-foreground: 45 30% 95%;
 
-        /* Subtle tints stay near the page ground — a saturated fill at this size
-           reads as mud on a dark surface and drowns the number sitting on it. */
-        --destructive: 4 84% 62%;
-        --destructive-foreground: 240 40% 8%;
-        --destructive-subtle: 4 32% 12%;
-        --success: 158 55% 48%;
-        --success-foreground: 240 40% 8%;
-        --success-subtle: 158 30% 11%;
-        --warning: 26 90% 60%;
-        --warning-foreground: 240 40% 8%;
-        --warning-subtle: 26 40% 12%;
-        --info: 44 64% 57%;
-        --info-foreground: 240 7% 6%;
-        --info-subtle: 44 42% 15%;
+        --secondary: 240 6% 17%;
+        --secondary-foreground: 45 30% 95%;
+        --muted: 240 6% 15%;
+        --muted-foreground: 240 5% 62%;
+        --accent: 240 6% 19%;
+        --accent-foreground: 45 30% 96%;
 
-        --border: 226 5% 16%;
-        --border-strong: 231 4% 32%;
-        --input: 228 5% 21%;
-        --ring: 44 64% 57%;
+        --destructive: 358 78% 66%;
+        --destructive-foreground: 240 10% 8%;
+        --destructive-subtle: 358 30% 15%;
+        --success: 152 45% 55%;
+        --success-foreground: 240 10% 8%;
+        --success-subtle: 152 25% 14%;
+        --warning: 44 82% 68%;
+        --warning-foreground: 40 60% 12%;
+        --warning-subtle: 44 30% 16%;
+        --info: 245 68% 78%;
+        --info-foreground: 245 45% 14%;
+        --info-subtle: 245 30% 20%;
 
-        --sidebar: 240 7% 4%;
-        --sidebar-foreground: 40 100% 94%;
-        --sidebar-muted: 231 6% 63%;
-        --sidebar-border: 226 5% 14%;
+        --border: 240 6% 18%;
+        --border-strong: 240 5% 30%;
+        --input: 240 6% 22%;
+        --ring: 245 68% 78%;
 
-        --shadow-color: 240 40% 2%;
-        --edge-highlight: 44 64% 57%;
+        --sidebar: 240 9% 5%;
+        --sidebar-foreground: 45 30% 95%;
+        --sidebar-muted: 240 5% 60%;
+        --sidebar-border: 240 6% 15%;
 
-        --chart-1: 44 64% 60%;
-        --chart-2: 231 6% 63%;
-        --chart-3: 158 55% 50%;
-        --chart-4: 33 45% 55%;
-        --chart-5: 4 84% 64%;
+        --shadow-color: 240 30% 2%;
+        --edge-highlight: 0 0% 100%;
+
+        --chart-1: 245 68% 78%;
+        --chart-2: 44 82% 68%;
+        --chart-3: 93 24% 74%;
+        --chart-4: 45 20% 88%;
+        --chart-5: 358 78% 66%;
     }
 }
 
@@ -162,7 +173,7 @@
 
     body {
         @apply bg-background text-foreground;
-        font-family: 'Geist', system-ui, -apple-system, sans-serif;
+        font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
         font-feature-settings: 'cv11', 'ss01';
@@ -170,9 +181,9 @@
     }
 
     h1, h2, h3, h4, .font-heading {
-        font-family: 'Geist', system-ui, sans-serif;
-        letter-spacing: -0.024em;
-        font-weight: 600;
+        font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+        letter-spacing: -0.03em;
+        font-weight: 700;
     }
 
     /* Tabular figures everywhere numbers are compared vertically. */

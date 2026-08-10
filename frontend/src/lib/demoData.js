@@ -233,6 +233,20 @@ const BRIEF_DETAIL_ITEMS = {
   ],
 };
 
+const OPERATING_SCORE = {
+  company: {
+    overall: 78,
+    enough_data: true,
+    categories: { execution: 82, finance: 64, sales: 71, responsiveness: 58 },
+  },
+  stats: { done: 34, open: 12, overdue: 5, open_complaints: 2, total_decisions: 18 },
+  employees: [
+    { id: "u-priya", name: "Priya Raman", role: "sales", score: 88, done: 14, open: 3, overdue: 0 },
+    { id: "u-karthik", name: "Karthik M", role: "production", score: 74, done: 11, open: 5, overdue: 2 },
+    { id: "u-anita", name: "Anita Desai", role: "finance", score: 69, done: 9, open: 4, overdue: 3 },
+  ],
+};
+
 const FINANCE_AMOUNTS = { receivables_overdue: 660000, bills_due: 315000, unmatched_payments: 180000 };
 
 /* -------------------------------------------------------------------------- */
@@ -279,6 +293,7 @@ const ROUTES = [
     }),
   ],
   [/^\/brief\/details$/, (_m, q) => ({ items: BRIEF_DETAIL_ITEMS[q.get("key")] || [] })],
+  [/^\/operating-score$/, () => OPERATING_SCORE],
   [/^\/tasks$/, () => TASKS],
   [/^\/tasks\/([\w-]+)$/, (m) => TASKS.find((t) => t.id === m[1]) || TASKS[0]],
   [/^\/decisions$/, () => DECISIONS],

@@ -24,7 +24,7 @@ import api from "../lib/api";
 import { timeAgo } from "../lib/format";
 import { notifMeta, notifLink } from "../lib/notif";
 import { hasPerm } from "../lib/perms";
-import { visibleGroups, activeItem } from "../lib/nav";
+import { visibleGroups, activeItem, canSee, PILL_NAV, PILL_LAUNCHER } from "../lib/nav";
 import { useIsMobile, useSwipe } from "../lib/gestures";
 import { cn } from "../lib/utils";
 import { Chip } from "./common";
@@ -128,6 +128,7 @@ export default function Layout({ children }) {
   }, [qc]);
 
   const groups = useMemo(() => visibleGroups(user), [user]);
+  const pillItems = useMemo(() => PILL_NAV.filter((n) => canSee(user, n)), [user]);
   const current = activeItem(location.pathname);
 
   /* ---- live counters ---------------------------------------------------- */
@@ -643,10 +644,10 @@ export default function Layout({ children }) {
 
           {/* Mobile header — title and the two things you reach for mid-task.
               Navigation lives in the bottom launcher, not up here. */}
-          <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-2 border-b border-border glass px-4 lg:hidden">
-            <h2 className="min-w-0 flex-1 truncate text-[17px] font-semibold tracking-tight">
-              {current ? t(current.tkey, current.label) : "DecisionOS"}
-            </h2>
+          <header className="sticky top-0 z-20 flex h-12 items-center justify-between gap-2 bg-background/80 px-4 backdrop-blur-xl lg:hidden">
+            {/* No title here — each page owns its own heading, as in the
+                reference, so the same words never appear twice. */}
+            <span className="min-w-0 flex-1" aria-hidden="true" />
 
             <div className="flex shrink-0 items-center gap-0.5">
               <IconButton
@@ -687,45 +688,67 @@ export default function Layout({ children }) {
           </main>
         </div>
 
-        {/* ---------------- Mobile bottom bar ----------------
-            One control, dead centre: it names where you are, and swiping up
-            from it opens the launcher. No tab row, no hamburger — the bar
-            carries a single affordance instead of five competing ones. */}
+        {/* ---------------- Floating pill nav ----------------
+            Straight from the reference: a rounded-full ink bar floating clear
+            of the content, four destinations plus a grid key for everything
+            else. The active item carries a tinted pill behind it. */}
         <div
-          className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:hidden"
+          className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center px-4 pb-[max(1rem,env(safe-area-inset-bottom))] lg:hidden"
           data-testid="mobile-bottom-nav"
         >
-          <button
-            type="button"
-            onClick={() => setLauncherOpen(true)}
-            {...launcherSwipe}
-            aria-haspopup="dialog"
-            aria-expanded={launcherOpen}
-            aria-label={`${current ? t(current.tkey, current.label) : "Menu"} — open navigation`}
-            data-testid="bottomnav-launcher"
-            className={cn(
-              "pointer-events-auto relative flex h-14 w-14 items-center justify-center rounded-full",
-              "border border-border/70 bg-card/70 backdrop-blur-2xl backdrop-saturate-150 shadow-lg",
-              "text-primary transition-transform duration-200 active:scale-[0.92]",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-            )}
-            style={{ touchAction: "none" }}
+          <nav
+            aria-label="Primary"
+            className="pointer-events-auto flex items-center gap-1 rounded-full bg-ink/95 p-1.5 shadow-lg backdrop-blur-xl"
           >
-            {/* A slow gold halo breathing outward — the only motion, and just
-                enough to read as "this is the live control". */}
-            <span
-              aria-hidden="true"
-              className="absolute inset-0 rounded-full ring-1 ring-primary/25 animate-hint-up"
-            />
-            {current ? (
-              <current.icon size={23} strokeWidth={1.9} aria-hidden="true" />
-            ) : (
-              <LayoutGrid size={23} strokeWidth={1.9} aria-hidden="true" />
-            )}
-            {(counters.fires > 0 || counters.captures > 0) && (
-              <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-destructive ring-2 ring-card" />
-            )}
-          </button>
+            {pillItems.map((item) => {
+              const active = current?.to === item.to;
+              return (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  data-testid={item.testid}
+                  aria-label={t(item.tkey || "", item.label)}
+                  className={cn(
+                    "relative flex h-11 w-11 items-center justify-center rounded-full",
+                    "transition-[background-color,color,transform] duration-200 active:scale-90",
+                    active
+                      ? item.accent === "butter"
+                        ? "bg-butter text-butter-foreground"
+                        : item.accent === "sage"
+                          ? "bg-sage text-sage-foreground"
+                          : "bg-primary text-primary-foreground"
+                      : "text-ink-foreground/55"
+                  )}
+                >
+                  <item.icon size={19} strokeWidth={2} aria-hidden="true" />
+                  {item.to === "/brief" && counters.fires > 0 && !active && (
+                    <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-destructive" />
+                  )}
+                </NavLink>
+              );
+            })}
+
+            <button
+              type="button"
+              onClick={() => setLauncherOpen(true)}
+              {...launcherSwipe}
+              aria-haspopup="dialog"
+              aria-expanded={launcherOpen}
+              aria-label={PILL_LAUNCHER.label}
+              data-testid="bottomnav-launcher"
+              className={cn(
+                "relative flex h-11 w-11 items-center justify-center rounded-full",
+                "text-ink-foreground/55 transition-[background-color,color,transform] duration-200 active:scale-90",
+                launcherOpen && "bg-primary text-primary-foreground"
+              )}
+              style={{ touchAction: "none" }}
+            >
+              <PILL_LAUNCHER.icon size={19} strokeWidth={2} aria-hidden="true" />
+              {counters.captures > 0 && (
+                <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-destructive" />
+              )}
+            </button>
+          </nav>
         </div>
 
         <AppLauncher

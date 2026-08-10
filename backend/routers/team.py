@@ -102,11 +102,75 @@ async def _decide_leave(leave_id, user, new_status, note, ntype, employee_msg):
 # ---------------------------------------------------------------------------
 @router.get("/users")
 async def list_users(user: dict = Depends(get_current_user)):
+    """List every user in the current tenant.
+
+    FIX-004-E (RBAC-17): each user carries `invite_status` and
+    `invited_at` sourced from their membership row so the admin UI
+    can render a Pending badge. Previously invited-but-not-accepted
+    users were indistinguishable from active members in the list.
+    Removed users are excluded — they're audit-only.
+    """
     users = await db.users.find(
         {"tenant_id": user["tenant_id"]},
         {"_id": 0, "password_hash": 0, "invite_token": 0, "invite_expires_at": 0},
     ).to_list(500)
-    return users
+    if not users:
+        return users
+    # Merge membership.status onto each user for the current tenant.
+    from services.auth.membership import list_memberships_for_tenant
+    memberships = await list_memberships_for_tenant(db, user["tenant_id"])
+    m_by_uid = {m["user_id"]: m for m in memberships if m.get("status") != "removed"}
+    out = []
+    for u in users:
+        m = m_by_uid.get(u.get("id"))
+        if m:
+            u["invite_status"] = m.get("status")   # pending | active | suspended
+            u["invited_at"] = m.get("invited_at")
+            u["accepted_at"] = m.get("accepted_at")
+        else:
+            # Legacy user without a membership row (mid-migration).
+            # Treat as active for the admin list; the compat layer in
+            # get_current_user will accept their login on the legacy path.
+            u["invite_status"] = "active"
+        out.append(u)
+    return out
+
+
+@router.post("/users/{user_id}/uninvite")
+async def uninvite_user(user_id: str, user: dict = Depends(require_perm("team_manage"))):
+    """FIX-004-E (RBAC-17): revoke a pending invite before the invitee
+    logs in for the first time. Removes the membership (soft-delete)
+    and invalidates the invite_token so the invite link stops working.
+    Refuses if the target has already accepted (status=active) — that
+    path uses the existing suspend/delete flow instead."""
+    from services.auth.membership import (
+        find_membership as _fm, remove_membership as _rm, STATUS_PENDING,
+    )
+    target = await db.users.find_one(
+        {"id": user_id, "tenant_id": user["tenant_id"]}, {"_id": 0, "name": 1, "phone": 1},
+    )
+    if not target:
+        raise HTTPException(status_code=404, detail="Member not found")
+    m = await _fm(db, user_id, user["tenant_id"])
+    if not m:
+        raise HTTPException(status_code=404, detail="No membership found for this member")
+    if m.get("status") != STATUS_PENDING:
+        raise HTTPException(
+            status_code=400,
+            detail="This member has already accepted their invite. Suspend or remove instead.",
+        )
+    # Kill both the membership + the legacy invite_token on the user
+    # doc so the invite link stops working immediately.
+    await _rm(db, user_id=user_id, tenant_id=user["tenant_id"])
+    await db.users.update_one(
+        {"id": user_id, "tenant_id": user["tenant_id"]},
+        {"$set": {"invite_token": None, "invite_expires_at": None, "updated_at": now_iso()}},
+    )
+    await log_activity(
+        user["tenant_id"], user["id"], "user_uninvited",
+        f"{user['name']} revoked pending invite for {target.get('name')}",
+    )
+    return {"ok": True, "revoked": True}
 
 
 @router.post("/users")

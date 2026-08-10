@@ -81,10 +81,25 @@ def _reset_for_test() -> None:
 
 
 async def guarded_llm(coro, *, label: str = "llm",
-                      timeout: int | None = None):
+                      timeout: int | None = None,
+                      skip_quota_check: bool = False):
     """Execute an awaitable under the shared LLM concurrency semaphore
     with a per-call timeout. The `label` is used only for logging so ops
     can see which call path is choking under load.
+
+    FIX-005-B (S3-04): also enforces the tenant's monthly llm_tokens
+    quota. Reads the request-scoped tenant via core._ctx_tenant (set by
+    core.set_usage_tenant during get_current_user). When no tenant is
+    on the context (unauth calls like signup interview, admin probe),
+    the quota check is skipped — matches the existing log_usage
+    semantics.
+
+    `skip_quota_check=True` bypasses the check even when a tenant is
+    present. Used only for the admin key-probe path where refusing the
+    probe based on tenant quota would be user-hostile.
+
+    On quota exceed: raises HTTPException(402) with structured detail
+    the frontend can turn into an upgrade CTA.
 
     Usage:
         resp = await guarded_llm(chat.send_message(message), label="claude:extract")
@@ -98,6 +113,40 @@ async def guarded_llm(coro, *, label: str = "llm",
     blocks already handle this — see routers/onboarding.py::os_blueprint
     or services/ai_setup.py wrappers).
     """
+    # Quota check BEFORE we take a semaphore slot — reject fast, don't
+    # queue rejections behind other work.
+    if not skip_quota_check:
+        try:
+            from core import _ctx_tenant, db
+            tid = _ctx_tenant.get()
+            if tid:
+                from services.quotas import check_quota
+                ok, detail = await check_quota(db, tid, "llm_tokens_total")
+                if not ok:
+                    from fastapi import HTTPException
+                    raise HTTPException(
+                        status_code=402,
+                        detail={
+                            "code": "quota_exceeded",
+                            "resource": "llm_tokens_total",
+                            "message": (f"You've used {detail.get('usage', 0):,} of "
+                                         f"{detail.get('cap', 0):,} LLM tokens this month. "
+                                         "Upgrade your plan or wait for the monthly reset."),
+                            "usage": detail.get("usage"),
+                            "cap": detail.get("cap"),
+                            "plan": detail.get("plan"),
+                        },
+                    )
+        except Exception as _quota_err:
+            # HTTPException we RAISE — that's the intentional 402 path.
+            # Anything else (Mongo blip in the quota fetch) fails open:
+            # log and let the call through so a monitoring failure
+            # doesn't take AI down.
+            from fastapi import HTTPException
+            if isinstance(_quota_err, HTTPException):
+                raise
+            logger.warning(f"[{label}] quota check errored, allowing: {_quota_err}")
+
     sem = _get_semaphore()
     effective_timeout = timeout if timeout is not None else LLM_TIMEOUT_SECONDS
     async with sem:

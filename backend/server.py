@@ -1846,6 +1846,20 @@ async def update_role_permissions(key: str, inp: RolePermissionsInput,
     return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
 
 
+# FIX-005-B (S3-04): monthly usage dashboard read endpoint.
+@api.get("/tenant/usage")
+async def get_tenant_usage(user: dict = Depends(get_current_user)):
+    """Return every quota resource with current usage + cap + percent.
+    Powers the frontend usage panel — badges at 75%/90%/100%. Every
+    logged-in member can read; hides no sensitive info.
+
+    Aggregation window = current UTC calendar month. Resets on the 1st.
+    """
+    from services.quotas import quota_status_all
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    return {"quotas": await quota_status_all(db, tenant or {"id": user["tenant_id"]})}
+
+
 # FIX-005-A (S3-02): plan / entitlement read endpoint.
 @api.get("/tenant/plan")
 async def get_tenant_plan(user: dict = Depends(get_current_user)):

@@ -429,8 +429,12 @@ async def _probe_anthropic():
         # Keep the tighter 25s probe timeout — a bad key should surface
         # fast, not sit for the default 45s. Semaphore still applies so a
         # spammy probe can't starve real user requests.
+        # FIX-005-B (S3-04): skip tenant quota check on the admin
+        # key-probe path — refusing a probe because of tenant quota
+        # would be user-hostile (probe should always run).
         await guarded_llm(chat.send_message(UserMessage(text="ping")),
-                          label="claude:admin-probe", timeout=25)
+                          label="claude:admin-probe", timeout=25,
+                          skip_quota_check=True)
         return {"status": "active", "detail": "Key working"}
     except Exception as e:
         msg = str(e).lower()

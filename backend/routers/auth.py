@@ -13,7 +13,7 @@ its own routers.
 """
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, EmailStr, Field
 
 from core import (
@@ -262,7 +262,48 @@ async def login(inp: LoginInput, response: Response):
 
 
 @router.post("/logout")
-async def logout(response: Response):
+async def logout(request: Request, response: Response):
+    # FIX-003-C (S2-06): revoke the current session's jti BEFORE
+    # clearing the cookie. Prior behavior only cleared the cookie —
+    # an attacker who copied the token before logout kept full access
+    # for up to 7 days (the JWT exp). Now we insert the jti into
+    # db.revoked_tokens and get_current_user rejects any subsequent
+    # request that presents it.
+    #
+    # No Depends(get_current_user) here — we want /logout to succeed
+    # even if the token is malformed or already-revoked. Best-effort
+    # decode: if we can pull a jti, revoke it. If not (legacy pre-jti
+    # token or corrupted JWT), the cookie clear alone is the visible
+    # signal — same behavior as before the fix.
+    import jwt
+    from core import JWT_SECRET, JWT_ALGORITHM, AUTH_COOKIE_NAME
+    from services.session_revocation import revoke as _revoke
+    token = request.cookies.get(AUTH_COOKIE_NAME)
+    if not token:
+        # No cookie -> maybe Bearer. Read from Authorization header
+        # directly (we don't have HTTPBearer dep here — that would
+        # 401 on missing creds).
+        auth_hdr = request.headers.get("Authorization") or ""
+        if auth_hdr.lower().startswith("bearer "):
+            token = auth_hdr[7:].strip() or None
+    if token:
+        try:
+            # Accept even expired tokens for the revocation step —
+            # revoking an expired jti is a harmless no-op (TTL will
+            # remove it fast) but a benign no-op logout is better UX
+            # than a 401 on a stale tab.
+            payload = jwt.decode(
+                token, JWT_SECRET, algorithms=[JWT_ALGORITHM],
+                options={"verify_exp": False},
+            )
+            jti = payload.get("jti")
+            exp = payload.get("exp")
+            if jti:
+                await _revoke(db, jti, exp=exp, reason="logout")
+        except Exception:
+            # Corrupted / unreadable token: nothing to revoke.
+            # Cookie clear below is still the visible logout signal.
+            pass
     clear_auth_cookie(response)
     return {"ok": True}
 

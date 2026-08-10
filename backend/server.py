@@ -1611,10 +1611,41 @@ async def regenerate_operating_model(user: dict = Depends(require_perm("team_man
     tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
     if not tenant:
         raise HTTPException(status_code=404, detail="Workspace not found")
-    om = await backfill_operating_model(tenant)
-    await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": {"operating_model": om}})
-    await log_activity(user["tenant_id"], user["id"], "operating_model_regenerated", f"{user['name']} regenerated the operating model")
-    return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    # FIX-003-C (S2-11): track success/failure. Prior code called
+    # backfill_operating_model directly, so a silent AI degradation
+    # (timeout, malformed JSON, empty pipelines) left the tenant with
+    # a defaulted operating model and no visible signal that anything
+    # went wrong — the founder just saw "Regenerate" click, spinner,
+    # and the same-looking board. Now we route through the status-
+    # aware wrapper and update ai_setup_status.operating_model so the
+    # frontend can surface "AI setup incomplete — click to retry."
+    from services import ai_setup as ai_setup_svc
+    om, om_status = await ai_setup_svc.ai_generate_operating_model_with_status(
+        tenant.get("industry") or "General",
+        tenant.get("company_size") or "",
+        tenant.get("roles") or DEFAULT_ROLES,
+        tenant.get("description") or "",
+    )
+    # Preserve any pipeline/category the tenant has already customized:
+    # if the AI succeeded, prefer its output; otherwise keep the existing
+    # operating_model rather than clobbering it with a default. That's
+    # the exact behavior founders expect from a "Regenerate" button.
+    updates: dict = {}
+    if om_status == ai_setup_svc.STATUS_GENERATED:
+        # Merge over the existing so pipelines the AI didn't touch survive.
+        merged = await backfill_operating_model({**tenant, "operating_model": om})
+        updates["operating_model"] = merged
+    status_map = dict(tenant.get("ai_setup_status") or {})
+    status_map["operating_model"] = om_status
+    updates["ai_setup_status"] = status_map
+    await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": updates})
+    await log_activity(user["tenant_id"], user["id"], "operating_model_regenerated",
+                       f"{user['name']} regenerated the operating model ({om_status})")
+    out = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    # Surface the status so the frontend can prompt retry if needed
+    # WITHOUT needing a second /me round-trip.
+    out["ai_setup_status_summary"] = ai_setup_svc.summarize_ai_setup_status(status_map)
+    return out
 
 
 class FinanceCategoriesInput(BaseModel):
@@ -1636,10 +1667,28 @@ async def regenerate_finance_categories(user: dict = Depends(require_perm("team_
     tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
     if not tenant:
         raise HTTPException(status_code=404, detail="Workspace not found")
-    fc = await ai_generate_finance_categories(tenant.get("industry"), tenant.get("company_size"), tenant.get("roles"), tenant.get("description") or "")
-    await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": {"finance_categories": fc}})
-    await log_activity(user["tenant_id"], user["id"], "finance_categories_regenerated", f"{user['name']} regenerated the finance categories")
-    return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    # FIX-003-C (S2-11): use the status-tracking wrapper so a defaulted
+    # AI result updates ai_setup_status.finance_categories instead of
+    # silently clobbering the existing categories with a default map.
+    from services import ai_setup as ai_setup_svc
+    fc, fc_status = await ai_setup_svc.ai_generate_finance_categories_with_status(
+        tenant.get("industry") or "General",
+        tenant.get("company_size") or "",
+        tenant.get("roles") or DEFAULT_ROLES,
+        tenant.get("description") or "",
+    )
+    updates: dict = {}
+    if fc_status == ai_setup_svc.STATUS_GENERATED:
+        updates["finance_categories"] = fc
+    status_map = dict(tenant.get("ai_setup_status") or {})
+    status_map["finance_categories"] = fc_status
+    updates["ai_setup_status"] = status_map
+    await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": updates})
+    await log_activity(user["tenant_id"], user["id"], "finance_categories_regenerated",
+                       f"{user['name']} regenerated the finance categories ({fc_status})")
+    out = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    out["ai_setup_status_summary"] = ai_setup_svc.summarize_ai_setup_status(status_map)
+    return out
 
 
 
@@ -1847,8 +1896,54 @@ async def update_contact(contact_id: str, inp: ContactUpdateInput, user: dict = 
         updates.pop("type")
     if "status" in updates and updates["status"] not in CONTACT_STATUS:
         updates.pop("status")
+    # FIX-003-C (S2-09): denormalized-name cascade. `contact_name` is
+    # copied at write time into invoices, payments, and workflows
+    # (workflows.counterparty). Without a cascade, renaming a contact
+    # only updates the contacts collection — every existing invoice /
+    # payment / workflow keeps the old name in its display column,
+    # search index, and any exported report. Cascade on the rename to
+    # keep the reads consistent.
+    old_name = (c.get("name") or "").strip()
+    new_name = str(updates.get("name") or "").strip()
+    name_changed = ("name" in updates and new_name and new_name != old_name)
     if updates:
         await db.contacts.update_one({"id": contact_id}, {"$set": updates})
+    if name_changed:
+        tid = user["tenant_id"]
+        # Match by contact_id where present (recent rows) and by exact
+        # old_name where contact_id is missing (legacy rows written
+        # before contact_id backfill). Every update is tenant-scoped
+        # so nothing crosses workspaces.
+        cascade_query_by_id = {"tenant_id": tid, "contact_id": contact_id}
+        cascade_query_by_name = {"tenant_id": tid, "contact_id": {"$in": [None, ""]},
+                                  "contact_name": old_name} if old_name else None
+        for coll_name, name_field in (
+            ("invoices", "contact_name"),
+            ("payments", "contact_name"),
+        ):
+            try:
+                await db[coll_name].update_many(cascade_query_by_id,
+                                                {"$set": {name_field: new_name}})
+                if cascade_query_by_name:
+                    await db[coll_name].update_many(cascade_query_by_name,
+                                                    {"$set": {name_field: new_name}})
+            except Exception:
+                logger.exception(f"[FIX-003-C] contact_name cascade failed on {coll_name}")
+        # workflows.counterparty is the denormalized display for the
+        # linked contact. Same match strategy.
+        try:
+            await db.workflows.update_many(
+                {"tenant_id": tid, "contact_id": contact_id},
+                {"$set": {"counterparty": new_name}},
+            )
+            if old_name:
+                await db.workflows.update_many(
+                    {"tenant_id": tid, "contact_id": {"$in": [None, ""]},
+                     "counterparty": old_name},
+                    {"$set": {"counterparty": new_name}},
+                )
+        except Exception:
+            logger.exception("[FIX-003-C] counterparty cascade failed on workflows")
     c = await db.contacts.find_one({"id": contact_id}, {"_id": 0})
     return (await enrich_contacts([c]))[0]
 
@@ -5481,6 +5576,24 @@ async def _bootstrap():
             )
         except Exception as e:
             logger.warning(f"scheduler_locks TTL index: {e}")
+        # FIX-003-C (S2-06): revoked-token table for logout-invalidates-JWT.
+        # `jti` is the lookup key on every authenticated request (see
+        # core.get_current_user -> services.session_revocation.is_revoked),
+        # and the TTL on `exp` purges rows when the underlying token would
+        # have expired anyway — keeps the table bounded to (~= logouts
+        # per 7-day window).
+        try:
+            await db.revoked_tokens.create_index("jti", unique=True,
+                                                 name="revoked_tokens_jti_unique")
+        except Exception as e:
+            logger.warning(f"revoked_tokens jti index: {e}")
+        try:
+            await db.revoked_tokens.create_index(
+                "exp", expireAfterSeconds=0,
+                name="revoked_tokens_exp_ttl",
+            )
+        except Exception as e:
+            logger.warning(f"revoked_tokens TTL index: {e}")
         # FIX-002-A: index the normalized 10-digit form so OTP login + WhatsApp
         # routing are exact-match lookups instead of full-collection scans.
         # Partial index — only users who actually have a phone contribute; keeps

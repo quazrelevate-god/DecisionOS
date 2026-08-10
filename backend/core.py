@@ -298,8 +298,14 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 
 def create_token(user_id: str, tenant_id: str, role: str) -> str:
+    # FIX-003-C (S2-06): every token gets a random jti. On logout the
+    # server records this jti in db.revoked_tokens; get_current_user
+    # checks membership before honoring the token. Without a jti the
+    # session-revocation table has no key to work on, so this is a
+    # HARD requirement for the fix — do not remove the field.
     payload = {
         "sub": user_id, "tenant_id": tenant_id, "role": role,
+        "jti": str(uuid.uuid4()),
         "exp": datetime.now(timezone.utc) + timedelta(days=7), "type": "access",
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
@@ -319,6 +325,16 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail="Session expired, please log in again")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
+    # FIX-003-C (S2-06): revocation check. A user who hit /logout
+    # invalidated their jti; the token is still cryptographically
+    # valid until `exp`, but we must refuse to honor it. Deferred
+    # import breaks the core.py <-> services cycle. See
+    # services/session_revocation.py for the fail-open contract.
+    jti = payload.get("jti")
+    if jti:
+        from services.session_revocation import is_revoked as _is_revoked
+        if await _is_revoked(db, jti):
+            raise HTTPException(status_code=401, detail="Session ended, please log in again")
     user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0})
     if not user:
         raise HTTPException(status_code=401, detail="User not found")

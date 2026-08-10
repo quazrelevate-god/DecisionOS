@@ -5,7 +5,7 @@ does NOT import from `server`, so there is no circular dependency.
 """
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
@@ -17,8 +17,53 @@ from core import (
 )
 from services import onboarding_drafts as drafts_svc  # FIX-001-D
 from services import ai_setup as ai_setup_svc          # FIX-001-D
+# FIX-004-A (RBAC Wave 1)
+from services.auth.draft_tokens import sign_draft_id, verify_draft_token
+from services.rate_limit import check_rate_limit, client_ip
 
 router = APIRouter(prefix="/api")
+
+
+# FIX-004-A (RBAC-01): rate-limit draft creation per IP so an attacker
+# can't spin up unlimited draft rows to fill the DB. Sliding window.
+_DRAFT_CREATE_LIMIT = (10, 3600)   # 10 create/hour/IP
+_DRAFT_ACCESS_LIMIT = (60, 60)     # 60 read-or-patch/min/draft_id — legit
+                                     # frontend saves after every keystroke so
+                                     # we allow a healthy per-draft ceiling.
+
+
+async def _require_draft_token(request: Request, draft_id: str) -> None:
+    """FIX-004-A (RBAC-01): draft URLs are HMAC-signed. Every GET/PATCH
+    must present the token that create_onboarding_draft returned.
+
+    Accepts either:
+      * `X-Draft-Token: <token>` header (preferred)
+      * `?token=<token>` query param (convenience for browser reloads)
+
+    Missing or mismatched token -> 401. The draft ID alone is NOT
+    sufficient authorization anymore.
+    """
+    token = (request.headers.get("X-Draft-Token")
+             or request.query_params.get("token")
+             or "")
+    if not verify_draft_token(draft_id, token):
+        raise HTTPException(
+            status_code=401,
+            detail=("This draft link is missing or invalid. Ask the browser "
+                    "that created the draft to resume it, or start a fresh one."),
+        )
+    # Per-draft rate limit: a legitimate wizard save cadence is well
+    # under 60/min. Anything hotter is scripted.
+    ok, retry_after = await check_rate_limit(
+        draft_id, _DRAFT_ACCESS_LIMIT[0], _DRAFT_ACCESS_LIMIT[1],
+        bucket="draft_access",
+    )
+    if not ok:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many draft requests. Slow down and retry.",
+            headers={"Retry-After": str(retry_after)},
+        )
 
 
 class OnboardingSuggestInput(BaseModel):
@@ -135,18 +180,39 @@ class DraftPatchInput(BaseModel):
 
 
 @router.post("/onboarding/draft")
-async def create_onboarding_draft(inp: DraftCreateInput):
+async def create_onboarding_draft(inp: DraftCreateInput, request: Request):
     """Create a server-side onboarding draft. Client keeps the returned
-    draft_id and PATCHes it as each wizard step completes so a page
-    refresh / network drop never wipes user input."""
+    draft_id + draft_token; every subsequent GET/PATCH must present the
+    token in the `X-Draft-Token` header.
+
+    FIX-004-A (RBAC-01): draft URLs used to be world-accessible by ID.
+    Now they're HMAC-signed and per-IP rate-limited on creation."""
+    ip = client_ip(request)
+    ok, retry_after = await check_rate_limit(
+        ip, _DRAFT_CREATE_LIMIT[0], _DRAFT_CREATE_LIMIT[1],
+        bucket="draft_create",
+    )
+    if not ok:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many draft creations from this IP. Try again later.",
+            headers={"Retry-After": str(retry_after)},
+        )
     doc = await drafts_svc.create_draft(db, email=inp.email)
-    return {"draft_id": doc["id"], "created_at": doc["created_at"]}
+    return {
+        "draft_id": doc["id"],
+        "draft_token": sign_draft_id(doc["id"]),  # FIX-004-A (RBAC-01)
+        "created_at": doc["created_at"],
+    }
 
 
 @router.get("/onboarding/draft/{draft_id}")
-async def get_onboarding_draft(draft_id: str):
+async def get_onboarding_draft(draft_id: str, request: Request):
     """Resume from a saved draft. Returns the full draft doc so the client
-    can restore every step's inputs."""
+    can restore every step's inputs.
+
+    FIX-004-A (RBAC-01): requires the draft_token issued at create time."""
+    await _require_draft_token(request, draft_id)
     doc = await drafts_svc.get_draft(db, draft_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Draft not found or already completed")
@@ -154,9 +220,12 @@ async def get_onboarding_draft(draft_id: str):
 
 
 @router.patch("/onboarding/draft/{draft_id}")
-async def patch_onboarding_draft(draft_id: str, inp: DraftPatchInput):
+async def patch_onboarding_draft(draft_id: str, inp: DraftPatchInput, request: Request):
     """Save one wizard step's data onto the draft. Unknown step keys are
-    rejected (fail-safe: don't let a client stash arbitrary data)."""
+    rejected (fail-safe: don't let a client stash arbitrary data).
+
+    FIX-004-A (RBAC-01): requires the draft_token issued at create time."""
+    await _require_draft_token(request, draft_id)
     if inp.step not in drafts_svc.VALID_STEP_KEYS:
         raise HTTPException(status_code=400, detail=f"Invalid step '{inp.step}'")
     doc = await drafts_svc.patch_draft(db, draft_id, inp.step, inp.data)

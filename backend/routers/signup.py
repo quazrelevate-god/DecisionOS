@@ -14,7 +14,7 @@ import re
 from typing import List, Optional
 
 import httpx
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
 from emergentintegrations.llm.chat import UserMessage
 
@@ -22,8 +22,70 @@ from core import (
     db, claude_chat, LLM_MODEL, _extract_json, new_id, now_iso, logger,
     normalize_os_blueprint, get_ai_key,
 )
+# FIX-004-A (RBAC-03): rate-limit + SSRF guard for unauth AI endpoints.
+from services.rate_limit import check_rate_limit, client_ip
+from services.ssrf_guard import is_url_safe_for_fetch
+from services.captcha import verify_captcha
 
 router = APIRouter(prefix="/api/signup")
+
+
+# FIX-004-A (RBAC-03): per-IP quotas on public AI endpoints. Numbers
+# are calibrated to a realistic signup funnel: a founder finishing the
+# whole flow hits website-intel once, tts a few times, stt 2-6 times.
+# 30/hr is comfortably above that, well below what a bot would need to
+# drain credit meaningfully.
+_SIGNUP_AI_LIMIT_HOURLY = (30, 3600)   # 30/hr per IP for the whole /api/signup surface
+_SIGNUP_BURST_LIMIT = (5, 10)          # 5/10s burst — kills tight loops
+
+
+async def _guard_signup_endpoint(request: Request, kind: str) -> str:
+    """Shared gate for the public /api/signup AI endpoints.
+
+    Runs three checks in order:
+      1. Sliding-window per-IP rate limit — HTTP 429.
+      2. Burst limit (5 requests in 10 seconds) — HTTP 429.
+      3. CAPTCHA verification (via header X-Captcha-Token) — HTTP 400
+         if a CAPTCHA is required and missing/invalid; skipped in dev
+         when no *_SECRET is configured.
+
+    Returns the caller's IP for downstream logging.
+    """
+    ip = client_ip(request)
+    # Hourly ceiling
+    ok, retry_after = await check_rate_limit(
+        ip, _SIGNUP_AI_LIMIT_HOURLY[0], _SIGNUP_AI_LIMIT_HOURLY[1],
+        bucket=f"signup_ai_hour:{kind}",
+    )
+    if not ok:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many {kind} requests from your network. Try again later.",
+            headers={"Retry-After": str(retry_after)},
+        )
+    # Short burst window — catches scripted loops even inside the hourly quota.
+    ok, retry_after = await check_rate_limit(
+        ip, _SIGNUP_BURST_LIMIT[0], _SIGNUP_BURST_LIMIT[1],
+        bucket=f"signup_ai_burst:{kind}",
+    )
+    if not ok:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many requests, too fast. Slow down.",
+            headers={"Retry-After": str(retry_after)},
+        )
+    # CAPTCHA — token comes in via header (frontend attaches after
+    # widget renders on the signup page). Optional in dev — see
+    # services/captcha.py behavior when no *_SECRET is set.
+    token = request.headers.get("X-Captcha-Token") or ""
+    cap_ok, cap_reason = await verify_captcha(token, remote_ip=ip)
+    if not cap_ok:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": f"captcha_{cap_reason}",
+                     "message": "We couldn't verify you as human. Refresh the page and try again."},
+        )
+    return ip
 
 # Interview length is DYNAMIC. Dex may finish as early as MIN_QUESTIONS if the
 # founder has already painted a clear operational picture, and stretches up to
@@ -101,7 +163,13 @@ class EmailCheckInput(BaseModel):
 
 
 @router.post("/check-email")
-async def check_email(inp: EmailCheckInput):
+async def check_email(inp: EmailCheckInput, request: Request):
+    # FIX-004-A (RBAC-03): rate-limited to prevent email enumeration.
+    # CAPTCHA is required in prod so a bot can't sweep a leaked email
+    # list. The response is intentionally binary (available: bool) —
+    # combining that with the rate limit + CAPTCHA + login rate-limit
+    # (S0-07, not shipped) makes enumeration economically infeasible.
+    await _guard_signup_endpoint(request, "check_email")
     email = inp.email.strip().lower()
     taken = bool(email) and bool(await db.users.find_one({"email": email}, {"_id": 1}))
     return {"available": not taken}
@@ -123,12 +191,27 @@ def _clean_html(html: str) -> str:
 
 
 @router.post("/website-intel")
-async def website_intel(inp: WebsiteIntelInput):
+async def website_intel(inp: WebsiteIntelInput, request: Request):
+    # FIX-004-A (RBAC-03): auth-gate + rate limit + SSRF guard.
+    await _guard_signup_endpoint(request, "website_intel")
     url = inp.url.strip()
     if not url:
         raise HTTPException(status_code=400, detail="Enter a website URL")
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
+    # FIX-004-A (RBAC-03): SSRF guard — refuse to fetch URLs that resolve
+    # to private IPs (10.x, 172.16-31.x, 192.168.x, 127.x, 169.254.x
+    # cloud metadata), file://, ftp://, or known internal hostnames
+    # (localhost, metadata.google.internal, kubernetes.default.svc).
+    # Prevents an attacker from using this endpoint to probe/attack
+    # our internal network or exfiltrate cloud metadata IAM tokens.
+    safe, reason = is_url_safe_for_fetch(url)
+    if not safe:
+        logger.warning(f"website-intel SSRF blocked: url={url!r} reason={reason}")
+        raise HTTPException(
+            status_code=400,
+            detail="This URL isn't allowed. Enter a public website.",
+        )
     text = ""
     try:
         async with httpx.AsyncClient(timeout=12, follow_redirects=True, headers={
@@ -293,7 +376,10 @@ def _lang_directive(code: str) -> str:
 
 
 @router.post("/interview/start")
-async def interview_start(inp: InterviewStartInput):
+async def interview_start(inp: InterviewStartInput, request: Request):
+    # FIX-004-A (RBAC-03): CAPTCHA + rate-limit. Prevents bots from
+    # holding open interview sessions and burning per-answer LLM calls.
+    await _guard_signup_endpoint(request, "interview_start")
     lang = _norm_lang(inp.language_code)
     session = {
         "id": new_id(),
@@ -326,7 +412,10 @@ async def interview_start(inp: InterviewStartInput):
 
 
 @router.post("/interview/back")
-async def interview_back(inp: InterviewSessionInput):
+async def interview_back(inp: InterviewSessionInput, request: Request):
+    # FIX-004-A (RBAC-03): rate-limit only (no LLM here). Prevents
+    # tight-loop DB churn on session state.
+    await _guard_signup_endpoint(request, "interview_back")
     """Step back one question: pop the last answered Q&A and re-open it,
     returning the previous answer so the founder can edit and re-send."""
     s = await db.signup_sessions.find_one({"id": inp.session_id}, {"_id": 0})
@@ -345,7 +434,9 @@ async def interview_back(inp: InterviewSessionInput):
 
 
 @router.post("/interview/answer")
-async def interview_answer(inp: InterviewAnswerInput):
+async def interview_answer(inp: InterviewAnswerInput, request: Request):
+    # FIX-004-A (RBAC-03): every answer triggers an LLM call — gate it.
+    await _guard_signup_endpoint(request, "interview_answer")
     s = await db.signup_sessions.find_one({"id": inp.session_id}, {"_id": 0})
     if not s:
         raise HTTPException(status_code=404, detail="Interview session not found")
@@ -404,7 +495,9 @@ BLUEPRINT_SYSTEM = (
 
 
 @router.post("/interview/blueprint")
-async def interview_blueprint(inp: InterviewSessionInput):
+async def interview_blueprint(inp: InterviewSessionInput, request: Request):
+    # FIX-004-A (RBAC-03): blueprint gen = expensive LLM call — gate it.
+    await _guard_signup_endpoint(request, "interview_blueprint")
     s = await db.signup_sessions.find_one({"id": inp.session_id}, {"_id": 0})
     if not s:
         raise HTTPException(status_code=404, detail="Interview session not found")
@@ -448,7 +541,9 @@ class InterviewRefineInput(BaseModel):
 
 
 @router.post("/interview/refine")
-async def interview_refine(inp: InterviewRefineInput):
+async def interview_refine(inp: InterviewRefineInput, request: Request):
+    # FIX-004-A (RBAC-03): refine re-runs blueprint (LLM) — gate it.
+    await _guard_signup_endpoint(request, "interview_refine")
     """Founder saw the first draft blueprint and wants to add/correct something.
     Store the refinement on the session, then re-run blueprint with it in context."""
     s = await db.signup_sessions.find_one({"id": inp.session_id}, {"_id": 0})
@@ -460,7 +555,12 @@ async def interview_refine(inp: InterviewRefineInput):
     await db.signup_sessions.update_one(
         {"id": s["id"]}, {"$set": {"refinement": refinement}}
     )
-    return await interview_blueprint(InterviewSessionInput(session_id=s["id"], language_code=inp.language_code))
+    # Pass the same Request so the rate limiter charges once per user
+    # action, not twice for the refine + inner blueprint chain.
+    return await interview_blueprint(
+        InterviewSessionInput(session_id=s["id"], language_code=inp.language_code),
+        request,
+    )
 
 
 # --------------------------------------------------------------------------
@@ -472,7 +572,10 @@ class TTSInput(BaseModel):
 
 
 @router.post("/tts")
-async def signup_tts(inp: TTSInput):
+async def signup_tts(inp: TTSInput, request: Request):
+    # FIX-004-A (RBAC-03): rate-limited + CAPTCHA-gated so an attacker
+    # can't drain the shared Sarvam TTS quota with unauth calls.
+    await _guard_signup_endpoint(request, "tts")
     key = get_ai_key("sarvam")
     if not key:
         raise HTTPException(status_code=503, detail="Voice is not configured")
@@ -499,7 +602,10 @@ async def signup_tts(inp: TTSInput):
 
 
 @router.post("/stt")
-async def signup_stt(file: UploadFile = File(...)):
+async def signup_stt(request: Request, file: UploadFile = File(...)):
+    # FIX-004-A (RBAC-03): rate-limited + CAPTCHA-gated. STT is
+    # per-minute-billed on Sarvam so bot abuse is directly financial.
+    await _guard_signup_endpoint(request, "stt")
     key = get_ai_key("sarvam")
     if not key:
         raise HTTPException(status_code=503, detail="Voice is not configured")

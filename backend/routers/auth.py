@@ -62,6 +62,11 @@ class RegisterInput(BaseModel):
     # draft (prevents "user typed 7 steps then /register 500'd and lost
     # everything"). Client-provided values still win over draft values.
     draft_id: Optional[str] = None
+    # FIX-004-A (RBAC-02): Turnstile / hCaptcha proof-of-humanity token.
+    # Verified server-side against the vendor's siteverify endpoint.
+    # Optional in dev (see services/captcha.py); made hard-required in
+    # prod via CAPTCHA_REQUIRED=1 env.
+    captcha_token: Optional[str] = None
 
 
 class LoginInput(BaseModel):
@@ -94,7 +99,31 @@ class PasswordResetInput(BaseModel):
 # Endpoints
 # ---------------------------------------------------------------------------
 @router.post("/register")
-async def register(inp: RegisterInput, response: Response):
+async def register(inp: RegisterInput, request: Request, response: Response):
+    # FIX-004-A (RBAC-02): rate-limit registrations per IP + verify
+    # CAPTCHA before any DB work. Prevents bot-driven tenant creation
+    # + AI credit burn + storage cost.
+    from services.rate_limit import check_rate_limit, client_ip
+    from services.captcha import verify_captcha
+    ip = client_ip(request)
+    ok, retry_after = await check_rate_limit(ip, 3, 3600, bucket="register")
+    if not ok:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many registrations from this network. Try again later.",
+            headers={"Retry-After": str(retry_after)},
+        )
+    cap_ok, cap_reason = await verify_captcha(inp.captcha_token, remote_ip=ip)
+    if not cap_ok:
+        # Never surface the raw vendor reason to the client; a friendly
+        # message is enough. Detail contains a code the frontend can
+        # branch on if it wants to re-render the CAPTCHA widget.
+        raise HTTPException(
+            status_code=400,
+            detail={"code": f"captcha_{cap_reason}",
+                     "message": "We couldn't verify you as human. Refresh the page and try again."},
+        )
+
     # Deferred to break the server.py ↔ routers/auth.py cycle.
     from server import normalize_os_blueprint
     from core import DEFAULT_ROLES

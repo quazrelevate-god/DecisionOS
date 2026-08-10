@@ -83,6 +83,33 @@ class SwitchWorkspaceInput(BaseModel):
     tenant_id: str
 
 
+# FIX-005-D (RBAC-23): 2FA input models
+class TotpConfirmInput(BaseModel):
+    code: str = Field(min_length=4, max_length=10)
+
+
+class TotpVerifyLoginInput(BaseModel):
+    # Short-lived 2fa-challenge token returned by /login when the
+    # account has 2FA enabled.
+    challenge_token: str
+    code: str = Field(min_length=4, max_length=10)
+
+
+class TotpDisableInput(BaseModel):
+    # Owner-only self-recovery: prove you own the account by
+    # supplying a current TOTP or a backup code before disabling.
+    code: str = Field(min_length=4, max_length=15)
+
+
+# FIX-005-D (RBAC-24): ownership transfer input
+class TransferOwnershipInput(BaseModel):
+    new_owner_user_id: str
+    # 2FA-confirmation code from the CURRENT owner if their account
+    # has 2FA enabled (else ignored). Prevents session-theft from
+    # trivially taking over the workspace.
+    totp_code: Optional[str] = None
+
+
 class ProfileUpdateInput(BaseModel):
     name: Optional[str] = None
     phone: Optional[str] = None
@@ -451,6 +478,27 @@ async def login(inp: LoginInput, request: Request, response: Response):
             "ambiguous": True,
             "detail": "This email belongs to multiple workspaces. Choose one to continue.",
             "choices": choices,
+        }
+    # FIX-005-D (RBAC-23): 2FA gate. If the user has confirmed 2FA
+    # enrollment, we DON'T issue the session token yet — we issue a
+    # short-lived (5min) challenge token and expect the client to
+    # call /auth/2fa/verify-login with it + a TOTP or backup code.
+    from services.auth.totp import is_enabled as _totp_enabled
+    if _totp_enabled(user):
+        # Audit the halfway-login so ops can see 2FA-protected logins
+        # as a distinct signal from vanilla successful logins.
+        _ctx_pre = _audit.context_from(request, {**user, "tenant_id": tenant_id})
+        await _audit.record(
+            db, action="two_factor_challenge_issued",
+            entity_type="user", entity_id=user["id"],
+            meta={"tenant_id": tenant_id, "role": role},
+            **_ctx_pre,
+        )
+        challenge = _mint_challenge(user["id"], tenant_id, role)
+        return {
+            "two_factor_required": True,
+            "challenge_token": challenge,
+            "detail": "Enter your 2FA code to complete sign in.",
         }
     token = create_token(user["id"], tenant_id, role)
     tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0})
@@ -883,3 +931,310 @@ async def password_reset(inp: PasswordResetInput):
         db, kind=auth_emails.KIND_PASSWORD_RESET, email=email,
     )
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# FIX-005-D (RBAC-23): TOTP two-factor auth
+# ---------------------------------------------------------------------------
+# JWT type "2fa_challenge" — short-lived (5min) token issued by /login
+# when the user has 2FA enabled. Cannot be used for anything except
+# calling /auth/2fa/verify-login. The full session JWT is only issued
+# after the challenge is answered with a valid TOTP or backup code.
+_TWO_FA_CHALLENGE_TTL_SECONDS = 300
+
+
+def _mint_challenge(user_id: str, tenant_id: str, role: str) -> str:
+    """Encode a short-lived 2fa-challenge token so we can round-trip
+    the user's chosen tenant_id + role after the second factor
+    succeeds without re-resolving them."""
+    import jwt as _jwt
+    from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+    from core import JWT_SECRET, JWT_ALGORITHM
+    payload = {
+        "sub": user_id,
+        "tenant_id": tenant_id,
+        "role": role,
+        "type": "2fa_challenge",
+        "jti": new_id(),
+        "exp": _dt.now(_tz.utc) + _td(seconds=_TWO_FA_CHALLENGE_TTL_SECONDS),
+    }
+    return _jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+def _decode_challenge(token: str) -> dict:
+    """Reverse of _mint_challenge. Raises HTTPException(401) on any
+    problem (expired, tampered, wrong type)."""
+    import jwt as _jwt
+    from core import JWT_SECRET, JWT_ALGORITHM
+    try:
+        payload = _jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except _jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="2FA challenge expired — please log in again")
+    except _jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid 2FA challenge")
+    if payload.get("type") != "2fa_challenge":
+        raise HTTPException(status_code=401, detail="Invalid 2FA challenge")
+    return payload
+
+
+@router.post("/2fa/enroll")
+async def begin_2fa_enrollment(user: dict = Depends(get_current_user)):
+    """Start 2FA enrollment. Generates a fresh base32 secret and
+    persists it as `pending_secret` on the user doc. Returns the
+    provisioning URI so the client can render a QR code + the raw
+    secret for manual entry when a QR reader isn't available.
+
+    User must call /2fa/confirm with a valid TOTP from the same
+    secret to actually enable 2FA. Re-running enroll overwrites the
+    previous pending secret (user restarted the flow)."""
+    from services.auth.totp import begin_enrollment, persist_pending_secret
+    payload = begin_enrollment(user, issuer_name="DecisionOS")
+    await persist_pending_secret(db, user["id"], payload["secret"])
+    return {
+        "secret": payload["secret"],
+        "provisioning_uri": payload["provisioning_uri"],
+        "note": ("Scan the QR (or type the secret) into your authenticator app, "
+                  "then POST /auth/2fa/confirm with a 6-digit code to enable 2FA."),
+    }
+
+
+@router.post("/2fa/confirm")
+async def confirm_2fa_enrollment(inp: TotpConfirmInput, request: Request,
+                                    user: dict = Depends(get_current_user)):
+    """Complete 2FA enrollment by proving the user actually scanned
+    the QR. On success we generate 10 backup codes and return the
+    plaintext ONCE — after this response the user cannot retrieve
+    them again (only regenerate)."""
+    from services.auth.totp import confirm_enrollment
+    from services import audit_log as _audit
+    ok, backup_codes = await confirm_enrollment(db, user["id"], inp.code)
+    if not ok:
+        raise HTTPException(status_code=400, detail="Invalid TOTP code")
+    _ctx = _audit.context_from(request, user)
+    await _audit.record(
+        db, action="two_factor_enabled",
+        entity_type="user", entity_id=user["id"],
+        **_ctx,
+    )
+    return {
+        "ok": True,
+        "backup_codes": backup_codes,
+        "warning": ("Save these 10 backup codes somewhere safe. "
+                     "They're single-use and shown only once — "
+                     "if you lose your authenticator you'll need them."),
+    }
+
+
+@router.post("/2fa/verify-login")
+async def verify_2fa_on_login(inp: TotpVerifyLoginInput, request: Request,
+                                response: Response):
+    """Second step of the login flow when the user has 2FA enabled.
+    Consumes the short-lived challenge_token from /login and issues
+    the full session JWT if the TOTP (or a backup code) verifies."""
+    payload = _decode_challenge(inp.challenge_token)
+    user_id = payload["sub"]
+    tenant_id = payload["tenant_id"]
+    role = payload["role"]
+    user = await db.users.find_one({"id": user_id}, {"_id": 0, "two_factor": 1,
+                                                       "email": 1, "name": 1})
+    if not user:
+        raise HTTPException(status_code=404, detail="Account not found")
+    # Try TOTP first, then backup code.
+    from services.auth.totp import verify_totp, consume_backup_code
+    from services import audit_log as _audit
+    used_backup = False
+    if not verify_totp(user, inp.code):
+        used_backup = await consume_backup_code(db, user_id, inp.code)
+        if not used_backup:
+            _ctx = _audit.context_from(request, user)
+            _ctx["tenant_id"] = tenant_id
+            await _audit.record(
+                db, action="two_factor_failure",
+                entity_type="user", entity_id=user_id,
+                meta={"reason": "invalid_totp"},
+                **_ctx,
+            )
+            raise HTTPException(status_code=401, detail="Invalid 2FA code")
+    # Success — issue the real session token, matching /login's tail.
+    token = create_token(user_id, tenant_id, role)
+    tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0})
+    user.pop("_id", None)
+    user.pop("password_hash", None)
+    set_auth_cookie(response, token)
+    # Track the new session + audit.
+    import jwt as _jwt
+    from core import JWT_SECRET as _JS, JWT_ALGORITHM as _JA
+    from services.auth.session_tracking import record_session as _rec_sess
+    _p = _jwt.decode(token, _JS, algorithms=[_JA])
+    _ctx = _audit.context_from(request, {**user, "tenant_id": tenant_id})
+    await _rec_sess(
+        db, jti=_p.get("jti"), user_id=user_id, tenant_id=tenant_id,
+        exp=_p.get("exp"),
+        ua=_ctx.get("actor_ua"), ip=_ctx.get("actor_ip"),
+    )
+    await _audit.record(
+        db, action="two_factor_success",
+        entity_type="user", entity_id=user_id,
+        meta={"used_backup_code": used_backup},
+        **_ctx,
+    )
+    return {"token": token, "user": user, "tenant": tenant,
+            "used_backup_code": used_backup}
+
+
+@router.post("/2fa/disable")
+async def disable_2fa(inp: TotpDisableInput, request: Request,
+                        user: dict = Depends(get_current_user)):
+    """Turn 2FA off — user must prove account ownership by supplying
+    a valid TOTP or a backup code. Wipes secret + all backup codes."""
+    from services.auth.totp import (
+        is_enabled, verify_totp, consume_backup_code, disable_totp,
+    )
+    from services import audit_log as _audit
+    full = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    if not is_enabled(full):
+        raise HTTPException(status_code=400, detail="2FA is not enabled on this account")
+    ok = verify_totp(full, inp.code)
+    if not ok:
+        ok = await consume_backup_code(db, user["id"], inp.code)
+    if not ok:
+        raise HTTPException(status_code=401, detail="Invalid 2FA code")
+    await disable_totp(db, user["id"])
+    _ctx = _audit.context_from(request, user)
+    await _audit.record(
+        db, action="two_factor_disabled",
+        entity_type="user", entity_id=user["id"],
+        **_ctx,
+    )
+    return {"ok": True}
+
+
+@router.post("/2fa/regenerate-backup-codes")
+async def regenerate_2fa_backup(inp: TotpConfirmInput, request: Request,
+                                   user: dict = Depends(get_current_user)):
+    """Fresh set of 10 backup codes; invalidates the old set. Requires
+    a valid current TOTP (not a backup code) to prove the user still
+    has the authenticator."""
+    from services.auth.totp import (
+        is_enabled, verify_totp, regenerate_backup_codes,
+    )
+    from services import audit_log as _audit
+    full = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    if not is_enabled(full):
+        raise HTTPException(status_code=400, detail="2FA is not enabled")
+    if not verify_totp(full, inp.code):
+        raise HTTPException(status_code=401, detail="Invalid TOTP")
+    codes = await regenerate_backup_codes(db, user["id"])
+    _ctx = _audit.context_from(request, user)
+    await _audit.record(
+        db, action="two_factor_backup_regenerated",
+        entity_type="user", entity_id=user["id"],
+        **_ctx,
+    )
+    return {"backup_codes": codes,
+             "warning": "Old backup codes are now invalid. Save these."}
+
+
+# ---------------------------------------------------------------------------
+# FIX-005-D (RBAC-24): tenant ownership transfer
+# ---------------------------------------------------------------------------
+@router.post("/tenant/transfer-ownership")
+async def transfer_ownership(inp: TransferOwnershipInput, request: Request,
+                                user: dict = Depends(get_current_user)):
+    """Transfer workspace ownership from the current owner to another
+    active member. The caller MUST be a current owner AND must supply
+    a valid TOTP code if they have 2FA enabled (prevents session-theft
+    from trivially seizing the workspace).
+
+    Steps:
+      1. Guard: caller is an owner in this tenant.
+      2. Guard: target is a live member in this tenant.
+      3. Guard: caller passes 2FA check (only enforced if their
+         account has 2FA — non-2FA callers pass through, but the
+         audit-log entry marks whether 2FA was in play).
+      4. Promote target: membership.role = "owner".
+      5. Demote caller: membership.role -> "sales" (caller can pick
+         a specific role later via team.update_user; sales is a safe
+         default that keeps them in the workspace).
+      6. Audit-log the full before/after.
+
+    Returns {ok, previous_owner_id, new_owner_id, transferred_at}.
+    """
+    from services.auth.membership import (
+        find_membership, update_membership, LIVE_STATUSES,
+    )
+    from services.auth.totp import is_enabled as totp_is_enabled, verify_totp
+    from services import audit_log as _audit
+    if user.get("role") != "owner":
+        raise HTTPException(
+            status_code=403,
+            detail="Only a current owner can transfer ownership.",
+        )
+    if inp.new_owner_user_id == user["id"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Pick a different member to transfer ownership to.",
+        )
+    target_membership = await find_membership(
+        db, inp.new_owner_user_id, user["tenant_id"],
+        statuses=LIVE_STATUSES,
+    )
+    if not target_membership:
+        raise HTTPException(
+            status_code=400,
+            detail="Target is not an active member of this workspace.",
+        )
+    # 2FA gate — only enforced when the caller has 2FA enabled.
+    # (An owner who never turned on 2FA can still transfer, but the
+    # audit trail marks 2fa_used=false so ops can see the risk.)
+    caller_full = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    two_fa_active = totp_is_enabled(caller_full)
+    if two_fa_active:
+        if not inp.totp_code:
+            raise HTTPException(
+                status_code=400,
+                detail="Your account has 2FA enabled. Include a TOTP code with the transfer request.",
+            )
+        if not verify_totp(caller_full, inp.totp_code):
+            raise HTTPException(status_code=401, detail="Invalid TOTP")
+    # Promote + demote in memberships.
+    await update_membership(
+        db, user_id=inp.new_owner_user_id, tenant_id=user["tenant_id"],
+        updates={"role": "owner"},
+    )
+    await update_membership(
+        db, user_id=user["id"], tenant_id=user["tenant_id"],
+        updates={"role": "sales"},   # safe default; caller can change later
+    )
+    # Update the legacy user.role field for compat (see FIX-004-B
+    # compat layer notes) — the new owner may be reading user.role
+    # somewhere that hasn't been migrated.
+    await db.users.update_many(
+        {"id": {"$in": [inp.new_owner_user_id, user["id"]]},
+         "tenant_id": user["tenant_id"]},
+        {"$set": {"updated_at": now_iso()}},
+    )
+    await db.users.update_one(
+        {"id": inp.new_owner_user_id, "tenant_id": user["tenant_id"]},
+        {"$set": {"role": "owner"}},
+    )
+    await db.users.update_one(
+        {"id": user["id"], "tenant_id": user["tenant_id"]},
+        {"$set": {"role": "sales"}},
+    )
+    _ctx = _audit.context_from(request, user)
+    await _audit.record(
+        db, action="tenant_ownership_transferred",
+        entity_type="tenant", entity_id=user["tenant_id"],
+        before={"owner_id": user["id"]},
+        after={"owner_id": inp.new_owner_user_id, "previous_owner_role": "sales",
+                "2fa_used": two_fa_active},
+        **_ctx,
+    )
+    return {
+        "ok": True,
+        "previous_owner_id": user["id"],
+        "new_owner_id": inp.new_owner_user_id,
+        "transferred_at": now_iso(),
+        "two_fa_used": two_fa_active,
+    }

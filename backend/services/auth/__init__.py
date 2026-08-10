@@ -61,3 +61,14 @@ from services.auth.session_tracking import (  # noqa: F401
     revoke_one_session,
     revoke_all_sessions_for_user,
 )
+from services.auth.totp import (  # noqa: F401
+    is_enabled as is_totp_enabled,
+    has_pending_enrollment,
+    begin_enrollment as begin_totp_enrollment,
+    persist_pending_secret as persist_totp_pending_secret,
+    confirm_enrollment as confirm_totp_enrollment,
+    verify_totp,
+    consume_backup_code,
+    disable_totp,
+    regenerate_backup_codes as regenerate_totp_backup_codes,
+)

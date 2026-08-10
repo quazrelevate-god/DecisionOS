@@ -33,6 +33,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
 from core import (
     db,
@@ -134,6 +135,57 @@ async def list_users(user: dict = Depends(get_current_user)):
             u["invite_status"] = "active"
         out.append(u)
     return out
+
+
+class DeprovisionInput(BaseModel):
+    reassign_to_user_id: Optional[str] = None
+
+
+@router.post("/users/{user_id}/deprovision")
+async def deprovision_member(user_id: str, inp: DeprovisionInput,
+                              user: dict = Depends(require_role("owner"))):
+    """FIX-004-H (RBAC-22): off-boarding wizard.
+
+    Composes 6 idempotent steps into a single call: revoke this
+    user's sessions in this tenant, remove their membership,
+    invalidate their invite token, reassign owned tasks + authored
+    contacts to the specified replacement user (or nullify), audit
+    the whole event.
+
+    Owner-only: off-boarding is inherently a workspace-level admin
+    action, and the last-owner guard inside the service prevents
+    an owner deprovisioning themselves without transferring
+    ownership first.
+
+    Returns the report dict with per-step counts so the UI can show
+    a confirmation summary ("Removed X. 3 tasks reassigned to Y,
+    5 contacts reassigned to Y.").
+    """
+    if user_id == user["id"]:
+        raise HTTPException(
+            status_code=400,
+            detail="You can't deprovision yourself. Ask another owner to do it.",
+        )
+    # Guard: replacement (if provided) must be a live member.
+    if inp.reassign_to_user_id:
+        from services.auth.membership import find_membership, LIVE_STATUSES
+        rep = await find_membership(
+            db, inp.reassign_to_user_id, user["tenant_id"], statuses=LIVE_STATUSES,
+        )
+        if not rep:
+            raise HTTPException(
+                status_code=400,
+                detail="The replacement user isn't an active member of this workspace.",
+            )
+    from services.deprovisioning import deprovision_user
+    report = await deprovision_user(
+        db, target_user_id=user_id, tenant_id=user["tenant_id"],
+        actor_user_id=user["id"],
+        reassign_to_user_id=inp.reassign_to_user_id,
+    )
+    if not report.get("ok"):
+        raise HTTPException(status_code=400, detail=report.get("error") or "Deprovision failed")
+    return report
 
 
 @router.post("/users/{user_id}/uninvite")

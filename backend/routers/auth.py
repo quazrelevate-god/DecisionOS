@@ -205,6 +205,11 @@ async def register(inp: RegisterInput, request: Request, response: Response):
         "finance_categories": fc_status,
     }
 
+    # FIX-005-A (S3-02): initialize plan fields on fresh registration.
+    # Trial for 14 days, no overrides. Grandfathered tenants get their
+    # plan set by the backfill migration in server.py._bootstrap.
+    from services.plans import new_tenant_plan_fields
+    _plan_fields = new_tenant_plan_fields()
     tenant_doc = {
         "id": tenant_id, "name": inp.company_name,
         "industry": inp.industry or "General",
@@ -227,6 +232,9 @@ async def register(inp: RegisterInput, request: Request, response: Response):
         "finance_categories": fc,
         "ai_setup_status": ai_setup_status,  # FIX-001-D
         "created_at": now_iso(),
+        # FIX-005-A (S3-02): plan defaults (plan / trial_ends_at /
+        # seat_limit_override / usage_quotas / feature_flags).
+        **_plan_fields,
     }
     await db.tenants.insert_one(tenant_doc)
     user_id = new_id()

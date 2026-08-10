@@ -234,6 +234,12 @@ async def create_user(inp: UserCreateInput, user: dict = Depends(require_perm("t
             raise HTTPException(status_code=403, detail="Only an owner can create another owner")
     elif inp.role not in role_keys:
         raise HTTPException(status_code=400, detail="Invalid role")
+    # FIX-005-A (S3-02): enforce the plan's seat cap BEFORE creating
+    # the user. Raises 402 with a friendly upgrade prompt when full.
+    # Owner-role invitees still count against the cap — a workspace
+    # can be capped at 3 owners just as easily as 3 sales.
+    from services.plans import enforce_seat_limit
+    await enforce_seat_limit(db, user["tenant_id"])
     email = inp.email.lower()
     if await db.users.find_one({"email": email}):
         raise HTTPException(status_code=400, detail="Email already registered")

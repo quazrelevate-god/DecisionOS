@@ -1846,6 +1846,118 @@ async def update_role_permissions(key: str, inp: RolePermissionsInput,
     return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
 
 
+# FIX-005-A (S3-02): plan / entitlement read endpoint.
+@api.get("/tenant/plan")
+async def get_tenant_plan(user: dict = Depends(get_current_user)):
+    """Return the tenant's current effective plan (base plan defaults
+    merged with tenant-level overrides). Every logged-in member can
+    read this — frontend uses it to decide whether to show upgrade
+    prompts, disabled features, seat-count badges."""
+    from services.plans import effective_plan
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    ep = effective_plan(tenant)
+    # Include seats_used so the UI can render "X of Y seats used"
+    # without a second round trip.
+    from services.auth.membership import list_memberships_for_tenant, LIVE_STATUSES
+    active = await list_memberships_for_tenant(
+        db, user["tenant_id"], statuses=LIVE_STATUSES,
+    )
+    ep["seats_used"] = len(active)
+    return ep
+
+
+# FIX-005-A (S3-03): per-tenant AI key endpoints.
+class TenantAIKeysInput(BaseModel):
+    # Provider -> key. Empty / missing = fall back to platform pool.
+    keys: dict
+
+
+@api.get("/tenant/ai-keys")
+async def get_tenant_ai_keys(user: dict = Depends(require_role("owner"))):
+    """Owner-only: list all providers with tenant-key presence + a
+    masked preview of the actual key. Never returns the full secret.
+    Fallback to platform pool is indicated by source='platform'."""
+    from services.tenant_ai_keys import summarize_tenant_ai_keys
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    return {"providers": summarize_tenant_ai_keys(tenant)}
+
+
+@api.put("/tenant/ai-keys")
+async def put_tenant_ai_keys(inp: TenantAIKeysInput, request: Request,
+                               user: dict = Depends(require_role("owner"))):
+    """Owner-only: replace the tenant.ai_keys map wholesale. Unknown
+    providers dropped by normalize_ai_key_map. Emits audit log for
+    each provider whose key was added / rotated / removed."""
+    from services.tenant_ai_keys import (
+        normalize_ai_key_map, CUSTOMIZABLE_PROVIDERS,
+    )
+    from services import audit_log as _audit
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    old_keys = tenant.get("ai_keys") or {}
+    new_keys = normalize_ai_key_map(inp.keys)
+    await db.tenants.update_one(
+        {"id": user["tenant_id"]}, {"$set": {"ai_keys": new_keys,
+                                              "updated_at": now_iso()}},
+    )
+    # Audit each provider whose presence changed. Never log the value.
+    _ctx = _audit.context_from(request, user)
+    for p in CUSTOMIZABLE_PROVIDERS:
+        had_old = bool((old_keys.get(p) or "").strip()) if isinstance(old_keys.get(p), str) else False
+        has_new = bool((new_keys.get(p) or "").strip())
+        if had_old != has_new or (had_old and has_new and old_keys.get(p) != new_keys.get(p)):
+            await _audit.record(
+                db, action="ai_key_updated",
+                entity_type="tenant", entity_id=user["tenant_id"],
+                meta={"provider": p, "had_old": had_old, "has_new": has_new,
+                       "was_rotated": had_old and has_new and old_keys.get(p) != new_keys.get(p)},
+                **_ctx,
+            )
+    await log_activity(
+        user["tenant_id"], user["id"], "ai_keys_updated",
+        f"{user['name']} updated AI keys ({len(new_keys)} provider(s) set)",
+    )
+    from services.tenant_ai_keys import summarize_tenant_ai_keys
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    return {"providers": summarize_tenant_ai_keys(tenant)}
+
+
+@api.delete("/tenant/ai-keys/{provider}")
+async def delete_tenant_ai_key(provider: str, request: Request,
+                                 user: dict = Depends(require_role("owner"))):
+    """Owner-only: revert one provider back to the platform shared
+    pool by removing the tenant's own key for it."""
+    from services.tenant_ai_keys import CUSTOMIZABLE_PROVIDERS
+    from services import audit_log as _audit
+    if provider not in CUSTOMIZABLE_PROVIDERS:
+        raise HTTPException(status_code=400, detail=f"Unknown provider {provider!r}")
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    keys = dict((tenant or {}).get("ai_keys") or {})
+    had_it = bool((keys.get(provider) or "").strip()) if isinstance(keys.get(provider), str) else False
+    keys.pop(provider, None)
+    await db.tenants.update_one(
+        {"id": user["tenant_id"]}, {"$set": {"ai_keys": keys, "updated_at": now_iso()}},
+    )
+    if had_it:
+        _ctx = _audit.context_from(request, user)
+        await _audit.record(
+            db, action="ai_key_updated",
+            entity_type="tenant", entity_id=user["tenant_id"],
+            meta={"provider": provider, "removed": True},
+            **_ctx,
+        )
+        await log_activity(
+            user["tenant_id"], user["id"], "ai_keys_updated",
+            f"{user['name']} removed the tenant-level {provider} key",
+        )
+    from services.tenant_ai_keys import summarize_tenant_ai_keys
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
+    return {"providers": summarize_tenant_ai_keys(tenant)}
+
+
 # FIX-004-D (RBAC-15): owner exclusion list. Lets a tenant opt an
 # owner OUT of specific permissions. Solves the "co-founder with
 # everything EXCEPT finance visibility" ask that early-stage founders
@@ -5814,6 +5926,36 @@ async def _bootstrap():
                 logger.info("Migration applied: backfill_memberships_v1")
         except Exception as e:
             logger.warning(f"backfill_memberships migration: {e}")
+        # FIX-005-A (S3-02): backfill plan fields on existing tenants
+        # that predate the plan model. Every legacy tenant gets
+        # plan=grandfathered (unlimited seats + quotas, feature-flag
+        # defaults set) so nothing about their experience changes
+        # until an admin explicitly repositions them. New tenants
+        # created AFTER this migration get plan=trial via
+        # routers/auth.register.
+        async def _backfill_grandfathered_plans(_db):
+            from services.plans import PLAN_GRANDFATHERED
+            _res = await _db.tenants.update_many(
+                {"plan": {"$exists": False}},
+                {"$set": {"plan": PLAN_GRANDFATHERED,
+                          "seat_limit_override": None,
+                          "usage_quotas": {},
+                          "feature_flags": {},
+                          "updated_at": now_iso()}},
+            )
+            logger.info(
+                f"[FIX-005-A] backfill_grandfathered_plans: "
+                f"tenants marked={getattr(_res, 'modified_count', 0)}"
+            )
+        try:
+            _pres = await _apply_migration(
+                db, "backfill_grandfathered_plans_v1", _backfill_grandfathered_plans,
+                description="FIX-005-A (S3-02): mark pre-plan tenants as grandfathered",
+            )
+            if _pres == "applied":
+                logger.info("Migration applied: backfill_grandfathered_plans_v1")
+        except Exception as e:
+            logger.warning(f"backfill_grandfathered_plans migration: {e}")
         # FIX-004-D (RBAC-16): canonical role rename production -> operations.
         # Prior code had config.ROLES with 'production' but
         # config.DEFAULT_ROLES with 'operations' — silent inconsistency

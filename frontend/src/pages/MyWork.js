@@ -11,6 +11,7 @@ import { opModel } from "../lib/operatingModel";
 import { toast } from "sonner";
 import { TaskBoard, NewTaskDialog } from "./Tasks";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
+import { ResponsiveSheet } from "../components/ResponsiveSheet";
 import Workflows from "./Workflows";
 import Leave from "./Leave";
 import {
@@ -455,11 +456,15 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
   const isImg = (a) => a.kind === "photo" || (a.content_type || "").startsWith("image/");
   const isAudio = (a) => a.kind === "voice" || (a.content_type || "").startsWith("audio/");
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) { setZoom(null); setConfirmDel(false); } onOpenChange(o); }}>
-      <DialogContent className="border border-black rounded-none max-w-2xl max-h-[90vh] overflow-y-auto" data-testid={`task-detail-${t.id}`}>
-        <DialogHeader>
-          <DialogTitle className="font-heading uppercase tracking-tight text-base pr-6">{t.title}</DialogTitle>
-        </DialogHeader>
+    // The task is the only thing on screen while open: bottom sheet on
+    // mobile (drag down to dismiss), dialog on desktop.
+    <ResponsiveSheet
+      open={open}
+      onOpenChange={(o) => { if (!o) { setZoom(null); setConfirmDel(false); } onOpenChange(o); }}
+      testid={`task-detail-${t.id}`}
+      title={t.title}
+      description="Task detail"
+    >
         {zoom ? (
           <div className="space-y-3">
             <button onClick={() => setZoom(null)} data-testid={`detail-zoom-back-${t.id}`} className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-black px-2 py-1 hover:bg-black/5"><X size={14} weight="bold" /> Back to details</button>
@@ -593,8 +598,7 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
             )}
           </div>
         )}
-      </DialogContent>
-    </Dialog>
+    </ResponsiveSheet>
   );
 }
 

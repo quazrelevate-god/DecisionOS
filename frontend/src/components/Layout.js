@@ -25,8 +25,10 @@ import { timeAgo } from "../lib/format";
 import { notifMeta, notifLink } from "../lib/notif";
 import { hasPerm } from "../lib/perms";
 import { visibleGroups, BOTTOM_NAV, canSee, activeItem } from "../lib/nav";
+import { useEdgeSwipe, useIsMobile, useLongPress, useSwipe } from "../lib/gestures";
 import { cn } from "../lib/utils";
 import { Chip } from "./common";
+import { PullToRefresh } from "./gestures";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import {
@@ -104,10 +106,29 @@ export default function Layout({ children }) {
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem(SIDEBAR_KEY) === "1"
   );
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     localStorage.setItem(SIDEBAR_KEY, collapsed ? "1" : "0");
   }, [collapsed]);
+
+  /* ---- gestures ---------------------------------------------------------- */
+
+  // Swipe in from the left bezel → navigation drawer (mobile only).
+  const edgeSwipe = useEdgeSwipe({
+    onOpen: () => setDrawerOpen(true),
+    edgeWidth: 16,
+  });
+  // Swipe the open drawer left → close it, mirroring how it arrived.
+  const drawerSwipe = useSwipe({ onLeft: () => setDrawerOpen(false) });
+
+  // Pull down at the top of any screen → refetch everything on it.
+  const refreshAll = useCallback(async () => {
+    await Promise.all([
+      qc.invalidateQueries(),
+      new Promise((r) => setTimeout(r, 500)), // keep the spinner legible
+    ]);
+  }, [qc]);
 
   const groups = useMemo(() => visibleGroups(user), [user]);
   const navBottom = useMemo(() => BOTTOM_NAV.filter((n) => canSee(user, n)), [user]);
@@ -168,6 +189,9 @@ export default function Layout({ children }) {
     else if (hasPerm(user, "data_input")) navigate("/ingest");
     else navigate("/my-work");
   }, [user, navigate]);
+
+  // FAB: tap = capture, long-press = command palette (the mobile "right click").
+  const fabLongPress = useLongPress(openCommandPalette);
 
   const openNotif = async (n) => {
     if (!n.read) {
@@ -316,7 +340,7 @@ export default function Layout({ children }) {
       >
         {({ isActive }) => (
           <>
-            {/* Active indicator — a Klein hairline, not a filled block. */}
+            {/* Active indicator — a gold hairline, not a filled block. */}
             <span
               aria-hidden="true"
               className={cn(
@@ -437,7 +461,10 @@ export default function Layout({ children }) {
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="flex min-h-screen bg-background text-foreground">
+      <div
+        className="flex min-h-screen bg-background text-foreground"
+        {...(isMobile ? edgeSwipe : {})}
+      >
         <a href="#main-content" className="skip-link">
           Skip to content
         </a>
@@ -598,9 +625,9 @@ export default function Layout({ children }) {
                 onClick={goCapture}
                 data-testid="header-capture"
                 className={cn(
-                  "mr-1 inline-flex items-center gap-2 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground shadow-xs",
-                  "transition-[background-color,box-shadow,transform] duration-200",
-                  "hover:-translate-y-px hover:bg-primary-emphasis hover:shadow-sm active:scale-[0.98]",
+                  "mr-1 inline-flex items-center gap-2 rounded-lg bg-brand-gold px-3.5 py-2 text-sm font-semibold text-brand-ink shadow-xs",
+                  "transition-[filter,box-shadow,transform] duration-200",
+                  "hover:-translate-y-px hover:shadow-sm hover:brightness-[1.04] active:scale-[0.98]",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 )}
               >
@@ -642,6 +669,7 @@ export default function Layout({ children }) {
                   side="left"
                   className="flex w-[19rem] flex-col gap-0 border-r border-sidebar-border bg-sidebar p-0"
                   data-testid="mobile-drawer"
+                  {...drawerSwipe}
                 >
                   <SheetTitle className="sr-only">Navigation</SheetTitle>
                   <SheetDescription className="sr-only">Main navigation menu</SheetDescription>
@@ -664,6 +692,17 @@ export default function Layout({ children }) {
                   </nav>
 
                   <div className="shrink-0 space-y-2 border-t border-sidebar-border p-3 pb-6">
+                    {/* Theme + language live here, not in the header — the
+                        header stays two icons, and these are set-and-forget. */}
+                    <div className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-1.5">
+                      <span className="text-sm text-muted-foreground">
+                        {t("drawer.appearance", "Theme & language")}
+                      </span>
+                      <div className="flex items-center gap-0.5">
+                        <ThemeToggle />
+                        <LanguageSwitcher />
+                      </div>
+                    </div>
                     {user?.role === "owner" && (
                       <button
                         type="button"
@@ -706,8 +745,25 @@ export default function Layout({ children }) {
               >
                 <MagnifyingGlass size={18} weight="bold" />
               </IconButton>
-              <ThemeToggle />
-              <NotificationBell />
+              {/* On a phone the bell goes straight to the Notifications
+                  screen — a popover list in a 390px viewport is clutter. */}
+              <IconButton
+                label={`${t("header.notifications")}${unread ? ` (${unread})` : ""}`}
+                onClick={() => navigate("/notifications")}
+                data-testid="notif-bell"
+                className="relative"
+              >
+                <Bell size={18} weight="bold" />
+                {unread > 0 && (
+                  <span
+                    data-testid="notif-count"
+                    data-numeric
+                    className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 font-mono text-[9px] font-semibold leading-none text-destructive-foreground ring-2 ring-background"
+                  >
+                    {unread > 99 ? "99+" : unread}
+                  </span>
+                )}
+              </IconButton>
             </div>
           </header>
 
@@ -716,7 +772,9 @@ export default function Layout({ children }) {
             tabIndex={-1}
             className="app-canvas flex-1 overflow-x-hidden p-4 pb-28 lg:p-8 lg:pb-10"
           >
-            {children}
+            <PullToRefresh onRefresh={refreshAll} disabled={!isMobile}>
+              {children}
+            </PullToRefresh>
           </main>
         </div>
 
@@ -730,15 +788,18 @@ export default function Layout({ children }) {
             <BottomTab key={item.to} item={item} location={location} t={t} />
           ))}
 
-          {/* Capture takes the thumb position — it is the core gesture. */}
+          {/* Capture takes the thumb position — it is the core gesture.
+              Tap = capture; long-press = command palette. Bright gold is
+              reserved for exactly this moment. */}
           <div className="relative flex w-[4.5rem] shrink-0 items-start justify-center">
             <button
               type="button"
               onClick={goCapture}
+              {...fabLongPress}
               data-testid="bottomnav-capture"
               aria-label={t("header.capture", "Capture")}
               className={cn(
-                "-mt-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground",
+                "-mt-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-gold text-brand-ink",
                 "shadow-lg ring-4 ring-background",
                 "transition-transform duration-200 active:scale-[0.94]",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

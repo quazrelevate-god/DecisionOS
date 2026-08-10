@@ -6,6 +6,7 @@ import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
 import { Chip, EmptyState } from "../components/common";
+import { SwipeRow } from "../components/gestures";
 import { ThinkingCanvas } from "../components/ThinkingCanvas";
 import ExecutionSummary from "../components/ExecutionSummary";
 import { DecisionDialog, raisedByLabel, RaisedByIcon } from "../components/DecisionDialog";
@@ -19,51 +20,8 @@ import {
   Paperclip, File as FileIcon, ShieldCheck, Camera, UploadSimple, Translate,
 } from "@phosphor-icons/react";
 
-function SwipeRow({ children, onLeft, onRight, rightLabel = "View", testid }) {
-  const [dx, setDx] = useState(0);
-  const s = useRef(null);
-  const engaged = useRef(false);
-  const THRESH = 70, MAX = 110;
-  const start = (e) => { const t = e.touches[0]; s.current = { x: t.clientX, y: t.clientY }; engaged.current = false; };
-  const move = (e) => {
-    if (!s.current) return;
-    const t = e.touches[0];
-    let d = t.clientX - s.current.x;
-    const dy = t.clientY - s.current.y;
-    if (!engaged.current) {
-      if (Math.abs(d) < Math.abs(dy) || Math.abs(d) < 10) return;
-      engaged.current = true;
-    }
-    if (!onRight && d > 0) d = 0;
-    if (!onLeft && d < 0) d = 0;
-    setDx(Math.max(-MAX, Math.min(MAX, d)));
-  };
-  const end = () => {
-    if (dx >= THRESH && onRight) onRight();
-    else if (dx <= -THRESH && onLeft) onLeft();
-    setDx(0); s.current = null; engaged.current = false;
-  };
-  const committedR = dx >= THRESH, committedL = dx <= -THRESH;
-  return (
-    <div className="relative overflow-hidden border border-black" data-testid={testid}>
-      {onRight && (
-        <div className={`absolute inset-y-0 left-0 flex items-center gap-1 px-5 text-white text-xs font-semibold uppercase tracking-wider transition-colors ${committedR ? "bg-brand-blue brightness-125" : "bg-brand-blue/70"}`} style={{ opacity: dx > 8 ? 1 : 0 }}>
-          <Eye size={16} weight="bold" /> {committedR ? `Release · ${rightLabel}` : rightLabel}
-        </div>
-      )}
-      {onLeft && (
-        <div className={`absolute inset-y-0 right-0 flex items-center gap-1 px-5 text-white text-xs font-semibold uppercase tracking-wider transition-colors ${committedL ? "bg-brand-red brightness-125" : "bg-brand-red/70"}`} style={{ opacity: dx < -8 ? 1 : 0 }}>
-          {committedL ? "Release · Dismiss" : "Dismiss"} <X size={16} weight="bold" />
-        </div>
-      )}
-      <div onTouchStart={start} onTouchMove={move} onTouchEnd={end}
-        className="relative bg-white"
-        style={{ transform: `translateX(${dx}px)`, transition: dx === 0 ? "transform .2s ease" : "none", touchAction: "pan-y" }}>
-        {children}
-      </div>
-    </div>
-  );
-}
+// Swipe actions on feed rows now come from the shared gesture toolkit
+// (components/gestures.js), so every screen reveals actions the same way.
 
 function EscalationCard({ t, onRespond, highlight }) {
   const [text, setText] = useState("");

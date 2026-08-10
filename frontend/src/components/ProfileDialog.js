@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
 import api from "../lib/api";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
+import { ResponsiveSheet } from "./ResponsiveSheet";
 import { UserCircle, FloppyDisk, Lock } from "@phosphor-icons/react";
 
 const inp = "w-full border border-border rounded-lg px-3 py-2 text-sm mt-1 bg-card focus:outline-none focus:ring-2 focus:ring-ring/40";
@@ -53,7 +53,7 @@ export function ProfileForm({ onSaved }) {
         <p className="label-mono text-muted-foreground mt-1">Email is your sign-in ID and can't be changed here.</p>
       </div>
       <button onClick={save} disabled={saving} data-testid="profile-save"
-        className="flex items-center justify-center gap-2 bg-brand-ink text-white px-5 py-2.5 text-sm font-semibold uppercase tracking-wider rounded-lg hover:bg-brand-red transition-colors disabled:opacity-50">
+        className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground shadow-xs transition-[background-color,transform] duration-200 hover:bg-primary-emphasis active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50">
         <FloppyDisk size={16} weight="bold" /> {saving ? "Saving…" : "Save changes"}
       </button>
     </div>
@@ -109,7 +109,7 @@ export function ChangePasswordForm() {
           onChange={(e) => setConfirm(e.target.value)} className={inp} placeholder="Re-enter new password" autoComplete="new-password" />
       </div>
       <button onClick={submit} disabled={saving} data-testid="password-change-submit"
-        className="flex items-center justify-center gap-2 bg-brand-ink text-white px-5 py-2.5 text-sm font-semibold uppercase tracking-wider rounded-lg hover:bg-brand-red transition-colors disabled:opacity-50">
+        className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground shadow-xs transition-[background-color,transform] duration-200 hover:bg-primary-emphasis active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50">
         <Lock size={16} weight="bold" /> {saving ? "Updating…" : "Update password"}
       </button>
     </div>
@@ -118,13 +118,16 @@ export function ChangePasswordForm() {
 
 export function ProfileDialog({ open, onClose }) {
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-md" data-testid="profile-dialog">
-        <DialogHeader>
-          <DialogTitle className="text-left flex items-center gap-2"><UserCircle size={22} weight="bold" /> Edit profile</DialogTitle>
-        </DialogHeader>
-        <div className="mt-2"><ProfileForm onSaved={onClose} /></div>
-      </DialogContent>
-    </Dialog>
+    <ResponsiveSheet
+      open={open}
+      onOpenChange={(o) => !o && onClose()}
+      testid="profile-dialog"
+      title="Edit profile"
+      description="Update your name, phone and password"
+      icon={<UserCircle size={22} weight="bold" />}
+      className="lg:max-w-md"
+    >
+      <div className="mt-2"><ProfileForm onSaved={onClose} /></div>
+    </ResponsiveSheet>
   );
 }

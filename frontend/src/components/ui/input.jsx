@@ -3,7 +3,7 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 
 /**
- * Flat input surface. Focus is the only decorated state, and it uses the Klein
+ * Flat input surface. Focus is the only decorated state, and it uses the gold
  * ring so keyboard position is never ambiguous.
  */
 const Input = React.forwardRef(({ className, type, ...props }, ref) => {

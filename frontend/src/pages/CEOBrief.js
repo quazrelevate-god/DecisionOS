@@ -1,13 +1,15 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { Chip, PageHeader, SegmentedControl, StatTile, EmptyState, Skeleton } from "../components/common";
+import { useSwipe } from "../lib/gestures";
+import { GestureHint } from "../components/gestures";
+import { ResponsiveSheet } from "../components/ResponsiveSheet";
 import { money } from "../lib/format";
 import { cn } from "../lib/utils";
 import { toast } from "sonner";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import {
   Clock, CheckCircle, Stamp, UserMinus, Warning, CurrencyInr, XCircle, ArrowClockwise,
   CaretRight, Fire, BookOpen, ListChecks, WarningCircle, ArrowBendUpRight, Sparkle,
@@ -113,25 +115,18 @@ function DetailDialog({ row, period, open, onClose }) {
     navigate(fn(it));
   };
 
+  // A focused overlay — bottom sheet on mobile (drag down to dismiss),
+  // dialog on desktop — so detail never expands inline into the grid.
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent
-        className="max-h-[85vh] max-w-2xl overflow-y-auto rounded-xl border-border"
-        data-testid={`brief-detail-dialog-${key}`}
-      >
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2.5 text-heading">
-            {row?.icon && (
-              <span className={cn("shrink-0", ACCENT[row.tone])}>
-                <row.icon size={20} weight="bold" />
-              </span>
-            )}
-            <span className="capitalize">{row?.label}</span>
-          </DialogTitle>
-          <DialogDescription className="sr-only">Details for {row?.label}</DialogDescription>
-        </DialogHeader>
-
-        {isLoading ? (
+    <ResponsiveSheet
+      open={open}
+      onOpenChange={(o) => !o && onClose()}
+      testid={`brief-detail-dialog-${key}`}
+      title={<span className="capitalize">{row?.label}</span>}
+      description={`Details for ${row?.label}`}
+      icon={row?.icon ? <row.icon size={20} weight="bold" className={ACCENT[row.tone]} /> : null}
+    >
+      {isLoading ? (
           <div className="space-y-3 py-2">
             {[0, 1, 2].map((i) => (
               <div key={i} className="rounded-lg border border-border p-4">
@@ -243,9 +238,8 @@ function DetailDialog({ row, period, open, onClose }) {
               );
             })}
           </div>
-        )}
-      </DialogContent>
-    </Dialog>
+      )}
+    </ResponsiveSheet>
   );
 }
 
@@ -260,6 +254,23 @@ export default function CEOBrief() {
     queryKey: ["brief", period],
     queryFn: () => api.get(`/brief?period=${period}`).then((r) => r.data),
     refetchInterval: 30000,
+  });
+
+  // Calendar-app muscle memory: swipe the report itself to move between
+  // periods. The segmented control stays as the visible state + tap path.
+  const stepPeriod = useCallback(
+    (dir) => {
+      setPeriod((p) => {
+        const i = PERIODS.findIndex((x) => x.value === p);
+        const next = PERIODS[i + dir];
+        return next ? next.value : p;
+      });
+    },
+    []
+  );
+  const periodSwipe = useSwipe({
+    onLeft: () => stepPeriod(1),
+    onRight: () => stepPeriod(-1),
   });
 
   const fires = data?.counters?.fires || 0;
@@ -317,6 +328,8 @@ export default function CEOBrief() {
         </div>
       </PageHeader>
 
+      <GestureHint className="mb-4 -mt-1">Swipe left or right to change period</GestureHint>
+
       {isLoading || !data ? (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-3" data-testid="brief-loading">
           {rows.map((r) => (
@@ -328,7 +341,9 @@ export default function CEOBrief() {
           ))}
         </div>
       ) : (
-        <div data-testid="ceo-brief-card">
+        // key={period} re-runs the tile entrance stagger, so a swipe visibly
+        // slides in a fresh report rather than mutating numbers in place.
+        <div data-testid="ceo-brief-card" key={period} {...periodSwipe} className="animate-fade-in" style={{ touchAction: "pan-y" }}>
           {/* Fires are the only thing allowed to interrupt the grid. */}
           {isOwner && fires > 0 && (
             <button

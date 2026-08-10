@@ -4,73 +4,81 @@
 @tailwind utilities;
 
 /* ============================================================================
-   DecisionOS — "Meridian" design tokens
+   DecisionOS — "Gilt" design tokens
    ----------------------------------------------------------------------------
-   Warm paper + graphite ink + International Klein Blue.
-   Klein blue is the system signature (primary actions, active nav, focus).
-   Red is NOT the brand — it is reserved as the urgency signal (fires, overdue,
-   destructive). Every surface is a token; nothing is hardcoded.
+   Ivory + graphite + gold.
+     · Light surfaces (#FFF4DE / #FFFFFF) are PRIMARY — the whole canvas.
+     · Dark graphite (#0D0D0F / #232427 / #4E4F55) is SECONDARY — the dark
+       theme and rare high-emphasis fills.
+     · Gold (#D8B24A) is the single accent: strokes, highlights, active
+       states, primary actions. On light surfaces it darkens to a "gold ink"
+       (#8A6914-range) wherever it carries text, so contrast never drops
+       below AA; the bright #D8B24A is reserved for fills that carry ink text
+       and for dark-theme accents where it reads at ~9:1.
+   Red stays a pure urgency signal. Every surface is a token.
    ========================================================================== */
 
 @layer base {
     :root {
-        /* Surfaces — warm neutral, slightly off-white so cards can sit above it */
-        --background: 40 22% 98%;
-        --surface: 40 16% 96%;
+        /* Surfaces — ivory canvas, white cards floating above it */
+        --background: 40 78% 96%;
+        --surface: 40 60% 93%;
         --surface-raised: 0 0% 100%;
-        --surface-sunken: 40 14% 94%;
-        --foreground: 225 18% 8%;
+        --surface-sunken: 40 52% 90%;
+        --foreground: 240 7% 6%;
 
         --card: 0 0% 100%;
-        --card-foreground: 225 18% 8%;
+        --card-foreground: 240 7% 6%;
         --popover: 0 0% 100%;
-        --popover-foreground: 225 18% 8%;
+        --popover-foreground: 240 7% 6%;
 
-        /* Signature — International Klein Blue */
-        --primary: 226 100% 33%;
-        --primary-foreground: 0 0% 100%;
-        --primary-subtle: 226 100% 96%;
-        --primary-emphasis: 226 100% 26%;
+        /* Signature — gold ink (readable on ivory); bright gold lives in
+           brand.gold for fills with dark text on top */
+        --primary: 43 72% 31%;
+        --primary-foreground: 40 100% 97%;
+        --primary-subtle: 44 78% 90%;
+        --primary-emphasis: 43 76% 24%;
 
-        --secondary: 40 14% 94%;
-        --secondary-foreground: 225 18% 12%;
-        --muted: 40 14% 95%;
-        --muted-foreground: 225 8% 42%;
-        --accent: 40 14% 93%;
-        --accent-foreground: 225 18% 10%;
+        --secondary: 40 48% 92%;
+        --secondary-foreground: 240 7% 10%;
+        --muted: 40 45% 93%;
+        --muted-foreground: 231 5% 34%;
+        --accent: 42 52% 90%;
+        --accent-foreground: 240 7% 8%;
 
-        /* Semantics */
+        /* Semantics — warning shifts to burnt orange so it never reads as
+           "the gold accent" */
         --destructive: 4 78% 47%;
         --destructive-foreground: 0 0% 100%;
         --destructive-subtle: 4 80% 96%;
         --success: 158 78% 27%;
         --success-foreground: 0 0% 100%;
         --success-subtle: 158 60% 95%;
-        --warning: 32 92% 40%;
+        --warning: 24 88% 38%;
         --warning-foreground: 0 0% 100%;
-        --warning-subtle: 38 92% 95%;
-        --info: 226 100% 33%;
-        --info-foreground: 0 0% 100%;
-        --info-subtle: 226 100% 96%;
+        --warning-subtle: 26 90% 94%;
+        --info: 43 72% 31%;
+        --info-foreground: 40 100% 97%;
+        --info-subtle: 44 78% 90%;
 
-        --border: 40 10% 88%;
-        --border-strong: 40 8% 78%;
-        --input: 40 10% 85%;
-        --ring: 226 100% 42%;
+        --border: 40 34% 84%;
+        --border-strong: 41 28% 71%;
+        --input: 40 30% 80%;
+        --ring: 43 70% 38%;
 
         /* App shell */
-        --sidebar: 40 18% 97%;
-        --sidebar-foreground: 225 18% 8%;
-        --sidebar-muted: 225 8% 44%;
-        --sidebar-border: 40 10% 88%;
+        --sidebar: 41 72% 97%;
+        --sidebar-foreground: 240 7% 6%;
+        --sidebar-muted: 231 5% 38%;
+        --sidebar-border: 40 32% 86%;
 
-        --shadow-color: 225 25% 12%;
+        --shadow-color: 40 24% 12%;
         --edge-highlight: 0 0% 100%;
 
-        --chart-1: 226 100% 40%;
-        --chart-2: 158 68% 34%;
-        --chart-3: 32 92% 46%;
-        --chart-4: 268 62% 52%;
+        --chart-1: 43 66% 44%;
+        --chart-2: 231 5% 40%;
+        --chart-3: 158 68% 32%;
+        --chart-4: 33 46% 58%;
         --chart-5: 4 74% 52%;
 
         --radius: 0.75rem;
@@ -79,62 +87,63 @@
     .dark {
         color-scheme: dark;
 
-        --background: 228 16% 6%;
-        --surface: 228 14% 9%;
-        --surface-raised: 228 13% 11%;
-        --surface-sunken: 228 18% 4%;
-        --foreground: 40 20% 96%;
+        /* Surfaces — the user's ink scale: #0D0D0F ground, #232427 raised */
+        --background: 240 7% 5%;
+        --surface: 225 5% 11%;
+        --surface-raised: 225 5% 15%;
+        --surface-sunken: 240 8% 3%;
+        --foreground: 40 100% 94%;
 
-        --card: 228 13% 9%;
-        --card-foreground: 40 20% 96%;
-        --popover: 228 14% 10%;
-        --popover-foreground: 40 20% 96%;
+        --card: 225 5% 13%;
+        --card-foreground: 40 100% 94%;
+        --popover: 225 5% 14%;
+        --popover-foreground: 40 100% 94%;
 
-        /* Klein blue lifted for dark-surface legibility */
-        --primary: 226 100% 68%;
-        --primary-foreground: 228 40% 8%;
-        --primary-subtle: 226 60% 16%;
-        --primary-emphasis: 226 100% 76%;
+        /* Bright gold carries the dark theme (~9:1 on #0D0D0F) */
+        --primary: 44 64% 57%;
+        --primary-foreground: 240 7% 6%;
+        --primary-subtle: 44 42% 15%;
+        --primary-emphasis: 44 70% 66%;
 
-        --secondary: 228 10% 15%;
-        --secondary-foreground: 40 20% 96%;
-        --muted: 228 10% 14%;
-        --muted-foreground: 228 9% 64%;
-        --accent: 228 10% 17%;
-        --accent-foreground: 40 20% 97%;
+        --secondary: 228 5% 18%;
+        --secondary-foreground: 40 100% 94%;
+        --muted: 228 5% 16%;
+        --muted-foreground: 231 7% 67%;
+        --accent: 228 5% 20%;
+        --accent-foreground: 40 100% 95%;
 
         /* Subtle tints stay near the page ground — a saturated fill at this size
            reads as mud on a dark surface and drowns the number sitting on it. */
         --destructive: 4 84% 62%;
-        --destructive-foreground: 228 40% 8%;
+        --destructive-foreground: 240 40% 8%;
         --destructive-subtle: 4 32% 12%;
-        --success: 158 62% 48%;
-        --success-foreground: 228 40% 8%;
+        --success: 158 55% 48%;
+        --success-foreground: 240 40% 8%;
         --success-subtle: 158 30% 11%;
-        --warning: 36 92% 58%;
-        --warning-foreground: 228 40% 8%;
-        --warning-subtle: 36 34% 11%;
-        --info: 226 100% 68%;
-        --info-foreground: 228 40% 8%;
-        --info-subtle: 226 60% 16%;
+        --warning: 26 90% 60%;
+        --warning-foreground: 240 40% 8%;
+        --warning-subtle: 26 40% 12%;
+        --info: 44 64% 57%;
+        --info-foreground: 240 7% 6%;
+        --info-subtle: 44 42% 15%;
 
-        --border: 228 10% 17%;
-        --border-strong: 228 9% 26%;
-        --input: 228 10% 20%;
-        --ring: 226 100% 68%;
+        --border: 226 5% 16%;
+        --border-strong: 231 4% 32%;
+        --input: 228 5% 21%;
+        --ring: 44 64% 57%;
 
-        --sidebar: 228 15% 7%;
-        --sidebar-foreground: 40 20% 96%;
-        --sidebar-muted: 228 9% 60%;
-        --sidebar-border: 228 10% 15%;
+        --sidebar: 240 7% 4%;
+        --sidebar-foreground: 40 100% 94%;
+        --sidebar-muted: 231 6% 63%;
+        --sidebar-border: 226 5% 14%;
 
-        --shadow-color: 228 40% 2%;
-        --edge-highlight: 0 0% 100%;
+        --shadow-color: 240 40% 2%;
+        --edge-highlight: 44 64% 57%;
 
-        --chart-1: 226 100% 70%;
-        --chart-2: 158 62% 50%;
-        --chart-3: 36 92% 60%;
-        --chart-4: 268 76% 70%;
+        --chart-1: 44 64% 60%;
+        --chart-2: 231 6% 63%;
+        --chart-3: 158 55% 50%;
+        --chart-4: 33 45% 55%;
         --chart-5: 4 84% 64%;
     }
 }
@@ -146,6 +155,9 @@
 
     html {
         -webkit-tap-highlight-color: transparent;
+        /* The app provides its own pull-to-refresh; suppress the browser's
+           native one so the two never fight over the same gesture. */
+        overscroll-behavior-y: none;
     }
 
     body {
@@ -329,7 +341,7 @@
 ::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.5); background-clip: padding-box; }
 * { scrollbar-width: thin; scrollbar-color: hsl(var(--border-strong)) transparent; }
 
-/* Ambient work surface: a faint Klein wash off the top edge + a precision grid. */
+/* Ambient work surface: a faint gold wash off the top edge + a precision grid. */
 .app-canvas {
     background-color: hsl(var(--background));
     background-image:

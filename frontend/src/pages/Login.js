@@ -185,37 +185,37 @@ export default function Login() {
       >
         {isDark ? <Sun size={18} weight="bold" /> : <MoonStars size={18} weight="bold" />}
       </button>
-      {/* Left brand panel — a deep Klein field, not a black box. */}
-      <div className="relative hidden flex-col justify-between overflow-hidden border-r border-border bg-[hsl(226_100%_14%)] p-12 text-white lg:flex">
+      {/* Left brand panel — deep graphite ink with a gold thread. */}
+      <div className="relative hidden flex-col justify-between overflow-hidden border-r border-border bg-[#0D0D0F] p-12 text-[#FFF4DE] lg:flex">
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 opacity-[0.18]"
+          className="pointer-events-none absolute inset-0 opacity-[0.16]"
           style={{
             backgroundImage:
-              "radial-gradient(70% 50% at 15% 0%, rgba(255,255,255,0.5), transparent 60%), radial-gradient(rgba(255,255,255,0.35) 0.7px, transparent 0.7px)",
+              "radial-gradient(70% 50% at 15% 0%, rgba(216,178,74,0.55), transparent 60%), radial-gradient(rgba(216,178,74,0.4) 0.7px, transparent 0.7px)",
             backgroundSize: "100% 100%, 28px 28px",
           }}
         />
         <div className="relative flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/15 ring-1 ring-inset ring-white/25">
-            <span className="text-[17px] font-semibold leading-none">D</span>
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-gold/15 ring-1 ring-inset ring-brand-gold/40">
+            <span className="text-[17px] font-semibold leading-none text-brand-gold">D</span>
           </div>
           <span className="text-[19px] font-semibold leading-none tracking-tight">
-            Decision<span className="text-white/60">OS</span>
+            Decision<span className="text-brand-gold">OS</span>
           </span>
         </div>
         <div className="relative">
-          <p className="label-mono mb-5 text-white/55">The operating brain for founder-led SMEs</p>
+          <p className="label-mono mb-5 text-brand-gold/80">The operating brain for founder-led SMEs</p>
           <h1 className="max-w-lg text-[2.75rem] font-semibold leading-[1.08] tracking-[-0.035em] xl:text-[3.25rem]">
             Speak the decision.<br />
-            <span className="text-white/60">We run the company.</span>
+            <span className="text-brand-gold">We run the company.</span>
           </h1>
-          <p className="mt-6 max-w-md text-sm leading-relaxed text-white/60">
+          <p className="mt-6 max-w-md text-sm leading-relaxed text-[#FFF4DE]/60">
             Tailored to your industry — DecisionOS turns spoken directives into structured tasks,
             workflows and a shared operational brain.
           </p>
         </div>
-        <div className="relative flex items-center gap-2 text-xs text-white/45">
+        <div className="relative flex items-center gap-2 text-xs text-[#FFF4DE]/45">
           <Microphone size={15} weight="bold" /> Voice-first · AI-structured · Multi-tenant
         </div>
       </div>

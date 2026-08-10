@@ -71,12 +71,15 @@ module.exports = {
                     muted: 'hsl(var(--sidebar-muted))',
                     border: 'hsl(var(--sidebar-border))',
                 },
-                // Signature palette. `red` is retained ONLY as the urgency signal.
+                // Signature palette. `gold` is the accent; `red` is retained ONLY
+                // as the urgency signal. blue/yellow keys survive for un-migrated
+                // markup — the legacy bridge in index.css re-tokens them anyway.
                 brand: {
-                    klein: '#002FA7',
-                    lift: '#5B7CFF',
-                    ink: '#111318',
-                    paper: '#FBFAF8',
+                    gold: '#D8B24A',
+                    ink: '#0D0D0F',
+                    graphite: '#4E4F55',
+                    ivory: '#FFF4DE',
+                    paper: '#FFF4DE',
                     red: '#E5342A',
                     blue: '#002FA7',
                     yellow: '#D97706',

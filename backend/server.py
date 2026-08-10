@@ -1846,6 +1846,100 @@ async def update_role_permissions(key: str, inp: RolePermissionsInput,
     return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
 
 
+# FIX-005-C (RBAC-25): DPDP AI-consent tracking endpoints.
+class AiConsentGrantInput(BaseModel):
+    version: Optional[str] = None
+    # Optional acknowledgment fields — not persisted, just make the
+    # frontend contract explicit that the user was shown the doc.
+    acknowledged: Optional[bool] = None
+
+
+@api.get("/tenant/ai-consent")
+async def get_ai_consent(user: dict = Depends(get_current_user)):
+    """Consent status readable by any member — the frontend needs it
+    to decide whether to show the consent modal (owner) or a
+    'consent pending' banner (non-owner)."""
+    from services.ai_consent import consent_status
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0, "ai_consent": 1})
+    return consent_status(tenant or {})
+
+
+@api.post("/tenant/ai-consent")
+async def grant_ai_consent(inp: AiConsentGrantInput, request: Request,
+                             user: dict = Depends(require_role("owner"))):
+    """Grant DPDP AI-processing consent. Owner-only — non-owners can't
+    obligate the workspace to AI processing on their behalf.
+
+    Captures actor + IP + UA so a regulator can verify who granted
+    when. Emits an audit_log row so the compliance timeline has an
+    immutable record.
+    """
+    from services import ai_consent as _consent
+    from services import audit_log as _audit
+    ip = (request.headers.get("X-Forwarded-For") or "").split(",")[0].strip() or (
+        request.headers.get("X-Real-IP") or "").strip() or (
+        request.client.host if request.client else None)
+    ua = request.headers.get("User-Agent") or None
+    payload = _consent.build_grant_payload(
+        actor_user_id=user["id"],
+        actor_email=user.get("email") or "",
+        ip=ip, ua=ua,
+        version=inp.version or _consent.CURRENT_CONSENT_VERSION,
+    )
+    await db.tenants.update_one(
+        {"id": user["tenant_id"]},
+        {"$set": {"ai_consent": payload, "updated_at": now_iso()}},
+    )
+    _ctx = _audit.context_from(request, user)
+    await _audit.record(
+        db, action="tenant_ai_consent_granted",
+        entity_type="tenant", entity_id=user["tenant_id"],
+        after={"version": payload["version"]},
+        **_ctx,
+    )
+    await log_activity(
+        user["tenant_id"], user["id"], "ai_consent_granted",
+        f"{user['name']} granted AI-processing consent (v{payload['version']})",
+    )
+    return _consent.consent_status(
+        await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0, "ai_consent": 1})
+    )
+
+
+@api.delete("/tenant/ai-consent")
+async def revoke_ai_consent(request: Request,
+                              user: dict = Depends(require_role("owner"))):
+    """Revoke previously-granted consent. Preserves the grant record
+    (granted_at + granting user's identity) — just flips revoked_at
+    so the audit trail stays intact.
+
+    All AI features become 451 immediately for this tenant.
+    """
+    from services import ai_consent as _consent
+    from services import audit_log as _audit
+    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0, "ai_consent": 1})
+    if not tenant or not (tenant.get("ai_consent") or {}).get("granted_at"):
+        raise HTTPException(status_code=400, detail="No active AI consent to revoke")
+    await db.tenants.update_one(
+        {"id": user["tenant_id"]},
+        {"$set": _consent.build_revoke_patch(), "updated_at": now_iso()},
+    )
+    _ctx = _audit.context_from(request, user)
+    await _audit.record(
+        db, action="tenant_ai_consent_revoked",
+        entity_type="tenant", entity_id=user["tenant_id"],
+        before={"granted_at": (tenant.get("ai_consent") or {}).get("granted_at")},
+        **_ctx,
+    )
+    await log_activity(
+        user["tenant_id"], user["id"], "ai_consent_revoked",
+        f"{user['name']} revoked AI-processing consent",
+    )
+    return _consent.consent_status(
+        await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0, "ai_consent": 1})
+    )
+
+
 # FIX-005-B (S3-04): monthly usage dashboard read endpoint.
 @api.get("/tenant/usage")
 async def get_tenant_usage(user: dict = Depends(get_current_user)):

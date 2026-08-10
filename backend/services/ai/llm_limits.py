@@ -113,13 +113,24 @@ async def guarded_llm(coro, *, label: str = "llm",
     blocks already handle this — see routers/onboarding.py::os_blueprint
     or services/ai_setup.py wrappers).
     """
-    # Quota check BEFORE we take a semaphore slot — reject fast, don't
-    # queue rejections behind other work.
+    # DPDP consent + quota checks BEFORE we take a semaphore slot —
+    # reject fast, don't queue rejections behind other work.
     if not skip_quota_check:
         try:
             from core import _ctx_tenant, db
             tid = _ctx_tenant.get()
             if tid:
+                # FIX-005-C (RBAC-25): DPDP consent gate. Fetch tenant
+                # once; use it for both the consent check and the
+                # quota check to avoid a second round-trip.
+                tenant_doc = await db.tenants.find_one(
+                    {"id": tid}, {"_id": 0, "ai_consent": 1, "plan": 1,
+                                   "seat_limit_override": 1, "usage_quotas": 1,
+                                   "feature_flags": 1},
+                )
+                from services.ai_consent import require_ai_consent
+                require_ai_consent(tenant_doc or {})
+                # Quota check
                 from services.quotas import check_quota
                 ok, detail = await check_quota(db, tid, "llm_tokens_total")
                 if not ok:
@@ -138,14 +149,14 @@ async def guarded_llm(coro, *, label: str = "llm",
                         },
                     )
         except Exception as _quota_err:
-            # HTTPException we RAISE — that's the intentional 402 path.
-            # Anything else (Mongo blip in the quota fetch) fails open:
-            # log and let the call through so a monitoring failure
-            # doesn't take AI down.
+            # HTTPException we RAISE — that's the intentional 402/451
+            # path. Anything else (Mongo blip in the fetch) fails
+            # open: log and let the call through so a monitoring
+            # failure doesn't take AI down.
             from fastapi import HTTPException
             if isinstance(_quota_err, HTTPException):
                 raise
-            logger.warning(f"[{label}] quota check errored, allowing: {_quota_err}")
+            logger.warning(f"[{label}] pre-call gate errored, allowing: {_quota_err}")
 
     sem = _get_semaphore()
     effective_timeout = timeout if timeout is not None else LLM_TIMEOUT_SECONDS

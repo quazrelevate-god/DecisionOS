@@ -19,6 +19,7 @@ from pydantic import BaseModel, EmailStr, Field
 from core import (
     db, get_current_user, hash_password, verify_password, create_token,
     set_auth_cookie, clear_auth_cookie, set_usage_tenant, new_id, now_iso,
+    login_response,
 )
 
 
@@ -409,12 +410,15 @@ async def register(inp: RegisterInput, request: Request, response: Response):
         "operational_tasks": len(tenant_doc["operational_task_templates"]),
         "approval_rules": len(tenant_doc["approval_rules"]),
     }
-    return {
-        "token": token, "user": user, "tenant": tenant, "os_summary": os_summary,
+    # FIX-006-A (S0-08): cookie is source of truth; body carries user/tenant.
+    # Raw JWT surfaces in the body only when AUTH_RETURN_TOKEN is on.
+    return login_response(
+        token,
+        user=user, tenant=tenant, os_summary=os_summary,
         # FIX-001-D: surface AI setup status so the frontend can prompt
         # regeneration when needed instead of silently using defaults.
-        "ai_setup_status": ai_setup_svc.summarize_ai_setup_status(ai_setup_status),
-    }
+        ai_setup_status=ai_setup_svc.summarize_ai_setup_status(ai_setup_status),
+    )
 
 
 @router.post("/login")
@@ -540,7 +544,8 @@ async def login(inp: LoginInput, request: Request, response: Response):
         )
     except Exception:
         pass  # best-effort — the JWT is still valid; session-mgmt is bonus
-    return {"token": token, "user": user, "tenant": tenant}
+    # FIX-006-A (S0-08): cookie-only in prod (see login_response).
+    return login_response(token, user=user, tenant=tenant)
 
 
 @router.get("/me/workspaces")
@@ -595,12 +600,13 @@ async def switch_workspace(inp: SwitchWorkspaceInput, request: Request,
         )
     except Exception:
         pass
-    return {
-        "token": token,
-        "tenant": tenant,
-        "role": target.get("role"),
-        "permissions": list(target.get("permissions") or []),
-    }
+    # FIX-006-A (S0-08): cookie-only in prod.
+    return login_response(
+        token,
+        tenant=tenant,
+        role=target.get("role"),
+        permissions=list(target.get("permissions") or []),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1078,8 +1084,8 @@ async def verify_2fa_on_login(inp: TotpVerifyLoginInput, request: Request,
         meta={"used_backup_code": used_backup},
         **_ctx,
     )
-    return {"token": token, "user": user, "tenant": tenant,
-            "used_backup_code": used_backup}
+    # FIX-006-A (S0-08): cookie-only in prod.
+    return login_response(token, user=user, tenant=tenant, used_backup_code=used_backup)
 
 
 @router.post("/2fa/disable")

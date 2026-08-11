@@ -13,6 +13,7 @@ from core import (
     create_admin_token, set_admin_cookie, clear_admin_cookie, get_platform_admin,
     get_ai_key, set_ai_keys, ai_key_source, mask_key, AI_KEY_PROVIDERS, claude_key,
     EMERGENT_LLM_KEY, LLM_MODEL, VISION_MODEL,
+    login_response,
 )
 
 router = APIRouter(prefix="/api/admin")
@@ -77,7 +78,11 @@ async def admin_login(payload: AdminLoginInput, request: Request, response: Resp
     token = create_admin_token(admin["id"])
     set_admin_cookie(response, token)
     await log_admin_action(admin, "login", "Signed in to the admin console")
-    return {"token": token, "admin": {"id": admin["id"], "email": admin["email"], "name": admin.get("name")}}
+    # FIX-006-A (S0-08): cookie is source of truth for admin auth too.
+    return login_response(
+        token,
+        admin={"id": admin["id"], "email": admin["email"], "name": admin.get("name")},
+    )
 
 
 @router.post("/logout")

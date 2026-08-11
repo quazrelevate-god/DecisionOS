@@ -27,6 +27,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from config import (  # noqa: F401 — re-exports
     MONGO_URL, DB_NAME,
     JWT_SECRET, JWT_ALGORITHM,
+    PLATFORM_ADMIN_JWT_SECRET, AUTH_RETURN_TOKEN, SUPERADMIN_ALLOW_HASH_REFRESH,
     AUTH_COOKIE_NAME, AUTH_COOKIE_MAX_AGE, ADMIN_COOKIE_NAME,
     EMERGENT_LLM_KEY, CLAUDE_KEY,
     LLM_MODEL, VISION_MODEL,
@@ -234,15 +235,36 @@ def clear_auth_cookie(response: Response) -> None:
     response.delete_cookie(key=AUTH_COOKIE_NAME, path="/", samesite="none", secure=True, httponly=True)
 
 
+def login_response(token: str, /, **body) -> dict:
+    """FIX-006-A (S0-08): build a login/register/switch-workspace response
+    body. The HttpOnly cookie is already the source of truth for auth;
+    embedding the raw JWT in the JSON body means any XSS bypasses
+    HttpOnly. In prod (`AUTH_RETURN_TOKEN=False`) we omit it entirely.
+    Left on in dev/test so the ~50 legacy bearer-header integration
+    tests keep working locally; explicit `AUTH_RETURN_TOKEN=1` in env
+    also opts back in.
+
+    Callers still call `set_auth_cookie(response, token)` themselves —
+    this helper only shapes the JSON body.
+    """
+    if AUTH_RETURN_TOKEN:
+        return {"token": token, **body}
+    return dict(body)
+
+
 # --- Platform super-admin auth (separate from tenant users) -----------------
 
 
 def create_admin_token(admin_id: str) -> str:
+    # FIX-006-A (S0-09): sign platform-admin tokens with a dedicated
+    # secret so a leak of JWT_SECRET (tenant secret) can't forge admin
+    # sessions. Falls back to JWT_SECRET when PLATFORM_ADMIN_JWT_SECRET
+    # is unset — dev-friendly; prod must set both to distinct values.
     payload = {
         "sub": admin_id, "type": "platform_admin",
         "exp": datetime.now(timezone.utc) + timedelta(days=7),
     }
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    return jwt.encode(payload, PLATFORM_ADMIN_JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 
 def set_admin_cookie(response: Response, token: str) -> None:
@@ -263,8 +285,11 @@ async def get_platform_admin(
     token = request.cookies.get(ADMIN_COOKIE_NAME) or (creds.credentials if creds else None)
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    # FIX-006-A (S0-09): verify with the admin-scoped secret. Falls back
+    # to JWT_SECRET when unset so dev/test flows keep working; the
+    # `type == platform_admin` claim remains as a second gate either way.
     try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        payload = jwt.decode(token, PLATFORM_ADMIN_JWT_SECRET, algorithms=[JWT_ALGORITHM])
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Session expired, please log in again")
     except jwt.InvalidTokenError:

@@ -35,7 +35,7 @@ from core import (
     load_ai_keys_from_db,
     now_iso, new_id, _extract_json,
     hash_password, verify_password, create_token,
-    set_auth_cookie, clear_auth_cookie,
+    set_auth_cookie, clear_auth_cookie, login_response,
     get_current_user, require_role, require_perm, user_perms, clean_perms,
     tenant_role_keys, log_activity, add_decision_event, normalize_os_blueprint,
     normalize_lexicon,
@@ -1556,12 +1556,33 @@ async def verify_otp(inp: OtpVerifyInput, response: Response):
         # a concurrent user deletion between /request and /verify can
         # get here. Refuse rather than issue a token for a ghost.
         raise HTTPException(status_code=404, detail="Account not found")
+    # FIX-006-A (S0-10): the OTP verify IS the "invite accepted" moment
+    # for invited users. Once we're about to issue a session token,
+    # invalidate the invite_token so:
+    #   * the invite link stops resolving on /auth/invite/{token}
+    #     (no more leaked name / masked phone to anyone with the URL)
+    #   * a second /auth/invite/{token}/start no longer bombs the
+    #     invitee's phone with SMS OTPs via a link that should be dead
+    # Idempotent — no-op when the user was never invited.
+    if user.get("invite_token"):
+        await db.users.update_one(
+            {"id": user["id"]},
+            {"$set": {"invite_token": None,
+                      "invite_expires_at": None,
+                      "invite_consumed_at": now_iso(),
+                      "updated_at": now_iso()}},
+        )
+        user.pop("invite_token", None)
+        user.pop("invite_expires_at", None)
     token = create_token(user["id"], user["tenant_id"], user["role"])
     tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
     user.pop("_id", None)
     user.pop("password_hash", None)
     set_auth_cookie(response, token)
-    return {"token": token, "user": user, "tenant": tenant}
+    # FIX-006-A (S0-08): cookie is source of truth; only surface the JWT
+    # in the body when AUTH_RETURN_TOKEN is on (dev/test) so prod XSS
+    # can't leak it.
+    return login_response(token, user=user, tenant=tenant)
 
 
 
@@ -6388,9 +6409,47 @@ async def _bootstrap():
 
 
 async def seed_platform_admin():
-    """Create the platform super-admin from env, idempotently; refresh the hash if the env password changed."""
-    email = os.environ.get("SUPERADMIN_EMAIL", "admin@decisionos.biz").strip().lower()
-    password = os.environ.get("SUPERADMIN_PASSWORD", "DecisionOS@2026").strip()
+    """FIX-006-A (S0-01): platform super-admin seeder.
+
+    Prior behaviour had two problems:
+      1. Hardcoded default email + password (`admin@decisionos.biz` /
+         `DecisionOS@2026`) shipped in the code — anyone who deployed
+         without SUPERADMIN_* env vars set got a well-known admin
+         account.
+      2. On every restart, if the env password didn't match the DB
+         hash, the DB was silently overwritten. That blocked
+         credential rotation via the DB and meant anyone with env-var
+         write access could re-take the account across the fleet.
+
+    Now:
+      * In prod (ENV=prod) we REFUSE to seed with the fallback defaults —
+        raise a loud error so a misconfigured deploy fails fast instead
+        of standing up a known-credentials admin.
+      * We only INSERT when the admin doesn't exist. Overwriting an
+        existing hash requires the explicit SUPERADMIN_ALLOW_HASH_REFRESH=1
+        opt-in (one-off flag for the rare intended reset).
+    """
+    from config import PLATFORM_ADMIN_JWT_SECRET as _pjwt  # noqa: F401 (import triggers config warn)
+    env_email = os.environ.get("SUPERADMIN_EMAIL", "").strip().lower()
+    env_password = os.environ.get("SUPERADMIN_PASSWORD", "").strip()
+    running_env = os.environ.get("ENV", "dev").strip().lower()
+    if not env_email or not env_password:
+        if running_env == "prod":
+            raise RuntimeError(
+                "SUPERADMIN_EMAIL + SUPERADMIN_PASSWORD are REQUIRED when ENV=prod. "
+                "Refusing to boot with hardcoded defaults."
+            )
+        # Non-prod fallback so local dev still gets a working admin login.
+        # Log the fact loudly so nobody forgets to set the env in staging.
+        email = env_email or "admin@decisionos.biz"
+        password = env_password or "DecisionOS@2026"
+        logger.warning(
+            "Seeding platform super-admin with DEV FALLBACK credentials. "
+            "Set SUPERADMIN_EMAIL + SUPERADMIN_PASSWORD before touching prod."
+        )
+    else:
+        email = env_email
+        password = env_password
     existing = await db.platform_admins.find_one({"email": email})
     if not existing:
         await db.platform_admins.insert_one({
@@ -6398,10 +6457,22 @@ async def seed_platform_admin():
             "password_hash": hash_password(password), "created_at": now_iso(),
         })
         logger.info(f"Platform super-admin seeded: {email}")
-    elif not verify_password(password, existing.get("password_hash", "")):
+        return
+    # From here on: an admin doc already exists. We NEVER silently
+    # replace its hash — that would let anyone with env-var access
+    # overwrite the account on the next restart. Only refresh when the
+    # deployer explicitly opts in via SUPERADMIN_ALLOW_HASH_REFRESH=1,
+    # which they should then unset on the following deploy.
+    from config import SUPERADMIN_ALLOW_HASH_REFRESH as _refresh_ok
+    if _refresh_ok and not verify_password(password, existing.get("password_hash", "")):
         await db.platform_admins.update_one(
-            {"id": existing["id"]}, {"$set": {"password_hash": hash_password(password)}})
-        logger.info(f"Platform super-admin password refreshed from env: {email}")
+            {"id": existing["id"]},
+            {"$set": {"password_hash": hash_password(password)}},
+        )
+        logger.warning(
+            f"Platform super-admin hash REFRESHED from env (opt-in): {email}. "
+            "Unset SUPERADMIN_ALLOW_HASH_REFRESH now to prevent silent future refreshes."
+        )
 
 
 @app.on_event("startup")

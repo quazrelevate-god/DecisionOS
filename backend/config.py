@@ -24,6 +24,41 @@ AUTH_COOKIE_NAME = "dos_token"
 AUTH_COOKIE_MAX_AGE = 7 * 24 * 60 * 60  # 7 days, matches token exp
 ADMIN_COOKIE_NAME = "dos_admin_token"
 
+# FIX-006-A (S0-09): split JWT secret so tenant tokens and platform-admin
+# tokens can't cross-sign. Before this, a compromise of the single
+# JWT_SECRET forged both. Falls back to JWT_SECRET when unset so dev/test
+# don't need a second env var; server.py logs a WARN at startup in that
+# case. Prod deploys should always set both to distinct high-entropy
+# values.
+PLATFORM_ADMIN_JWT_SECRET = (
+    os.environ.get('PLATFORM_ADMIN_JWT_SECRET', '').strip() or JWT_SECRET
+)
+
+# FIX-006-A (S0-08): whether login/register/switch-workspace/2fa responses
+# include the raw JWT in the JSON body in ADDITION to setting the HttpOnly
+# cookie. In prod this is unsafe — any XSS bypasses HttpOnly. Default:
+# False in prod, True elsewhere so the ~50 legacy bearer-header integration
+# tests keep working locally. Deployers can force it either way via env.
+_ENV = os.environ.get('ENV', 'dev').strip().lower()
+_ARB_ENV = os.environ.get('AUTH_RETURN_TOKEN', '').strip().lower()
+if _ARB_ENV in ('1', 'true', 'yes', 'on'):
+    AUTH_RETURN_TOKEN = True
+elif _ARB_ENV in ('0', 'false', 'no', 'off'):
+    AUTH_RETURN_TOKEN = False
+else:
+    AUTH_RETURN_TOKEN = (_ENV != 'prod')
+
+# FIX-006-A (S0-01): platform-admin seed policy. By default we NEVER
+# overwrite an existing password hash on startup — that blocks credential
+# rotation via the DB and, worse, means anyone who can flip an env var
+# silently re-owns the account across the whole cluster. Set
+# SUPERADMIN_ALLOW_HASH_REFRESH=1 only for the one-off boot where you
+# actually intend the env password to replace the DB hash.
+SUPERADMIN_ALLOW_HASH_REFRESH = (
+    os.environ.get('SUPERADMIN_ALLOW_HASH_REFRESH', '').strip().lower()
+    in ('1', 'true', 'yes', 'on')
+)
+
 # --- LLM providers ----------------------------------------------------------
 EMERGENT_LLM_KEY = os.environ['EMERGENT_LLM_KEY']
 # All Claude Sonnet 4.6 calls use the user's own Anthropic key when set,

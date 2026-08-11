@@ -59,6 +59,80 @@ SUPERADMIN_ALLOW_HASH_REFRESH = (
     in ('1', 'true', 'yes', 'on')
 )
 
+
+# --- FIX-006-B (S0-02): strict CORS + CSRF ---------------------------------
+def _parse_cors_origins() -> list[str]:
+    """Comma-separated allow-list. In prod (ENV=prod) we REFUSE to boot
+    with an empty list or a literal '*' — the old default of `*` +
+    `allow_credentials=True` was echoed back per-origin via
+    `allow_origin_regex='.*'`, which sidesteps the CORS spec's
+    ban on wildcard+credentials and effectively lets any site the user
+    visits make credentialed cross-origin calls carrying their auth
+    cookie. Dev/test defaults to the local frontend origins so the
+    dev-loop keeps working.
+    """
+    raw = os.environ.get('CORS_ORIGINS', '').strip()
+    if raw:
+        origins = [o.strip() for o in raw.split(',') if o.strip()]
+    else:
+        origins = []
+    if _ENV == 'prod':
+        if not origins or '*' in origins:
+            raise RuntimeError(
+                "CORS_ORIGINS must be a comma-separated list of exact "
+                "origins (no '*') when ENV=prod. Refusing to boot with a "
+                "wildcard CORS + credentials — that's the browser-security "
+                "anti-pattern the CORS spec was written to prevent."
+            )
+        return origins
+    # Non-prod fallback: local frontends. Loud enough that a staging
+    # deploy without CORS_ORIGINS set won't be mistaken for prod-safe.
+    return origins or [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:3000",
+    ]
+
+
+CORS_ORIGINS = _parse_cors_origins()
+
+# CSRF: double-submit cookie pattern. On every auth-cookie set, we ALSO
+# set a NON-HttpOnly `dos_csrf` cookie carrying a random token. The
+# frontend reads it via JS and echoes it back as `X-CSRF-Token` on every
+# mutating request. Because the same-origin policy still applies to
+# READING cookies even when SameSite=None allows the browser to SEND
+# them, evil.com can never construct the matching header.
+CSRF_COOKIE_NAME = "dos_csrf"
+CSRF_HEADER_NAME = "X-CSRF-Token"
+# Paths where we do NOT check CSRF. Kept tiny.
+#   * webhooks are signature-authenticated by the caller (Meta HMAC etc.)
+#   * login endpoints run BEFORE the CSRF cookie exists
+#   * health probes
+CSRF_EXEMPT_PATHS = frozenset([
+    "/api/webhooks/whatsapp",
+    "/api/auth/login",
+    "/api/auth/register",
+    "/api/auth/2fa/verify-login",
+    "/api/admin/login",
+    "/api/auth/otp/request",
+    "/api/auth/otp/verify",
+    "/api/auth/password/forgot",
+    "/api/auth/password/reset",
+    "/api/auth/verify-email",
+    "/api/auth/invite/start",
+    "/api/health",
+    "/health",
+])
+# Rollout guard: middleware is ALWAYS installed so we start minting the
+# cookie and logging telemetry immediately. But enforcement (returning
+# 403 on mismatch) defaults OFF so this batch can ship without a
+# breaking frontend change. Flip to CSRF_ENFORCE=1 once the frontend
+# starts sending X-CSRF-Token and staging logs show 100% match rate.
+CSRF_ENFORCE = (
+    os.environ.get('CSRF_ENFORCE', '').strip().lower()
+    in ('1', 'true', 'yes', 'on')
+)
+
 # --- LLM providers ----------------------------------------------------------
 EMERGENT_LLM_KEY = os.environ['EMERGENT_LLM_KEY']
 # All Claude Sonnet 4.6 calls use the user's own Anthropic key when set,

@@ -6529,14 +6529,34 @@ from routers.brief import router as brief_router  # noqa: E402
 app.include_router(brief_router)
 from routers.team import router as team_router  # noqa: E402
 app.include_router(team_router)
-_cors_env = os.environ.get('CORS_ORIGINS', '*').strip()
-_cors_kwargs = dict(allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
-if _cors_env == '*':
-    # Reflect the request Origin (valid with credentials, unlike a literal '*').
-    _cors_kwargs["allow_origin_regex"] = ".*"
-else:
-    _cors_kwargs["allow_origins"] = _cors_env.split(',')
-app.add_middleware(CORSMiddleware, **_cors_kwargs)
+# FIX-006-B (S0-02): strict CORS allow-list — no more `allow_origin_regex=".*"`.
+# The old default of `*` combined with `allow_credentials=True` was echoed
+# back per-origin via `allow_origin_regex='.*'`, which sidesteps the CORS
+# spec's ban on wildcard-with-credentials and effectively lets any site
+# the user visits make credentialed cross-origin calls carrying their
+# auth cookie. Origins now come from CORS_ORIGINS env; in prod (ENV=prod)
+# an unset or wildcard list makes config.py refuse to boot.
+from config import CORS_ORIGINS as _cors_origins  # noqa: E402
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+    allow_headers=["*"],
+    expose_headers=[],
+    max_age=600,
+)
+logger.info(f"CORS allow-list ({len(_cors_origins)} origins): {_cors_origins}")
+
+# FIX-006-B (S0-02): CSRF double-submit cookie enforcement. Middleware
+# is always installed so we mint the cookie + log match/mismatch on
+# every mutating cookie-authed request. Actual 403 enforcement is
+# gated by CSRF_ENFORCE env — defaults OFF this batch so the frontend
+# can adopt the X-CSRF-Token header before we start rejecting.
+from services.csrf import CSRFMiddleware  # noqa: E402
+app.add_middleware(CSRFMiddleware)
+from config import CSRF_ENFORCE as _csrf_enforce  # noqa: E402
+logger.info(f"CSRF middleware installed (enforce={_csrf_enforce})")
 
 
 @app.on_event("shutdown")

@@ -29,6 +29,8 @@ from config import (  # noqa: F401 — re-exports
     JWT_SECRET, JWT_ALGORITHM,
     PLATFORM_ADMIN_JWT_SECRET, AUTH_RETURN_TOKEN, SUPERADMIN_ALLOW_HASH_REFRESH,
     AUTH_COOKIE_NAME, AUTH_COOKIE_MAX_AGE, ADMIN_COOKIE_NAME,
+    CORS_ORIGINS, CSRF_COOKIE_NAME, CSRF_HEADER_NAME,
+    CSRF_EXEMPT_PATHS, CSRF_ENFORCE,
     EMERGENT_LLM_KEY, CLAUDE_KEY,
     LLM_MODEL, VISION_MODEL,
     ROLES, PERMISSION_KEYS, DEFAULT_ROLES,
@@ -224,15 +226,54 @@ logger = logging.getLogger("decisionos")
 security = HTTPBearer(auto_error=False)
 
 
+def _mint_csrf_token() -> str:
+    """Random URL-safe token. Uses secrets.token_urlsafe for cryptographic
+    strength — CSRF tokens must be unpredictable per session."""
+    import secrets
+    return secrets.token_urlsafe(32)
+
+
+def set_csrf_cookie(response: Response, token: str = None) -> str:
+    """FIX-006-B (S0-02): set the double-submit CSRF cookie.
+
+    Called by set_auth_cookie / set_admin_cookie so every login,
+    register, switch-workspace, 2fa-verify, and OTP-verify path mints
+    a fresh token. NOT HttpOnly — the frontend needs JS access to
+    read it and echo it back as X-CSRF-Token.
+
+    Returns the token so callers can also embed it in the response
+    body when they need to (e.g. for tests, or future native clients
+    that never see cookies)."""
+    tok = token or _mint_csrf_token()
+    response.set_cookie(
+        key=CSRF_COOKIE_NAME, value=tok, max_age=AUTH_COOKIE_MAX_AGE,
+        httponly=False, secure=True, samesite="none", path="/",
+    )
+    return tok
+
+
+def clear_csrf_cookie(response: Response) -> None:
+    response.delete_cookie(key=CSRF_COOKIE_NAME, path="/",
+                             samesite="none", secure=True, httponly=False)
+
+
 def set_auth_cookie(response: Response, token: str) -> None:
     response.set_cookie(
         key=AUTH_COOKIE_NAME, value=token, max_age=AUTH_COOKIE_MAX_AGE,
         httponly=True, secure=True, samesite="none", path="/",
     )
+    # FIX-006-B (S0-02): mint CSRF token alongside the auth token so
+    # every cookie-authed browser session has a matching double-submit
+    # token available. No extra call site to update — every set_auth_cookie
+    # caller inherits this for free.
+    set_csrf_cookie(response)
 
 
 def clear_auth_cookie(response: Response) -> None:
     response.delete_cookie(key=AUTH_COOKIE_NAME, path="/", samesite="none", secure=True, httponly=True)
+    # FIX-006-B (S0-02): drop the CSRF cookie too so a stale one from a
+    # previous session can't cross-contaminate the next login.
+    clear_csrf_cookie(response)
 
 
 def login_response(token: str, /, **body) -> dict:
@@ -272,10 +313,14 @@ def set_admin_cookie(response: Response, token: str) -> None:
         key=ADMIN_COOKIE_NAME, value=token, max_age=AUTH_COOKIE_MAX_AGE,
         httponly=True, secure=True, samesite="none", path="/",
     )
+    # FIX-006-B (S0-02): admin console needs CSRF too — mint the same
+    # cookie so the admin frontend's mutating calls carry the header.
+    set_csrf_cookie(response)
 
 
 def clear_admin_cookie(response: Response) -> None:
     response.delete_cookie(key=ADMIN_COOKIE_NAME, path="/", samesite="none", secure=True, httponly=True)
+    clear_csrf_cookie(response)
 
 
 async def get_platform_admin(

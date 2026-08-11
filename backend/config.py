@@ -133,6 +133,43 @@ CSRF_ENFORCE = (
     in ('1', 'true', 'yes', 'on')
 )
 
+
+# --- FIX-006-C (S0-03/04/05): endpoint hardening -----------------------------
+
+# S0-03: legacy local-disk fallback in GET /api/files/{fname}. Post-
+# FIX-002-E migration to obj_store this branch should be dead code, but
+# leaving it live means any authenticated user (from ANY tenant) can
+# request a bare filename and get it back — no tenant-scoping happens on
+# the legacy disk path. Default OFF; only opt in explicitly in dev when
+# investigating a stale-file complaint.
+SERVE_LEGACY_LOCAL_DISK = (
+    os.environ.get('SERVE_LEGACY_LOCAL_DISK', '').strip().lower()
+    in ('1', 'true', 'yes', 'on')
+)
+
+# S0-04: dev-OTP leak. The OTP request response used to include
+# `dev_otp` in the JSON body whenever no SMS provider was configured —
+# fine for dev, catastrophic for prod (any /auth/otp/request caller
+# gets a working code). New rule:
+#   * env DEV_OTP_IN_RESPONSE explicitly controls the leak (default off)
+#   * server.py raises at boot if ENV=prod AND no SMS provider (APM /
+#     Twilio) is configured — "prod without SMS = silent dev mode"
+#     stops here.
+DEV_OTP_IN_RESPONSE = (
+    os.environ.get('DEV_OTP_IN_RESPONSE', '').strip().lower()
+    in ('1', 'true', 'yes', 'on')
+)
+
+# S0-05: WhatsApp webhook signature. Old code logged on HMAC mismatch
+# and PROCESSED the payload anyway — Meta's whole security model relies
+# on the recipient rejecting mismatches, so this was equivalent to
+# having no signature check at all. New:
+#   * mismatch → 403, no processing.
+#   * WA_APP_SECRET absent → refuse the webhook entirely in prod;
+#     accept with a stern WARN in dev so local tunnels still work.
+# Kept as a strict default rather than a flag — signature bypass is
+# never the right answer in prod.
+
 # --- LLM providers ----------------------------------------------------------
 EMERGENT_LLM_KEY = os.environ['EMERGENT_LLM_KEY']
 # All Claude Sonnet 4.6 calls use the user's own Anthropic key when set,

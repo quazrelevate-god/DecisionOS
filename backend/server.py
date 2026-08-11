@@ -1309,6 +1309,20 @@ APM_SMS_API_KEY = os.environ.get("APM_SMS_API_KEY")
 APM_OTP_ENDPOINT = os.environ.get("APM_OTP_ENDPOINT", "Registration")  # "Registration" or "ForgotPassword"
 APM_ENABLED = bool(APM_SMS_API_KEY)
 
+# FIX-006-C (S0-04): prod without an SMS provider is dev-mode-by-default,
+# and dev-mode-by-default is account-takeover-by-default (the OTP was
+# being returned in the JSON body). Refuse to boot in prod when neither
+# APM nor Twilio is configured — better a loud "no SMS provider" boot
+# failure than a silent "any /auth/otp/request returns a valid OTP"
+# response.
+if os.environ.get("ENV", "dev").strip().lower() == "prod" and not (APM_ENABLED or TWILIO_ENABLED):
+    raise RuntimeError(
+        "No SMS provider configured (APM_SMS_API_KEY or TWILIO_ACCOUNT_SID/"
+        "AUTH_TOKEN/FROM_NUMBER). Refusing to boot in prod — without a real "
+        "provider, /auth/otp/request would silently fall into dev mode and, "
+        "with DEV_OTP_IN_RESPONSE=1, leak login codes to any caller."
+    )
+
 
 async def _apm_send_and_fetch_otp(norm_phone: str):
     """Call the APM gateway to SEND an OTP SMS and return the 6-digit code it generated.
@@ -1399,8 +1413,16 @@ async def _issue_otp(norm: str, display_phone: str, tenant_id: str,
         upsert=True,
     )
     resp = {"sent": sent, "dev_mode": dev, "tenant_id": tenant_id}
-    if dev:
-        resp["dev_otp"] = code  # DEV ONLY — omitted once real SMS (APM/Twilio) is live
+    # FIX-006-C (S0-04): dev_otp is a REAL, WORKING code — returning it
+    # in a JSON body means anyone who can hit /auth/otp/request gets a
+    # login OTP for the target phone. That's fine in dev with no SMS
+    # provider; in prod it's account takeover as a feature. Now gated
+    # by an explicit env flag (DEV_OTP_IN_RESPONSE=1), OFF by default.
+    # server.py's boot check also refuses to start in prod when no SMS
+    # provider is configured, so "silently in dev mode" is impossible.
+    from config import DEV_OTP_IN_RESPONSE
+    if dev and DEV_OTP_IN_RESPONSE:
+        resp["dev_otp"] = code
     return resp
 
 
@@ -3872,13 +3894,33 @@ async def get_file(fname: str, user: dict = Depends(get_current_user)):
         if cd:
             storage_path = cd.get("storage_path") or fname
 
-    # 5) Legacy fallback: serve from local disk if the file exists AND
-    #    the request is authenticated (tenant scope enforced by upstream).
-    #    Post-migration this path returns 404 for everything.
+    # 5) Legacy fallback: serve from local disk if the file exists.
+    #    FIX-006-C (S0-03): the old code returned any authenticated
+    #    caller's request for a bare filename — but nothing here checks
+    #    that the file actually belongs to the caller's tenant. Post-
+    #    FIX-002-E migration this branch is dead code (obj_store owns
+    #    every real upload). Default is now 404 for everything; ops can
+    #    opt in via SERVE_LEGACY_LOCAL_DISK=1 in dev only when
+    #    investigating a stale-file complaint. We LOG the hit so a
+    #    lingering legacy reference shows up in observability.
     if not storage_path:
+        from config import SERVE_LEGACY_LOCAL_DISK
         legacy_path = UPLOAD_DIR / fname
-        if legacy_path.exists():
+        if legacy_path.exists() and SERVE_LEGACY_LOCAL_DISK:
+            logger.warning(
+                "S0-03 legacy-disk-fallback: served %s to tenant=%s (opt-in). "
+                "This path has no tenant-ownership check — turn "
+                "SERVE_LEGACY_LOCAL_DISK off in prod.",
+                fname, tid,
+            )
             return FileResponse(str(legacy_path))
+        if legacy_path.exists():
+            logger.warning(
+                "S0-03 legacy-disk hit denied for %s (tenant=%s). "
+                "File exists on local disk but no DB record ties it to "
+                "this tenant. Run the local-disk → obj_store migration.",
+                fname, tid,
+            )
         raise HTTPException(status_code=404, detail="Not found")
 
     try:
@@ -4807,19 +4849,56 @@ async def update_wa_event(ev_id: str, **fields):
 
 @api.post("/webhooks/whatsapp")
 async def whatsapp_webhook(request: Request, background: BackgroundTasks):
+    """FIX-006-C (S0-05): the whole point of Meta's HMAC signature is
+    that the recipient REJECTS mismatches. Old code logged and processed
+    anyway — equivalent to shipping without a signature check at all,
+    which meant anyone who could reach the public webhook URL could
+    forge inbound WhatsApp messages (spoof any tenant's contact, inject
+    fake orders / expenses via the AI ingestion pipeline).
+
+    New behaviour:
+      * WA_APP_SECRET set + signature matches → process (unchanged).
+      * WA_APP_SECRET set + signature mismatch → 403, no processing.
+      * WA_APP_SECRET absent → refuse the webhook entirely in prod
+        (ENV=prod). Dev/staging accept with a stern WARN so local
+        tunnels still work during integration testing.
+    """
     if not os.environ.get("WA_ACCESS_TOKEN"):
         return {"status": "not_configured",
                 "detail": "WhatsApp ingestion is ready but not connected. Add WA_ACCESS_TOKEN / WA_PHONE_NUMBER_ID / WA_VERIFY_TOKEN to enable."}
     raw = await request.body()
     app_secret = os.environ.get("WA_APP_SECRET")
+    running_env = os.environ.get("ENV", "dev").strip().lower()
     if app_secret:
         sig = request.headers.get("X-Hub-Signature-256", "")
         expected = "sha256=" + hmac.new(app_secret.encode(), raw, hashlib.sha256).hexdigest()
         if not hmac.compare_digest(expected, sig):
-            # A proxy/ingress may re-encode the body, breaking Meta's HMAC. Log but DO NOT drop the message.
-            await log_wa_event("", "", "signature_mismatch",
-                               reason="X-Hub-Signature-256 did not match — processing anyway (a proxy may re-encode the body; verify WA_APP_SECRET if unexpected)")
-            logger.warning("WhatsApp signature mismatch; processing anyway")
+            # Audit BEFORE the reject so ops can see the attack surface.
+            await log_wa_event(
+                "", "", "signature_mismatch",
+                reason=("X-Hub-Signature-256 did not match — REJECTED. If a "
+                        "proxy/ingress re-encodes bodies, disable that or "
+                        "recompute WA_APP_SECRET after decoding."),
+            )
+            logger.warning("WhatsApp signature mismatch — rejecting (S0-05)")
+            raise HTTPException(status_code=403, detail="Invalid signature")
+    elif running_env == "prod":
+        # No secret configured AND we're in prod — refuse. Anyone who
+        # can reach the URL could otherwise post forged messages.
+        logger.error(
+            "S0-05: /webhooks/whatsapp rejected in prod — WA_APP_SECRET "
+            "is not set. Configure it before re-enabling ingestion."
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="WhatsApp webhook rejected: WA_APP_SECRET not configured.",
+        )
+    else:
+        logger.warning(
+            "S0-05: /webhooks/whatsapp accepted WITHOUT signature check "
+            "(WA_APP_SECRET not set + ENV != prod). Local tunnel only — "
+            "set WA_APP_SECRET before touching prod."
+        )
     try:
         body = json.loads(raw)
     except Exception:

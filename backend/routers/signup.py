@@ -52,8 +52,21 @@ LANG_SPEAKERS = {
 def _speaker_for(lang: str) -> str:
     return LANG_SPEAKERS.get(lang, TTS_SPEAKER)
 
-# Fixed interview opener per language — no LLM call, instant start.
+# Fixed interview openers per language — no LLM call, instant start.
 # "{name}" is replaced with " <founder first name>" (or "" when unknown).
+#
+# Two tiers, chosen at request time by whether the session already has a
+# confirmed `industry` (set by WebsiteIntel, either from the scan or manual
+# entry) — no extra DB read or LLM call, this data is already on the session:
+#   - OPENERS_WITH_INDUSTRY: industry is known → skip re-asking "what do you
+#     do" entirely and go straight to the operational question, naming the
+#     industry back to the founder so turn 1 already sounds tailored.
+#   - OPENERS: fallback for the rare case industry is still unknown (e.g. the
+#     founder skipped WebsiteIntel) — unchanged from the original template.
+# NOTE: `{industry}` values come from the INDUSTRIES enum, which is English
+# only. Non-English templates below will code-switch to an English industry
+# name mid-sentence — common in Indian product UX, but flagging it since it's
+# a deliberate tradeoff, not an oversight.
 OPENERS = {
     "en-IN": "Hi{name} — tell me about {company} — what do you do, and how do your day-to-day operations actually run?",
     "hi-IN": "नमस्ते{name} — मुझे {company} के बारे में बताइए — आप क्या करते हैं, और आपका रोज़ का कामकाज कैसे चलता है?",
@@ -66,6 +79,37 @@ OPENERS = {
     "pa-IN": "ਸਤ ਸ੍ਰੀ ਅਕਾਲ{name} — ਮੈਨੂੰ {company} ਬਾਰੇ ਦੱਸੋ — ਤੁਸੀਂ ਕੀ ਕਰਦੇ ਹੋ, ਅਤੇ ਤੁਹਾਡਾ ਰੋਜ਼ਾਨਾ ਕੰਮਕਾਜ ਕਿਵੇਂ ਚੱਲਦਾ ਹੈ?",
     "ta-IN": "வணக்கம்{name} — {company} பற்றி சொல்லுங்கள் — நீங்கள் என்ன செய்கிறீர்கள், உங்கள் அன்றாட வேலைகள் எப்படி நடக்கின்றன?",
     "te-IN": "నమస్తే{name} — {company} గురించి చెప్పండి — మీరు ఏమి చేస్తారు, మీ రోజువారీ కార్యకలాపాలు ఎలా జరుగుతాయి?",
+}
+
+OPENERS_WITH_INDUSTRY = {
+    "en-IN": "Hi{name} — I can see {company} is in {industry}. Walk me through how your day-to-day operations actually run.",
+    "hi-IN": "नमस्ते{name} — मुझे पता है {company}, {industry} क्षेत्र में है। बताइए, आपका रोज़ का कामकाज असल में कैसे चलता है?",
+    "bn-IN": "নমস্কার{name} — আমি জানি {company} {industry} ক্ষেত্রে কাজ করে। বলুন, আপনার দৈনন্দিন কাজকর্ম আসলে কীভাবে চলে?",
+    "gu-IN": "નમસ્તે{name} — મને ખબર છે {company}, {industry} ક્ષેત્રમાં છે. કહો, તમારું રોજિંદું કામકાજ ખરેખર કેવી રીતે ચાલે છે?",
+    "kn-IN": "ನಮಸ್ಕಾರ{name} — {company}, {industry} ಕ್ಷೇತ್ರದಲ್ಲಿದೆ ಎಂದು ನನಗೆ ತಿಳಿದಿದೆ. ನಿಮ್ಮ ದೈನಂದಿನ ಕೆಲಸ ನಿಜವಾಗಿ ಹೇಗೆ ನಡೆಯುತ್ತದೆ ಎಂದು ಹೇಳಿ?",
+    "ml-IN": "നമസ്കാരം{name} — {company}, {industry} മേഖലയിലാണെന്ന് എനിക്കറിയാം. നിങ്ങളുടെ ദൈനംദിന പ്രവർത്തനങ്ങൾ യഥാർത്ഥത്തിൽ എങ്ങനെയാണ് നടക്കുന്നതെന്ന് പറയൂ?",
+    "mr-IN": "नमस्कार{name} — मला माहीत आहे {company} हे {industry} क्षेत्रात आहे. सांगा, तुमचं रोजचं कामकाज खरंतर कसं चालतं?",
+    "od-IN": "ନମସ୍କାର{name} — ମୁଁ ଜାଣେ {company}, {industry} କ୍ଷେତ୍ରରେ ଅଛି। କୁହନ୍ତୁ, ଆପଣଙ୍କ ଦୈନନ୍ଦିନ କାର୍ଯ୍ୟ ପ୍ରକୃତରେ କିପରି ଚାଲେ?",
+    "pa-IN": "ਸਤ ਸ੍ਰੀ ਅਕਾਲ{name} — ਮੈਨੂੰ ਪਤਾ ਹੈ {company}, {industry} ਖੇਤਰ ਵਿੱਚ ਹੈ। ਦੱਸੋ, ਤੁਹਾਡਾ ਰੋਜ਼ਾਨਾ ਕੰਮਕਾਜ ਅਸਲ ਵਿੱਚ ਕਿਵੇਂ ਚੱਲਦਾ ਹੈ?",
+    "ta-IN": "வணக்கம்{name} — {company}, {industry} துறையில் இருப்பது எனக்குத் தெரியும். உங்கள் அன்றாட வேலைகள் உண்மையில் எப்படி நடக்கின்றன என்று சொல்லுங்கள்?",
+    "te-IN": "నమస్తే{name} — {company}, {industry} రంగంలో ఉందని నాకు తెలుసు. మీ రోజువారీ కార్యకలాపాలు నిజంగా ఎలా జరుగుతాయో చెప్పండి?",
+}
+
+# The opener's "why" caption, localized (previously hardcoded to English
+# regardless of interview language — fixed here since it's shown on the same
+# screen as the now-localized question).
+OPENER_WHY = {
+    "en-IN": "Your own words become your OS",
+    "hi-IN": "आपके शब्द ही आपका OS बनेंगे",
+    "bn-IN": "আপনার কথাই হবে আপনার OS",
+    "gu-IN": "તમારા શબ્દો જ તમારું OS બનશે",
+    "kn-IN": "ನಿಮ್ಮ ಮಾತುಗಳೇ ನಿಮ್ಮ OS ಆಗುತ್ತವೆ",
+    "ml-IN": "നിങ്ങളുടെ വാക്കുകൾ തന്നെ നിങ്ങളുടെ OS ആകും",
+    "mr-IN": "तुमचे शब्दच तुमचं OS बनतील",
+    "od-IN": "ଆପଣଙ୍କ କଥା ହିଁ ଆପଣଙ୍କ OS ହେବ",
+    "pa-IN": "ਤੁਹਾਡੇ ਸ਼ਬਦ ਹੀ ਤੁਹਾਡਾ OS ਬਣਨਗੇ",
+    "ta-IN": "உங்கள் வார்த்தைகளே உங்கள் OS ஆகும்",
+    "te-IN": "మీ మాటలే మీ OS గా మారతాయి",
 }
 
 
@@ -143,13 +187,26 @@ async def website_intel(inp: WebsiteIntelInput):
         return {"fetched": False}
 
     system = (
-        "You analyse a company's website text for onboarding. Return ONLY valid JSON, no prose: "
-        "{\"summary\": string (2 short sentences, second person: 'You ...' — what the company does and for whom), "
-        f"\"industry\": string (MUST be exactly one of: {', '.join(INDUSTRIES)}), "
-        f"\"business_model\": string (MUST be exactly one of: {', '.join(BUSINESS_MODELS)}), "
-        "\"products\": [{\"name\": string, \"description\": short string}] (up to 4 real products/services found), "
-        "\"highlights\": [string] (3 short facts learned, each under 8 words)}. "
-        "Be specific and only state what the text supports."
+        "You analyse a company's website text for onboarding. The page text may include navigation menus, "
+        "cookie notices, footer legal boilerplate, or other non-content noise mixed in with the real copy — "
+        "ignore that noise and base every answer only on sentences that actually describe what the company "
+        "does, sells, or serves.\n\n"
+        "Return ONLY valid JSON, no prose:\n"
+        "{\"summary\": string (2 short sentences, second person: 'You ...' — what the company does and for whom),\n"
+        f"\"industry\": string (MUST be exactly one of: {', '.join(INDUSTRIES)}. If the site spans more than "
+        "one, pick whichever drives the most day-to-day operational work — not whichever is mentioned first "
+        "or takes up the most text),\n"
+        f"\"business_model\": string (MUST be exactly one of: {', '.join(BUSINESS_MODELS)}. If genuinely "
+        "mixed, pick whichever generates most of the revenue),\n"
+        "\"products\": [{\"name\": string, \"description\": short string}] (up to 4 real, named products or "
+        "services the text actually describes — not services you'd assume a company like this offers),\n"
+        "\"highlights\": [string] (3 short facts under 8 words each, distinct from summary and products — "
+        "think scale, years in business, credentials, notable clients, or geography, not a restatement of "
+        "what they sell)}.\n\n"
+        "Be specific. Only state what the text explicitly supports — for summary, products, and highlights, "
+        "it's better to return fewer or shorter items than to guess. For industry and business_model you must "
+        "still pick the closest valid option even if the signal is thin, since those two fields drive later "
+        "logic and cannot be left blank."
     )
     prompt = f"Company: {inp.company_name or 'unknown'}\nWebsite text:\n{text}"
     try:
@@ -224,6 +281,17 @@ INTERVIEW_SYSTEM = (
     "so DecisionOS can build a REALISTIC operating system for THEIR company (departments, workflows, recurring tasks, "
     "approval rules) — never a generic template.\n\n"
 
+    "ESTABLISHED CONTEXT COMES FIRST. Every message you receive includes a company profile — industry, business "
+    "model, team size, website summary, products, and the founder's own description — gathered before this "
+    "conversation started. Treat every non-'unknown' field in it as CONFIRMED FACT, not a guess:\n"
+    "  • Never ask about anything already stated there — that includes what they do, their industry, their "
+    "products, and their business model.\n"
+    "  • Use it to aim every question at THEIR specific business from question one — reference their actual "
+    "industry, products, or something from their website summary by name wherever you can, instead of asking "
+    "in the abstract.\n"
+    "  • Fields marked 'unknown' are genuine gaps, not facts — do not assume what they'd likely be; ask about "
+    "them only if they matter operationally.\n\n"
+
     "INTERVIEW LENGTH IS DYNAMIC. You have a range: "
     f"MINIMUM {MIN_QUESTIONS} answers, MAXIMUM {MAX_QUESTIONS} answers (including the opening question already answered). "
     "End early (set enough=true) the moment the operational picture is genuinely clear — do NOT pad. "
@@ -237,24 +305,33 @@ INTERVIEW_SYSTEM = (
     "which slice, how the founder finds out things went wrong, what they still personally sign off on.\n"
     "  • 50+ person team → Real departments, managers, formal approvals, escalation paths. Ask about department "
     "structure, approval limits, review cadences, cross-team handoffs.\n"
-    "Industry matters too — a beauty salon runs on appointments + stylists + walk-ins; a textile manufacturer runs "
-    "on orders + raw material + production + dispatch; an agency runs on clients + projects + retainers. Speak their "
-    "world, not a generic one.\n\n"
+    "Industry shapes WHAT you ask about, not just how you phrase it. If their industry is known, ask about the "
+    "operational specifics that actually matter for THAT industry — e.g. a manufacturer runs on raw material, "
+    "production queue, quality checks, dispatch; a clinic runs on appointments, patient records, follow-ups; an "
+    "agency runs on client onboarding, project handoff, retainer billing; a salon runs on appointments, stylists, "
+    "walk-ins. Derive the right vocabulary and topics from THEIR known industry and products — don't default to "
+    "a generic operational checklist when you already know what kind of business this is. Only reason generically "
+    "if industry is genuinely unknown.\n\n"
 
-    "OPERATIONAL COVERAGE CHECKLIST (mentally verify before setting enough=true):\n"
+    "OPERATIONAL COVERAGE CHECKLIST (mentally verify before setting enough=true — checking BOTH the established "
+    "context above and everything answered so far, not just the last answer):\n"
     "  1. End-to-end flow — from customer enquiry/order right through to delivery + payment.\n"
     "  2. Who does what — roles (or departments if 50+), key handoffs, backups.\n"
     "  3. Approvals & money — who signs off on spends, discounts, hires, refunds.\n"
     "  4. Where things slip — the pain points the founder feels weekly.\n"
     "  5. Founder's daily/weekly touchpoints — what they personally check, chase, or approve.\n"
-    "If ANY of 1–5 is still fuzzy, keep asking (until you hit the max). If all are clear enough to design "
-    "departments/workflows/tasks/approvals, set enough=true.\n\n"
+    "If ANY of 1–5 is still fuzzy after accounting for what's already known, keep asking (until you hit the max). "
+    "If all are clear enough to design departments/workflows/tasks/approvals, set enough=true.\n\n"
 
     "QUESTION RULES:\n"
     "  • Exactly ONE question at a time, under 28 words, warm and conversational.\n"
-    "  • Build on what they just said — reference their words.\n"
-    "  • Purely OPERATIONAL — never strategic, visionary, growth-plan, or 'where do you see the company in 5 years' style.\n"
-    "  • Never re-ask what you already know (industry, size, products, what they do).\n\n"
+    "  • Ground it in a specific, named detail — from the established context or something they actually said — "
+    "never a generic operational category floating free of their real business.\n"
+    "  • Before asking, check silently: is this already answered or clearly implied by the established context "
+    "or ANY earlier answer (not just the last one)? If yes, drop it and ask about the next real gap instead.\n"
+    "  • Never assume or invent something about their business that wasn't stated in the established context or "
+    "the conversation — if you're not sure whether something applies to them, ask, don't assume.\n"
+    "  • Purely OPERATIONAL — never strategic, visionary, growth-plan, or 'where do you see the company in 5 years' style.\n\n"
 
     "Return ONLY valid JSON: {\"question\": string, \"why\": string (under 10 words, why this matters), "
     f"\"enough\": boolean (true only if the checklist is covered AND at least {MIN_QUESTIONS} answers exist)}}."
@@ -311,17 +388,22 @@ async def interview_start(inp: InterviewStartInput):
         "status": "active",
         "created_at": now_iso(),
     }
-    # Question 1 is always the standard opener, in the founder's chosen
-    # language — no LLM call, so the interview starts instantly.
+    # Question 1 is always a fixed opener, in the founder's chosen language —
+    # no LLM call, so the interview starts instantly. If WebsiteIntel already
+    # confirmed an industry, skip re-asking "what do you do" and go straight
+    # to an operational question that names it back to them; otherwise fall
+    # back to the original identity + operations opener.
     founder_first = (session["founder_name"].split() or [""])[0]
-    question = OPENERS.get(lang, OPENERS["en-IN"]).format(
+    templates = OPENERS_WITH_INDUSTRY if session["industry"] else OPENERS
+    question = templates.get(lang, OPENERS["en-IN"]).format(
         name=f" {founder_first}" if founder_first else "",
         company=session["company_name"],
+        industry=session["industry"],
     )
     session["pending_q"] = question
     await db.signup_sessions.insert_one(session)
     return {"session_id": session["id"], "question": question,
-            "why": "Your own words become your OS",
+            "why": OPENER_WHY.get(lang, OPENER_WHY["en-IN"]),
             "index": 1, "max": MAX_QUESTIONS, "language_code": lang}
 
 
@@ -388,16 +470,51 @@ async def interview_answer(inp: InterviewAnswerInput):
 
 BLUEPRINT_SYSTEM = (
     "You are the onboarding architect for DecisionOS, an operating system for founder-led SMEs. "
-    "You just interviewed a founder. Design THEIR operating system from the actual conversation — "
-    "use their terminology, their real processes, their pain points. NOT a generic template.\n"
+    "You just interviewed a founder, on top of an earlier website analysis. Design THEIR operating system "
+    "using ONLY what the profile and interview transcript below actually support — use their terminology, "
+    "their real processes, their pain points, their own numbers and thresholds where they gave any. "
+    "NOT a generic template.\n\n"
+
+    "GROUNDING IS MANDATORY. Every department, workflow, task, and approval rule must trace back to something "
+    "stated in the profile (industry, business model, website summary, products, description) or said during "
+    "the interview. If the profile and transcript don't clearly support an item, LEAVE IT OUT — a shorter, "
+    "accurate blueprint beats a longer, invented one. Never add a department, workflow, task, or approval rule "
+    "just to fill a quota.\n\n"
+
+    "TARGET COUNTS BY TEAM SIZE BAND — read the TEAM SIZE BAND given below the profile and use the matching row. "
+    "These are ceilings, not quotas — return fewer if the evidence doesn't support the max:\n"
+    "  • 1-10 (founder-led) → 2-4 departments (functional areas the founder personally juggles — not a "
+    "hierarchy), 3-5 workflows, 4-8 operational_tasks, 1-3 approval_rules.\n"
+    "  • 11-50 (early structure) → 3-6 departments, 4-7 workflows, 6-10 operational_tasks, 2-4 approval_rules.\n"
+    "  • 50-200 (departments + managers) → 5-8 departments, 6-9 workflows, 8-14 operational_tasks, "
+    "3-6 approval_rules.\n"
+    "  • 200+ (full structure) → 6-8 departments, 8-10 workflows, 10-20 operational_tasks, 4-6 approval_rules.\n\n"
+
+    "STAY CONSISTENT WITH THE PROFILE. Departments, workflows, and tasks must fit the industry and business "
+    "model already established in the profile — don't contradict it or drift into a different kind of business. "
+    "Map what you generate to what the interview actually covered: workflows should reflect the end-to-end flow "
+    "they described, approval_rules should reflect who they said signs off on what, and operational_tasks "
+    "should reflect the pain points and daily/weekly touchpoints they mentioned — not a generic list.\n\n"
+
+    "USE THEIR EXACT WORDS. Name departments, workflows, tasks, and approval rules the way the founder or their "
+    "website would describe them, not the way a textbook would. If they gave a specific number, role, or "
+    "threshold (e.g. an amount above which they personally approve something), preserve it in the description "
+    "instead of generalizing it away.\n\n"
+
+    "IF A FOUNDER REFINEMENT IS PRESENT in the message below, it is a correction made after seeing the first "
+    "draft — treat it as authoritative. Where it conflicts with the original interview transcript or profile, "
+    "the refinement wins.\n\n"
+
     "Return ONLY valid JSON with exactly these keys: "
-    "{\"departments\": [string department name] (5-8, no 'Owner'), "
-    "\"workflows\": [{\"name\": string}] (5-10, named after THEIR real processes), "
+    "{\"departments\": [string department name] (see target counts above, no 'Owner'), "
+    "\"workflows\": [{\"name\": string}] (see target counts above, named after THEIR real processes), "
     "\"operational_tasks\": [{\"title\": string, \"category\": one of "
     "[Presentation,Meeting,Documentation,Proposal,Planning,Review,Administration,Compliance,Marketing,HR Activity,Travel,Event,IT Support,Other]}] "
-    "(8-12 recurring tasks that address what the founder said slips or matters), "
-    "\"approval_rules\": [{\"name\": string, \"description\": short string}] (3-6, matching who they said approves things), "
-    "\"products\": [{\"name\": string, \"description\": short string}] (their actual products/services, up to 5), "
+    "(see target counts above, recurring tasks that address what the founder said slips or matters), "
+    "\"approval_rules\": [{\"name\": string, \"description\": short string}] (see target counts above, matching "
+    "who they said approves things), "
+    "\"products\": [{\"name\": string, \"description\": short string}] (their actual products/services already "
+    "named in the profile or interview, up to 5 — do not invent products not already established), "
     "\"welcome_line\": string (ONE warm, specific sentence telling this founder what their new OS will handle for them — "
     "reference something real they said, under 30 words)}."
 )

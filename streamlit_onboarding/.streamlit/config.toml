@@ -1,0 +1,14 @@
+# Forces a LIGHT theme so the brutalist DecisionOS UI renders with dark text on
+# the paper background regardless of the OS/browser dark-mode setting. Without
+# this, Streamlit follows the system theme and native widget text turns light —
+# nearly invisible on the forced light background.
+#
+# Read from the CWD you launch `streamlit run` from, so start the app from
+# INSIDE this folder (see the run command in the app / chat).
+[theme]
+base = "light"
+primaryColor = "#FF3B30"
+backgroundColor = "#F4F4F5"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#0A0A0B"
+font = "sans serif"

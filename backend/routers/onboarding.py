@@ -19,7 +19,10 @@ from services import onboarding_drafts as drafts_svc  # FIX-001-D
 from services import ai_setup as ai_setup_svc          # FIX-001-D
 # FIX-004-A (RBAC Wave 1)
 from services.auth.draft_tokens import sign_draft_id, verify_draft_token
-from services.rate_limit import check_rate_limit, client_ip
+from services.rate_limit import (
+    check_rate_limit, client_ip,
+    guard_unauth_ai_endpoint,  # FIX-006-D (S0-06)
+)
 
 router = APIRouter(prefix="/api")
 
@@ -85,7 +88,10 @@ class OSBlueprintInput(BaseModel):
 
 
 @router.post("/onboarding/suggest")
-async def onboarding_suggest(inp: OnboardingSuggestInput):
+async def onboarding_suggest(inp: OnboardingSuggestInput, request: Request):
+    # FIX-006-D (S0-06): unauth endpoint that calls Claude — every hit
+    # burns LLM credit. Rate-limit + captcha stop drive-by cost drain.
+    await guard_unauth_ai_endpoint(request, service="onboarding", kind="suggest")
     system = (
         "You are an onboarding assistant for DecisionOS, a business operations app. "
         "Given an industry, propose the team roles/departments and example products or services a small business in that "
@@ -119,7 +125,11 @@ async def onboarding_suggest(inp: OnboardingSuggestInput):
 
 
 @router.post("/onboarding/os-blueprint")
-async def onboarding_os_blueprint(inp: OSBlueprintGenInput):
+async def onboarding_os_blueprint(inp: OSBlueprintGenInput, request: Request):
+    # FIX-006-D (S0-06): full-blueprint generation is the most expensive
+    # unauth AI call in the codebase (large system + long response).
+    # Same 3-check guard as the rest of the pre-auth AI surface.
+    await guard_unauth_ai_endpoint(request, service="onboarding", kind="os_blueprint")
     system = (
         "You are the onboarding architect for DecisionOS, an operating system for founder-led SMEs. "
         "Given an industry, design a ready-to-use Business Operating System for a small/mid business. "

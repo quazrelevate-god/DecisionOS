@@ -26,6 +26,65 @@ from core import (
 router = APIRouter(prefix="/api/auth")
 
 
+# FIX-006-D (S0-07): tenant-login lockout — parity with admin login.
+# Admin login (routers/admin.py) has always locked out at 5 failures
+# per (IP, email) for 15 minutes. Tenant user login had no such gate,
+# so email/password brute-force was rate-unlimited from any origin.
+# Same numbers as admin so the two auth surfaces behave the same.
+LOGIN_MAX_ATTEMPTS = 5
+LOGIN_LOCKOUT_MIN = 15
+
+
+def _login_ident(request: Request, email: str) -> str:
+    """(IP, email) compound key. Same shape as platform_login_attempts
+    so both auth surfaces can share observability queries later."""
+    ip = "?"
+    try:
+        ip = request.client.host if request.client else "?"
+    except Exception:
+        pass
+    # Trust the standard proxy header when present so a single-attacker-
+    # behind-many-emails from one NAT doesn't slip past the compound key.
+    xff = request.headers.get("X-Forwarded-For") or ""
+    if xff:
+        ip = xff.split(",")[0].strip() or ip
+    return f"{ip}:{email}"
+
+
+async def _login_locked_out(ident: str) -> tuple[bool, int]:
+    """Return (locked, retry_after_seconds).  False, 0 when the caller
+    can proceed. Reads db.user_login_attempts."""
+    att = await db.user_login_attempts.find_one({"identifier": ident})
+    if not att or att.get("count", 0) < LOGIN_MAX_ATTEMPTS:
+        return False, 0
+    last = att.get("last")
+    if not last:
+        return False, 0
+    from datetime import datetime, timezone
+    try:
+        dt = datetime.fromisoformat(last)
+    except ValueError:
+        return False, 0
+    mins = (datetime.now(timezone.utc) - dt).total_seconds() / 60
+    if mins >= LOGIN_LOCKOUT_MIN:
+        # Cool-down elapsed — clear the counter so this attempt starts fresh.
+        await db.user_login_attempts.delete_one({"identifier": ident})
+        return False, 0
+    return True, int((LOGIN_LOCKOUT_MIN - mins) * 60)
+
+
+async def _login_record_failure(ident: str) -> None:
+    await db.user_login_attempts.update_one(
+        {"identifier": ident},
+        {"$inc": {"count": 1}, "$set": {"last": now_iso()}},
+        upsert=True,
+    )
+
+
+async def _login_clear_attempts(ident: str) -> None:
+    await db.user_login_attempts.delete_one({"identifier": ident})
+
+
 # ---------------------------------------------------------------------------
 # Request models (duplicated from server.py for now; will move to
 # `models/auth.py` in a later pass — kept local to keep this router
@@ -425,8 +484,29 @@ async def register(inp: RegisterInput, request: Request, response: Response):
 async def login(inp: LoginInput, request: Request, response: Response):
     from services import audit_log as _audit
     email = inp.email.lower()
+    # FIX-006-D (S0-07): brute-force lockout — parity with admin login.
+    # Check BEFORE the DB lookup so an attacker can't measure timing
+    # differences to enumerate valid emails, and so a hammered lock
+    # short-circuits the more expensive path.
+    ident = _login_ident(request, email)
+    locked, retry_after = await _login_locked_out(ident)
+    if locked:
+        _ctx = _audit.context_from(request, None)
+        _ctx["actor_email"] = email
+        await _audit.record(
+            db, action="login_locked_out",
+            meta={"reason": "too_many_attempts", "retry_after_s": retry_after},
+            **_ctx,
+        )
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many failed attempts. Try again in {retry_after // 60 + 1} min.",
+            headers={"Retry-After": str(retry_after)},
+        )
     user = await db.users.find_one({"email": email})
     if not user or not verify_password(inp.password, user["password_hash"]):
+        # FIX-006-D (S0-07): increment the counter, then audit.
+        await _login_record_failure(ident)
         # FIX-004-F (RBAC-20): audit-log login failure so brute-force
         # + credential-stuffing attempts show up in ops review even
         # when they never succeed. Tenant unknown for failures against
@@ -440,6 +520,10 @@ async def login(inp: LoginInput, request: Request, response: Response):
             **_ctx,
         )
         raise HTTPException(status_code=401, detail="Invalid email or password")
+    # FIX-006-D (S0-07): password verified — wipe the counter so a slow
+    # attacker who eventually got the password can't share the lockout
+    # cooldown with the legitimate user's next attempt.
+    await _login_clear_attempts(ident)
     # FIX-004-B (RBAC-12): resolve the target workspace via memberships.
     # A person may hold memberships in multiple tenants — the caller
     # must pick which one to log into. Single-membership users hit the

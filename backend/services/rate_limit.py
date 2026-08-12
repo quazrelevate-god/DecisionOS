@@ -102,3 +102,96 @@ def client_ip(request) -> str:
         return request.client.host if request.client else "unknown"
     except Exception:
         return "unknown"
+
+
+# ---------------------------------------------------------------------------
+# FIX-006-D (S0-06): shared guard for public AI endpoints.
+#
+# Extracted from signup.py's _guard_signup_endpoint so the same three
+# checks (hourly quota → burst quota → captcha) can apply to any
+# unauth endpoint that burns LLM credits — signup wizard, onboarding
+# suggest, blueprint generation, and whatever public AI surface gets
+# added next.
+#
+# Every unauth endpoint that calls claude_chat / any LLM MUST route
+# through this. The RBAC-01/03 gap the tracker's S0-06 flagged was
+# exactly two /api/onboarding/* endpoints that skipped it; making
+# the guard a public shared function is the smallest fix that also
+# stops the next such regression.
+# ---------------------------------------------------------------------------
+
+# Numbers calibrated to a realistic pre-auth funnel: a founder finishing
+# the whole flow hits each surface a handful of times. 30/hr is well
+# above legitimate use, well below what a bot needs to meaningfully
+# drain LLM credit.
+_UNAUTH_AI_LIMIT_HOURLY = (30, 3600)  # 30 hits per hour per IP per endpoint kind
+_UNAUTH_AI_BURST = (5, 10)             # 5 hits per 10 seconds — kills scripted loops
+
+
+async def guard_unauth_ai_endpoint(
+    request,
+    service: str,
+    kind: str,
+    *,
+    hourly: tuple = _UNAUTH_AI_LIMIT_HOURLY,
+    burst: tuple = _UNAUTH_AI_BURST,
+    require_captcha: bool = True,
+) -> str:
+    """FIX-006-D (S0-06): three-check gate for public AI endpoints.
+
+    Runs, in order:
+      1. Sliding hourly quota per (IP, service:kind).  429 on breach.
+      2. Sliding burst quota per (IP, service:kind).   429 on breach.
+      3. CAPTCHA verification (via `X-Captcha-Token` header).  400 on
+         breach.  Skipped in dev when no *_SECRET is configured
+         (see services/captcha.py).
+
+    Args:
+      service: outer namespace ("signup", "onboarding", …) — keeps
+        two endpoints on different services from sharing a bucket.
+      kind:    per-endpoint suffix ("suggest", "os_blueprint", …).
+      hourly / burst: override the defaults for a specific endpoint
+        that has different traffic characteristics.
+      require_captcha: turn off ONLY for endpoints that legitimately
+        can't render one (rare).
+
+    Returns:
+      The caller's IP for downstream logging.
+
+    Raises:
+      HTTPException(429) or HTTPException(400) on any failure.
+    """
+    # Deferred imports so this module stays cheap to import.
+    from fastapi import HTTPException
+    from services.captcha import verify_captcha
+
+    ip = client_ip(request)
+    bucket_key = f"{service}:{kind}"
+    ok, retry_after = await check_rate_limit(
+        ip, hourly[0], hourly[1], bucket=f"unauth_ai_hour:{bucket_key}",
+    )
+    if not ok:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many {kind} requests from your network. Try again later.",
+            headers={"Retry-After": str(retry_after)},
+        )
+    ok, retry_after = await check_rate_limit(
+        ip, burst[0], burst[1], bucket=f"unauth_ai_burst:{bucket_key}",
+    )
+    if not ok:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many requests, too fast. Slow down.",
+            headers={"Retry-After": str(retry_after)},
+        )
+    if require_captcha:
+        token = request.headers.get("X-Captcha-Token") or ""
+        cap_ok, cap_reason = await verify_captcha(token, remote_ip=ip)
+        if not cap_ok:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": f"captcha_{cap_reason}",
+                         "message": "We couldn't verify you as human. Refresh the page and try again."},
+            )
+    return ip

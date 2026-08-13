@@ -1,0 +1,1910 @@
+DecisionOS — mobile audit
+==============================================================================
+base url      http://localhost:3000
+generated     2026-08-13T23:25:33.870Z
+viewports     390x844, 360x640
+routes        22 in scope (spec §6)
+
+SUMMARY
+------------------------------------------------------------------------------
+2683 failing violation(s), 1496 warning(s) across 22 routes
+
+  FAIL   1085  touch-target-min-44
+  FAIL   1274  text-below-13px
+  FAIL    202  horizontal-overflow
+  FAIL     62  native-select-in-scroll
+  FAIL      4  screen-over-2500px
+  FAIL      2  leaked-system-string
+  FAIL     54  non-indian-inr-grouping
+  warn     10  horizontal-scroll-strip
+  warn   1486  uppercase-text
+
+
+FAIL · touch-target-min-44 — 1085
+Interactive element under 44px in either dimension (§5.1)
+------------------------------------------------------------------------------
+  /inbox [390x844] — 14
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 236.9×42px — button[data-testid="desk-chip-needs_decision"].flex.items-center.gap-2.px-4 — “NEEDS YOUR DECISION 6”
+      · 147.2×42px — button[data-testid="desk-chip-on_fire"].flex.items-center.gap-2.px-4 — “ON FIRE 5”
+      · 170.5×42px — button[data-testid="desk-chip-due_today"].flex.items-center.gap-2.px-4 — “DUE TODAY 3”
+      · 174.1×42px — button[data-testid="desk-chip-important"].flex.items-center.gap-2.px-4 — “IMPORTANT 0”
+      · 97.5×32px — button[data-testid="desk-cta-review-d_1"].px-4.py-2.text-xs.font-semibold — “REVIEW →”
+      · 97.5×32px — button[data-testid="desk-cta-review-d_2"].px-4.py-2.text-xs.font-semibold — “REVIEW →”
+      · 97.5×32px — button[data-testid="desk-cta-review-d_3"].px-4.py-2.text-xs.font-semibold — “REVIEW →”
+      · 97.5×32px — button[data-testid="desk-cta-review-d_4"].px-4.py-2.text-xs.font-semibold — “REVIEW →”
+      … 2 more
+  /brief [390x844] — 9
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 105.3×40px — button[data-testid="brief-period-morning"].flex-1.lg:flex-none.px-4.lg:px-5 — “MORNING”
+      · 99.3×40px — button[data-testid="brief-period-evening"].flex-1.lg:flex-none.px-4.lg:px-5 — “EVENING”
+      · 91.6×40px — button[data-testid="brief-period-weekly"].flex-1.lg:flex-none.px-4.lg:px-5 — “WEEKLY”
+      · 102.6×40px — button[data-testid="brief-period-monthly"].flex-1.lg:flex-none.px-4.lg:px-5 — “MONTHLY”
+      · 358×42px — button[data-testid="brief-open-journal"].col-span-2.flex.items-center.justify-center — “CEO JOURNAL”
+  /my-work [390x844] — 142
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 81.7×30px — button[data-testid="work-tab-all"].flex.items-center.gap-1.5.px-3 — “ALL 13”
+      · 143.4×30px — button[data-testid="work-tab-operational"].flex.items-center.gap-1.5.px-3 — “OPERATIONAL 0”
+      · 94.2×30px — button[data-testid="work-tab-sales"].flex.items-center.gap-1.5.px-3 — “SALES 0”
+      · 123.5×30px — button[data-testid="work-tab-purchase"].flex.items-center.gap-1.5.px-3 — “PURCHASE 0”
+      · 138.2×30px — button[data-testid="work-tab-production"].flex.items-center.gap-1.5.px-3 — “PRODUCTION 0”
+      · 109.8×30px — button[data-testid="work-tab-finance"].flex.items-center.gap-1.5.px-3 — “FINANCE 0”
+      · 71.3×30px — button[data-testid="work-tab-hr"].flex.items-center.gap-1.5.px-3 — “HR 0”
+      · 129.4×30px — button[data-testid="work-tab-completed"].flex.items-center.gap-1.5.px-3 — “COMPLETED 1”
+      … 130 more
+  /my-work?view=leave [390x844] — 6
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 245.5×38px — button[data-testid="report-absence-button"].flex.items-center.gap-2.bg-brand-red — “REPORT ABSENCE TODAY”
+      · 177.7×38px — button[data-testid="request-leave-button"].flex.items-center.gap-2.bg-brand-ink — “REQUEST LEAVE”
+  /my-work?view=workflows [390x844] — 7
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 111.6×30px — button[data-testid="wf-subtab-pipelines"].flex.items-center.gap-1.5.px-3 — “PIPELINES”
+      · 126.5×30px — button[data-testid="wf-subtab-board"].flex.items-center.gap-1.5.px-3 — “TASK BOARD”
+      · 93×38px — button[data-testid="new-workflow-button"].flex.items-center.gap-2.bg-brand-ink — “NEW”
+  /crm [390x844] — 40
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 177×38px — button[data-testid="crm-add-customer"].flex.items-center.gap-2.bg-brand-ink — “ADD CUSTOMER”
+      · 166.6×38px — button[data-testid="crm-add-supplier"].flex.items-center.gap-2.bg-brand-yellow — “ADD SUPPLIER”
+      · 84.8×36px — button[data-testid="crm-scope-all"].flex.items-center.gap-2.px-4 — “ALL”
+      · 150.2×36px — button[data-testid="crm-scope-customers"].flex.items-center.gap-2.px-4 — “CUSTOMERS”
+      · 139.8×36px — button[data-testid="crm-scope-suppliers"].flex.items-center.gap-2.px-4 — “SUPPLIERS”
+      · 69.9×36px — button[data-testid="crm-scope-mine"].flex.items-center.gap-2.px-4 — “MINE”
+      · 316×36px — input[data-testid="crm-search"].flex-1.py-2.px-2.text-sm
+      · 358×38px — select[data-testid="crm-status-filter"].border.border-black.bg-white.px-3 — “All statuses lead active inactive”
+      … 28 more
+  /team [390x844] — 18
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 158.9×38px — button[data-testid="add-user-button"].flex.items-center.gap-2.bg-brand-ink — “ADD MEMBER”
+      · 84.8×26px — button[data-testid="edit-access-u_owner"].flex.items-center.gap-1.text-xs — “ACCESS”
+      · 84.8×26px — button[data-testid="edit-access-u_sales"].flex.items-center.gap-1.text-xs — “ACCESS”
+      · 73.3×26px — button[data-testid="invite-link-u_sales"].flex.items-center.gap-1.text-xs — “INVITE”
+      · 107.2×26px — button[data-testid="toggle-absent-u_sales"].text-xs.uppercase.tracking-wider.border — “MARK ABSENT”
+      · 84.8×26px — button[data-testid="edit-access-u_prod"].flex.items-center.gap-1.text-xs — “ACCESS”
+      · 73.3×26px — button[data-testid="invite-link-u_prod"].flex.items-center.gap-1.text-xs — “INVITE”
+      · 107.2×26px — button[data-testid="toggle-absent-u_prod"].text-xs.uppercase.tracking-wider.border — “MARK ABSENT”
+      … 6 more
+  /finance [390x844] — 16
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 175×34px — button[data-testid="ledger-tab-overview"].flex.items-center.justify-center.gap-1.5 — “OVERVIEW”
+      · 175×34px — button[data-testid="ledger-tab-revenue"].flex.items-center.justify-center.gap-1.5 — “REVENUE”
+      · 175×34px — button[data-testid="ledger-tab-expenses"].flex.items-center.justify-center.gap-1.5 — “EXPENSES”
+      · 175×34px — button[data-testid="ledger-tab-assets"].flex.items-center.justify-center.gap-1.5 — “ASSETS”
+      · 175×34px — button[data-testid="ledger-tab-inventory"].flex.items-center.justify-center.gap-1.5 — “INVENTORY”
+      · 175×34px — button[data-testid="ledger-tab-inbox"].flex.items-center.justify-center.gap-1.5 — “INBOX”
+      · 358×34px — button[data-testid="ledger-reclassify-btn"].flex.items-center.justify-center.gap-1.5 — “FIX OLD PURCHASES”
+      · 131.8×34px — button[data-testid="finance-hero-inbox-badge"].flex.items-center.gap-2.border — “2 IN INBOX →”
+      … 4 more
+  /finance?tab=revenue [390x844] — 16
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 175×34px — button[data-testid="ledger-tab-overview"].flex.items-center.justify-center.gap-1.5 — “OVERVIEW”
+      · 175×34px — button[data-testid="ledger-tab-revenue"].flex.items-center.justify-center.gap-1.5 — “REVENUE”
+      · 175×34px — button[data-testid="ledger-tab-expenses"].flex.items-center.justify-center.gap-1.5 — “EXPENSES”
+      · 175×34px — button[data-testid="ledger-tab-assets"].flex.items-center.justify-center.gap-1.5 — “ASSETS”
+      · 175×34px — button[data-testid="ledger-tab-inventory"].flex.items-center.justify-center.gap-1.5 — “INVENTORY”
+      · 175×34px — button[data-testid="ledger-tab-inbox"].flex.items-center.justify-center.gap-1.5 — “INBOX”
+      · 358×38px — button[data-testid="add-income-btn"].flex.items-center.justify-center.gap-2 — “ADD INCOME”
+      · 358×34px — button[data-testid="ledger-reclassify-btn"].flex.items-center.justify-center.gap-1.5 — “FIX OLD PURCHASES”
+      … 4 more
+  /finance?tab=expenses [390x844] — 24
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 175×34px — button[data-testid="ledger-tab-overview"].flex.items-center.justify-center.gap-1.5 — “OVERVIEW”
+      · 175×34px — button[data-testid="ledger-tab-revenue"].flex.items-center.justify-center.gap-1.5 — “REVENUE”
+      · 175×34px — button[data-testid="ledger-tab-expenses"].flex.items-center.justify-center.gap-1.5 — “EXPENSES”
+      · 175×34px — button[data-testid="ledger-tab-assets"].flex.items-center.justify-center.gap-1.5 — “ASSETS”
+      · 175×34px — button[data-testid="ledger-tab-inventory"].flex.items-center.justify-center.gap-1.5 — “INVENTORY”
+      · 175×34px — button[data-testid="ledger-tab-inbox"].flex.items-center.justify-center.gap-1.5 — “INBOX”
+      · 358×38px — button[data-testid="add-expense-btn"].flex.items-center.justify-center.gap-2 — “ADD EXPENSE”
+      · 358×34px — button[data-testid="ledger-reclassify-btn"].flex.items-center.justify-center.gap-1.5 — “FIX OLD PURCHASES”
+      … 12 more
+  /finance?tab=assets [390x844] — 21
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 175×34px — button[data-testid="ledger-tab-overview"].flex.items-center.justify-center.gap-1.5 — “OVERVIEW”
+      · 175×34px — button[data-testid="ledger-tab-revenue"].flex.items-center.justify-center.gap-1.5 — “REVENUE”
+      · 175×34px — button[data-testid="ledger-tab-expenses"].flex.items-center.justify-center.gap-1.5 — “EXPENSES”
+      · 175×34px — button[data-testid="ledger-tab-assets"].flex.items-center.justify-center.gap-1.5 — “ASSETS”
+      · 175×34px — button[data-testid="ledger-tab-inventory"].flex.items-center.justify-center.gap-1.5 — “INVENTORY”
+      · 175×34px — button[data-testid="ledger-tab-inbox"].flex.items-center.justify-center.gap-1.5 — “INBOX”
+      · 358×38px — button[data-testid="add-asset-btn"].flex.items-center.justify-center.gap-2 — “ADD ASSET”
+      · 358×34px — button[data-testid="ledger-reclassify-btn"].flex.items-center.justify-center.gap-1.5 — “FIX OLD PURCHASES”
+      … 9 more
+  /finance?tab=inventory [390x844] — 21
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 175×34px — button[data-testid="ledger-tab-overview"].flex.items-center.justify-center.gap-1.5 — “OVERVIEW”
+      · 175×34px — button[data-testid="ledger-tab-revenue"].flex.items-center.justify-center.gap-1.5 — “REVENUE”
+      · 175×34px — button[data-testid="ledger-tab-expenses"].flex.items-center.justify-center.gap-1.5 — “EXPENSES”
+      · 175×34px — button[data-testid="ledger-tab-assets"].flex.items-center.justify-center.gap-1.5 — “ASSETS”
+      · 175×34px — button[data-testid="ledger-tab-inventory"].flex.items-center.justify-center.gap-1.5 — “INVENTORY”
+      · 175×34px — button[data-testid="ledger-tab-inbox"].flex.items-center.justify-center.gap-1.5 — “INBOX”
+      · 358×38px — button[data-testid="add-inventory-btn"].flex.items-center.justify-center.gap-2 — “ADD ITEM”
+      · 358×34px — button[data-testid="ledger-reclassify-btn"].flex.items-center.justify-center.gap-1.5 — “FIX OLD PURCHASES”
+      … 9 more
+  /finance?tab=inbox [390x844] — 17
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 175×34px — button[data-testid="ledger-tab-overview"].flex.items-center.justify-center.gap-1.5 — “OVERVIEW”
+      · 175×34px — button[data-testid="ledger-tab-revenue"].flex.items-center.justify-center.gap-1.5 — “REVENUE”
+      · 175×34px — button[data-testid="ledger-tab-expenses"].flex.items-center.justify-center.gap-1.5 — “EXPENSES”
+      · 175×34px — button[data-testid="ledger-tab-assets"].flex.items-center.justify-center.gap-1.5 — “ASSETS”
+      · 175×34px — button[data-testid="ledger-tab-inventory"].flex.items-center.justify-center.gap-1.5 — “INVENTORY”
+      · 175×34px — button[data-testid="ledger-tab-inbox"].flex.items-center.justify-center.gap-1.5 — “INBOX”
+      · 358×34px — button[data-testid="ledger-reclassify-btn"].flex.items-center.justify-center.gap-1.5 — “FIX OLD PURCHASES”
+      · 131.8×34px — button[data-testid="finance-hero-inbox-badge"].flex.items-center.gap-2.border — “2 IN INBOX →”
+      … 5 more
+  /brain [390x844] — 13
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 87.1×36px — button[data-testid="brain-tab-ask"].flex.items-center.gap-2.px-4 — “ASK”
+      · 118.4×36px — button[data-testid="brain-tab-search"].flex.items-center.gap-2.px-4 — “SEARCH”
+      · 150.9×36px — button[data-testid="brain-tab-documents"].flex.items-center.gap-2.px-4 — “DOCUMENTS”
+      · 20×44px — button[data-testid="dex-mic-record"].w-11.h-11.flex.items-center
+      · 18×44px — button[data-testid="dex-file-upload"].w-11.h-11.flex.items-center
+      · 200.3×30px — button[data-testid="ask-suggestion"].text-xs.border.border-black.px-3 — “What needs my attention today?”
+      · 268.9×30px — button[data-testid="ask-suggestion"].text-xs.border.border-black.px-3 — “Show all tasks completed on time this month”
+      · 285×30px — button[data-testid="ask-suggestion"].text-xs.border.border-black.px-3 — “Which employees have the most overdue tasks?”
+      … 1 more
+  /calendar [390x844] — 12
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 109.1×38px — button[data-testid="cal-filter-all"].flex.items-center.gap-2.px-4 — “ALL (0)”
+      · 157.9×38px — button[data-testid="cal-filter-meeting"].flex.items-center.gap-2.px-4 — “MEETINGS (0)”
+      · 160.1×38px — button[data-testid="cal-filter-payment_due"].flex.items-center.gap-2.px-4 — “PAYMENTS (0)”
+      · 128.4×38px — button[data-testid="cal-filter-task"].flex.items-center.gap-2.px-4 — “TASKS (0)”
+      · 167.9×38px — button[data-testid="cal-filter-delivery"].flex.items-center.gap-2.px-4 — “DELIVERIES (0)”
+      · 179.3×38px — button[data-testid="cal-filter-complaint"].flex.items-center.gap-2.px-4 — “COMPLAINTS (0)”
+      · 163.6×38px — button[data-testid="cal-filter-birthday"].flex.items-center.gap-2.px-4 — “BIRTHDAYS (0)”
+      · 127.6×38px — button[data-testid="cal-filter-leave"].flex.items-center.gap-2.px-4 — “LEAVE (0)”
+  /notifications [390x844] — 8
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 178.2×38px — button[data-testid="mark-all-read"].flex.items-center.gap-2.border — “MARK ALL READ”
+      · 51.8×26px — button[data-testid="read-n_1"].text-xs.uppercase.tracking-wider.border — “READ”
+      · 51.8×26px — button[data-testid="read-n_2"].text-xs.uppercase.tracking-wider.border — “READ”
+      · 51.8×26px — button[data-testid="read-n_3"].text-xs.uppercase.tracking-wider.border — “READ”
+  /settings [390x844] — 145
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 316×38px — input[data-testid="company-field-name"].w-full.border.border-black.px-3
+      · 316×38px — input[data-testid="company-field-industry"].w-full.border.border-black.px-3
+      · 316×38px — input[data-testid="company-field-company_size"].w-full.border.border-black.px-3
+      · 316×38px — input[data-testid="company-field-phone"].w-full.border.border-black.px-3
+      · 316×38px — input[data-testid="company-field-region"].w-full.border.border-black.px-3
+      · 316×38px — input[data-testid="company-field-currency"].w-full.border.border-black.px-3
+      · 316×38px — input[data-testid="company-field-gst"].w-full.border.border-black.px-3
+      · 316×38px — input[data-testid="company-field-branches"].w-full.border.border-black.px-3
+      … 133 more
+  /journal [390x844] — 6
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 216.6×40px — input[data-testid="journal-search-input"].flex-1.px-3.py-2.5.text-sm
+      · 101.4×42px — button[data-testid="journal-search-btn"].px-5.py-2.5.text-sm.font-semibold — “SEARCH”
+  /login [390x844] — 8
+      · 40×40px — button[data-testid="login-theme-toggle"].fixed.top-4.right-4.z-50
+      · 170.5×32px — button[data-testid="login-tab-password"].flex-1.px-3.py-2.text-xs — “EMAIL & PASSWORD”
+      · 169.5×32px — button[data-testid="login-tab-otp"].flex-1.flex.items-center.justify-center — “MOBILE OTP”
+      · 204.5×20px — a[data-testid="toggle-auth-mode"].mt-4.inline-block.text-sm.text-brand-blue — “Need a workspace? Register →”
+      · 167×34px — button[data-testid="demo-login-owner"].border.border-black.px-3.py-2 — “OWNER”
+      · 167×34px — button[data-testid="demo-login-sales"].border.border-black.px-3.py-2 — “SALES”
+      · 167×34px — button[data-testid="demo-login-production"].border.border-black.px-3.py-2 — “PRODUCTION”
+      · 167×34px — button[data-testid="demo-login-finance"].border.border-black.px-3.py-2 — “FINANCE”
+  /inbox [360x640] — 14
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 236.9×42px — button[data-testid="desk-chip-needs_decision"].flex.items-center.gap-2.px-4 — “NEEDS YOUR DECISION 6”
+      · 147.2×42px — button[data-testid="desk-chip-on_fire"].flex.items-center.gap-2.px-4 — “ON FIRE 5”
+      · 170.5×42px — button[data-testid="desk-chip-due_today"].flex.items-center.gap-2.px-4 — “DUE TODAY 3”
+      · 174.1×42px — button[data-testid="desk-chip-important"].flex.items-center.gap-2.px-4 — “IMPORTANT 0”
+      · 97.5×32px — button[data-testid="desk-cta-review-d_1"].px-4.py-2.text-xs.font-semibold — “REVIEW →”
+      · 97.5×32px — button[data-testid="desk-cta-review-d_2"].px-4.py-2.text-xs.font-semibold — “REVIEW →”
+      · 97.5×32px — button[data-testid="desk-cta-review-d_3"].px-4.py-2.text-xs.font-semibold — “REVIEW →”
+      · 97.5×32px — button[data-testid="desk-cta-review-d_4"].px-4.py-2.text-xs.font-semibold — “REVIEW →”
+      … 2 more
+  /brief [360x640] — 9
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 105.3×40px — button[data-testid="brief-period-morning"].flex-1.lg:flex-none.px-4.lg:px-5 — “MORNING”
+      · 99.3×40px — button[data-testid="brief-period-evening"].flex-1.lg:flex-none.px-4.lg:px-5 — “EVENING”
+      · 91.6×40px — button[data-testid="brief-period-weekly"].flex-1.lg:flex-none.px-4.lg:px-5 — “WEEKLY”
+      · 102.6×40px — button[data-testid="brief-period-monthly"].flex-1.lg:flex-none.px-4.lg:px-5 — “MONTHLY”
+      · 328×42px — button[data-testid="brief-open-journal"].col-span-2.flex.items-center.justify-center — “CEO JOURNAL”
+  /my-work [360x640] — 142
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 81.7×30px — button[data-testid="work-tab-all"].flex.items-center.gap-1.5.px-3 — “ALL 13”
+      · 143.4×30px — button[data-testid="work-tab-operational"].flex.items-center.gap-1.5.px-3 — “OPERATIONAL 0”
+      · 94.2×30px — button[data-testid="work-tab-sales"].flex.items-center.gap-1.5.px-3 — “SALES 0”
+      · 123.5×30px — button[data-testid="work-tab-purchase"].flex.items-center.gap-1.5.px-3 — “PURCHASE 0”
+      · 138.2×30px — button[data-testid="work-tab-production"].flex.items-center.gap-1.5.px-3 — “PRODUCTION 0”
+      · 109.8×30px — button[data-testid="work-tab-finance"].flex.items-center.gap-1.5.px-3 — “FINANCE 0”
+      · 71.3×30px — button[data-testid="work-tab-hr"].flex.items-center.gap-1.5.px-3 — “HR 0”
+      · 129.4×30px — button[data-testid="work-tab-completed"].flex.items-center.gap-1.5.px-3 — “COMPLETED 1”
+      … 130 more
+  /my-work?view=leave [360x640] — 6
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 245.5×38px — button[data-testid="report-absence-button"].flex.items-center.gap-2.bg-brand-red — “REPORT ABSENCE TODAY”
+      · 177.7×38px — button[data-testid="request-leave-button"].flex.items-center.gap-2.bg-brand-ink — “REQUEST LEAVE”
+  /my-work?view=workflows [360x640] — 7
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 111.6×30px — button[data-testid="wf-subtab-pipelines"].flex.items-center.gap-1.5.px-3 — “PIPELINES”
+      · 126.5×30px — button[data-testid="wf-subtab-board"].flex.items-center.gap-1.5.px-3 — “TASK BOARD”
+      · 93×38px — button[data-testid="new-workflow-button"].flex.items-center.gap-2.bg-brand-ink — “NEW”
+  /crm [360x640] — 40
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 177×38px — button[data-testid="crm-add-customer"].flex.items-center.gap-2.bg-brand-ink — “ADD CUSTOMER”
+      · 166.6×38px — button[data-testid="crm-add-supplier"].flex.items-center.gap-2.bg-brand-yellow — “ADD SUPPLIER”
+      · 84.8×36px — button[data-testid="crm-scope-all"].flex.items-center.gap-2.px-4 — “ALL”
+      · 150.2×36px — button[data-testid="crm-scope-customers"].flex.items-center.gap-2.px-4 — “CUSTOMERS”
+      · 139.8×36px — button[data-testid="crm-scope-suppliers"].flex.items-center.gap-2.px-4 — “SUPPLIERS”
+      · 69.9×36px — button[data-testid="crm-scope-mine"].flex.items-center.gap-2.px-4 — “MINE”
+      · 286×36px — input[data-testid="crm-search"].flex-1.py-2.px-2.text-sm
+      · 328×38px — select[data-testid="crm-status-filter"].border.border-black.bg-white.px-3 — “All statuses lead active inactive”
+      … 28 more
+  /team [360x640] — 18
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 158.9×38px — button[data-testid="add-user-button"].flex.items-center.gap-2.bg-brand-ink — “ADD MEMBER”
+      · 84.8×26px — button[data-testid="edit-access-u_owner"].flex.items-center.gap-1.text-xs — “ACCESS”
+      · 84.8×26px — button[data-testid="edit-access-u_sales"].flex.items-center.gap-1.text-xs — “ACCESS”
+      · 73.3×26px — button[data-testid="invite-link-u_sales"].flex.items-center.gap-1.text-xs — “INVITE”
+      · 107.2×26px — button[data-testid="toggle-absent-u_sales"].text-xs.uppercase.tracking-wider.border — “MARK ABSENT”
+      · 84.8×26px — button[data-testid="edit-access-u_prod"].flex.items-center.gap-1.text-xs — “ACCESS”
+      · 73.3×26px — button[data-testid="invite-link-u_prod"].flex.items-center.gap-1.text-xs — “INVITE”
+      · 107.2×26px — button[data-testid="toggle-absent-u_prod"].text-xs.uppercase.tracking-wider.border — “MARK ABSENT”
+      … 6 more
+  /finance [360x640] — 16
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 160×34px — button[data-testid="ledger-tab-overview"].flex.items-center.justify-center.gap-1.5 — “OVERVIEW”
+      · 160×34px — button[data-testid="ledger-tab-revenue"].flex.items-center.justify-center.gap-1.5 — “REVENUE”
+      · 160×34px — button[data-testid="ledger-tab-expenses"].flex.items-center.justify-center.gap-1.5 — “EXPENSES”
+      · 160×34px — button[data-testid="ledger-tab-assets"].flex.items-center.justify-center.gap-1.5 — “ASSETS”
+      · 160×34px — button[data-testid="ledger-tab-inventory"].flex.items-center.justify-center.gap-1.5 — “INVENTORY”
+      · 160×34px — button[data-testid="ledger-tab-inbox"].flex.items-center.justify-center.gap-1.5 — “INBOX”
+      · 328×34px — button[data-testid="ledger-reclassify-btn"].flex.items-center.justify-center.gap-1.5 — “FIX OLD PURCHASES”
+      · 131.8×34px — button[data-testid="finance-hero-inbox-badge"].flex.items-center.gap-2.border — “2 IN INBOX →”
+      … 4 more
+  /finance?tab=revenue [360x640] — 16
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 160×34px — button[data-testid="ledger-tab-overview"].flex.items-center.justify-center.gap-1.5 — “OVERVIEW”
+      · 160×34px — button[data-testid="ledger-tab-revenue"].flex.items-center.justify-center.gap-1.5 — “REVENUE”
+      · 160×34px — button[data-testid="ledger-tab-expenses"].flex.items-center.justify-center.gap-1.5 — “EXPENSES”
+      · 160×34px — button[data-testid="ledger-tab-assets"].flex.items-center.justify-center.gap-1.5 — “ASSETS”
+      · 160×34px — button[data-testid="ledger-tab-inventory"].flex.items-center.justify-center.gap-1.5 — “INVENTORY”
+      · 160×34px — button[data-testid="ledger-tab-inbox"].flex.items-center.justify-center.gap-1.5 — “INBOX”
+      · 328×38px — button[data-testid="add-income-btn"].flex.items-center.justify-center.gap-2 — “ADD INCOME”
+      · 328×34px — button[data-testid="ledger-reclassify-btn"].flex.items-center.justify-center.gap-1.5 — “FIX OLD PURCHASES”
+      … 4 more
+  /finance?tab=expenses [360x640] — 24
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 160×34px — button[data-testid="ledger-tab-overview"].flex.items-center.justify-center.gap-1.5 — “OVERVIEW”
+      · 160×34px — button[data-testid="ledger-tab-revenue"].flex.items-center.justify-center.gap-1.5 — “REVENUE”
+      · 160×34px — button[data-testid="ledger-tab-expenses"].flex.items-center.justify-center.gap-1.5 — “EXPENSES”
+      · 160×34px — button[data-testid="ledger-tab-assets"].flex.items-center.justify-center.gap-1.5 — “ASSETS”
+      · 160×34px — button[data-testid="ledger-tab-inventory"].flex.items-center.justify-center.gap-1.5 — “INVENTORY”
+      · 160×34px — button[data-testid="ledger-tab-inbox"].flex.items-center.justify-center.gap-1.5 — “INBOX”
+      · 328×38px — button[data-testid="add-expense-btn"].flex.items-center.justify-center.gap-2 — “ADD EXPENSE”
+      · 328×34px — button[data-testid="ledger-reclassify-btn"].flex.items-center.justify-center.gap-1.5 — “FIX OLD PURCHASES”
+      … 12 more
+  /finance?tab=assets [360x640] — 21
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 160×34px — button[data-testid="ledger-tab-overview"].flex.items-center.justify-center.gap-1.5 — “OVERVIEW”
+      · 160×34px — button[data-testid="ledger-tab-revenue"].flex.items-center.justify-center.gap-1.5 — “REVENUE”
+      · 160×34px — button[data-testid="ledger-tab-expenses"].flex.items-center.justify-center.gap-1.5 — “EXPENSES”
+      · 160×34px — button[data-testid="ledger-tab-assets"].flex.items-center.justify-center.gap-1.5 — “ASSETS”
+      · 160×34px — button[data-testid="ledger-tab-inventory"].flex.items-center.justify-center.gap-1.5 — “INVENTORY”
+      · 160×34px — button[data-testid="ledger-tab-inbox"].flex.items-center.justify-center.gap-1.5 — “INBOX”
+      · 328×38px — button[data-testid="add-asset-btn"].flex.items-center.justify-center.gap-2 — “ADD ASSET”
+      · 328×34px — button[data-testid="ledger-reclassify-btn"].flex.items-center.justify-center.gap-1.5 — “FIX OLD PURCHASES”
+      … 9 more
+  /finance?tab=inventory [360x640] — 21
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 160×34px — button[data-testid="ledger-tab-overview"].flex.items-center.justify-center.gap-1.5 — “OVERVIEW”
+      · 160×34px — button[data-testid="ledger-tab-revenue"].flex.items-center.justify-center.gap-1.5 — “REVENUE”
+      · 160×34px — button[data-testid="ledger-tab-expenses"].flex.items-center.justify-center.gap-1.5 — “EXPENSES”
+      · 160×34px — button[data-testid="ledger-tab-assets"].flex.items-center.justify-center.gap-1.5 — “ASSETS”
+      · 160×34px — button[data-testid="ledger-tab-inventory"].flex.items-center.justify-center.gap-1.5 — “INVENTORY”
+      · 160×34px — button[data-testid="ledger-tab-inbox"].flex.items-center.justify-center.gap-1.5 — “INBOX”
+      · 328×38px — button[data-testid="add-inventory-btn"].flex.items-center.justify-center.gap-2 — “ADD ITEM”
+      · 328×34px — button[data-testid="ledger-reclassify-btn"].flex.items-center.justify-center.gap-1.5 — “FIX OLD PURCHASES”
+      … 9 more
+  /finance?tab=inbox [360x640] — 17
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 160×34px — button[data-testid="ledger-tab-overview"].flex.items-center.justify-center.gap-1.5 — “OVERVIEW”
+      · 160×34px — button[data-testid="ledger-tab-revenue"].flex.items-center.justify-center.gap-1.5 — “REVENUE”
+      · 160×34px — button[data-testid="ledger-tab-expenses"].flex.items-center.justify-center.gap-1.5 — “EXPENSES”
+      · 160×34px — button[data-testid="ledger-tab-assets"].flex.items-center.justify-center.gap-1.5 — “ASSETS”
+      · 160×34px — button[data-testid="ledger-tab-inventory"].flex.items-center.justify-center.gap-1.5 — “INVENTORY”
+      · 160×34px — button[data-testid="ledger-tab-inbox"].flex.items-center.justify-center.gap-1.5 — “INBOX”
+      · 328×34px — button[data-testid="ledger-reclassify-btn"].flex.items-center.justify-center.gap-1.5 — “FIX OLD PURCHASES”
+      · 131.8×34px — button[data-testid="finance-hero-inbox-badge"].flex.items-center.gap-2.border — “2 IN INBOX →”
+      … 5 more
+  /brain [360x640] — 12
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 87.1×36px — button[data-testid="brain-tab-ask"].flex.items-center.gap-2.px-4 — “ASK”
+      · 118.4×36px — button[data-testid="brain-tab-search"].flex.items-center.gap-2.px-4 — “SEARCH”
+      · 150.9×36px — button[data-testid="brain-tab-documents"].flex.items-center.gap-2.px-4 — “DOCUMENTS”
+      · 20×44px — button[data-testid="dex-mic-record"].w-11.h-11.flex.items-center
+      · 18×44px — button[data-testid="dex-file-upload"].w-11.h-11.flex.items-center
+      · 200.3×30px — button[data-testid="ask-suggestion"].text-xs.border.border-black.px-3 — “What needs my attention today?”
+      · 268.9×30px — button[data-testid="ask-suggestion"].text-xs.border.border-black.px-3 — “Show all tasks completed on time this month”
+      · 224.8×30px — button[data-testid="ask-suggestion"].text-xs.border.border-black.px-3 — “Show outstanding customer invoices”
+  /calendar [360x640] — 12
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 109.1×38px — button[data-testid="cal-filter-all"].flex.items-center.gap-2.px-4 — “ALL (0)”
+      · 157.9×38px — button[data-testid="cal-filter-meeting"].flex.items-center.gap-2.px-4 — “MEETINGS (0)”
+      · 160.1×38px — button[data-testid="cal-filter-payment_due"].flex.items-center.gap-2.px-4 — “PAYMENTS (0)”
+      · 128.4×38px — button[data-testid="cal-filter-task"].flex.items-center.gap-2.px-4 — “TASKS (0)”
+      · 167.9×38px — button[data-testid="cal-filter-delivery"].flex.items-center.gap-2.px-4 — “DELIVERIES (0)”
+      · 179.3×38px — button[data-testid="cal-filter-complaint"].flex.items-center.gap-2.px-4 — “COMPLAINTS (0)”
+      · 163.6×38px — button[data-testid="cal-filter-birthday"].flex.items-center.gap-2.px-4 — “BIRTHDAYS (0)”
+      · 127.6×38px — button[data-testid="cal-filter-leave"].flex.items-center.gap-2.px-4 — “LEAVE (0)”
+  /notifications [360x640] — 8
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 178.2×38px — button[data-testid="mark-all-read"].flex.items-center.gap-2.border — “MARK ALL READ”
+      · 51.8×26px — button[data-testid="read-n_1"].text-xs.uppercase.tracking-wider.border — “READ”
+      · 51.8×26px — button[data-testid="read-n_2"].text-xs.uppercase.tracking-wider.border — “READ”
+      · 51.8×26px — button[data-testid="read-n_3"].text-xs.uppercase.tracking-wider.border — “READ”
+  /settings [360x640] — 145
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 286×38px — input[data-testid="company-field-name"].w-full.border.border-black.px-3
+      · 286×38px — input[data-testid="company-field-industry"].w-full.border.border-black.px-3
+      · 286×38px — input[data-testid="company-field-company_size"].w-full.border.border-black.px-3
+      · 286×38px — input[data-testid="company-field-phone"].w-full.border.border-black.px-3
+      · 286×38px — input[data-testid="company-field-region"].w-full.border.border-black.px-3
+      · 286×38px — input[data-testid="company-field-currency"].w-full.border.border-black.px-3
+      · 286×38px — input[data-testid="company-field-gst"].w-full.border.border-black.px-3
+      · 286×38px — input[data-testid="company-field-branches"].w-full.border.border-black.px-3
+      … 133 more
+  /journal [360x640] — 6
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 194×40px — input[data-testid="journal-search-input"].flex-1.px-3.py-2.5.text-sm
+      · 101.4×42px — button[data-testid="journal-search-btn"].px-5.py-2.5.text-sm.font-semibold — “SEARCH”
+  /login [360x640] — 8
+      · 40×40px — button[data-testid="login-theme-toggle"].fixed.top-4.right-4.z-50
+      · 155.5×32px — button[data-testid="login-tab-password"].flex-1.px-3.py-2.text-xs — “EMAIL & PASSWORD”
+      · 154.5×32px — button[data-testid="login-tab-otp"].flex-1.flex.items-center.justify-center — “MOBILE OTP”
+      · 204.5×20px — a[data-testid="toggle-auth-mode"].mt-4.inline-block.text-sm.text-brand-blue — “Need a workspace? Register →”
+      · 152×34px — button[data-testid="demo-login-owner"].border.border-black.px-3.py-2 — “OWNER”
+      · 152×34px — button[data-testid="demo-login-sales"].border.border-black.px-3.py-2 — “SALES”
+      · 152×34px — button[data-testid="demo-login-production"].border.border-black.px-3.py-2 — “PRODUCTION”
+      · 152×34px — button[data-testid="demo-login-finance"].border.border-black.px-3.py-2 — “FINANCE”
+
+FAIL · text-below-13px — 1274
+Rendered text below the 13px mobile floor (§3.4)
+------------------------------------------------------------------------------
+  /inbox [390x844] — 22
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 10px — span.ml-1.px-1.5.py-0.5.text-[10px] — “6”
+      · 10px — span.ml-1.px-1.5.py-0.5.text-[10px] — “5”
+      · 10px — span.ml-1.px-1.5.py-0.5.text-[10px] — “3”
+      · 10px — span.ml-1.px-1.5.py-0.5.text-[10px] — “0”
+      · 12px — p.text-xs.text-muted-foreground.font-mono.mt-1 — “Waiting 6 days · From Suresh Patel · Unblocks 3 tasks”
+      · 12px — button[data-testid="desk-cta-review-d_1"].px-4.py-2.text-xs.font-semibold — “REVIEW →”
+      · 12px — p.text-xs.text-muted-foreground.font-mono.mt-1 — “Waiting 4 days · From Anita Desai · Unblocks 1 task”
+      · 12px — button[data-testid="desk-cta-review-d_2"].px-4.py-2.text-xs.font-semibold — “REVIEW →”
+      · 12px — p.text-xs.text-muted-foreground.font-mono.mt-1 — “Waiting 3 days · From Suresh Patel · Unblocks 2 tasks”
+      · 12px — button[data-testid="desk-cta-review-d_3"].px-4.py-2.text-xs.font-semibold — “REVIEW →”
+      · 12px — p.text-xs.text-muted-foreground.font-mono.mt-1 — “Waiting 2 days · From Priya Sharma · Unblocks 1 task”
+      … 10 more
+  /brief [390x844] — 15
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 12px — span.mt-3.inline-flex.items-center.gap-1 — “VIEW DETAILS”
+      · 12px — span.mt-3.inline-flex.items-center.gap-1 — “VIEW DETAILS”
+      · 12px — span.mt-3.inline-flex.items-center.gap-1 — “VIEW DETAILS”
+      · 12px — span.mt-3.inline-flex.items-center.gap-1 — “VIEW DETAILS”
+      · 12px — span.mt-3.inline-flex.items-center.gap-1 — “VIEW DETAILS”
+      · 12px — span.mt-3.inline-flex.items-center.gap-1 — “VIEW DETAILS”
+      · 12px — span.mt-3.inline-flex.items-center.gap-1 — “VIEW DETAILS”
+      · 12px — span.mt-3.inline-flex.items-center.gap-1 — “VIEW DETAILS”
+      · 12px — span.mt-3.inline-flex.items-center.gap-1 — “VIEW DETAILS”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “DESK”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “BRIEF”
+      … 3 more
+  /my-work [390x844] — 157
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 11px — button[data-testid="new-task-button"].flex.items-center.justify-center.gap-1.5 — “NEW TASK”
+      · 11px — button[data-testid="work-scope-mine"].flex.items-center.justify-center.gap-1.5 — “MY TASKS”
+      · 11px — button[data-testid="work-scope-all"].flex.items-center.justify-center.gap-1.5 — “ALL TASKS”
+      · 11px — button[data-testid="ai-priority-toggle"].flex.items-center.justify-center.gap-1.5 — “AI PRIORITY”
+      · 11px — button[data-testid="work-view-mywork"].flex.items-center.justify-center.gap-1.5 — “MY WORK”
+      · 11px — button[data-testid="work-view-workflows"].flex.items-center.justify-center.gap-1.5 — “WORKFLOWS”
+      · 11px — button[data-testid="work-view-leave"].flex.items-center.justify-center.gap-1.5 — “LEAVE”
+      · 12px — button[data-testid="work-tab-all"].flex.items-center.gap-1.5.px-3 — “ALL 13”
+      · 10px — span.px-1.5.py-0.5.text-[10px].leading-none — “13”
+      · 12px — button[data-testid="work-tab-operational"].flex.items-center.gap-1.5.px-3 — “OPERATIONAL 0”
+      · 10px — span.px-1.5.py-0.5.text-[10px].leading-none — “0”
+      … 145 more
+  /my-work?view=leave [390x844] — 25
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 11px — button[data-testid="new-task-button"].flex.items-center.justify-center.gap-1.5 — “NEW TASK”
+      · 11px — button[data-testid="work-scope-mine"].flex.items-center.justify-center.gap-1.5 — “MY TASKS”
+      · 11px — button[data-testid="work-scope-all"].flex.items-center.justify-center.gap-1.5 — “ALL TASKS”
+      · 11px — button[data-testid="ai-priority-toggle"].flex.items-center.justify-center.gap-1.5 — “AI PRIORITY”
+      · 11px — button[data-testid="work-view-mywork"].flex.items-center.justify-center.gap-1.5 — “MY WORK”
+      · 11px — button[data-testid="work-view-workflows"].flex.items-center.justify-center.gap-1.5 — “WORKFLOWS”
+      · 11px — button[data-testid="work-view-leave"].flex.items-center.justify-center.gap-1.5 — “LEAVE”
+      · 10px — span.min-w-5.h-5.px-1.flex — “3”
+      · 10px — span.min-w-5.h-5.px-1.flex — “2”
+      · 12px — span[data-testid="leave-status-lv_1"].inline-block.px-2.py-0.5.text-xs — “PENDING”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “CASUAL”
+      … 13 more
+  /my-work?view=workflows [390x844] — 22
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 11px — button[data-testid="new-task-button"].flex.items-center.justify-center.gap-1.5 — “NEW TASK”
+      · 11px — button[data-testid="work-scope-mine"].flex.items-center.justify-center.gap-1.5 — “MY TASKS”
+      · 11px — button[data-testid="work-scope-all"].flex.items-center.justify-center.gap-1.5 — “ALL TASKS”
+      · 11px — button[data-testid="ai-priority-toggle"].flex.items-center.justify-center.gap-1.5 — “AI PRIORITY”
+      · 11px — button[data-testid="work-view-mywork"].flex.items-center.justify-center.gap-1.5 — “MY WORK”
+      · 11px — button[data-testid="work-view-workflows"].flex.items-center.justify-center.gap-1.5 — “WORKFLOWS”
+      · 11px — button[data-testid="work-view-leave"].flex.items-center.justify-center.gap-1.5 — “LEAVE”
+      · 12px — button[data-testid="wf-subtab-pipelines"].flex.items-center.gap-1.5.px-3 — “PIPELINES”
+      · 12px — button[data-testid="wf-subtab-board"].flex.items-center.gap-1.5.px-3 — “TASK BOARD”
+      · 10px — span.block.text-[10px].uppercase.tracking-widest — “ORDER → READY”
+      · 10px — span.block.text-[10px].uppercase.tracking-widest — “DISPATCH → DELIVER”
+      … 10 more
+  /crm [390x844] — 22
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “CUSTOMER”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “ACTIVE”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “CUSTOMER”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “ACTIVE”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “CUSTOMER”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “ACTIVE”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “SUPPLIER”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “ACTIVE”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “SUPPLIER”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “ACTIVE”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “SUPPLIER”
+      … 10 more
+  /team [390x844] — 34
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 12px — p.text-xs.text-muted-foreground.font-mono — “rajesh@balajitextiles.in”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “OWNER”
+      · 12px — button[data-testid="edit-access-u_owner"].flex.items-center.gap-1.text-xs — “ACCESS”
+      · 12px — p.text-xs.text-muted-foreground.font-mono — “priya@balajitextiles.in”
+      · 12px — span[data-testid="member-access-count-u_sales"].label-mono.text-muted-foreground — “7 ACCESS”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “SALES”
+      · 12px — button[data-testid="edit-access-u_sales"].flex.items-center.gap-1.text-xs — “ACCESS”
+      · 12px — button[data-testid="invite-link-u_sales"].flex.items-center.gap-1.text-xs — “INVITE”
+      · 12px — button[data-testid="toggle-absent-u_sales"].text-xs.uppercase.tracking-wider.border — “MARK ABSENT”
+      · 12px — p.text-xs.text-muted-foreground.font-mono — “suresh@balajitextiles.in”
+      · 12px — span[data-testid="member-access-count-u_prod"].label-mono.text-muted-foreground — “6 ACCESS”
+      … 22 more
+  /finance [390x844] — 56
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 12px — button[data-testid="ledger-tab-overview"].flex.items-center.justify-center.gap-1.5 — “OVERVIEW”
+      · 12px — button[data-testid="ledger-tab-revenue"].flex.items-center.justify-center.gap-1.5 — “REVENUE”
+      · 12px — button[data-testid="ledger-tab-expenses"].flex.items-center.justify-center.gap-1.5 — “EXPENSES”
+      · 12px — button[data-testid="ledger-tab-assets"].flex.items-center.justify-center.gap-1.5 — “ASSETS”
+      · 12px — button[data-testid="ledger-tab-inventory"].flex.items-center.justify-center.gap-1.5 — “INVENTORY”
+      · 12px — button[data-testid="ledger-tab-inbox"].flex.items-center.justify-center.gap-1.5 — “INBOX”
+      · 12px — button[data-testid="ledger-reclassify-btn"].flex.items-center.justify-center.gap-1.5 — “FIX OLD PURCHASES”
+      · 12px — label[data-testid="finance-hero-doc"].flex.items-center.gap-2.border — “UPLOAD BILL / RECEIPT”
+      · 12px — label[data-testid="finance-hero-photo"].flex.items-center.gap-2.border — “PHOTO”
+      · 12px — label[data-testid="finance-hero-csv"].flex.items-center.gap-2.border — “CSV / EXCEL”
+      · 12px — button[data-testid="finance-hero-inbox-badge"].flex.items-center.gap-2.border — “2 IN INBOX →”
+      … 44 more
+  /finance?tab=revenue [390x844] — 22
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 12px — button[data-testid="ledger-tab-overview"].flex.items-center.justify-center.gap-1.5 — “OVERVIEW”
+      · 12px — button[data-testid="ledger-tab-revenue"].flex.items-center.justify-center.gap-1.5 — “REVENUE”
+      · 12px — button[data-testid="ledger-tab-expenses"].flex.items-center.justify-center.gap-1.5 — “EXPENSES”
+      · 12px — button[data-testid="ledger-tab-assets"].flex.items-center.justify-center.gap-1.5 — “ASSETS”
+      · 12px — button[data-testid="ledger-tab-inventory"].flex.items-center.justify-center.gap-1.5 — “INVENTORY”
+      · 12px — button[data-testid="ledger-tab-inbox"].flex.items-center.justify-center.gap-1.5 — “INBOX”
+      · 12px — button[data-testid="ledger-reclassify-btn"].flex.items-center.justify-center.gap-1.5 — “FIX OLD PURCHASES”
+      · 12px — label[data-testid="finance-hero-doc"].flex.items-center.gap-2.border — “UPLOAD BILL / RECEIPT”
+      · 12px — label[data-testid="finance-hero-photo"].flex.items-center.gap-2.border — “PHOTO”
+      · 12px — label[data-testid="finance-hero-csv"].flex.items-center.gap-2.border — “CSV / EXCEL”
+      · 12px — button[data-testid="finance-hero-inbox-badge"].flex.items-center.gap-2.border — “2 IN INBOX →”
+      … 10 more
+  /finance?tab=expenses [390x844] — 41
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 12px — button[data-testid="ledger-tab-overview"].flex.items-center.justify-center.gap-1.5 — “OVERVIEW”
+      · 12px — button[data-testid="ledger-tab-revenue"].flex.items-center.justify-center.gap-1.5 — “REVENUE”
+      · 12px — button[data-testid="ledger-tab-expenses"].flex.items-center.justify-center.gap-1.5 — “EXPENSES”
+      · 12px — button[data-testid="ledger-tab-assets"].flex.items-center.justify-center.gap-1.5 — “ASSETS”
+      · 12px — button[data-testid="ledger-tab-inventory"].flex.items-center.justify-center.gap-1.5 — “INVENTORY”
+      · 12px — button[data-testid="ledger-tab-inbox"].flex.items-center.justify-center.gap-1.5 — “INBOX”
+      · 12px — button[data-testid="ledger-reclassify-btn"].flex.items-center.justify-center.gap-1.5 — “FIX OLD PURCHASES”
+      · 12px — label[data-testid="finance-hero-doc"].flex.items-center.gap-2.border — “UPLOAD BILL / RECEIPT”
+      · 12px — label[data-testid="finance-hero-photo"].flex.items-center.gap-2.border — “PHOTO”
+      · 12px — label[data-testid="finance-hero-csv"].flex.items-center.gap-2.border — “CSV / EXCEL”
+      · 12px — button[data-testid="finance-hero-inbox-badge"].flex.items-center.gap-2.border — “2 IN INBOX →”
+      … 29 more
+  /finance?tab=assets [390x844] — 35
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 12px — button[data-testid="ledger-tab-overview"].flex.items-center.justify-center.gap-1.5 — “OVERVIEW”
+      · 12px — button[data-testid="ledger-tab-revenue"].flex.items-center.justify-center.gap-1.5 — “REVENUE”
+      · 12px — button[data-testid="ledger-tab-expenses"].flex.items-center.justify-center.gap-1.5 — “EXPENSES”
+      · 12px — button[data-testid="ledger-tab-assets"].flex.items-center.justify-center.gap-1.5 — “ASSETS”
+      · 12px — button[data-testid="ledger-tab-inventory"].flex.items-center.justify-center.gap-1.5 — “INVENTORY”
+      · 12px — button[data-testid="ledger-tab-inbox"].flex.items-center.justify-center.gap-1.5 — “INBOX”
+      · 12px — button[data-testid="ledger-reclassify-btn"].flex.items-center.justify-center.gap-1.5 — “FIX OLD PURCHASES”
+      · 12px — label[data-testid="finance-hero-doc"].flex.items-center.gap-2.border — “UPLOAD BILL / RECEIPT”
+      · 12px — label[data-testid="finance-hero-photo"].flex.items-center.gap-2.border — “PHOTO”
+      · 12px — label[data-testid="finance-hero-csv"].flex.items-center.gap-2.border — “CSV / EXCEL”
+      · 12px — button[data-testid="finance-hero-inbox-badge"].flex.items-center.gap-2.border — “2 IN INBOX →”
+      … 23 more
+  /finance?tab=inventory [390x844] — 25
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 12px — button[data-testid="ledger-tab-overview"].flex.items-center.justify-center.gap-1.5 — “OVERVIEW”
+      · 12px — button[data-testid="ledger-tab-revenue"].flex.items-center.justify-center.gap-1.5 — “REVENUE”
+      · 12px — button[data-testid="ledger-tab-expenses"].flex.items-center.justify-center.gap-1.5 — “EXPENSES”
+      · 12px — button[data-testid="ledger-tab-assets"].flex.items-center.justify-center.gap-1.5 — “ASSETS”
+      · 12px — button[data-testid="ledger-tab-inventory"].flex.items-center.justify-center.gap-1.5 — “INVENTORY”
+      · 12px — button[data-testid="ledger-tab-inbox"].flex.items-center.justify-center.gap-1.5 — “INBOX”
+      · 12px — button[data-testid="ledger-reclassify-btn"].flex.items-center.justify-center.gap-1.5 — “FIX OLD PURCHASES”
+      · 12px — label[data-testid="finance-hero-doc"].flex.items-center.gap-2.border — “UPLOAD BILL / RECEIPT”
+      · 12px — label[data-testid="finance-hero-photo"].flex.items-center.gap-2.border — “PHOTO”
+      · 12px — label[data-testid="finance-hero-csv"].flex.items-center.gap-2.border — “CSV / EXCEL”
+      · 12px — button[data-testid="finance-hero-inbox-badge"].flex.items-center.gap-2.border — “2 IN INBOX →”
+      … 13 more
+  /finance?tab=inbox [390x844] — 17
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 12px — button[data-testid="ledger-tab-overview"].flex.items-center.justify-center.gap-1.5 — “OVERVIEW”
+      · 12px — button[data-testid="ledger-tab-revenue"].flex.items-center.justify-center.gap-1.5 — “REVENUE”
+      · 12px — button[data-testid="ledger-tab-expenses"].flex.items-center.justify-center.gap-1.5 — “EXPENSES”
+      · 12px — button[data-testid="ledger-tab-assets"].flex.items-center.justify-center.gap-1.5 — “ASSETS”
+      · 12px — button[data-testid="ledger-tab-inventory"].flex.items-center.justify-center.gap-1.5 — “INVENTORY”
+      · 12px — button[data-testid="ledger-tab-inbox"].flex.items-center.justify-center.gap-1.5 — “INBOX”
+      · 12px — button[data-testid="ledger-reclassify-btn"].flex.items-center.justify-center.gap-1.5 — “FIX OLD PURCHASES”
+      · 12px — label[data-testid="finance-hero-doc"].flex.items-center.gap-2.border — “UPLOAD BILL / RECEIPT”
+      · 12px — label[data-testid="finance-hero-photo"].flex.items-center.gap-2.border — “PHOTO”
+      · 12px — label[data-testid="finance-hero-csv"].flex.items-center.gap-2.border — “CSV / EXCEL”
+      · 12px — button[data-testid="finance-hero-inbox-badge"].flex.items-center.gap-2.border — “2 IN INBOX →”
+      … 5 more
+  /brain [390x844] — 11
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 12px — p[data-testid="brain-tabs-hint"].text-xs.text-muted-foreground — “Speak, type, ask, search — Dex remembers everything.”
+      · 12px — button[data-testid="ask-suggestion"].text-xs.border.border-black.px-3 — “What needs my attention today?”
+      · 12px — button[data-testid="ask-suggestion"].text-xs.border.border-black.px-3 — “Show all tasks completed on time this month”
+      · 12px — button[data-testid="ask-suggestion"].text-xs.border.border-black.px-3 — “Which employees have the most overdue tasks?”
+      · 12px — button[data-testid="ask-suggestion"].text-xs.border.border-black.px-3 — “Show outstanding customer invoices”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “DESK”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “BRIEF”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “WORK”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “CRM”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “DEX”
+  /calendar [390x844] — 6
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “DESK”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “BRIEF”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “WORK”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “CRM”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “DEX”
+  /notifications [390x844] — 28
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “REMINDER”
+      · 12px — span.label-mono.text-muted-foreground.flex.items-center — “5 HRS AGO”
+      · 12px — p.text-xs.text-muted-foreground.mt-0.5.truncate — “Decision waiting”
+      · 12px — p.label-mono.text-muted-foreground.mt-1.flex — “SURESH PATEL”
+      · 12px — button[data-testid="read-n_1"].text-xs.uppercase.tracking-wider.border — “READ”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “REMINDER”
+      · 12px — span.label-mono.text-muted-foreground.flex.items-center — “1 DAY AGO”
+      · 12px — p.text-xs.text-muted-foreground.mt-0.5.truncate — “Escalation”
+      · 12px — p.label-mono.text-muted-foreground.mt-1.flex — “SURESH PATEL”
+      · 12px — button[data-testid="read-n_2"].text-xs.uppercase.tracking-wider.border — “READ”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “REMINDER”
+      … 16 more
+  /settings [390x844] — 86
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 12px — p.text-xs.text-muted-foreground.mb-4 — “Update your company profile, products, and team roles.”
+      · 12px — label.label-mono.text-muted-foreground — “COMPANY NAME”
+      · 12px — label.label-mono.text-muted-foreground — “INDUSTRY”
+      · 12px — label.label-mono.text-muted-foreground — “TEAM SIZE”
+      · 12px — label.label-mono.text-muted-foreground — “COMPANY MOBILE”
+      · 12px — label.label-mono.text-muted-foreground — “REGION”
+      · 12px — label.label-mono.text-muted-foreground — “CURRENCY”
+      · 12px — label.label-mono.text-muted-foreground — “GST / TAX ID”
+      · 12px — label.label-mono.text-muted-foreground — “BRANCHES”
+      · 12px — label.label-mono.text-muted-foreground.flex.items-center — “WORKSPACE ID (WhatsApp routing fallback — set as WA_TENANT_ID)”
+      · 12px — span.normal-case — “(WhatsApp routing fallback — set as WA_TENANT_ID)”
+      … 74 more
+  /journal [390x844] — 6
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “DESK”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “BRIEF”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “WORK”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “CRM”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “DEX”
+  /login [390x844] — 7
+      · 12px — button[data-testid="login-tab-password"].flex-1.px-3.py-2.text-xs — “EMAIL & PASSWORD”
+      · 12px — button[data-testid="login-tab-otp"].flex-1.flex.items-center.justify-center — “MOBILE OTP”
+      · 12px — p.label-mono.text-muted-foreground.mb-3 — “TRY THE SHARMA DEMO”
+      · 12px — button[data-testid="demo-login-owner"].border.border-black.px-3.py-2 — “OWNER”
+      · 12px — button[data-testid="demo-login-sales"].border.border-black.px-3.py-2 — “SALES”
+      · 12px — button[data-testid="demo-login-production"].border.border-black.px-3.py-2 — “PRODUCTION”
+      · 12px — button[data-testid="demo-login-finance"].border.border-black.px-3.py-2 — “FINANCE”
+  /inbox [360x640] — 22
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 10px — span.ml-1.px-1.5.py-0.5.text-[10px] — “6”
+      · 10px — span.ml-1.px-1.5.py-0.5.text-[10px] — “5”
+      · 10px — span.ml-1.px-1.5.py-0.5.text-[10px] — “3”
+      · 10px — span.ml-1.px-1.5.py-0.5.text-[10px] — “0”
+      · 12px — p.text-xs.text-muted-foreground.font-mono.mt-1 — “Waiting 6 days · From Suresh Patel · Unblocks 3 tasks”
+      · 12px — button[data-testid="desk-cta-review-d_1"].px-4.py-2.text-xs.font-semibold — “REVIEW →”
+      · 12px — p.text-xs.text-muted-foreground.font-mono.mt-1 — “Waiting 4 days · From Anita Desai · Unblocks 1 task”
+      · 12px — button[data-testid="desk-cta-review-d_2"].px-4.py-2.text-xs.font-semibold — “REVIEW →”
+      · 12px — p.text-xs.text-muted-foreground.font-mono.mt-1 — “Waiting 3 days · From Suresh Patel · Unblocks 2 tasks”
+      · 12px — button[data-testid="desk-cta-review-d_3"].px-4.py-2.text-xs.font-semibold — “REVIEW →”
+      · 12px — p.text-xs.text-muted-foreground.font-mono.mt-1 — “Waiting 2 days · From Priya Sharma · Unblocks 1 task”
+      … 10 more
+  /brief [360x640] — 15
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 12px — span.mt-3.inline-flex.items-center.gap-1 — “VIEW DETAILS”
+      · 12px — span.mt-3.inline-flex.items-center.gap-1 — “VIEW DETAILS”
+      · 12px — span.mt-3.inline-flex.items-center.gap-1 — “VIEW DETAILS”
+      · 12px — span.mt-3.inline-flex.items-center.gap-1 — “VIEW DETAILS”
+      · 12px — span.mt-3.inline-flex.items-center.gap-1 — “VIEW DETAILS”
+      · 12px — span.mt-3.inline-flex.items-center.gap-1 — “VIEW DETAILS”
+      · 12px — span.mt-3.inline-flex.items-center.gap-1 — “VIEW DETAILS”
+      · 12px — span.mt-3.inline-flex.items-center.gap-1 — “VIEW DETAILS”
+      · 12px — span.mt-3.inline-flex.items-center.gap-1 — “VIEW DETAILS”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “DESK”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “BRIEF”
+      … 3 more
+  /my-work [360x640] — 157
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 11px — button[data-testid="new-task-button"].flex.items-center.justify-center.gap-1.5 — “NEW TASK”
+      · 11px — button[data-testid="work-scope-mine"].flex.items-center.justify-center.gap-1.5 — “MY TASKS”
+      · 11px — button[data-testid="work-scope-all"].flex.items-center.justify-center.gap-1.5 — “ALL TASKS”
+      · 11px — button[data-testid="ai-priority-toggle"].flex.items-center.justify-center.gap-1.5 — “AI PRIORITY”
+      · 11px — button[data-testid="work-view-mywork"].flex.items-center.justify-center.gap-1.5 — “MY WORK”
+      · 11px — button[data-testid="work-view-workflows"].flex.items-center.justify-center.gap-1.5 — “WORKFLOWS”
+      · 11px — button[data-testid="work-view-leave"].flex.items-center.justify-center.gap-1.5 — “LEAVE”
+      · 12px — button[data-testid="work-tab-all"].flex.items-center.gap-1.5.px-3 — “ALL 13”
+      · 10px — span.px-1.5.py-0.5.text-[10px].leading-none — “13”
+      · 12px — button[data-testid="work-tab-operational"].flex.items-center.gap-1.5.px-3 — “OPERATIONAL 0”
+      · 10px — span.px-1.5.py-0.5.text-[10px].leading-none — “0”
+      … 145 more
+  /my-work?view=leave [360x640] — 25
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 11px — button[data-testid="new-task-button"].flex.items-center.justify-center.gap-1.5 — “NEW TASK”
+      · 11px — button[data-testid="work-scope-mine"].flex.items-center.justify-center.gap-1.5 — “MY TASKS”
+      · 11px — button[data-testid="work-scope-all"].flex.items-center.justify-center.gap-1.5 — “ALL TASKS”
+      · 11px — button[data-testid="ai-priority-toggle"].flex.items-center.justify-center.gap-1.5 — “AI PRIORITY”
+      · 11px — button[data-testid="work-view-mywork"].flex.items-center.justify-center.gap-1.5 — “MY WORK”
+      · 11px — button[data-testid="work-view-workflows"].flex.items-center.justify-center.gap-1.5 — “WORKFLOWS”
+      · 11px — button[data-testid="work-view-leave"].flex.items-center.justify-center.gap-1.5 — “LEAVE”
+      · 10px — span.min-w-5.h-5.px-1.flex — “3”
+      · 10px — span.min-w-5.h-5.px-1.flex — “2”
+      · 12px — span[data-testid="leave-status-lv_1"].inline-block.px-2.py-0.5.text-xs — “PENDING”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “CASUAL”
+      … 13 more
+  /my-work?view=workflows [360x640] — 22
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 11px — button[data-testid="new-task-button"].flex.items-center.justify-center.gap-1.5 — “NEW TASK”
+      · 11px — button[data-testid="work-scope-mine"].flex.items-center.justify-center.gap-1.5 — “MY TASKS”
+      · 11px — button[data-testid="work-scope-all"].flex.items-center.justify-center.gap-1.5 — “ALL TASKS”
+      · 11px — button[data-testid="ai-priority-toggle"].flex.items-center.justify-center.gap-1.5 — “AI PRIORITY”
+      · 11px — button[data-testid="work-view-mywork"].flex.items-center.justify-center.gap-1.5 — “MY WORK”
+      · 11px — button[data-testid="work-view-workflows"].flex.items-center.justify-center.gap-1.5 — “WORKFLOWS”
+      · 11px — button[data-testid="work-view-leave"].flex.items-center.justify-center.gap-1.5 — “LEAVE”
+      · 12px — button[data-testid="wf-subtab-pipelines"].flex.items-center.gap-1.5.px-3 — “PIPELINES”
+      · 12px — button[data-testid="wf-subtab-board"].flex.items-center.gap-1.5.px-3 — “TASK BOARD”
+      · 10px — span.block.text-[10px].uppercase.tracking-widest — “ORDER → READY”
+      · 10px — span.block.text-[10px].uppercase.tracking-widest — “DISPATCH → DELIVER”
+      … 10 more
+  /crm [360x640] — 22
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “CUSTOMER”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “ACTIVE”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “CUSTOMER”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “ACTIVE”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “CUSTOMER”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “ACTIVE”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “SUPPLIER”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “ACTIVE”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “SUPPLIER”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “ACTIVE”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “SUPPLIER”
+      … 10 more
+  /team [360x640] — 34
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 12px — p.text-xs.text-muted-foreground.font-mono — “rajesh@balajitextiles.in”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “OWNER”
+      · 12px — button[data-testid="edit-access-u_owner"].flex.items-center.gap-1.text-xs — “ACCESS”
+      · 12px — p.text-xs.text-muted-foreground.font-mono — “priya@balajitextiles.in”
+      · 12px — span[data-testid="member-access-count-u_sales"].label-mono.text-muted-foreground — “7 ACCESS”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “SALES”
+      · 12px — button[data-testid="edit-access-u_sales"].flex.items-center.gap-1.text-xs — “ACCESS”
+      · 12px — button[data-testid="invite-link-u_sales"].flex.items-center.gap-1.text-xs — “INVITE”
+      · 12px — button[data-testid="toggle-absent-u_sales"].text-xs.uppercase.tracking-wider.border — “MARK ABSENT”
+      · 12px — p.text-xs.text-muted-foreground.font-mono — “suresh@balajitextiles.in”
+      · 12px — span[data-testid="member-access-count-u_prod"].label-mono.text-muted-foreground — “6 ACCESS”
+      … 22 more
+  /finance [360x640] — 56
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 12px — button[data-testid="ledger-tab-overview"].flex.items-center.justify-center.gap-1.5 — “OVERVIEW”
+      · 12px — button[data-testid="ledger-tab-revenue"].flex.items-center.justify-center.gap-1.5 — “REVENUE”
+      · 12px — button[data-testid="ledger-tab-expenses"].flex.items-center.justify-center.gap-1.5 — “EXPENSES”
+      · 12px — button[data-testid="ledger-tab-assets"].flex.items-center.justify-center.gap-1.5 — “ASSETS”
+      · 12px — button[data-testid="ledger-tab-inventory"].flex.items-center.justify-center.gap-1.5 — “INVENTORY”
+      · 12px — button[data-testid="ledger-tab-inbox"].flex.items-center.justify-center.gap-1.5 — “INBOX”
+      · 12px — button[data-testid="ledger-reclassify-btn"].flex.items-center.justify-center.gap-1.5 — “FIX OLD PURCHASES”
+      · 12px — label[data-testid="finance-hero-doc"].flex.items-center.gap-2.border — “UPLOAD BILL / RECEIPT”
+      · 12px — label[data-testid="finance-hero-photo"].flex.items-center.gap-2.border — “PHOTO”
+      · 12px — label[data-testid="finance-hero-csv"].flex.items-center.gap-2.border — “CSV / EXCEL”
+      · 12px — button[data-testid="finance-hero-inbox-badge"].flex.items-center.gap-2.border — “2 IN INBOX →”
+      … 44 more
+  /finance?tab=revenue [360x640] — 22
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 12px — button[data-testid="ledger-tab-overview"].flex.items-center.justify-center.gap-1.5 — “OVERVIEW”
+      · 12px — button[data-testid="ledger-tab-revenue"].flex.items-center.justify-center.gap-1.5 — “REVENUE”
+      · 12px — button[data-testid="ledger-tab-expenses"].flex.items-center.justify-center.gap-1.5 — “EXPENSES”
+      · 12px — button[data-testid="ledger-tab-assets"].flex.items-center.justify-center.gap-1.5 — “ASSETS”
+      · 12px — button[data-testid="ledger-tab-inventory"].flex.items-center.justify-center.gap-1.5 — “INVENTORY”
+      · 12px — button[data-testid="ledger-tab-inbox"].flex.items-center.justify-center.gap-1.5 — “INBOX”
+      · 12px — button[data-testid="ledger-reclassify-btn"].flex.items-center.justify-center.gap-1.5 — “FIX OLD PURCHASES”
+      · 12px — label[data-testid="finance-hero-doc"].flex.items-center.gap-2.border — “UPLOAD BILL / RECEIPT”
+      · 12px — label[data-testid="finance-hero-photo"].flex.items-center.gap-2.border — “PHOTO”
+      · 12px — label[data-testid="finance-hero-csv"].flex.items-center.gap-2.border — “CSV / EXCEL”
+      · 12px — button[data-testid="finance-hero-inbox-badge"].flex.items-center.gap-2.border — “2 IN INBOX →”
+      … 10 more
+  /finance?tab=expenses [360x640] — 41
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 12px — button[data-testid="ledger-tab-overview"].flex.items-center.justify-center.gap-1.5 — “OVERVIEW”
+      · 12px — button[data-testid="ledger-tab-revenue"].flex.items-center.justify-center.gap-1.5 — “REVENUE”
+      · 12px — button[data-testid="ledger-tab-expenses"].flex.items-center.justify-center.gap-1.5 — “EXPENSES”
+      · 12px — button[data-testid="ledger-tab-assets"].flex.items-center.justify-center.gap-1.5 — “ASSETS”
+      · 12px — button[data-testid="ledger-tab-inventory"].flex.items-center.justify-center.gap-1.5 — “INVENTORY”
+      · 12px — button[data-testid="ledger-tab-inbox"].flex.items-center.justify-center.gap-1.5 — “INBOX”
+      · 12px — button[data-testid="ledger-reclassify-btn"].flex.items-center.justify-center.gap-1.5 — “FIX OLD PURCHASES”
+      · 12px — label[data-testid="finance-hero-doc"].flex.items-center.gap-2.border — “UPLOAD BILL / RECEIPT”
+      · 12px — label[data-testid="finance-hero-photo"].flex.items-center.gap-2.border — “PHOTO”
+      · 12px — label[data-testid="finance-hero-csv"].flex.items-center.gap-2.border — “CSV / EXCEL”
+      · 12px — button[data-testid="finance-hero-inbox-badge"].flex.items-center.gap-2.border — “2 IN INBOX →”
+      … 29 more
+  /finance?tab=assets [360x640] — 35
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 12px — button[data-testid="ledger-tab-overview"].flex.items-center.justify-center.gap-1.5 — “OVERVIEW”
+      · 12px — button[data-testid="ledger-tab-revenue"].flex.items-center.justify-center.gap-1.5 — “REVENUE”
+      · 12px — button[data-testid="ledger-tab-expenses"].flex.items-center.justify-center.gap-1.5 — “EXPENSES”
+      · 12px — button[data-testid="ledger-tab-assets"].flex.items-center.justify-center.gap-1.5 — “ASSETS”
+      · 12px — button[data-testid="ledger-tab-inventory"].flex.items-center.justify-center.gap-1.5 — “INVENTORY”
+      · 12px — button[data-testid="ledger-tab-inbox"].flex.items-center.justify-center.gap-1.5 — “INBOX”
+      · 12px — button[data-testid="ledger-reclassify-btn"].flex.items-center.justify-center.gap-1.5 — “FIX OLD PURCHASES”
+      · 12px — label[data-testid="finance-hero-doc"].flex.items-center.gap-2.border — “UPLOAD BILL / RECEIPT”
+      · 12px — label[data-testid="finance-hero-photo"].flex.items-center.gap-2.border — “PHOTO”
+      · 12px — label[data-testid="finance-hero-csv"].flex.items-center.gap-2.border — “CSV / EXCEL”
+      · 12px — button[data-testid="finance-hero-inbox-badge"].flex.items-center.gap-2.border — “2 IN INBOX →”
+      … 23 more
+  /finance?tab=inventory [360x640] — 25
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 12px — button[data-testid="ledger-tab-overview"].flex.items-center.justify-center.gap-1.5 — “OVERVIEW”
+      · 12px — button[data-testid="ledger-tab-revenue"].flex.items-center.justify-center.gap-1.5 — “REVENUE”
+      · 12px — button[data-testid="ledger-tab-expenses"].flex.items-center.justify-center.gap-1.5 — “EXPENSES”
+      · 12px — button[data-testid="ledger-tab-assets"].flex.items-center.justify-center.gap-1.5 — “ASSETS”
+      · 12px — button[data-testid="ledger-tab-inventory"].flex.items-center.justify-center.gap-1.5 — “INVENTORY”
+      · 12px — button[data-testid="ledger-tab-inbox"].flex.items-center.justify-center.gap-1.5 — “INBOX”
+      · 12px — button[data-testid="ledger-reclassify-btn"].flex.items-center.justify-center.gap-1.5 — “FIX OLD PURCHASES”
+      · 12px — label[data-testid="finance-hero-doc"].flex.items-center.gap-2.border — “UPLOAD BILL / RECEIPT”
+      · 12px — label[data-testid="finance-hero-photo"].flex.items-center.gap-2.border — “PHOTO”
+      · 12px — label[data-testid="finance-hero-csv"].flex.items-center.gap-2.border — “CSV / EXCEL”
+      · 12px — button[data-testid="finance-hero-inbox-badge"].flex.items-center.gap-2.border — “2 IN INBOX →”
+      … 13 more
+  /finance?tab=inbox [360x640] — 17
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 12px — button[data-testid="ledger-tab-overview"].flex.items-center.justify-center.gap-1.5 — “OVERVIEW”
+      · 12px — button[data-testid="ledger-tab-revenue"].flex.items-center.justify-center.gap-1.5 — “REVENUE”
+      · 12px — button[data-testid="ledger-tab-expenses"].flex.items-center.justify-center.gap-1.5 — “EXPENSES”
+      · 12px — button[data-testid="ledger-tab-assets"].flex.items-center.justify-center.gap-1.5 — “ASSETS”
+      · 12px — button[data-testid="ledger-tab-inventory"].flex.items-center.justify-center.gap-1.5 — “INVENTORY”
+      · 12px — button[data-testid="ledger-tab-inbox"].flex.items-center.justify-center.gap-1.5 — “INBOX”
+      · 12px — button[data-testid="ledger-reclassify-btn"].flex.items-center.justify-center.gap-1.5 — “FIX OLD PURCHASES”
+      · 12px — label[data-testid="finance-hero-doc"].flex.items-center.gap-2.border — “UPLOAD BILL / RECEIPT”
+      · 12px — label[data-testid="finance-hero-photo"].flex.items-center.gap-2.border — “PHOTO”
+      · 12px — label[data-testid="finance-hero-csv"].flex.items-center.gap-2.border — “CSV / EXCEL”
+      · 12px — button[data-testid="finance-hero-inbox-badge"].flex.items-center.gap-2.border — “2 IN INBOX →”
+      … 5 more
+  /brain [360x640] — 11
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 12px — p[data-testid="brain-tabs-hint"].text-xs.text-muted-foreground — “Speak, type, ask, search — Dex remembers everything.”
+      · 12px — button[data-testid="ask-suggestion"].text-xs.border.border-black.px-3 — “What needs my attention today?”
+      · 12px — button[data-testid="ask-suggestion"].text-xs.border.border-black.px-3 — “Show all tasks completed on time this month”
+      · 12px — button[data-testid="ask-suggestion"].text-xs.border.border-black.px-3 — “Which employees have the most overdue tasks?”
+      · 12px — button[data-testid="ask-suggestion"].text-xs.border.border-black.px-3 — “Show outstanding customer invoices”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “DESK”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “BRIEF”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “WORK”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “CRM”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “DEX”
+  /calendar [360x640] — 6
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “DESK”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “BRIEF”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “WORK”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “CRM”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “DEX”
+  /notifications [360x640] — 28
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “REMINDER”
+      · 12px — span.label-mono.text-muted-foreground.flex.items-center — “5 HRS AGO”
+      · 12px — p.text-xs.text-muted-foreground.mt-0.5.truncate — “Decision waiting”
+      · 12px — p.label-mono.text-muted-foreground.mt-1.flex — “SURESH PATEL”
+      · 12px — button[data-testid="read-n_1"].text-xs.uppercase.tracking-wider.border — “READ”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “REMINDER”
+      · 12px — span.label-mono.text-muted-foreground.flex.items-center — “1 DAY AGO”
+      · 12px — p.text-xs.text-muted-foreground.mt-0.5.truncate — “Escalation”
+      · 12px — p.label-mono.text-muted-foreground.mt-1.flex — “SURESH PATEL”
+      · 12px — button[data-testid="read-n_2"].text-xs.uppercase.tracking-wider.border — “READ”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “REMINDER”
+      … 16 more
+  /settings [360x640] — 86
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 12px — p.text-xs.text-muted-foreground.mb-4 — “Update your company profile, products, and team roles.”
+      · 12px — label.label-mono.text-muted-foreground — “COMPANY NAME”
+      · 12px — label.label-mono.text-muted-foreground — “INDUSTRY”
+      · 12px — label.label-mono.text-muted-foreground — “TEAM SIZE”
+      · 12px — label.label-mono.text-muted-foreground — “COMPANY MOBILE”
+      · 12px — label.label-mono.text-muted-foreground — “REGION”
+      · 12px — label.label-mono.text-muted-foreground — “CURRENCY”
+      · 12px — label.label-mono.text-muted-foreground — “GST / TAX ID”
+      · 12px — label.label-mono.text-muted-foreground — “BRANCHES”
+      · 12px — label.label-mono.text-muted-foreground.flex.items-center — “WORKSPACE ID (WhatsApp routing fallback — set as WA_TENANT_ID)”
+      · 12px — span.normal-case — “(WhatsApp routing fallback — set as WA_TENANT_ID)”
+      … 74 more
+  /journal [360x640] — 6
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “DESK”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “BRIEF”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “WORK”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “CRM”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “DEX”
+  /login [360x640] — 7
+      · 12px — button[data-testid="login-tab-password"].flex-1.px-3.py-2.text-xs — “EMAIL & PASSWORD”
+      · 12px — button[data-testid="login-tab-otp"].flex-1.flex.items-center.justify-center — “MOBILE OTP”
+      · 12px — p.label-mono.text-muted-foreground.mb-3 — “TRY THE SHARMA DEMO”
+      · 12px — button[data-testid="demo-login-owner"].border.border-black.px-3.py-2 — “OWNER”
+      · 12px — button[data-testid="demo-login-sales"].border.border-black.px-3.py-2 — “SALES”
+      · 12px — button[data-testid="demo-login-production"].border.border-black.px-3.py-2 — “PRODUCTION”
+      · 12px — button[data-testid="demo-login-finance"].border.border-black.px-3.py-2 — “FINANCE”
+
+FAIL · horizontal-overflow — 202
+Content clipped at the right edge (§5.2.1)
+------------------------------------------------------------------------------
+  /inbox [390x844] — 1
+      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+  /brief [390x844] — 4
+      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 400>358 (overflow-x:visible) — div.flex.flex-col — “MORNING EVENING WEEKLY MONTHLY CEO JOURNAL 1 FIRES TO PUT OUT TODAY HANDLE NOW 4 delayed t”
+      · 400>358 (overflow-x:visible) — div[data-testid="brief-controls"].order-2.lg:order-1.mt-8.lg:mt-0 — “MORNING EVENING WEEKLY MONTHLY CEO JOURNAL”
+      · 399>356 (overflow-x:visible) — div.flex.border.border-black.w-full — “MORNING EVENING WEEKLY MONTHLY”
+  /my-work [390x844] — 1
+      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+  /my-work?view=leave [390x844] — 3
+      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 388>358 (overflow-x:visible) — div — “NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE REPORT ABSENCE TODAY REQUE”
+      · 388>358 (overflow-x:visible) — div — “REPORT ABSENCE TODAY REQUEST LEAVE MY LEAVE 3 APPROVALS 2 SETTINGS PENDING CASUAL Priya Sh”
+  /my-work?view=workflows [390x844] — 1
+      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+  /crm [390x844] — 1
+      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+  /team [390x844] — 1
+      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+  /finance [390x844] — 1
+      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+  /finance?tab=revenue [390x844] — 6
+      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 367>358 (overflow-x:visible) — div — “OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD INCOME FIX OLD PURCHASES UPLOAD BILL ”
+      · 367>358 (overflow-x:visible) — div[data-testid="ledger-revenue"].space-y-6 — “BILLED ₹0 RECEIVED ₹0 OUTSTANDING ₹0 AI ANALYSIS Refresh ASK AI ABOUT YOUR REVENUE Ask SAL”
+      · 367>358 (overflow-x:visible) — div.grid.grid-cols-3.gap-3 — “BILLED ₹0 RECEIVED ₹0 OUTSTANDING ₹0”
+      · 119>109 (overflow-x:visible) — div[data-testid="kpi-outstanding"].card-brutal.p-4 — “OUTSTANDING ₹0”
+      · 103>77 (overflow-x:visible) — div.flex.items-center.gap-2.text-muted-foreground — “OUTSTANDING”
+  /finance?tab=expenses [390x844] — 1
+      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+  /finance?tab=assets [390x844] — 1
+      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+  /finance?tab=inventory [390x844] — 1
+      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+  /finance?tab=inbox [390x844] — 1
+      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+  /brain [390x844] — 6
+      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 409>358 (overflow-x:visible) — div — “ASK SEARCH DOCUMENTS Speak, type, ask, search — Dex remembers everything. SEND ASK YOUR CO”
+      · 373>356 (overflow-x:visible) — div[data-testid="dex-capture-bar"].border.border-black.bg-white.p-3 — “SEND”
+      · 361>332 (overflow-x:visible) — div.flex.items-stretch.gap-2 — “SEND”
+      · 409>358 (overflow-x:visible) — div.flex.flex-col.h-[calc(100vh-15rem)].lg:h-[calc(100vh-12rem)] — “ASK YOUR COMPANY ANYTHING Every answer is computed from your authorised workspace data — w”
+      · 409>358 (overflow-x:visible) — form.flex.gap-2.mt-3 — “> ASK”
+  /calendar [390x844] — 1
+      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+  /notifications [390x844] — 1
+      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+  /settings [390x844] — 1
+      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+  /journal [390x844] — 1
+      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+  /inbox [360x640] — 7
+      · page scrollWidth 391 > viewport 360
+      · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 Decision Desk 6 decisions waiting on you · 5 on fire · 3 due today NEEDS YO”
+      · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 Decision Desk 6 decisions waiting on you · 5 on fire · 3 due today NEEDS YO”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 Decision Desk 6 decisions waiting on you · 5 on fire · 3 due today NEEDS YO”
+      · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 Decision Desk 6 decisions waiting on you · 5 on fire · 3 due today NEEDS YO”
+      · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
+      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+  /brief [360x640] — 10
+      · page scrollWidth 391 > viewport 360
+      · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 MORNING EVENING WEEKLY MONTHLY CEO JOURNAL 1 FIRES TO PUT OUT TODAY HANDLE ”
+      · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 MORNING EVENING WEEKLY MONTHLY CEO JOURNAL 1 FIRES TO PUT OUT TODAY HANDLE ”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 MORNING EVENING WEEKLY MONTHLY CEO JOURNAL 1 FIRES TO PUT OUT TODAY HANDLE ”
+      · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 MORNING EVENING WEEKLY MONTHLY CEO JOURNAL 1 FIRES TO PUT OUT TODAY HANDLE ”
+      · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
+      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 400>328 (overflow-x:visible) — div.flex.flex-col — “MORNING EVENING WEEKLY MONTHLY CEO JOURNAL 1 FIRES TO PUT OUT TODAY HANDLE NOW 4 delayed t”
+      · 400>328 (overflow-x:visible) — div[data-testid="brief-controls"].order-2.lg:order-1.mt-8.lg:mt-0 — “MORNING EVENING WEEKLY MONTHLY CEO JOURNAL”
+      · 399>326 (overflow-x:visible) — div.flex.border.border-black.w-full — “MORNING EVENING WEEKLY MONTHLY”
+  /my-work [360x640] — 8
+      · page scrollWidth 391 > viewport 360
+      · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE ALL 13 OPER”
+      · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE ALL 13 OPER”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE ALL 13 OPER”
+      · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE ALL 13 OPER”
+      · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
+      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 78>74 (overflow-x:visible) — button[data-testid="work-view-workflows"].flex.items-center.justify-center.gap-1.5 — “WORKFLOWS”
+  /my-work?view=leave [360x640] — 10
+      · page scrollWidth 391 > viewport 360
+      · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE REPORT ABSE”
+      · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE REPORT ABSE”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE REPORT ABSE”
+      · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE REPORT ABSE”
+      · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
+      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 388>328 (overflow-x:visible) — div — “NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE REPORT ABSENCE TODAY REQUE”
+      · 78>74 (overflow-x:visible) — button[data-testid="work-view-workflows"].flex.items-center.justify-center.gap-1.5 — “WORKFLOWS”
+      · 388>328 (overflow-x:visible) — div — “REPORT ABSENCE TODAY REQUEST LEAVE MY LEAVE 3 APPROVALS 2 SETTINGS PENDING CASUAL Priya Sh”
+  /my-work?view=workflows [360x640] — 8
+      · page scrollWidth 391 > viewport 360
+      · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE PIPELINES T”
+      · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE PIPELINES T”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE PIPELINES T”
+      · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE PIPELINES T”
+      · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
+      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 78>74 (overflow-x:visible) — button[data-testid="work-view-workflows"].flex.items-center.justify-center.gap-1.5 — “WORKFLOWS”
+  /crm [360x640] — 7
+      · page scrollWidth 391 > viewport 360
+      · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 ADD CUSTOMER ADD SUPPLIER ALL CUSTOMERS SUPPLIERS MINE All statuses lead ac”
+      · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 ADD CUSTOMER ADD SUPPLIER ALL CUSTOMERS SUPPLIERS MINE All statuses lead ac”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 ADD CUSTOMER ADD SUPPLIER ALL CUSTOMERS SUPPLIERS MINE All statuses lead ac”
+      · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 ADD CUSTOMER ADD SUPPLIER ALL CUSTOMERS SUPPLIERS MINE All statuses lead ac”
+      · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
+      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+  /team [360x640] — 7
+      · page scrollWidth 391 > viewport 360
+      · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 ADD MEMBER MEMBERS R Rajesh Kumar rajesh@balajitextiles.in OWNER ACCESS P P”
+      · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 ADD MEMBER MEMBERS R Rajesh Kumar rajesh@balajitextiles.in OWNER ACCESS P P”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 ADD MEMBER MEMBERS R Rajesh Kumar rajesh@balajitextiles.in OWNER ACCESS P P”
+      · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 ADD MEMBER MEMBERS R Rajesh Kumar rajesh@balajitextiles.in OWNER ACCESS P P”
+      · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
+      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+  /finance [360x640] — 10
+      · page scrollWidth 391 > viewport 360
+      · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX FIX OLD PURCHASES UPLOAD B”
+      · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX FIX OLD PURCHASES UPLOAD B”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX FIX OLD PURCHASES UPLOAD B”
+      · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX FIX OLD PURCHASES UPLOAD B”
+      · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
+      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 136>124 (overflow-x:visible) — p.font-heading.text-2xl.font-black.tracking-tight — “₹2,589,000”
+      · 132>124 (overflow-x:visible) — p.font-heading.text-2xl.font-black.tracking-tight — “₹2,015,000”
+      · 132>124 (overflow-x:visible) — p.font-heading.text-2xl.font-black.tracking-tight — “₹3,785,000”
+  /finance?tab=revenue [360x640] — 13
+      · page scrollWidth 391 > viewport 360
+      · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD INCOME FIX OLD PURCHAS”
+      · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD INCOME FIX OLD PURCHAS”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD INCOME FIX OLD PURCHAS”
+      · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD INCOME FIX OLD PURCHAS”
+      · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
+      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 347>328 (overflow-x:visible) — div — “OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD INCOME FIX OLD PURCHASES UPLOAD BILL ”
+      · 347>328 (overflow-x:visible) — div[data-testid="ledger-revenue"].space-y-6 — “BILLED ₹0 RECEIVED ₹0 OUTSTANDING ₹0 AI ANALYSIS Refresh ASK AI ABOUT YOUR REVENUE Ask SAL”
+      · 347>328 (overflow-x:visible) — div.grid.grid-cols-3.gap-3 — “BILLED ₹0 RECEIVED ₹0 OUTSTANDING ₹0”
+      · 77>67 (overflow-x:visible) — div.flex.items-center.gap-2.text-muted-foreground — “RECEIVED”
+      · 119>99 (overflow-x:visible) — div[data-testid="kpi-outstanding"].card-brutal.p-4 — “OUTSTANDING ₹0”
+      … 1 more
+  /finance?tab=expenses [360x640] — 7
+      · page scrollWidth 391 > viewport 360
+      · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD EXPENSE FIX OLD PURCHA”
+      · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD EXPENSE FIX OLD PURCHA”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD EXPENSE FIX OLD PURCHA”
+      · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD EXPENSE FIX OLD PURCHA”
+      · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
+      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+  /finance?tab=assets [360x640] — 7
+      · page scrollWidth 391 > viewport 360
+      · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD ASSET FIX OLD PURCHASE”
+      · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD ASSET FIX OLD PURCHASE”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD ASSET FIX OLD PURCHASE”
+      · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD ASSET FIX OLD PURCHASE”
+      · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
+      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+  /finance?tab=inventory [360x640] — 7
+      · page scrollWidth 391 > viewport 360
+      · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD ITEM FIX OLD PURCHASES”
+      · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD ITEM FIX OLD PURCHASES”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD ITEM FIX OLD PURCHASES”
+      · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD ITEM FIX OLD PURCHASES”
+      · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
+      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+  /finance?tab=inbox [360x640] — 7
+      · page scrollWidth 391 > viewport 360
+      · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX FIX OLD PURCHASES UPLOAD B”
+      · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX FIX OLD PURCHASES UPLOAD B”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX FIX OLD PURCHASES UPLOAD B”
+      · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX FIX OLD PURCHASES UPLOAD B”
+      · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
+      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+  /brain [360x640] — 13
+      · page scrollWidth 391 > viewport 360
+      · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 ASK SEARCH DOCUMENTS Speak, type, ask, search — Dex remembers everything. S”
+      · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 ASK SEARCH DOCUMENTS Speak, type, ask, search — Dex remembers everything. S”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 ASK SEARCH DOCUMENTS Speak, type, ask, search — Dex remembers everything. S”
+      · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 ASK SEARCH DOCUMENTS Speak, type, ask, search — Dex remembers everything. S”
+      · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
+      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 409>328 (overflow-x:visible) — div — “ASK SEARCH DOCUMENTS Speak, type, ask, search — Dex remembers everything. SEND ASK YOUR CO”
+      · 358>328 (overflow-x:visible) — div.mb-6.flex.flex-wrap.items-center — “ASK SEARCH DOCUMENTS Speak, type, ask, search — Dex remembers everything.”
+      · 373>326 (overflow-x:visible) — div[data-testid="dex-capture-bar"].border.border-black.bg-white.p-3 — “SEND”
+      · 361>302 (overflow-x:visible) — div.flex.items-stretch.gap-2 — “SEND”
+      · 409>328 (overflow-x:visible) — div.flex.flex-col.h-[calc(100vh-15rem)].lg:h-[calc(100vh-12rem)] — “ASK YOUR COMPANY ANYTHING Every answer is computed from your authorised workspace data — w”
+      … 1 more
+  /calendar [360x640] — 7
+      · page scrollWidth 391 > viewport 360
+      · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 ALL (0) MEETINGS (0) PAYMENTS (0) TASKS (0) DELIVERIES (0) COMPLAINTS (0) B”
+      · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 ALL (0) MEETINGS (0) PAYMENTS (0) TASKS (0) DELIVERIES (0) COMPLAINTS (0) B”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 ALL (0) MEETINGS (0) PAYMENTS (0) TASKS (0) DELIVERIES (0) COMPLAINTS (0) B”
+      · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 ALL (0) MEETINGS (0) PAYMENTS (0) TASKS (0) DELIVERIES (0) COMPLAINTS (0) B”
+      · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
+      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+  /notifications [360x640] — 7
+      · page scrollWidth 391 > viewport 360
+      · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 MARK ALL READ REMINDER 5 HRS AGO Approve ₹4,80,000 yarn purchase Decision w”
+      · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 MARK ALL READ REMINDER 5 HRS AGO Approve ₹4,80,000 yarn purchase Decision w”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 MARK ALL READ REMINDER 5 HRS AGO Approve ₹4,80,000 yarn purchase Decision w”
+      · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 MARK ALL READ REMINDER 5 HRS AGO Approve ₹4,80,000 yarn purchase Decision w”
+      · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
+      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+  /settings [360x640] — 25
+      · page scrollWidth 391 > viewport 360
+      · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 COMPANY DETAILS Update your company profile, products, and team roles. COMP”
+      · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 COMPANY DETAILS Update your company profile, products, and team roles. COMP”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 COMPANY DETAILS Update your company profile, products, and team roles. COMP”
+      · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 COMPANY DETAILS Update your company profile, products, and team roles. COMP”
+      · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
+      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 272>260 (overflow-x:visible) — div.mt-3.space-y-1.5 — “STAGES (IN ORDER) Add stage”
+      · 272>260 (overflow-x:visible) — div[data-testid="op-stage-0-0"].flex.items-center.gap-1.5
+      · 272>260 (overflow-x:visible) — div[data-testid="op-stage-0-1"].flex.items-center.gap-1.5
+      · 272>260 (overflow-x:visible) — div[data-testid="op-stage-0-2"].flex.items-center.gap-1.5
+      · 272>260 (overflow-x:visible) — div[data-testid="op-stage-0-3"].flex.items-center.gap-1.5
+      … 13 more
+  /journal [360x640] — 9
+      · page scrollWidth 391 > viewport 360
+      · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 SEARCH Nothing logged yet Decisions you capture and approve will appear her”
+      · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 SEARCH Nothing logged yet Decisions you capture and approve will appear her”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 SEARCH Nothing logged yet Decisions you capture and approve will appear her”
+      · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 SEARCH Nothing logged yet Decisions you capture and approve will appear her”
+      · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
+      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 335>328 (overflow-x:visible) — div — “SEARCH Nothing logged yet Decisions you capture and approve will appear here, grouped by d”
+      · 335>328 (overflow-x:visible) — form.flex.gap-2.mb-8.max-w-xl — “SEARCH”
+
+FAIL · native-select-in-scroll — 62
+Native <select> inside a scroll path (§5.2.5)
+------------------------------------------------------------------------------
+  /my-work [390x844] — 26
+      · select[data-testid="status-select-t_1"].border.border-black.px-2.py-1 — “Not Started In Progress Waiting Under Review Completed Cancelled” (in scrolling page)
+      · select[data-testid="progress-select-t_1"].border.border-black.px-2.py-1 — “0% 25% 50% 75% 100%” (in scrolling page)
+      · select[data-testid="status-select-t_2"].border.border-black.px-2.py-1 — “Not Started In Progress Waiting Under Review Completed Cancelled” (in scrolling page)
+      · select[data-testid="progress-select-t_2"].border.border-black.px-2.py-1 — “0% 25% 50% 75% 100%” (in scrolling page)
+      · select[data-testid="status-select-t_3"].border.border-black.px-2.py-1 — “Not Started In Progress Waiting Under Review Completed Cancelled” (in scrolling page)
+      · select[data-testid="progress-select-t_3"].border.border-black.px-2.py-1 — “0% 25% 50% 75% 100%” (in scrolling page)
+      · select[data-testid="status-select-t_4"].border.border-black.px-2.py-1 — “Not Started In Progress Waiting Under Review Completed Cancelled” (in scrolling page)
+      · select[data-testid="progress-select-t_4"].border.border-black.px-2.py-1 — “0% 25% 50% 75% 100%” (in scrolling page)
+      · select[data-testid="status-select-t_5"].border.border-black.px-2.py-1 — “Not Started In Progress Waiting Under Review Completed Cancelled” (in scrolling page)
+      · select[data-testid="progress-select-t_5"].border.border-black.px-2.py-1 — “0% 25% 50% 75% 100%” (in scrolling page)
+      · select[data-testid="status-select-t_6"].border.border-black.px-2.py-1 — “Not Started In Progress Waiting Under Review Completed Cancelled” (in scrolling page)
+      · select[data-testid="progress-select-t_6"].border.border-black.px-2.py-1 — “0% 25% 50% 75% 100%” (in scrolling page)
+      … 14 more
+  /crm [390x844] — 1
+      · select[data-testid="crm-status-filter"].border.border-black.bg-white.px-3 — “All statuses lead active inactive” (in scrolling page)
+  /settings [390x844] — 4
+      · select[data-testid="op-approval-0"].border.border-border.rounded-md.px-2 — “None Order Received Confirmed In Production Ready” (in scrolling page)
+      · select[data-testid="op-approval-1"].border.border-border.rounded-md.px-2 — “None Ready To Dispatch Dispatched In Transit Delivered” (in scrolling page)
+      · select[data-testid="op-approval-2"].border.border-border.rounded-md.px-2 — “None Requested Approved Ordered Received Payment Pending Paid” (in scrolling page)
+      · select[data-testid="settings-currency"].w-full.border.border-border.rounded-lg — “INR USD EUR GBP AED SGD AUD” (in scrolling page)
+  /my-work [360x640] — 26
+      · select[data-testid="status-select-t_1"].border.border-black.px-2.py-1 — “Not Started In Progress Waiting Under Review Completed Cancelled” (in scrolling page)
+      · select[data-testid="progress-select-t_1"].border.border-black.px-2.py-1 — “0% 25% 50% 75% 100%” (in scrolling page)
+      · select[data-testid="status-select-t_2"].border.border-black.px-2.py-1 — “Not Started In Progress Waiting Under Review Completed Cancelled” (in scrolling page)
+      · select[data-testid="progress-select-t_2"].border.border-black.px-2.py-1 — “0% 25% 50% 75% 100%” (in scrolling page)
+      · select[data-testid="status-select-t_3"].border.border-black.px-2.py-1 — “Not Started In Progress Waiting Under Review Completed Cancelled” (in scrolling page)
+      · select[data-testid="progress-select-t_3"].border.border-black.px-2.py-1 — “0% 25% 50% 75% 100%” (in scrolling page)
+      · select[data-testid="status-select-t_4"].border.border-black.px-2.py-1 — “Not Started In Progress Waiting Under Review Completed Cancelled” (in scrolling page)
+      · select[data-testid="progress-select-t_4"].border.border-black.px-2.py-1 — “0% 25% 50% 75% 100%” (in scrolling page)
+      · select[data-testid="status-select-t_5"].border.border-black.px-2.py-1 — “Not Started In Progress Waiting Under Review Completed Cancelled” (in scrolling page)
+      · select[data-testid="progress-select-t_5"].border.border-black.px-2.py-1 — “0% 25% 50% 75% 100%” (in scrolling page)
+      · select[data-testid="status-select-t_6"].border.border-black.px-2.py-1 — “Not Started In Progress Waiting Under Review Completed Cancelled” (in scrolling page)
+      · select[data-testid="progress-select-t_6"].border.border-black.px-2.py-1 — “0% 25% 50% 75% 100%” (in scrolling page)
+      … 14 more
+  /crm [360x640] — 1
+      · select[data-testid="crm-status-filter"].border.border-black.bg-white.px-3 — “All statuses lead active inactive” (in scrolling page)
+  /settings [360x640] — 4
+      · select[data-testid="op-approval-0"].border.border-border.rounded-md.px-2 — “None Order Received Confirmed In Production Ready” (in scrolling page)
+      · select[data-testid="op-approval-1"].border.border-border.rounded-md.px-2 — “None Ready To Dispatch Dispatched In Transit Delivered” (in scrolling page)
+      · select[data-testid="op-approval-2"].border.border-border.rounded-md.px-2 — “None Requested Approved Ordered Received Payment Pending Paid” (in scrolling page)
+      · select[data-testid="settings-currency"].w-full.border.border-border.rounded-lg — “INR USD EUR GBP AED SGD AUD” (in scrolling page)
+
+FAIL · screen-over-2500px — 4
+Screen taller than ~2,500px (§5.2.7)
+------------------------------------------------------------------------------
+  /my-work [390x844] — 1
+      · 7803px tall
+  /settings [390x844] — 1
+      · 6739px tall
+  /my-work [360x640] — 1
+      · 8740px tall
+  /settings [360x640] — 1
+      · 7074px tall
+
+FAIL · leaked-system-string — 2
+Env var / table / field / HTTP status on screen (§5.4)
+------------------------------------------------------------------------------
+  /settings [390x844] — 1
+      · env var “WA_TENANT_ID” — … ID (WhatsApp routing fallback — set as WA_TENANT_ID) COPY Messages from unregistered numbe…
+  /settings [360x640] — 1
+      · env var “WA_TENANT_ID” — … ID (WhatsApp routing fallback — set as WA_TENANT_ID) COPY Messages from unregistered numbe…
+
+FAIL · non-indian-inr-grouping — 54
+Currency not in Indian digit grouping (§5.3)
+------------------------------------------------------------------------------
+  /inbox [390x844] — 3
+      · ₹480,000 — …· From Suresh Patel · Unblocks 3 tasks ₹480,000 REVIEW → Write off ₹1,15,000 from Kri…
+      · ₹115,000 — …s · From Anita Desai · Unblocks 1 task ₹115,000 REVIEW → Hire second cutting master o…
+      · ₹2,200,000 — … · From Priya Sharma · Unblocks 1 task ₹2,200,000 REVIEW → Replace the failing Jacquard…
+  /brief [390x844] — 2
+      · ₹585,000 — …VIEW DETAILS 2 overdue receivable(s) ₹585,000 VIEW DETAILS 2 supplier bill(s) to p…
+      · ₹428,000 — …EW DETAILS 2 supplier bill(s) to pay ₹428,000 VIEW DETAILS 1 payment(s) to match …
+  /finance [390x844] — 11
+      · ₹2,589,000 — …PHOTO CSV / EXCEL 2 IN INBOX → REVENUE ₹2,589,000 TOTAL SPEND ₹1,914,500 NET PROFIT ₹…
+      · ₹1,914,500 — …BOX → REVENUE ₹2,589,000 TOTAL SPEND ₹1,914,500 NET PROFIT ₹674,500 RECEIVED ₹2,015…
+      · ₹674,500 — …0 TOTAL SPEND ₹1,914,500 NET PROFIT ₹674,500 RECEIVED ₹2,015,000 ASSET VALUE ₹3,…
+      · ₹2,015,000 — …14,500 NET PROFIT ₹674,500 RECEIVED ₹2,015,000 ASSET VALUE ₹3,785,000 INVENTORY VAL…
+      · ₹3,785,000 — …500 RECEIVED ₹2,015,000 ASSET VALUE ₹3,785,000 INVENTORY VALUE ₹1,318,800 AI FINANC…
+      · ₹1,318,800 — …SET VALUE ₹3,785,000 INVENTORY VALUE ₹1,318,800 AI FINANCE BRIEF Refresh ASK AI ABOUT …
+      · ₹862,000 — …0k 600k 900k 1200k BY CATEGORY Salaries ₹862,000 Raw Material ₹632,000 Utilities ₹214,00…
+      · ₹632,000 — …CATEGORY Salaries ₹862,000 Raw Material ₹632,000 Utilities ₹214,000 Job Work ₹96,000 Log…
+      · ₹214,000 — …862,000 Raw Material ₹632,000 Utilities ₹214,000 Job Work ₹96,000 Logistics ₹47,000 Main…
+      · ₹480,000 — …Y SPEND Payroll ₹862,000 Surat Spinners ₹480,000 MSEDCL ₹214,000 Rajkot Fibres ₹152,000 …
+      · ₹152,000 — … ₹480,000 MSEDCL ₹214,000 Rajkot Fibres ₹152,000 Bombay Dyeing House ₹96,000 Sai Transpo…
+  /finance?tab=expenses [390x844] — 4
+      · ₹480,000 — …TERIAL Surat Spinners 2026-08-10 UNPAID ₹480,000 UTILITIES MSEDCL 2026-08-01 PAID ₹21…
+      · ₹214,000 — …000 UTILITIES MSEDCL 2026-08-01 PAID ₹214,000 SALARIES Payroll 2026-07-30 PAID ₹86…
+      · ₹862,000 — …000 SALARIES Payroll 2026-07-30 PAID ₹862,000 JOB WORK Bombay Dyeing House 2026-08…
+      · ₹152,000 — … MATERIAL Rajkot Fibres 2026-07-16 PAID ₹152,000 PROFESSIONAL FEES Shah & Associates …
+  /finance?tab=assets [390x844] — 4
+      · ₹1,250,000 — …m #4 MACHINERY — 2022-10-13 MAINTENANCE ₹1,250,000 Jacquard loom #5 MACHINERY — 2022-10-…
+      · ₹185,000 — …dustrial) MACHINERY — 2024-02-25 ACTIVE ₹185,000 Tata Ace delivery van VEHICLE — 2023-…
+      · ₹620,000 — …elivery van VEHICLE — 2023-08-09 ACTIVE ₹620,000 Diesel generator 62.5 kVA UTILITY — 2…
+      · ₹480,000 — …or 62.5 kVA UTILITY — 2024-09-12 ACTIVE ₹480,000 DESK BRIEF WORK CRM DEX…
+  /finance?tab=inventory [390x844] — 3
+      · ₹336,000 — …on yarn 40s — 8400 kg ₹0 Surat Spinners ₹336,000 Polyester blend — 2100 kg ₹0 Rajkot F…
+      · ₹588,000 — … Finished shirting — grey — 4200 m ₹0 — ₹588,000 Finished shirting — indigo — 1800 m ₹…
+      · ₹288,000 — …inished shirting — indigo — 1800 m ₹0 — ₹288,000 Packing cartons — 900 pcs ₹0 Nashik T…
+  /inbox [360x640] — 3
+      · ₹480,000 — …· From Suresh Patel · Unblocks 3 tasks ₹480,000 REVIEW → Write off ₹1,15,000 from Kri…
+      · ₹115,000 — …s · From Anita Desai · Unblocks 1 task ₹115,000 REVIEW → Hire second cutting master o…
+      · ₹2,200,000 — … · From Priya Sharma · Unblocks 1 task ₹2,200,000 REVIEW → Replace the failing Jacquard…
+  /brief [360x640] — 2
+      · ₹585,000 — …VIEW DETAILS 2 overdue receivable(s) ₹585,000 VIEW DETAILS 2 supplier bill(s) to p…
+      · ₹428,000 — …EW DETAILS 2 supplier bill(s) to pay ₹428,000 VIEW DETAILS 1 payment(s) to match …
+  /finance [360x640] — 11
+      · ₹2,589,000 — …PHOTO CSV / EXCEL 2 IN INBOX → REVENUE ₹2,589,000 TOTAL SPEND ₹1,914,500 NET PROFIT ₹…
+      · ₹1,914,500 — …BOX → REVENUE ₹2,589,000 TOTAL SPEND ₹1,914,500 NET PROFIT ₹674,500 RECEIVED ₹2,015…
+      · ₹674,500 — …0 TOTAL SPEND ₹1,914,500 NET PROFIT ₹674,500 RECEIVED ₹2,015,000 ASSET VALUE ₹3,…
+      · ₹2,015,000 — …14,500 NET PROFIT ₹674,500 RECEIVED ₹2,015,000 ASSET VALUE ₹3,785,000 INVENTORY VAL…
+      · ₹3,785,000 — …500 RECEIVED ₹2,015,000 ASSET VALUE ₹3,785,000 INVENTORY VALUE ₹1,318,800 AI FINANC…
+      · ₹1,318,800 — …SET VALUE ₹3,785,000 INVENTORY VALUE ₹1,318,800 AI FINANCE BRIEF Refresh ASK AI ABOUT …
+      · ₹862,000 — …0k 600k 900k 1200k BY CATEGORY Salaries ₹862,000 Raw Material ₹632,000 Utilities ₹214,00…
+      · ₹632,000 — …CATEGORY Salaries ₹862,000 Raw Material ₹632,000 Utilities ₹214,000 Job Work ₹96,000 Log…
+      · ₹214,000 — …862,000 Raw Material ₹632,000 Utilities ₹214,000 Job Work ₹96,000 Logistics ₹47,000 Main…
+      · ₹480,000 — …Y SPEND Payroll ₹862,000 Surat Spinners ₹480,000 MSEDCL ₹214,000 Rajkot Fibres ₹152,000 …
+      · ₹152,000 — … ₹480,000 MSEDCL ₹214,000 Rajkot Fibres ₹152,000 Bombay Dyeing House ₹96,000 Sai Transpo…
+  /finance?tab=expenses [360x640] — 4
+      · ₹480,000 — …TERIAL Surat Spinners 2026-08-10 UNPAID ₹480,000 UTILITIES MSEDCL 2026-08-01 PAID ₹21…
+      · ₹214,000 — …000 UTILITIES MSEDCL 2026-08-01 PAID ₹214,000 SALARIES Payroll 2026-07-30 PAID ₹86…
+      · ₹862,000 — …000 SALARIES Payroll 2026-07-30 PAID ₹862,000 JOB WORK Bombay Dyeing House 2026-08…
+      · ₹152,000 — … MATERIAL Rajkot Fibres 2026-07-16 PAID ₹152,000 PROFESSIONAL FEES Shah & Associates …
+  /finance?tab=assets [360x640] — 4
+      · ₹1,250,000 — …m #4 MACHINERY — 2022-10-13 MAINTENANCE ₹1,250,000 Jacquard loom #5 MACHINERY — 2022-10-…
+      · ₹185,000 — …dustrial) MACHINERY — 2024-02-25 ACTIVE ₹185,000 Tata Ace delivery van VEHICLE — 2023-…
+      · ₹620,000 — …elivery van VEHICLE — 2023-08-09 ACTIVE ₹620,000 Diesel generator 62.5 kVA UTILITY — 2…
+      · ₹480,000 — …or 62.5 kVA UTILITY — 2024-09-12 ACTIVE ₹480,000 DESK BRIEF WORK CRM DEX…
+  /finance?tab=inventory [360x640] — 3
+      · ₹336,000 — …on yarn 40s — 8400 kg ₹0 Surat Spinners ₹336,000 Polyester blend — 2100 kg ₹0 Rajkot F…
+      · ₹588,000 — … Finished shirting — grey — 4200 m ₹0 — ₹588,000 Finished shirting — indigo — 1800 m ₹…
+      · ₹288,000 — …inished shirting — indigo — 1800 m ₹0 — ₹288,000 Packing cartons — 900 pcs ₹0 Nashik T…
+
+WARN · horizontal-scroll-strip — 10
+Horizontally scrolling strip — needs fade mask + peeking item (§5.2.2)
+------------------------------------------------------------------------------
+  /my-work?view=workflows [390x844] — 1
+      · 1024>356 — div.border.border-black.overflow-x-auto — “ORDER RECEIVED 0 CONFIRMED 0 IN PRODUCTION 0 READY 0”
+  /crm [390x844] — 1
+      · 445>356 — div[data-testid="crm-scope-chips"].flex.border.border-black.overflow-x-auto — “ALL CUSTOMERS SUPPLIERS MINE”
+  /finance?tab=expenses [390x844] — 1
+      · 590>356 — div[data-testid="expenses-table"].card-brutal.overflow-x-auto — “TITLE CATEGORY VENDOR DATE STATUS AMOUNT RAW MATERIAL Surat Spinners 2026-08-10 UNPAID ₹48”
+  /finance?tab=assets [390x844] — 1
+      · 643>356 — div[data-testid="assets-table"].card-brutal.overflow-x-auto — “ASSET CATEGORY VENDOR BOUGHT STATUS VALUE Jacquard loom #4 MACHINERY — 2022-10-13 MAINTENA”
+  /finance?tab=inventory [390x844] — 1
+      · 460>356 — div[data-testid="inventory-table"].card-brutal.overflow-x-auto — “ITEM SKU QTY UNIT COST VENDOR VALUE Cotton yarn 40s — 8400 kg ₹0 Surat Spinners ₹336,000 P”
+  /my-work?view=workflows [360x640] — 1
+      · 1024>326 — div.border.border-black.overflow-x-auto — “ORDER RECEIVED 0 CONFIRMED 0 IN PRODUCTION 0 READY 0”
+  /crm [360x640] — 1
+      · 445>326 — div[data-testid="crm-scope-chips"].flex.border.border-black.overflow-x-auto — “ALL CUSTOMERS SUPPLIERS MINE”
+  /finance?tab=expenses [360x640] — 1
+      · 590>326 — div[data-testid="expenses-table"].card-brutal.overflow-x-auto — “TITLE CATEGORY VENDOR DATE STATUS AMOUNT RAW MATERIAL Surat Spinners 2026-08-10 UNPAID ₹48”
+  /finance?tab=assets [360x640] — 1
+      · 643>326 — div[data-testid="assets-table"].card-brutal.overflow-x-auto — “ASSET CATEGORY VENDOR BOUGHT STATUS VALUE Jacquard loom #4 MACHINERY — 2022-10-13 MAINTENA”
+  /finance?tab=inventory [360x640] — 1
+      · 460>326 — div[data-testid="inventory-table"].card-brutal.overflow-x-auto — “ITEM SKU QTY UNIT COST VENDOR VALUE Cotton yarn 40s — 8400 kg ₹0 Surat Spinners ₹336,000 P”
+
+WARN · uppercase-text — 1486
+text-transform: uppercase (§3.4 forbids uppercase)
+------------------------------------------------------------------------------
+  /inbox [390x844] — 21
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="desk-chip-needs_decision"].flex.items-center.gap-2.px-4 — “NEEDS YOUR DECISION 6”
+      · span.ml-1.px-1.5.py-0.5.text-[10px] — “6”
+      · button[data-testid="desk-chip-on_fire"].flex.items-center.gap-2.px-4 — “ON FIRE 5”
+      · span.ml-1.px-1.5.py-0.5.text-[10px] — “5”
+      · button[data-testid="desk-chip-due_today"].flex.items-center.gap-2.px-4 — “DUE TODAY 3”
+      · span.ml-1.px-1.5.py-0.5.text-[10px] — “3”
+      · button[data-testid="desk-chip-important"].flex.items-center.gap-2.px-4 — “IMPORTANT 0”
+      · span.ml-1.px-1.5.py-0.5.text-[10px] — “0”
+      · button[data-testid="desk-cta-review-d_1"].px-4.py-2.text-xs.font-semibold — “REVIEW →”
+      · button[data-testid="desk-cta-review-d_2"].px-4.py-2.text-xs.font-semibold — “REVIEW →”
+      … 9 more
+  /brief [390x844] — 23
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="brief-period-morning"].flex-1.lg:flex-none.px-4.lg:px-5 — “MORNING”
+      · button[data-testid="brief-period-evening"].flex-1.lg:flex-none.px-4.lg:px-5 — “EVENING”
+      · button[data-testid="brief-period-weekly"].flex-1.lg:flex-none.px-4.lg:px-5 — “WEEKLY”
+      · button[data-testid="brief-period-monthly"].flex-1.lg:flex-none.px-4.lg:px-5 — “MONTHLY”
+      · button[data-testid="brief-open-journal"].col-span-2.flex.items-center.justify-center — “CEO JOURNAL”
+      · p.text-sm.font-semibold.uppercase.tracking-wider — “FIRES TO PUT OUT TODAY”
+      · span.inline-flex.items-center.gap-1.text-sm — “HANDLE NOW”
+      · span.mt-3.inline-flex.items-center.gap-1 — “VIEW DETAILS”
+      · span.mt-3.inline-flex.items-center.gap-1 — “VIEW DETAILS”
+      · span.mt-3.inline-flex.items-center.gap-1 — “VIEW DETAILS”
+      … 11 more
+  /my-work [390x844] — 236
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="new-task-button"].flex.items-center.justify-center.gap-1.5 — “NEW TASK”
+      · button[data-testid="work-scope-mine"].flex.items-center.justify-center.gap-1.5 — “MY TASKS”
+      · button[data-testid="work-scope-all"].flex.items-center.justify-center.gap-1.5 — “ALL TASKS”
+      · button[data-testid="ai-priority-toggle"].flex.items-center.justify-center.gap-1.5 — “AI PRIORITY”
+      · button[data-testid="work-view-mywork"].flex.items-center.justify-center.gap-1.5 — “MY WORK”
+      · button[data-testid="work-view-workflows"].flex.items-center.justify-center.gap-1.5 — “WORKFLOWS”
+      · button[data-testid="work-view-leave"].flex.items-center.justify-center.gap-1.5 — “LEAVE”
+      · button[data-testid="work-tab-all"].flex.items-center.gap-1.5.px-3 — “ALL 13”
+      · span.px-1.5.py-0.5.text-[10px].leading-none — “13”
+      · button[data-testid="work-tab-operational"].flex.items-center.gap-1.5.px-3 — “OPERATIONAL 0”
+      … 224 more
+  /my-work?view=leave [390x844] — 31
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="new-task-button"].flex.items-center.justify-center.gap-1.5 — “NEW TASK”
+      · button[data-testid="work-scope-mine"].flex.items-center.justify-center.gap-1.5 — “MY TASKS”
+      · button[data-testid="work-scope-all"].flex.items-center.justify-center.gap-1.5 — “ALL TASKS”
+      · button[data-testid="ai-priority-toggle"].flex.items-center.justify-center.gap-1.5 — “AI PRIORITY”
+      · button[data-testid="work-view-mywork"].flex.items-center.justify-center.gap-1.5 — “MY WORK”
+      · button[data-testid="work-view-workflows"].flex.items-center.justify-center.gap-1.5 — “WORKFLOWS”
+      · button[data-testid="work-view-leave"].flex.items-center.justify-center.gap-1.5 — “LEAVE”
+      · button[data-testid="report-absence-button"].flex.items-center.gap-2.bg-brand-red — “REPORT ABSENCE TODAY”
+      · button[data-testid="request-leave-button"].flex.items-center.gap-2.bg-brand-ink — “REQUEST LEAVE”
+      · button[data-testid="leave-tab-mine"].flex.items-center.gap-2.px-5 — “MY LEAVE 3”
+      … 19 more
+  /my-work?view=workflows [390x844] — 27
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="new-task-button"].flex.items-center.justify-center.gap-1.5 — “NEW TASK”
+      · button[data-testid="work-scope-mine"].flex.items-center.justify-center.gap-1.5 — “MY TASKS”
+      · button[data-testid="work-scope-all"].flex.items-center.justify-center.gap-1.5 — “ALL TASKS”
+      · button[data-testid="ai-priority-toggle"].flex.items-center.justify-center.gap-1.5 — “AI PRIORITY”
+      · button[data-testid="work-view-mywork"].flex.items-center.justify-center.gap-1.5 — “MY WORK”
+      · button[data-testid="work-view-workflows"].flex.items-center.justify-center.gap-1.5 — “WORKFLOWS”
+      · button[data-testid="work-view-leave"].flex.items-center.justify-center.gap-1.5 — “LEAVE”
+      · button[data-testid="wf-subtab-pipelines"].flex.items-center.gap-1.5.px-3 — “PIPELINES”
+      · button[data-testid="wf-subtab-board"].flex.items-center.gap-1.5.px-3 — “TASK BOARD”
+      · button[data-testid="new-workflow-button"].flex.items-center.gap-2.bg-brand-ink — “NEW”
+      … 15 more
+  /crm [390x844] — 29
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="crm-add-customer"].flex.items-center.gap-2.bg-brand-ink — “ADD CUSTOMER”
+      · button[data-testid="crm-add-supplier"].flex.items-center.gap-2.bg-brand-yellow — “ADD SUPPLIER”
+      · button[data-testid="crm-scope-all"].flex.items-center.gap-2.px-4 — “ALL”
+      · button[data-testid="crm-scope-customers"].flex.items-center.gap-2.px-4 — “CUSTOMERS”
+      · button[data-testid="crm-scope-suppliers"].flex.items-center.gap-2.px-4 — “SUPPLIERS”
+      · button[data-testid="crm-scope-mine"].flex.items-center.gap-2.px-4 — “MINE”
+      · span.inline-block.px-2.py-0.5.text-xs — “CUSTOMER”
+      · span.inline-block.px-2.py-0.5.text-xs — “ACTIVE”
+      · span.inline-block.px-2.py-0.5.text-xs — “CUSTOMER”
+      · span.inline-block.px-2.py-0.5.text-xs — “ACTIVE”
+      … 17 more
+  /team [390x844] — 32
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="add-user-button"].flex.items-center.gap-2.bg-brand-ink — “ADD MEMBER”
+      · h2.font-heading.text-2xl.font-extrabold.uppercase — “MEMBERS”
+      · span.inline-block.px-2.py-0.5.text-xs — “OWNER”
+      · button[data-testid="edit-access-u_owner"].flex.items-center.gap-1.text-xs — “ACCESS”
+      · span[data-testid="member-access-count-u_sales"].label-mono.text-muted-foreground — “7 ACCESS”
+      · span.inline-block.px-2.py-0.5.text-xs — “SALES”
+      · button[data-testid="edit-access-u_sales"].flex.items-center.gap-1.text-xs — “ACCESS”
+      · button[data-testid="invite-link-u_sales"].flex.items-center.gap-1.text-xs — “INVITE”
+      · button[data-testid="toggle-absent-u_sales"].text-xs.uppercase.tracking-wider.border — “MARK ABSENT”
+      · span[data-testid="member-access-count-u_prod"].label-mono.text-muted-foreground — “6 ACCESS”
+      … 20 more
+  /finance [390x844] — 36
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="ledger-tab-overview"].flex.items-center.justify-center.gap-1.5 — “OVERVIEW”
+      · button[data-testid="ledger-tab-revenue"].flex.items-center.justify-center.gap-1.5 — “REVENUE”
+      · button[data-testid="ledger-tab-expenses"].flex.items-center.justify-center.gap-1.5 — “EXPENSES”
+      · button[data-testid="ledger-tab-assets"].flex.items-center.justify-center.gap-1.5 — “ASSETS”
+      · button[data-testid="ledger-tab-inventory"].flex.items-center.justify-center.gap-1.5 — “INVENTORY”
+      · button[data-testid="ledger-tab-inbox"].flex.items-center.justify-center.gap-1.5 — “INBOX”
+      · button[data-testid="ledger-reclassify-btn"].flex.items-center.justify-center.gap-1.5 — “FIX OLD PURCHASES”
+      · label[data-testid="finance-hero-doc"].flex.items-center.gap-2.border — “UPLOAD BILL / RECEIPT”
+      · label[data-testid="finance-hero-photo"].flex.items-center.gap-2.border — “PHOTO”
+      · label[data-testid="finance-hero-csv"].flex.items-center.gap-2.border — “CSV / EXCEL”
+      … 24 more
+  /finance?tab=revenue [390x844] — 25
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="ledger-tab-overview"].flex.items-center.justify-center.gap-1.5 — “OVERVIEW”
+      · button[data-testid="ledger-tab-revenue"].flex.items-center.justify-center.gap-1.5 — “REVENUE”
+      · button[data-testid="ledger-tab-expenses"].flex.items-center.justify-center.gap-1.5 — “EXPENSES”
+      · button[data-testid="ledger-tab-assets"].flex.items-center.justify-center.gap-1.5 — “ASSETS”
+      · button[data-testid="ledger-tab-inventory"].flex.items-center.justify-center.gap-1.5 — “INVENTORY”
+      · button[data-testid="ledger-tab-inbox"].flex.items-center.justify-center.gap-1.5 — “INBOX”
+      · button[data-testid="add-income-btn"].flex.items-center.justify-center.gap-2 — “ADD INCOME”
+      · button[data-testid="ledger-reclassify-btn"].flex.items-center.justify-center.gap-1.5 — “FIX OLD PURCHASES”
+      · label[data-testid="finance-hero-doc"].flex.items-center.gap-2.border — “UPLOAD BILL / RECEIPT”
+      · label[data-testid="finance-hero-photo"].flex.items-center.gap-2.border — “PHOTO”
+      … 13 more
+  /finance?tab=expenses [390x844] — 43
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="ledger-tab-overview"].flex.items-center.justify-center.gap-1.5 — “OVERVIEW”
+      · button[data-testid="ledger-tab-revenue"].flex.items-center.justify-center.gap-1.5 — “REVENUE”
+      · button[data-testid="ledger-tab-expenses"].flex.items-center.justify-center.gap-1.5 — “EXPENSES”
+      · button[data-testid="ledger-tab-assets"].flex.items-center.justify-center.gap-1.5 — “ASSETS”
+      · button[data-testid="ledger-tab-inventory"].flex.items-center.justify-center.gap-1.5 — “INVENTORY”
+      · button[data-testid="ledger-tab-inbox"].flex.items-center.justify-center.gap-1.5 — “INBOX”
+      · button[data-testid="add-expense-btn"].flex.items-center.justify-center.gap-2 — “ADD EXPENSE”
+      · button[data-testid="ledger-reclassify-btn"].flex.items-center.justify-center.gap-1.5 — “FIX OLD PURCHASES”
+      · label[data-testid="finance-hero-doc"].flex.items-center.gap-2.border — “UPLOAD BILL / RECEIPT”
+      · label[data-testid="finance-hero-photo"].flex.items-center.gap-2.border — “PHOTO”
+      … 31 more
+  /finance?tab=assets [390x844] — 37
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="ledger-tab-overview"].flex.items-center.justify-center.gap-1.5 — “OVERVIEW”
+      · button[data-testid="ledger-tab-revenue"].flex.items-center.justify-center.gap-1.5 — “REVENUE”
+      · button[data-testid="ledger-tab-expenses"].flex.items-center.justify-center.gap-1.5 — “EXPENSES”
+      · button[data-testid="ledger-tab-assets"].flex.items-center.justify-center.gap-1.5 — “ASSETS”
+      · button[data-testid="ledger-tab-inventory"].flex.items-center.justify-center.gap-1.5 — “INVENTORY”
+      · button[data-testid="ledger-tab-inbox"].flex.items-center.justify-center.gap-1.5 — “INBOX”
+      · button[data-testid="add-asset-btn"].flex.items-center.justify-center.gap-2 — “ADD ASSET”
+      · button[data-testid="ledger-reclassify-btn"].flex.items-center.justify-center.gap-1.5 — “FIX OLD PURCHASES”
+      · label[data-testid="finance-hero-doc"].flex.items-center.gap-2.border — “UPLOAD BILL / RECEIPT”
+      · label[data-testid="finance-hero-photo"].flex.items-center.gap-2.border — “PHOTO”
+      … 25 more
+  /finance?tab=inventory [390x844] — 27
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="ledger-tab-overview"].flex.items-center.justify-center.gap-1.5 — “OVERVIEW”
+      · button[data-testid="ledger-tab-revenue"].flex.items-center.justify-center.gap-1.5 — “REVENUE”
+      · button[data-testid="ledger-tab-expenses"].flex.items-center.justify-center.gap-1.5 — “EXPENSES”
+      · button[data-testid="ledger-tab-assets"].flex.items-center.justify-center.gap-1.5 — “ASSETS”
+      · button[data-testid="ledger-tab-inventory"].flex.items-center.justify-center.gap-1.5 — “INVENTORY”
+      · button[data-testid="ledger-tab-inbox"].flex.items-center.justify-center.gap-1.5 — “INBOX”
+      · button[data-testid="add-inventory-btn"].flex.items-center.justify-center.gap-2 — “ADD ITEM”
+      · button[data-testid="ledger-reclassify-btn"].flex.items-center.justify-center.gap-1.5 — “FIX OLD PURCHASES”
+      · label[data-testid="finance-hero-doc"].flex.items-center.gap-2.border — “UPLOAD BILL / RECEIPT”
+      · label[data-testid="finance-hero-photo"].flex.items-center.gap-2.border — “PHOTO”
+      … 15 more
+  /finance?tab=inbox [390x844] — 23
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="ledger-tab-overview"].flex.items-center.justify-center.gap-1.5 — “OVERVIEW”
+      · button[data-testid="ledger-tab-revenue"].flex.items-center.justify-center.gap-1.5 — “REVENUE”
+      · button[data-testid="ledger-tab-expenses"].flex.items-center.justify-center.gap-1.5 — “EXPENSES”
+      · button[data-testid="ledger-tab-assets"].flex.items-center.justify-center.gap-1.5 — “ASSETS”
+      · button[data-testid="ledger-tab-inventory"].flex.items-center.justify-center.gap-1.5 — “INVENTORY”
+      · button[data-testid="ledger-tab-inbox"].flex.items-center.justify-center.gap-1.5 — “INBOX”
+      · button[data-testid="ledger-reclassify-btn"].flex.items-center.justify-center.gap-1.5 — “FIX OLD PURCHASES”
+      · label[data-testid="finance-hero-doc"].flex.items-center.gap-2.border — “UPLOAD BILL / RECEIPT”
+      · label[data-testid="finance-hero-photo"].flex.items-center.gap-2.border — “PHOTO”
+      · label[data-testid="finance-hero-csv"].flex.items-center.gap-2.border — “CSV / EXCEL”
+      … 11 more
+  /brain [390x844] — 13
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="brain-tab-ask"].flex.items-center.gap-2.px-4 — “ASK”
+      · button[data-testid="brain-tab-search"].flex.items-center.gap-2.px-4 — “SEARCH”
+      · button[data-testid="brain-tab-documents"].flex.items-center.gap-2.px-4 — “DOCUMENTS”
+      · button[data-testid="dex-send"].px-4.flex.items-center.gap-2 — “SEND”
+      · p.flex.items-center.gap-2.font-heading — “ASK YOUR COMPANY ANYTHING”
+      · button[data-testid="ask-submit"].bg-brand-red.text-white.px-6.flex — “ASK”
+      · span.text-[10px].uppercase.tracking-wide.font-semibold — “DESK”
+      · span.text-[10px].uppercase.tracking-wide.font-semibold — “BRIEF”
+      · span.text-[10px].uppercase.tracking-wide.font-semibold — “WORK”
+      · span.text-[10px].uppercase.tracking-wide.font-semibold — “CRM”
+      … 1 more
+  /calendar [390x844] — 15
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="cal-filter-all"].flex.items-center.gap-2.px-4 — “ALL (0)”
+      · button[data-testid="cal-filter-meeting"].flex.items-center.gap-2.px-4 — “MEETINGS (0)”
+      · button[data-testid="cal-filter-payment_due"].flex.items-center.gap-2.px-4 — “PAYMENTS (0)”
+      · button[data-testid="cal-filter-task"].flex.items-center.gap-2.px-4 — “TASKS (0)”
+      · button[data-testid="cal-filter-delivery"].flex.items-center.gap-2.px-4 — “DELIVERIES (0)”
+      · button[data-testid="cal-filter-complaint"].flex.items-center.gap-2.px-4 — “COMPLAINTS (0)”
+      · button[data-testid="cal-filter-birthday"].flex.items-center.gap-2.px-4 — “BIRTHDAYS (0)”
+      · button[data-testid="cal-filter-leave"].flex.items-center.gap-2.px-4 — “LEAVE (0)”
+      · span.text-[10px].uppercase.tracking-wide.font-semibold — “DESK”
+      · span.text-[10px].uppercase.tracking-wide.font-semibold — “BRIEF”
+      … 3 more
+  /notifications [390x844] — 25
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="mark-all-read"].flex.items-center.gap-2.border — “MARK ALL READ”
+      · span.inline-block.px-2.py-0.5.text-xs — “REMINDER”
+      · span.label-mono.text-muted-foreground.flex.items-center — “5 HRS AGO”
+      · p.label-mono.text-muted-foreground.mt-1.flex — “SURESH PATEL”
+      · button[data-testid="read-n_1"].text-xs.uppercase.tracking-wider.border — “READ”
+      · span.inline-block.px-2.py-0.5.text-xs — “REMINDER”
+      · span.label-mono.text-muted-foreground.flex.items-center — “1 DAY AGO”
+      · p.label-mono.text-muted-foreground.mt-1.flex — “SURESH PATEL”
+      · button[data-testid="read-n_2"].text-xs.uppercase.tracking-wider.border — “READ”
+      · span.inline-block.px-2.py-0.5.text-xs — “REMINDER”
+      … 13 more
+  /settings [390x844] — 81
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · h2.font-heading.text-lg.font-extrabold.uppercase — “COMPANY DETAILS”
+      · label.label-mono.text-muted-foreground — “COMPANY NAME”
+      · label.label-mono.text-muted-foreground — “INDUSTRY”
+      · label.label-mono.text-muted-foreground — “TEAM SIZE”
+      · label.label-mono.text-muted-foreground — “COMPANY MOBILE”
+      · label.label-mono.text-muted-foreground — “REGION”
+      · label.label-mono.text-muted-foreground — “CURRENCY”
+      · label.label-mono.text-muted-foreground — “GST / TAX ID”
+      · label.label-mono.text-muted-foreground — “BRANCHES”
+      · label.label-mono.text-muted-foreground.flex.items-center — “WORKSPACE ID (WhatsApp routing fallback — set as WA_TENANT_ID)”
+      … 69 more
+  /journal [390x844] — 8
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="journal-search-btn"].px-5.py-2.5.text-sm.font-semibold — “SEARCH”
+      · span.text-[10px].uppercase.tracking-wide.font-semibold — “DESK”
+      · span.text-[10px].uppercase.tracking-wide.font-semibold — “BRIEF”
+      · span.text-[10px].uppercase.tracking-wide.font-semibold — “WORK”
+      · span.text-[10px].uppercase.tracking-wide.font-semibold — “CRM”
+      · span.text-[10px].uppercase.tracking-wide.font-semibold — “DEX”
+  /login [390x844] — 11
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · h2.font-heading.text-3xl.font-black.uppercase — “SIGN IN”
+      · button[data-testid="login-tab-password"].flex-1.px-3.py-2.text-xs — “EMAIL & PASSWORD”
+      · button[data-testid="login-tab-otp"].flex-1.flex.items-center.justify-center — “MOBILE OTP”
+      · button[data-testid="auth-submit-button"].w-full.bg-brand-red.text-white.font-semibold — “SIGN IN”
+      · p.label-mono.text-muted-foreground.mb-3 — “TRY THE SHARMA DEMO”
+      · button[data-testid="demo-login-owner"].border.border-black.px-3.py-2 — “OWNER”
+      · button[data-testid="demo-login-sales"].border.border-black.px-3.py-2 — “SALES”
+      · button[data-testid="demo-login-production"].border.border-black.px-3.py-2 — “PRODUCTION”
+      · button[data-testid="demo-login-finance"].border.border-black.px-3.py-2 — “FINANCE”
+  /inbox [360x640] — 21
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="desk-chip-needs_decision"].flex.items-center.gap-2.px-4 — “NEEDS YOUR DECISION 6”
+      · span.ml-1.px-1.5.py-0.5.text-[10px] — “6”
+      · button[data-testid="desk-chip-on_fire"].flex.items-center.gap-2.px-4 — “ON FIRE 5”
+      · span.ml-1.px-1.5.py-0.5.text-[10px] — “5”
+      · button[data-testid="desk-chip-due_today"].flex.items-center.gap-2.px-4 — “DUE TODAY 3”
+      · span.ml-1.px-1.5.py-0.5.text-[10px] — “3”
+      · button[data-testid="desk-chip-important"].flex.items-center.gap-2.px-4 — “IMPORTANT 0”
+      · span.ml-1.px-1.5.py-0.5.text-[10px] — “0”
+      · button[data-testid="desk-cta-review-d_1"].px-4.py-2.text-xs.font-semibold — “REVIEW →”
+      · button[data-testid="desk-cta-review-d_2"].px-4.py-2.text-xs.font-semibold — “REVIEW →”
+      … 9 more
+  /brief [360x640] — 23
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="brief-period-morning"].flex-1.lg:flex-none.px-4.lg:px-5 — “MORNING”
+      · button[data-testid="brief-period-evening"].flex-1.lg:flex-none.px-4.lg:px-5 — “EVENING”
+      · button[data-testid="brief-period-weekly"].flex-1.lg:flex-none.px-4.lg:px-5 — “WEEKLY”
+      · button[data-testid="brief-period-monthly"].flex-1.lg:flex-none.px-4.lg:px-5 — “MONTHLY”
+      · button[data-testid="brief-open-journal"].col-span-2.flex.items-center.justify-center — “CEO JOURNAL”
+      · p.text-sm.font-semibold.uppercase.tracking-wider — “FIRES TO PUT OUT TODAY”
+      · span.inline-flex.items-center.gap-1.text-sm — “HANDLE NOW”
+      · span.mt-3.inline-flex.items-center.gap-1 — “VIEW DETAILS”
+      · span.mt-3.inline-flex.items-center.gap-1 — “VIEW DETAILS”
+      · span.mt-3.inline-flex.items-center.gap-1 — “VIEW DETAILS”
+      … 11 more
+  /my-work [360x640] — 236
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="new-task-button"].flex.items-center.justify-center.gap-1.5 — “NEW TASK”
+      · button[data-testid="work-scope-mine"].flex.items-center.justify-center.gap-1.5 — “MY TASKS”
+      · button[data-testid="work-scope-all"].flex.items-center.justify-center.gap-1.5 — “ALL TASKS”
+      · button[data-testid="ai-priority-toggle"].flex.items-center.justify-center.gap-1.5 — “AI PRIORITY”
+      · button[data-testid="work-view-mywork"].flex.items-center.justify-center.gap-1.5 — “MY WORK”
+      · button[data-testid="work-view-workflows"].flex.items-center.justify-center.gap-1.5 — “WORKFLOWS”
+      · button[data-testid="work-view-leave"].flex.items-center.justify-center.gap-1.5 — “LEAVE”
+      · button[data-testid="work-tab-all"].flex.items-center.gap-1.5.px-3 — “ALL 13”
+      · span.px-1.5.py-0.5.text-[10px].leading-none — “13”
+      · button[data-testid="work-tab-operational"].flex.items-center.gap-1.5.px-3 — “OPERATIONAL 0”
+      … 224 more
+  /my-work?view=leave [360x640] — 31
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="new-task-button"].flex.items-center.justify-center.gap-1.5 — “NEW TASK”
+      · button[data-testid="work-scope-mine"].flex.items-center.justify-center.gap-1.5 — “MY TASKS”
+      · button[data-testid="work-scope-all"].flex.items-center.justify-center.gap-1.5 — “ALL TASKS”
+      · button[data-testid="ai-priority-toggle"].flex.items-center.justify-center.gap-1.5 — “AI PRIORITY”
+      · button[data-testid="work-view-mywork"].flex.items-center.justify-center.gap-1.5 — “MY WORK”
+      · button[data-testid="work-view-workflows"].flex.items-center.justify-center.gap-1.5 — “WORKFLOWS”
+      · button[data-testid="work-view-leave"].flex.items-center.justify-center.gap-1.5 — “LEAVE”
+      · button[data-testid="report-absence-button"].flex.items-center.gap-2.bg-brand-red — “REPORT ABSENCE TODAY”
+      · button[data-testid="request-leave-button"].flex.items-center.gap-2.bg-brand-ink — “REQUEST LEAVE”
+      · button[data-testid="leave-tab-mine"].flex.items-center.gap-2.px-5 — “MY LEAVE 3”
+      … 19 more
+  /my-work?view=workflows [360x640] — 27
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="new-task-button"].flex.items-center.justify-center.gap-1.5 — “NEW TASK”
+      · button[data-testid="work-scope-mine"].flex.items-center.justify-center.gap-1.5 — “MY TASKS”
+      · button[data-testid="work-scope-all"].flex.items-center.justify-center.gap-1.5 — “ALL TASKS”
+      · button[data-testid="ai-priority-toggle"].flex.items-center.justify-center.gap-1.5 — “AI PRIORITY”
+      · button[data-testid="work-view-mywork"].flex.items-center.justify-center.gap-1.5 — “MY WORK”
+      · button[data-testid="work-view-workflows"].flex.items-center.justify-center.gap-1.5 — “WORKFLOWS”
+      · button[data-testid="work-view-leave"].flex.items-center.justify-center.gap-1.5 — “LEAVE”
+      · button[data-testid="wf-subtab-pipelines"].flex.items-center.gap-1.5.px-3 — “PIPELINES”
+      · button[data-testid="wf-subtab-board"].flex.items-center.gap-1.5.px-3 — “TASK BOARD”
+      · button[data-testid="new-workflow-button"].flex.items-center.gap-2.bg-brand-ink — “NEW”
+      … 15 more
+  /crm [360x640] — 29
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="crm-add-customer"].flex.items-center.gap-2.bg-brand-ink — “ADD CUSTOMER”
+      · button[data-testid="crm-add-supplier"].flex.items-center.gap-2.bg-brand-yellow — “ADD SUPPLIER”
+      · button[data-testid="crm-scope-all"].flex.items-center.gap-2.px-4 — “ALL”
+      · button[data-testid="crm-scope-customers"].flex.items-center.gap-2.px-4 — “CUSTOMERS”
+      · button[data-testid="crm-scope-suppliers"].flex.items-center.gap-2.px-4 — “SUPPLIERS”
+      · button[data-testid="crm-scope-mine"].flex.items-center.gap-2.px-4 — “MINE”
+      · span.inline-block.px-2.py-0.5.text-xs — “CUSTOMER”
+      · span.inline-block.px-2.py-0.5.text-xs — “ACTIVE”
+      · span.inline-block.px-2.py-0.5.text-xs — “CUSTOMER”
+      · span.inline-block.px-2.py-0.5.text-xs — “ACTIVE”
+      … 17 more
+  /team [360x640] — 32
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="add-user-button"].flex.items-center.gap-2.bg-brand-ink — “ADD MEMBER”
+      · h2.font-heading.text-2xl.font-extrabold.uppercase — “MEMBERS”
+      · span.inline-block.px-2.py-0.5.text-xs — “OWNER”
+      · button[data-testid="edit-access-u_owner"].flex.items-center.gap-1.text-xs — “ACCESS”
+      · span[data-testid="member-access-count-u_sales"].label-mono.text-muted-foreground — “7 ACCESS”
+      · span.inline-block.px-2.py-0.5.text-xs — “SALES”
+      · button[data-testid="edit-access-u_sales"].flex.items-center.gap-1.text-xs — “ACCESS”
+      · button[data-testid="invite-link-u_sales"].flex.items-center.gap-1.text-xs — “INVITE”
+      · button[data-testid="toggle-absent-u_sales"].text-xs.uppercase.tracking-wider.border — “MARK ABSENT”
+      · span[data-testid="member-access-count-u_prod"].label-mono.text-muted-foreground — “6 ACCESS”
+      … 20 more
+  /finance [360x640] — 36
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="ledger-tab-overview"].flex.items-center.justify-center.gap-1.5 — “OVERVIEW”
+      · button[data-testid="ledger-tab-revenue"].flex.items-center.justify-center.gap-1.5 — “REVENUE”
+      · button[data-testid="ledger-tab-expenses"].flex.items-center.justify-center.gap-1.5 — “EXPENSES”
+      · button[data-testid="ledger-tab-assets"].flex.items-center.justify-center.gap-1.5 — “ASSETS”
+      · button[data-testid="ledger-tab-inventory"].flex.items-center.justify-center.gap-1.5 — “INVENTORY”
+      · button[data-testid="ledger-tab-inbox"].flex.items-center.justify-center.gap-1.5 — “INBOX”
+      · button[data-testid="ledger-reclassify-btn"].flex.items-center.justify-center.gap-1.5 — “FIX OLD PURCHASES”
+      · label[data-testid="finance-hero-doc"].flex.items-center.gap-2.border — “UPLOAD BILL / RECEIPT”
+      · label[data-testid="finance-hero-photo"].flex.items-center.gap-2.border — “PHOTO”
+      · label[data-testid="finance-hero-csv"].flex.items-center.gap-2.border — “CSV / EXCEL”
+      … 24 more
+  /finance?tab=revenue [360x640] — 25
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="ledger-tab-overview"].flex.items-center.justify-center.gap-1.5 — “OVERVIEW”
+      · button[data-testid="ledger-tab-revenue"].flex.items-center.justify-center.gap-1.5 — “REVENUE”
+      · button[data-testid="ledger-tab-expenses"].flex.items-center.justify-center.gap-1.5 — “EXPENSES”
+      · button[data-testid="ledger-tab-assets"].flex.items-center.justify-center.gap-1.5 — “ASSETS”
+      · button[data-testid="ledger-tab-inventory"].flex.items-center.justify-center.gap-1.5 — “INVENTORY”
+      · button[data-testid="ledger-tab-inbox"].flex.items-center.justify-center.gap-1.5 — “INBOX”
+      · button[data-testid="add-income-btn"].flex.items-center.justify-center.gap-2 — “ADD INCOME”
+      · button[data-testid="ledger-reclassify-btn"].flex.items-center.justify-center.gap-1.5 — “FIX OLD PURCHASES”
+      · label[data-testid="finance-hero-doc"].flex.items-center.gap-2.border — “UPLOAD BILL / RECEIPT”
+      · label[data-testid="finance-hero-photo"].flex.items-center.gap-2.border — “PHOTO”
+      … 13 more
+  /finance?tab=expenses [360x640] — 43
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="ledger-tab-overview"].flex.items-center.justify-center.gap-1.5 — “OVERVIEW”
+      · button[data-testid="ledger-tab-revenue"].flex.items-center.justify-center.gap-1.5 — “REVENUE”
+      · button[data-testid="ledger-tab-expenses"].flex.items-center.justify-center.gap-1.5 — “EXPENSES”
+      · button[data-testid="ledger-tab-assets"].flex.items-center.justify-center.gap-1.5 — “ASSETS”
+      · button[data-testid="ledger-tab-inventory"].flex.items-center.justify-center.gap-1.5 — “INVENTORY”
+      · button[data-testid="ledger-tab-inbox"].flex.items-center.justify-center.gap-1.5 — “INBOX”
+      · button[data-testid="add-expense-btn"].flex.items-center.justify-center.gap-2 — “ADD EXPENSE”
+      · button[data-testid="ledger-reclassify-btn"].flex.items-center.justify-center.gap-1.5 — “FIX OLD PURCHASES”
+      · label[data-testid="finance-hero-doc"].flex.items-center.gap-2.border — “UPLOAD BILL / RECEIPT”
+      · label[data-testid="finance-hero-photo"].flex.items-center.gap-2.border — “PHOTO”
+      … 31 more
+  /finance?tab=assets [360x640] — 37
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="ledger-tab-overview"].flex.items-center.justify-center.gap-1.5 — “OVERVIEW”
+      · button[data-testid="ledger-tab-revenue"].flex.items-center.justify-center.gap-1.5 — “REVENUE”
+      · button[data-testid="ledger-tab-expenses"].flex.items-center.justify-center.gap-1.5 — “EXPENSES”
+      · button[data-testid="ledger-tab-assets"].flex.items-center.justify-center.gap-1.5 — “ASSETS”
+      · button[data-testid="ledger-tab-inventory"].flex.items-center.justify-center.gap-1.5 — “INVENTORY”
+      · button[data-testid="ledger-tab-inbox"].flex.items-center.justify-center.gap-1.5 — “INBOX”
+      · button[data-testid="add-asset-btn"].flex.items-center.justify-center.gap-2 — “ADD ASSET”
+      · button[data-testid="ledger-reclassify-btn"].flex.items-center.justify-center.gap-1.5 — “FIX OLD PURCHASES”
+      · label[data-testid="finance-hero-doc"].flex.items-center.gap-2.border — “UPLOAD BILL / RECEIPT”
+      · label[data-testid="finance-hero-photo"].flex.items-center.gap-2.border — “PHOTO”
+      … 25 more
+  /finance?tab=inventory [360x640] — 27
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="ledger-tab-overview"].flex.items-center.justify-center.gap-1.5 — “OVERVIEW”
+      · button[data-testid="ledger-tab-revenue"].flex.items-center.justify-center.gap-1.5 — “REVENUE”
+      · button[data-testid="ledger-tab-expenses"].flex.items-center.justify-center.gap-1.5 — “EXPENSES”
+      · button[data-testid="ledger-tab-assets"].flex.items-center.justify-center.gap-1.5 — “ASSETS”
+      · button[data-testid="ledger-tab-inventory"].flex.items-center.justify-center.gap-1.5 — “INVENTORY”
+      · button[data-testid="ledger-tab-inbox"].flex.items-center.justify-center.gap-1.5 — “INBOX”
+      · button[data-testid="add-inventory-btn"].flex.items-center.justify-center.gap-2 — “ADD ITEM”
+      · button[data-testid="ledger-reclassify-btn"].flex.items-center.justify-center.gap-1.5 — “FIX OLD PURCHASES”
+      · label[data-testid="finance-hero-doc"].flex.items-center.gap-2.border — “UPLOAD BILL / RECEIPT”
+      · label[data-testid="finance-hero-photo"].flex.items-center.gap-2.border — “PHOTO”
+      … 15 more
+  /finance?tab=inbox [360x640] — 23
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="ledger-tab-overview"].flex.items-center.justify-center.gap-1.5 — “OVERVIEW”
+      · button[data-testid="ledger-tab-revenue"].flex.items-center.justify-center.gap-1.5 — “REVENUE”
+      · button[data-testid="ledger-tab-expenses"].flex.items-center.justify-center.gap-1.5 — “EXPENSES”
+      · button[data-testid="ledger-tab-assets"].flex.items-center.justify-center.gap-1.5 — “ASSETS”
+      · button[data-testid="ledger-tab-inventory"].flex.items-center.justify-center.gap-1.5 — “INVENTORY”
+      · button[data-testid="ledger-tab-inbox"].flex.items-center.justify-center.gap-1.5 — “INBOX”
+      · button[data-testid="ledger-reclassify-btn"].flex.items-center.justify-center.gap-1.5 — “FIX OLD PURCHASES”
+      · label[data-testid="finance-hero-doc"].flex.items-center.gap-2.border — “UPLOAD BILL / RECEIPT”
+      · label[data-testid="finance-hero-photo"].flex.items-center.gap-2.border — “PHOTO”
+      · label[data-testid="finance-hero-csv"].flex.items-center.gap-2.border — “CSV / EXCEL”
+      … 11 more
+  /brain [360x640] — 13
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="brain-tab-ask"].flex.items-center.gap-2.px-4 — “ASK”
+      · button[data-testid="brain-tab-search"].flex.items-center.gap-2.px-4 — “SEARCH”
+      · button[data-testid="brain-tab-documents"].flex.items-center.gap-2.px-4 — “DOCUMENTS”
+      · button[data-testid="dex-send"].px-4.flex.items-center.gap-2 — “SEND”
+      · p.flex.items-center.gap-2.font-heading — “ASK YOUR COMPANY ANYTHING”
+      · button[data-testid="ask-submit"].bg-brand-red.text-white.px-6.flex — “ASK”
+      · span.text-[10px].uppercase.tracking-wide.font-semibold — “DESK”
+      · span.text-[10px].uppercase.tracking-wide.font-semibold — “BRIEF”
+      · span.text-[10px].uppercase.tracking-wide.font-semibold — “WORK”
+      · span.text-[10px].uppercase.tracking-wide.font-semibold — “CRM”
+      … 1 more
+  /calendar [360x640] — 15
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="cal-filter-all"].flex.items-center.gap-2.px-4 — “ALL (0)”
+      · button[data-testid="cal-filter-meeting"].flex.items-center.gap-2.px-4 — “MEETINGS (0)”
+      · button[data-testid="cal-filter-payment_due"].flex.items-center.gap-2.px-4 — “PAYMENTS (0)”
+      · button[data-testid="cal-filter-task"].flex.items-center.gap-2.px-4 — “TASKS (0)”
+      · button[data-testid="cal-filter-delivery"].flex.items-center.gap-2.px-4 — “DELIVERIES (0)”
+      · button[data-testid="cal-filter-complaint"].flex.items-center.gap-2.px-4 — “COMPLAINTS (0)”
+      · button[data-testid="cal-filter-birthday"].flex.items-center.gap-2.px-4 — “BIRTHDAYS (0)”
+      · button[data-testid="cal-filter-leave"].flex.items-center.gap-2.px-4 — “LEAVE (0)”
+      · span.text-[10px].uppercase.tracking-wide.font-semibold — “DESK”
+      · span.text-[10px].uppercase.tracking-wide.font-semibold — “BRIEF”
+      … 3 more
+  /notifications [360x640] — 25
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="mark-all-read"].flex.items-center.gap-2.border — “MARK ALL READ”
+      · span.inline-block.px-2.py-0.5.text-xs — “REMINDER”
+      · span.label-mono.text-muted-foreground.flex.items-center — “5 HRS AGO”
+      · p.label-mono.text-muted-foreground.mt-1.flex — “SURESH PATEL”
+      · button[data-testid="read-n_1"].text-xs.uppercase.tracking-wider.border — “READ”
+      · span.inline-block.px-2.py-0.5.text-xs — “REMINDER”
+      · span.label-mono.text-muted-foreground.flex.items-center — “1 DAY AGO”
+      · p.label-mono.text-muted-foreground.mt-1.flex — “SURESH PATEL”
+      · button[data-testid="read-n_2"].text-xs.uppercase.tracking-wider.border — “READ”
+      · span.inline-block.px-2.py-0.5.text-xs — “REMINDER”
+      … 13 more
+  /settings [360x640] — 81
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · h2.font-heading.text-lg.font-extrabold.uppercase — “COMPANY DETAILS”
+      · label.label-mono.text-muted-foreground — “COMPANY NAME”
+      · label.label-mono.text-muted-foreground — “INDUSTRY”
+      · label.label-mono.text-muted-foreground — “TEAM SIZE”
+      · label.label-mono.text-muted-foreground — “COMPANY MOBILE”
+      · label.label-mono.text-muted-foreground — “REGION”
+      · label.label-mono.text-muted-foreground — “CURRENCY”
+      · label.label-mono.text-muted-foreground — “GST / TAX ID”
+      · label.label-mono.text-muted-foreground — “BRANCHES”
+      · label.label-mono.text-muted-foreground.flex.items-center — “WORKSPACE ID (WhatsApp routing fallback — set as WA_TENANT_ID)”
+      … 69 more
+  /journal [360x640] — 8
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="journal-search-btn"].px-5.py-2.5.text-sm.font-semibold — “SEARCH”
+      · span.text-[10px].uppercase.tracking-wide.font-semibold — “DESK”
+      · span.text-[10px].uppercase.tracking-wide.font-semibold — “BRIEF”
+      · span.text-[10px].uppercase.tracking-wide.font-semibold — “WORK”
+      · span.text-[10px].uppercase.tracking-wide.font-semibold — “CRM”
+      · span.text-[10px].uppercase.tracking-wide.font-semibold — “DEX”
+  /login [360x640] — 11
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · h2.font-heading.text-3xl.font-black.uppercase — “SIGN IN”
+      · button[data-testid="login-tab-password"].flex-1.px-3.py-2.text-xs — “EMAIL & PASSWORD”
+      · button[data-testid="login-tab-otp"].flex-1.flex.items-center.justify-center — “MOBILE OTP”
+      · button[data-testid="auth-submit-button"].w-full.bg-brand-red.text-white.font-semibold — “SIGN IN”
+      · p.label-mono.text-muted-foreground.mb-3 — “TRY THE SHARMA DEMO”
+      · button[data-testid="demo-login-owner"].border.border-black.px-3.py-2 — “OWNER”
+      · button[data-testid="demo-login-sales"].border.border-black.px-3.py-2 — “SALES”
+      · button[data-testid="demo-login-production"].border.border-black.px-3.py-2 — “PRODUCTION”
+      · button[data-testid="demo-login-finance"].border.border-black.px-3.py-2 — “FINANCE”
+
+
+DESKTOP BASELINE (§9.2 — must stay empty)
+------------------------------------------------------------------------------
+captured 42 baseline screenshot(s) at frontend/.audit-desktop-baseline
+desktop diff: EMPTY
+
+
+CONSOLE ERRORS (2)
+------------------------------------------------------------------------------
+  [390x844] In HTML, %s cannot be a child of <%s>.%s
+This will cause a hydration error.%s <span> option  
+
+  ...
+    <Protected x-file-name="App" x-line-number="97" x-column="44" x-component="Protected" x-id="App
+
+
+NOTES
+------------------------------------------------------------------------------
+  · Browser: playwright chromium (131.0.6778.33)

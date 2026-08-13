@@ -11,6 +11,10 @@ import Signup from "./pages/Signup";
 import Inbox from "./pages/Inbox";
 import Brain from "./pages/Brain";
 import People from "./pages/People";
+// Epic 2 Sprint A — E2-01 / E2-02: dedicated CRM (customers + suppliers) and
+// Team (employees) pages replace the tabbed /contacts People surface.
+import CRM from "./pages/CRM";
+import TeamPage from "./pages/Team";
 import CEOBrief from "./pages/CEOBrief";
 import Notifications from "./pages/Notifications";
 import MyWork from "./pages/MyWork";
@@ -92,8 +96,12 @@ function App() {
             <Route path="/notifications" element={<Protected><Notifications /></Protected>} />
             <Route path="/inbox" element={<Protected perm="inbox"><Inbox /></Protected>} />
             <Route path="/workflows" element={<Navigate to="/my-work?view=workflows" replace />} />
-            <Route path="/contacts" element={<Protected perm="people"><People /></Protected>} />
+            {/* Epic 2 Sprint A — E2-01: /contacts is retired, redirects to /crm.
+                /contacts/:id (ContactProfile 360°) still works so any deep-links
+                or Brain-cited sources continue to resolve. */}
+            <Route path="/contacts" element={<Navigate to="/crm" replace />} />
             <Route path="/contacts/:id" element={<Protected perm="people"><ContactProfile /></Protected>} />
+            <Route path="/crm" element={<Protected perm="people"><CRM /></Protected>} />
             <Route path="/ingest" element={<Protected perm="data_input"><Ingest /></Protected>} />
             <Route path="/tasks" element={<Navigate to="/my-work" replace />} />
             <Route path="/priorities" element={<Navigate to="/my-work" replace />} />
@@ -105,7 +113,9 @@ function App() {
             <Route path="/ledger" element={<Protected perms={["ledger", "finance"]}><Ledger /></Protected>} />
             <Route path="/finance" element={<Navigate to="/ledger" replace />} />
             <Route path="/ask" element={<Navigate to="/brain" replace />} />
-            <Route path="/team" element={<Navigate to="/contacts" replace />} />
+            {/* Epic 2 Sprint A — E2-01: /team is now a real page (Employees list)
+                gated on team_manage. Owner auto-passes via the all-perms shortcut. */}
+            <Route path="/team" element={<Protected perms={["team_manage"]}><TeamPage /></Protected>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>

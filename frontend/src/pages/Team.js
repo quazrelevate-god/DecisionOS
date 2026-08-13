@@ -197,6 +197,23 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite, member
   );
 }
 
+// Epic 2 Sprint A — E2-01: /team route wraps TeamPanel with a page header.
+// The old People > Employees tab is retired; owner + team_manage users
+// reach the same table via the Ops-adjacent /team page.
+import { PageHeader } from "../components/common";
+
+export default function TeamPage() {
+  return (
+    <div>
+      <PageHeader
+        eyebrow="Employees · access · reporting lines"
+        title="Team"
+      />
+      <TeamPanel />
+    </div>
+  );
+}
+
 export function TeamPanel() {
   const { user, tenant } = useAuth();
   const qc = useQueryClient();

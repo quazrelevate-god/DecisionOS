@@ -35,16 +35,23 @@ import {
   Tray,
   UserCircle,
   Wallet,
+  Gauge, // Epic 2 E2-15: Ops nav entry (Operating Score)
+  UsersThree, // Epic 2 E2-01: Team nav entry (Employees list)
 } from "@phosphor-icons/react";
 import { ProfileDialog } from "./ProfileDialog";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { WelcomeOverlay } from "./WelcomeOverlay";
 
+// Epic 2 Sprint A (E2-01 / E2-02 / E2-15): People retired; CRM (customers +
+// suppliers) and Team (employees) are separate top-level entries. Ops is a
+// new owner-only shortcut to Operating Score (removed from Brief in E2-11).
 const NAV = [
   { to: "/", label: "Decision Desk", tkey: "inbox", icon: Tray, testid: "nav-inbox", perm: "inbox" },
   { to: "/brief", label: "CEO Brief", tkey: "brief", icon: Sun, testid: "nav-ceo-brief" },
   { to: "/my-work", label: "My Work", tkey: "mywork", icon: Briefcase, testid: "nav-my-work" },
-  { to: "/contacts", label: "People", tkey: "people", icon: AddressBook, testid: "nav-contacts", perm: "people" },
+  { to: "/operating-score", label: "Ops", tkey: "ops", icon: Gauge, testid: "nav-ops", ownerOnly: true },
+  { to: "/crm", label: "CRM", tkey: "crm", icon: AddressBook, testid: "nav-crm", perm: "people" },
+  { to: "/team", label: "Team", tkey: "team", icon: UsersThree, testid: "nav-team", perms: ["team_manage"] },
   { to: "/brain", label: "Company Brain", tkey: "brain", icon: BrainIcon, testid: "nav-brain", perm: "brain" },
   { to: "/ledger", label: "Finance", tkey: "finance", icon: Wallet, testid: "nav-ledger", perms: ["ledger", "finance"] },
   { to: "/ingest", label: "Capture", tkey: "capture", icon: FileArrowUp, testid: "nav-ingest", perm: "data_input" },
@@ -52,12 +59,14 @@ const NAV = [
   { to: "/settings", label: "Settings", tkey: "settings", icon: GearSix, testid: "nav-settings", ownerOnly: true },
 ];
 
-// Primary items for the mobile bottom tab bar
+// Primary items for the mobile bottom tab bar — kept at 5 slots.
+// People slot is replaced by CRM (which surfaces customers + suppliers only);
+// Team lives in the sidebar drawer only.
 const BOTTOM_NAV = [
   { to: "/", label: "Desk", tkey: "desk", icon: Tray, perm: "inbox" },
   { to: "/brief", label: "Brief", tkey: "brief", icon: Sun },
   { to: "/my-work", label: "Work", tkey: "work", icon: Briefcase },
-  { to: "/contacts", label: "People", tkey: "people", icon: AddressBook, perm: "people" },
+  { to: "/crm", label: "CRM", tkey: "crm", icon: AddressBook, perm: "people" },
   { to: "/brain", label: "Brain", tkey: "brain", icon: BrainIcon, perm: "brain" },
 ];
 

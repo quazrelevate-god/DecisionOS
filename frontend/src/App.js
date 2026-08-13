@@ -109,7 +109,8 @@ function App() {
             <Route path="/contacts" element={<Navigate to="/crm" replace />} />
             <Route path="/contacts/:id" element={<Protected perm="people"><ContactProfile /></Protected>} />
             <Route path="/crm" element={<Protected perm="people"><CRM /></Protected>} />
-            <Route path="/ingest" element={<Protected perm="data_input"><Ingest /></Protected>} />
+            {/* Epic 2 Sprint 4 (E2-27): /ingest merged into /finance's Inbox tab. */}
+            <Route path="/ingest" element={<Navigate to="/finance?tab=inbox" replace />} />
             <Route path="/tasks" element={<Navigate to="/my-work" replace />} />
             <Route path="/priorities" element={<Navigate to="/my-work" replace />} />
             <Route path="/calendar" element={<Protected><Calendar /></Protected>} />
@@ -117,8 +118,12 @@ function App() {
             <Route path="/operating-score" element={<Protected ownerOnly><OperatingScore /></Protected>} />
             <Route path="/coach" element={<Protected><WorkCoach /></Protected>} />
             <Route path="/brain" element={<Protected perm="brain"><Brain /></Protected>} />
-            <Route path="/ledger" element={<Protected perms={["ledger", "finance"]}><Ledger /></Protected>} />
-            <Route path="/finance" element={<Navigate to="/ledger" replace />} />
+            {/* Epic 2 Sprint 4 (E2-23 / E2-27): /finance is the merged home
+                for Finance + document Capture. Old /ledger + /ingest redirect
+                here. Gate broadened to also accept data_input so users who
+                had Capture-only access aren't locked out of the Inbox tab. */}
+            <Route path="/finance" element={<Protected perms={["ledger", "finance", "data_input"]}><Ledger /></Protected>} />
+            <Route path="/ledger" element={<Navigate to="/finance" replace />} />
             <Route path="/ask" element={<Navigate to="/brain" replace />} />
             {/* Epic 2 Sprint A — E2-01: /team is now a real page (Employees list)
                 gated on team_manage. Owner auto-passes via the all-perms shortcut. */}

@@ -12,7 +12,16 @@ import {
   Plus, Sparkle, Package, Receipt, TrendUp, Trash, Buildings, Robot,
   Paperclip, ArrowClockwise, PaperPlaneRight, WarningCircle, Brain, CaretDown, ListPlus,
   CurrencyDollar, Coins,
+  // Epic 2 Sprint 4: hero capture bar + Inbox tab
+  FilePdf, Camera, UploadSimple, Tray, WhatsappLogo,
 } from "@phosphor-icons/react";
+// Epic 2 Sprint 4 (E2-24 / E2-25 / E2-26): pull Capture Review Queue,
+// upload ReviewPanel, and WhatsApp status card from Ingest.js so
+// document-capture lives on /finance as the merged surface.
+import { CaptureReview } from "./Captures";
+import { ReviewPanel, WhatsAppCard } from "./Ingest";
+import { hasPerm } from "../lib/perms";
+import { formatApiError } from "../lib/api";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell,
 } from "recharts";
@@ -839,7 +848,110 @@ const TABS = [
   { key: "expenses", tkey: "finance.t_expenses", icon: Receipt },
   { key: "assets", tkey: "finance.t_assets", icon: Buildings },
   { key: "inventory", tkey: "finance.t_inventory", icon: Package },
+  // Epic 2 Sprint 4 (E2-24): Inbox tab hosts the Capture Review Queue —
+  // the former /ingest page's Review Queue collapsed under Finance.
+  { key: "inbox", tkey: "finance.t_inbox", icon: Tray },
 ];
+
+
+// Epic 2 Sprint 4 (E2-25): Capture hero bar.
+// Always-visible at the top of every Finance tab. Founder pick
+// 2026-08-14 over tab-placement or FAB: capture stays 1-click from
+// anywhere in Finance.
+function CaptureHero({ pendingCount, onIngested, onOpenInbox }) {
+  const { user } = useAuth();
+  const canIngest = user?.role === "owner" || hasPerm(user, "data_input");
+  const [uploading, setUploading] = useState(false);
+  const [active, setActive] = useState(null);
+  const qc = useQueryClient();
+
+  const upload = async (endpoint, files) => {
+    const f = files?.[0];
+    if (!f) return;
+    setUploading(true);
+    setActive(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", f);
+      const { data } = await api.post(endpoint, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      if (data.status === "failed") {
+        toast.error("Extraction failed: " + (data.error || "unreadable file"));
+      } else {
+        setActive(data);
+        toast.success("Extracted — review below");
+      }
+      qc.invalidateQueries({ queryKey: ["ingestions"] });
+    } catch (e) {
+      toast.error(formatApiError(e.response?.data?.detail) || "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const onFiled = () => {
+    setActive(null);
+    onIngested && onIngested();
+  };
+
+  if (!canIngest) return null;
+
+  return (
+    <>
+      <div className="border border-black bg-white p-3 mb-6 flex flex-wrap items-center gap-2" data-testid="finance-capture-hero">
+        <span className="label-mono text-muted-foreground text-xs uppercase tracking-wider hidden sm:inline mr-1">
+          Capture
+        </span>
+        <label
+          data-testid="finance-hero-doc"
+          className={`flex items-center gap-2 border border-black bg-white px-3 py-2 text-xs font-semibold uppercase tracking-wider hover:bg-brand-red hover:text-white transition-colors cursor-pointer ${uploading ? "opacity-60 pointer-events-none" : ""}`}
+          title="Upload a bill or receipt (PDF or photo)"
+        >
+          <FilePdf size={14} weight="bold" />
+          Upload bill / receipt
+          <input type="file" hidden accept="image/*,application/pdf" onChange={(e) => upload("/ingest/document", e.target.files)} />
+        </label>
+        <label
+          data-testid="finance-hero-photo"
+          className={`flex items-center gap-2 border border-black bg-white px-3 py-2 text-xs font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors cursor-pointer ${uploading ? "opacity-60 pointer-events-none" : ""}`}
+          title="Take a photo (mobile camera)"
+        >
+          <Camera size={14} weight="bold" />
+          Photo
+          <input type="file" hidden accept="image/*" capture="environment" onChange={(e) => upload("/ingest/document", e.target.files)} />
+        </label>
+        <label
+          data-testid="finance-hero-csv"
+          className={`flex items-center gap-2 border border-black bg-white px-3 py-2 text-xs font-semibold uppercase tracking-wider hover:bg-brand-yellow transition-colors cursor-pointer ${uploading ? "opacity-60 pointer-events-none" : ""}`}
+          title="Bulk CSV or Excel import"
+        >
+          <UploadSimple size={14} weight="bold" />
+          CSV / Excel
+          <input type="file" hidden accept=".csv,.xlsx,.xls" onChange={(e) => upload("/ingest/csv", e.target.files)} />
+        </label>
+        {pendingCount > 0 && (
+          <button
+            data-testid="finance-hero-inbox-badge"
+            onClick={onOpenInbox}
+            className="flex items-center gap-2 border border-black bg-brand-red text-white px-3 py-2 text-xs font-semibold uppercase tracking-wider hover:shadow-brutal-sm transition-all"
+          >
+            <Tray size={14} weight="bold" />
+            {pendingCount} in Inbox →
+          </button>
+        )}
+        {uploading && (
+          <span className="text-xs text-muted-foreground font-mono ml-1">Extracting…</span>
+        )}
+      </div>
+      {active && (
+        <div className="mb-6" data-testid="finance-hero-review">
+          <ReviewPanel ingestion={active} onFiled={onFiled} onCancel={() => setActive(null)} />
+        </div>
+      )}
+    </>
+  );
+}
 
 export default function Ledger() {
   const { t } = useTranslation();
@@ -869,6 +981,13 @@ export default function Ledger() {
   const inventoryQ = useQuery({ queryKey: ["inventory"], queryFn: () => api.get("/inventory").then((r) => r.data) });
   const revenueQ = useQuery({ queryKey: ["revenue"], queryFn: () => api.get("/revenue").then((r) => r.data) });
   const payablesQ = useQuery({ queryKey: ["payables"], queryFn: () => api.get("/payables").then((r) => r.data) });
+  // Epic 2 Sprint 4 (E2-25): pending-capture badge feeds the hero's "N in Inbox →" pill.
+  const capPendingQ = useQuery({
+    queryKey: ["captures-pending"],
+    queryFn: () => api.get("/captures/pending-count").then((r) => r.data),
+    refetchInterval: 30000,
+  });
+  const pendingCount = capPendingQ.data?.count || 0;
 
   const summary = summaryQ.data;
   const cur = summary?.currency || "INR";
@@ -917,15 +1036,30 @@ export default function Ledger() {
         </div>
       </PageHeader>
 
+      {/* Epic 2 Sprint 4 (E2-25): hero capture bar above every tab. */}
+      <CaptureHero
+        pendingCount={pendingCount}
+        onIngested={() => { invalidate(); qc.invalidateQueries({ queryKey: ["captures-pending"] }); }}
+        onOpenInbox={() => setTab("inbox")}
+      />
+
       {(summaryQ.isLoading && tab === "overview") ? (
         <p className="font-mono text-sm">{t("finance.loading")}</p>
       ) : (
         <>
-          {tab === "overview" && summary && <OverviewTab summary={summary} />}
+          {tab === "overview" && summary && (
+            <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+              <div><OverviewTab summary={summary} /></div>
+              {/* Epic 2 Sprint 4 (E2-26): WhatsApp status card moves here. */}
+              <div className="lg:sticky lg:top-6 self-start"><WhatsAppCard /></div>
+            </div>
+          )}
           {tab === "revenue" && <RevenueTab data={revenueQ.data} cur={cur} onDelete={delRevenue} onChange={invalidate} />}
           {tab === "expenses" && <div className="space-y-6"><NeedsMatchingPanel title="Supplier payments to match" testid="payables-needs-matching" hint="These payments to suppliers couldn’t be auto-linked to a purchase bill. Pick the bill they settle, or mark as a standalone expense." unmatched={payablesQ.data?.unmatched_payments} open={payablesQ.data?.open_invoices || []} cur={cur} endpoint="/payables/payment" standaloneLabel={{ btn: "Standalone expense", done: "Booked as a standalone expense" }} onChange={invalidate} /><AiPanel scope="expenses" /><ExpensesTable rows={expensesQ.data || []} cur={cur} onDelete={(id) => del("expenses", id)} /></div>}
           {tab === "assets" && <div className="space-y-6"><AiPanel scope="assets" /><AssetsTable rows={assetsQ.data || []} cur={cur} onDelete={(id) => del("assets", id)} /></div>}
           {tab === "inventory" && <div className="space-y-6"><AiPanel scope="inventory" /><InventoryTable rows={inventoryQ.data || []} cur={cur} onDelete={(id) => del("inventory", id)} /></div>}
+          {/* Epic 2 Sprint 4 (E2-24): Inbox tab hosts CaptureReview from /ingest. */}
+          {tab === "inbox" && <CaptureReview />}
         </>
       )}
 

@@ -95,7 +95,7 @@ const resources = {
       },
       finance: {
         eyebrow: "Money in one place", title: "Finance",
-        t_overview: "Overview", t_expenses: "Expenses", t_assets: "Assets", t_inventory: "Inventory", t_revenue: "Revenue",
+        t_overview: "Overview", t_expenses: "Expenses", t_assets: "Assets", t_inventory: "Inventory", t_revenue: "Revenue", t_inbox: "Inbox",
         k_spend: "Total Spend", k_out: "Outstanding", k_asset: "Asset Value", k_inv: "Inventory Value",
         add_expense: "Add Expense", add_asset: "Add Asset", add_item: "Add Item", loading: "Loading…",
         monthly_spend: "Monthly spend", no_spend: "No spend data yet.", by_category: "By category",
@@ -210,7 +210,7 @@ const resources = {
       },
       finance: {
         eyebrow: "पैसा एक ही जगह", title: "वित्त",
-        t_overview: "अवलोकन", t_expenses: "खर्च", t_assets: "संपत्तियाँ", t_inventory: "इन्वेंट्री", t_revenue: "आय",
+        t_overview: "अवलोकन", t_expenses: "खर्च", t_assets: "संपत्तियाँ", t_inventory: "इन्वेंट्री", t_revenue: "आय", t_inbox: "इनबॉक्स",
         k_spend: "कुल खर्च", k_out: "बकाया", k_asset: "संपत्ति मूल्य", k_inv: "इन्वेंट्री मूल्य",
         add_expense: "खर्च जोड़ें", add_asset: "संपत्ति जोड़ें", add_item: "आइटम जोड़ें", loading: "लोड हो रहा है…",
         monthly_spend: "मासिक खर्च", no_spend: "अभी तक कोई खर्च डेटा नहीं।", by_category: "श्रेणी अनुसार",
@@ -326,7 +326,7 @@ const resources = {
       },
       finance: {
         eyebrow: "பணம் ஒரே இடத்தில்", title: "நிதி",
-        t_overview: "மேலோட்டம்", t_expenses: "செலவுகள்", t_assets: "சொத்துகள்", t_inventory: "சரக்கு", t_revenue: "வருவாய்",
+        t_overview: "மேலோட்டம்", t_expenses: "செலவுகள்", t_assets: "சொத்துகள்", t_inventory: "சரக்கு", t_revenue: "வருவாய்", t_inbox: "இன்பாக்ஸ்",
         k_spend: "மொத்த செலவு", k_out: "நிலுவை", k_asset: "சொத்து மதிப்பு", k_inv: "சரக்கு மதிப்பு",
         add_expense: "செலவு சேர்", add_asset: "சொத்து சேர்", add_item: "பொருள் சேர்", loading: "ஏற்றுகிறது…",
         monthly_spend: "மாதாந்திர செலவு", no_spend: "இன்னும் செலவு தரவு இல்லை.", by_category: "வகை வாரியாக",

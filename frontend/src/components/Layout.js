@@ -53,8 +53,9 @@ const NAV = [
   { to: "/crm", label: "CRM", tkey: "crm", icon: AddressBook, testid: "nav-crm", perm: "people" },
   { to: "/team", label: "Team", tkey: "team", icon: UsersThree, testid: "nav-team", perms: ["team_manage"] },
   { to: "/brain", label: "Company Brain", tkey: "brain", icon: BrainIcon, testid: "nav-brain", perm: "brain" },
-  { to: "/ledger", label: "Finance", tkey: "finance", icon: Wallet, testid: "nav-ledger", perms: ["ledger", "finance"] },
-  { to: "/ingest", label: "Capture", tkey: "capture", icon: FileArrowUp, testid: "nav-ingest", perm: "data_input" },
+  // Epic 2 Sprint 4 (E2-27): 'Capture' nav retired; Finance is now the
+  // single home for money + document capture. Route rename /ledger -> /finance.
+  { to: "/finance", label: "Finance", tkey: "finance", icon: Wallet, testid: "nav-ledger", perms: ["ledger", "finance", "data_input"] },
   { to: "/meetings", label: "Meeting Notes", tkey: "meetings", icon: MicrophoneStage, testid: "nav-meetings" },
   { to: "/settings", label: "Settings", tkey: "settings", icon: GearSix, testid: "nav-settings", ownerOnly: true },
 ];

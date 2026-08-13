@@ -120,7 +120,8 @@ const WA_STATUS_STYLE = {
   error: "bg-brand-red text-white",
 };
 
-function WhatsAppCard() {
+// Epic 2 Sprint 4 (E2-24 / E2-26): exported so /finance can import.
+export function WhatsAppCard() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const isOwner = user?.role === "owner";
@@ -212,7 +213,9 @@ function Field({ label, value, onChange, placeholder }) {
   );
 }
 
-function ReviewPanel({ ingestion, onFiled, onCancel }) {
+// Epic 2 Sprint 4 (E2-25): exported so /finance's hero can render
+// the in-progress review inline after an upload.
+export function ReviewPanel({ ingestion, onFiled, onCancel }) {
   const { tenant } = useAuth();
   const L = lex(tenant);
   const optLabels = { ...OPT_LABELS, customer: L.customer_singular, vendor: L.vendor_singular };

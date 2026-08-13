@@ -234,25 +234,26 @@ class TestCrossRolePermissionMatrix:
             assert k in p, f"owner must have perm {k!r} via all-perms shortcut"
 
     def test_sales_default_perms(self):
-        """Sales gets _BASE_PERMS only."""
+        """Sales gets _BASE_PERMS only. FIX-FUP-51: 'people' is opt-in."""
         p = _perms_for_role("sales")
         # Base perms present
-        for k in ("inbox", "data_input", "people", "workflows", "tasks",
-                   "brain", "ask"):
+        for k in ("inbox", "data_input", "workflows", "tasks", "brain", "ask"):
             assert k in p, f"sales must have {k!r} by default"
-        # Elevated perms absent
-        for k in ("finance", "ledger", "team_manage", "brain_export",
+        # Elevated perms absent — including "people" post-FIX-FUP-51
+        # (contact list requires explicit grant even for sales).
+        for k in ("people", "finance", "ledger", "team_manage", "brain_export",
                    "leave_approve", "decisions_approve", "approvals",
                    "voice_capture"):
             assert k not in p, f"sales must NOT have {k!r} by default"
 
     def test_finance_default_perms(self):
-        """Finance gets _BASE_PERMS + {finance, ledger}."""
+        """Finance gets _BASE_PERMS + {finance, ledger}. 'people' opt-in."""
         p = _perms_for_role("finance")
         for k in ("finance", "ledger", "inbox", "data_input", "brain", "ask"):
             assert k in p, f"finance must have {k!r} by default"
-        # Elevated perms STILL absent — finance role doesn't imply team_manage or brain_export.
-        for k in ("team_manage", "brain_export", "leave_approve",
+        # Elevated + opt-in perms absent — finance role doesn't imply
+        # team_manage, brain_export, OR people (contact list, FIX-FUP-51).
+        for k in ("people", "team_manage", "brain_export", "leave_approve",
                    "decisions_approve", "approvals"):
             assert k not in p, f"finance must NOT have {k!r} by default"
 
@@ -262,7 +263,8 @@ class TestCrossRolePermissionMatrix:
         p = _perms_for_role("warehouse_manager")
         assert "inbox" in p
         assert "tasks" in p
-        # Same elevated-perm exclusions apply.
+        # Same elevated + opt-in exclusions apply.
+        assert "people" not in p  # FIX-FUP-51
         assert "brain_export" not in p
         assert "team_manage" not in p
         assert "approvals" not in p
@@ -287,6 +289,28 @@ class TestCrossRolePermissionMatrix:
             assert "brain_export" not in _perms_for_role(role)
         # But an explicit grant works:
         assert "brain_export" in _perms_for_role("sales", ["brain_export", "ask"])
+
+    def test_people_requires_explicit_grant(self):
+        """FIX-FUP-51: contact list (vendor/supplier/customer) is opt-in.
+        Nobody except owner gets 'people' by default — not even sales
+        or finance. Founders can grant it per-role via Settings > Roles
+        or per-user via membership.permissions."""
+        # No default role sees the contact list.
+        for role in ("sales", "finance", "warehouse_manager", "production", "hr"):
+            assert "people" not in _perms_for_role(role), (
+                f"FIX-FUP-51: role={role!r} must not see /contacts by "
+                "default; grant 'people' explicitly if needed."
+            )
+        # Owner always passes.
+        from core import PERMISSION_KEYS
+        assert "people" in _perms_for_role("owner"), (
+            "owner must still pass via the all-perms shortcut"
+        )
+        # Explicit per-user grant restores access.
+        assert "people" in _perms_for_role("finance", ["people", "finance"])
+        # Tenant-level role grant restores access (simulated by handing
+        # the perm through the permissions list — same code path).
+        assert "people" in _perms_for_role("sales", ["people"])
 
 
 # ---------------------------------------------------------------------------

@@ -94,11 +94,13 @@ class TestRBACBrain:
 
 class TestRBACContacts:
     def test_employee_forbidden_on_contacts(self, prod_token):
-        # production doesn't have 'people' perm by default (only owner/sales/finance)
+        """FIX-FUP-51: production role has no 'people' perm by default —
+        contact list is now opt-in (removed from _BASE_PERMS). Must be
+        403 unless the tenant explicitly grants 'people' to production."""
         r = requests.get(f"{BASE_URL}/api/contacts", headers=_hdr(prod_token), timeout=15)
-        # production has _BASE_PERMS = inbox,people,workflows,tasks,brain,ask, so people IS included.
-        # Adjust assertion: check that the endpoint responds with either 200 (if perm) or 403 (if not).
-        assert r.status_code in (200, 403)
+        assert r.status_code == 403, (
+            f"FIX-FUP-51: production must be 403 on /contacts; got {r.status_code}: {r.text[:200]}"
+        )
 
     def test_owner_allowed_contacts(self, owner_token):
         r = requests.get(f"{BASE_URL}/api/contacts", headers=_hdr(owner_token), timeout=15)

@@ -484,7 +484,16 @@ def require_role(*roles):
 
 # --- Module-level access permissions ---------------------------------------
 # PERMISSION_KEYS + DEFAULT_ROLES come from `config.py` (re-exported above).
-_BASE_PERMS = {"inbox", "data_input", "people", "workflows", "tasks", "brain", "ask"}
+# FIX-FUP-51 (2026-08-13): "people" (contacts list — customer +
+# supplier + vendor) moved OUT of _BASE_PERMS. Was granting the
+# full contact list to every default role (production, HR, custom).
+# Vendor + supplier lists frequently contain price agreements,
+# payment terms, and personal contact numbers; the founder wants
+# them opt-in even for finance and sales — those roles now need
+# the perm granted explicitly via Settings > Roles (or per-user
+# via membership.permissions). Owner still passes via the
+# "owner -> all PERMISSION_KEYS" branch in user_perms().
+_BASE_PERMS = {"inbox", "data_input", "workflows", "tasks", "brain", "ask"}
 ROLE_DEFAULT_PERMS = {
     "sales": _BASE_PERMS,
     "finance": _BASE_PERMS | {"finance", "ledger"},

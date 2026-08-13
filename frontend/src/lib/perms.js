@@ -17,7 +17,10 @@ export const PERMISSIONS = [
 
 export const PERMISSION_KEYS = PERMISSIONS.map((p) => p.key);
 
-const BASE = ["inbox", "data_input", "people", "workflows", "tasks", "brain", "ask"];
+// FIX-FUP-51: mirror of backend core._BASE_PERMS — kept in sync so the
+// nav/route gates match the API. "people" is opt-in (contact list is
+// sensitive); Owner still passes via the role==='owner' branch below.
+const BASE = ["inbox", "data_input", "workflows", "tasks", "brain", "ask"];
 export const ROLE_DEFAULT_PERMS = {
   sales: [...BASE],
   finance: [...BASE, "finance", "ledger"],

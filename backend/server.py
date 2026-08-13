@@ -6772,6 +6772,9 @@ from routers.decisions import router as decisions_router  # noqa: E402
 app.include_router(decisions_router)
 from routers.inbox import router as inbox_router  # noqa: E402
 app.include_router(inbox_router)
+# Epic 2 Sprint 2 (E2-17 / E2-22): Decision Desk aggregation + nudge action.
+from routers.desk import router as desk_router  # noqa: E402
+app.include_router(desk_router)
 from routers.brief import router as brief_router  # noqa: E402
 app.include_router(brief_router)
 from routers.team import router as team_router  # noqa: E402

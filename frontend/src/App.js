@@ -9,6 +9,8 @@ import Layout from "./components/Layout";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Inbox from "./pages/Inbox";
+// Epic 2 Sprint 2 — new Decision Desk (4-chip design) replaces the mixed Inbox.
+import Desk from "./pages/Desk";
 import Brain from "./pages/Brain";
 import People from "./pages/People";
 // Epic 2 Sprint A — E2-01 / E2-02: dedicated CRM (customers + suppliers) and
@@ -94,7 +96,12 @@ function App() {
             <Route path="/settings" element={<Protected><Settings /></Protected>} />
             <Route path="/review" element={<Navigate to="/ingest" replace />} />
             <Route path="/notifications" element={<Protected><Notifications /></Protected>} />
-            <Route path="/inbox" element={<Protected perm="inbox"><Inbox /></Protected>} />
+            {/* Epic 2 Sprint 2 (E2-16/17/18/19/22): /inbox now renders the
+                new 4-chip Desk. Old Inbox.js kept alive at /inbox-legacy
+                for one commit so any deep-link we missed still resolves,
+                and can be removed in a follow-up. */}
+            <Route path="/inbox" element={<Protected perm="inbox"><Desk /></Protected>} />
+            <Route path="/inbox-legacy" element={<Protected perm="inbox"><Inbox /></Protected>} />
             <Route path="/workflows" element={<Navigate to="/my-work?view=workflows" replace />} />
             {/* Epic 2 Sprint A — E2-01: /contacts is retired, redirects to /crm.
                 /contacts/:id (ContactProfile 360°) still works so any deep-links

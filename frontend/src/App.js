@@ -25,7 +25,10 @@ import Ingest from "./pages/Ingest";
 import ContactProfile from "./pages/ContactProfile";
 import Journal from "./pages/Journal";
 import Calendar from "./pages/Calendar";
-import Meetings from "./pages/Meetings";
+// Epic 2 Sprint 3 (E2-31): Meetings hidden this phase.
+// Re-enable: uncomment this import, restore the /meetings route in
+// place of the Navigate below, restore the sidebar NAV entry.
+// import Meetings from "./pages/Meetings";
 import OperatingScore from "./pages/OperatingScore";
 import WorkCoach from "./pages/WorkCoach";
 import Ledger from "./pages/Ledger";
@@ -114,7 +117,10 @@ function App() {
             <Route path="/tasks" element={<Navigate to="/my-work" replace />} />
             <Route path="/priorities" element={<Navigate to="/my-work" replace />} />
             <Route path="/calendar" element={<Protected><Calendar /></Protected>} />
-            <Route path="/meetings" element={<Protected><Meetings /></Protected>} />
+            {/* Epic 2 Sprint 3 (E2-31): Meeting Notes hidden this phase.
+                Route redirects to home. Meetings.js + backend endpoints
+                stay alive so re-enabling is a single-line revert. */}
+            <Route path="/meetings" element={<Navigate to="/" replace />} />
             <Route path="/operating-score" element={<Protected ownerOnly><OperatingScore /></Protected>} />
             <Route path="/coach" element={<Protected><WorkCoach /></Protected>} />
             <Route path="/brain" element={<Protected perm="brain"><Brain /></Protected>} />

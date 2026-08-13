@@ -6,6 +6,9 @@ import { MagnifyingGlass, ChatCircleText, Lock, Books } from "@phosphor-icons/re
 import { AskPanel } from "./AskAI";
 import { DocumentsPanel } from "./BrainDocuments";
 import { MicDictateButton } from "../components/MicDictateButton";
+// Epic 2 Sprint 5 (E2-33): capture bar moves here from Desk. Single AI home.
+import { DexCaptureBar } from "../components/DexCaptureBar";
+import { useQueryClient } from "@tanstack/react-query";
 
 function SearchPanel() {
   const { t } = useTranslation();
@@ -147,7 +150,11 @@ function SearchPanel() {
 
 export default function Brain() {
   const { t } = useTranslation();
+  const qc = useQueryClient();
   const [tab, setTab] = useState("ask");
+  // Epic 2 Sprint 5 (E2-32): 'Company Brain' becomes 'Dex' -- single AI
+  // persona. Founder ask 2026-08-14. Route stays /brain for bookmark
+  // safety; /dex is an alias set up in App.js.
   return (
     <div>
       <PageHeader eyebrow={t("brain.eyebrow")} title={t("brain.title")}>
@@ -169,6 +176,10 @@ export default function Brain() {
           <p className="text-xs text-muted-foreground" data-testid="brain-tabs-hint">{t("brain.tabs_hint")}</p>
         </div>
       </PageHeader>
+
+      {/* Epic 2 Sprint 5 (E2-33): capture bar migrated from Desk. Always-visible
+          at the top of Dex so speak/type/upload is one click from every sub-tab. */}
+      <DexCaptureBar onCaptured={() => qc.invalidateQueries({ queryKey: ["voice-notes"] })} />
 
       {tab === "ask" ? <AskPanel /> : tab === "search" ? <SearchPanel /> : <DocumentsPanel />}
     </div>

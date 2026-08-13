@@ -14,9 +14,9 @@ const resources = {
         inbox: "Decision Desk", brief: "CEO Brief", mywork: "My Work",
         people: "People", // legacy — retained for /contacts back-compat only
         crm: "CRM", team: "Team", ops: "Ops",
-        brain: "Company Brain", finance: "Finance", capture: "Capture", meetings: "Meeting Notes", settings: "Settings",
+        brain: "Dex", finance: "Finance", capture: "Capture", meetings: "Meeting Notes", settings: "Settings",
       },
-      bottomnav: { desk: "Desk", brief: "Brief", work: "Work", crm: "CRM", brain: "Brain" },
+      bottomnav: { desk: "Desk", brief: "Brief", work: "Work", crm: "CRM", brain: "Dex" },
       header: {
         signed_in_as: "Signed in as", send_digest: "Send Daily Digest", sign_out: "Sign out",
         notifications: "Notifications", view_all: "View all", new: "new", all_caught_up: "You're all caught up.",
@@ -65,8 +65,8 @@ const resources = {
         empty_hint: "No records match your filters.",
       },
       brain: {
-        eyebrow: "Everything your business knows", title: "Company Brain",
-        ask: "Ask", search: "Search", tabs_hint: "Ask = get an AI answer · Search = find records",
+        eyebrow: "Your always-on AI COO", title: "Dex",
+        ask: "Ask", search: "Search", tabs_hint: "Speak, type, ask, search — Dex remembers everything.",
         search_ph: "Search decisions, tasks, workflows…", search_btn: "Search", speak_search: "Speak your search",
         search_hint: "Find the exact records — decisions, tasks, workflows, contacts & more that match your words.",
         searching: "Searching…", empty_title: "Search the company brain",
@@ -141,9 +141,9 @@ const resources = {
       nav: {
         inbox: "निर्णय डेस्क", brief: "सीईओ ब्रीफ़", mywork: "मेरा काम",
         people: "लोग", crm: "सीआरएम", team: "टीम", ops: "ऑप्स",
-        brain: "कंपनी ब्रेन", finance: "वित्त", capture: "कैप्चर", meetings: "मीटिंग नोट्स", settings: "सेटिंग्स",
+        brain: "डेक्स", finance: "वित्त", capture: "कैप्चर", meetings: "मीटिंग नोट्स", settings: "सेटिंग्स",
       },
-      bottomnav: { desk: "डेस्क", brief: "ब्रीफ़", work: "काम", crm: "सीआरएम", brain: "ब्रेन" },
+      bottomnav: { desk: "डेस्क", brief: "ब्रीफ़", work: "काम", crm: "सीआरएम", brain: "डेक्स" },
       header: {
         signed_in_as: "साइन इन:", send_digest: "दैनिक डाइजेस्ट भेजें", sign_out: "साइन आउट",
         notifications: "सूचनाएँ", view_all: "सभी देखें", new: "नई", all_caught_up: "आप पूरी तरह अपडेट हैं।",
@@ -256,9 +256,9 @@ const resources = {
       nav: {
         inbox: "முடிவு மேசை", brief: "தலைமை சுருக்கம்", mywork: "எனது வேலை",
         people: "நபர்கள்", crm: "CRM", team: "குழு", ops: "இயக்கம்",
-        brain: "நிறுவன மூளை", finance: "நிதி", capture: "பதிவு", meetings: "கூட்டக் குறிப்புகள்", settings: "அமைப்புகள்",
+        brain: "டெக்ஸ்", finance: "நிதி", capture: "பதிவு", meetings: "கூட்டக் குறிப்புகள்", settings: "அமைப்புகள்",
       },
-      bottomnav: { desk: "மேசை", brief: "சுருக்கம்", work: "வேலை", crm: "CRM", brain: "மூளை" },
+      bottomnav: { desk: "மேசை", brief: "சுருக்கம்", work: "வேலை", crm: "CRM", brain: "டெக்ஸ்" },
       header: {
         signed_in_as: "உள்நுழைந்தவர்", send_digest: "தினசரி சுருக்கம் அனுப்பு", sign_out: "வெளியேறு",
         notifications: "அறிவிப்புகள்", view_all: "அனைத்தையும் காண்க", new: "புதியவை", all_caught_up: "அனைத்தும் முடிந்தது.",

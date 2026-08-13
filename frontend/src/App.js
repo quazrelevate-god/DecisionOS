@@ -123,7 +123,10 @@ function App() {
             <Route path="/meetings" element={<Navigate to="/" replace />} />
             <Route path="/operating-score" element={<Protected ownerOnly><OperatingScore /></Protected>} />
             <Route path="/coach" element={<Protected><WorkCoach /></Protected>} />
+            {/* Epic 2 Sprint 5 (E2-32): /dex is the new-name alias for the
+                Brain page. Route /brain is preserved for bookmark safety. */}
             <Route path="/brain" element={<Protected perm="brain"><Brain /></Protected>} />
+            <Route path="/dex" element={<Protected perm="brain"><Brain /></Protected>} />
             {/* Epic 2 Sprint 4 (E2-23 / E2-27): /finance is the merged home
                 for Finance + document Capture. Old /ledger + /ingest redirect
                 here. Gate broadened to also accept data_input so users who

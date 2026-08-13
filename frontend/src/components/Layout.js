@@ -52,7 +52,9 @@ const NAV = [
   { to: "/operating-score", label: "Ops", tkey: "ops", icon: Gauge, testid: "nav-ops", ownerOnly: true },
   { to: "/crm", label: "CRM", tkey: "crm", icon: AddressBook, testid: "nav-crm", perm: "people" },
   { to: "/team", label: "Team", tkey: "team", icon: UsersThree, testid: "nav-team", perms: ["team_manage"] },
-  { to: "/brain", label: "Company Brain", tkey: "brain", icon: BrainIcon, testid: "nav-brain", perm: "brain" },
+  // Epic 2 Sprint 5 (E2-32): 'Company Brain' -> 'Dex' (single AI persona).
+  // Route stays /brain for bookmark safety; /dex is an alias in App.js.
+  { to: "/brain", label: "Dex", tkey: "brain", icon: BrainIcon, testid: "nav-brain", perm: "brain" },
   // Epic 2 Sprint 4 (E2-27): 'Capture' nav retired; Finance is now the
   // single home for money + document capture. Route rename /ledger -> /finance.
   { to: "/finance", label: "Finance", tkey: "finance", icon: Wallet, testid: "nav-ledger", perms: ["ledger", "finance", "data_input"] },
@@ -72,7 +74,7 @@ const BOTTOM_NAV = [
   { to: "/brief", label: "Brief", tkey: "brief", icon: Sun },
   { to: "/my-work", label: "Work", tkey: "work", icon: Briefcase },
   { to: "/crm", label: "CRM", tkey: "crm", icon: AddressBook, perm: "people" },
-  { to: "/brain", label: "Brain", tkey: "brain", icon: BrainIcon, perm: "brain" },
+  { to: "/brain", label: "Dex", tkey: "brain", icon: BrainIcon, perm: "brain" },
 ];
 
 const Logo = () => (

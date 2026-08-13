@@ -7,7 +7,7 @@ import { Chip } from "../components/common";
 import { money } from "../lib/format";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../components/ui/dialog";
-import { Clock, CheckCircle, Stamp, UserMinus, Warning, CurrencyInr, XCircle, ArrowClockwise, CaretRight, Fire, BookOpen, ListChecks, WarningCircle, ArrowBendUpRight, Sparkle, Paperclip, Gauge, Receipt, HandCoins, Coins } from "@phosphor-icons/react";
+import { Clock, CheckCircle, Stamp, UserMinus, Warning, CurrencyInr, XCircle, ArrowClockwise, CaretRight, Fire, BookOpen, ListChecks, WarningCircle, ArrowBendUpRight, Sparkle, Paperclip, Receipt, HandCoins, Coins } from "@phosphor-icons/react";
 
 const PERIODS = [
   { key: "morning", label: "Morning" },
@@ -213,16 +213,13 @@ export default function CEOBrief() {
         </div>
         <div className="grid grid-cols-2 gap-2 lg:flex lg:items-center">
           {isOwner ? (
-            <>
-              <button onClick={() => navigate("/operating-score")} data-testid="brief-operating-score"
-                className="flex items-center justify-center gap-2 bg-brand-ink text-white px-4 py-2.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
-                <Gauge size={16} weight="bold" /> Operating Score
-              </button>
-              <button onClick={() => navigate("/journal")} data-testid="brief-open-journal"
-                className="flex items-center justify-center gap-2 bg-brand-ink text-white px-4 py-2.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
-                <BookOpen size={16} weight="bold" /> CEO Journal
-              </button>
-            </>
+            // Epic 2 E2-11: Operating Score card removed from Brief header.
+            // Lives standalone at /operating-score; the Brief is dashboard-
+            // focused, no shortcut cards competing for attention.
+            <button onClick={() => navigate("/journal")} data-testid="brief-open-journal"
+              className="col-span-2 flex items-center justify-center gap-2 bg-brand-ink text-white px-4 py-2.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
+              <BookOpen size={16} weight="bold" /> CEO Journal
+            </button>
           ) : (
             <button onClick={() => navigate("/coach")} data-testid="brief-open-coach"
               className="col-span-2 flex items-center justify-center gap-2 bg-brand-ink text-white px-4 py-2.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">

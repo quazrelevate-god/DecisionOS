@@ -162,13 +162,20 @@ async def _cards_on_fire(tid: str, user: dict) -> list:
     role_keys = await _my_role_keys(tid, uid)
     today = _iso_today()
 
-    # 1) Overdue tasks I own
+    # 1) Overdue tasks I'm ACCOUNTABLE for but someone ELSE owns.
+    # "Chase" is a verb aimed at the assignee -- if I'm the assignee it's
+    # my own todo, belongs on My Work, not on the Desk's On Fire chip.
+    # Owner sees every non-owner overdue in the tenant; other roles see
+    # overdue tasks they created (raised for a teammate to do).
+    is_owner = user.get("role") == "owner"
     q_overdue = {
         "tenant_id": tid,
-        "assignee_id": uid,
+        "assignee_id": {"$ne": uid, "$exists": True, "$nin": [None, ""]},
         "status": {"$nin": ["done", "cancelled"]},
         "due_date": {"$lt": today, "$ne": None},
     }
+    if not is_owner:
+        q_overdue["created_by"] = uid
     overdue = await db.tasks.find(q_overdue, {"_id": 0}).sort("due_date", 1).to_list(200)
 
     # 2) Escalations/handoffs pointed at me. The `updates` array is the
@@ -250,14 +257,20 @@ async def _cards_on_fire(tid: str, user: dict) -> list:
 
 
 async def _cards_due_today(tid: str, user: dict) -> list:
+    """Tasks due today that someone else owns (I care about them, they
+    need nudging). Mirror of on_fire scope: not-me + I-created-them,
+    or owner scope for owner. My own due-today lives on My Work."""
     uid = user["id"]
     today = _iso_today()
+    is_owner = user.get("role") == "owner"
     q = {
         "tenant_id": tid,
-        "assignee_id": uid,
+        "assignee_id": {"$ne": uid, "$exists": True, "$nin": [None, ""]},
         "status": {"$nin": ["done", "cancelled"]},
         "due_date": today,
     }
+    if not is_owner:
+        q["created_by"] = uid
     rows = await db.tasks.find(q, {"_id": 0}).to_list(200)
     assignee_ids = [t.get("assignee_id") for t in rows if t.get("assignee_id")]
     umap = await _users_lookup(tid, assignee_ids)

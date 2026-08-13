@@ -24,6 +24,11 @@ from core import (
     db, claude_chat, LLM_MODEL, _extract_json, new_id, now_iso, logger,
     require_perm, user_perms,
 )
+# FIX-007-C (S4-04): shared Brain retrieval so /ask + /brain/agent
+# both see brain_context (decision provenance) and brain_documents
+# (uploaded policies / contracts). Before this, /ask was blind to
+# both and Dex was the only surface with provenance answers.
+from services.ai import brain_retrieval
 
 router = APIRouter(prefix="/api")
 
@@ -202,7 +207,28 @@ async def _users_map(tid):
     return {u["id"]: u for u in await db.users.find({"tenant_id": tid}, {"_id": 0, "id": 1, "name": 1, "role": 1}).to_list(500)}
 
 
-async def _retrieve(plan: dict, scope: dict):
+async def _enrich_with_brain(plan: dict, scope: dict, user: dict) -> dict:
+    """FIX-007-C (S4-04): auxiliary retrieval pass — every /ask call
+    now ALSO fetches top-N matching brain_context (provenance) and
+    brain_documents (policies) rows using the plan's keywords, so
+    /ask can cite "how we handled this last time" and "what the
+    contract says" the same way Dex does. Both lookups fail-open —
+    a Mongo blip yields empty lists, never a 500."""
+    kw = plan.get("keywords") or ""
+    q_txt = (kw if isinstance(kw, str) else " ".join(kw)).strip()
+    tid = scope["tenant_id"]
+    # Cheap parallel-safe async calls — no I/O race because they hit
+    # different collections + text indexes.
+    doc_hits = await brain_retrieval.search_documents(
+        tenant_id=tid, user=user, query=q_txt,
+    )
+    ctx_hits = await brain_retrieval.search_context(
+        tenant_id=tid, user=user, query=q_txt,
+    )
+    return {"document_hits": doc_hits, "knowledge_hits": ctx_hits}
+
+
+async def _retrieve(plan: dict, scope: dict, user: Optional[dict] = None):
     tid = scope["tenant_id"]
     entity = plan["primary_entity"]
     kw = plan.get("keywords")
@@ -655,9 +681,36 @@ _ANSWER_SYSTEM = (
 )
 
 
-async def _answer(question, kpis, table, lang):
+async def _answer(question, kpis, table, lang,
+                    knowledge_hits: Optional[list] = None,
+                    document_hits: Optional[list] = None):
+    """FIX-007-C (S4-04): the LLM answer now sees three signal streams:
+      * `kpis` + `table` (deterministic domain metrics, as before)
+      * `knowledge_hits` — brain_context provenance rows (past decisions,
+        approvals, task_done outcomes) so the answer can cite "we handled
+        this the same way three weeks ago"
+      * `document_hits` — brain_documents matches (contracts / policies)
+        so the answer can quote the source-of-truth doc
+    Empty extras keep the answer prompt exactly the shape it was before,
+    so behaviour on unrelated /ask questions is unchanged."""
     sample = {"kpis": kpis, "columns": [c["label"] for c in table["columns"]],
               "rows": table["rows"][:20], "total_rows": table["total_rows"]}
+    # Compact projections — one row per hit with just the fields the
+    # answer prompt needs. Keeps the context window small.
+    if knowledge_hits:
+        sample["past_context"] = [
+            {"title": h.get("title"), "kind": h.get("kind"),
+             "outcome": h.get("outcome"), "why": (h.get("why") or "")[:200],
+             "at": h.get("created_at")}
+            for h in knowledge_hits[:6]
+        ]
+    if document_hits:
+        sample["policies_or_documents"] = [
+            {"title": h.get("title") or h.get("original_filename"),
+             "summary": (h.get("summary") or "")[:200],
+             "tags": h.get("tags") or []}
+            for h in document_hits[:5]
+        ]
     chat = claude_chat(session_id=f"brain-ans-{new_id()}",
                        system_message=_ANSWER_SYSTEM + _lang_directive(lang)).with_model(*LLM_MODEL)
     try:
@@ -667,7 +720,15 @@ async def _answer(question, kpis, table, lang):
         sugg = data.get("suggested_questions") if isinstance(data.get("suggested_questions"), list) else []
     except Exception:
         logger.exception("brain answer failed")
-        ans = "Here is what I found in your workspace." if table["total_rows"] else "I couldn't find matching records."
+        # FIX-007-C (S4-04): the fallback message now acknowledges the
+        # Brain hits even when the LLM synth fails, so users don't see
+        # "no matches" while the sources list clearly has entries.
+        if table["total_rows"]:
+            ans = "Here is what I found in your workspace."
+        elif knowledge_hits or document_hits:
+            ans = "I found related notes and documents from your Company Brain — see the sources below."
+        else:
+            ans = "I couldn't find matching records."
         sugg = []
     return ans, [s for s in sugg if isinstance(s, str)][:3]
 
@@ -730,8 +791,19 @@ async def ask(inp: AskRequest, user: dict = Depends(require_perm("ask"))):
         await _audit(tid, scope["uid"], q, plan, [], "PERMISSION_DENIED")
         return {"type": "PERMISSION_DENIED", "message": _PERM_DENIED_MSG}
 
-    retrieved = await _retrieve(plan, scope)
+    retrieved = await _retrieve(plan, scope, user=user)
     kpis, table, cites = await _compute(plan, retrieved, scope)
+
+    # FIX-007-C (S4-04): auxiliary Brain reach — every /ask call
+    # ALSO fetches top-N brain_context (provenance) + brain_documents
+    # (policies) hits keyed by the plan's keywords. Merged into the
+    # citation list so /ask can point at "how we handled this last
+    # time" and "what the contract says" — parity with /brain/agent.
+    brain_extras = await _enrich_with_brain(plan, scope, user)
+    extra_cites = brain_retrieval.cites_from_hits(
+        document_hits=brain_extras["document_hits"],
+        context_hits=brain_extras["knowledge_hits"],
+    )
 
     # Disclosure guard (belt & suspenders): strip money columns for non-finance users
     if not scope["can_finance"]:
@@ -741,7 +813,12 @@ async def ask(inp: AskRequest, user: dict = Depends(require_perm("ask"))):
             table["rows"] = [{k: v for k, v in r.items() if k not in money_keys} for r in table["rows"]]
             kpis = [k for k in kpis if not isinstance(k.get("value"), (int, float))]
 
-    if table["total_rows"] == 0:
+    # FIX-007-C (S4-04): don't flip to INSUFFICIENT_DATA when the domain
+    # tables are empty but the Brain has provenance / doc matches —
+    # "we don't have data in the ledger but the vendor contract says X"
+    # is a legitimate answer, not a dead-end. Only fall through to the
+    # empty response when BOTH sides are empty.
+    if table["total_rows"] == 0 and not extra_cites:
         await _audit(tid, scope["uid"], q, plan, [], "INSUFFICIENT_DATA")
         return {
             "type": "INSUFFICIENT_DATA",
@@ -750,7 +827,11 @@ async def ask(inp: AskRequest, user: dict = Depends(require_perm("ask"))):
             "suggested_questions": ["What needs my attention today?", "Show my overdue tasks", "Show tasks completed this month"],
         }
 
-    answer, suggested = await _answer(q, kpis, table, user.get("language"))
+    answer, suggested = await _answer(
+        q, kpis, table, user.get("language"),
+        knowledge_hits=brain_extras["knowledge_hits"],
+        document_hits=brain_extras["document_hits"],
+    )
     ctx_id = new_id()
     plan["_currency"] = await _currency(tid)
     # FIX-007-A (S4-03): renamed from brain_contexts to brain_query_cache.
@@ -758,7 +839,21 @@ async def ask(inp: AskRequest, user: dict = Depends(require_perm("ask"))):
         "id": ctx_id, "tenant_id": tid, "user_id": scope["uid"], "question": q,
         "plan": plan, "created_at": now_iso(),
     })
-    await _audit(tid, scope["uid"], q, plan, [c["id"] for c in cites], "ANSWER")
+    # FIX-007-C (S4-04): merge domain-record citations with Brain-store
+    # citations. Domain rows first (they're the direct answer), then
+    # brain_context (provenance), then brain_documents (policies).
+    all_cites = list(cites) + list(extra_cites)
+    # De-dup by id in case a domain record and a brain row share the same id.
+    seen_ids: set = set()
+    merged_cites: list = []
+    for c in all_cites:
+        cid = c.get("id")
+        if cid and cid in seen_ids:
+            continue
+        if cid:
+            seen_ids.add(cid)
+        merged_cites.append(c)
+    await _audit(tid, scope["uid"], q, plan, [c["id"] for c in merged_cites if c.get("id")], "ANSWER")
 
     return {
         "type": "ANSWER",
@@ -766,7 +861,7 @@ async def ask(inp: AskRequest, user: dict = Depends(require_perm("ask"))):
         "query_context_id": ctx_id,
         "kpis": kpis,
         "table": table if table["total_rows"] else None,
-        "sources": cites,
+        "sources": merged_cites,
         "applied_filters": {k: plan.get(k) for k in ("primary_entity", "status", "date_preset", "group_by") if plan.get(k)},
         "suggested_questions": suggested,
         "export_options": ["csv", "excel", "pdf"] if table["total_rows"] else [],

@@ -122,43 +122,24 @@ async def _plan(question: str) -> dict:
 # Tool implementations
 # ---------------------------------------------------------------------------
 async def _tool_metadata_search(query: str, user: dict) -> dict:
-    base: dict = {"tenant_id": user["tenant_id"], "is_deleted": False}
-    if user.get("role") != "owner" and "team_manage" not in user_perms(user):
-        base.setdefault("$and", []).append(_docs_visibility_filter(user))
-
-    rows: list = []
-    if query:
-        # Primary — ranked full-text search using the brain_documents_text_v1 index.
-        try:
-            rows = await db.brain_documents.find(
-                {**base, "$text": {"$search": query}},
-                {"_id": 0, "keywords": 0, "storage_path": 0, "score": {"$meta": "textScore"}},
-            ).sort([("score", {"$meta": "textScore"})]).limit(_MAX_DOCS).to_list(_MAX_DOCS)
-        except Exception as e:
-            logger.warning(f"brain_documents text search fallback: {e}")
-            rows = []
-        if not rows:
-            # Fallback to the older keyword+regex path (matches the /brain/documents
-            # list endpoint behaviour so results stay predictable).
-            tokens = _docs_keywords(query)
-            regex_or = [{"title":              {"$regex": query, "$options": "i"}},
-                        {"summary":            {"$regex": query, "$options": "i"}},
-                        {"original_filename":  {"$regex": query, "$options": "i"}}]
-            if tokens:
-                regex_or += [{"keywords": {"$in": tokens}}, {"tags": {"$in": tokens}}]
-            filt = {**base}
-            filt.setdefault("$and", []).append({"$or": regex_or})
-            rows = await db.brain_documents.find(filt, {"_id": 0, "keywords": 0, "storage_path": 0}) \
-                .sort("created_at", -1).limit(_MAX_DOCS).to_list(_MAX_DOCS)
-    else:
-        rows = await db.brain_documents.find(base, {"_id": 0, "keywords": 0, "storage_path": 0}) \
-            .sort("created_at", -1).limit(_MAX_DOCS).to_list(_MAX_DOCS)
+    # FIX-007-C (S4-04): delegate to the shared retrieval service so
+    # /ask and /brain/agent hit the same brain_documents code path.
+    # Any future upgrade (vector search in S4-05/06) lands there once
+    # and both surfaces benefit — no risk of drift between the two.
+    from services.ai import brain_retrieval
+    rows = await brain_retrieval.search_documents(
+        tenant_id=user["tenant_id"], user=user,
+        query=query, limit=_MAX_DOCS,
+    )
     return {"tool": "metadata_search", "query": query, "count": len(rows), "hits": rows}
 
 
 async def _tool_knowledge_lookup(query: str, user: dict) -> dict:
-    rows = await brain_context.query_context(
-        tenant_id=user["tenant_id"], user=user, q=query, limit=_MAX_CONTEXT,
+    # FIX-007-C (S4-04): shared service — same reason as metadata_search.
+    from services.ai import brain_retrieval
+    rows = await brain_retrieval.search_context(
+        tenant_id=user["tenant_id"], user=user,
+        query=query, limit=_MAX_CONTEXT,
     )
     return {"tool": "knowledge_lookup", "query": query, "count": len(rows), "hits": rows}
 

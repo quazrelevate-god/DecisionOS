@@ -6355,6 +6355,90 @@ async def _bootstrap():
                 logger.info("Migration applied: otp_codes_tenant_scope_v1")
         except Exception as e:
             logger.warning(f"otp_codes tenant-scope migration: {e}")
+
+        # FIX-007-A (S4-03): rename brain_contexts → brain_query_cache to
+        # kill the name collision with brain_context (singular, decision-
+        # provenance store). Mongo's renameCollection is atomic and only
+        # works when the target doesn't already exist as a REAL collection
+        # — this migration checks source has data and target is missing
+        # before firing; on second boot, source is empty/absent and
+        # target holds the data, so the guard skips (idempotent).
+        async def _rename_brain_contexts_to_query_cache(_db):
+            names = set(await _db.list_collection_names())
+            has_src = "brain_contexts" in names
+            has_dst = "brain_query_cache" in names
+            if not has_src:
+                logger.info("[S4-03] brain_contexts absent — rename no-op")
+                return
+            if has_dst:
+                # Target already there — likely a fresh index create landed
+                # first on a boot that lost the migration ledger. Check
+                # counts; if target is empty we can safely drop+rename,
+                # else we bail (destructive to merge) and leave both.
+                dst_n = await _db.brain_query_cache.count_documents({})
+                if dst_n == 0:
+                    await _db.brain_query_cache.drop()
+                    logger.info("[S4-03] dropped empty brain_query_cache before rename")
+                else:
+                    logger.warning(
+                        "[S4-03] brain_query_cache already has data (%d rows); "
+                        "leaving brain_contexts as-is. Manual merge needed.",
+                        dst_n,
+                    )
+                    return
+            # Motor exposes admin.command; renameCollection needs fully-
+            # qualified namespaces.
+            src_ns = f"{DB_NAME}.brain_contexts"
+            dst_ns = f"{DB_NAME}.brain_query_cache"
+            await client.admin.command(
+                {"renameCollection": src_ns, "to": dst_ns, "dropTarget": False}
+            )
+            logger.info("[S4-03] renamed brain_contexts → brain_query_cache")
+        try:
+            _s403_res = await _apply_migration(
+                db, "rename_brain_contexts_to_query_cache_v1",
+                _rename_brain_contexts_to_query_cache,
+                description="FIX-007-A (S4-03): kill brain_contexts/brain_context name collision",
+            )
+            if _s403_res == "applied":
+                logger.info("Migration applied: rename_brain_contexts_to_query_cache_v1")
+        except Exception as e:
+            logger.warning(f"brain_contexts rename migration: {e}")
+
+        # FIX-007-A (S4-01): drop text indexes that were created with
+        # default_language="none" so the create_index calls below can
+        # rebuild them with default_language="english" (Mongo doesn't
+        # let you MUTATE default_language on an existing text index).
+        # Only drops when the existing index spec says language:none —
+        # if someone already switched to english, this is a no-op.
+        async def _drop_none_language_text_indexes(_db):
+            for coll_name, index_name in (
+                ("brain_context", "brain_context_text_v1"),
+                ("brain_documents", "brain_documents_text_v1"),
+            ):
+                try:
+                    info = await _db[coll_name].index_information()
+                    spec = info.get(index_name) or {}
+                    if spec.get("default_language") == "none":
+                        await _db[coll_name].drop_index(index_name)
+                        logger.info(
+                            "[S4-01] dropped %s.%s (default_language=none) — "
+                            "will be recreated with english below",
+                            coll_name, index_name,
+                        )
+                except Exception as _e:
+                    logger.warning("[S4-01] %s.%s inspect/drop failed: %s",
+                                    coll_name, index_name, _e)
+        try:
+            _s401_res = await _apply_migration(
+                db, "drop_none_language_text_indexes_v1",
+                _drop_none_language_text_indexes,
+                description="FIX-007-A (S4-01): drop stale text indexes so english-stemmed ones can rebuild",
+            )
+            if _s401_res == "applied":
+                logger.info("Migration applied: drop_none_language_text_indexes_v1")
+        except Exception as e:
+            logger.warning(f"drop-none-language text indexes migration: {e}")
         # New compound unique index — one live OTP per (phone, tenant).
         try:
             await db.otp_codes.create_index(
@@ -6379,9 +6463,32 @@ async def _bootstrap():
         await db.inbox.create_index([("tenant_id", 1), ("classification", 1)])
         await db.voice_notes.create_index([("tenant_id", 1), ("created_at", -1)])
         await db.memory.create_index([("tenant_id", 1), ("created_at", -1)])
+        # FIX-007-A (S4-01): db.memory had NO text index — every knowledge
+        # lookup fell back to case-insensitive regex, which is a collection
+        # scan filtered by tenant_id only. Adding ranked full-text search
+        # brings /ask + brain_router into parity with brain_context /
+        # brain_documents (both of which have had text indexes for months).
+        # default_language="english" enables stemming so "refund" also
+        # matches "refunds" / "refunded" — the recall bug the tracker
+        # called out ("refund != refunds").
+        try:
+            await db.memory.create_index(
+                [("text", "text"), ("tag", "text")],
+                weights={"text": 3, "tag": 1},
+                name="memory_text_v1",
+                default_language="english",
+            )
+        except Exception as e:
+            logger.warning(f"memory text index: {e}")
         await db.brain_audit.create_index([("tenant_id", 1), ("created_at", -1)])
-        await db.brain_contexts.create_index([("tenant_id", 1), ("created_at", -1)])
-        await db.brain_contexts.create_index("id")
+        # FIX-007-A (S4-03): brain_contexts (plural) renamed to
+        # brain_query_cache — the singular/plural collision with the
+        # decision-provenance store `brain_context` was a foot-gun that
+        # produced silent data corruption on typo. Post-rename these
+        # indexes live on the new collection; the migration below
+        # renameCollections + skips the create if the rename already ran.
+        await db.brain_query_cache.create_index([("tenant_id", 1), ("created_at", -1)])
+        await db.brain_query_cache.create_index("id")
         await db.leaves.create_index([("tenant_id", 1), ("status", 1), ("from_date", -1)])
         await db.contacts.create_index([("tenant_id", 1), ("name", 1)])
         # FIX-003-B (S2-08): the contacts collection field is `type`
@@ -6429,12 +6536,19 @@ async def _bootstrap():
         # relevance (not just regex hits). Wrapped in try/except because a
         # collection can only have ONE text index — this call is a no-op the
         # second time it's run with the same fields.
+        # FIX-007-A (S4-01): default_language now "english" (was "none")
+        # so Mongo's snowball stemmer kicks in — "refund" matches "refunds"
+        # / "refunded", "invoice" matches "invoiced" / "invoicing".
+        # Mongo doesn't let you MUTATE default_language on an existing
+        # text index, so the migration below drops the old
+        # brain_context_text_v1 / brain_documents_text_v1 indexes exactly
+        # once; this create_index then rebuilds them with the new setting.
         try:
             await db.brain_context.create_index(
                 [("title", "text"), ("why", "text"), ("tags", "text")],
                 weights={"title": 6, "tags": 3, "why": 1},
                 name="brain_context_text_v1",
-                default_language="none",
+                default_language="english",
             )
         except Exception as e:
             logger.warning(f"brain_context text index: {e}")
@@ -6444,7 +6558,7 @@ async def _bootstrap():
                  ("original_filename", "text"), ("keywords", "text"), ("tags", "text")],
                 weights={"title": 8, "tags": 4, "keywords": 3, "summary": 2, "original_filename": 1},
                 name="brain_documents_text_v1",
-                default_language="none",
+                default_language="english",
             )
         except Exception as e:
             logger.warning(f"brain_documents text index: {e}")

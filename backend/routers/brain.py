@@ -711,7 +711,11 @@ async def ask(inp: AskRequest, user: dict = Depends(require_perm("ask"))):
 
     prev = None
     if inp.context_id:
-        prev = await db.brain_contexts.find_one(
+        # FIX-007-A (S4-03): renamed from db.brain_contexts to
+        # db.brain_query_cache — collection storing /ask query-plan cache
+        # (kept the singular/plural name collision with the decision-
+        # provenance store from silently corrupting data on typo).
+        prev = await db.brain_query_cache.find_one(
             {"id": inp.context_id, "tenant_id": tid}, {"_id": 0, "plan": 1})
         prev = (prev or {}).get("plan")
 
@@ -749,7 +753,8 @@ async def ask(inp: AskRequest, user: dict = Depends(require_perm("ask"))):
     answer, suggested = await _answer(q, kpis, table, user.get("language"))
     ctx_id = new_id()
     plan["_currency"] = await _currency(tid)
-    await db.brain_contexts.insert_one({
+    # FIX-007-A (S4-03): renamed from brain_contexts to brain_query_cache.
+    await db.brain_query_cache.insert_one({
         "id": ctx_id, "tenant_id": tid, "user_id": scope["uid"], "question": q,
         "plan": plan, "created_at": now_iso(),
     })
@@ -797,7 +802,8 @@ async def export(inp: ExportRequest, user: dict = Depends(require_perm("brain_ex
     tid = user["tenant_id"]
     scope = {"tenant_id": tid, "uid": user.get("id"), "role": user.get("role"),
              "can_finance": _can_finance(user), "privileged": _privileged(user)}
-    ctx = await db.brain_contexts.find_one({"id": inp.context_id, "tenant_id": tid}, {"_id": 0})
+    # FIX-007-A (S4-03): renamed from brain_contexts to brain_query_cache.
+    ctx = await db.brain_query_cache.find_one({"id": inp.context_id, "tenant_id": tid}, {"_id": 0})
     if not ctx:
         raise HTTPException(status_code=404, detail="This result has expired. Re-run the question, then export.")
     plan = ctx["plan"]

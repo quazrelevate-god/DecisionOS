@@ -174,10 +174,13 @@ async def admin_reactivate_tenant(tenant_id: str, admin: dict = Depends(get_plat
 # remain. If someone adds a collection and forgets this list, that test fails
 # loudly — that's the drift-detection layer.
 #
-# Naming trap: `brain_context` (singular) is the auto-captured decision-memory
-# store, `brain_contexts` (plural) is the /ask query-plan cache. Both are
-# tenant-scoped and both must be wiped. Added by FIX-001-E after audit found
-# the singular one was missing from the wipe list.
+# FIX-007-A (S4-03): renamed `brain_contexts` (plural, /ask query-plan
+# cache) to `brain_query_cache` so the singular/plural collision with
+# `brain_context` (decision-provenance store) stops being a foot-gun.
+# Both are still tenant-scoped and both must be wiped. Backward-compat:
+# `brain_contexts` stays in the list so any lingering pre-rename data
+# on a staging tenant that predates the migration still gets cleaned
+# up on tenant delete.
 TENANT_COLLECTIONS = [
     # Core workspace records
     "users", "tasks", "decisions", "workflows", "contacts", "capture_drafts",
@@ -193,7 +196,9 @@ TENANT_COLLECTIONS = [
     "brain_context",
     # Company Brain — DOCUMENTS catalog — added by FIX-001-E
     "brain_documents",
-    # /ask query plan cache (name-collision with the memory store above)
+    # /ask query plan cache — renamed FIX-007-A (S4-03) from brain_contexts
+    "brain_query_cache",
+    # Legacy name kept for wipe-list back-compat (pre-rename staging data)
     "brain_contexts",
     # Audit / ops
     "brain_audit", "usage_events", "wa_events", "files",

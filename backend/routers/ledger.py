@@ -20,6 +20,9 @@ from core import (
     _extract_json, new_id, now_iso, logger, log_usage, _est_tokens,
     get_current_user, user_perms, log_activity,
 )
+# FIX-007-B (S4-10): Brain-context writes for finance events so
+# "how did we settle the Kapoor invoice?" queries can find the answer.
+from services import brain_context
 
 router = APIRouter(prefix="/api")
 
@@ -268,6 +271,30 @@ async def create_expense(tenant_id: str, user_id: str, data: dict, source: str =
         vend = f" to {doc['vendor_name']}" if doc["vendor_name"] else ""
         await _write_brain(tenant_id, user_id,
                             f"Expense: {doc['title']} — {currency} {amount:,.0f} ({category}){vend} [{source}]", "expense")
+        # FIX-007-B (S4-10): every expense that's brain-worthy (i.e.
+        # auto-created from a workflow / ingestion / capture — anything
+        # non-manual) ALSO drops a brain_context row so Dex + /ask can
+        # cite it as a source. Manual expenses stay Brain-invisible
+        # unless the caller explicitly requests write_brain=True.
+        try:
+            _vend_txt = f" to {doc['vendor_name']}" if doc.get("vendor_name") else ""
+            await brain_context.record_context(
+                tenant_id=tenant_id, kind="finance",
+                title=f"Expense: {doc['title']}"[:220],
+                outcome=doc.get("status") or "recorded",
+                why=(f"{currency} {amount:,.0f} ({category}){_vend_txt} — {source}"
+                      + (f"; notes: {doc['notes']}" if doc.get("notes") else ""))[:800],
+                tags=["expense", category] if category else ["expense"],
+                source_type="expense", source_id=eid,
+                related_ids={"workflow_id": doc.get("workflow_id"),
+                              "ingestion_id": doc.get("ingestion_id"),
+                              "invoice_id": doc.get("invoice_id"),
+                              "vendor_name": doc.get("vendor_name")},
+                actor_id=user_id, actor_name="",
+                department="finance", visibility="dept",
+            )
+        except Exception as _e:
+            logger.warning(f"S4-10 expense brain_context failed for {eid}: {_e}")
     # An "Asset Purchase" expense also becomes a tracked Asset.
     if category == "Asset Purchase":
         await create_asset(tenant_id, user_id, {
@@ -352,6 +379,25 @@ async def create_income(tenant_id: str, user_id: str, data: dict, source: str = 
     frm = f" from {cust}" if cust else ""
     await _write_brain(tenant_id, user_id,
                        f"Income: {label} — {currency} {amount:,.0f}{frm} [{source}]", "income")
+    # FIX-007-B (S4-10): capture the invoice creation as a queryable
+    # Brain event. Sales invoices are the mirror of expenses; the
+    # tracker's gap called out "invoices" specifically.
+    try:
+        await brain_context.record_context(
+            tenant_id=tenant_id, kind="finance",
+            title=f"Invoice: {label}"[:220],
+            outcome="paid" if received else (doc.get("status") or "unpaid"),
+            why=(f"{currency} {amount:,.0f}{frm} — {source}"
+                  + (f"; #{doc['number']}" if doc.get("number") else ""))[:800],
+            tags=["invoice", "income"],
+            source_type="invoice", source_id=inv_id,
+            related_ids={"contact_name": cust or None,
+                          "invoice_number": doc.get("number") or None},
+            actor_id=user_id, actor_name="",
+            department="finance", visibility="dept",
+        )
+    except Exception as _e:
+        logger.warning(f"S4-10 invoice brain_context failed for {inv_id}: {_e}")
     if received:
         await db.payments.insert_one({
             "id": new_id(), "tenant_id": tenant_id, "direction": "in", "amount": amount,
@@ -467,6 +513,37 @@ async def reconcile_payment(tenant_id: str, payment: dict, matched_by: str = "au
                                      {"$set": {"match_status": payment.get("match_status") or "unmatched"}})
         return None
     await _apply_payment_to_invoice(tenant_id, inv, payment, matched_by)
+    # FIX-007-B (S4-10): payment-to-invoice reconciliation is one of the
+    # most-asked finance questions ("did Kapoor's payment come in for
+    # invoice #422?") — capture it as a Brain event so the answer's a
+    # retrieval away.
+    try:
+        _cur = inv.get("currency") or ""
+        _amt = _num(payment.get("amount"))
+        _dir = "in" if payment.get("direction") == "in" else "out"
+        _party = payment.get("contact_name") or inv.get("contact_name") or ""
+        _party_txt = f" from {_party}" if _dir == "in" and _party else \
+                      (f" to {_party}" if _party else "")
+        await brain_context.record_context(
+            tenant_id=tenant_id, kind="finance",
+            title=(f"Payment reconciled: {_cur} {_amt:,.0f}{_party_txt}"
+                    f" → invoice {inv.get('number') or inv['id']}")[:220],
+            outcome=inv.get("status") or "matched",
+            why=f"Auto-matched by {matched_by}. Invoice remaining: "
+                 f"{_cur} {_num(inv.get('amount')) - _num(inv.get('amount_paid')):,.0f}",
+            tags=["payment", "reconciliation", _dir],
+            source_type="payment", source_id=payment.get("id") or "",
+            related_ids={"invoice_id": inv.get("id"),
+                          "invoice_number": inv.get("number"),
+                          "contact_name": _party or None},
+            actor_id="", actor_name=matched_by or "auto",
+            department="finance", visibility="dept",
+        )
+    except Exception as _e:
+        logger.warning(
+            f"S4-10 payment reconciliation brain_context failed for "
+            f"{payment.get('id')}: {_e}"
+        )
     return inv
 
 

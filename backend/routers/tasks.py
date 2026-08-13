@@ -309,11 +309,14 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
             await add_decision_event(t["decision_id"], f"{t['title']} → {updates['status'].replace('_',' ')}", user["name"], "task")
         if updates.get("status") == "done":
             await log_activity(user["tenant_id"], user["id"], "task_done", f"Completed task '{t['title']}'", "task", task_id)
+            # FIX-007-B (S4-02): thread decision_id through so the
+            # decision → task → outcome chain is reconstructable.
             await brain_context.record_context(
                 tenant_id=user["tenant_id"], kind="task_done", title=t.get("title") or "Task completed",
                 outcome="done", why=t.get("description") or "",
                 tags=[t.get("category")] if t.get("category") else [],
                 source_type="task", source_id=task_id,
+                decision_id=t.get("decision_id"),
                 actor_id=user["id"], actor_name=user.get("name") or "",
                 department=user.get("role") or "", visibility="dept",
             )
@@ -396,11 +399,13 @@ async def approve_task(task_id: str, user: dict = Depends(get_current_user)):
         await push_notification(user["tenant_id"], [t["assignee_id"]], 1, f"Approved: you can start '{t['title']}'", "task", task_id,
                                 ntype="approved", title=t["title"], sender=user["name"])
     await log_activity(user["tenant_id"], user["id"], "task_approved", f"Approved '{t['title']}'", "task", task_id)
+    # FIX-007-B (S4-02): pass decision_id when set.
     await brain_context.record_context(
         tenant_id=user["tenant_id"], kind="approval", title=t.get("title") or "Task approved",
         outcome="approved", why=t.get("description") or "",
         tags=[t.get("category")] if t.get("category") else [],
         source_type="task", source_id=task_id,
+        decision_id=t.get("decision_id"),
         actor_id=user["id"], actor_name=user.get("name") or "",
         department=user.get("role") or "", visibility="dept",
     )
@@ -429,11 +434,13 @@ async def reject_task(task_id: str, inp: TaskRejectInput, user: dict = Depends(g
         await push_notification(user["tenant_id"], [t["assignee_id"]], 2, msg, "task", task_id,
                                 ntype="rejected", title=t["title"], sender=user["name"])
     await log_activity(user["tenant_id"], user["id"], "task_rejected", f"Requested changes on '{t['title']}'", "task", task_id)
+    # FIX-007-B (S4-02): pass decision_id when set.
     await brain_context.record_context(
         tenant_id=user["tenant_id"], kind="approval", title=t.get("title") or "Task rejected",
         outcome="rejected", why=reason or t.get("description") or "",
         tags=[t.get("category")] if t.get("category") else [],
         source_type="task", source_id=task_id,
+        decision_id=t.get("decision_id"),
         actor_id=user["id"], actor_name=user.get("name") or "",
         department=user.get("role") or "", visibility="dept",
     )
@@ -520,6 +527,25 @@ async def save_execution_plan(task_id: str, inp: ExecPlanInput, user: dict = Dep
         await log_activity(user["tenant_id"], user["id"], "task_done", f"Completed task '{t['title']}'", "task", task_id)
         if t.get("decision_id"):
             await add_decision_event(t["decision_id"], f"{t['title']} → done", user["name"], "task")
+        # FIX-007-B (S4-02): this endpoint was the ONE task-completion
+        # path that skipped record_context — a task whose execution plan
+        # ticked to 100% (via save_execution_plan) transitioned status
+        # to "done" here but never wrote to brain_context, so downstream
+        # "how did we handle X?" queries saw a mysterious silence for
+        # every execution-plan-driven completion. Now parity with the
+        # PATCH /tasks/{id} status=done path (see update_task above),
+        # and decision_id is threaded through so decision → task →
+        # outcome is reconstructable.
+        await brain_context.record_context(
+            tenant_id=user["tenant_id"], kind="task_done",
+            title=t.get("title") or "Task completed",
+            outcome="done", why=t.get("description") or "",
+            tags=[t.get("category")] if t.get("category") else [],
+            source_type="task", source_id=task_id,
+            decision_id=t.get("decision_id"),
+            actor_id=user["id"], actor_name=user.get("name") or "",
+            department=user.get("role") or "", visibility="dept",
+        )
     return await enrich_task(await db.tasks.find_one(tenant_filter(task_id, user["tenant_id"]), {"_id": 0}))  # FIX-001-C
 
 

@@ -2516,6 +2516,33 @@ async def process_meeting(meeting_id: str):
         }})
         await log_activity(tid, m["created_by"], "meeting_processed",
                            f"Meeting notes ready: '{notes.get('title')}' — {len(task_ids)} action item(s)", "meeting", meeting_id)
+        # FIX-007-B (S4-10): every finalized meeting is now a queryable
+        # Brain event — "what did we agree at the Sharma vendor call?"
+        # used to be answerable only by scrolling meetings; now the
+        # summary + decisions + action-item count land as one
+        # brain_context row that /ask + brain_router can retrieve.
+        try:
+            _key_pts = notes.get("key_points") or []
+            _decs = notes.get("decisions") or []
+            _why_bits = []
+            if _decs:
+                _why_bits.append("Decisions: " + " | ".join(str(d) for d in _decs[:5]))
+            if _key_pts:
+                _why_bits.append("Key points: " + " | ".join(str(k) for k in _key_pts[:5]))
+            await brain_context.record_context(
+                tenant_id=tid, kind="meeting",
+                title=notes.get("title") or "Meeting",
+                outcome=f"{len(task_ids)} action item(s)" if task_ids else "notes",
+                why=(notes.get("summary") or "\n".join(_why_bits))[:800],
+                tags=["meeting"],
+                source_type="meeting", source_id=meeting_id,
+                related_ids={"task_ids_count": str(len(task_ids))},
+                actor_id=m.get("created_by") or "",
+                actor_name="",
+                department="", visibility="public",
+            )
+        except Exception as _e:
+            logger.warning(f"S4-10 meeting brain_context failed for {meeting_id}: {_e}")
     except Exception as e:
         logger.exception("process_meeting failed")
         await db.meetings.update_one({"id": meeting_id}, {"$set": {"status": "failed", "error": str(e)}})
@@ -2929,6 +2956,33 @@ async def advance_workflow(workflow_id: str, inp: WorkflowAdvanceInput, user: di
         {"$set": {"stage": inp.stage}, "$push": {"history": entry}},
     )
     await log_activity(user["tenant_id"], user["id"], "workflow_advanced", f"'{wf['title']}' → {inp.stage}", "workflow", workflow_id)
+    # FIX-007-B (S4-10): workflow-stage advances were invisible to the
+    # Brain — "when did the Kapoor order actually ship?" queries came
+    # back empty because the paid → dispatched → delivered chain never
+    # got captured as a queryable outcome. Now every advance writes one
+    # brain_context row keyed by (workflow_id, decision_id) so both
+    # "downstream of decision X" and "history of workflow Y" queries
+    # resolve. Terminal-stage advances get outcome="completed" so
+    # retrieval can rank a completed workflow above one still in flight.
+    try:
+        _final_stage = wf["stages"][-1] if wf.get("stages") else None
+        _is_terminal = _final_stage and inp.stage == _final_stage
+        await brain_context.record_context(
+            tenant_id=user["tenant_id"], kind="workflow",
+            title=f"{wf.get('title') or 'Workflow'} → {inp.stage}",
+            outcome="completed" if _is_terminal else "advanced",
+            why=(inp.note or ""),
+            tags=[wf.get("type")] if wf.get("type") else [],
+            source_type="workflow", source_id=workflow_id,
+            decision_id=wf.get("decision_id"),
+            related_ids={"workflow_type": wf.get("type"),
+                          "counterparty": wf.get("counterparty")},
+            actor_id=user["id"], actor_name=user.get("name") or "",
+            department=user.get("role") or "", visibility="public",
+        )
+    except Exception as _e:
+        # Fail-open — never let a Brain write break the workflow advance.
+        logger.warning(f"S4-10 workflow brain_context failed for {workflow_id}: {_e}")
 
     # FIX-001-B: workflow -> Finance handoff. When a procurement workflow
     # advances to its final stage ("paid" / "settled" / "invoice_paid" etc.,

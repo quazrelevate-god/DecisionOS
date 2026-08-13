@@ -24,7 +24,20 @@ from typing import List, Optional
 from core import db, new_id, now_iso, logger
 
 
-KIND_VALUES = {"decision", "approval", "task_done", "resolution", "note"}
+# FIX-007-B (S4-02 + S4-10): expanded kind vocabulary so the Brain has
+# a bucket for every meaningful event in the app. Prior list only covered
+# the decision/approval/task loop — payments, meetings, ingestions and
+# workflow advances were silently discarded. Query paths keep working
+# because the existing kinds are unchanged; new ones are additive.
+KIND_VALUES = {
+    # Original set (Sprint 2 / P2)
+    "decision", "approval", "task_done", "resolution", "note",
+    # FIX-007-B (S4-10) — expanded write coverage
+    "workflow",     # workflow stage advance (procurement / sales / etc.)
+    "finance",      # invoice created, expense recorded, payment settled
+    "meeting",      # meeting notes generated with action items
+    "ingestion",    # WhatsApp / doc capture → structured record
+}
 VISIBILITY_VALUES = {"public", "dept", "private"}
 
 
@@ -228,8 +241,22 @@ async def record_context(
     actor_name: str = "",
     department: str = "",
     visibility: str = "public",
+    decision_id: Optional[str] = None,
+    related_ids: Optional[dict] = None,
 ) -> Optional[str]:
-    """Insert one context row. Returns the id, or None on failure (never raises)."""
+    """Insert one context row. Returns the id, or None on failure (never raises).
+
+    FIX-007-B (S4-02): `decision_id` is now a first-class field so the
+    decision → task → outcome chain is reconstructable ("show me every
+    outcome downstream of decision X"). Callers on the task-lifecycle
+    path (approve/reject/done + execution-plan-complete) MUST pass it
+    when the task carries a decision_id.
+
+    FIX-007-B (S4-10): `related_ids` is an optional dict for cross-
+    referencing OTHER domain objects — e.g. {"workflow_id": ...,
+    "invoice_id": ..., "meeting_id": ...}. Keeps the shape flexible
+    without inventing a new column per event type.
+    """
     try:
         k = (kind or "note").lower()
         if k not in KIND_VALUES:
@@ -264,6 +291,18 @@ async def record_context(
             "visibility": v,
             "created_at": now_iso(),
         }
+        # FIX-007-B (S4-02): only store decision_id when actually present so
+        # ad-hoc events (unlinked notes) don't carry a `null` field that
+        # would waste index space + confuse "$exists" queries later.
+        if decision_id:
+            doc["decision_id"] = str(decision_id).strip()[:64]
+        # FIX-007-B (S4-10): related_ids only stored when non-empty; keeps
+        # small brain rows small while giving retrieval flexibility.
+        if related_ids:
+            clean = {k2: str(v2).strip()[:64]
+                     for k2, v2 in related_ids.items() if v2}
+            if clean:
+                doc["related_ids"] = clean
         await db.brain_context.insert_one(doc)
         return doc["id"]
     except Exception as e:

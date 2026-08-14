@@ -37,6 +37,8 @@ import AdminPortal from "./pages/admin/AdminPortal";
 // MPWA-04: dev-only harness for the §7 mobile components. Tree-shaken out of
 // production builds by the NODE_ENV guard on its route below.
 import MobileKitchenSink from "./pages/MobileKitchenSink";
+// MPWA-12a: design lab (§6), development only — see the route guard below.
+import DesignLab from "./pages/DesignLab";
 
 function AccessDenied() {
   const navigate = useNavigate();
@@ -143,6 +145,12 @@ function App() {
             {/* MPWA-04: component harness, development only. */}
             {process.env.NODE_ENV !== "production" && (
               <Route path="/__mobile-kit" element={<Protected><MobileKitchenSink /></Protected>} />
+            )}
+            {/* MPWA-12a (§6): not wrapped in <Protected> — the lab renders the
+                real screens inside iframes, and each of those enforces its own
+                auth. Gating the shell too would just double the redirect. */}
+            {process.env.NODE_ENV !== "production" && (
+              <Route path="/design-lab" element={<DesignLab />} />
             )}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

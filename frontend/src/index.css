@@ -25,6 +25,42 @@
         --input: 240 6% 90%;
         --ring: 4 100% 59%;
         --radius: 0.625rem;
+
+        /* ---------------------------------------------------------------
+           MPWA-01 (§5.1) — control heights + the two sub-floor type tiers,
+           driven off custom properties that switch at the lg breakpoint so
+           components reference them once and desktop never moves.
+
+           Desktop values are the *current* shadcn heights, not §5.1's
+           32/40/48 ladder. shadcn ships sm:32 / default:36 / lg:40, so
+           mapping `default` onto a 40px --control-h-md would grow every
+           desktop button by 4px and break §9.2's empty-diff requirement.
+           --control-h-{sm,md,lg} keep §5.1's literal values; --control-h-base
+           exists only to hold the 36px `default`/`icon` size.
+           --------------------------------------------------------------- */
+        --control-h-sm: 2rem;       /* 32 — shadcn `sm` */
+        --control-h-base: 2.25rem;  /* 36 — shadcn `default` + `icon` */
+        --control-h-md: 2.5rem;     /* 40 — shadcn `lg` */
+        --control-h-lg: 3rem;       /* 48 — money-committing tier */
+        --text-label: 0.75rem;      /* 12 */
+
+        /* Tabs are a nested pair: the list is a fixed box and the trigger
+           fills it minus p-1, so both need their own tier to stay exact. */
+        --tabs-list-h: 2.25rem;     /* 36 */
+        --tabs-trigger-h: 1.75rem;  /* 28 */
+    }
+
+    @media (max-width: 1023.98px) {
+        :root {
+            --control-h-sm: 2.75rem;    /* 44 */
+            --control-h-base: 3rem;     /* 48 */
+            --control-h-md: 3rem;       /* 48 */
+            --control-h-lg: 3.5rem;     /* 56 */
+            --text-label: 0.8125rem;    /* 13 — the hard mobile floor */
+
+            --tabs-list-h: 3.25rem;     /* 52 = 44 trigger + 8 list padding */
+            --tabs-trigger-h: 2.75rem;  /* 44 */
+        }
     }
 
     .dark {
@@ -107,6 +143,68 @@
     .dark input::placeholder, .dark textarea::placeholder { color: hsl(240 5% 50%); }
     .dark textarea, .dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]) { background-color: hsl(var(--card)); color: #f4f4f5; }
     .dark select:invalid, .dark select option { color: #f4f4f5; background-color: hsl(var(--card)); }
+}
+
+/* ---------------------------------------------------------------------------
+   MPWA-01 (§5.1) — the mobile floors, applied centrally.
+
+   §4 counts 279 `text-xs`, 33 `text-[11px]`, 25 `text-[10px]` call sites and
+   51 sub-44px controls across the page tree. Re-pointing the utilities once
+   here lifts all of them to the 13px / 44px floors without editing a single
+   page file, and because every rule sits inside the max-width query, desktop
+   does not move. Same idiom as the block above, which already re-points
+   .border-black and .rounded-none centrally.
+
+   Per §5.1 the measured getBoundingClientRect() is what must clear 44 — so
+   these set real box size, not a padded-out hit area.
+--------------------------------------------------------------------------- */
+@media (max-width: 1023.98px) {
+    /* ---- type: nothing renders below 13px ---- */
+    .text-xs,
+    .text-\[9px\],
+    .text-\[10px\],
+    .text-\[11px\],
+    .text-\[12px\] {
+        font-size: 0.8125rem;
+        line-height: 1.25rem;
+    }
+    .label-mono { font-size: var(--text-label); }
+
+    /* Recharts writes font-size as an SVG presentation attribute, so the
+       utility overrides above never reach axis ticks and legends. */
+    .recharts-wrapper text,
+    .recharts-wrapper tspan {
+        font-size: 0.8125rem;
+    }
+
+    /* ---- touch: min-height/min-width are inert on inline boxes, so prose
+       links keep their line box and only real controls grow. ---- */
+    button,
+    summary,
+    [role="button"],
+    [role="tab"],
+    [role="menuitem"],
+    [role="switch"],
+    /* Every actionable anchor in this tree carries a data-testid; prose links
+       do not. Inline anchors ignore min-height anyway, so a link inside a
+       sentence keeps its line box either way. */
+    a[data-testid] {
+        min-height: var(--control-h-sm);
+        min-width: var(--control-h-sm);
+    }
+
+    /* Fields take the height but stay width-fluid. 16px is deliberate — any
+       smaller and iOS Safari zooms the viewport on focus. */
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]),
+    textarea,
+    select {
+        min-height: var(--control-h-sm);
+        font-size: max(1rem, var(--text-label));
+    }
+
+    /* A control that opted into a taller tier keeps it. */
+    .min-h-touch-md { min-height: var(--control-h-md) !important; }
+    .min-h-touch-lg { min-height: var(--control-h-lg) !important; }
 }
 
 @layer base {

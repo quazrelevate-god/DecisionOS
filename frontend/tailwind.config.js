@@ -14,6 +14,22 @@ module.exports = {
                 lg: 'var(--radius)',
                 md: 'var(--radius)',
                 sm: 'var(--radius)',
+                pill: '9999px',
+            },
+            // MPWA-01 (§5.1) — the mobile touch scale. 44 is the floor, 48 the
+            // comfortable tier, 56 the money-committing tier (Approve/Reject).
+            minHeight: {
+                touch: '2.75rem',      // 44
+                'touch-md': '3rem',    // 48
+                'touch-lg': '3.5rem',  // 56
+            },
+            minWidth: {
+                touch: '2.75rem',      // 44
+                'touch-md': '3rem',    // 48
+                'touch-lg': '3.5rem',  // 56
+            },
+            spacing: {
+                'touch-gap': '0.5rem', // 8 — minimum gap between adjacent targets
             },
             colors: {
                 background: 'hsl(var(--background))',

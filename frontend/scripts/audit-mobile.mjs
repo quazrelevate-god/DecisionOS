@@ -40,6 +40,13 @@ const BASE = String(flag('base-url', 'http://localhost:3000')).replace(/\/$/, ''
 const UPDATE_DESKTOP = Boolean(flag('update-desktop', false));
 const JSON_OUT = flag('json', null);
 const ONLY = flag('only', null); // substring filter on route path
+const SKIP_MOBILE = Boolean(flag('skip-mobile', false));
+const SKIP_DESKTOP = Boolean(flag('skip-desktop', false));
+// Frozen page clock, shared with the fixture server's anchor (midnight UTC
+// today + 9h12m). Keeps every relative date string — and therefore every
+// screenshot — byte-stable across runs. Override with --anchor 2026-08-14.
+const ANCHOR_DAY = String(flag('anchor', new Date().toISOString().slice(0, 10)));
+const FROZEN_NOW = new Date(`${ANCHOR_DAY}T09:12:00.000Z`);
 const BASELINE_DIR = path.join(FRONTEND, '.audit-desktop-baseline');
 const ARTIFACT_DIR = path.join(FRONTEND, '.audit-artifacts');
 
@@ -87,6 +94,7 @@ const RULES = {
   'screen-over-2500px': { level: 'fail', desc: 'Screen taller than ~2,500px (§5.2.7)' },
   'leaked-system-string': { level: 'fail', desc: 'Env var / table / field / HTTP status on screen (§5.4)' },
   'non-indian-inr-grouping': { level: 'fail', desc: 'Currency not in Indian digit grouping (§5.3)' },
+  'runtime-error': { level: 'fail', desc: 'Route threw at runtime (dev-server error overlay present)' },
   'horizontal-scroll-strip': { level: 'warn', desc: 'Horizontally scrolling strip — needs fade mask + peeking item (§5.2.2)' },
   'uppercase-text': { level: 'warn', desc: 'text-transform: uppercase (§3.4 forbids uppercase)' },
 };
@@ -151,6 +159,18 @@ function collectViolations() {
   if (doc.scrollWidth > doc.clientWidth + 1) {
     push('horizontal-overflow', `page scrollWidth ${doc.scrollWidth} > viewport ${doc.clientWidth}`);
   }
+  // An out-of-flow descendant (a count badge pinned with -top-2 -right-2, a
+  // dropdown, a tooltip) is *designed* to overhang its box. That is not the
+  // right-edge clipping §5.2.1 is about, so only in-flow overflow counts.
+  const overflowIsOnlyAbsolute = (el) => {
+    const kids = Array.from(el.children).filter((k) => {
+      const r = k.getBoundingClientRect();
+      const p = el.getBoundingClientRect();
+      return r.right > p.right + 1 || r.left < p.left - 1;
+    });
+    return kids.length > 0 && kids.every((k) => ['absolute', 'fixed'].includes(getComputedStyle(k).position));
+  };
+
   for (const el of all) {
     if (!visible(el)) continue;
     if (el.scrollWidth <= el.clientWidth + 1) continue;
@@ -158,7 +178,7 @@ function collectViolations() {
     const ox = getComputedStyle(el).overflowX;
     if (ox === 'auto' || ox === 'scroll') {
       push('horizontal-scroll-strip', `${el.scrollWidth}>${el.clientWidth} — ${describe(el)}`);
-    } else if (ox === 'visible') {
+    } else if (ox === 'visible' && !overflowIsOnlyAbsolute(el)) {
       // visible overflow on a constrained box = content spilling past the edge
       push('horizontal-overflow', `${el.scrollWidth}>${el.clientWidth} (overflow-x:visible) — ${describe(el)}`);
     }
@@ -237,6 +257,56 @@ function collectViolations() {
 // ---------------------------------------------------------------------------
 const ensureDir = (d) => fs.mkdirSync(d, { recursive: true });
 
+// Wait until the DOM stops mutating. Recharts animates by rewriting SVG
+// attributes on rAF, so "networkidle + a fixed sleep" is not enough — without
+// this the desktop diff is flaky by hundreds of pixels between identical runs.
+async function waitForDomQuiet(page, quietMs = 250, timeoutMs = 2200) {
+  await page
+    .evaluate(
+      ([quiet, limit]) =>
+        new Promise((resolve) => {
+          let timer;
+          const started = Date.now();
+          const done = () => { obs.disconnect(); clearTimeout(timer); resolve(); };
+          const bump = () => {
+            clearTimeout(timer);
+            if (Date.now() - started > limit) return done();
+            timer = setTimeout(done, quiet);
+          };
+          const obs = new MutationObserver(bump);
+          obs.observe(document.body, {
+            attributes: true, childList: true, subtree: true, characterData: true,
+          });
+          bump();
+        }),
+      [quietMs, timeoutMs]
+    )
+    .catch(() => {});
+}
+
+// CRA/webpack renders runtime errors into an overlay iframe. Left in place it
+// silently poisons the screenshot diff (its stack trace carries bundle line
+// numbers that shift on every rebuild), so surface it as a finding and strip it
+// before capture.
+async function takeErrorOverlay(page) {
+  return page
+    .evaluate(() => {
+      const sel = '#webpack-dev-server-client-overlay, iframe[id*="overlay"], iframe[src*="webpack"]';
+      const nodes = Array.from(document.querySelectorAll(sel));
+      if (!nodes.length) return null;
+      let msg = '';
+      for (const n of nodes) {
+        try {
+          const t = n.contentDocument?.body?.innerText || '';
+          if (t.trim()) msg = t.trim().split('\n').slice(0, 3).join(' · ').slice(0, 220);
+        } catch { /* cross-origin */ }
+        n.remove();
+      }
+      return msg || 'dev-server error overlay present (message unreadable)';
+    })
+    .catch(() => null);
+}
+
 async function settle(page) {
   // React Query fills in after mount; wait for the network to go quiet, then
   // for either real content or an empty-state to exist.
@@ -254,7 +324,25 @@ async function settle(page) {
   await page.addStyleTag({
     content: `*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}`,
   }).catch(() => {});
-  await page.waitForTimeout(250);
+  // Webfonts (Chivo/Geist/IBM Plex Mono) arrive via an @import chain, so a
+  // bare `document.fonts.ready` resolves *before* that CSS is parsed — no font
+  // loads are pending yet, so it lies. Screenshotting then rasterises the
+  // fallback face, which showed up as a phantom 534px desktop diff on the
+  // wordmark: the first run after a recompile failed, later runs passed.
+  // Forcing each family settles it deterministically.
+  await page
+    .evaluate(async () => {
+      await document.fonts.ready;
+      const faces = [
+        '900 24px Chivo', '800 24px Chivo', '700 24px Chivo',
+        '400 15px Geist', '500 15px Geist', '600 15px Geist', '700 15px Geist',
+        '400 13px "IBM Plex Mono"',
+      ];
+      await Promise.all(faces.map((f) => document.fonts.load(f).catch(() => {})));
+      await document.fonts.ready;
+    })
+    .catch(() => {});
+  await waitForDomQuiet(page);
 }
 
 async function ensureAuth(page) {
@@ -280,6 +368,7 @@ async function desktopBaseline(browser, report) {
   ensureDir(BASELINE_DIR);
   ensureDir(ARTIFACT_DIR);
   const ctx = await browser.newContext({ viewport: DESKTOP_VIEWPORTS[0] });
+  await ctx.clock.setFixedTime(FROZEN_NOW);
   const page = await ctx.newPage();
   const authed = await ensureAuth(page);
   if (!authed) {
@@ -295,6 +384,10 @@ async function desktopBaseline(browser, report) {
       const file = path.join(BASELINE_DIR, `${vp.name}__${slug}.png`);
       await page.goto(`${BASE}${route.path}`, { waitUntil: 'domcontentloaded' });
       await settle(page);
+      const overlay = await takeErrorOverlay(page);
+      if (overlay) {
+        report.notes.push(`[${vp.name}] ${route.path} rendered a runtime error — desktop shot excludes the overlay: ${overlay}`);
+      }
       const shot = await page.screenshot({ fullPage: true });
 
       if (UPDATE_DESKTOP || !fs.existsSync(file)) {
@@ -370,13 +463,14 @@ async function launchBrowser() {
 
 const browser = await launchBrowser();
 
-for (const vp of MOBILE_VIEWPORTS) {
+for (const vp of SKIP_MOBILE ? [] : MOBILE_VIEWPORTS) {
   const ctx = await browser.newContext({
     viewport: { width: vp.width, height: vp.height },
     deviceScaleFactor: 2,
     isMobile: true,
     hasTouch: true,
   });
+  await ctx.clock.setFixedTime(FROZEN_NOW);
   const page = await ctx.newPage();
   page.on('console', (m) => {
     if (m.type() === 'error') {
@@ -400,6 +494,13 @@ for (const vp of MOBILE_VIEWPORTS) {
       report.notes.push(`[${vp.name}] ${route.path} bounced to /login (permission gate?)`);
       continue;
     }
+    const overlay = await takeErrorOverlay(page);
+    if (overlay) {
+      report.findings.push({
+        rule: 'runtime-error', detail: overlay,
+        route: route.path, label: route.label, viewport: vp.name, landed,
+      });
+    }
     let found = [];
     try {
       found = await page.evaluate(collectViolations);
@@ -414,7 +515,7 @@ for (const vp of MOBILE_VIEWPORTS) {
   await ctx.close();
 }
 
-await desktopBaseline(browser, report);
+if (!SKIP_DESKTOP) await desktopBaseline(browser, report);
 await browser.close();
 
 // ---------------------------------------------------------------------------

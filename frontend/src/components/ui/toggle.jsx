@@ -15,10 +15,11 @@ const toggleVariants = cva(
         outline:
           "border border-input bg-transparent shadow-sm hover:bg-accent hover:text-accent-foreground",
       },
+      // MPWA-01 (§5.1) — same ladder as button.
       size: {
-        default: "h-9 px-2 min-w-9",
-        sm: "h-8 px-1.5 min-w-8",
-        lg: "h-10 px-2.5 min-w-10",
+        default: "h-[var(--control-h-base)] px-2 min-w-[var(--control-h-base)]",
+        sm: "h-[var(--control-h-sm)] px-1.5 min-w-[var(--control-h-sm)]",
+        lg: "h-[var(--control-h-md)] px-2.5 min-w-[var(--control-h-md)]",
       },
     },
     defaultVariants: {

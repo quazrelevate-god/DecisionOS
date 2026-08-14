@@ -4,7 +4,9 @@ import { cva } from "class-variance-authority";
 import { cn } from "@/lib/utils"
 
 const badgeVariants = cva(
-  "inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+  // MPWA-01 (§5.1/§3.4): badge is one of the two sub-floor type tiers —
+  // 12px on desktop, 13px below lg, driven off --text-label.
+  "inline-flex items-center rounded-md border px-2.5 py-0.5 text-[length:var(--text-label)] font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
   {
     variants: {
       variant: {

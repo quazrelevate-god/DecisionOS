@@ -20,11 +20,17 @@ const buttonVariants = cva(
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
       },
+      // MPWA-01 (§5.1): heights come from --control-h-*, which switch at the
+      // lg breakpoint. Desktop keeps shadcn's 32/36/40; mobile lands on
+      // 44/48/48. Never patch a size at a call-site.
       size: {
-        default: "h-9 px-4 py-2",
-        sm: "h-8 rounded-md px-3 text-xs",
-        lg: "h-10 rounded-md px-8",
-        icon: "h-9 w-9",
+        default: "h-[var(--control-h-base)] px-4 py-2",
+        sm: "h-[var(--control-h-sm)] rounded-md px-3 text-[length:var(--text-label)]",
+        lg: "h-[var(--control-h-md)] rounded-md px-8",
+        icon: "h-[var(--control-h-base)] w-[var(--control-h-base)]",
+        // 56px on mobile — the tier §5.1 reserves for money-committing
+        // actions (Approve / Reject / Submit).
+        commit: "h-[var(--control-h-lg)] rounded-md px-6 text-base font-semibold",
       },
     },
     defaultVariants: {

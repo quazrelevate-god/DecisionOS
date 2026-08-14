@@ -28,10 +28,18 @@ const PORT = argPort > -1 ? Number(process.argv[argPort + 1]) : 8000;
 const ORIGIN = process.env.FIXTURE_CORS_ORIGIN || 'http://localhost:3000';
 
 // ---------------------------------------------------------------------------
-// Date helpers — everything is relative to process start so relative-date
-// rendering ("Due Monday", "31 days") stays meaningful, and stable per run.
+// Date helpers.
+//
+// T0 is anchored to *midnight UTC today*, not process start. The audit freezes
+// the browser clock to the same anchor (+9h12m), so every relative string
+// ("Waiting 6 days", "31 days late") is byte-stable for the whole day. Without
+// a shared anchor the desktop screenshot diff flakes as wall-clock advances.
+// Override with FIXTURE_ANCHOR=2026-08-14 to pin a specific day.
 // ---------------------------------------------------------------------------
-const T0 = new Date();
+const ANCHOR = process.env.FIXTURE_ANCHOR
+  ? new Date(`${process.env.FIXTURE_ANCHOR}T00:00:00.000Z`)
+  : new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
+const T0 = ANCHOR;
 const iso = (d) => d.toISOString();
 const ymd = (d) => d.toISOString().slice(0, 10);
 const shift = (days, hours = 0) =>
@@ -472,30 +480,46 @@ const CALENDAR = [
   { id: 'cal_5', title: 'Fire safety certificate expiry', date: dateAhead(12), kind: 'compliance', amount: 0, link: '/my-work?task=t_9' },
 ];
 
+// Shape per OperatingScore.js: { company: {overall, enough_data, categories},
+// stats, employees[] }. CATS keys are execution/finance/sales/responsiveness.
 const OPERATING_SCORE = {
-  score: 68, band: 'amber', previous_score: 61, updated_at: daysAgo(0.5),
-  summary: 'Delivery is holding but collections slipped again. One retailer is carrying a third of your overdue money.',
-  pillars: [
-    { key: 'delivery', label: 'Delivery', score: 74, delta: 3, note: '3 of 5 delays traced to cutting' },
-    { key: 'collections', label: 'Collections', score: 52, delta: -9, note: '₹4,00,000 past 30 days' },
-    { key: 'people', label: 'People', score: 71, delta: 1, note: '2 absent today' },
-    { key: 'compliance', label: 'Compliance', score: 80, delta: 0, note: 'GST reconciliation pending' },
-    { key: 'cash', label: 'Cash', score: 63, delta: -4, note: '₹4,28,000 of bills due this fortnight' },
+  company: {
+    overall: 68,
+    enough_data: true,
+    categories: { execution: 74, finance: 52, sales: 71, responsiveness: 80 },
+  },
+  stats: {
+    open: 9, done: 4, overdue: 4, total_decisions: 6, open_complaints: 1,
+  },
+  employees: [
+    { id: 'u_sales', name: 'Priya Sharma', role: 'sales', score: 66, open: 3, done: 1, overdue: 1 },
+    { id: 'u_prod', name: 'Suresh Patel', role: 'production', score: 72, open: 2, done: 2, overdue: 0 },
+    { id: 'u_fin', name: 'Anita Desai', role: 'finance', score: 58, open: 3, done: 1, overdue: 1 },
+    { id: 'u_store', name: 'Mohan Yadav', role: 'production', score: 49, open: 3, done: 0, overdue: 2 },
   ],
 };
 
+// Shape per WorkCoach.js: { target: {name, role}, stats, summary: {...} }.
 const WORK_COACH = {
-  user_id: 'u_owner', updated_at: daysAgo(0.4),
-  headline: 'You are the bottleneck on 6 decisions. Four are under ₹80,000.',
-  observations: [
-    'Six decisions have been waiting an average of 3 days. Two are worth under ₹30,000 — those could sit with Suresh.',
-    'You reopened the Krishna Garments file 4 times in 9 days without a decision either way.',
-    'Cutting is behind 3 of the last 5 delays and you have not filled the second master role you approved in July.',
-  ],
-  suggestions: [
-    { title: 'Delegate approvals under ₹30,000', detail: 'Two of your six open decisions fall under this line.' },
-    { title: 'Close the Krishna Garments file this week', detail: 'Either write it off or start recovery — the drift is costing attention.' },
-  ],
+  target: { id: 'u_owner', name: 'Rajesh Kumar', role: 'owner' },
+  stats: { open: 9, done: 4, overdue: 4 },
+  summary: {
+    generated_at: daysAgo(0.4),
+    headline: 'You are the bottleneck on 6 decisions. Four are under ₹80,000.',
+    completed: 4, open: 9, overdue: 4,
+    completion_rate: 0.31, proof_upload_rate: 0.42,
+    plans_used: 2, photos_uploaded: 5, voice_updates: 7,
+    strengths: [
+      'You answer escalations the same day — Suresh got a reply within 4 hours.',
+      'Cash decisions above ₹5,00,000 always get written rationale.',
+    ],
+    improvements: [
+      'Six decisions have been waiting an average of 3 days. Two are worth under ₹30,000 — those could sit with Suresh.',
+      'You reopened the Krishna Garments file 4 times in 9 days without deciding either way.',
+      'Cutting is behind 3 of the last 5 delays; the second master role you approved in July is still unfilled.',
+    ],
+    recommendation: 'Delegate approvals under ₹30,000 to Suresh and close the Krishna Garments file this week — either write it off or start recovery.',
+  },
 };
 
 const JOURNAL = [
@@ -607,30 +631,47 @@ function resolve(method, path, q) {
   if (seg[1] === 'contacts' && seg[2]) {
     const c = CONTACTS.find((x) => x.id === seg[2]) || CONTACTS[0];
     if (seg[3] === 'profile') {
+      // Shape per ContactProfile.js's destructure: contact, summary, invoices,
+      // payments, complaints, pending_deliveries, follow_ups, decisions,
+      // price_history, ai_relationship.
+      const inv = INVOICES.filter((i) => i.contact_id === c.id);
+      const atRisk = c.id === 'c_1';
       return {
-        contact: c,
-        financial: {
-          total_business: c.total_business, outstanding: c.outstanding,
-          received: Math.max(0, c.total_business - c.outstanding),
-          overdue_days: c.id === 'c_1' ? 31 : 0, credit_limit: 500000,
-          invoices: INVOICES.filter((i) => i.contact_id === c.id),
-          payments: PAYMENTS.filter((x) => x.contact_id === c.id),
+        contact: {
+          ...c,
+          address: `${c.city}, India`,
+          tax_id: '24AABCS1429B1ZX',
         },
-        workflows: WORKFLOWS.filter((w) => w.contact_name === c.name),
-        activity: [
-          { id: 'ac_1', kind: 'call', note: 'Called about the overdue invoice — no answer', actor_name: 'Priya Sharma', created_at: daysAgo(2) },
-          { id: 'ac_2', kind: 'invoice', note: 'Invoice SBT/25-26/0412 raised', actor_name: 'Anita Desai', created_at: daysAgo(61) },
-        ],
-        intelligence: {
-          health_score: c.health_score,
-          summary: c.id === 'c_1'
-            ? 'Payment behaviour has deteriorated for three months running. Two numbers are unreachable. Treat further supply as cash-only.'
-            : 'Steady buyer, pays inside terms, no complaints on the last six lots.',
-          risks: c.id === 'c_1' ? ['31 days overdue on ₹4,00,000', 'Unreachable on two numbers'] : [],
+        summary: {
+          outstanding: c.outstanding,
+          total_billed: c.total_business,
+          total_paid: Math.max(0, c.total_business - c.outstanding),
+          open_complaints: COMPLAINTS.filter((x) => x.contact_id === c.id && x.status === 'open').length,
         },
-        documents: BRAIN_DOCS.slice(0, 2),
-        tasks: TASKS.filter((t) => t.amount === c.outstanding && c.outstanding > 0),
+        invoices: inv,
+        payments: PAYMENTS.filter((x) => x.contact_id === c.id),
         complaints: COMPLAINTS.filter((x) => x.contact_id === c.id),
+        pending_deliveries: atRisk ? [] : [
+          { id: 'pd_1', title: '2,400 m indigo shirting', due_date: dateAhead(2), amount: 384000 },
+        ],
+        follow_ups: [
+          { id: 'fu_1', title: 'Call about the overdue invoice', due_date: dateAhead(1), owner_name: 'Priya Sharma' },
+        ],
+        decisions: DECISIONS.filter((d) => d.title.includes(c.name.split(' ')[0])),
+        price_history: [
+          { id: 'ph_1', item: 'Cotton shirting 40s', rate: 158, date: dateAgo(120), unit: 'm' },
+          { id: 'ph_2', item: 'Cotton shirting 40s', rate: 162, date: dateAgo(40), unit: 'm' },
+        ],
+        ai_relationship: {
+          relationship_score: c.health_score,
+          risk_score: 100 - c.health_score,
+          reason: atRisk
+            ? 'Payment behaviour has deteriorated for three months running and two numbers are unreachable. Treat further supply as cash-only.'
+            : 'Steady buyer, pays inside terms, no complaints on the last six lots.',
+          signals: atRisk
+            ? ['31 days overdue on ₹4,00,000', 'Unreachable on two numbers', 'Stopped replying on WhatsApp']
+            : ['Pays inside terms', 'No quality complaints', 'Reorders every quarter'],
+        },
       };
     }
     if (method !== 'GET') return { ...OK, contact: c };
@@ -778,6 +819,7 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, () => {
   console.log(`[fixture] DecisionOS fixture API on http://localhost:${PORT}/api`);
+  console.log(`[fixture] clock anchor: ${ANCHOR.toISOString()}`);
   console.log(`[fixture] CORS origin: ${ORIGIN} · persona: Rajesh Kumar (owner)`);
   console.log('[fixture] NOT the real backend — contracts read off backend/routers at 54067b0.');
 });

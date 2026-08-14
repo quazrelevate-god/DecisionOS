@@ -77,14 +77,20 @@ const BOTTOM_NAV = [
   { to: "/brain", label: "Dex", tkey: "brain", icon: BrainIcon, perm: "brain" },
 ];
 
-const Logo = () => (
+// MPWA-01: `markOnly` drops the wordmark. The mobile app bar cannot hold the
+// full wordmark plus four 44px controls at 390px (it measured 407 > 390 once
+// the §5.1 touch floor landed), and §5.2.1 forbids clipping at the right edge.
+// Interim — MPWA-03 rebuilds this header down to two controls.
+const Logo = ({ markOnly = false }) => (
   <div className="flex items-center gap-2.5">
     <div className="w-9 h-9 bg-brand-red rounded-lg flex items-center justify-center shrink-0">
       <span className="font-logo font-black text-white text-xl leading-none">D</span>
     </div>
-    <span className="font-logo font-black text-2xl tracking-tight uppercase leading-none">
-      <span className="text-foreground">Decision</span><span className="text-brand-red">OS</span>
-    </span>
+    {!markOnly && (
+      <span className="font-logo font-black text-2xl tracking-tight uppercase leading-none">
+        <span className="text-foreground">Decision</span><span className="text-brand-red">OS</span>
+      </span>
+    )}
   </div>
 );
 
@@ -295,9 +301,9 @@ export default function Layout({ children }) {
         </header>
 
         {/* Mobile top app bar */}
-        <header className="lg:hidden h-14 border-b border-border bg-background/80 backdrop-blur-xl flex items-center justify-between px-4 sticky top-0 z-20">
-          <Logo />
-          <div className="flex items-center gap-2">
+        <header className="lg:hidden h-14 border-b border-border bg-background/80 backdrop-blur-xl flex items-center justify-between gap-2 pl-4 pr-3 sticky top-0 z-20">
+          <Logo markOnly />
+          <div className="flex items-center gap-touch-gap shrink-0">
             <LanguageSwitcher />
             <ThemeToggle />
             <Bellicon />

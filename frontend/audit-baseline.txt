@@ -1,26 +1,26 @@
 DecisionOS — mobile audit
 ==============================================================================
 base url      http://localhost:3000
-generated     2026-08-13T23:25:33.870Z
+generated     2026-08-14T01:29:53.204Z
 viewports     390x844, 360x640
 routes        22 in scope (spec §6)
 
 SUMMARY
 ------------------------------------------------------------------------------
-2683 failing violation(s), 1496 warning(s) across 22 routes
+2804 failing violation(s), 1656 warning(s) across 22 routes
 
-  FAIL   1085  touch-target-min-44
-  FAIL   1274  text-below-13px
-  FAIL    202  horizontal-overflow
+  FAIL   1115  touch-target-min-44
+  FAIL   1398  text-below-13px
+  FAIL    165  horizontal-overflow
   FAIL     62  native-select-in-scroll
   FAIL      4  screen-over-2500px
   FAIL      2  leaked-system-string
-  FAIL     54  non-indian-inr-grouping
-  warn     10  horizontal-scroll-strip
-  warn   1486  uppercase-text
+  FAIL     58  non-indian-inr-grouping
+  warn     12  horizontal-scroll-strip
+  warn   1644  uppercase-text
 
 
-FAIL · touch-target-min-44 — 1085
+FAIL · touch-target-min-44 — 1115
 Interactive element under 44px in either dimension (§5.1)
 ------------------------------------------------------------------------------
   /inbox [390x844] — 14
@@ -90,6 +90,13 @@ Interactive element under 44px in either dimension (§5.1)
       · 316×36px — input[data-testid="crm-search"].flex-1.py-2.px-2.text-sm
       · 358×38px — select[data-testid="crm-status-filter"].border.border-black.bg-white.px-3 — “All statuses lead active inactive”
       … 28 more
+  /contacts/c_1 [390x844] — 6
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 150.9×20px — button[data-testid="profile-back"].flex.items-center.gap-2.text-sm — “BACK TO PEOPLE”
+      · 136.3×38px — button[data-testid="rescore-contact-btn"].flex.items-center.gap-2.border — “RE-SCORE”
   /team [390x844] — 18
       · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
       · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
@@ -245,6 +252,17 @@ Interactive element under 44px in either dimension (§5.1)
       · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
       · 216.6×40px — input[data-testid="journal-search-input"].flex-1.px-3.py-2.5.text-sm
       · 101.4×42px — button[data-testid="journal-search-btn"].px-5.py-2.5.text-sm.font-semibold — “SEARCH”
+  /operating-score [390x844] — 4
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+  /coach [390x844] — 5
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 127×38px — button[data-testid="coach-refresh-btn"].flex.items-center.gap-2.border — “REFRESH”
   /login [390x844] — 8
       · 40×40px — button[data-testid="login-theme-toggle"].fixed.top-4.right-4.z-50
       · 170.5×32px — button[data-testid="login-tab-password"].flex-1.px-3.py-2.text-xs — “EMAIL & PASSWORD”
@@ -321,6 +339,13 @@ Interactive element under 44px in either dimension (§5.1)
       · 286×36px — input[data-testid="crm-search"].flex-1.py-2.px-2.text-sm
       · 328×38px — select[data-testid="crm-status-filter"].border.border-black.bg-white.px-3 — “All statuses lead active inactive”
       … 28 more
+  /contacts/c_1 [360x640] — 6
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 150.9×20px — button[data-testid="profile-back"].flex.items-center.gap-2.text-sm — “BACK TO PEOPLE”
+      · 136.3×38px — button[data-testid="rescore-contact-btn"].flex.items-center.gap-2.border — “RE-SCORE”
   /team [360x640] — 18
       · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
       · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
@@ -475,6 +500,17 @@ Interactive element under 44px in either dimension (§5.1)
       · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
       · 194×40px — input[data-testid="journal-search-input"].flex-1.px-3.py-2.5.text-sm
       · 101.4×42px — button[data-testid="journal-search-btn"].px-5.py-2.5.text-sm.font-semibold — “SEARCH”
+  /operating-score [360x640] — 4
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+  /coach [360x640] — 5
+      · 40×40px — button[data-testid="language-switcher"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="theme-toggle"].w-10.h-10.flex.items-center
+      · 40×40px — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+      · 40×40px — button[data-testid="mobile-menu-button"].w-10.h-10.flex.items-center
+      · 127×38px — button[data-testid="coach-refresh-btn"].flex.items-center.gap-2.border — “REFRESH”
   /login [360x640] — 8
       · 40×40px — button[data-testid="login-theme-toggle"].fixed.top-4.right-4.z-50
       · 155.5×32px — button[data-testid="login-tab-password"].flex-1.px-3.py-2.text-xs — “EMAIL & PASSWORD”
@@ -485,7 +521,7 @@ Interactive element under 44px in either dimension (§5.1)
       · 152×34px — button[data-testid="demo-login-production"].border.border-black.px-3.py-2 — “PRODUCTION”
       · 152×34px — button[data-testid="demo-login-finance"].border.border-black.px-3.py-2 — “FINANCE”
 
-FAIL · text-below-13px — 1274
+FAIL · text-below-13px — 1398
 Rendered text below the 13px mobile floor (§3.4)
 ------------------------------------------------------------------------------
   /inbox [390x844] — 22
@@ -572,6 +608,20 @@ Rendered text below the 13px mobile floor (§3.4)
       · 12px — span.inline-block.px-2.py-0.5.text-xs — “ACTIVE”
       · 12px — span.inline-block.px-2.py-0.5.text-xs — “SUPPLIER”
       … 10 more
+  /contacts/c_1 [390x844] — 30
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “CUSTOMER”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “ACTIVE”
+      · 12px — p.label-mono.text-muted-foreground — “OUTSTANDING”
+      · 12px — p.label-mono.text-muted-foreground — “TOTAL INVOICED”
+      · 12px — p.label-mono.text-muted-foreground — “TOTAL PAID”
+      · 12px — p.label-mono.text-muted-foreground — “OPEN COMPLAINTS”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “31 days overdue on ₹4,00,000”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “Unreachable on two numbers”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “Stopped replying on WhatsApp”
+      · 12px — span.label-mono.text-muted-foreground — “(1)”
+      · 12px — th.text-left.px-3.py-2.label-mono — “NUMBER”
+      … 18 more
   /team [390x844] — 34
       · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
       · 12px — p.text-xs.text-muted-foreground.font-mono — “rajesh@balajitextiles.in”
@@ -692,7 +742,7 @@ Rendered text below the 13px mobile floor (§3.4)
   /notifications [390x844] — 28
       · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
       · 12px — span.inline-block.px-2.py-0.5.text-xs — “REMINDER”
-      · 12px — span.label-mono.text-muted-foreground.flex.items-center — “5 HRS AGO”
+      · 12px — span.label-mono.text-muted-foreground.flex.items-center — “14 HRS AGO”
       · 12px — p.text-xs.text-muted-foreground.mt-0.5.truncate — “Decision waiting”
       · 12px — p.label-mono.text-muted-foreground.mt-1.flex — “SURESH PATEL”
       · 12px — button[data-testid="read-n_1"].text-xs.uppercase.tracking-wider.border — “READ”
@@ -724,6 +774,34 @@ Rendered text below the 13px mobile floor (§3.4)
       · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “WORK”
       · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “CRM”
       · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “DEX”
+  /operating-score [390x844] — 16
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 12px — span.label-mono.text-muted-foreground.mt-1 — “/ 100”
+      · 12px — p.label-mono.text-muted-foreground — “TASKS DONE”
+      · 12px — p.label-mono.text-muted-foreground — “OPEN TASKS”
+      · 12px — p.label-mono.text-muted-foreground — “OVERDUE”
+      · 12px — p.label-mono.text-muted-foreground — “OPEN COMPLAINTS”
+      · 12px — p.label-mono.text-muted-foreground.mb-3 — “TAP ANY MEMBER TO SEE THEIR FULL ACTIVITY & AI COACHING.”
+      · 12px — p.label-mono.text-muted-foreground — “SALES · 1 DONE · 3 OPEN · 1 OVERDUE”
+      · 12px — p.label-mono.text-muted-foreground — “PRODUCTION · 2 DONE · 2 OPEN”
+      · 12px — p.label-mono.text-muted-foreground — “FINANCE · 1 DONE · 3 OPEN · 1 OVERDUE”
+      · 12px — p.label-mono.text-muted-foreground — “PRODUCTION · 0 DONE · 3 OPEN · 2 OVERDUE”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “DESK”
+      … 4 more
+  /coach [390x844] — 16
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 12px — p.label-mono.text-muted-foreground — “COMPLETED TASKS”
+      · 12px — p.label-mono.text-muted-foreground — “OPEN”
+      · 12px — p.label-mono.text-muted-foreground — “OVERDUE”
+      · 12px — p.label-mono.text-muted-foreground — “COMPLETION”
+      · 12px — p.label-mono.text-muted-foreground — “PROOF UPLOADS”
+      · 12px — p.label-mono.text-muted-foreground — “PLANS USED”
+      · 12px — p.label-mono.text-muted-foreground — “PHOTOS”
+      · 12px — p.label-mono.text-muted-foreground — “VOICE UPDATES”
+      · 12px — p.label-mono.text-brand-red.mb-1 — “AI RECOMMENDATION”
+      · 12px — p.label-mono.text-muted-foreground — “UPDATED 8/13/2026, 7:54:00 PM”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “DESK”
+      … 4 more
   /login [390x844] — 7
       · 12px — button[data-testid="login-tab-password"].flex-1.px-3.py-2.text-xs — “EMAIL & PASSWORD”
       · 12px — button[data-testid="login-tab-otp"].flex-1.flex.items-center.justify-center — “MOBILE OTP”
@@ -816,6 +894,20 @@ Rendered text below the 13px mobile floor (§3.4)
       · 12px — span.inline-block.px-2.py-0.5.text-xs — “ACTIVE”
       · 12px — span.inline-block.px-2.py-0.5.text-xs — “SUPPLIER”
       … 10 more
+  /contacts/c_1 [360x640] — 30
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “CUSTOMER”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “ACTIVE”
+      · 12px — p.label-mono.text-muted-foreground — “OUTSTANDING”
+      · 12px — p.label-mono.text-muted-foreground — “TOTAL INVOICED”
+      · 12px — p.label-mono.text-muted-foreground — “TOTAL PAID”
+      · 12px — p.label-mono.text-muted-foreground — “OPEN COMPLAINTS”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “31 days overdue on ₹4,00,000”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “Unreachable on two numbers”
+      · 12px — span.inline-block.px-2.py-0.5.text-xs — “Stopped replying on WhatsApp”
+      · 12px — span.label-mono.text-muted-foreground — “(1)”
+      · 12px — th.text-left.px-3.py-2.label-mono — “NUMBER”
+      … 18 more
   /team [360x640] — 34
       · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
       · 12px — p.text-xs.text-muted-foreground.font-mono — “rajesh@balajitextiles.in”
@@ -936,7 +1028,7 @@ Rendered text below the 13px mobile floor (§3.4)
   /notifications [360x640] — 28
       · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
       · 12px — span.inline-block.px-2.py-0.5.text-xs — “REMINDER”
-      · 12px — span.label-mono.text-muted-foreground.flex.items-center — “5 HRS AGO”
+      · 12px — span.label-mono.text-muted-foreground.flex.items-center — “14 HRS AGO”
       · 12px — p.text-xs.text-muted-foreground.mt-0.5.truncate — “Decision waiting”
       · 12px — p.label-mono.text-muted-foreground.mt-1.flex — “SURESH PATEL”
       · 12px — button[data-testid="read-n_1"].text-xs.uppercase.tracking-wider.border — “READ”
@@ -968,6 +1060,34 @@ Rendered text below the 13px mobile floor (§3.4)
       · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “WORK”
       · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “CRM”
       · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “DEX”
+  /operating-score [360x640] — 16
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 12px — span.label-mono.text-muted-foreground.mt-1 — “/ 100”
+      · 12px — p.label-mono.text-muted-foreground — “TASKS DONE”
+      · 12px — p.label-mono.text-muted-foreground — “OPEN TASKS”
+      · 12px — p.label-mono.text-muted-foreground — “OVERDUE”
+      · 12px — p.label-mono.text-muted-foreground — “OPEN COMPLAINTS”
+      · 12px — p.label-mono.text-muted-foreground.mb-3 — “TAP ANY MEMBER TO SEE THEIR FULL ACTIVITY & AI COACHING.”
+      · 12px — p.label-mono.text-muted-foreground — “SALES · 1 DONE · 3 OPEN · 1 OVERDUE”
+      · 12px — p.label-mono.text-muted-foreground — “PRODUCTION · 2 DONE · 2 OPEN”
+      · 12px — p.label-mono.text-muted-foreground — “FINANCE · 1 DONE · 3 OPEN · 1 OVERDUE”
+      · 12px — p.label-mono.text-muted-foreground — “PRODUCTION · 0 DONE · 3 OPEN · 2 OVERDUE”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “DESK”
+      … 4 more
+  /coach [360x640] — 16
+      · 10px — span[data-testid="notif-count"].absolute.-top-2.-right-2.bg-brand-red — “3”
+      · 12px — p.label-mono.text-muted-foreground — “COMPLETED TASKS”
+      · 12px — p.label-mono.text-muted-foreground — “OPEN”
+      · 12px — p.label-mono.text-muted-foreground — “OVERDUE”
+      · 12px — p.label-mono.text-muted-foreground — “COMPLETION”
+      · 12px — p.label-mono.text-muted-foreground — “PROOF UPLOADS”
+      · 12px — p.label-mono.text-muted-foreground — “PLANS USED”
+      · 12px — p.label-mono.text-muted-foreground — “PHOTOS”
+      · 12px — p.label-mono.text-muted-foreground — “VOICE UPDATES”
+      · 12px — p.label-mono.text-brand-red.mb-1 — “AI RECOMMENDATION”
+      · 12px — p.label-mono.text-muted-foreground — “UPDATED 8/13/2026, 7:54:00 PM”
+      · 10px — span.text-[10px].uppercase.tracking-wide.font-semibold — “DESK”
+      … 4 more
   /login [360x640] — 7
       · 12px — button[data-testid="login-tab-password"].flex-1.px-3.py-2.text-xs — “EMAIL & PASSWORD”
       · 12px — button[data-testid="login-tab-otp"].flex-1.flex.items-center.justify-center — “MOBILE OTP”
@@ -977,235 +1097,189 @@ Rendered text below the 13px mobile floor (§3.4)
       · 12px — button[data-testid="demo-login-production"].border.border-black.px-3.py-2 — “PRODUCTION”
       · 12px — button[data-testid="demo-login-finance"].border.border-black.px-3.py-2 — “FINANCE”
 
-FAIL · horizontal-overflow — 202
+FAIL · horizontal-overflow — 165
 Content clipped at the right edge (§5.2.1)
 ------------------------------------------------------------------------------
-  /inbox [390x844] — 1
-      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
-  /brief [390x844] — 4
-      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+  /brief [390x844] — 3
       · 400>358 (overflow-x:visible) — div.flex.flex-col — “MORNING EVENING WEEKLY MONTHLY CEO JOURNAL 1 FIRES TO PUT OUT TODAY HANDLE NOW 4 delayed t”
       · 400>358 (overflow-x:visible) — div[data-testid="brief-controls"].order-2.lg:order-1.mt-8.lg:mt-0 — “MORNING EVENING WEEKLY MONTHLY CEO JOURNAL”
       · 399>356 (overflow-x:visible) — div.flex.border.border-black.w-full — “MORNING EVENING WEEKLY MONTHLY”
-  /my-work [390x844] — 1
-      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
-  /my-work?view=leave [390x844] — 3
-      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+  /my-work?view=leave [390x844] — 2
       · 388>358 (overflow-x:visible) — div — “NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE REPORT ABSENCE TODAY REQUE”
       · 388>358 (overflow-x:visible) — div — “REPORT ABSENCE TODAY REQUEST LEAVE MY LEAVE 3 APPROVALS 2 SETTINGS PENDING CASUAL Priya Sh”
-  /my-work?view=workflows [390x844] — 1
-      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
-  /crm [390x844] — 1
-      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
-  /team [390x844] — 1
-      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
-  /finance [390x844] — 1
-      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
-  /finance?tab=revenue [390x844] — 6
-      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+  /finance?tab=revenue [390x844] — 5
       · 367>358 (overflow-x:visible) — div — “OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD INCOME FIX OLD PURCHASES UPLOAD BILL ”
       · 367>358 (overflow-x:visible) — div[data-testid="ledger-revenue"].space-y-6 — “BILLED ₹0 RECEIVED ₹0 OUTSTANDING ₹0 AI ANALYSIS Refresh ASK AI ABOUT YOUR REVENUE Ask SAL”
       · 367>358 (overflow-x:visible) — div.grid.grid-cols-3.gap-3 — “BILLED ₹0 RECEIVED ₹0 OUTSTANDING ₹0”
       · 119>109 (overflow-x:visible) — div[data-testid="kpi-outstanding"].card-brutal.p-4 — “OUTSTANDING ₹0”
       · 103>77 (overflow-x:visible) — div.flex.items-center.gap-2.text-muted-foreground — “OUTSTANDING”
-  /finance?tab=expenses [390x844] — 1
-      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
-  /finance?tab=assets [390x844] — 1
-      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
-  /finance?tab=inventory [390x844] — 1
-      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
-  /finance?tab=inbox [390x844] — 1
-      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
-  /brain [390x844] — 6
-      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
+  /brain [390x844] — 5
       · 409>358 (overflow-x:visible) — div — “ASK SEARCH DOCUMENTS Speak, type, ask, search — Dex remembers everything. SEND ASK YOUR CO”
       · 373>356 (overflow-x:visible) — div[data-testid="dex-capture-bar"].border.border-black.bg-white.p-3 — “SEND”
       · 361>332 (overflow-x:visible) — div.flex.items-stretch.gap-2 — “SEND”
       · 409>358 (overflow-x:visible) — div.flex.flex-col.h-[calc(100vh-15rem)].lg:h-[calc(100vh-12rem)] — “ASK YOUR COMPANY ANYTHING Every answer is computed from your authorised workspace data — w”
       · 409>358 (overflow-x:visible) — form.flex.gap-2.mt-3 — “> ASK”
-  /calendar [390x844] — 1
-      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
-  /notifications [390x844] — 1
-      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
-  /settings [390x844] — 1
-      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
-  /journal [390x844] — 1
-      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
-  /inbox [360x640] — 7
+  /inbox [360x640] — 5
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 Decision Desk 6 decisions waiting on you · 5 on fire · 3 due today NEEDS YO”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 Decision Desk 6 decisions waiting on you · 5 on fire · 3 due today NEEDS YO”
-      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 Decision Desk 6 decisions waiting on you · 5 on fire · 3 due today NEEDS YO”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 Decision Desk 6 decisions waiting on you · 5 on fire · 3 due today NEEDS YO”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
-      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
-  /brief [360x640] — 10
+  /brief [360x640] — 8
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 MORNING EVENING WEEKLY MONTHLY CEO JOURNAL 1 FIRES TO PUT OUT TODAY HANDLE ”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 MORNING EVENING WEEKLY MONTHLY CEO JOURNAL 1 FIRES TO PUT OUT TODAY HANDLE ”
-      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 MORNING EVENING WEEKLY MONTHLY CEO JOURNAL 1 FIRES TO PUT OUT TODAY HANDLE ”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 MORNING EVENING WEEKLY MONTHLY CEO JOURNAL 1 FIRES TO PUT OUT TODAY HANDLE ”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
-      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
       · 400>328 (overflow-x:visible) — div.flex.flex-col — “MORNING EVENING WEEKLY MONTHLY CEO JOURNAL 1 FIRES TO PUT OUT TODAY HANDLE NOW 4 delayed t”
       · 400>328 (overflow-x:visible) — div[data-testid="brief-controls"].order-2.lg:order-1.mt-8.lg:mt-0 — “MORNING EVENING WEEKLY MONTHLY CEO JOURNAL”
       · 399>326 (overflow-x:visible) — div.flex.border.border-black.w-full — “MORNING EVENING WEEKLY MONTHLY”
-  /my-work [360x640] — 8
+  /my-work [360x640] — 6
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE ALL 13 OPER”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE ALL 13 OPER”
-      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE ALL 13 OPER”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE ALL 13 OPER”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
-      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
       · 78>74 (overflow-x:visible) — button[data-testid="work-view-workflows"].flex.items-center.justify-center.gap-1.5 — “WORKFLOWS”
-  /my-work?view=leave [360x640] — 10
+  /my-work?view=leave [360x640] — 8
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE REPORT ABSE”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE REPORT ABSE”
-      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE REPORT ABSE”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE REPORT ABSE”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
-      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
       · 388>328 (overflow-x:visible) — div — “NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE REPORT ABSENCE TODAY REQUE”
       · 78>74 (overflow-x:visible) — button[data-testid="work-view-workflows"].flex.items-center.justify-center.gap-1.5 — “WORKFLOWS”
       · 388>328 (overflow-x:visible) — div — “REPORT ABSENCE TODAY REQUEST LEAVE MY LEAVE 3 APPROVALS 2 SETTINGS PENDING CASUAL Priya Sh”
-  /my-work?view=workflows [360x640] — 8
+  /my-work?view=workflows [360x640] — 6
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE PIPELINES T”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE PIPELINES T”
-      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE PIPELINES T”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE PIPELINES T”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
-      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
       · 78>74 (overflow-x:visible) — button[data-testid="work-view-workflows"].flex.items-center.justify-center.gap-1.5 — “WORKFLOWS”
-  /crm [360x640] — 7
+  /crm [360x640] — 5
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 ADD CUSTOMER ADD SUPPLIER ALL CUSTOMERS SUPPLIERS MINE All statuses lead ac”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 ADD CUSTOMER ADD SUPPLIER ALL CUSTOMERS SUPPLIERS MINE All statuses lead ac”
-      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 ADD CUSTOMER ADD SUPPLIER ALL CUSTOMERS SUPPLIERS MINE All statuses lead ac”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 ADD CUSTOMER ADD SUPPLIER ALL CUSTOMERS SUPPLIERS MINE All statuses lead ac”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
-      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
-  /team [360x640] — 7
+  /contacts/c_1 [360x640] — 7
+      · page scrollWidth 391 > viewport 360
+      · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 BACK TO PEOPLE CUSTOMER ACTIVE KRISHNA GARMENTS Krishna Garments Pvt Ltd +9”
+      · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 BACK TO PEOPLE CUSTOMER ACTIVE KRISHNA GARMENTS Krishna Garments Pvt Ltd +9”
+      · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 BACK TO PEOPLE CUSTOMER ACTIVE KRISHNA GARMENTS Krishna Garments Pvt Ltd +9”
+      · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
+      · 138>124 (overflow-x:visible) — p.font-heading.text-2xl.font-black.tracking-tight — “₹3,800,000”
+      · 137>124 (overflow-x:visible) — p.font-heading.text-2xl.font-black.tracking-tight — “₹3,400,000”
+  /team [360x640] — 5
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 ADD MEMBER MEMBERS R Rajesh Kumar rajesh@balajitextiles.in OWNER ACCESS P P”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 ADD MEMBER MEMBERS R Rajesh Kumar rajesh@balajitextiles.in OWNER ACCESS P P”
-      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 ADD MEMBER MEMBERS R Rajesh Kumar rajesh@balajitextiles.in OWNER ACCESS P P”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 ADD MEMBER MEMBERS R Rajesh Kumar rajesh@balajitextiles.in OWNER ACCESS P P”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
-      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
-  /finance [360x640] — 10
+  /finance [360x640] — 8
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX FIX OLD PURCHASES UPLOAD B”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX FIX OLD PURCHASES UPLOAD B”
-      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX FIX OLD PURCHASES UPLOAD B”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX FIX OLD PURCHASES UPLOAD B”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
-      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
       · 136>124 (overflow-x:visible) — p.font-heading.text-2xl.font-black.tracking-tight — “₹2,589,000”
       · 132>124 (overflow-x:visible) — p.font-heading.text-2xl.font-black.tracking-tight — “₹2,015,000”
       · 132>124 (overflow-x:visible) — p.font-heading.text-2xl.font-black.tracking-tight — “₹3,785,000”
-  /finance?tab=revenue [360x640] — 13
+  /finance?tab=revenue [360x640] — 11
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD INCOME FIX OLD PURCHAS”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD INCOME FIX OLD PURCHAS”
-      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD INCOME FIX OLD PURCHAS”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD INCOME FIX OLD PURCHAS”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
-      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
       · 347>328 (overflow-x:visible) — div — “OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD INCOME FIX OLD PURCHASES UPLOAD BILL ”
       · 347>328 (overflow-x:visible) — div[data-testid="ledger-revenue"].space-y-6 — “BILLED ₹0 RECEIVED ₹0 OUTSTANDING ₹0 AI ANALYSIS Refresh ASK AI ABOUT YOUR REVENUE Ask SAL”
       · 347>328 (overflow-x:visible) — div.grid.grid-cols-3.gap-3 — “BILLED ₹0 RECEIVED ₹0 OUTSTANDING ₹0”
       · 77>67 (overflow-x:visible) — div.flex.items-center.gap-2.text-muted-foreground — “RECEIVED”
       · 119>99 (overflow-x:visible) — div[data-testid="kpi-outstanding"].card-brutal.p-4 — “OUTSTANDING ₹0”
-      … 1 more
-  /finance?tab=expenses [360x640] — 7
+      · 103>67 (overflow-x:visible) — div.flex.items-center.gap-2.text-muted-foreground — “OUTSTANDING”
+  /finance?tab=expenses [360x640] — 5
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD EXPENSE FIX OLD PURCHA”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD EXPENSE FIX OLD PURCHA”
-      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD EXPENSE FIX OLD PURCHA”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD EXPENSE FIX OLD PURCHA”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
-      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
-  /finance?tab=assets [360x640] — 7
+  /finance?tab=assets [360x640] — 5
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD ASSET FIX OLD PURCHASE”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD ASSET FIX OLD PURCHASE”
-      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD ASSET FIX OLD PURCHASE”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD ASSET FIX OLD PURCHASE”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
-      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
-  /finance?tab=inventory [360x640] — 7
+  /finance?tab=inventory [360x640] — 5
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD ITEM FIX OLD PURCHASES”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD ITEM FIX OLD PURCHASES”
-      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD ITEM FIX OLD PURCHASES”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD ITEM FIX OLD PURCHASES”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
-      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
-  /finance?tab=inbox [360x640] — 7
+  /finance?tab=inbox [360x640] — 5
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX FIX OLD PURCHASES UPLOAD B”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX FIX OLD PURCHASES UPLOAD B”
-      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX FIX OLD PURCHASES UPLOAD B”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX FIX OLD PURCHASES UPLOAD B”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
-      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
-  /brain [360x640] — 13
+  /brain [360x640] — 11
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 ASK SEARCH DOCUMENTS Speak, type, ask, search — Dex remembers everything. S”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 ASK SEARCH DOCUMENTS Speak, type, ask, search — Dex remembers everything. S”
-      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 ASK SEARCH DOCUMENTS Speak, type, ask, search — Dex remembers everything. S”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 ASK SEARCH DOCUMENTS Speak, type, ask, search — Dex remembers everything. S”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
-      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
       · 409>328 (overflow-x:visible) — div — “ASK SEARCH DOCUMENTS Speak, type, ask, search — Dex remembers everything. SEND ASK YOUR CO”
       · 358>328 (overflow-x:visible) — div.mb-6.flex.flex-wrap.items-center — “ASK SEARCH DOCUMENTS Speak, type, ask, search — Dex remembers everything.”
       · 373>326 (overflow-x:visible) — div[data-testid="dex-capture-bar"].border.border-black.bg-white.p-3 — “SEND”
       · 361>302 (overflow-x:visible) — div.flex.items-stretch.gap-2 — “SEND”
       · 409>328 (overflow-x:visible) — div.flex.flex-col.h-[calc(100vh-15rem)].lg:h-[calc(100vh-12rem)] — “ASK YOUR COMPANY ANYTHING Every answer is computed from your authorised workspace data — w”
-      … 1 more
-  /calendar [360x640] — 7
+      · 409>328 (overflow-x:visible) — form.flex.gap-2.mt-3 — “> ASK”
+  /calendar [360x640] — 5
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 ALL (0) MEETINGS (0) PAYMENTS (0) TASKS (0) DELIVERIES (0) COMPLAINTS (0) B”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 ALL (0) MEETINGS (0) PAYMENTS (0) TASKS (0) DELIVERIES (0) COMPLAINTS (0) B”
-      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 ALL (0) MEETINGS (0) PAYMENTS (0) TASKS (0) DELIVERIES (0) COMPLAINTS (0) B”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 ALL (0) MEETINGS (0) PAYMENTS (0) TASKS (0) DELIVERIES (0) COMPLAINTS (0) B”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
-      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
-  /notifications [360x640] — 7
+  /notifications [360x640] — 5
       · page scrollWidth 391 > viewport 360
-      · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 MARK ALL READ REMINDER 5 HRS AGO Approve ₹4,80,000 yarn purchase Decision w”
-      · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 MARK ALL READ REMINDER 5 HRS AGO Approve ₹4,80,000 yarn purchase Decision w”
-      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 MARK ALL READ REMINDER 5 HRS AGO Approve ₹4,80,000 yarn purchase Decision w”
-      · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 MARK ALL READ REMINDER 5 HRS AGO Approve ₹4,80,000 yarn purchase Decision w”
+      · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 MARK ALL READ REMINDER 14 HRS AGO Approve ₹4,80,000 yarn purchase Decision ”
+      · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 MARK ALL READ REMINDER 14 HRS AGO Approve ₹4,80,000 yarn purchase Decision ”
+      · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 MARK ALL READ REMINDER 14 HRS AGO Approve ₹4,80,000 yarn purchase Decision ”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
-      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
-  /settings [360x640] — 25
+  /settings [360x640] — 23
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 COMPANY DETAILS Update your company profile, products, and team roles. COMP”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 COMPANY DETAILS Update your company profile, products, and team roles. COMP”
-      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 COMPANY DETAILS Update your company profile, products, and team roles. COMP”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 COMPANY DETAILS Update your company profile, products, and team roles. COMP”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
-      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
       · 272>260 (overflow-x:visible) — div.mt-3.space-y-1.5 — “STAGES (IN ORDER) Add stage”
       · 272>260 (overflow-x:visible) — div[data-testid="op-stage-0-0"].flex.items-center.gap-1.5
       · 272>260 (overflow-x:visible) — div[data-testid="op-stage-0-1"].flex.items-center.gap-1.5
       · 272>260 (overflow-x:visible) — div[data-testid="op-stage-0-2"].flex.items-center.gap-1.5
       · 272>260 (overflow-x:visible) — div[data-testid="op-stage-0-3"].flex.items-center.gap-1.5
-      … 13 more
-  /journal [360x640] — 9
+      · 272>260 (overflow-x:visible) — div.mt-3.space-y-1.5 — “STAGES (IN ORDER) Add stage”
+      · 272>260 (overflow-x:visible) — div[data-testid="op-stage-1-0"].flex.items-center.gap-1.5
+      … 11 more
+  /journal [360x640] — 7
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 SEARCH Nothing logged yet Decisions you capture and approve will appear her”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 SEARCH Nothing logged yet Decisions you capture and approve will appear her”
-      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 SEARCH Nothing logged yet Decisions you capture and approve will appear her”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 SEARCH Nothing logged yet Decisions you capture and approve will appear her”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
-      · 46>38 (overflow-x:visible) — button[data-testid="notif-bell"].relative.w-10.h-10.flex — “3”
       · 335>328 (overflow-x:visible) — div — “SEARCH Nothing logged yet Decisions you capture and approve will appear here, grouped by d”
       · 335>328 (overflow-x:visible) — form.flex.gap-2.mb-8.max-w-xl — “SEARCH”
+  /operating-score [360x640] — 5
+      · page scrollWidth 391 > viewport 360
+      · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 68 / 100 COMPANY HEALTH EXECUTION 74 FINANCE 52 SALES 71 RESPONSIVENESS 80 ”
+      · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 68 / 100 COMPANY HEALTH EXECUTION 74 FINANCE 52 SALES 71 RESPONSIVENESS 80 ”
+      · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 68 / 100 COMPANY HEALTH EXECUTION 74 FINANCE 52 SALES 71 RESPONSIVENESS 80 ”
+      · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
+  /coach [360x640] — 5
+      · page scrollWidth 391 > viewport 360
+      · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 REFRESH COMPLETED TASKS OPEN 9 OVERDUE 4 COMPLETION % PROOF UPLOADS % PLANS”
+      · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 REFRESH COMPLETED TASKS OPEN 9 OVERDUE 4 COMPLETION % PROOF UPLOADS % PLANS”
+      · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 REFRESH COMPLETED TASKS OPEN 9 OVERDUE 4 COMPLETION % PROOF UPLOADS % PLANS”
+      · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
 
 FAIL · native-select-in-scroll — 62
 Native <select> inside a scroll path (§5.2.5)
@@ -1273,16 +1347,17 @@ Env var / table / field / HTTP status on screen (§5.4)
   /settings [360x640] — 1
       · env var “WA_TENANT_ID” — … ID (WhatsApp routing fallback — set as WA_TENANT_ID) COPY Messages from unregistered numbe…
 
-FAIL · non-indian-inr-grouping — 54
+FAIL · non-indian-inr-grouping — 58
 Currency not in Indian digit grouping (§5.3)
 ------------------------------------------------------------------------------
   /inbox [390x844] — 3
       · ₹480,000 — …· From Suresh Patel · Unblocks 3 tasks ₹480,000 REVIEW → Write off ₹1,15,000 from Kri…
       · ₹115,000 — …s · From Anita Desai · Unblocks 1 task ₹115,000 REVIEW → Hire second cutting master o…
       · ₹2,200,000 — … · From Priya Sharma · Unblocks 1 task ₹2,200,000 REVIEW → Replace the failing Jacquard…
-  /brief [390x844] — 2
-      · ₹585,000 — …VIEW DETAILS 2 overdue receivable(s) ₹585,000 VIEW DETAILS 2 supplier bill(s) to p…
-      · ₹428,000 — …EW DETAILS 2 supplier bill(s) to pay ₹428,000 VIEW DETAILS 1 payment(s) to match …
+  /contacts/c_1 [390x844] — 3
+      · ₹400,000 — …ad, India 24AABCS1429B1ZX OUTSTANDING ₹400,000 TOTAL INVOICED ₹3,800,000 TOTAL PAID…
+      · ₹3,800,000 — … OUTSTANDING ₹400,000 TOTAL INVOICED ₹3,800,000 TOTAL PAID ₹3,400,000 OPEN COMPLAINT…
+      · ₹3,400,000 — …TOTAL INVOICED ₹3,800,000 TOTAL PAID ₹3,400,000 OPEN COMPLAINTS 0 RELATIONSHIP INTEL…
   /finance [390x844] — 11
       · ₹2,589,000 — …PHOTO CSV / EXCEL 2 IN INBOX → REVENUE ₹2,589,000 TOTAL SPEND ₹1,914,500 NET PROFIT ₹…
       · ₹1,914,500 — …BOX → REVENUE ₹2,589,000 TOTAL SPEND ₹1,914,500 NET PROFIT ₹674,500 RECEIVED ₹2,015…
@@ -1296,15 +1371,15 @@ Currency not in Indian digit grouping (§5.3)
       · ₹480,000 — …Y SPEND Payroll ₹862,000 Surat Spinners ₹480,000 MSEDCL ₹214,000 Rajkot Fibres ₹152,000 …
       · ₹152,000 — … ₹480,000 MSEDCL ₹214,000 Rajkot Fibres ₹152,000 Bombay Dyeing House ₹96,000 Sai Transpo…
   /finance?tab=expenses [390x844] — 4
-      · ₹480,000 — …TERIAL Surat Spinners 2026-08-10 UNPAID ₹480,000 UTILITIES MSEDCL 2026-08-01 PAID ₹21…
-      · ₹214,000 — …000 UTILITIES MSEDCL 2026-08-01 PAID ₹214,000 SALARIES Payroll 2026-07-30 PAID ₹86…
-      · ₹862,000 — …000 SALARIES Payroll 2026-07-30 PAID ₹862,000 JOB WORK Bombay Dyeing House 2026-08…
-      · ₹152,000 — … MATERIAL Rajkot Fibres 2026-07-16 PAID ₹152,000 PROFESSIONAL FEES Shah & Associates …
+      · ₹480,000 — …TERIAL Surat Spinners 2026-08-11 UNPAID ₹480,000 UTILITIES MSEDCL 2026-08-02 PAID ₹21…
+      · ₹214,000 — …000 UTILITIES MSEDCL 2026-08-02 PAID ₹214,000 SALARIES Payroll 2026-07-31 PAID ₹86…
+      · ₹862,000 — …000 SALARIES Payroll 2026-07-31 PAID ₹862,000 JOB WORK Bombay Dyeing House 2026-08…
+      · ₹152,000 — … MATERIAL Rajkot Fibres 2026-07-17 PAID ₹152,000 PROFESSIONAL FEES Shah & Associates …
   /finance?tab=assets [390x844] — 4
-      · ₹1,250,000 — …m #4 MACHINERY — 2022-10-13 MAINTENANCE ₹1,250,000 Jacquard loom #5 MACHINERY — 2022-10-…
-      · ₹185,000 — …dustrial) MACHINERY — 2024-02-25 ACTIVE ₹185,000 Tata Ace delivery van VEHICLE — 2023-…
-      · ₹620,000 — …elivery van VEHICLE — 2023-08-09 ACTIVE ₹620,000 Diesel generator 62.5 kVA UTILITY — 2…
-      · ₹480,000 — …or 62.5 kVA UTILITY — 2024-09-12 ACTIVE ₹480,000 DESK BRIEF WORK CRM DEX…
+      · ₹1,250,000 — …m #4 MACHINERY — 2022-10-14 MAINTENANCE ₹1,250,000 Jacquard loom #5 MACHINERY — 2022-10-…
+      · ₹185,000 — …dustrial) MACHINERY — 2024-02-26 ACTIVE ₹185,000 Tata Ace delivery van VEHICLE — 2023-…
+      · ₹620,000 — …elivery van VEHICLE — 2023-08-10 ACTIVE ₹620,000 Diesel generator 62.5 kVA UTILITY — 2…
+      · ₹480,000 — …or 62.5 kVA UTILITY — 2024-09-13 ACTIVE ₹480,000 DESK BRIEF WORK CRM DEX…
   /finance?tab=inventory [390x844] — 3
       · ₹336,000 — …on yarn 40s — 8400 kg ₹0 Surat Spinners ₹336,000 Polyester blend — 2100 kg ₹0 Rajkot F…
       · ₹588,000 — … Finished shirting — grey — 4200 m ₹0 — ₹588,000 Finished shirting — indigo — 1800 m ₹…
@@ -1316,6 +1391,10 @@ Currency not in Indian digit grouping (§5.3)
   /brief [360x640] — 2
       · ₹585,000 — …VIEW DETAILS 2 overdue receivable(s) ₹585,000 VIEW DETAILS 2 supplier bill(s) to p…
       · ₹428,000 — …EW DETAILS 2 supplier bill(s) to pay ₹428,000 VIEW DETAILS 1 payment(s) to match …
+  /contacts/c_1 [360x640] — 3
+      · ₹400,000 — …ad, India 24AABCS1429B1ZX OUTSTANDING ₹400,000 TOTAL INVOICED ₹3,800,000 TOTAL PAID…
+      · ₹3,800,000 — … OUTSTANDING ₹400,000 TOTAL INVOICED ₹3,800,000 TOTAL PAID ₹3,400,000 OPEN COMPLAINT…
+      · ₹3,400,000 — …TOTAL INVOICED ₹3,800,000 TOTAL PAID ₹3,400,000 OPEN COMPLAINTS 0 RELATIONSHIP INTEL…
   /finance [360x640] — 11
       · ₹2,589,000 — …PHOTO CSV / EXCEL 2 IN INBOX → REVENUE ₹2,589,000 TOTAL SPEND ₹1,914,500 NET PROFIT ₹…
       · ₹1,914,500 — …BOX → REVENUE ₹2,589,000 TOTAL SPEND ₹1,914,500 NET PROFIT ₹674,500 RECEIVED ₹2,015…
@@ -1329,45 +1408,49 @@ Currency not in Indian digit grouping (§5.3)
       · ₹480,000 — …Y SPEND Payroll ₹862,000 Surat Spinners ₹480,000 MSEDCL ₹214,000 Rajkot Fibres ₹152,000 …
       · ₹152,000 — … ₹480,000 MSEDCL ₹214,000 Rajkot Fibres ₹152,000 Bombay Dyeing House ₹96,000 Sai Transpo…
   /finance?tab=expenses [360x640] — 4
-      · ₹480,000 — …TERIAL Surat Spinners 2026-08-10 UNPAID ₹480,000 UTILITIES MSEDCL 2026-08-01 PAID ₹21…
-      · ₹214,000 — …000 UTILITIES MSEDCL 2026-08-01 PAID ₹214,000 SALARIES Payroll 2026-07-30 PAID ₹86…
-      · ₹862,000 — …000 SALARIES Payroll 2026-07-30 PAID ₹862,000 JOB WORK Bombay Dyeing House 2026-08…
-      · ₹152,000 — … MATERIAL Rajkot Fibres 2026-07-16 PAID ₹152,000 PROFESSIONAL FEES Shah & Associates …
+      · ₹480,000 — …TERIAL Surat Spinners 2026-08-11 UNPAID ₹480,000 UTILITIES MSEDCL 2026-08-02 PAID ₹21…
+      · ₹214,000 — …000 UTILITIES MSEDCL 2026-08-02 PAID ₹214,000 SALARIES Payroll 2026-07-31 PAID ₹86…
+      · ₹862,000 — …000 SALARIES Payroll 2026-07-31 PAID ₹862,000 JOB WORK Bombay Dyeing House 2026-08…
+      · ₹152,000 — … MATERIAL Rajkot Fibres 2026-07-17 PAID ₹152,000 PROFESSIONAL FEES Shah & Associates …
   /finance?tab=assets [360x640] — 4
-      · ₹1,250,000 — …m #4 MACHINERY — 2022-10-13 MAINTENANCE ₹1,250,000 Jacquard loom #5 MACHINERY — 2022-10-…
-      · ₹185,000 — …dustrial) MACHINERY — 2024-02-25 ACTIVE ₹185,000 Tata Ace delivery van VEHICLE — 2023-…
-      · ₹620,000 — …elivery van VEHICLE — 2023-08-09 ACTIVE ₹620,000 Diesel generator 62.5 kVA UTILITY — 2…
-      · ₹480,000 — …or 62.5 kVA UTILITY — 2024-09-12 ACTIVE ₹480,000 DESK BRIEF WORK CRM DEX…
+      · ₹1,250,000 — …m #4 MACHINERY — 2022-10-14 MAINTENANCE ₹1,250,000 Jacquard loom #5 MACHINERY — 2022-10-…
+      · ₹185,000 — …dustrial) MACHINERY — 2024-02-26 ACTIVE ₹185,000 Tata Ace delivery van VEHICLE — 2023-…
+      · ₹620,000 — …elivery van VEHICLE — 2023-08-10 ACTIVE ₹620,000 Diesel generator 62.5 kVA UTILITY — 2…
+      · ₹480,000 — …or 62.5 kVA UTILITY — 2024-09-13 ACTIVE ₹480,000 DESK BRIEF WORK CRM DEX…
   /finance?tab=inventory [360x640] — 3
       · ₹336,000 — …on yarn 40s — 8400 kg ₹0 Surat Spinners ₹336,000 Polyester blend — 2100 kg ₹0 Rajkot F…
       · ₹588,000 — … Finished shirting — grey — 4200 m ₹0 — ₹588,000 Finished shirting — indigo — 1800 m ₹…
       · ₹288,000 — …inished shirting — indigo — 1800 m ₹0 — ₹288,000 Packing cartons — 900 pcs ₹0 Nashik T…
 
-WARN · horizontal-scroll-strip — 10
+WARN · horizontal-scroll-strip — 12
 Horizontally scrolling strip — needs fade mask + peeking item (§5.2.2)
 ------------------------------------------------------------------------------
   /my-work?view=workflows [390x844] — 1
       · 1024>356 — div.border.border-black.overflow-x-auto — “ORDER RECEIVED 0 CONFIRMED 0 IN PRODUCTION 0 READY 0”
   /crm [390x844] — 1
       · 445>356 — div[data-testid="crm-scope-chips"].flex.border.border-black.overflow-x-auto — “ALL CUSTOMERS SUPPLIERS MINE”
+  /contacts/c_1 [390x844] — 1
+      · 398>356 — div.overflow-x-auto.border.border-black.bg-white — “NUMBER AMOUNT DATE DUE STATUS SBT/25-26/0412 ₹400,000 2026-06-14 2026-07-14 OVERDUE”
   /finance?tab=expenses [390x844] — 1
-      · 590>356 — div[data-testid="expenses-table"].card-brutal.overflow-x-auto — “TITLE CATEGORY VENDOR DATE STATUS AMOUNT RAW MATERIAL Surat Spinners 2026-08-10 UNPAID ₹48”
+      · 590>356 — div[data-testid="expenses-table"].card-brutal.overflow-x-auto — “TITLE CATEGORY VENDOR DATE STATUS AMOUNT RAW MATERIAL Surat Spinners 2026-08-11 UNPAID ₹48”
   /finance?tab=assets [390x844] — 1
-      · 643>356 — div[data-testid="assets-table"].card-brutal.overflow-x-auto — “ASSET CATEGORY VENDOR BOUGHT STATUS VALUE Jacquard loom #4 MACHINERY — 2022-10-13 MAINTENA”
+      · 643>356 — div[data-testid="assets-table"].card-brutal.overflow-x-auto — “ASSET CATEGORY VENDOR BOUGHT STATUS VALUE Jacquard loom #4 MACHINERY — 2022-10-14 MAINTENA”
   /finance?tab=inventory [390x844] — 1
       · 460>356 — div[data-testid="inventory-table"].card-brutal.overflow-x-auto — “ITEM SKU QTY UNIT COST VENDOR VALUE Cotton yarn 40s — 8400 kg ₹0 Surat Spinners ₹336,000 P”
   /my-work?view=workflows [360x640] — 1
       · 1024>326 — div.border.border-black.overflow-x-auto — “ORDER RECEIVED 0 CONFIRMED 0 IN PRODUCTION 0 READY 0”
   /crm [360x640] — 1
       · 445>326 — div[data-testid="crm-scope-chips"].flex.border.border-black.overflow-x-auto — “ALL CUSTOMERS SUPPLIERS MINE”
+  /contacts/c_1 [360x640] — 1
+      · 398>326 — div.overflow-x-auto.border.border-black.bg-white — “NUMBER AMOUNT DATE DUE STATUS SBT/25-26/0412 ₹400,000 2026-06-14 2026-07-14 OVERDUE”
   /finance?tab=expenses [360x640] — 1
-      · 590>326 — div[data-testid="expenses-table"].card-brutal.overflow-x-auto — “TITLE CATEGORY VENDOR DATE STATUS AMOUNT RAW MATERIAL Surat Spinners 2026-08-10 UNPAID ₹48”
+      · 590>326 — div[data-testid="expenses-table"].card-brutal.overflow-x-auto — “TITLE CATEGORY VENDOR DATE STATUS AMOUNT RAW MATERIAL Surat Spinners 2026-08-11 UNPAID ₹48”
   /finance?tab=assets [360x640] — 1
-      · 643>326 — div[data-testid="assets-table"].card-brutal.overflow-x-auto — “ASSET CATEGORY VENDOR BOUGHT STATUS VALUE Jacquard loom #4 MACHINERY — 2022-10-13 MAINTENA”
+      · 643>326 — div[data-testid="assets-table"].card-brutal.overflow-x-auto — “ASSET CATEGORY VENDOR BOUGHT STATUS VALUE Jacquard loom #4 MACHINERY — 2022-10-14 MAINTENA”
   /finance?tab=inventory [360x640] — 1
       · 460>326 — div[data-testid="inventory-table"].card-brutal.overflow-x-auto — “ITEM SKU QTY UNIT COST VENDOR VALUE Cotton yarn 40s — 8400 kg ₹0 Surat Spinners ₹336,000 P”
 
-WARN · uppercase-text — 1486
+WARN · uppercase-text — 1644
 text-transform: uppercase (§3.4 forbids uppercase)
 ------------------------------------------------------------------------------
   /inbox [390x844] — 21
@@ -1454,6 +1537,20 @@ text-transform: uppercase (§3.4 forbids uppercase)
       · span.inline-block.px-2.py-0.5.text-xs — “CUSTOMER”
       · span.inline-block.px-2.py-0.5.text-xs — “ACTIVE”
       … 17 more
+  /contacts/c_1 [390x844] — 36
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="profile-back"].flex.items-center.gap-2.text-sm — “BACK TO PEOPLE”
+      · span.inline-block.px-2.py-0.5.text-xs — “CUSTOMER”
+      · span.inline-block.px-2.py-0.5.text-xs — “ACTIVE”
+      · h1.font-heading.text-4xl.font-black.uppercase — “KRISHNA GARMENTS”
+      · p.label-mono.text-muted-foreground — “OUTSTANDING”
+      · p.label-mono.text-muted-foreground — “TOTAL INVOICED”
+      · p.label-mono.text-muted-foreground — “TOTAL PAID”
+      · p.label-mono.text-muted-foreground — “OPEN COMPLAINTS”
+      · h2.font-heading.text-xl.font-extrabold.uppercase — “RELATIONSHIP INTELLIGENCE”
+      · button[data-testid="rescore-contact-btn"].flex.items-center.gap-2.border — “RE-SCORE”
+      … 24 more
   /team [390x844] — 32
       · span.text-foreground — “DECISION”
       · span.text-brand-red — “OS”
@@ -1585,7 +1682,7 @@ text-transform: uppercase (§3.4 forbids uppercase)
       · span.text-brand-red — “OS”
       · button[data-testid="mark-all-read"].flex.items-center.gap-2.border — “MARK ALL READ”
       · span.inline-block.px-2.py-0.5.text-xs — “REMINDER”
-      · span.label-mono.text-muted-foreground.flex.items-center — “5 HRS AGO”
+      · span.label-mono.text-muted-foreground.flex.items-center — “14 HRS AGO”
       · p.label-mono.text-muted-foreground.mt-1.flex — “SURESH PATEL”
       · button[data-testid="read-n_1"].text-xs.uppercase.tracking-wider.border — “READ”
       · span.inline-block.px-2.py-0.5.text-xs — “REMINDER”
@@ -1617,6 +1714,34 @@ text-transform: uppercase (§3.4 forbids uppercase)
       · span.text-[10px].uppercase.tracking-wide.font-semibold — “WORK”
       · span.text-[10px].uppercase.tracking-wide.font-semibold — “CRM”
       · span.text-[10px].uppercase.tracking-wide.font-semibold — “DEX”
+  /operating-score [390x844] — 23
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · span.label-mono.text-muted-foreground.mt-1 — “/ 100”
+      · span.font-heading.font-extrabold.uppercase.tracking-tight — “COMPANY HEALTH”
+      · span.flex.items-center.gap-2.text-sm — “EXECUTION”
+      · span.flex.items-center.gap-2.text-sm — “FINANCE”
+      · span.flex.items-center.gap-2.text-sm — “SALES”
+      · span.flex.items-center.gap-2.text-sm — “RESPONSIVENESS”
+      · p.label-mono.text-muted-foreground — “TASKS DONE”
+      · p.label-mono.text-muted-foreground — “OPEN TASKS”
+      · p.label-mono.text-muted-foreground — “OVERDUE”
+      · p.label-mono.text-muted-foreground — “OPEN COMPLAINTS”
+      … 11 more
+  /coach [390x844] — 20
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="coach-refresh-btn"].flex.items-center.gap-2.border — “REFRESH”
+      · p.label-mono.text-muted-foreground — “COMPLETED TASKS”
+      · p.label-mono.text-muted-foreground — “OPEN”
+      · p.label-mono.text-muted-foreground — “OVERDUE”
+      · p.label-mono.text-muted-foreground — “COMPLETION”
+      · p.label-mono.text-muted-foreground — “PROOF UPLOADS”
+      · p.label-mono.text-muted-foreground — “PLANS USED”
+      · p.label-mono.text-muted-foreground — “PHOTOS”
+      · p.label-mono.text-muted-foreground — “VOICE UPDATES”
+      · h2.font-heading.font-extrabold.uppercase.tracking-tight — “STRENGTHS”
+      … 8 more
   /login [390x844] — 11
       · span.text-foreground — “DECISION”
       · span.text-brand-red — “OS”
@@ -1713,6 +1838,20 @@ text-transform: uppercase (§3.4 forbids uppercase)
       · span.inline-block.px-2.py-0.5.text-xs — “CUSTOMER”
       · span.inline-block.px-2.py-0.5.text-xs — “ACTIVE”
       … 17 more
+  /contacts/c_1 [360x640] — 36
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="profile-back"].flex.items-center.gap-2.text-sm — “BACK TO PEOPLE”
+      · span.inline-block.px-2.py-0.5.text-xs — “CUSTOMER”
+      · span.inline-block.px-2.py-0.5.text-xs — “ACTIVE”
+      · h1.font-heading.text-4xl.font-black.uppercase — “KRISHNA GARMENTS”
+      · p.label-mono.text-muted-foreground — “OUTSTANDING”
+      · p.label-mono.text-muted-foreground — “TOTAL INVOICED”
+      · p.label-mono.text-muted-foreground — “TOTAL PAID”
+      · p.label-mono.text-muted-foreground — “OPEN COMPLAINTS”
+      · h2.font-heading.text-xl.font-extrabold.uppercase — “RELATIONSHIP INTELLIGENCE”
+      · button[data-testid="rescore-contact-btn"].flex.items-center.gap-2.border — “RE-SCORE”
+      … 24 more
   /team [360x640] — 32
       · span.text-foreground — “DECISION”
       · span.text-brand-red — “OS”
@@ -1844,7 +1983,7 @@ text-transform: uppercase (§3.4 forbids uppercase)
       · span.text-brand-red — “OS”
       · button[data-testid="mark-all-read"].flex.items-center.gap-2.border — “MARK ALL READ”
       · span.inline-block.px-2.py-0.5.text-xs — “REMINDER”
-      · span.label-mono.text-muted-foreground.flex.items-center — “5 HRS AGO”
+      · span.label-mono.text-muted-foreground.flex.items-center — “14 HRS AGO”
       · p.label-mono.text-muted-foreground.mt-1.flex — “SURESH PATEL”
       · button[data-testid="read-n_1"].text-xs.uppercase.tracking-wider.border — “READ”
       · span.inline-block.px-2.py-0.5.text-xs — “REMINDER”
@@ -1876,6 +2015,34 @@ text-transform: uppercase (§3.4 forbids uppercase)
       · span.text-[10px].uppercase.tracking-wide.font-semibold — “WORK”
       · span.text-[10px].uppercase.tracking-wide.font-semibold — “CRM”
       · span.text-[10px].uppercase.tracking-wide.font-semibold — “DEX”
+  /operating-score [360x640] — 23
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · span.label-mono.text-muted-foreground.mt-1 — “/ 100”
+      · span.font-heading.font-extrabold.uppercase.tracking-tight — “COMPANY HEALTH”
+      · span.flex.items-center.gap-2.text-sm — “EXECUTION”
+      · span.flex.items-center.gap-2.text-sm — “FINANCE”
+      · span.flex.items-center.gap-2.text-sm — “SALES”
+      · span.flex.items-center.gap-2.text-sm — “RESPONSIVENESS”
+      · p.label-mono.text-muted-foreground — “TASKS DONE”
+      · p.label-mono.text-muted-foreground — “OPEN TASKS”
+      · p.label-mono.text-muted-foreground — “OVERDUE”
+      · p.label-mono.text-muted-foreground — “OPEN COMPLAINTS”
+      … 11 more
+  /coach [360x640] — 20
+      · span.text-foreground — “DECISION”
+      · span.text-brand-red — “OS”
+      · button[data-testid="coach-refresh-btn"].flex.items-center.gap-2.border — “REFRESH”
+      · p.label-mono.text-muted-foreground — “COMPLETED TASKS”
+      · p.label-mono.text-muted-foreground — “OPEN”
+      · p.label-mono.text-muted-foreground — “OVERDUE”
+      · p.label-mono.text-muted-foreground — “COMPLETION”
+      · p.label-mono.text-muted-foreground — “PROOF UPLOADS”
+      · p.label-mono.text-muted-foreground — “PLANS USED”
+      · p.label-mono.text-muted-foreground — “PHOTOS”
+      · p.label-mono.text-muted-foreground — “VOICE UPDATES”
+      · h2.font-heading.font-extrabold.uppercase.tracking-tight — “STRENGTHS”
+      … 8 more
   /login [360x640] — 11
       · span.text-foreground — “DECISION”
       · span.text-brand-red — “OS”

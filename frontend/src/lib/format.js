@@ -1,10 +1,45 @@
 const SYMBOLS = { INR: "₹", USD: "$", EUR: "€", GBP: "£", AED: "AED ", SGD: "S$", AUD: "A$", CAD: "C$" };
 
+// NOTE (§5.3): this groups digits in the *runtime* locale, so it renders
+// ₹480,000 rather than ₹4,80,000 for an Indian MSME. Deliberately left alone
+// on this branch — it is shared with desktop, where §1/§9.2 require a
+// pixel-identical render, and changing it would move every money figure on
+// every desktop screen. Mobile screens migrate to `inr()` below as each page
+// slice lands; the desktop fix wants its own PR with a blast-radius note.
 export function money(amount, currency = "INR") {
   if (amount == null || amount === "") return "";
   const sym = SYMBOLS[currency] || `${currency} `;
   return sym + Number(amount).toLocaleString();
 }
+
+/**
+ * Indian-grouped rupees, no decimals. 480000 -> ₹4,80,000
+ *
+ * §5.3: no component formats currency inline — everything goes through here.
+ */
+export const inr = (n) =>
+  n == null || n === "" || Number.isNaN(Number(n))
+    ? ""
+    : new Intl.NumberFormat("en-IN", {
+        style: "currency",
+        currency: "INR",
+        maximumFractionDigits: 0,
+      }).format(Number(n));
+
+/**
+ * Short form for glanceable contexts. 18423000 -> ₹1.84Cr
+ *
+ * §5.3: NEVER use this in an approval or reconciliation context — the owner
+ * must see the exact figure he is committing to. Use `inr()` there.
+ */
+export const inrCompact = (n) => {
+  if (n == null || n === "" || Number.isNaN(Number(n))) return "";
+  const v = Number(n);
+  const abs = Math.abs(v);
+  if (abs >= 1e7) return `₹${(v / 1e7).toFixed(2)}Cr`;
+  if (abs >= 1e5) return `₹${(v / 1e5).toFixed(1)}L`;
+  return inr(v);
+};
 
 export function slugify(label) {
   return String(label || "")

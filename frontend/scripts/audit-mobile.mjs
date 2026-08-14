@@ -515,19 +515,73 @@ async function settle(page) {
       // an @import chain, so document.fonts is still EMPTY when the first
       // `fonts.ready` resolves — nothing is pending because nothing is known
       // yet. A fixed list also silently stops covering any face added later.
-      // Wait for the registry to stop growing, then load every face in it.
+      //
+      // Wait for the registry to become non-empty AND stop growing. The first
+      // cut only checked "stopped growing", which 0 === 0 satisfies on the
+      // second frame — so a run where the @import had not been parsed yet
+      // loaded nothing, rasterised the fallback face, and moved every glyph on
+      // every desktop screen. It passed three runs and then failed one.
       let size = -1;
-      for (let i = 0; i < 40 && size !== document.fonts.size; i++) {
-        size = document.fonts.size;
+      let stable = 0;
+      for (let i = 0; i < 120; i++) {
+        const now = document.fonts.size;
+        stable = now === size && now > 0 ? stable + 1 : 0;
+        size = now;
+        if (stable >= 3) break;
         await frame();
       }
       await Promise.all(Array.from(document.fonts).map((f) => f.load().catch(() => {})));
+      // Belt and braces: if the registry never filled (a blocked @import, or a
+      // route that renders before the stylesheet), ask for the families we know
+      // this app uses so the fallback face is never what gets rasterised.
+      await Promise.all(
+        [
+          '900 24px Chivo', '800 24px Chivo', '700 24px Chivo',
+          '400 15px Geist', '500 15px Geist', '600 15px Geist', '700 15px Geist',
+          '400 13px "IBM Plex Mono"',
+        ].map((f) => document.fonts.load(f).catch(() => {}))
+      );
       await document.fonts.ready;
       await frame();
     })
     .catch(() => {});
   await waitForDomQuiet(page);
   await waitForVectorsStable(page);
+  await waitForTextStable(page);
+}
+
+// The last 534 pixels. Even after every registered face is loaded, a face can
+// still swap in late enough to re-rasterise one element — the Chivo wordmark did
+// it on 46 desktop screens, at 0.018% each, on roughly one run in four. Fonts
+// change TEXT METRICS, so watch the metrics: sample a spread of text boxes until
+// their widths hold still for a quiet window.
+async function waitForTextStable(page, quietMs = 300, limitMs = 2500) {
+  await page
+    .evaluate(
+      ([quiet, limit]) =>
+        new Promise((resolve) => {
+          const nodes = Array.from(
+            document.querySelectorAll('h1, h2, h3, aside a, [data-testid$="-title"], nav span, header span')
+          ).slice(0, 40);
+          if (!nodes.length) return resolve();
+          const read = () =>
+            nodes.map((el) => `${Math.round(el.offsetWidth)}x${Math.round(el.offsetHeight)}`).join('|');
+          const started = Date.now();
+          const STEP = 100;
+          let prev = read();
+          let quietFor = 0;
+          const tick = () => {
+            const next = read();
+            quietFor = next === prev ? quietFor + STEP : 0;
+            prev = next;
+            if (quietFor >= quiet || Date.now() - started > limit) return resolve();
+            setTimeout(tick, STEP);
+          };
+          setTimeout(tick, STEP);
+        }),
+      [quietMs, limitMs]
+    )
+    .catch(() => {});
 }
 
 // Append ?fixture= when auditing a fixture state, preserving any existing query.

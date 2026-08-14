@@ -14,15 +14,25 @@ import { cn } from "@/lib/utils";
  * @param {Function} renderTile  (item) => ReactNode — the tile's inner content
  * @param {string}  [title]
  * @param {2|3}     [cols]
+ * @param {number}  [max]       tiles rendered before the "Show more" row. A book
+ *                              of 60 relationships is 4,700px of tiles, past
+ *                              §5.2.7's ceiling — the cap is what keeps a Grid
+ *                              scannable, the same way max-5 does for a Queue.
+ * @param {Function} [onSeeAll] omit to render everything
  */
 export function Grid({
   title,
   items = [],
   renderTile,
   cols = 2,
+  max,
+  onSeeAll,
   className,
   "data-testid": testId = "block-grid",
 }) {
+  const shown = max ? items.slice(0, max) : items;
+  const hidden = items.length - shown.length;
+
   if (!items.length) return null;
   return (
     <section data-block="grid" data-testid={testId} className={cn("mb-3", className)}>
@@ -30,7 +40,7 @@ export function Grid({
         <h2 className="mb-1.5 font-heading text-base font-semibold tracking-tight">{title}</h2>
       )}
       <div className={cn("grid gap-3", cols === 3 ? "grid-cols-3" : "grid-cols-2")}>
-        {items.map((item, i) => {
+        {shown.map((item, i) => {
           const Tag = item.onOpen ? "button" : "div";
           return (
             <Tag
@@ -47,6 +57,18 @@ export function Grid({
           );
         })}
       </div>
+
+      {hidden > 0 && onSeeAll && (
+        <button
+          type="button"
+          onClick={onSeeAll}
+          data-testid={`${testId}-see-all`}
+          className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-border text-sm font-semibold transition-colors hover:bg-accent"
+          style={{ minHeight: "var(--control-h-sm)" }}
+        >
+          Show {Math.min(hidden, max)} more of {items.length}
+        </button>
+      )}
     </section>
   );
 }

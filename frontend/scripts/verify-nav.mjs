@@ -266,7 +266,12 @@ const dctx = await browser.newContext({ viewport: { width: 1280, height: 900 } }
 const dpage = await dctx.newPage();
 check('signed in on desktop', await signIn(dpage, BASE));
 await dpage.goto(`${BASE}/inbox`, { waitUntil: 'domcontentloaded' });
-await dpage.waitForTimeout(1200);
+// Wait for the sidebar itself, not a fixed 1200ms. The app's auth bootstrap got
+// heavier and the sleep started landing before the layout rendered, which read
+// as "the desktop sidebar is gone" — a false alarm on the one thing this whole
+// track promises not to touch.
+await dpage.waitForSelector('aside a[data-testid^="nav-"]', { timeout: 15000 });
+await dpage.waitForTimeout(500);
 check('desktop sidebar still present', await dpage.locator('aside').isVisible());
 check('desktop keeps its theme toggle',
   await dpage.locator('[data-testid="theme-toggle"]').isVisible());

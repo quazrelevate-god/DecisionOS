@@ -7,7 +7,7 @@
 //   3. Net Profit was computed as `revenue_billed - total_spend` with no guard,
 //      so while spend was still resolving it displayed profit == revenue. §5.3:
 //      "One wrong money figure costs more trust than ten missing features."
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -21,6 +21,8 @@ import { inr, inrCompact } from "../../lib/format";
 import {
   BottomSheet, MobileCard, EmptyState, ListSkeleton, MoneySkeleton, StatusChip,
 } from "../../components/mobile";
+import { Verdict, Pulse, Grid, Strip } from "../../components/mobile/blocks";
+import { useFocus, FocusView } from "../../components/mobile/FocusView";
 
 const TABS = [
   { key: "overview", label: "Overview", icon: Sparkle },
@@ -60,6 +62,7 @@ export default function FinanceMobile() {
 
   const [reclassifying, setReclassifying] = useState(false);
   const [detail, setDetail] = useState(null);
+  const focus = useFocus();
 
   const summaryQ = useQuery({
     queryKey: ["ledger-summary"],
@@ -69,6 +72,14 @@ export default function FinanceMobile() {
     queryKey: ["ledger-ai", tab === "overview" ? "brief" : tab],
     queryFn: () => api.get(`/ledger/ai/${tab === "overview" ? "brief" : tab}`).then((r) => r.data),
   });
+  // §3's table for Money asks for a "received-this-week trend, up-arrow when
+  // positive". /ledger/summary has no history, so the trend is built from the
+  // invoices themselves — same queryKey the Income tab uses, so it is one cached
+  // request rather than a second one for a sparkline.
+  const invoicesQ = useQuery({
+    queryKey: ["ledger", "revenue"],
+    queryFn: () => api.get("/revenue").then((r) => r.data),
+  });
 
   const totals = summaryQ.data?.totals || {};
   const received = val(totals.revenue_received);
@@ -76,6 +87,58 @@ export default function FinanceMobile() {
   // The guarded version of the desktop calculation. Either input missing ->
   // null -> skeleton, so profit can never briefly equal revenue.
   const netProfit = val(totals.net_profit) ?? derive((r, s) => r - s, totals.revenue_billed, totals.total_spend);
+
+  // Two 7-day series from the invoice ledger: money that came in, and money that
+  // fell due and has not. Derived, not invented — every point is a row he could
+  // open. Empty when there are no invoices, and the Pulse then shows the delta
+  // chip alone rather than a flat line pretending to be data.
+  const trends = useMemo(() => {
+    const rows = invoicesQ.data?.invoices || (Array.isArray(invoicesQ.data) ? invoicesQ.data : []);
+    if (!rows.length) return { received: [], outstanding: [], receivedDelta: null };
+    const day = 86400000;
+    const midnight = new Date();
+    midnight.setHours(0, 0, 0, 0);
+    const bucket = (n) => {
+      // n = days back from today; 0 is today.
+      const from = midnight.getTime() - n * day;
+      return { from, to: from + day };
+    };
+    const paidOn = (r) => {
+      const raw = r.paid_at || r.updated_at || r.date;
+      const t = raw ? new Date(raw).getTime() : NaN;
+      return Number.isNaN(t) ? null : t;
+    };
+    const received = [];
+    const outstanding = [];
+    for (let i = 6; i >= 0; i--) {
+      const { from, to } = bucket(i);
+      received.push(
+        rows.reduce((sum, r) => {
+          const t = paidOn(r);
+          const paid = Number(r.paid_amount) || 0;
+          return t != null && paid > 0 && t >= from && t < to ? sum + paid : sum;
+        }, 0)
+      );
+      outstanding.push(
+        rows.reduce((sum, r) => {
+          const due = r.due_date ? new Date(r.due_date).getTime() : NaN;
+          const owed = (Number(r.amount) || 0) - (Number(r.paid_amount) || 0);
+          return !Number.isNaN(due) && owed > 0 && due < to ? sum + owed : sum;
+        }, 0)
+      );
+    }
+    // Week on week, so the arrow means something.
+    const thisWeek = received.reduce((a, b) => a + b, 0);
+    const prior = rows.reduce((sum, r) => {
+      const t = paidOn(r);
+      const paid = Number(r.paid_amount) || 0;
+      const from = midnight.getTime() - 14 * day;
+      const to = midnight.getTime() - 7 * day;
+      return t != null && paid > 0 && t >= from && t < to ? sum + paid : sum;
+    }, 0);
+    const receivedDelta = prior > 0 ? Math.round(((thisWeek - prior) / prior) * 100) : null;
+    return { received, outstanding, receivedDelta };
+  }, [invoicesQ.data]);
 
   const reclassify = async () => {
     setReclassifying(true);
@@ -100,93 +163,116 @@ export default function FinanceMobile() {
     { key: "stock", label: "Stock value", amount: val(totals.inventory_value), icon: Package },
     { key: "unpaid", label: "Unpaid bills", amount: val(totals.outstanding), icon: Receipt },
   ].filter((k) => k.amount === null || k.amount !== 0);
+  const kpiPeak = Math.max(...kpis.map((k) => Math.abs(k.amount || 0)), 0);
+  const kpis2 = kpis.map((k) => ({
+    ...k,
+    id: k.key,
+    share: kpiPeak > 0 && k.amount != null ? Math.min(1, Math.abs(k.amount) / kpiPeak) : null,
+  }));
 
   return (
     <div data-testid="finance-mobile">
       <h1 className="font-heading text-2xl font-bold tracking-tight">Money</h1>
 
-      {/* §5.2.1: the tab strip WRAPS. It used to scroll and clip silently — six
-          tabs never fit 390px, so the last two were invisible with nothing to
-          suggest they existed. */}
-      <div className="mt-3 flex flex-wrap gap-touch-gap" data-testid="finance-tabs">
-        {TABS.map((tb) => (
-          <button
-            key={tb.key}
-            type="button"
-            onClick={() => setTab(tb.key)}
-            data-testid={`finance-tab-${tb.key}`}
-            aria-pressed={tab === tb.key}
-            className={`flex items-center gap-1.5 rounded-pill border px-3 text-sm font-semibold transition-colors ${
-              tab === tb.key
-                ? "border-transparent bg-primary text-primary-foreground"
-                : "border-border bg-card hover:bg-accent"
-            }`}
-            style={{ minHeight: "var(--control-h-sm)" }}
-          >
-            <tb.icon size={18} weight={tab === tb.key ? "fill" : "regular"} aria-hidden="true" />
-            {tb.label}
-          </button>
-        ))}
-      </div>
+      {/* MPWA-12g (§5.3): ONE row with a fade mask and a peeking sixth chip.
+          MPWA-09 made it wrap, which fixed the silent clipping but "six chips
+          wrapping to two rows eats 100px before any content". A Strip scrolls
+          *visibly* — the mask and the half-shown next chip are what the old
+          version was missing, not the wrapping. */}
+      <Strip
+        label="View"
+        sticky
+        data-testid="finance-tabs"
+        items={TABS.map((tb) => ({
+          key: tb.key,
+          label: tb.label,
+          icon: tb.icon,
+          active: tab === tb.key,
+          onSelect: () => setTab(tb.key),
+        }))}
+      />
 
-      {/* ---------------- hero: money in one line, then the verdict ---------- */}
-      <section className="mt-4" data-testid="finance-hero">
-        <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-xl border border-border bg-card p-3.5">
-            <p className="flex items-center gap-1.5 text-[length:var(--text-label)] font-semibold leading-4 text-muted-foreground">
-              <TrendUp size={16} weight="bold" className="text-success-600" aria-hidden="true" />
-              Received
-            </p>
-            <p className="mt-1 text-right font-heading text-xl font-bold">
-              <Figure amount={received} testid="finance-received" />
-            </p>
-          </div>
-          <div className="rounded-xl border border-border bg-card p-3.5">
-            <p className="flex items-center gap-1.5 text-[length:var(--text-label)] font-semibold leading-4 text-muted-foreground">
-              <TrendDown size={16} weight="bold" className="text-danger-600" aria-hidden="true" />
-              Outstanding
-            </p>
-            <p className="mt-1 text-right font-heading text-xl font-bold">
-              <Figure amount={outstanding} testid="finance-outstanding" />
-            </p>
-          </div>
-        </div>
+      {/* §5.3's stratum 1 — the AI finance sentence as the Verdict. §8: it is
+          "the most useful string in the product and is currently buried below
+          the KPI tiles". It leads, and it is the screen's one full-bleed hero. */}
+      <Verdict
+        tone={outstanding > 0 ? "danger" : "success"}
+        eyebrow="Money"
+        headline={aiQ.data?.verdict || moneyFallback(received, outstanding)}
+        action={
+          outstanding > 0
+            ? { label: "Chase what's owed", onClick: () => focus.open("money:outstanding") }
+            : undefined
+        }
+        data-testid="finance-verdict"
+      />
 
-        {/* §8: the AI verdict is "the most useful string in the product and is
-            currently buried below the KPI tiles". It leads now. */}
-        {aiQ.data?.verdict && (
-          <div className="mt-3 rounded-xl border border-border bg-neutral-50 p-3.5 dark:bg-neutral-800" data-testid="finance-verdict">
-            <p className="flex items-center gap-1.5 text-[length:var(--text-label)] font-semibold leading-4 text-muted-foreground">
-              <Sparkle size={16} weight="fill" aria-hidden="true" />
-              What this says
-            </p>
-            <p className="mt-1.5 text-[0.9375rem] leading-relaxed">{aiQ.data.verdict}</p>
-          </div>
+      {/* Stratum 2 — Received vs Outstanding, with L3 on Received (§5.3). Both
+          open a Focus View: chasing a receivable is an ACT, so it happens here
+          rather than throwing him onto the ledger (§2.2). */}
+      <Pulse
+        data-testid="finance-pulse"
+        stats={[
+          {
+            label: "Received",
+            value: received == null ? null : inrCompact(received),
+            loading: received == null,
+            series: trends.received,
+            tone: "success",
+            delta: trends.receivedDelta,
+            progress: "money-received",
+            onOpen: () => focus.open("money:received"),
+          },
+          {
+            label: "Outstanding",
+            value: outstanding == null ? null : inrCompact(outstanding),
+            loading: outstanding == null,
+            series: trends.outstanding,
+            tone: "danger",
+            delta: null,
+            invertDelta: true,
+            onOpen: () => focus.open("money:outstanding"),
+          },
+        ]}
+      />
+
+      {/* Stratum 3 — where the money is, as a Grid. Zeros still never render: a
+          tile reading ₹0 spends a sixth of the viewport saying nothing (§8). */}
+      <Grid
+        title="Where the money is"
+        items={kpis2}
+        data-testid="finance-kpis"
+        renderTile={(k) => (
+          <>
+            <span className="flex items-center gap-1.5 text-[length:var(--text-label)] font-semibold leading-4 text-muted-foreground">
+              <k.icon size={16} weight="bold" aria-hidden="true" />
+              {k.label}
+            </span>
+            {/* Right-aligned and tabular so a column of amounts lines up (§5.3). */}
+            <span className="mt-1 block text-right font-heading text-lg font-bold">
+              <Figure amount={k.amount} compact testid={`finance-kpi-value-${k.key}`} />
+            </span>
+            {/* §5.3 calls these "composition tiles", so they show composition:
+                this figure against the largest one on screen. Derived from the
+                same numbers above it — not decoration, and not a second way of
+                saying the amount. A label + a number in a 116px tile leaves a
+                hole in the middle, which is what took the first viewport to 78%
+                against §3's 85% floor. */}
+            {k.share != null && (
+              <span
+                className="mt-1.5 block h-1.5 overflow-hidden rounded-pill bg-accent"
+                role="img"
+                aria-label={`${Math.round(k.share * 100)}% of the largest figure here`}
+              >
+                <span
+                  className={`block h-full rounded-pill ${k.key === "spend" || k.key === "unpaid" ? "bg-danger-500" : "bg-brand-500"}`}
+                  style={{ width: `${Math.max(4, Math.round(k.share * 100))}%` }}
+                />
+              </span>
+            )}
+          </>
         )}
-        {aiQ.isLoading && (
-          <div className="mt-3">
-            <ListSkeleton rows={1} />
-          </div>
-        )}
-      </section>
-
-      {/* ---------------- KPIs, zeros removed ---------------- */}
-      {kpis.length > 0 && (
-        <section className="mt-4 grid grid-cols-2 gap-3" data-testid="finance-kpis">
-          {kpis.map((k) => (
-            <div key={k.key} className="rounded-xl border border-border bg-card p-3.5" data-testid={`finance-kpi-${k.key}`}>
-              <p className="flex items-center gap-1.5 text-[length:var(--text-label)] font-semibold leading-4 text-muted-foreground">
-                <k.icon size={16} weight="bold" aria-hidden="true" />
-                {k.label}
-              </p>
-              {/* Right-aligned and tabular so a column of amounts lines up (§5.3). */}
-              <p className="mt-1 text-right font-heading text-lg font-bold">
-                <Figure amount={k.amount} compact testid={`finance-kpi-value-${k.key}`} />
-              </p>
-            </div>
-          ))}
-        </section>
-      )}
+      />
 
       {tab === "inbox" ? (
         <CaptureInbox />
@@ -228,8 +314,29 @@ export default function FinanceMobile() {
           </p>
         ))}
       </BottomSheet>
+
+      {/* §5.3: "Tapping Outstanding ₹1,68,000 -> Focus View listing the six
+          overdue receivables with a Chase action per row and Open Money -> at
+          the foot. He chases the payment without ever leaving the screen he was
+          reading." */}
+      <FocusView onChanged={() => qc.invalidateQueries({ queryKey: ["ledger-summary"] })} />
     </div>
   );
+}
+
+/**
+ * The Verdict's sentence when the AI has not produced one. Says what the two
+ * numbers mean rather than restating them — a hero that reads "Received ₹19.4L,
+ * Outstanding ₹6.9L" is the Pulse below it, twice.
+ */
+function moneyFallback(received, outstanding) {
+  if (outstanding == null && received == null) return "Pulling your numbers together.";
+  if ((outstanding || 0) > 0 && (received || 0) > 0) {
+    return `${inrCompact(outstanding)} is still owed to you.`;
+  }
+  if ((outstanding || 0) > 0) return `${inrCompact(outstanding)} is owed and nothing has come in yet.`;
+  if ((received || 0) > 0) return "Everything invoiced has been paid.";
+  return "Nothing has moved yet.";
 }
 
 // ---------------------------------------------------------------------------
@@ -284,17 +391,23 @@ const ENDPOINT = {
 const LIST_KEY = { revenue: "invoices" };
 
 function LedgerList({ tab, onOpen }) {
+  // MPWA-12g: a busy ledger tab rendered every row — 24 expenses ran 3,927px,
+  // past §5.2.7's ceiling. Show a screenful, then let him ask for more.
+  const [limit, setLimit] = useState(8);
   const { data, isLoading } = useQuery({
     queryKey: ["ledger", tab],
     queryFn: () => api.get(ENDPOINT[tab]).then((r) => r.data),
     enabled: !!ENDPOINT[tab],
   });
-  const rows = Array.isArray(data)
+  const all = Array.isArray(data)
     ? data
     : data?.[LIST_KEY[tab]] || data?.items || [];
+  useEffect(() => setLimit(8), [tab]);
+  const rows = all.slice(0, limit);
+  const hidden = all.length - rows.length;
 
   if (isLoading) return <div className="mt-4"><ListSkeleton rows={4} /></div>;
-  if (!rows.length) {
+  if (!all.length) {
     return (
       <div className="mt-4">
         <EmptyState
@@ -339,6 +452,18 @@ function LedgerList({ tab, onOpen }) {
           />
         );
       })}
+
+      {hidden > 0 && (
+        <button
+          type="button"
+          onClick={() => setLimit((n) => n + 8)}
+          data-testid={`finance-list-${tab}-more`}
+          className="flex w-full items-center justify-center rounded-xl border border-border text-sm font-semibold transition-colors hover:bg-accent"
+          style={{ minHeight: "var(--control-h-sm)" }}
+        >
+          Show {Math.min(hidden, 8)} more of {all.length}
+        </button>
+      )}
     </div>
   );
 }

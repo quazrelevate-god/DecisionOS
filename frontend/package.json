@@ -72,6 +72,7 @@
     "audit:mobile": "node scripts/audit-mobile.mjs",
     "verify:kit": "node scripts/verify-mobile-kit.mjs",
     "verify:nav": "node scripts/verify-nav.mjs",
+    "verify:desk": "node scripts/verify-desk.mjs",
     "verify:pwa": "npm run build && node scripts/verify-pwa.mjs",
     "shots": "node scripts/shots.mjs",
     "fixture-api": "node scripts/fixture-server.mjs --port 8000"

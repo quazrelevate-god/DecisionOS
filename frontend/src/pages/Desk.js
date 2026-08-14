@@ -26,6 +26,8 @@ import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { toast } from "sonner";
 import { DecisionDialog } from "../components/DecisionDialog";
+import { useIsMobile } from "../hooks/useIsMobile";
+import DeskMobile from "./mobile/DeskMobile";
 import {
   Fire, Sun, Star, CheckCircle, ArrowClockwise, Spinner,
 } from "@phosphor-icons/react";
@@ -103,6 +105,10 @@ const CHIPS = [
 ];
 
 export default function Desk() {
+  // MPWA-06: below lg this screen is rebuilt (§8). Above lg the original tree
+  // renders byte-for-byte unchanged, which is how §9.2's empty desktop diff is
+  // guaranteed structurally rather than re-verified on every edit.
+  const isMobile = useIsMobile();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [chip, setChip] = useState("needs_decision");
@@ -153,6 +159,8 @@ export default function Desk() {
     `${counters.on_fire} on fire`,
     `${counters.due_today} due today`,
   ].join(" · ");
+
+  if (isMobile) return <DeskMobile />;
 
   return (
     <div className="max-w-5xl mx-auto">

@@ -36,6 +36,7 @@ import { AllAppsPanel } from "./mobile/AllAppsPanel";
 import { DexFab } from "./mobile/DexFab";
 import { DexSheet } from "./mobile/DexSheet";
 import { BottomSheet } from "./mobile/BottomSheet";
+import { InstallPrompt } from "./mobile/InstallPrompt";
 
 // Epic 2 Sprint A (E2-01 / E2-02 / E2-15): People retired; CRM (customers +
 // suppliers) and Team (employees) are separate top-level entries. Ops is a
@@ -351,6 +352,8 @@ export default function Layout({ children }) {
         onOpenLanguage={() => setLangOpen(true)}
         counts={{ notifications: bellCount, myWork: fires }}
       />
+      {/* MPWA-05: third session, dismissible, above the dock (§8). */}
+      <InstallPrompt />
       <DexSheet
         open={dexOpen}
         onClose={() => setDexOpen(false)}

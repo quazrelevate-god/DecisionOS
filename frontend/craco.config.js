@@ -1,5 +1,6 @@
 // craco.config.js
 const path = require("path");
+const { InjectManifest } = require("workbox-webpack-plugin");
 require("dotenv").config();
 
 // Check if we're in development/preview mode (not production build)
@@ -101,6 +102,51 @@ let webpackConfig = {
       // Add health check plugin to webpack if enabled
       if (config.enableHealthCheck && healthPluginInstance) {
         webpackConfig.plugins.push(healthPluginInstance);
+      }
+
+      // MPWA-05: real PWA, wired through CRACO with no eject.
+      //
+      // CRA 5 DOES ship Workbox wiring — but it is gated on
+      // `src/service-worker.js` existing, and this project had no such file
+      // (§4: "There is no service worker and none is registered"). Creating it
+      // therefore switched CRA's own InjectManifest on, and pushing a second
+      // instance made the build fail with "Can't find self.__WB_MANIFEST in
+      // your SW source": the first instance injected the manifest correctly,
+      // then the second found the injection point already substituted.
+      //
+      // So replace CRA's instance rather than adding to it — the defaults need
+      // tuning anyway (see below).
+      //
+      // Production only: a service worker in front of the dev server serves
+      // stale bundles and makes "did my change land?" unanswerable.
+      if (!isDevServer) {
+        webpackConfig.plugins = webpackConfig.plugins.filter(
+          (p) => !p || p.constructor?.name !== "InjectManifest"
+        );
+        webpackConfig.plugins.push(
+          new InjectManifest({
+            swSrc: path.resolve(__dirname, "src/service-worker.js"),
+            swDest: "service-worker.js",
+            exclude: [
+              /\.map$/,
+              /asset-manifest\.json$/,
+              /LICENSE/,
+              // Cached explicitly on install instead, so it is available even
+              // when the precache itself has not run.
+              /^offline\.html$/,
+              // public/ ships ~5 investor and doc PDFs. CRA's default excludes
+              // do not cover them, and precaching megabytes of brochure on a
+              // patchy 4G connection to install an app is the opposite of the
+              // point.
+              /\.pdf$/,
+              /^manual\//,
+            ],
+            // CRA defaults to 5MiB; the main chunk here is comfortably inside
+            // that, but be explicit — if the shell chunk ever silently drops
+            // out of the manifest, offline start breaks and nothing warns.
+            maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+          })
+        );
       }
       return webpackConfig;
     },

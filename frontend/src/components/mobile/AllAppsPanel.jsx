@@ -230,7 +230,10 @@ export function AllAppsPanel({
             "rounded-2xl border border-border bg-background shadow-brutal-lg",
             "top-1/2 -translate-y-1/2",
             // scale 0.92 -> 1 with opacity, ~180ms ease-out; reverse on close
-            "duration-[180ms] ease-out",
+            // [animation-duration:...] rather than duration-[180ms]: the
+            // bare arbitrary value is ambiguous between transition- and
+            // animation-duration, and Tailwind warns on it at build time.
+            "[animation-duration:180ms] ease-out",
             "data-[state=open]:animate-in data-[state=closed]:animate-out",
             "data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0",
             "data-[state=open]:zoom-in-[0.92] data-[state=closed]:zoom-out-[0.92]"

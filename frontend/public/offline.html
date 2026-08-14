@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#FF3B30" />
+    <title>DecisionOS — offline</title>
+    <!--
+      MPWA-05 offline fallback: a cold start with nothing cached.
+
+      Deliberately self-contained — no webfont, no bundle, no API. If this page
+      needed anything from the network it would be useless in the one situation
+      it exists for. §5.4 applies: business language, no status codes.
+    -->
+    <style>
+      :root { color-scheme: light dark; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        display: grid;
+        place-items: center;
+        padding: calc(1.5rem + env(safe-area-inset-top, 0px)) 1.5rem
+                 calc(1.5rem + env(safe-area-inset-bottom, 0px));
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        background: #f9fafb;
+        color: #171a21;
+        -webkit-font-smoothing: antialiased;
+      }
+      main { max-width: 22rem; text-align: center; }
+      .mark {
+        width: 3.25rem; height: 3.25rem; margin: 0 auto 1.25rem;
+        display: grid; place-items: center;
+        background: #ff3b30; color: #fff; border-radius: 0.75rem;
+        font-weight: 900; font-size: 1.5rem; line-height: 1;
+      }
+      h1 { margin: 0 0 0.5rem; font-size: 1.375rem; line-height: 1.3; letter-spacing: -0.02em; }
+      p { margin: 0; font-size: 0.9375rem; line-height: 1.5; color: #4b5563; }
+      button {
+        margin-top: 1.5rem;
+        min-height: 3rem;
+        width: 100%;
+        padding: 0 1.25rem;
+        font: inherit;
+        font-size: 1rem;
+        font-weight: 600;
+        color: #fff;
+        background: #ff3b30;
+        border: 0;
+        border-radius: 0.75rem;
+        cursor: pointer;
+        touch-action: manipulation;
+      }
+      button:disabled { opacity: 0.55; }
+      .note { margin-top: 1rem; font-size: 0.8125rem; color: #636a79; }
+      @media (prefers-color-scheme: dark) {
+        body { background: #111318; color: #f4f4f5; }
+        p { color: #9ca3b0; }
+        .note { color: #9ca3b0; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="mark">D</div>
+      <h1>You're offline</h1>
+      <p>
+        DecisionOS couldn't reach your company data. Nothing has been lost —
+        anything you record will send once you're back on signal.
+      </p>
+      <button type="button" id="retry">Try again</button>
+      <p class="note" id="status">Waiting for a connection…</p>
+    </main>
+    <script>
+      var btn = document.getElementById('retry');
+      var status = document.getElementById('status');
+      function retry() {
+        btn.disabled = true;
+        status.textContent = 'Checking…';
+        // Reload rather than fetch-probe: if the worker can serve the shell
+        // now, the app takes over; if not, this page comes back.
+        setTimeout(function () { window.location.reload(); }, 250);
+      }
+      btn.addEventListener('click', retry);
+      window.addEventListener('online', function () {
+        status.textContent = "You're back online.";
+        retry();
+      });
+      if (navigator.onLine) status.textContent = 'Connection looks available — try again.';
+    </script>
+  </body>
+</html>

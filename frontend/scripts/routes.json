@@ -1,0 +1,671 @@
+{
+"/api/": [
+"GET"
+],
+"/api/admin/ai-keys": [
+"GET",
+"PUT"
+],
+"/api/admin/ai-keys/status": [
+"GET"
+],
+"/api/admin/alerts": [
+"GET"
+],
+"/api/admin/audit": [
+"GET"
+],
+"/api/admin/audit-log": [
+"GET"
+],
+"/api/admin/health": [
+"GET"
+],
+"/api/admin/login": [
+"POST"
+],
+"/api/admin/logout": [
+"POST"
+],
+"/api/admin/me": [
+"GET"
+],
+"/api/admin/metrics": [
+"GET"
+],
+"/api/admin/migrations": [
+"GET"
+],
+"/api/admin/reclassify-purchases": [
+"POST"
+],
+"/api/admin/reclassify-purchases/status": [
+"GET"
+],
+"/api/admin/scheduler-locks": [
+"GET"
+],
+"/api/admin/tenants": [
+"GET"
+],
+"/api/admin/tenants/{tenant_id}": [
+"DELETE"
+],
+"/api/admin/tenants/{tenant_id}/reactivate": [
+"POST"
+],
+"/api/admin/tenants/{tenant_id}/suspend": [
+"POST"
+],
+"/api/admin/usage": [
+"GET"
+],
+"/api/admin/users": [
+"GET"
+],
+"/api/admin/users/{user_id}/reactivate": [
+"POST"
+],
+"/api/admin/users/{user_id}/reset-access": [
+"POST"
+],
+"/api/admin/users/{user_id}/suspend": [
+"POST"
+],
+"/api/ask": [
+"POST"
+],
+"/api/assets": [
+"GET",
+"POST"
+],
+"/api/assets/with-file": [
+"POST"
+],
+"/api/assets/{aid}": [
+"DELETE",
+"PATCH"
+],
+"/api/attendance": [
+"GET",
+"POST"
+],
+"/api/auth/2fa/confirm": [
+"POST"
+],
+"/api/auth/2fa/disable": [
+"POST"
+],
+"/api/auth/2fa/enroll": [
+"POST"
+],
+"/api/auth/2fa/regenerate-backup-codes": [
+"POST"
+],
+"/api/auth/2fa/verify-login": [
+"POST"
+],
+"/api/auth/change-password": [
+"POST"
+],
+"/api/auth/email/send-verification": [
+"POST"
+],
+"/api/auth/email/verify/{token}": [
+"GET"
+],
+"/api/auth/invite/{token}": [
+"GET"
+],
+"/api/auth/invite/{token}/start": [
+"POST"
+],
+"/api/auth/login": [
+"POST"
+],
+"/api/auth/logout": [
+"POST"
+],
+"/api/auth/me": [
+"GET"
+],
+"/api/auth/me/sessions": [
+"DELETE",
+"GET"
+],
+"/api/auth/me/sessions/{jti}": [
+"DELETE"
+],
+"/api/auth/me/switch-workspace": [
+"POST"
+],
+"/api/auth/me/workspaces": [
+"GET"
+],
+"/api/auth/otp/request": [
+"POST"
+],
+"/api/auth/otp/verify": [
+"POST"
+],
+"/api/auth/password/forgot": [
+"POST"
+],
+"/api/auth/password/reset": [
+"POST"
+],
+"/api/auth/profile": [
+"PATCH"
+],
+"/api/auth/register": [
+"POST"
+],
+"/api/auth/tenant/transfer-ownership": [
+"POST"
+],
+"/api/brain/agent": [
+"POST"
+],
+"/api/brain/agent/create-task": [
+"POST"
+],
+"/api/brain/context": [
+"GET"
+],
+"/api/brain/documents": [
+"GET",
+"POST"
+],
+"/api/brain/documents/{doc_id}": [
+"DELETE",
+"GET",
+"PATCH"
+],
+"/api/brain/documents/{doc_id}/download": [
+"GET"
+],
+"/api/brain/export": [
+"POST"
+],
+"/api/brain/search": [
+"GET"
+],
+"/api/brief": [
+"GET"
+],
+"/api/brief/details": [
+"GET"
+],
+"/api/brief/send-digest": [
+"POST"
+],
+"/api/brochure": [
+"GET"
+],
+"/api/calendar": [
+"GET"
+],
+"/api/capture/clarify": [
+"POST"
+],
+"/api/captures": [
+"GET"
+],
+"/api/captures/pending-count": [
+"GET"
+],
+"/api/captures/{cid}": [
+"PATCH"
+],
+"/api/captures/{cid}/approve": [
+"POST"
+],
+"/api/captures/{cid}/clarify": [
+"POST"
+],
+"/api/captures/{cid}/reassign": [
+"POST"
+],
+"/api/captures/{cid}/reject": [
+"POST"
+],
+"/api/complaints": [
+"GET",
+"POST"
+],
+"/api/complaints/{cid}/resolve": [
+"PATCH"
+],
+"/api/contacts": [
+"GET",
+"POST"
+],
+"/api/contacts/{contact_id}": [
+"DELETE",
+"PATCH"
+],
+"/api/contacts/{contact_id}/profile": [
+"GET"
+],
+"/api/contacts/{contact_id}/rescore": [
+"POST"
+],
+"/api/dashboard": [
+"GET"
+],
+"/api/decisions": [
+"GET"
+],
+"/api/decisions/{decision_id}": [
+"GET"
+],
+"/api/decisions/{decision_id}/approve": [
+"POST"
+],
+"/api/decisions/{decision_id}/comment": [
+"POST"
+],
+"/api/decisions/{decision_id}/reject": [
+"POST"
+],
+"/api/decisions/{decision_id}/tasks": [
+"POST"
+],
+"/api/decisions/{decision_id}/timeline": [
+"GET"
+],
+"/api/desk": [
+"GET"
+],
+"/api/desk/nudge/{item_id}": [
+"POST"
+],
+"/api/expenses": [
+"GET",
+"POST"
+],
+"/api/expenses/suggest-category": [
+"POST"
+],
+"/api/expenses/with-file": [
+"POST"
+],
+"/api/expenses/{eid}": [
+"DELETE",
+"PATCH"
+],
+"/api/files": [
+"POST"
+],
+"/api/files/{file_id}/download": [
+"GET"
+],
+"/api/files/{fname}": [
+"GET"
+],
+"/api/follow-up/run": [
+"POST"
+],
+"/api/health": [
+"GET"
+],
+"/api/inbox": [
+"GET"
+],
+"/api/inbox/{item_id}/status": [
+"POST"
+],
+"/api/ingest": [
+"GET"
+],
+"/api/ingest/csv": [
+"POST"
+],
+"/api/ingest/document": [
+"POST"
+],
+"/api/ingest/{ingestion_id}": [
+"GET"
+],
+"/api/ingest/{ingestion_id}/commit": [
+"POST"
+],
+"/api/inventory": [
+"GET",
+"POST"
+],
+"/api/inventory/with-file": [
+"POST"
+],
+"/api/inventory/{iid}": [
+"DELETE",
+"PATCH"
+],
+"/api/invites": [
+"GET",
+"POST"
+],
+"/api/invoices": [
+"GET"
+],
+"/api/journal": [
+"GET"
+],
+"/api/leaves": [
+"GET",
+"POST"
+],
+"/api/leaves/absence": [
+"POST"
+],
+"/api/leaves/on-leave": [
+"GET"
+],
+"/api/leaves/{leave_id}": [
+"GET"
+],
+"/api/leaves/{leave_id}/approve": [
+"POST"
+],
+"/api/leaves/{leave_id}/impact": [
+"GET"
+],
+"/api/leaves/{leave_id}/reject": [
+"POST"
+],
+"/api/leaves/{leave_id}/request-info": [
+"POST"
+],
+"/api/ledger/ai/{scope}": [
+"GET"
+],
+"/api/ledger/ai/{scope}/refresh": [
+"POST"
+],
+"/api/ledger/ask": [
+"POST"
+],
+"/api/ledger/reclassify-purchases": [
+"POST"
+],
+"/api/ledger/summary": [
+"GET"
+],
+"/api/meetings": [
+"GET",
+"POST"
+],
+"/api/meetings/text": [
+"POST"
+],
+"/api/meetings/{meeting_id}": [
+"GET"
+],
+"/api/memory": [
+"GET",
+"POST"
+],
+"/api/notifications": [
+"GET"
+],
+"/api/notifications/read-all": [
+"POST"
+],
+"/api/notifications/{nid}/read": [
+"POST"
+],
+"/api/onboarding/draft": [
+"POST"
+],
+"/api/onboarding/draft/{draft_id}": [
+"GET",
+"PATCH"
+],
+"/api/onboarding/os-blueprint": [
+"POST"
+],
+"/api/onboarding/suggest": [
+"POST"
+],
+"/api/operating-score": [
+"GET"
+],
+"/api/payables": [
+"GET"
+],
+"/api/payables/payment/{pid}/match": [
+"POST"
+],
+"/api/payables/payment/{pid}/standalone": [
+"POST"
+],
+"/api/payments": [
+"GET"
+],
+"/api/revenue": [
+"GET",
+"POST"
+],
+"/api/revenue/invoice/{iid}": [
+"DELETE"
+],
+"/api/revenue/payment/{pid}": [
+"DELETE"
+],
+"/api/revenue/payment/{pid}/match": [
+"POST"
+],
+"/api/revenue/payment/{pid}/standalone": [
+"POST"
+],
+"/api/revenue/with-file": [
+"POST"
+],
+"/api/signup/check-email": [
+"POST"
+],
+"/api/signup/interview/answer": [
+"POST"
+],
+"/api/signup/interview/back": [
+"POST"
+],
+"/api/signup/interview/blueprint": [
+"POST"
+],
+"/api/signup/interview/refine": [
+"POST"
+],
+"/api/signup/interview/start": [
+"POST"
+],
+"/api/signup/stt": [
+"POST"
+],
+"/api/signup/tts": [
+"POST"
+],
+"/api/signup/website-intel": [
+"POST"
+],
+"/api/tasks": [
+"GET",
+"POST"
+],
+"/api/tasks/prioritize": [
+"POST"
+],
+"/api/tasks/{task_id}": [
+"DELETE",
+"GET",
+"PATCH"
+],
+"/api/tasks/{task_id}/approve": [
+"POST"
+],
+"/api/tasks/{task_id}/attachment": [
+"POST"
+],
+"/api/tasks/{task_id}/clarify": [
+"POST"
+],
+"/api/tasks/{task_id}/execution-plan": [
+"DELETE",
+"PATCH"
+],
+"/api/tasks/{task_id}/execution-plan/generate": [
+"POST"
+],
+"/api/tasks/{task_id}/reassign": [
+"POST"
+],
+"/api/tasks/{task_id}/reject": [
+"POST"
+],
+"/api/tasks/{task_id}/respond": [
+"POST"
+],
+"/api/tasks/{task_id}/steps/ask": [
+"POST"
+],
+"/api/tasks/{task_id}/updates": [
+"POST"
+],
+"/api/tenant": [
+"PATCH"
+],
+"/api/tenant/ai-consent": [
+"DELETE",
+"GET",
+"POST"
+],
+"/api/tenant/ai-keys": [
+"GET",
+"PUT"
+],
+"/api/tenant/ai-keys/{provider}": [
+"DELETE"
+],
+"/api/tenant/ai-setup/retry": [
+"POST"
+],
+"/api/tenant/ai-setup/status": [
+"GET"
+],
+"/api/tenant/finance-categories": [
+"PATCH"
+],
+"/api/tenant/finance-categories/regenerate": [
+"POST"
+],
+"/api/tenant/leave-approvers": [
+"PATCH"
+],
+"/api/tenant/lexicon": [
+"PATCH"
+],
+"/api/tenant/lexicon/regenerate": [
+"POST"
+],
+"/api/tenant/operating-model": [
+"PATCH"
+],
+"/api/tenant/operating-model/regenerate": [
+"POST"
+],
+"/api/tenant/os-blueprint": [
+"PATCH"
+],
+"/api/tenant/owner-exclusions": [
+"PUT"
+],
+"/api/tenant/plan": [
+"GET"
+],
+"/api/tenant/roles": [
+"POST"
+],
+"/api/tenant/roles/{key}": [
+"DELETE",
+"PATCH"
+],
+"/api/tenant/roles/{key}/permissions": [
+"PATCH"
+],
+"/api/tenant/settings": [
+"PATCH"
+],
+"/api/tenant/usage": [
+"GET"
+],
+"/api/transcribe": [
+"POST"
+],
+"/api/users": [
+"GET",
+"POST"
+],
+"/api/users/{user_id}": [
+"PATCH"
+],
+"/api/users/{user_id}/deprovision": [
+"POST"
+],
+"/api/users/{user_id}/invite": [
+"POST"
+],
+"/api/users/{user_id}/uninvite": [
+"POST"
+],
+"/api/voice-notes": [
+"GET",
+"POST"
+],
+"/api/voice-notes/text": [
+"POST"
+],
+"/api/voice-notes/{note_id}": [
+"GET"
+],
+"/api/webhooks/whatsapp": [
+"GET",
+"POST"
+],
+"/api/whatsapp/logs": [
+"GET"
+],
+"/api/whatsapp/status": [
+"GET"
+],
+"/api/work-coach": [
+"GET"
+],
+"/api/work-coach/refresh": [
+"POST"
+],
+"/api/workflows": [
+"GET",
+"POST"
+],
+"/api/workflows/{workflow_id}": [
+"DELETE"
+],
+"/api/workflows/{workflow_id}/advance": [
+"PATCH"
+],
+"/docs": [
+"GET"
+],
+"/docs/oauth2-redirect": [
+"GET"
+],
+"/health": [
+"GET"
+],
+"/openapi.json": [
+"GET"
+],
+"/redoc": [
+"GET"
+]
+}

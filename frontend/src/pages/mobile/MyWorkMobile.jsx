@@ -745,10 +745,34 @@ function WorkflowList() {
   });
   const rows = Array.isArray(data) ? data : data?.workflows || [];
 
+  /**
+   * Move a workflow on one stage.
+   *
+   * Two things were wrong here and both were masked by the fixture server,
+   * whose catch-all answered any verb on any path with 200:
+   *   1. the verb is PATCH, not POST — the real route is
+   *      PATCH /api/workflows/{id}/advance, so POST returned 405
+   *   2. "advance" does not compute the next stage for you; the body is
+   *      required and must name the target: { stage } (+ optional note),
+   *      so a bodyless PATCH returned 422
+   * The workflow carries its own ordered `stages` array, so the next stage is
+   * derived from that rather than hardcoded per pipeline.
+   */
+  const nextStage = (wf) => {
+    const stages = wf?.stages || [];
+    const at = stages.indexOf(wf?.stage);
+    return at >= 0 && at < stages.length - 1 ? stages[at + 1] : null;
+  };
+
   const advance = async (wf) => {
+    const stage = nextStage(wf);
+    if (!stage) {
+      toast.info("That's already at the last step.");
+      return;
+    }
     try {
-      await api.post(`/workflows/${wf.id}/advance`);
-      toast.success("Moved to the next stage");
+      await api.patch(`/workflows/${wf.id}/advance`, { stage });
+      toast.success(`Moved to ${humanStage(stage).toLowerCase()}`);
       qc.invalidateQueries({ queryKey: ["workflows"] });
       setOpen(null);
     } catch (e) {

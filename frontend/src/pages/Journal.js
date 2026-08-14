@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import api from "../lib/api";
+import { useIsMobile } from "../hooks/useIsMobile";
 import { PageHeader, Chip, EmptyState } from "../components/common";
 import {
   Dialog,
@@ -114,8 +115,37 @@ export default function Journal() {
     queryFn: () => api.get(`/journal?q=${encodeURIComponent(term)}`).then((r) => r.data),
   });
 
-  const visibleDays = useMemo(() => (data?.days || []).filter((d) => d.decisions.length || d.notes.length), [data]);
-  const hasContent = visibleDays.length > 0;
+  const allDays = useMemo(() => (data?.days || []).filter((d) => d.decisions.length || d.notes.length), [data]);
+  const hasContent = allDays.length > 0;
+  // MPWA-11 (§5.2.7): the journal grows without bound — with real entries it
+  // measured 3,124px at 390px, past the ~2,500px ceiling.
+  //
+  // Capping DAYS was the wrong cut: the live journal has only 2 days, one of
+  // which holds 23 notes. The length is inside a day, so the cap has to be on
+  // entries. Mobile only; desktop still renders everything.
+  const isMobile = useIsMobile();
+  const [showAllEntries, setShowAllEntries] = useState(false);
+  const PER_DAY_ON_MOBILE = 5;
+  const capped = isMobile && !showAllEntries;
+  const visibleDays = useMemo(
+    () => (capped
+      ? allDays.map((d) => ({
+          ...d,
+          decisions: (d.decisions || []).slice(0, PER_DAY_ON_MOBILE),
+          notes: (d.notes || []).slice(0, PER_DAY_ON_MOBILE),
+        }))
+      : allDays),
+    [allDays, capped]
+  );
+  const hiddenEntryCount = useMemo(
+    () => allDays.reduce(
+      (n, d) =>
+        n + Math.max(0, (d.decisions || []).length - (capped ? PER_DAY_ON_MOBILE : Infinity))
+          + Math.max(0, (d.notes || []).length - (capped ? PER_DAY_ON_MOBILE : Infinity)),
+      0
+    ),
+    [allDays, capped]
+  );
 
   return (
     <div>
@@ -198,6 +228,16 @@ export default function Journal() {
               )}
             </section>
           ))}
+          {hiddenEntryCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowAllEntries(true)}
+              data-testid="journal-show-earlier"
+              className="w-full rounded-xl border border-border bg-card text-sm font-semibold transition-colors hover:bg-accent min-h-touch"
+            >
+              Show {hiddenEntryCount} earlier {hiddenEntryCount === 1 ? "entry" : "entries"}
+            </button>
+          )}
         </div>
       )}
 

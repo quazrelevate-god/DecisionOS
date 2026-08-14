@@ -276,13 +276,22 @@ const ENDPOINT = {
   inventory: "/inventory",
 };
 
+// List endpoints are not uniform. /expenses, /assets and /inventory return bare
+// arrays; /revenue returns { currency, invoices, open_invoices, payments,
+// totals, unmatched_payments }. Looking only for `items` made the Income tab
+// render "Nothing under income yet" while invoices existed — caught against the
+// real API, hidden by the fixture, which did return an array.
+const LIST_KEY = { revenue: "invoices" };
+
 function LedgerList({ tab, onOpen }) {
   const { data, isLoading } = useQuery({
     queryKey: ["ledger", tab],
     queryFn: () => api.get(ENDPOINT[tab]).then((r) => r.data),
     enabled: !!ENDPOINT[tab],
   });
-  const rows = Array.isArray(data) ? data : data?.items || [];
+  const rows = Array.isArray(data)
+    ? data
+    : data?.[LIST_KEY[tab]] || data?.items || [];
 
   if (isLoading) return <div className="mt-4"><ListSkeleton rows={4} /></div>;
   if (!rows.length) {

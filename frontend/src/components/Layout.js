@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { NavLink, useNavigate, useLocation } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
@@ -12,14 +12,6 @@ import { notifMeta, notifLink } from "../lib/notif";
 import { Chip } from "./common";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import {
-  Sheet,
-  SheetContent,
-  SheetTrigger,
-  SheetTitle,
-  SheetDescription,
-} from "./ui/sheet";
-import {
-  Microphone,
   Brain as BrainIcon,
   AddressBook,
   SignOut,
@@ -29,11 +21,7 @@ import {
   MoonStars,
   Briefcase,
   GearSix,
-  MicrophoneStage,
-  List as ListIcon,
-  FileArrowUp,
   Tray,
-  UserCircle,
   Wallet,
   Gauge, // Epic 2 E2-15: Ops nav entry (Operating Score)
   UsersThree, // Epic 2 E2-01: Team nav entry (Employees list)
@@ -41,6 +29,13 @@ import {
 import { ProfileDialog } from "./ProfileDialog";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { WelcomeOverlay } from "./WelcomeOverlay";
+// MPWA-03: mobile navigation is the floating dock + All Apps panel. The
+// edge-to-edge tab bar and the hamburger drawer are both gone below lg.
+import { FloatingDock } from "./mobile/FloatingDock";
+import { AllAppsPanel } from "./mobile/AllAppsPanel";
+import { DexFab } from "./mobile/DexFab";
+import { DexSheet } from "./mobile/DexSheet";
+import { BottomSheet } from "./mobile/BottomSheet";
 
 // Epic 2 Sprint A (E2-01 / E2-02 / E2-15): People retired; CRM (customers +
 // suppliers) and Team (employees) are separate top-level entries. Ops is a
@@ -66,16 +61,12 @@ const NAV = [
   { to: "/settings", label: "Settings", tkey: "settings", icon: GearSix, testid: "nav-settings", ownerOnly: true },
 ];
 
-// Primary items for the mobile bottom tab bar — kept at 5 slots.
-// People slot is replaced by CRM (which surfaces customers + suppliers only);
-// Team lives in the sidebar drawer only.
-const BOTTOM_NAV = [
-  { to: "/", label: "Desk", tkey: "desk", icon: Tray, perm: "inbox" },
-  { to: "/brief", label: "Brief", tkey: "brief", icon: Sun },
-  { to: "/my-work", label: "Work", tkey: "work", icon: Briefcase },
-  { to: "/crm", label: "CRM", tkey: "crm", icon: AddressBook, perm: "people" },
-  { to: "/brain", label: "Dex", tkey: "brain", icon: BrainIcon, perm: "brain" },
-];
+// MPWA-03 (§8): BOTTOM_NAV is retired. The mobile 5-item tab bar put CRM and
+// My Work in slots the owner rarely flips between, and left Money — the
+// second-most-consulted screen for an MSME owner — two taps deep in a drawer.
+// Slots now live in FloatingDock (Desk · Brief · Money · More) with Dex as the
+// FAB; everything else is in AllAppsPanel. This supersedes Epic 2's E2-10
+// bottom-nav rebalance, which was a founder decision — confirm before merging.
 
 // MPWA-01: `markOnly` drops the wordmark. The mobile app bar cannot hold the
 // full wordmark plus four 44px controls at 390px (it measured 407 > 390 once
@@ -103,14 +94,23 @@ export default function Layout({ children }) {
     if (n.perms) return n.perms.some((p) => hasPerm(user, p));
     return !n.perm || hasPerm(user, n.perm);
   }), [user]);
-  const navBottom = useMemo(() => BOTTOM_NAV.filter((n) => !n.perm || hasPerm(user, n.perm)), [user]);
   const navigate = useNavigate();
-  const location = useLocation();
   const { isDark, toggle: toggleTheme } = useTheme();
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  // MPWA-03 mobile navigation state.
+  const [allAppsOpen, setAllAppsOpen] = useState(false);
+  const [dexOpen, setDexOpen] = useState(false);
+  const [dexRecording, setDexRecording] = useState({ on: false, secs: 0 });
+  const [langOpen, setLangOpen] = useState(false);
   const { data: notif } = useQuery({ queryKey: ["notifications"], queryFn: () => api.get("/notifications").then((r) => r.data), refetchInterval: 30000 });
   const unread = notif?.unread || 0;
+  // MPWA-03 (§8): the bell counts only what actually needs *him* — approvals,
+  // escalations and mentions. A badge that also counted "payment received" and
+  // "task done" trained him to ignore it, which is worse than no badge.
+  const NEEDS_HIM = /decision|approv|escalat|mention|handoff|nudge/i;
+  const bellCount = (notif?.notifications || []).filter(
+    (n) => !n.read && NEEDS_HIM.test(n.kind || "")
+  ).length;
   const qc = useQueryClient();
   const { data: brief } = useQuery({ queryKey: ["fires-count"], queryFn: () => api.get("/brief?period=morning").then((r) => r.data), refetchInterval: 60000, enabled: user?.role === "owner" });
   const fires = brief?.counters?.fires || 0;
@@ -125,17 +125,22 @@ export default function Layout({ children }) {
     if (to) navigate(to);
   };
 
-  const Bellicon = () => {
+  // `mobile` applies the MPWA-03 header rules — 48px target, and a badge that
+  // counts only what needs him, capped at 9. Desktop keeps its 40px button and
+  // raw unread count so §9.2's pixel-identical requirement holds.
+  const Bellicon = ({ mobile = false }) => {
     const items = (notif?.notifications || []).slice(0, 7);
+    const count = mobile ? bellCount : unread;
     return (
       <Popover>
         <PopoverTrigger asChild>
           <button data-testid="notif-bell"
-            className="relative w-10 h-10 flex items-center justify-center border border-black hover:bg-brand-ink hover:text-white transition-colors">
-            <Bell size={18} weight="bold" />
-            {unread > 0 && (
+            aria-label={count > 0 ? `Notifications, ${count} need you` : "Notifications"}
+            className={`relative flex items-center justify-center border border-black hover:bg-brand-ink hover:text-white transition-colors ${mobile ? "w-12 h-12" : "w-10 h-10"}`}>
+            <Bell size={mobile ? 22 : 18} weight="bold" />
+            {count > 0 && (
               <span data-testid="notif-count" className="absolute -top-2 -right-2 bg-brand-red text-white text-[10px] min-w-5 h-5 px-1 flex items-center justify-center border border-black font-bold">
-                {unread > 99 ? "99+" : unread}
+                {mobile ? Math.min(9, count) : (unread > 99 ? "99+" : unread)}
               </span>
             )}
           </button>
@@ -300,63 +305,17 @@ export default function Layout({ children }) {
           )}
         </header>
 
-        {/* Mobile top app bar */}
-        {/* MPWA-02: h-14 becomes min-h-14 + top inset — a fixed height would
-            put the controls under the status bar in iOS standalone, where
-            there is no browser chrome above us. px-safe covers landscape,
-            where the notch eats the left or right edge instead. */}
+        {/* Mobile top app bar — MPWA-03.
+            Two controls, not four. The theme toggle moved to an All Apps tile
+            (he switches theme roughly never and it was occupying prime
+            top-bar space beside the bell), and the hamburger drawer is gone
+            entirely — nothing should be reachable from two places (§8).
+            MPWA-02: min-h + top inset so nothing sits under the status bar in
+            iOS standalone, where there is no browser chrome above us. */}
         <header className="lg:hidden min-h-14 border-b border-border bg-background/80 backdrop-blur-xl flex items-center justify-between gap-2 px-chrome-safe pt-safe sticky top-0 z-20">
           <Logo markOnly />
           <div className="flex items-center gap-touch-gap shrink-0">
-            <LanguageSwitcher />
-            <ThemeToggle />
-            <Bellicon />
-            <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
-            <SheetTrigger asChild>
-              <button
-                data-testid="mobile-menu-button"
-                aria-label="Open menu"
-                className="w-10 h-10 flex items-center justify-center border border-black bg-white hover:bg-brand-ink hover:text-white transition-colors"
-              >
-                <ListIcon size={20} weight="bold" />
-              </button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-72 p-0 border-r border-black rounded-none bg-white flex flex-col" data-testid="mobile-drawer">
-              <SheetTitle className="sr-only">Navigation</SheetTitle>
-              <SheetDescription className="sr-only">Main navigation menu</SheetDescription>
-              <div className="px-6 py-5 border-b border-black">
-                <Logo />
-                <p className="mt-2 label-mono text-muted-foreground truncate">{tenant?.name}</p>
-                <div className="mt-3 flex items-center gap-2">
-                  <span className="font-semibold text-sm">{user?.name}</span>
-                  <span className="px-2 py-0.5 text-[11px] rounded-md uppercase tracking-wider bg-brand-red/10 text-brand-red border border-brand-red/20 font-semibold">
-                    {user?.role}
-                  </span>
-                </div>
-              </div>
-              <nav className="flex-1 py-3 overflow-y-auto">
-                <NavItems onNavigate={() => setDrawerOpen(false)} />
-              </nav>
-              <div className="border-t border-black p-4 space-y-2 pb-24">
-                {user?.role === "owner" && (
-                  <button
-                    onClick={() => { setDrawerOpen(false); sendDigest(); }}
-                    data-testid="mobile-send-digest-button"
-                    className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm rounded-lg bg-foreground text-background font-semibold"
-                  >
-                    <EnvelopeSimple size={16} weight="bold" /> {t("header.send_digest")}
-                  </button>
-                )}
-                <button
-                  onClick={doLogout}
-                  data-testid="mobile-logout-button"
-                  className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold uppercase tracking-wider bg-white text-brand-red border-2 border-brand-red hover:bg-brand-red hover:text-white transition-colors"
-                >
-                  <SignOut size={16} weight="bold" /> {t("header.sign_out")}
-                </button>
-              </div>
-            </SheetContent>
-          </Sheet>
+            <Bellicon mobile />
           </div>
         </header>
 
@@ -365,29 +324,51 @@ export default function Layout({ children }) {
         <main className="flex-1 p-4 lg:p-8 pb-dock lg:pb-8 px-gutter-safe overflow-x-hidden app-canvas">{children}</main>
       </div>
 
-      {/* Mobile bottom tab bar */}
-      {/* MPWA-02: the bottom inset keeps the tabs off the home indicator.
-          This whole nav is replaced by FloatingDock in MPWA-03 — the inset
-          work is done here anyway so the app is correct in between. */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 border-t border-black bg-white flex z-[10000] pb-safe" data-testid="mobile-bottom-nav">
-        {navBottom.map(({ to, label, tkey, icon: Icon }) => {
-          const active = to === "/" ? location.pathname === "/" : location.pathname.startsWith(to);
-          return (
-            <NavLink
-              key={to}
-              to={to}
-              end={to === "/"}
-              data-testid={`bottomnav-${to === "/" ? "dashboard" : to.slice(1)}`}
-              className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 border-r border-black/10 last:border-r-0 transition-colors ${
-                active ? "bg-brand-ink text-white" : "text-brand-ink hover:bg-black/5"
-              }`}
-            >
-              <Icon size={20} weight={active ? "fill" : "bold"} />
-              <span className="text-[10px] uppercase tracking-wide font-semibold leading-none">{t(`bottomnav.${tkey}`)}</span>
-            </NavLink>
-          );
-        })}
-      </nav>
+      {/* MPWA-03 — mobile navigation.
+          A floating pill detached from the edges (lists scroll *under* it,
+          which is what `pb-dock` on main pays for), plus Dex as a separate
+          64px circle on the same baseline. Desktop keeps its sidebar. */}
+      <FloatingDock
+        user={user}
+        onMore={() => setAllAppsOpen(true)}
+        moreOpen={allAppsOpen}
+        moreBadge={captureCount}
+      />
+      <DexFab
+        onOpen={() => setDexOpen(true)}
+        recording={dexRecording.on}
+        seconds={dexRecording.secs}
+        onStop={() => setDexOpen(true)}
+      />
+      <AllAppsPanel
+        open={allAppsOpen}
+        onClose={() => setAllAppsOpen(false)}
+        user={user}
+        isDark={isDark}
+        onToggleTheme={toggleTheme}
+        onSendDigest={sendDigest}
+        onSignOut={doLogout}
+        onOpenLanguage={() => setLangOpen(true)}
+        counts={{ notifications: bellCount, myWork: fires }}
+      />
+      <DexSheet
+        open={dexOpen}
+        onClose={() => setDexOpen(false)}
+        onRecordingChange={(on, secs) => setDexRecording({ on, secs })}
+        onCaptured={() => qc.invalidateQueries({ queryKey: ["captures-pending"] })}
+      />
+      {/* The Language tile opens the existing switcher in a thumb-reachable
+          sheet rather than duplicating the language list. */}
+      <BottomSheet
+        open={langOpen}
+        onClose={() => setLangOpen(false)}
+        title={t("allapps.language", "Language")}
+        data-testid="language-sheet"
+      >
+        <div className="py-1" onClick={() => setLangOpen(false)}>
+          <LanguageSwitcher variant="inline" />
+        </div>
+      </BottomSheet>
     </div>
   );
 }

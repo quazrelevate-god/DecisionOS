@@ -162,13 +162,33 @@ function collectViolations() {
   // An out-of-flow descendant (a count badge pinned with -top-2 -right-2, a
   // dropdown, a tooltip) is *designed* to overhang its box. That is not the
   // right-edge clipping §5.2.1 is about, so only in-flow overflow counts.
-  const overflowIsOnlyAbsolute = (el) => {
-    const kids = Array.from(el.children).filter((k) => {
-      const r = k.getBoundingClientRect();
-      const p = el.getBoundingClientRect();
-      return r.right > p.right + 1 || r.left < p.left - 1;
-    });
-    return kids.length > 0 && kids.every((k) => ['absolute', 'fixed'].includes(getComputedStyle(k).position));
+  //
+  // Must walk to any depth, not just direct children: the bell's badge is a
+  // grandchild — absolute inside a relative button — so a children-only check
+  // saw the in-flow button as the offender and flagged the header on every
+  // route (44 false positives).
+  const overflowIsOnlyOutOfFlow = (el) => {
+    const box = el.getBoundingClientRect();
+    let sawOverhang = false;
+    for (const d of el.querySelectorAll('*')) {
+      const r = d.getBoundingClientRect();
+      if (r.width === 0 && r.height === 0) continue;
+      if (r.right <= box.right + 1 && r.left >= box.left - 1) continue;
+      sawOverhang = true;
+      // Is this overhang out-of-flow relative to `el`? Walk up to `el` looking
+      // for an absolutely/fixed positioned ancestor.
+      let node = d;
+      let outOfFlow = false;
+      while (node && node !== el) {
+        if (['absolute', 'fixed'].includes(getComputedStyle(node).position)) {
+          outOfFlow = true;
+          break;
+        }
+        node = node.parentElement;
+      }
+      if (!outOfFlow) return false; // a real in-flow overflow
+    }
+    return sawOverhang;
   };
 
   for (const el of all) {
@@ -178,7 +198,7 @@ function collectViolations() {
     const ox = getComputedStyle(el).overflowX;
     if (ox === 'auto' || ox === 'scroll') {
       push('horizontal-scroll-strip', `${el.scrollWidth}>${el.clientWidth} — ${describe(el)}`);
-    } else if (ox === 'visible' && !overflowIsOnlyAbsolute(el)) {
+    } else if (ox === 'visible' && !overflowIsOnlyOutOfFlow(el)) {
       // visible overflow on a constrained box = content spilling past the edge
       push('horizontal-overflow', `${el.scrollWidth}>${el.clientWidth} (overflow-x:visible) — ${describe(el)}`);
     }

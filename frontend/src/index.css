@@ -206,6 +206,19 @@
     .min-h-touch-md { min-height: var(--control-h-md) !important; }
     .min-h-touch-lg { min-height: var(--control-h-lg) !important; }
 
+    /* MPWA-03: dock slots are the one control that must exceed the 44px floor
+       — §8 specifies >= 56x56. Declared here rather than as a Tailwind
+       min-w-[3.5rem] because the floors above are plain CSS that sits after
+       Tailwind's utilities in source order and would win (measured 48x48).
+       Qualified with the element name so it matches `a[data-testid]`'s
+       specificity (0,1,1) and wins on source order — a bare `.dock-item`
+       (0,1,0) lost to it and the slots measured 44x44. */
+    a.dock-item,
+    button.dock-item {
+        min-height: 3.5rem;
+        min-width: 3.5rem;
+    }
+
     /* ---- MPWA-02 (§5.2.8) — safe area + touch behaviour ----
        These live under the same query so desktop is untouched. */
 
@@ -253,6 +266,12 @@
         padding-left: max(1rem, env(safe-area-inset-left, 0px));
         padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
     }
+}
+
+/* §8: below 360px items shrink to 52px and the FAB to 60px — never below 44. */
+@media (max-width: 359.98px) {
+    a.dock-item,
+    button.dock-item { min-height: 3.25rem; min-width: 3.25rem; }
 }
 
 /* The dock in MPWA-03 floats this far above the home indicator. */

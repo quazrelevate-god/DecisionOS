@@ -32,4 +32,24 @@ export function useIsMobile() {
   return isMobile;
 }
 
+/**
+ * True if we were below lg *when this component mounted*, and never changes
+ * after. One-shot on purpose.
+ *
+ * MPWA-12c: `/brief` redirects to `/inbox?scope=morning` below lg. Driving that
+ * off `useIsMobile()` made a *layout* signal cause a *navigation*, so any later
+ * flip past 1024px moved the user to a different page and could not be undone
+ * by resizing back — a desktop user narrowing their window lost the Brief, and
+ * the §9.2 screenshot harness lost it mid-capture when the scrollbar appeared.
+ *
+ * Redirects are navigation decisions: they get made once, on arrival. Layout
+ * decisions keep using useIsMobile and stay live.
+ */
+export function useWasMobileAtMount() {
+  const [was] = useState(() =>
+    typeof window === "undefined" ? false : window.matchMedia(MOBILE_QUERY).matches
+  );
+  return was;
+}
+
 export default useIsMobile;

@@ -97,6 +97,11 @@ function App() {
             <Route path="/admin/*" element={<AdminPortal />} />
             <Route path="/" element={<Home />} />
             <Route path="/dashboard" element={<Navigate to="/brief" replace />} />
+            {/* MPWA-12c (§2.1): Desk and Brief are one surface now, and the
+                mode is time. /brief redirects PERMANENTLY — bookmarks,
+                notifications and the daily digest email all link there. Desktop
+                still renders CEOBrief at that route (see the component's own
+                isMobile branch), so the redirect is mobile-only. */}
             <Route path="/brief" element={<Protected><CEOBrief /></Protected>} />
             <Route path="/journal" element={<Protected ownerOnly><Journal /></Protected>} />
             <Route path="/my-work" element={<Protected><MyWork /></Protected>} />

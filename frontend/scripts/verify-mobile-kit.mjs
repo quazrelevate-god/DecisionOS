@@ -8,6 +8,7 @@
  * Exits non-zero on any failed assertion.
  */
 import { chromium } from 'playwright';
+import { signIn } from './lib/auth.mjs';
 
 const BASE = process.env.AUDIT_BASE || 'http://localhost:3000';
 const results = [];
@@ -25,6 +26,7 @@ const ctx = await browser.newContext({
 const page = await ctx.newPage();
 page.on('pageerror', (e) => check('no page errors', false, e.message.split('\n')[0]));
 
+check('signed in', await signIn(page, BASE));
 await page.goto(`${BASE}/__mobile-kit`, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('[data-testid="mobile-kitchen-sink"]', { timeout: 15000 });
 await page.waitForTimeout(400);

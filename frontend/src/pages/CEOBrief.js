@@ -7,8 +7,11 @@ import { Chip } from "../components/common";
 import { money } from "../lib/format";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../components/ui/dialog";
-import { useIsMobile } from "../hooks/useIsMobile";
-import CEOBriefMobile from "./mobile/CEOBriefMobile";
+import { useWasMobileAtMount } from "../hooks/useIsMobile";
+// MPWA-12c (§2.1): CEOBriefMobile is retired as a page — Desk absorbed its
+// narrative composition, and its content components were extracted into
+// components/mobile/blocks/BriefBlocks.jsx rather than deleted (§9).
+import { Navigate } from "react-router-dom";
 import { Clock, CheckCircle, Stamp, UserMinus, Warning, CurrencyInr, XCircle, ArrowClockwise, CaretRight, Fire, BookOpen, ListChecks, WarningCircle, ArrowBendUpRight, Sparkle, Paperclip, Receipt, HandCoins, Coins } from "@phosphor-icons/react";
 
 const PERIODS = [
@@ -189,9 +192,9 @@ function DetailDialog({ row, period, open, onClose }) {
 }
 
 export default function CEOBrief() {
-  // MPWA-07: rebuilt below lg (§8). Above lg the original tree renders
-  // unchanged, which keeps §9.2's desktop diff empty by construction.
-  const isMobile = useIsMobile();
+  // MPWA-12c: below lg this route is a redirect, not a page. Read once on
+  // mount — see useWasMobileAtMount for why a live media query is wrong here.
+  const goMobile = useWasMobileAtMount();
   const { user, tenant } = useAuth();
   const navigate = useNavigate();
   const isOwner = user?.role === "owner";
@@ -202,9 +205,15 @@ export default function CEOBrief() {
     queryKey: ["brief", period],
     queryFn: () => api.get(`/brief?period=${period}`).then((r) => r.data),
     refetchInterval: 30000,
+    // Do not spend a request on a page we are about to leave (§2.1: "Fetch only
+    // for the active scope").
+    enabled: !goMobile,
   });
 
-  if (isMobile) return <CEOBriefMobile />;
+  // §2.1: "/brief redirects to /inbox?scope=morning. Keep the redirect
+  // permanently — bookmarks, notifications and the daily digest email all link
+  // there." Mobile only; desktop keeps its own Brief page untouched.
+  if (goMobile) return <Navigate to="/inbox?scope=morning" replace />;
 
   return (
     <div className="flex flex-col">

@@ -5,48 +5,52 @@
 // lists scroll *under* it (§8: every scroll container gets padding-bottom 96px
 // — Layout's `pb-dock` does that).
 //
-// Slots are chosen against §2's four questions — the destinations the owner
-// switches *between* all day, not the ones he visits occasionally:
-//   Desk  /inbox    Q2 what's stuck on me      ~8x/day
-//   Brief /brief    Q1 anything on fire        every open
-//   Money /finance  Q3 did money move          ~4x/day
+// MPWA-12c (§2.1): Desk absorbed Brief, which FREED A SLOT. My Work is promoted
+// out of All Apps into it, giving four verbs: decide, do, money, ask.
+//   Desk  /inbox    decide — what needs me, in any time scope
+//   Work  /my-work  do     — the flow I am running
+//   Money /finance  money  — did it move
 //   More            everything else
 // Q4 (tell someone to do X) is the Dex FAB, a separate circle.
+//
+// §9: "Do not add a fourth thing to the dock. Four slots plus the FAB,
+// permanently." Four is the count, not a starting point.
 //
 // Active state carries three cues together (§3.5): regular -> fill weight,
 // colour change, AND the label. Never colour alone, never an unlabelled icon.
 import * as React from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Tray, Newspaper, Wallet, DotsThree, Briefcase } from "@phosphor-icons/react";
+import { Tray, Wallet, DotsThree, Briefcase } from "@phosphor-icons/react";
 import { hasPerm } from "@/lib/perms";
 import { cn } from "@/lib/utils";
 
 /**
- * Resolve the three permanent slots for this user (§8 "Role variance").
- * Slots 2 and 4 never change.
- *   - no `inbox` permission     -> My Work in slot 1 instead of Desk
- *   - no finance/ledger access  -> My Work in slot 3 instead of Money
+ * Resolve the dock's destination slots for this user (§8 "Role variance").
+ * `More` is always last and is added by the component, not here.
+ *   - no `inbox` permission     -> Work takes slot 1
+ *   - no finance/ledger access  -> Money is dropped entirely rather than
+ *     replaced by a second Work, since nothing may appear twice
  */
 export function dockSlots(user, t = (k, d) => d) {
   const canInbox = hasPerm(user, "inbox");
   const canMoney =
     hasPerm(user, "ledger") || hasPerm(user, "finance") || hasPerm(user, "data_input");
 
+  // Without the `inbox` permission there is no Desk to show, so Work takes slot
+  // 1 and the dock collapses to three destinations plus More — the dedupe below
+  // removes the repeat rather than showing My Work twice.
   const desk = canInbox
     ? { to: "/inbox", label: t("bottomnav.desk", "Desk"), icon: Tray, testid: "dock-desk" }
     : { to: "/my-work", label: t("bottomnav.work", "Work"), icon: Briefcase, testid: "dock-my-work" };
 
-  // §3.5 known collision: Sun was doing duty for /brief AND the Desk's "Due
-  // Today" chip while the header used a moon for dark mode — three meanings,
-  // two glyphs. /brief takes a document glyph; Sun stays with Due Today only.
-  const brief = { to: "/brief", label: t("bottomnav.brief", "Brief"), icon: Newspaper, testid: "dock-brief" };
+  const work = { to: "/my-work", label: t("bottomnav.work", "Work"), icon: Briefcase, testid: "dock-work" };
 
   const money = canMoney
     ? { to: "/finance", label: t("bottomnav.money", "Money"), icon: Wallet, testid: "dock-money" }
-    : { to: "/my-work", label: t("bottomnav.work", "Work"), icon: Briefcase, testid: "dock-my-work-alt" };
+    : null;
 
-  const slots = [desk, brief, money];
+  const slots = [desk, work, money].filter(Boolean);
   // If a permission collapse duplicated My Work, drop the repeat rather than
   // showing the same destination twice — §8: nothing appears in two places.
   const seen = new Set();

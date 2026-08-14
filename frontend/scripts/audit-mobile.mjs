@@ -47,6 +47,16 @@ const SKIP_DESKTOP = Boolean(flag('skip-desktop', false));
 // either, the audit runs against whatever the API actually returns.
 const ONE_FIXTURE = flag('fixture', null);
 const SWEEP = Boolean(flag('fixtures', false));
+// §9.2's desktop diff is a LAYOUT test, so it needs deterministic DATA. Captured
+// against whatever the live API happened to hold, every baseline rotted the
+// moment the tenant changed — the first run after switching from the fixture
+// server to the real backend reported 42 "moved" screens, none of which was a
+// layout change. Pinned to a fixture state instead; --desktop-fixture off opts
+// back out.
+const DESKTOP_FIXTURE = (() => {
+  const v = flag('desktop-fixture', 'busy');
+  return v === 'off' || v === false ? null : String(v);
+})();
 const FIXTURE_STATES = SWEEP
   ? ['empty', 'sparse', 'busy']
   : (typeof ONE_FIXTURE === 'string' ? [ONE_FIXTURE] : [null]);
@@ -73,8 +83,14 @@ const DESKTOP_VIEWPORTS = [
 // founder lives in, assembled from blocks. A detail page (contact 360) or a
 // row-list (settings) is not composed and is exempt.
 const ROUTES = [
-  { path: '/inbox', label: 'Desk', primary: true },
-  { path: '/brief', label: 'CEO Brief' },
+  { path: '/inbox', label: 'Desk · now', primary: true },
+  // MPWA-12c: the Brief is a scope of the Desk, so each narrative mode is its
+  // own composed screen and carries the §3 L1/L2/L3 rules. /brief stays in the
+  // sweep because desktop still renders CEOBrief there and mobile must prove
+  // the redirect target is clean.
+  { path: '/inbox?scope=morning', label: 'Desk · morning brief', primary: true },
+  { path: '/inbox?scope=week', label: 'Desk · this week', primary: true },
+  { path: '/brief', label: 'CEO Brief (desktop) / redirect (mobile)' },
   { path: '/my-work', label: 'My Work', primary: true },
   { path: '/my-work?view=leave', label: 'My Work · leave' },
   { path: '/my-work?view=workflows', label: 'My Work · workflows' },
@@ -177,34 +193,53 @@ function collectViolations(opts = {}) {
   if (doc.scrollWidth > doc.clientWidth + 1) {
     push('horizontal-overflow', `page scrollWidth ${doc.scrollWidth} > viewport ${doc.clientWidth}`);
   }
-  // An out-of-flow descendant (a count badge pinned with -top-2 -right-2, a
-  // dropdown, a tooltip) is *designed* to overhang its box. That is not the
-  // right-edge clipping §5.2.1 is about, so only in-flow overflow counts.
+  // §5.2.1 is about content *clipped at the right edge* — content he cannot
+  // read or reach. Three things overhang a box without ever being clipped:
   //
-  // Must walk to any depth, not just direct children: the bell's badge is a
-  // grandchild — absolute inside a relative button — so a children-only check
-  // saw the in-flow button as the offender and flagged the header on every
-  // route (44 false positives).
-  const overflowIsOnlyOutOfFlow = (el) => {
-    const box = el.getBoundingClientRect();
+  //   1. an out-of-flow descendant (a count badge pinned with -top-2 -right-2, a
+  //      dropdown, a tooltip) — designed to overhang;
+  //   2. a deliberate full-bleed (`-mx-4 px-4` on the Verdict hero) — in flow,
+  //      wider than its parent's content box, still inside the box that clips;
+  //   3. anything inside a horizontally scrollable strip — reachable by
+  //      scrolling, and the strip itself is reported as horizontal-scroll-strip.
+  //
+  // (3) is why the clipper cannot be found by walking UP from the container: the
+  // scope strip's `overflow-x:auto` sits BELOW the Desk's root, so a container
+  // holding a 419px-wide chip row read as 29px of clipped content on every Desk
+  // route in every state — 40 findings, none of them real.
+  //
+  // So: per overhanging descendant, walk up to the container. A scrollable
+  // ancestor on the way means reachable. Otherwise the nearest hidden/clip
+  // ancestor (or the viewport) is what would cut it off.
+  const overflowIsHarmless = (el) => {
     let sawOverhang = false;
+    const box = el.getBoundingClientRect();
     for (const d of el.querySelectorAll('*')) {
       const r = d.getBoundingClientRect();
       if (r.width === 0 && r.height === 0) continue;
       if (r.right <= box.right + 1 && r.left >= box.left - 1) continue;
       sawOverhang = true;
-      // Is this overhang out-of-flow relative to `el`? Walk up to `el` looking
-      // for an absolutely/fixed positioned ancestor.
-      let node = d;
-      let outOfFlow = false;
-      while (node && node !== el) {
-        if (['absolute', 'fixed'].includes(getComputedStyle(node).position)) {
-          outOfFlow = true;
-          break;
+
+      let node = d.parentElement;
+      let outOfFlow = ['absolute', 'fixed'].includes(getComputedStyle(d).position);
+      let reachable = false;
+      let clipL = 0;
+      let clipR = window.innerWidth;
+      let seenContainer = false;
+      while (node && node !== document.body) {
+        const cs = getComputedStyle(node);
+        if (!seenContainer && ['absolute', 'fixed'].includes(cs.position)) outOfFlow = true;
+        if (['auto', 'scroll'].includes(cs.overflowX)) { reachable = true; break; }
+        if (cs.overflowX !== 'visible') {
+          const cr = node.getBoundingClientRect();
+          clipL = Math.max(clipL, cr.left);
+          clipR = Math.min(clipR, cr.right);
         }
+        if (node === el) seenContainer = true;
         node = node.parentElement;
       }
-      if (!outOfFlow) return false; // a real in-flow overflow
+      if (outOfFlow || reachable) continue;
+      if (r.right > clipR + 1 || r.left < clipL - 1) return false; // genuinely cut off
     }
     return sawOverhang;
   };
@@ -216,7 +251,7 @@ function collectViolations(opts = {}) {
     const ox = getComputedStyle(el).overflowX;
     if (ox === 'auto' || ox === 'scroll') {
       push('horizontal-scroll-strip', `${el.scrollWidth}>${el.clientWidth} — ${describe(el)}`);
-    } else if (ox === 'visible' && !overflowIsOnlyOutOfFlow(el)) {
+    } else if (ox === 'visible' && !overflowIsHarmless(el)) {
       // visible overflow on a constrained box = content spilling past the edge
       push('horizontal-overflow', `${el.scrollWidth}>${el.clientWidth} (overflow-x:visible) — ${describe(el)}`);
     }
@@ -303,8 +338,15 @@ function collectViolations(opts = {}) {
     // Measured in 8px rows over the first viewport: a row counts as filled if
     // any visible leaf element covers it. Coverage rather than a bounding box,
     // because a tall empty container would otherwise read as "filled".
+    //
+    // The band starts at the top of <main>, not at y=0. The app bar sits above
+    // main and is not composed from blocks, so counting its 72px as "empty"
+    // charged every screen a flat 9% (11% at 640px) it could never earn back —
+    // which is how a screen that genuinely fills its content area reported 80%.
     const ROW = 8;
-    const rows = Math.floor(viewportHeight / ROW);
+    const mainTop = Math.max(0, Math.round(main.getBoundingClientRect().top));
+    const bandTop = Math.min(mainTop, viewportHeight - ROW);
+    const rows = Math.max(1, Math.floor((viewportHeight - bandTop) / ROW));
     const covered = new Array(rows).fill(false);
     const leaves = Array.from(main.querySelectorAll('*')).filter(
       (el) => el.children.length === 0 || /^(P|H1|H2|H3|SPAN|BUTTON|A|LI|IMG|SVG|INPUT|TEXTAREA)$/.test(el.tagName)
@@ -314,13 +356,13 @@ function collectViolations(opts = {}) {
       if (r.width < 2 || r.height < 2) continue;
       const cs = getComputedStyle(el);
       if (cs.visibility === 'hidden' || cs.display === 'none' || Number(cs.opacity) === 0) continue;
-      const from = Math.max(0, Math.floor(r.top / ROW));
-      const to = Math.min(rows - 1, Math.floor(r.bottom / ROW));
+      const from = Math.max(0, Math.floor((r.top - bandTop) / ROW));
+      const to = Math.min(rows - 1, Math.floor((r.bottom - bandTop) / ROW));
       for (let i = from; i <= to; i++) covered[i] = true;
     }
     const filled = covered.filter(Boolean).length;
     const fillPct = Math.round((filled / rows) * 100);
-    if (fillPct < 85) push('density-floor', `${fillPct}% of the first viewport filled`);
+    if (fillPct < 85) push('density-floor', `${fillPct}% of the first viewport filled (content band ${bandTop}-${viewportHeight}px)`);
 
     let gapRun = 0;
     let worstGap = 0;
@@ -379,6 +421,46 @@ async function waitForDomQuiet(page, quietMs = 250, timeoutMs = 2200) {
     .catch(() => {});
 }
 
+// recharts animates a pie by rewriting each sector's `d` on rAF, and it starts
+// that animation from a mount-time timer rather than from a mutation — so
+// waitForDomQuiet's window can close while an arc is still sweeping. The result
+// was a /finance desktop diff of exactly 151px, every run, all of it on one pie
+// arc's antialiased edge: deterministic within a session, different between
+// sessions, and nothing to do with layout.
+//
+// Waits for a sustained QUIET WINDOW, not merely two identical frames: a Pie's
+// sweep begins on a mount timer, so two consecutive frames match trivially
+// *before* it starts and the screenshot lands mid-arc. 400ms of no geometry
+// change, capped at 5s (recharts' default sweep is 1.5s).
+async function waitForVectorsStable(page, quietMs = 400, limitMs = 5000) {
+  await page
+    .evaluate(
+      ([quiet, limit]) =>
+        new Promise((resolve) => {
+          const read = () =>
+            Array.from(document.querySelectorAll('svg path, svg circle, svg rect'))
+              .map((el) => el.getAttribute('d')
+                || `${el.getAttribute('cx')},${el.getAttribute('cy')},${el.getAttribute('r')},${el.getAttribute('width')},${el.getAttribute('height')}`)
+              .join('|');
+          if (!document.querySelector('svg path, svg circle, svg rect')) return resolve();
+          const started = Date.now();
+          const STEP = 100;
+          let prev = read();
+          let quietFor = 0;
+          const tick = () => {
+            const next = read();
+            quietFor = next === prev ? quietFor + STEP : 0;
+            prev = next;
+            if (quietFor >= quiet || Date.now() - started > limit) return resolve();
+            setTimeout(tick, STEP);
+          };
+          setTimeout(tick, STEP);
+        }),
+      [quietMs, limitMs]
+    )
+    .catch(() => {});
+}
+
 // CRA/webpack renders runtime errors into an overlay iframe. Left in place it
 // silently poisons the screenshot diff (its stack trace carries bundle line
 // numbers that shift on every rebuild), so surface it as a finding and strip it
@@ -427,17 +509,25 @@ async function settle(page) {
   // Forcing each family settles it deterministically.
   await page
     .evaluate(async () => {
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       await document.fonts.ready;
-      const faces = [
-        '900 24px Chivo', '800 24px Chivo', '700 24px Chivo',
-        '400 15px Geist', '500 15px Geist', '600 15px Geist', '700 15px Geist',
-        '400 13px "IBM Plex Mono"',
-      ];
-      await Promise.all(faces.map((f) => document.fonts.load(f).catch(() => {})));
+      // The face list must not be hardcoded. Chivo/Geist/IBM Plex Mono arrive via
+      // an @import chain, so document.fonts is still EMPTY when the first
+      // `fonts.ready` resolves — nothing is pending because nothing is known
+      // yet. A fixed list also silently stops covering any face added later.
+      // Wait for the registry to stop growing, then load every face in it.
+      let size = -1;
+      for (let i = 0; i < 40 && size !== document.fonts.size; i++) {
+        size = document.fonts.size;
+        await frame();
+      }
+      await Promise.all(Array.from(document.fonts).map((f) => f.load().catch(() => {})));
       await document.fonts.ready;
+      await frame();
     })
     .catch(() => {});
   await waitForDomQuiet(page);
+  await waitForVectorsStable(page);
 }
 
 // Append ?fixture= when auditing a fixture state, preserving any existing query.
@@ -476,7 +566,8 @@ async function desktopBaseline(browser, report) {
   const ctx = await browser.newContext({ viewport: DESKTOP_VIEWPORTS[0] });
   await ctx.clock.setFixedTime(FROZEN_NOW);
   const page = await ctx.newPage();
-  const authed = await ensureAuth(page);
+  const authed = await ensureAuth(page, DESKTOP_FIXTURE);
+  report.notes.push(`Desktop baseline data: ${DESKTOP_FIXTURE ? `fixture "${DESKTOP_FIXTURE}"` : 'live API (not reproducible)'}`);
   if (!authed) {
     report.notes.push('Desktop baseline skipped — could not authenticate.');
     await ctx.close();
@@ -487,9 +578,20 @@ async function desktopBaseline(browser, report) {
     for (const route of ROUTES) {
       if (route.anon) continue;
       const slug = route.path.replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '');
-      const file = path.join(BASELINE_DIR, `${vp.name}__${slug}.png`);
-      await page.goto(`${BASE}${route.path}`, { waitUntil: 'domcontentloaded' });
+      const data = DESKTOP_FIXTURE || 'live';
+      const file = path.join(BASELINE_DIR, `${vp.name}__${data}__${slug}.png`);
+      await page.goto(routeUrl(route.path, DESKTOP_FIXTURE), { waitUntil: 'domcontentloaded' });
       await settle(page);
+      // A desktop route that redirects is a §9.2 violation on its own — the
+      // screenshot would silently compare two different pages and report the
+      // difference as a layout move.
+      const at = new URL(page.url()).pathname;
+      if (at !== route.path.split('?')[0]) {
+        report.desktop.diffs.push({
+          route: route.path, viewport: vp.name,
+          detail: `redirected to ${at} on desktop — a mobile-only redirect leaked above lg`,
+        });
+      }
       const overlay = await takeErrorOverlay(page);
       if (overlay) {
         report.notes.push(`[${vp.name}] ${route.path} rendered a runtime error — desktop shot excludes the overlay: ${overlay}`);
@@ -508,7 +610,7 @@ async function desktopBaseline(browser, report) {
           route: route.path, viewport: vp.name,
           detail: `size changed ${before.w}×${before.h} → ${after.w}×${after.h}`,
         });
-        fs.writeFileSync(path.join(ARTIFACT_DIR, `${vp.name}__${slug}__actual.png`), shot);
+        fs.writeFileSync(path.join(ARTIFACT_DIR, `${vp.name}__${data}__${slug}__actual.png`), shot);
         continue;
       }
       const diff = new PNG({ width: before.w, height: before.h });
@@ -521,8 +623,8 @@ async function desktopBaseline(browser, report) {
           route: route.path, viewport: vp.name,
           detail: `${changed} px changed (${((changed / (before.w * before.h)) * 100).toFixed(3)}%)`,
         });
-        fs.writeFileSync(path.join(ARTIFACT_DIR, `${vp.name}__${slug}__diff.png`), PNG.sync.write(diff));
-        fs.writeFileSync(path.join(ARTIFACT_DIR, `${vp.name}__${slug}__actual.png`), shot);
+        fs.writeFileSync(path.join(ARTIFACT_DIR, `${vp.name}__${data}__${slug}__diff.png`), PNG.sync.write(diff));
+        fs.writeFileSync(path.join(ARTIFACT_DIR, `${vp.name}__${data}__${slug}__actual.png`), shot);
       }
     }
   }

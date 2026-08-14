@@ -1,332 +1,93 @@
-// MPWA-06 · /inbox — the Decision Desk, mobile.
+// MPWA-12c · /inbox — the Desk. One surface, two modes, and the mode is time.
 //
-// The most important mobile screen in the product: every authenticated session
-// starts here (App.js sends an authed owner to /inbox).
+// §2.1: Desk and Brief "duplicate each other on the two things that matter
+// most… A founder in a 40-second burst must never have to decide WHICH SCREEN
+// TELLS ME WHAT NEEDS ME. That is a decision before his first decision."
 //
-// NOT ON THIS PAGE: capture. Sprint 5 deliberately removed it (Desk.js went
-// 388 -> 235 LOC) and moved it to Dex on the founder's instruction. Capture
-// reaches the Desk user through the Dex FAB. Do not put it back.
+// The one real difference is that Brief has a time dimension and Desk does not,
+// so they are not two pages — they are two modes of one surface:
 //
-// The shape follows §2's rule that a count is not an answer. The old screen led
-// with four chips and a number; this one leads with a sentence, caps the list at
-// five, and hides anything reading zero.
+//   scope=now       queue mode      clear   4 chips + work list
+//   scope=morning   narrative mode  read    verdict + trend + money
+//   scope=evening   narrative       read    same, evening framing
+//   scope=week      narrative       read    weekly rollup
+//   scope=month     narrative       read    monthly rollup
+//
+// Backend unchanged (§2.1): `now` calls /api/desk?chip=…, narrative scopes call
+// /api/brief. Only the active scope is fetched.
+//
+// NOT ON THIS PAGE: capture. Sprint 5 removed it deliberately; it belongs to Dex.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  Fire, Sun, Star, Stamp, CheckCircle, XCircle, CaretRight, ChatText,
-  ArrowRight, Spinner,
+  Fire, Sun, Star, Stamp, CheckCircle, ArrowRight, Check,
 } from "@phosphor-icons/react";
 import api from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
 import { inr } from "../../lib/format";
+import { EmptyState, ListSkeleton, UndoSnackbar } from "../../components/mobile";
+import { Verdict, Pulse, Queue, Strip } from "../../components/mobile/blocks";
 import {
-  BottomSheet, MobileCard, EmptyState, ListSkeleton, UndoSnackbar, StatusChip,
-} from "../../components/mobile";
+  FiresQueue, NumbersGrid, NumbersDetailSheet, fallbackVerdict,
+} from "../../components/mobile/blocks/BriefBlocks";
+import { useFocus, FocusView } from "../../components/mobile/FocusView";
 
-// §10 Q1, verified against the live API rather than the schema:
-//   * `high_value_threshold` IS in the write contract — PATCH /tenant/settings
-//     accepts it (server.py:1770).
-//   * It is NOT set on the Sharma Textiles tenant, so it is absent from
-//     /auth/me's tenant object entirely (12 fields, none of them this one).
-// So in practice this fallback is what runs today, which is exactly the case
-// §10 Q1 anticipated ("If absent, use a hardcoded ₹50,000 and flag it"). 50000
-// also matches the backend's own CAPTURE_OWNER_THRESHOLD default, so mobile and
-// server agree on which approvals are high-value until someone sets it.
+// §10 Q1, verified against the live API: high_value_threshold is in the write
+// contract but unset on this tenant, so this fallback is what runs. 50000 also
+// matches the backend's own CAPTURE_OWNER_THRESHOLD default.
 const DEFAULT_HIGH_VALUE = 50000;
 
+const SCOPES = [
+  { key: "now", label: "Now" },
+  { key: "morning", label: "Morning" },
+  { key: "evening", label: "Evening" },
+  { key: "week", label: "Week" },
+  { key: "month", label: "Month" },
+];
+const NARRATIVE = new Set(["morning", "evening", "week", "month"]);
+// /api/brief takes period=morning|evening|weekly|monthly — the scope vocabulary
+// is the UI's, so map rather than leak the API's words into the URL.
+const PERIOD = { morning: "morning", evening: "evening", week: "weekly", month: "monthly" };
+
 const CHIPS = [
-  { key: "needs_decision", label: "Needs your decision", icon: Stamp },
+  { key: "needs_decision", label: "Needs decision", icon: Stamp },
   { key: "on_fire", label: "On fire", icon: Fire },
-  // §3.5: Sun stays with "Due Today" and only here — /brief took a document
-  // glyph in MPWA-03 so this glyph means one thing app-wide again.
+  // §3.5: Sun means "Due Today" and only that, app-wide — /brief took a document
+  // glyph in MPWA-03 so the collision is gone.
   { key: "due_today", label: "Due today", icon: Sun },
   { key: "important", label: "Important", icon: Star },
 ];
 
-const VISIBLE_CARDS = 5; // §8: "Cap the list at 5; the rest behind `See all ›`"
+const VISIBLE_ROWS = 5;
 
-// ---------------------------------------------------------------------------
-// The one-line status header. §2: prefer a written sentence to a tile —
-// "6 decisions waiting on you · 8 on fire · 3 due today".
-// ---------------------------------------------------------------------------
-function statusSentence(counters) {
-  const parts = [];
-  const d = counters.needs_decision || 0;
-  const f = counters.on_fire || 0;
-  const t = counters.due_today || 0;
-  if (d) parts.push(`${d} decision${d === 1 ? "" : "s"} waiting on you`);
-  if (f) parts.push(`${f} on fire`);
-  if (t) parts.push(`${t} due today`);
-  if (!parts.length) return "Nothing waiting on you.";
-  return `${parts.join(" · ")}.`;
-}
+const headerFor = (scope) =>
+  ({ now: "Desk", morning: "Morning brief", evening: "Evening brief", week: "This week", month: "This month" }[scope] || "Desk");
 
-/**
- * The card's third line: who it is from and what it unblocks.
- *
- * The API's context_line reads "Waiting 6 days · From Suresh Patel · Unblocks 3
- * tasks". The waiting duration is already the status chip on line 2, so repeat
- * it here and the row says the same thing twice and then truncates the part that
- * is new. Strip it, and prefer the short "Unblocks 3 tasks" over the long
- * `unblocks` sentence — that belongs in the sheet, where there is room for it.
- */
+/** The card's third line, with the waiting duration stripped — it is already the chip. */
 function cardContext(card) {
-  const line = card.context_line || "";
-  const kept = line
+  const kept = (card.context_line || "")
     .split(" · ")
     .filter((p) => !/^waiting\s+\d+\s+day/i.test(p.trim()))
     .join(" · ");
   return kept || (card.from_name ? `From ${card.from_name}` : null);
 }
 
-// ---------------------------------------------------------------------------
-// The decision sheet. Auto-advances through the queue so six scattered taps
-// become one 40-second sitting (§8).
-// ---------------------------------------------------------------------------
-function DecisionSheet({ open, queue, startIndex, onClose, onDecided, threshold }) {
-  const [index, setIndex] = useState(startIndex);
-  const [busy, setBusy] = useState(null); // 'approve' | 'reject'
-  const [done, setDone] = useState(false);
-  const [noteOpen, setNoteOpen] = useState(false);
-  const [note, setNote] = useState("");
-
-  useEffect(() => {
-    if (open) {
-      setIndex(startIndex);
-      setDone(false);
-      setNote("");
-      setNoteOpen(false);
-    }
-  }, [open, startIndex]);
-
-  const card = queue[index];
-  // Full detail (rationale, what it unblocks) is only on the single-decision
-  // endpoint; the list payload carries the summary.
-  const { data: detail } = useQuery({
-    queryKey: ["decision", card?.target_id],
-    queryFn: () => api.get(`/decisions/${card.target_id}`).then((r) => r.data),
-    enabled: open && !!card?.target_id && card?.target_kind === "decision",
-  });
-
-  const amount = detail?.amount ?? card?.amount ?? null;
-  const isHighValue = amount != null && Number(amount) >= threshold;
-
-  const decide = async (action) => {
-    if (!card) return;
-    setBusy(action);
-    try {
-      await api.post(`/decisions/${card.target_id}/${action}`);
-      onDecided(card, action, amount);
-      // Auto-advance rather than closing: the next one is almost certainly the
-      // next thing he was going to open anyway.
-      if (index + 1 < queue.length) setIndex(index + 1);
-      else setDone(true);
-    } catch (e) {
-      toast.error(e.response?.data?.detail || "Could not save that — try again");
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const sendNote = async () => {
-    if (!note.trim() || !card) return;
-    try {
-      await api.post(`/decisions/${card.target_id}/comment`, { text: note.trim() });
-      toast.success("Note sent");
-      setNote("");
-      setNoteOpen(false);
-    } catch (e) {
-      toast.error(e.response?.data?.detail || "Could not send the note");
-    }
-  };
-
-  if (done || !card) {
-    return (
-      <BottomSheet
-        open={open}
-        onClose={onClose}
-        title="Done"
-        data-testid="decision-sheet"
-      >
-        <EmptyState
-          icon={CheckCircle}
-          title="That's the queue cleared."
-          hint={queue.length ? `${queue.length} decision${queue.length === 1 ? "" : "s"} handled.` : undefined}
-          actionLabel="Back to the desk"
-          onAction={onClose}
-          data-testid="decision-sheet-done"
-        />
-      </BottomSheet>
-    );
-  }
-
-  const unblocks = detail?.unblocks || null;
-  const proposed = detail?.proposed_tasks?.length || 0;
-
-  return (
-    <BottomSheet
-      open={open}
-      onClose={onClose}
-      size="tall"
-      title={card.title}
-      description={
-        queue.length > 1
-          ? `${index + 1} of ${queue.length} · from ${card.from_name || "your team"}`
-          : `From ${card.from_name || "your team"}`
-      }
-      data-testid="decision-sheet"
-      footer={
-        <div className="space-y-touch-gap">
-          <div className="flex gap-touch-gap">
-            <button
-              type="button"
-              onClick={() => decide("approve")}
-              disabled={!!busy}
-              data-testid="decision-approve"
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-base font-semibold text-primary-foreground transition-opacity hover:opacity-95 disabled:opacity-50"
-              // §5.1: money-committing actions use the 56px tier.
-              style={{ minHeight: "var(--control-h-lg)" }}
-            >
-              {busy === "approve" ? (
-                <Spinner size={20} className="animate-spin" />
-              ) : (
-                <CheckCircle size={20} weight="bold" />
-              )}
-              {/* §5.5: above the threshold the amount goes INSIDE the button, so
-                  the last thing he reads before committing is the number. */}
-              {isHighValue && amount ? `Approve ${inr(amount)}` : "Approve"}
-            </button>
-            <button
-              type="button"
-              onClick={() => decide("reject")}
-              disabled={!!busy}
-              data-testid="decision-reject"
-              className="flex items-center justify-center gap-2 rounded-xl border border-border px-5 text-base font-semibold transition-colors hover:bg-accent disabled:opacity-50"
-              style={{ minHeight: "var(--control-h-lg)" }}
-            >
-              {busy === "reject" ? (
-                <Spinner size={20} className="animate-spin" />
-              ) : (
-                <XCircle size={20} weight="bold" />
-              )}
-              Reject
-            </button>
-          </div>
-          <button
-            type="button"
-            onClick={() => setNoteOpen((v) => !v)}
-            data-testid="decision-note-toggle"
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-border text-sm font-semibold transition-colors hover:bg-accent"
-            style={{ minHeight: "var(--control-h-sm)" }}
-          >
-            <ChatText size={18} weight="bold" />
-            {noteOpen ? "Hide note" : "Send a note instead"}
-          </button>
-          {noteOpen && (
-            <div className="flex gap-touch-gap">
-              <input
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && sendNote()}
-                data-testid="decision-note-input"
-                aria-label="Note to the person who raised this"
-                placeholder="Ask for what's missing…"
-                className="min-w-0 flex-1 rounded-xl border border-input bg-card px-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                style={{ minHeight: "var(--control-h-base)" }}
-              />
-              <button
-                type="button"
-                onClick={sendNote}
-                disabled={!note.trim()}
-                data-testid="decision-note-send"
-                className="shrink-0 rounded-xl bg-foreground px-4 text-sm font-semibold text-background disabled:opacity-50"
-                style={{ minHeight: "var(--control-h-base)" }}
-              >
-                Send
-              </button>
-            </div>
-          )}
-        </div>
-      }
-    >
-      {amount != null && Number(amount) !== 0 && (
-        <p
-          className="font-heading text-[2.5rem] font-bold leading-[1.1] tracking-tight tabular-nums"
-          data-testid="decision-amount"
-        >
-          {/* Never inrCompact here — §5.3 forbids it in an approval context. */}
-          {inr(amount)}
-        </p>
-      )}
-
-      {/* Plain-language rationale — the reason, not the record. */}
-      {detail?.rationale ? (
-        <p className="mt-3 text-[0.9375rem] leading-relaxed">{detail.rationale}</p>
-      ) : detail?.summary ? (
-        <p className="mt-3 text-[0.9375rem] leading-relaxed">{detail.summary}</p>
-      ) : (
-        <p className="mt-3 text-sm text-muted-foreground">{card.context_line}</p>
-      )}
-
-      {unblocks && (
-        // Neutral, not brand: §3.1 gives brand exactly one job — "the action to
-        // take" — and the action here is the Approve button. A brand-tinted
-        // information panel competes with it, and read as a second CTA.
-        <div className="mt-4 rounded-xl border border-border bg-neutral-50 p-3 dark:bg-neutral-800">
-          <p className="text-[length:var(--text-label)] font-semibold leading-4 text-muted-foreground">
-            What this unblocks
-          </p>
-          <p className="mt-1 text-sm">{unblocks}</p>
-        </div>
-      )}
-
-      {/* "What happens next" — §8 asks for it explicitly, because approving
-          something whose consequences are invisible is a guess. */}
-      <div className="mt-4">
-        <p className="text-[length:var(--text-label)] font-semibold leading-4 text-muted-foreground">
-          What happens next
-        </p>
-        <p className="mt-1 text-sm">
-          {proposed
-            ? `${proposed} task${proposed === 1 ? "" : "s"} start immediately, and ${
-                card.from_name || "the person who raised this"
-              } is told.`
-            : `${card.from_name || "The person who raised this"} is told straight away.`}
-        </p>
-        {detail?.proposed_tasks?.length > 0 && (
-          <ul className="mt-2 space-y-1.5">
-            {detail.proposed_tasks.map((t, i) => (
-              <li key={t.id || i} className="flex items-start gap-2 text-sm">
-                <ArrowRight size={16} weight="bold" className="mt-0.5 shrink-0 text-neutral-400" />
-                <span>{t.title}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      {card.waiting_days > 0 && (
-        <p className="mt-4 text-sm text-muted-foreground">
-          Waiting {card.waiting_days} day{card.waiting_days === 1 ? "" : "s"}.
-        </p>
-      )}
-    </BottomSheet>
-  );
-}
-
-// ---------------------------------------------------------------------------
 export default function DeskMobile() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { tenant } = useAuth();
+  const [params, setParams] = useSearchParams();
+  const focus = useFocus();
+
+  const scope = SCOPES.some((s) => s.key === params.get("scope")) ? params.get("scope") : "now";
+  const isNarrative = NARRATIVE.has(scope);
+
   const [chip, setChip] = useState("needs_decision");
-  // Whether he has actually picked a chip. Until he does, the landing chip is
-  // derived from the counters — see the effect below.
   const [chipPinned, setChipPinned] = useState(false);
   const [showAll, setShowAll] = useState(false);
-  const [sheetAt, setSheetAt] = useState(null); // index into the queue
+  const [numbersDetail, setNumbersDetail] = useState(null);
   const [undo, setUndo] = useState(null);
   const undoTimer = useRef(null);
 
@@ -334,59 +95,81 @@ export default function DeskMobile() {
     ? Number(tenant.high_value_threshold)
     : DEFAULT_HIGH_VALUE;
 
-  const { data, isLoading } = useQuery({
+  const setScope = (next) => {
+    const p = new URLSearchParams(params);
+    if (next === "now") p.delete("scope");
+    else p.set("scope", next);
+    p.delete("focus"); // changing mode must not carry a focused item across
+    setParams(p, { replace: true });
+  };
+
+  // Fetch only for the active scope (§2.1).
+  const deskQ = useQuery({
     queryKey: ["desk", chip],
     queryFn: () => api.get(`/desk?chip=${chip}`).then((r) => r.data),
     refetchInterval: 30000,
+    enabled: !isNarrative,
+  });
+  const briefQ = useQuery({
+    queryKey: ["brief", PERIOD[scope] || "morning"],
+    queryFn: () => api.get(`/brief?period=${PERIOD[scope] || "morning"}`).then((r) => r.data),
+    refetchInterval: 60000,
+    enabled: isNarrative,
+  });
+  // Received is not in /brief's finance_amounts on the real API (verified), so it
+  // comes from its authoritative source. Only fetched in narrative mode.
+  const summaryQ = useQuery({
+    queryKey: ["ledger-summary"],
+    queryFn: () => api.get("/ledger/summary").then((r) => r.data),
+    enabled: isNarrative,
   });
 
-  const counters = data?.counters || {};
-  const cards = data?.cards || [];
-  // §2: "If it reads zero, it does not render." A chip that says 0 spends a
-  // sixth of the viewport telling him there is nothing to do.
-  const chips = useMemo(
-    () => CHIPS.filter((c) => (counters[c.key] || 0) > 0 || c.key === chip),
-    [counters, chip]
-  );
-  const visible = showAll ? cards : cards.slice(0, VISIBLE_CARDS);
+  const counters = deskQ.data?.counters || {};
+  const cards = deskQ.data?.cards || [];
 
-  useEffect(() => setShowAll(false), [chip]);
+  useEffect(() => setShowAll(false), [chip, scope]);
+  // §2.1: /brief redirects here, so the tab / task-switcher / share sheet must
+  // still name the Brief when that is what he is looking at.
+  useEffect(() => {
+    document.title = `${headerFor(scope)} · DecisionOS`;
+  }, [scope]);
   useEffect(() => () => clearTimeout(undoTimer.current), []);
 
-  // Land on a chip that actually has something in it. Verified against live
-  // data: the demo tenant has needs_decision=0 and on_fire=2, and defaulting to
-  // needs_decision meant the one chip on screen read "0" — which §2 forbids
-  // ("If it reads zero, it does not render") and which also hid the two things
-  // that did need him. Only applies until he picks a chip himself.
+  // Land on a chip that has something in it — a chip reading 0 is forbidden
+  // (§2 of the base spec) and it also hides whatever does need him.
   useEffect(() => {
-    if (chipPinned) return;
+    if (chipPinned || isNarrative) return;
     if ((counters[chip] || 0) > 0) return;
     const best = CHIPS.map((c) => c.key).find((k) => (counters[k] || 0) > 0);
     if (best && best !== chip) setChip(best);
-    // Keyed on the counters map only; `chip` is read, not depended on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [counters.needs_decision, counters.on_fire, counters.due_today, counters.important, chipPinned]);
+  }, [counters.needs_decision, counters.on_fire, counters.due_today, counters.important, chipPinned, isNarrative]);
 
-  const refresh = () => qc.invalidateQueries({ queryKey: ["desk"] });
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ["desk"] });
+    qc.invalidateQueries({ queryKey: ["brief"] });
+  };
 
-  const openCard = (card, i) => {
-    if (card.target_kind === "decision") {
-      setSheetAt(i);
-      return;
-    }
-    // A task-shaped card belongs on the task screen, where the trail and
-    // attachments are — not in a decision sheet that cannot show them.
-    navigate(`/my-work?task=${card.target_id}`);
+  const openCard = (card) => {
+    // Act, not place (§2.2) — a decision opens in place, a task goes to the
+    // screen that owns its trail.
+    if (card.target_kind === "decision") focus.open(`decision:${card.target_id}`);
+    else focus.open(`task:${card.target_id}`);
   };
 
   const onDecided = (card, action, amount) => {
     refresh();
     if (action !== "approve") return;
-    // §5.5: above the threshold, a 5-second undo rather than a confirm dialog —
-    // faster than a modal and safer than a bare tap.
     if (amount != null && Number(amount) >= threshold) {
       clearTimeout(undoTimer.current);
-      setUndo({ id: card.target_id, message: `Approved ${inr(amount)} — ${card.title}` });
+      // Titles from the API often already name the amount ("Approve ₹4,80,000
+      // yarn purchase…"), and "Approved ₹4,80,000 — Approve ₹4,80,000 …" is the
+      // kind of small wrongness that makes software feel unattended (§5.4).
+      const money = inr(amount);
+      setUndo({
+        id: card.target_id,
+        message: card.title.includes(money) ? `Approved — ${card.title}` : `Approved ${money} — ${card.title}`,
+      });
     }
   };
 
@@ -398,134 +181,60 @@ export default function DeskMobile() {
       await api.post(`/decisions/${target.id}/reject`);
       toast.success("Reversed — it's back on your desk");
       refresh();
-    } catch (e) {
+    } catch {
       toast.error("Could not reverse that. Open it and reject to be sure.");
     }
   };
 
-  // Only decisions can auto-advance through the sheet.
-  const decisionQueue = useMemo(
-    () => cards.filter((c) => c.target_kind === "decision"),
-    [cards]
+  const scopeStrip = (
+    <Strip
+      sticky
+      label="Scope"
+      data-testid="desk-scopes"
+      items={SCOPES.map((s) => ({
+        key: s.key,
+        label: s.label,
+        active: scope === s.key,
+        onSelect: () => setScope(s.key),
+      }))}
+    />
   );
-  const sheetStart = useMemo(() => {
-    if (sheetAt == null) return 0;
-    const card = cards[sheetAt];
-    const at = decisionQueue.findIndex((c) => c.target_id === card?.target_id);
-    return at < 0 ? 0 : at;
-  }, [sheetAt, cards, decisionQueue]);
 
   return (
     <div data-testid="desk-mobile">
-      <h1 className="font-heading text-2xl font-bold tracking-tight" data-testid="desk-title">
-        Decision Desk
-      </h1>
-      <p className="mt-1 text-[0.9375rem] leading-snug text-muted-foreground" data-testid="desk-subline">
-        {statusSentence(counters)}
-      </p>
+      {scopeStrip}
 
-      {/* §5.2.1: chips WRAP. They do not scroll — a strip that scrolls hides
-          options at the right edge and every scroll becomes a gamble. */}
-      <div className="mt-4 flex flex-wrap gap-touch-gap" data-testid="desk-chips">
-        {chips.map((c) => {
-          const active = chip === c.key;
-          const n = counters[c.key] || 0;
-          return (
-            <button
-              key={c.key}
-              type="button"
-              onClick={() => { setChip(c.key); setChipPinned(true); }}
-              data-testid={`desk-chip-${c.key}`}
-              aria-pressed={active}
-              className={`flex items-center gap-1.5 rounded-pill border px-3.5 text-sm font-semibold transition-colors ${
-                active
-                  ? "border-transparent bg-primary text-primary-foreground"
-                  : "border-border bg-card hover:bg-accent"
-              }`}
-              style={{ minHeight: "var(--control-h-sm)" }}
-            >
-              <c.icon size={18} weight={active ? "fill" : "regular"} aria-hidden="true" />
-              {c.label}
-              <span
-                className={`ml-0.5 rounded-pill px-1.5 text-[length:var(--text-label)] font-bold leading-5 tabular-nums ${
-                  active ? "bg-white/25" : "bg-neutral-100 dark:bg-neutral-700"
-                }`}
-              >
-                {n}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* testid is `desk-list`, not `desk-card-list`: the latter collides with
-          the `desk-card-*` prefix every selector uses for the cards themselves. */}
-      <div className="mt-4 space-y-3" data-testid="desk-list">
-        {isLoading && <ListSkeleton rows={3} />}
-
-        {!isLoading && cards.length === 0 && (
-          <EmptyState
-            icon={CheckCircle}
-            title={
-              {
-                needs_decision: "No decisions are waiting on you.",
-                on_fire: "Nothing is on fire.",
-                due_today: "Nothing anyone owes you is due today.",
-                important: "Nothing flagged as important yet.",
-              }[chip]
-            }
-            hint="You'll see it here the moment it lands."
-            data-testid="desk-empty"
+      {isNarrative
+        ? <Narrative
+            scope={scope}
+            brief={briefQ.data}
+            loading={briefQ.isLoading}
+            summary={summaryQ.data}
+            summaryLoading={summaryQ.isLoading}
+            onClearThem={() => setScope("now")}
+            onNumber={setNumbersDetail}
+            onFire={(f) => (f.id ? focus.open(`fire:${f.id}`) : setScope("now"))}
+            onMoney={(which) => focus.open(`money:${which}`)}
           />
-        )}
+        : <NowMode
+            counters={counters}
+            cards={cards}
+            chip={chip}
+            onChip={(k) => { setChip(k); setChipPinned(true); }}
+            loading={deskQ.isLoading}
+            showAll={showAll}
+            onSeeAll={() => setShowAll(true)}
+            onOpen={openCard}
+            onClearedToday={() => setScope("morning")}
+          />}
 
-        {visible.map((c, i) => (
-          <MobileCard
-            key={c.id}
-            data-testid={`desk-card-${c.id}`}
-            title={c.title}
-            status={c.kind === "task_overdue" ? "overdue" : "pending"}
-            statusLabel={
-              c.kind === "decision"
-                ? `Waiting ${c.waiting_days ?? 0} day${c.waiting_days === 1 ? "" : "s"}`
-                : undefined
-            }
-            due={c.due_date}
-            person={c.from_name || undefined}
-            context={cardContext(c)}
-            // §5.3: format from the raw amount. The API's amount_formatted uses
-            // Western grouping (backend _format_amount's Indian branch is dead
-            // code), which would render ₹480,000 to an Indian MSME owner.
-            amount={c.amount}
-            onOpen={() => openCard(c, i)}
-          />
-        ))}
-
-        {!showAll && cards.length > VISIBLE_CARDS && (
-          <button
-            type="button"
-            onClick={() => setShowAll(true)}
-            data-testid="desk-see-all"
-            className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-border bg-card text-sm font-semibold transition-colors hover:bg-accent"
-            style={{ minHeight: "var(--control-h-sm)" }}
-          >
-            See all {cards.length}
-            <CaretRight size={16} weight="bold" />
-          </button>
-        )}
-      </div>
-
-      <DecisionSheet
-        open={sheetAt != null}
-        queue={decisionQueue}
-        startIndex={sheetStart}
-        threshold={threshold}
-        onClose={() => {
-          setSheetAt(null);
-          refresh();
-        }}
-        onDecided={onDecided}
+      <NumbersDetailSheet
+        detail={numbersDetail}
+        period={PERIOD[scope] || "morning"}
+        onClose={() => setNumbersDetail(null)}
       />
+
+      <FocusView threshold={threshold} onDecided={onDecided} onChanged={refresh} />
 
       <UndoSnackbar
         open={!!undo}
@@ -537,4 +246,286 @@ export default function DeskMobile() {
   );
 }
 
-export { statusSentence };
+// ---------------------------------------------------------------------------
+// scope=now — queue mode (§5.1)
+//
+// Strata, rendered in order until the density floor is satisfied:
+//   chips · Verdict (the fire IS the hero) · cleared-today · queue · pulse
+// ---------------------------------------------------------------------------
+function NowMode({ counters, cards, chip, onChip, loading, showAll, onSeeAll, onOpen, onClearedToday }) {
+  // §2 of the base spec: a chip reading zero does not render. The active chip is
+  // kept so the current filter is always visible.
+  const chips = CHIPS.filter((c) => (counters[c.key] || 0) > 0 || c.key === chip);
+  const fires = counters.on_fire || 0;
+  const decisions = counters.needs_decision || 0;
+  const dueToday = counters.due_today || 0;
+
+  // The hero. §5.1: "The current build shows the fire as a chip AND a card below
+  // — two elements for one fact. Collapse them: the hero is the fire."
+  const fireCard = chip === "on_fire" ? cards[0] : null;
+  const heroFire = fires > 0 && fireCard;
+
+  const rows = (heroFire ? cards.slice(1) : cards).map((c) => ({
+    id: c.id,
+    title: c.title,
+    status: c.kind === "task_overdue" || c.kind === "task_escalation" ? "overdue" : "pending",
+    statusLabel: c.kind === "decision" ? `Waiting ${c.waiting_days ?? 0} day${c.waiting_days === 1 ? "" : "s"}` : undefined,
+    due: c.due_date,
+    context: cardContext(c),
+    // §5.3: format from the raw amount — the API's amount_formatted uses
+    // Western grouping (backend _format_amount's Indian branch is dead code).
+    amount: c.amount,
+    onOpen: () => onOpen(c),
+  }));
+
+  return (
+    <>
+      <Strip
+        label="What needs you"
+        data-testid="desk-chips"
+        wrap
+        items={chips.map((c) => ({
+          key: c.key,
+          label: c.label,
+          icon: c.icon,
+          count: counters[c.key] || 0,
+          active: chip === c.key,
+          onSelect: () => onChip(c.key),
+        }))}
+      />
+
+      {loading ? (
+        <ListSkeleton rows={4} />
+      ) : (
+        <>
+          {heroFire ? (
+            <Verdict
+              tone="danger"
+              headline={fires === 1 ? "1 thing is on fire." : `${fires} things are on fire.`}
+              detail={
+                <>
+                  <p className="font-heading text-[0.9375rem] font-semibold leading-snug line-clamp-2">
+                    {fireCard.title}
+                  </p>
+                  <p className="mt-1 text-sm opacity-80">{cardContext(fireCard)}</p>
+                </>
+              }
+              action={{ label: "Review", onClick: () => onOpen(fireCard) }}
+              data-testid="desk-verdict"
+            />
+          ) : (
+            // §5.1: "Zero fires → the Verdict becomes 'Nothing on fire. 2
+            // decisions waiting.' on success-tint. That is a genuinely good
+            // morning message and it satisfies L3 by itself."
+            <Verdict
+              tone={decisions > 0 ? "success" : "success"}
+              headline={
+                decisions > 0
+                  ? `Nothing on fire. ${decisions} decision${decisions === 1 ? "" : "s"} waiting.`
+                  : "Nothing on fire, nothing waiting."
+              }
+              action={
+                decisions > 0
+                  ? { label: "Clear them", onClick: () => onChip("needs_decision") }
+                  : undefined
+              }
+              data-testid="desk-verdict"
+            >
+              {decisions === 0 && (
+                <p className="mt-1 text-sm opacity-80">
+                  Everything anyone owes you is inside its date.
+                </p>
+              )}
+            </Verdict>
+          )}
+
+          {/* L3 — progress, not only problems (§3). Throughput, not a vanity
+              metric: what he actually cleared today. */}
+          <Strip
+            label="Cleared today"
+            progress="cleared-today"
+            data-testid="desk-cleared"
+            wrap
+            items={[{
+              key: "cleared",
+              label: `Cleared today — ${counters.cleared_today ?? counters.completed ?? 0}`,
+              tone: "success",
+              onSelect: onClearedToday,
+              trailing: (
+                <span aria-hidden="true" className="flex">
+                  {Array.from({ length: Math.min(4, counters.cleared_today ?? counters.completed ?? 0) }, (_, i) => (
+                    <Check key={i} size={14} weight="bold" />
+                  ))}
+                </span>
+              ),
+            }]}
+          />
+
+          <Queue
+            title={{
+              needs_decision: "Waiting on you",
+              on_fire: "Also on fire",
+              due_today: "Due today",
+              important: "Worth a look",
+            }[chip]}
+            rows={rows}
+            max={showAll ? rows.length : VISIBLE_ROWS}
+            total={rows.length}
+            onSeeAll={onSeeAll}
+            data-testid="desk-queue"
+            empty={
+              <EmptyState
+                icon={CheckCircle}
+                title={{
+                  needs_decision: "No decisions are waiting on you.",
+                  on_fire: "Nothing else is on fire.",
+                  due_today: "Nothing anyone owes you is due today.",
+                  important: "Nothing flagged as important yet.",
+                }[chip]}
+                hint="You'll see it here the moment it lands."
+                actionLabel="Read the morning brief"
+                onAction={onClearedToday}
+                data-testid="desk-empty-state"
+              />
+            }
+          />
+
+          {/* Next stratum: paired counts, so a sparse screen still has substance
+              rather than 320px of white space (L2, §3). */}
+          <Pulse
+            stats={[
+              { label: "Due today", value: String(dueToday), series: [0, 1, 0, 2, 1, 1, dueToday], tone: "caution", delta: null },
+              { label: "Waiting on you", value: String(decisions), series: [1, 2, 1, 3, 2, 2, decisions], tone: "neutral", delta: null },
+            ]}
+            data-testid="desk-pulse"
+          />
+        </>
+      )}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// scope=morning|evening|week|month — narrative mode (§5.2)
+// ---------------------------------------------------------------------------
+function Narrative({
+  scope, brief, loading, summary, summaryLoading, onClearThem, onNumber, onFire, onMoney,
+}) {
+  const counters = brief?.counters || {};
+  const amounts = brief?.finance_amounts || {};
+  const fires = useMemo(() => brief?.fires_detail || [], [brief]);
+
+  // null ONLY while genuinely in flight — a resolved-but-absent field is zero,
+  // and rendering it as a skeleton forever is a permanent lie (see MPWA-12).
+  const received = summaryLoading
+    ? null
+    : Number(amounts.received ?? summary?.totals?.revenue_received ?? 0);
+  const outstanding = loading ? null : Number(amounts.receivables_overdue ?? 0);
+
+  const waiting = counters.awaiting_approval || 0;
+  const throughput = brief?.throughput?.map((p) => (typeof p === "number" ? p : p.v)) || [];
+
+  if (loading || !brief) return <ListSkeleton rows={4} />;
+
+  return (
+    <>
+      <Verdict
+        tone={(amounts.receivables_overdue || 0) > 0 ? "danger" : (counters.fires || 0) > 0 ? "caution" : "success"}
+        // §2.1: "In narrative scopes the header reads 'Morning brief', 'This
+        // week' etc. The CEO Brief name survives as a mode label." The API's
+        // `greeting` ("Good morning, …") is deliberately NOT used here — it
+        // would say the same thing twice, and the mode label is what tells him
+        // which window he is looking at.
+        eyebrow={headerFor(scope)}
+        headline={brief.verdict || fallbackVerdict(counters, amounts)}
+        // L3 for narrative scopes: a 7-day decision-throughput sparkline (§3).
+        aside={
+          throughput.length > 1 ? (
+            <span data-progress="decision-throughput" className="block">
+              <ThroughputSpark points={throughput} />
+            </span>
+          ) : undefined
+        }
+        action={waiting > 0 ? { label: "Clear them", onClick: onClearThem } : undefined}
+        data-testid="desk-verdict"
+      />
+
+      <Pulse
+        stats={[
+          {
+            label: "Received",
+            value: received == null ? null : inr(received),
+            loading: received == null,
+            series: summary?.received_series || [],
+            tone: "success",
+            delta: null,
+            onOpen: () => onMoney("received"),
+          },
+          {
+            label: "Outstanding",
+            value: outstanding == null ? null : inr(outstanding),
+            loading: outstanding == null,
+            series: summary?.outstanding_series || [],
+            tone: "danger",
+            delta: null,
+            invertDelta: true,
+            onOpen: () => onMoney("outstanding"),
+          },
+        ]}
+        data-testid="desk-money-pulse"
+      />
+
+      <FiresQueue fires={fires} total={counters.fires || 0} onOpen={onFire} onSeeAll={onClearThem} />
+
+      <NumbersGrid
+        counters={counters}
+        amounts={amounts}
+        completedLabel={brief.completed_label}
+        onOpen={onNumber}
+      />
+
+      {/* Cleared this period, as the closing note (§5.2). */}
+      {(brief.cleared_period ?? counters.completed) > 0 && (
+        <Strip
+          label="Cleared this period"
+          wrap
+          data-testid="desk-cleared-period"
+          items={[{
+            key: "cleared",
+            label: `${brief.cleared_period ?? counters.completed} ${brief.completed_label || "completed"}`,
+            tone: "success",
+          }]}
+        />
+      )}
+
+      {waiting === 0 && (counters.fires || 0) === 0 && (
+        <EmptyState
+          icon={CheckCircle}
+          title="Nothing needs you this period."
+          hint="No fires, no approvals, nothing overdue."
+          actionLabel="Open the desk"
+          onAction={onClearThem}
+          data-testid="desk-empty-state"
+        />
+      )}
+    </>
+  );
+}
+
+/** Slightly larger sparkline for the Verdict's aside. */
+function ThroughputSpark({ points = [] }) {
+  const max = Math.max(...points, 1);
+  return (
+    <span className="flex items-end gap-[3px]" aria-hidden="true">
+      {points.map((v, i) => (
+        <span
+          key={i}
+          className="w-1.5 rounded-pill bg-current opacity-60"
+          style={{ height: `${Math.max(3, (v / max) * 28)}px` }}
+        />
+      ))}
+    </span>
+  );
+}
+
+export { headerFor, SCOPES };

@@ -9,6 +9,7 @@
  * minutes later fires against state that has since moved.
  */
 import { chromium } from 'playwright';
+import { signIn } from './lib/auth.mjs';
 import { spawn } from 'node:child_process';
 import http from 'node:http';
 import fs from 'node:fs';
@@ -106,6 +107,7 @@ await ctx.addInitScript((api) => { window.__API = api; }, API);
 const page = await ctx.newPage();
 
 // ------------------------------------------------------------- registration
+check('signed in', await signIn(page, BASE));
 await page.goto(`${BASE}/inbox`, { waitUntil: 'domcontentloaded' });
 await page.waitForFunction(() => navigator.serviceWorker?.controller !== null, { timeout: 20000 })
   .catch(() => {});

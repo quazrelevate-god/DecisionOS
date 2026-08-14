@@ -56,11 +56,30 @@ export function buildRoutes(d) {
     });
   }
   if (d.brief) {
+    // `fires_detail` is derived from the same records /desk?chip=on_fire serves
+    // rather than written out a second time in each state file: they ARE the
+    // same fires, and a state where the counter says 12 but the list is empty
+    // would quietly stop testing the narrative screen's biggest block. Shaped
+    // the way MPWA-07 consumes it.
+    const firesDetail = d.brief.fires_detail
+      || (d.desk?.cards?.on_fire || []).map((c) => ({
+        id: c.target_id || c.id,
+        title: c.title,
+        days_late: c.days_late ?? c.overdue_days ?? c.waiting_days ?? null,
+        person: c.from_name || null,
+        action: { chase: "Chase", nudge: "Nudge", respond: "Reply" }[c.cta] || null,
+        amount: c.amount ?? null,
+      }));
     R.push({
       match: "/brief",
       data: ({ query }) => {
         const period = query.get("period") || "morning";
-        return { ...d.brief, period, greeting: d.brief.greetingFor?.[period] || d.brief.greeting };
+        return {
+          ...d.brief,
+          fires_detail: firesDetail,
+          period,
+          greeting: d.brief.greetingFor?.[period] || d.brief.greeting,
+        };
       },
     });
   }

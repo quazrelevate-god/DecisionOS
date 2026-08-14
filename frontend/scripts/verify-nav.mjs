@@ -7,6 +7,7 @@
  * the dock clears the home indicator; desktop sidebar untouched.
  */
 import { chromium } from 'playwright';
+import { signIn } from './lib/auth.mjs';
 
 const BASE = process.env.AUDIT_BASE || 'http://localhost:3000';
 const results = [];
@@ -25,6 +26,7 @@ const ctx = await browser.newContext({
 });
 const page = await ctx.newPage();
 page.on('pageerror', (e) => check('no page errors', false, e.message.split('\n')[0]));
+check('signed in', await signIn(page, BASE));
 await page.goto(`${BASE}/inbox`, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('[data-testid="floating-dock"]', { timeout: 15000 });
 await page.waitForTimeout(600);
@@ -85,7 +87,7 @@ const cue = await active.evaluate((el) => ({
   filled: !!el.querySelector('svg'),
   current: el.getAttribute('aria-current'),
 }));
-const inactiveColour = await page.locator('[data-testid="dock-brief"]').evaluate((el) => getComputedStyle(el).color);
+const inactiveColour = await page.locator('[data-testid="dock-work"]').evaluate((el) => getComputedStyle(el).color);
 check('active slot differs in colour from inactive', cue.colour !== inactiveColour,
   `${cue.colour} vs ${inactiveColour}`);
 check('active slot still shows its label', cue.label.length > 0, `"${cue.label}"`);
@@ -121,7 +123,7 @@ const panelMaxH = await page.locator('[data-testid="allapps-panel"]').evaluate(
 check('panel is at most 80vh', panelMaxH <= 80, `${panelMaxH}vh`);
 
 // grid geometry
-const tile = await page.locator('[data-testid="allapps-tile-my-work"]').boundingBox();
+const tile = await page.locator('[data-testid="allapps-tile-calendar"]').boundingBox();
 check('tiles are >= 88x88', tile.width >= 88 && tile.height >= 88,
   `${Math.round(tile.width)}x${Math.round(tile.height)}`);
 const cols = await page.locator('[data-testid="allapps-group-account"] > div').evaluate(
@@ -130,7 +132,9 @@ const cols = await page.locator('[data-testid="allapps-group-account"] > div').e
 check('3 columns at 390px', cols === 3, `${cols} columns`);
 
 // nothing appears in both the dock and All Apps (§8)
-const dockRoutes = ['/inbox', '/brief', '/finance'];
+// MPWA-12c: Work replaced Brief in the dock, so /my-work is now the route
+// that must NOT also have a tile.
+const dockRoutes = ['/inbox', '/my-work', '/finance'];
 const tileKeys = await page.locator('[data-testid^="allapps-tile-"]').evaluateAll((els) =>
   els.map((e) => e.getAttribute('data-testid').replace('allapps-tile-', ''))
 );
@@ -172,7 +176,7 @@ check('panel restores scroll position', Math.abs(afterY - beforeY) <= 2, `${befo
 
 // ------------------------------------------------- 2 taps to every destination
 const DESTINATIONS = [
-  ['/my-work', 'allapps-tile-my-work'],
+  // /my-work moved to the dock in MPWA-12c — asserted as a 1-tap below.
   ['/calendar', 'allapps-tile-calendar'],
   ['/crm', 'allapps-tile-crm'],
   ['/team', 'allapps-tile-team'],
@@ -193,6 +197,33 @@ for (const [route, testid] of DESTINATIONS) {
   const at = new URL(page.url()).pathname;
   check(`${route} reachable in 2 taps`, at === route, `landed on ${at}`);
 }
+
+// --------------------------------------------- MPWA-12c · the promoted slot
+// §2.1: "The dock becomes Desk · Work · Money · More + Dex FAB."
+await page.goto(`${BASE}/inbox`, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('[data-testid="floating-dock"]', { timeout: 8000 });
+await page.waitForTimeout(400);
+const dockLabels = await page.locator('[data-testid^="dock-"]:not([data-testid$="-badge"])')
+  .evaluateAll((els) => els.map((e) => e.innerText.trim()));
+check('dock reads Desk · Work · Money · More',
+  dockLabels.join(' · ') === 'Desk · Work · Money · More', dockLabels.join(' · '));
+check('Brief no longer occupies a dock slot',
+  (await page.locator('[data-testid="dock-brief"]').count()) === 0);
+await page.locator('[data-testid="dock-work"]').click();                 // tap 1
+await page.waitForTimeout(800);
+check('/my-work is 1 tap from the dock', new URL(page.url()).pathname === '/my-work',
+  new URL(page.url()).pathname);
+
+// §2.1: /brief is a permanent redirect, and it must not resurrect a dock slot.
+await page.goto(`${BASE}/brief`, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('[data-testid="desk-mobile"]', { timeout: 10000 });
+await page.waitForTimeout(600);
+const briefLanding = new URL(page.url());
+check('/brief lands on the Desk\'s morning scope',
+  briefLanding.pathname === '/inbox' && briefLanding.searchParams.get('scope') === 'morning',
+  briefLanding.pathname + briefLanding.search);
+check('the Desk slot is the active one after the redirect',
+  (await page.locator('[data-testid="dock-desk"]').getAttribute('aria-current')) === 'page');
 
 // Dex FAB opens the sheet, which hosts the EXISTING capture bar
 await page.goto(`${BASE}/inbox`, { waitUntil: 'domcontentloaded' });
@@ -221,6 +252,7 @@ await ctx.close();
 // ----------------------------------------------------------------- desktop
 const dctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
 const dpage = await dctx.newPage();
+check('signed in on desktop', await signIn(dpage, BASE));
 await dpage.goto(`${BASE}/inbox`, { waitUntil: 'domcontentloaded' });
 await dpage.waitForTimeout(1200);
 check('desktop sidebar still present', await dpage.locator('aside').isVisible());

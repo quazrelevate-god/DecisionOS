@@ -28,7 +28,11 @@ function buildGroups({ user, isDark, t, counts }) {
       key: "work",
       label: t("allapps.work", "Work"),
       tiles: [
-        { key: "my-work", to: "/my-work", label: t("nav.mywork", "My Work"), icon: Briefcase, badge: counts.myWork },
+        // MPWA-12c (§2.1): My Work was promoted into the dock, so its tile is
+        // gone from here — "nothing may appear in two places". Brief is
+        // deliberately NOT added in its place: §2.1 says add it "only if user
+        // testing shows people look for it", and it is reachable as a scope on
+        // the Desk.
         { key: "calendar", to: "/calendar", label: t("nav.calendar", "Calendar"), icon: CalendarBlank },
       ],
     },

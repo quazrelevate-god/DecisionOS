@@ -1,6 +1,7 @@
 // MPWA-04 — mobile component library (§7).
 // Single import surface: `import { BottomSheet, MobileCard } from '@/components/mobile'`
 export { BottomSheet, useBodyScrollLock } from "./BottomSheet";
+export { FocusView, useFocus, FOCUS_TYPES } from "./FocusView";
 export { FloatingDock, dockSlots } from "./FloatingDock";
 export { AllAppsPanel } from "./AllAppsPanel";
 export { DexFab } from "./DexFab";

@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api, { formatApiError } from "../lib/api";
+import { useIsMobile } from "../hooks/useIsMobile";
+import TeamMobile from "./mobile/TeamMobile";
 import { useAuth } from "../context/AuthContext";
 import { Chip } from "../components/common";import { PERMISSIONS, defaultPermsForRole, hasPerm, userPerms } from "../lib/perms";
 import { toast } from "sonner";
@@ -203,6 +205,10 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite, member
 import { PageHeader } from "../components/common";
 
 export default function TeamPage() {
+  // MPWA-10: rebuilt below lg (§8); desktop tree untouched.
+  const isMobile = useIsMobile();
+  if (isMobile) return <TeamMobile />;
+
   return (
     <div>
       <PageHeader

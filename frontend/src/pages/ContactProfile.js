@@ -1,6 +1,8 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "../lib/api";
+import { useIsMobile } from "../hooks/useIsMobile";
+import ContactProfileMobile from "./mobile/ContactProfileMobile";
 import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
 import { Chip, EmptyState } from "../components/common";
@@ -41,6 +43,8 @@ function Table({ head, rows }) {
 }
 
 export default function ContactProfile() {
+  // MPWA-10: rebuilt below lg (§8); desktop tree untouched.
+  const isMobile = useIsMobile();
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -86,6 +90,8 @@ export default function ContactProfile() {
       </div>
     );
   };
+
+  if (isMobile) return <ContactProfileMobile />;
 
   return (
     <div>

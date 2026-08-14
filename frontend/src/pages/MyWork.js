@@ -8,6 +8,8 @@ import { PageHeader, Chip, EmptyState } from "../components/common";
 import { useAuth } from "../context/AuthContext";
 import { userPerms } from "../lib/perms";
 import { opModel } from "../lib/operatingModel";
+import { useIsMobile } from "../hooks/useIsMobile";
+import MyWorkMobile from "./mobile/MyWorkMobile";
 import { toast } from "sonner";
 import { TaskBoard, NewTaskDialog } from "./Tasks";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
@@ -930,6 +932,9 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
 }
 
 export default function MyWork() {
+  // MPWA-08: rebuilt below lg (§8). Above lg the original tree renders
+  // unchanged, keeping §9.2's desktop diff empty by construction.
+  const isMobile = useIsMobile();
   const qc = useQueryClient();
   const { t } = useTranslation();
   const { tenant, user } = useAuth();
@@ -1005,6 +1010,8 @@ export default function MyWork() {
   if (aiPriority && tab !== "completed") {
     list = [...list].sort((a, b) => (scoreMap[b.id]?.priority_score || 0) - (scoreMap[a.id]?.priority_score || 0));
   }
+
+  if (isMobile) return <MyWorkMobile />;
 
   return (
     <div>

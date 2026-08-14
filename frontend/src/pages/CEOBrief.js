@@ -7,6 +7,8 @@ import { Chip } from "../components/common";
 import { money } from "../lib/format";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../components/ui/dialog";
+import { useIsMobile } from "../hooks/useIsMobile";
+import CEOBriefMobile from "./mobile/CEOBriefMobile";
 import { Clock, CheckCircle, Stamp, UserMinus, Warning, CurrencyInr, XCircle, ArrowClockwise, CaretRight, Fire, BookOpen, ListChecks, WarningCircle, ArrowBendUpRight, Sparkle, Paperclip, Receipt, HandCoins, Coins } from "@phosphor-icons/react";
 
 const PERIODS = [
@@ -187,6 +189,9 @@ function DetailDialog({ row, period, open, onClose }) {
 }
 
 export default function CEOBrief() {
+  // MPWA-07: rebuilt below lg (§8). Above lg the original tree renders
+  // unchanged, which keeps §9.2's desktop diff empty by construction.
+  const isMobile = useIsMobile();
   const { user, tenant } = useAuth();
   const navigate = useNavigate();
   const isOwner = user?.role === "owner";
@@ -198,6 +203,8 @@ export default function CEOBrief() {
     queryFn: () => api.get(`/brief?period=${period}`).then((r) => r.data),
     refetchInterval: 30000,
   });
+
+  if (isMobile) return <CEOBriefMobile />;
 
   return (
     <div className="flex flex-col">

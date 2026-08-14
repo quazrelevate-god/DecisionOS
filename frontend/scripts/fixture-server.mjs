@@ -392,6 +392,9 @@ function brief(period = 'morning') {
       receivables_overdue: overdueRecv.reduce((s, r) => s + remaining(r), 0),
       bills_due: billsDue.reduce((s, r) => s + remaining(r), 0),
       unmatched_payments: unmatched.reduce((s, p) => s + num(p.amount), 0),
+      // MPWA-07's money line is "received vs outstanding" in one line, so the
+      // brief needs the received side too.
+      received: PAYMENTS.filter((p) => p.direction === 'in').reduce((s, p) => s + num(p.amount), 0),
     },
     // The written verdict MPWA-07 hoists into the hero.
     verdict: '₹4,00,000 is stuck past 30 days with one retailer.',

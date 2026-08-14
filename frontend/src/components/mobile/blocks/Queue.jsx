@@ -10,6 +10,7 @@
 import * as React from "react";
 import { CaretRight } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
+import { CompletionRing } from "./Board";
 import { inr } from "@/lib/format";
 import { StatusChip } from "../StatusChip";
 import { dueLabel } from "../MobileCard";
@@ -18,11 +19,17 @@ const MAX_ROWS = 5;
 
 /**
  * @param {string} title
- * @param {Array}  rows      {id,title,status,statusLabel,due,person,context,amount,onOpen}
+ * @param {Array}  rows      {id,title,status,statusLabel,due,person,context,amount,onOpen,progress}
+ *        `progress` — 0..100. Rendered as a ring, because §5.4 asks for "a
+ *        progress ring per card instead of a percentage in text".
  * @param {number} [max]
  * @param {Function} [onSeeAll]
  * @param {number} [total]   real count, when rows is already truncated upstream
  * @param {ReactNode} [empty] rendered instead of the list when there is nothing
+ * @param {Function} [wrapRow] (node, row) => ReactNode — wraps each row without
+ *        changing it. MPWA-12f uses it to keep My Work's swipe-to-snooze around
+ *        a Queue row; without it, moving that screen onto the block would have
+ *        silently dropped a shipped gesture.
  */
 export function Queue({
   title,
@@ -31,9 +38,11 @@ export function Queue({
   onSeeAll,
   total,
   empty,
+  wrapRow,
   className,
   "data-testid": testId = "block-queue",
 }) {
+  const wrap = wrapRow ? (r, node) => wrapRow(node, r) : (_r, node) => node;
   const shown = rows.slice(0, max);
   const count = total ?? rows.length;
   const hidden = Math.max(0, count - shown.length);
@@ -62,6 +71,7 @@ export function Queue({
               const d = dueLabel(r.due);
               return (
                 <li key={r.id}>
+                  {wrap(r, (
                   <button
                     type="button"
                     onClick={r.onOpen}
@@ -90,6 +100,16 @@ export function Queue({
                         )}
                       </span>
                     </span>
+                    {r.progress != null && (
+                      <span
+                        className="shrink-0"
+                        role="img"
+                        aria-label={`${Math.round(r.progress)}% done`}
+                        data-testid={`${testId}-ring-${r.id}`}
+                      >
+                        <CompletionRing done={Number(r.progress) || 0} total={100} size={24} />
+                      </span>
+                    )}
                     {r.amount != null && Number(r.amount) !== 0 && (
                       <span className="shrink-0 text-right text-sm font-semibold tabular-nums">
                         {inr(r.amount)}
@@ -102,6 +122,7 @@ export function Queue({
                       className="shrink-0 text-neutral-400"
                     />
                   </button>
+                  ))}
                 </li>
               );
             })}

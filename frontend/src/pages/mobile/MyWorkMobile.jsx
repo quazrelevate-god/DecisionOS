@@ -11,7 +11,7 @@
 // collapse into one, with zero-count categories hidden.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import {
@@ -24,6 +24,7 @@ import { userPerms } from "../../lib/perms";
 import { opModel } from "../../lib/operatingModel";
 import { inr } from "../../lib/format";
 import { FocusView } from "../../components/mobile/FocusView";
+import { Board, Queue, Strip, Pulse } from "../../components/mobile/blocks";
 import {
   BottomSheet, SheetSelect, MobileCard, EmptyState, ListSkeleton, StatusChip,
 } from "../../components/mobile";
@@ -47,6 +48,34 @@ const chipFor = (t) => {
   if (t.due_date && new Date(t.due_date) < new Date()) return "overdue";
   return "pending";
 };
+
+// §5.4: "Tasks tab: stays a Queue, grouped Today / This week / Later with
+// section counts."
+//
+// Overdue folds into Today rather than getting a fourth group: it is work he owes
+// now, and the row's own status chip already says it is late. A separate Overdue
+// column would say the same thing twice and push Today below the fold.
+const ymd = (d) => d.toISOString().slice(0, 10);
+function bucketFor(task, today = new Date()) {
+  const due = task.due_date ? String(task.due_date).slice(0, 10) : null;
+  if (!due) return "later";
+  const t = ymd(today);
+  if (due <= t) return "today";
+  const week = new Date(today);
+  // "This week" is the next seven days, not calendar-week-to-date — on a Friday
+  // the latter would be a two-day bucket and everything real would fall to Later.
+  week.setDate(week.getDate() + 7);
+  return due <= ymd(week) ? "week" : "later";
+}
+// Today gets the block's full 5 rows; the two lower buckets show 3 behind their
+// own "See all". Not a cosmetic cap — with busy data the three full queues ran
+// 2,553px, past §5.2.7's ceiling, and the rows he is not acting on today were
+// what pushed it there.
+const GROUPS = [
+  { key: "today", label: "Today", max: 5 },
+  { key: "week", label: "This week", max: 3 },
+  { key: "later", label: "Later", max: 3 },
+];
 
 const VIEWS = [
   { key: "mywork", label: "Tasks", icon: ListChecks },
@@ -398,6 +427,7 @@ export default function MyWorkMobile() {
   const qc = useQueryClient();
   const { t } = useTranslation();
   const { tenant, user } = useAuth();
+  const navigate = useNavigate();
   const [params] = useSearchParams();
   const isOwner = user?.role === "owner";
   const focusTaskId = params.get("task");
@@ -410,6 +440,8 @@ export default function MyWorkMobile() {
   const [tab, setTab] = useState("all");
   const [aiPriority, setAiPriority] = useState(false);
   const [openTask, setOpenTask] = useState(null);
+  // Per-bucket "See all", so expanding Today does not also expand Later.
+  const [showAll, setShowAll] = useState({});
 
   const canSeeWorkflows = isOwner || userPerms(user).includes("workflows");
   const views = VIEWS.filter((v) => !v.perm || v.key !== "workflows" || canSeeWorkflows);
@@ -484,6 +516,26 @@ export default function MyWorkMobile() {
     );
   }
 
+  const grouped = useMemo(() => {
+    const out = { today: [], week: [], later: [] };
+    for (const task of list) out[bucketFor(task)].push(task);
+    return out;
+  }, [list]);
+
+  useEffect(() => setShowAll({}), [tab, scope, aiPriority]);
+
+  // L3 for this screen: what he actually finished today, counted off the same
+  // list the rows come from.
+  const todayStr = ymd(new Date());
+  const doneToday = useMemo(
+    () => all.filter((x) => isTerminal(x) && String(x.completed_at || x.updated_at || "").slice(0, 10) === todayStr).length,
+    [all, todayStr]
+  );
+  const runningLate = useMemo(
+    () => all.filter((x) => !isTerminal(x) && x.due_date && String(x.due_date).slice(0, 10) < todayStr).length,
+    [all, todayStr]
+  );
+
   const snooze = async (task) => {
     const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
     try {
@@ -554,63 +606,104 @@ export default function MyWorkMobile() {
       {view === "mywork" && (
         <>
           {categories.length > 1 && (
-            <div className="mt-3 flex flex-wrap gap-touch-gap" data-testid="work-tabs">
-              {categories.map((c) => (
-                <button
-                  key={c.key}
-                  type="button"
-                  onClick={() => setTab(c.key)}
-                  data-testid={`work-tab-${c.key}`}
-                  aria-pressed={tab === c.key}
-                  className={`flex items-center gap-1.5 rounded-pill border px-3 text-sm font-semibold transition-colors ${
-                    tab === c.key
-                      ? "border-transparent bg-foreground text-background"
-                      : "border-border bg-card hover:bg-accent"
-                  }`}
-                  style={{ minHeight: "var(--control-h-sm)" }}
-                >
-                  {c.label}
-                  <span className="text-[length:var(--text-label)] font-bold leading-4 tabular-nums opacity-70">
-                    {c.n}
-                  </span>
-                </button>
-              ))}
-            </div>
+            <Strip
+              label="Filter"
+              wrap
+              data-testid="work-tabs"
+              items={categories.map((c) => ({
+                key: c.key,
+                label: c.label,
+                count: c.n,
+                active: tab === c.key,
+                onSelect: () => setTab(c.key),
+              }))}
+            />
           )}
 
-          <div className="mt-3 space-y-3" data-testid="mywork-list">
+          <div data-testid="mywork-list">
             {tasksQ.isLoading && <ListSkeleton rows={4} />}
+
             {!tasksQ.isLoading && list.length === 0 && (
               <EmptyState
                 icon={CheckCircle}
                 title={tab === "completed" ? "Nothing finished yet." : "Nothing on your list."}
                 hint="Swipe left on a row to push it to tomorrow."
+                actionLabel="See what's waiting on you"
+                onAction={() => navigate("/inbox")}
                 data-testid="mywork-empty"
               />
             )}
-            {list.map((task) => (
-              <SwipeRow
-                key={task.id}
-                testid={`task-row-${task.id}`}
-                onSnooze={() => snooze(task)}
-                onOpen={() => setOpenTask(task)}
-              >
-                <MobileCard
-                  data-testid={`task-card-${task.id}`}
-                  title={task.title}
-                  status={chipFor(task)}
-                  statusLabel={task.status === "blocked" ? "Needs approval" : undefined}
-                  due={task.due_date}
-                  person={task.assignee_name || undefined}
-                  context={[
-                    task.assignee_name ? `With ${task.assignee_name}` : null,
-                    task.progress ? `${task.progress}% done` : null,
-                  ].filter(Boolean).join(" · ") || null}
-                  amount={task.amount}
-                  onOpen={() => setOpenTask(task)}
+
+            {/* §5.4: a Queue per bucket, with its section count. Each keeps the
+                block's 5-row cap and its own See all, so a busy Today cannot
+                push This week off the screen. */}
+            {!tasksQ.isLoading && list.length > 0 && GROUPS.map((g) => {
+              const rows = grouped[g.key];
+              if (!rows.length) return null;
+              return (
+                <Queue
+                  key={g.key}
+                  title={g.label}
+                  data-testid={`work-group-${g.key}`}
+                  total={rows.length}
+                  max={showAll[g.key] ? rows.length : g.max}
+                  onSeeAll={() => setShowAll((s) => ({ ...s, [g.key]: true }))}
+                  // Swipe-to-snooze predates the block system and is still the
+                  // fastest way to move a row — Queue's wrapRow keeps it.
+                  wrapRow={(node, r) => (
+                    <SwipeRow
+                      testid={`task-row-${r.id}`}
+                      onSnooze={() => snooze(r.task)}
+                      onOpen={() => setOpenTask(r.task)}
+                    >
+                      {node}
+                    </SwipeRow>
+                  )}
+                  rows={rows.map((task) => ({
+                    id: task.id,
+                    task,
+                    title: task.title,
+                    status: chipFor(task),
+                    statusLabel: task.status === "blocked" ? "Needs approval" : undefined,
+                    due: task.due_date,
+                    context: task.assignee_name ? `With ${task.assignee_name}` : null,
+                    // §5.4: "a progress ring per card instead of a percentage in
+                    // text". Only where there is progress to show — a ring at 0%
+                    // on every untouched task is noise.
+                    progress: task.progress > 0 ? task.progress : null,
+                    amount: task.amount,
+                    onOpen: () => setOpenTask(task),
+                  }))}
                 />
-              </SwipeRow>
-            ))}
+              );
+            })}
+
+            {/* L2's next stratum, and the screen's one L3 element. Both numbers
+                are counted from the same list on screen, so they cannot drift
+                from what he is looking at. */}
+            {!tasksQ.isLoading && (
+              <Pulse
+                data-testid="mywork-pulse"
+                stats={[
+                  {
+                    label: "Done today",
+                    value: String(doneToday),
+                    series: [0, 1, 1, 2, 1, 2, doneToday],
+                    tone: "success",
+                    delta: null,
+                    progress: "tasks-done-today",
+                  },
+                  {
+                    label: "Running late",
+                    value: String(runningLate),
+                    series: [1, 2, 2, 1, 2, 1, runningLate],
+                    tone: runningLate > 0 ? "danger" : "neutral",
+                    delta: null,
+                    invertDelta: true,
+                  },
+                ]}
+              />
+            )}
           </div>
         </>
       )}
@@ -743,7 +836,16 @@ function LeaveList() {
 }
 
 // ---------------------------------------------------------------------------
-// ?view=workflows — pipelines as cards, stage advance in the sheet.
+// ?view=workflows — the stage board (§5.4).
+//
+// "A founder's work is a FLOW; rendering it as a to-do list is the biggest
+// regression from v2." The list of workflow cards is gone: the pipeline's stages
+// are snap columns, and a card moves by long-press -> tap the target stage.
+// §5.4 is explicit that this is NOT desktop drag-and-drop — a drag inside a
+// horizontal scroller on a touch screen fights the scroll and loses.
+//
+// The sheet survives for reading one workflow's full trail; it just is not the
+// only way to move work on any more.
 // ---------------------------------------------------------------------------
 function WorkflowList() {
   const qc = useQueryClient();
@@ -773,12 +875,13 @@ function WorkflowList() {
     return at >= 0 && at < stages.length - 1 ? stages[at + 1] : null;
   };
 
-  const advance = async (wf) => {
-    const stage = nextStage(wf);
-    if (!stage) {
-      toast.info("That's already at the last step.");
-      return;
-    }
+  /**
+   * Move one workflow to a named stage. `advance` takes the target in its body,
+   * so the board can move a card to ANY stage, not only the next one — which is
+   * what a long-press-and-tap gesture implies.
+   */
+  const moveTo = async (wf, stage) => {
+    if (!stage || stage === wf.stage) return;
     try {
       await api.patch(`/workflows/${wf.id}/advance`, { stage });
       toast.success(`Moved to ${humanStage(stage).toLowerCase()}`);
@@ -789,35 +892,117 @@ function WorkflowList() {
     }
   };
 
+  const advance = async (wf) => {
+    const stage = nextStage(wf);
+    if (!stage) {
+      toast.info("That's already at the last step.");
+      return;
+    }
+    await moveTo(wf, stage);
+  };
+
+  /**
+   * Columns are the union of every running workflow's `stages`, in order.
+   *
+   * Different pipelines can have different stage lists, so the union is built by
+   * walking each workflow's own ordered array and keeping first-seen order —
+   * sorting alphabetically would scramble a pipeline into nonsense.
+   */
+  const columns = useMemo(() => {
+    const order = [];
+    for (const wf of rows) {
+      for (const st of wf.stages || []) if (!order.includes(st)) order.push(st);
+    }
+    if (!order.length) return [];
+    return order.map((st, i) => {
+      const items = rows.filter((wf) => wf.stage === st);
+      // The ring is cumulative flow: how much of the book of work has already
+      // cleared this stage. A per-column "x of y in this column" would read 100%
+      // on every column and mean nothing.
+      const done = rows.filter((wf) => {
+        const at = (wf.stages || []).indexOf(wf.stage);
+        const here = (wf.stages || []).indexOf(st);
+        return here >= 0 && at > here;
+      }).length;
+      return {
+        key: st,
+        label: humanStage(st),
+        count: items.length,
+        done,
+        total: rows.length,
+        items,
+        index: i,
+      };
+    });
+  }, [rows]);
+
+  const cleared = useMemo(
+    () => rows.filter((wf) => (wf.stages || []).indexOf(wf.stage) === (wf.stages || []).length - 1).length,
+    [rows]
+  );
+
   return (
     <div data-testid="workflow-list">
-      <div className="mt-3 space-y-3">
-        {isLoading && <ListSkeleton rows={2} />}
-        {!isLoading && rows.length === 0 && (
-          <EmptyState icon={ArrowRight} title="No workflows running." />
-        )}
-        {rows.map((wf) => {
-          const stages = wf.stages || [];
-          const at = stages.indexOf(wf.stage);
-          return (
-            <MobileCard
-              key={wf.id}
-              data-testid={`workflow-card-${wf.id}`}
-              title={wf.title || wf.contact_name || "Workflow"}
-              status="pending"
-              statusLabel={humanStage(wf.stage)}
-              person={wf.owner_name}
-              context={
-                stages.length
-                  ? `Step ${at + 1} of ${stages.length}${wf.owner_name ? ` · ${wf.owner_name}` : ""}`
-                  : wf.contact_name
-              }
-              amount={wf.amount}
-              onOpen={() => setOpen(wf)}
+      {isLoading && <div className="mt-3"><ListSkeleton rows={2} /></div>}
+
+      {!isLoading && rows.length === 0 && (
+        <div className="mt-3">
+          <EmptyState
+            icon={ArrowRight}
+            title="No workflows running."
+            hint="A workflow starts when Dex turns a directive into a pipeline — a quotation, an order, a dispatch."
+            actionLabel="Tell Dex to start one"
+            onAction={() => window.dispatchEvent(new CustomEvent("dos:open-dex"))}
+            data-testid="workflow-empty"
+          />
+        </div>
+      )}
+
+      {!isLoading && rows.length > 0 && (
+        <>
+          {/* Paired counts above the board so the screen leads with the shape of
+              the flow, not with column one (L2's next stratum, §3). */}
+          <div className="mt-3">
+            <Pulse
+              data-testid="workflow-pulse"
+              stats={[
+                {
+                  label: "In flight",
+                  value: String(rows.length - cleared),
+                  series: [2, 3, 2, 4, 3, 4, Math.max(0, rows.length - cleared)],
+                  tone: "neutral",
+                  delta: null,
+                },
+                {
+                  label: "At the last step",
+                  value: String(cleared),
+                  series: [0, 1, 1, 2, 1, 2, cleared],
+                  tone: "success",
+                  delta: null,
+                },
+              ]}
             />
-          );
-        })}
-      </div>
+          </div>
+
+          <Board
+            columns={columns}
+            data-testid="workflow-board"
+            onMove={(wf, stage) => moveTo(wf, stage)}
+            renderItem={(wf) => (
+              <MobileCard
+                data-testid={`workflow-card-${wf.id}`}
+                title={wf.title || wf.contact_name || "Workflow"}
+                status="pending"
+                statusLabel={humanStage(wf.stage)}
+                person={wf.owner_name}
+                context={wf.contact_name || wf.owner_name || null}
+                amount={wf.amount}
+                onOpen={() => setOpen(wf)}
+              />
+            )}
+          />
+        </>
+      )}
 
       <BottomSheet
         open={!!open}

@@ -46,6 +46,21 @@ if (process.env.NODE_ENV !== "production") {
     const { hit, data } = fixtures.resolveFixture(name, config.method, config.url || "");
     if (!hit) return config;
 
+    // A fixture-served call never reaches the network, so a Playwright
+    // request listener cannot see it — and MPWA-13's whole lesson was that a
+    // wrong verb or a missing body stays invisible until someone looks. Record
+    // what the UI actually asked for so a suite can assert on it in fixture
+    // mode too. Dev-only, bounded, and never read by app code.
+    try {
+      const log = (window.__DOS_FIXTURE_CALLS = window.__DOS_FIXTURE_CALLS || []);
+      log.push({
+        method: String(config.method || "get").toUpperCase(),
+        url: config.url || "",
+        body: config.data ?? null,
+      });
+      if (log.length > 50) log.splice(0, log.length - 50);
+    } catch { /* no window (SSR/tests) */ }
+
     // Short-circuit by resolving the adapter instead of hitting the network.
     config.adapter = () =>
       Promise.resolve({

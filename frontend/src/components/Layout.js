@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -101,6 +101,17 @@ export default function Layout({ children }) {
   // MPWA-03 mobile navigation state.
   const [allAppsOpen, setAllAppsOpen] = useState(false);
   const [dexOpen, setDexOpen] = useState(false);
+
+  // MPWA-12f: an empty state whose primary action is "tell Dex to start one" has
+  // to be able to open the sheet, and the sheet's state lives here. A window
+  // event rather than threading a callback through every page: the alternative is
+  // a prop on Layout -> page -> list -> EmptyState, four levels deep, for one
+  // button. 12i uses the same event across the rest of the empty states.
+  useEffect(() => {
+    const open = () => setDexOpen(true);
+    window.addEventListener("dos:open-dex", open);
+    return () => window.removeEventListener("dos:open-dex", open);
+  }, []);
   const [dexRecording, setDexRecording] = useState({ on: false, secs: 0 });
   const [langOpen, setLangOpen] = useState(false);
   const { data: notif } = useQuery({ queryKey: ["notifications"], queryFn: () => api.get("/notifications").then((r) => r.data), refetchInterval: 30000 });

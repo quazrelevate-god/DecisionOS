@@ -255,11 +255,13 @@ if (await fire.count()) {
 await page.goto(`${BASE}/my-work?fixture=busy`, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('[data-testid="mywork-mobile"]', { timeout: 12000 });
 await page.waitForTimeout(1200);
-const taskId = await page.locator('[data-testid^="task-card-"]').first()
+// 12f moved the task rows onto the Queue block, so the row id lives in the
+// group's testid: work-group-<bucket>-row-<taskId>.
+const taskId = await page.locator('[data-testid^="work-group-"][data-testid*="-row-"]').first()
   .getAttribute('data-testid').catch(() => null);
 check('My Work has tasks to deep-link into', !!taskId, taskId || 'none found');
 if (taskId) {
-  const id = taskId.replace('task-card-', '');
+  const id = taskId.replace(/^work-group-[a-z]+-row-/, '');
   await page.goto(`${BASE}/my-work?fixture=busy&focus=task:${id}`, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(1800);
   check('/my-work resolves a focus deep link', (await page.locator('[data-testid="focus-view"]').count()) === 1,

@@ -81,6 +81,11 @@ export function Board({
     setLifted(null);
   };
 
+  // Aggregate throughput across the board — the sum of what each stage has
+  // cleared, which is what the rail reports.
+  const cleared = columns.reduce((n, c) => n + (c.done || 0), 0);
+  const clearedTotal = columns.reduce((n, c) => n + (c.total || c.items?.length || 0), 0);
+
   if (!columns.length) return null;
 
   return (
@@ -136,10 +141,12 @@ export function Board({
                 <span className="text-[length:var(--text-label)] font-bold leading-4 tabular-nums text-muted-foreground">
                   {col.count ?? col.items?.length ?? 0}
                 </span>
-                {/* L3: throughput per stage, not a vanity metric */}
-                <span data-progress="stage-completion">
-                  <CompletionRing done={col.done || 0} total={col.total || col.items?.length || 0} />
-                </span>
+                {/* §3's table wants "a completion ring on each board stage
+                    header", but L3 wants EXACTLY ONE data-progress element per
+                    screen. Both hold: every header keeps its ring, and the
+                    attribute goes on the rail below, which is the screen's one
+                    aggregate progress element. */}
+                <CompletionRing done={col.done || 0} total={col.total || col.items?.length || 0} />
               </button>
 
               <div className="space-y-2">
@@ -170,8 +177,9 @@ export function Board({
         })}
       </div>
 
-      {/* Dot indicator plus a thin progress rail under the board (§5.4) */}
-      <div className="mt-1 flex items-center gap-2">
+      {/* Dot indicator plus a thin progress rail under the board (§5.4), and the
+          screen's single L3 element (see the note on the stage headers). */}
+      <div className="mt-1 flex items-center gap-2" data-progress="stage-completion">
         <div className="flex gap-1.5" data-testid={`${testId}-dots`}>
           {columns.map((c, i) => (
             <span
@@ -187,10 +195,17 @@ export function Board({
         <span className="sr-only" aria-live="polite">
           Stage {active + 1} of {columns.length}
         </span>
-        <div className="h-1 flex-1 overflow-hidden rounded-pill bg-neutral-200 dark:bg-neutral-700">
+        {/* The rail is throughput, not scroll position: how much of the work in
+            this pipeline has cleared. A rail that tracked which column you were
+            looking at would be a vanity metric wearing a progress bar (§3 L3). */}
+        <div
+          className="h-1 flex-1 overflow-hidden rounded-pill bg-neutral-200 dark:bg-neutral-700"
+          role="img"
+          aria-label={`${cleared} of ${clearedTotal} cleared`}
+        >
           <div
-            className="h-full rounded-pill bg-primary/60 transition-all"
-            style={{ width: `${((active + 1) / columns.length) * 100}%` }}
+            className="h-full rounded-pill bg-success-600 transition-all"
+            style={{ width: `${clearedTotal ? (cleared / clearedTotal) * 100 : 0}%` }}
           />
         </div>
       </div>

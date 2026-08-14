@@ -13,7 +13,10 @@ const DEMO = [
   { role: "Finance", email: "finance@sharma.com" },
 ];
 
-const inputCls = "w-full border border-black bg-white px-4 py-3 text-sm font-mono focus:outline-none focus:shadow-brutal-sm transition-shadow";
+// MPWA-11 (§8): "56px fields and buttons" on mobile. min-h-touch-lg is 56px
+// below lg and unset above it, so desktop keeps its py-3 geometry. text-base
+// also stops iOS Safari zooming the viewport on focus.
+const inputCls = "w-full border border-black bg-white px-4 py-3 text-base lg:text-sm font-mono focus:outline-none focus:shadow-brutal-sm transition-shadow min-h-touch-lg lg:min-h-0";
 const labelCls = "label-mono text-muted-foreground";
 
 // Masks a phone to show only the last 4 digits, e.g. +91 98765 43210 -> +91 ••••• •3210
@@ -285,9 +288,10 @@ export default function Login() {
           <Link to="/signup" data-testid="toggle-auth-mode" className="mt-4 inline-block text-sm text-brand-blue font-semibold hover:underline">Need a workspace? Register →</Link>
           <div className="mt-8 border-t border-black/20 pt-6">
             <p className="label-mono text-muted-foreground mb-3">Try the Sharma demo</p>
-            <div className="grid grid-cols-2 gap-2">
+            {/* MPWA-11 (§8): demo-role buttons WRAP rather than clip. */}
+            <div className="flex flex-wrap gap-touch-gap">
               {DEMO.map((d) => (
-                <button key={d.email} onClick={() => demoLogin(d.email)} data-testid={`demo-login-${d.role.toLowerCase()}`} className="border border-black px-3 py-2 text-xs font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors">{d.role}</button>
+                <button key={d.email} onClick={() => demoLogin(d.email)} data-testid={`demo-login-${d.role.toLowerCase()}`} className="flex-1 min-w-[7rem] min-h-touch lg:min-h-0 border border-black px-3 py-2 text-sm lg:text-xs font-semibold tracking-wider lg:uppercase hover:bg-brand-ink hover:text-white transition-colors">{d.role}</button>
               ))}
             </div>
           </div>

@@ -125,20 +125,20 @@ export default function Journal() {
         onSubmit={(e) => { e.preventDefault(); setTerm(q); }}
         className="flex gap-2 mb-8 max-w-xl"
       >
-        <div className="flex-1 flex items-center border border-black bg-white">
+        <div className="flex-1 min-w-0 flex items-center border border-black bg-white">
           <MagnifyingGlass size={18} weight="bold" className="ml-3 text-muted-foreground" />
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
             data-testid="journal-search-input"
             placeholder="Search decisions & notes…"
-            className="flex-1 px-3 py-2.5 text-sm outline-none bg-transparent"
+            className="flex-1 min-w-0 px-3 py-2.5 text-sm outline-none bg-transparent"
           />
         </div>
         <button
           type="submit"
           data-testid="journal-search-btn"
-          className="px-5 py-2.5 text-sm font-semibold uppercase tracking-wider bg-brand-ink text-white hover:bg-brand-red transition-colors"
+          className="shrink-0 px-5 py-2.5 text-sm font-semibold uppercase tracking-wider bg-brand-ink text-white hover:bg-brand-red transition-colors"
         >
           Search
         </button>

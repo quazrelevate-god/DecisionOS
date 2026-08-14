@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import api from "../lib/api";
+import { useIsMobile } from "../hooks/useIsMobile";
+import SettingsMobile from "./mobile/SettingsMobile";
 import { hasPerm } from "../lib/perms";
 import { PageHeader } from "../components/common";
 import { CompanyDetails } from "../components/CompanyDetails";
@@ -57,6 +59,8 @@ function SecurityCard() {
 }
 
 export default function Settings() {
+  // MPWA-11: rebuilt below lg (§8) as a row-list; desktop untouched.
+  const isMobile = useIsMobile();
   const { tenant, user, refreshTenant } = useAuth();
   const isOwner = user?.role === "owner" || hasPerm(user, "team_manage");
   const [threshold, setThreshold] = useState(String(tenant?.high_value_threshold ?? 50000));
@@ -90,6 +94,8 @@ export default function Settings() {
       </div>
     );
   }
+
+  if (isMobile) return <SettingsMobile />;
 
   return (
     <div>

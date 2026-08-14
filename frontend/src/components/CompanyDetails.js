@@ -157,7 +157,12 @@ export function CompanyDetails() {
 
       {canManage && tenant?.id && (
         <div className="mt-4 border border-black/40 bg-brand-paper p-3" data-testid="workspace-id-block">
-          <label className="label-mono text-muted-foreground flex items-center gap-1.5"><WhatsappLogo size={13} weight="bold" className="text-green-600" /> Workspace ID <span className="normal-case">(WhatsApp routing fallback — set as WA_TENANT_ID)</span></label>
+          {/* MPWA-11 (§5.4): "No env var, table, field, permission key or HTTP
+              status ever reaches the screen." The env-var name is a devops
+              instruction for whoever configures the server — useful on a desk,
+              meaningless to a founder on a shop floor. Hidden below lg only, so
+              desktop stays pixel-identical (§9.2). */}
+          <label className="label-mono text-muted-foreground flex items-center gap-1.5"><WhatsappLogo size={13} weight="bold" className="text-green-600" /> Workspace ID <span className="normal-case hidden lg:inline">(WhatsApp routing fallback — set as WA_TENANT_ID)</span></label>
           <div className="flex gap-2 mt-1.5">
             <input data-testid="workspace-id-value" readOnly value={tenant.id} className={`${inp} bg-white cursor-text`} onFocus={(e) => e.target.select()} />
             <button data-testid="workspace-id-copy"
@@ -166,7 +171,13 @@ export function CompanyDetails() {
               <Copy size={14} weight="bold" /> Copy
             </button>
           </div>
-          <p className="text-xs text-muted-foreground mt-1.5">Messages from unregistered numbers fall back to this workspace. Paste this into your production <span className="font-mono">WA_TENANT_ID</span> env variable.</p>
+          {/* Two variants rather than one reworded sentence: the desktop copy is
+              byte-identical to before (§9.2), and mobile gets the same fact in
+              business language with no env var (§5.4). */}
+          <p className="text-xs text-muted-foreground mt-1.5 lg:hidden">
+            WhatsApp bills from numbers we don't recognise still reach this company.
+          </p>
+          <p className="text-xs text-muted-foreground mt-1.5 hidden lg:block">Messages from unregistered numbers fall back to this workspace. Paste this into your production <span className="font-mono">WA_TENANT_ID</span> env variable.</p>
         </div>
       )}
 

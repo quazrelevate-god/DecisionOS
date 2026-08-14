@@ -34,6 +34,9 @@ import WorkCoach from "./pages/WorkCoach";
 import Ledger from "./pages/Ledger";
 import Landing from "./pages/Landing";
 import AdminPortal from "./pages/admin/AdminPortal";
+// MPWA-04: dev-only harness for the §7 mobile components. Tree-shaken out of
+// production builds by the NODE_ENV guard on its route below.
+import MobileKitchenSink from "./pages/MobileKitchenSink";
 
 function AccessDenied() {
   const navigate = useNavigate();
@@ -137,6 +140,10 @@ function App() {
             {/* Epic 2 Sprint A — E2-01: /team is now a real page (Employees list)
                 gated on team_manage. Owner auto-passes via the all-perms shortcut. */}
             <Route path="/team" element={<Protected perms={["team_manage"]}><TeamPage /></Protected>} />
+            {/* MPWA-04: component harness, development only. */}
+            {process.env.NODE_ENV !== "production" && (
+              <Route path="/__mobile-kit" element={<Protected><MobileKitchenSink /></Protected>} />
+            )}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>

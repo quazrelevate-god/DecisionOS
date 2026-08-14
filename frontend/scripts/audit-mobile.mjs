@@ -42,6 +42,14 @@ const JSON_OUT = flag('json', null);
 const ONLY = flag('only', null); // substring filter on route path
 const SKIP_MOBILE = Boolean(flag('skip-mobile', false));
 const SKIP_DESKTOP = Boolean(flag('skip-desktop', false));
+// MPWA-12a/§8: composition checks must run against ALL THREE fixture states.
+// `--fixture sparse` audits one; `--fixtures` sweeps empty+sparse+busy. Without
+// either, the audit runs against whatever the API actually returns.
+const ONE_FIXTURE = flag('fixture', null);
+const SWEEP = Boolean(flag('fixtures', false));
+const FIXTURE_STATES = SWEEP
+  ? ['empty', 'sparse', 'busy']
+  : (typeof ONE_FIXTURE === 'string' ? [ONE_FIXTURE] : [null]);
 // Frozen page clock, shared with the fixture server's anchor (midnight UTC
 // today + 9h12m). Keeps every relative date string — and therefore every
 // screenshot — byte-stable across runs. Override with --anchor 2026-08-14.
@@ -61,16 +69,19 @@ const DESKTOP_VIEWPORTS = [
 
 // In-scope routes, spec §6. Out-of-scope (admin/**, onboarding/**, Landing,
 // Signup, Inbox.js at /inbox-legacy, Meetings) deliberately absent.
+// `primary: true` marks the screens §3's three laws apply to — the ones a
+// founder lives in, assembled from blocks. A detail page (contact 360) or a
+// row-list (settings) is not composed and is exempt.
 const ROUTES = [
-  { path: '/inbox', label: 'Desk' },
+  { path: '/inbox', label: 'Desk', primary: true },
   { path: '/brief', label: 'CEO Brief' },
-  { path: '/my-work', label: 'My Work' },
+  { path: '/my-work', label: 'My Work', primary: true },
   { path: '/my-work?view=leave', label: 'My Work · leave' },
   { path: '/my-work?view=workflows', label: 'My Work · workflows' },
-  { path: '/crm', label: 'CRM' },
+  { path: '/crm', label: 'CRM', primary: true },
   { path: '/contacts/c_1', label: 'Contact profile' },
   { path: '/team', label: 'Team' },
-  { path: '/finance', label: 'Finance · overview' },
+  { path: '/finance', label: 'Finance · overview', primary: true },
   { path: '/finance?tab=revenue', label: 'Finance · revenue' },
   { path: '/finance?tab=expenses', label: 'Finance · expenses' },
   { path: '/finance?tab=assets', label: 'Finance · assets' },
@@ -95,6 +106,12 @@ const RULES = {
   'leaked-system-string': { level: 'fail', desc: 'Env var / table / field / HTTP status on screen (§5.4)' },
   'non-indian-inr-grouping': { level: 'fail', desc: 'Currency not in Indian digit grouping (§5.3)' },
   'runtime-error': { level: 'fail', desc: 'Route threw at runtime (dev-server error overlay present)' },
+  // MPWA-12b §3/§8 — composition rules, checked on primary screens only.
+  'block-variety': { level: 'fail', desc: 'L1 — fewer than 3 distinct data-block types (§3)' },
+  'density-floor': { level: 'fail', desc: 'L2 — first viewport under 85% filled (§3)' },
+  'white-gap': { level: 'fail', desc: 'Vertical white gap over 120px (§8)' },
+  'progress-element': { level: 'fail', desc: 'L3 — not exactly one data-progress element (§3)' },
+  'empty-state-action': { level: 'fail', desc: 'Empty state without a primary action (§8)' },
   'horizontal-scroll-strip': { level: 'warn', desc: 'Horizontally scrolling strip — needs fade mask + peeking item (§5.2.2)' },
   'uppercase-text': { level: 'warn', desc: 'text-transform: uppercase (§3.4 forbids uppercase)' },
 };
@@ -103,7 +120,8 @@ const RULES = {
 // In-page rule evaluation. Runs inside the browser; returns plain data.
 // ---------------------------------------------------------------------------
 /* eslint-disable no-undef */
-function collectViolations() {
+function collectViolations(opts = {}) {
+  const { primary = false, viewportHeight = 844 } = opts;
   const out = [];
   const MAXTEXT = 90;
   const push = (rule, detail, extra = {}) => out.push({ rule, detail, ...extra });
@@ -268,6 +286,63 @@ function collectViolations() {
     }
   }
 
+  // ---- 8. MPWA-12b composition rules (§3, §8) ------------------------------
+  // Primary screens only: these are laws about how a screen is *composed*, and
+  // a detail page or a settings row-list is not composed from blocks.
+  if (primary) {
+    const main = document.querySelector('main') || document.body;
+
+    // L1 — shape variety
+    const blockEls = Array.from(document.querySelectorAll('[data-block]'));
+    const types = [...new Set(blockEls.map((b) => b.getAttribute('data-block')))];
+    if (types.length < 3) {
+      push('block-variety', `${types.length} distinct block type(s): ${types.join(', ') || 'none'}`);
+    }
+
+    // L2 — density floor, and the largest white gap.
+    // Measured in 8px rows over the first viewport: a row counts as filled if
+    // any visible leaf element covers it. Coverage rather than a bounding box,
+    // because a tall empty container would otherwise read as "filled".
+    const ROW = 8;
+    const rows = Math.floor(viewportHeight / ROW);
+    const covered = new Array(rows).fill(false);
+    const leaves = Array.from(main.querySelectorAll('*')).filter(
+      (el) => el.children.length === 0 || /^(P|H1|H2|H3|SPAN|BUTTON|A|LI|IMG|SVG|INPUT|TEXTAREA)$/.test(el.tagName)
+    );
+    for (const el of leaves) {
+      const r = el.getBoundingClientRect();
+      if (r.width < 2 || r.height < 2) continue;
+      const cs = getComputedStyle(el);
+      if (cs.visibility === 'hidden' || cs.display === 'none' || Number(cs.opacity) === 0) continue;
+      const from = Math.max(0, Math.floor(r.top / ROW));
+      const to = Math.min(rows - 1, Math.floor(r.bottom / ROW));
+      for (let i = from; i <= to; i++) covered[i] = true;
+    }
+    const filled = covered.filter(Boolean).length;
+    const fillPct = Math.round((filled / rows) * 100);
+    if (fillPct < 85) push('density-floor', `${fillPct}% of the first viewport filled`);
+
+    let gapRun = 0;
+    let worstGap = 0;
+    for (const c of covered) {
+      gapRun = c ? 0 : gapRun + 1;
+      worstGap = Math.max(worstGap, gapRun);
+    }
+    if (worstGap * ROW > 120) push('white-gap', `${worstGap * ROW}px of vertical white space`);
+
+    // L3 — progress, not only problems
+    const prog = document.querySelectorAll('[data-progress]').length;
+    if (prog !== 1) push('progress-element', `${prog} data-progress element(s), expected exactly 1`);
+  }
+
+  // ---- 9. Empty states must invite, never dead-end (§8, §5.3) --------------
+  for (const es of Array.from(document.querySelectorAll('[data-testid$="empty-state"], [data-empty-state]'))) {
+    const hasAction = es.querySelector('button, a[href], [role="button"]');
+    if (!hasAction) {
+      push('empty-state-action', `no primary action — ${describe(es)}`);
+    }
+  }
+
   return out;
 }
 /* eslint-enable no-undef */
@@ -365,10 +440,21 @@ async function settle(page) {
   await waitForDomQuiet(page);
 }
 
-async function ensureAuth(page) {
-  await page.goto(`${BASE}/inbox`, { waitUntil: 'domcontentloaded' });
+// Append ?fixture= when auditing a fixture state, preserving any existing query.
+function routeUrl(routePath, fixture) {
+  if (!fixture) return `${BASE}${routePath}`;
+  const [p, q = ''] = routePath.split('?');
+  const params = new URLSearchParams(q);
+  params.set('fixture', fixture);
+  return `${BASE}${p}?${params.toString()}`;
+}
+
+async function ensureAuth(page, fixture) {
+  await page.goto(routeUrl('/inbox', fixture), { waitUntil: 'domcontentloaded' });
   await settle(page);
   if (!page.url().includes('/login')) return true;
+  // In fixture mode /auth/me is answered locally, so there is nothing to log in
+  // to — a bounce to /login means the fixture failed to load.
   const btn = page.locator('[data-testid="demo-login-owner"]');
   if (await btn.count()) {
     await btn.first().click();
@@ -499,37 +585,42 @@ for (const vp of SKIP_MOBILE ? [] : MOBILE_VIEWPORTS) {
     }
   });
 
-  const authed = await ensureAuth(page);
-  if (!authed) {
-    report.notes.push(`[${vp.name}] Could not authenticate — authed routes skipped. Check the Owner demo button or the API URL.`);
-  }
+  // §8: composition checks run against every fixture state, so the same route is
+  // walked once per state. `null` means "whatever the API returns".
+  for (const fixture of FIXTURE_STATES) {
+    const authed = await ensureAuth(page, fixture);
+    if (!authed) {
+      report.notes.push(`[${vp.name}${fixture ? `/${fixture}` : ''}] Could not authenticate — authed routes skipped.`);
+    }
+    const tag = fixture ? `${vp.name} · ${fixture}` : vp.name;
 
-  for (const route of ROUTES) {
-    if (!authed && !route.anon) continue;
-    await page.goto(`${BASE}${route.path}`, { waitUntil: 'domcontentloaded' });
-    await settle(page);
-    // A redirect means the route is gated/aliased — record and move on.
-    const landed = new URL(page.url()).pathname + (new URL(page.url()).search || '');
-    if (!route.anon && landed.startsWith('/login')) {
-      report.notes.push(`[${vp.name}] ${route.path} bounced to /login (permission gate?)`);
-      continue;
-    }
-    const overlay = await takeErrorOverlay(page);
-    if (overlay) {
-      report.findings.push({
-        rule: 'runtime-error', detail: overlay,
-        route: route.path, label: route.label, viewport: vp.name, landed,
-      });
-    }
-    let found = [];
-    try {
-      found = await page.evaluate(collectViolations);
-    } catch (err) {
-      report.notes.push(`[${vp.name}] ${route.path} evaluation failed: ${err.message}`);
-      continue;
-    }
-    for (const f of found) {
-      report.findings.push({ ...f, route: route.path, label: route.label, viewport: vp.name, landed });
+    for (const route of ROUTES) {
+      if (!authed && !route.anon) continue;
+      await page.goto(routeUrl(route.path, fixture), { waitUntil: 'domcontentloaded' });
+      await settle(page);
+      // A redirect means the route is gated/aliased — record and move on.
+      const landed = new URL(page.url()).pathname + (new URL(page.url()).search || '');
+      if (!route.anon && landed.startsWith('/login')) {
+        report.notes.push(`[${tag}] ${route.path} bounced to /login (permission gate?)`);
+        continue;
+      }
+      const overlay = await takeErrorOverlay(page);
+      if (overlay) {
+        report.findings.push({
+          rule: 'runtime-error', detail: overlay,
+          route: route.path, label: route.label, viewport: tag, landed,
+        });
+      }
+      let found = [];
+      try {
+        found = await page.evaluate(collectViolations, { primary: !!route.primary, viewportHeight: vp.height });
+      } catch (err) {
+        report.notes.push(`[${tag}] ${route.path} evaluation failed: ${err.message}`);
+        continue;
+      }
+      for (const f of found) {
+        report.findings.push({ ...f, route: route.path, label: route.label, viewport: tag, landed });
+      }
     }
   }
   await ctx.close();

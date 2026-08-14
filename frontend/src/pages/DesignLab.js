@@ -10,6 +10,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { FIXTURE_NAMES, FIXTURE_LABEL } from "../fixtures/mobile";
+import { Verdict, Pulse, Queue, Board, Grid, Strip, CompletionRing } from "../components/mobile/blocks";
+import { EmptyState } from "../components/mobile";
+import { inr } from "../lib/format";
+import { Fire, Sun, Stamp, Star, Camera, CheckCircle } from "@phosphor-icons/react";
 
 const SCREENS = [
   { path: "/inbox", label: "Desk · now" },
@@ -132,9 +136,103 @@ function Frame({ path, fixture }) {
   );
 }
 
+/**
+ * The six blocks in isolation, at phone width, so the shape vocabulary can be
+ * judged on its own before it is assembled into screens (§3).
+ */
+function BlockGallery() {
+  const rows = [
+    { id: "r1", title: "Confirm cotton supplier rates for Q3", status: "overdue", due: "2020-01-01", context: "With Amit Verma" },
+    { id: "r2", title: "Hire a dispatch coordinator", status: "pending", statusLabel: "Waiting 6 days", context: "From Amit Verma", amount: 28000 },
+    { id: "r3", title: "Lock supplier rates before the festive season", status: "pending", context: "From Priya Nair", amount: 12000 },
+  ];
+  return (
+    <div className="w-[390px] shrink-0 rounded-xl border border-border bg-background p-4">
+      <p className="mb-3 text-sm font-semibold text-muted-foreground">All six blocks · 390px</p>
+
+      <Verdict
+        tone="danger"
+        eyebrow="Good morning, Rajesh"
+        headline="1 decision is on fire."
+        detail={
+          <>
+            <p className="font-heading text-[0.9375rem] font-semibold leading-snug">Confirm cotton supplier rates for Q3</p>
+            <p className="mt-1 text-sm opacity-80">3 days overdue · Amit Verma</p>
+          </>
+        }
+        action={{ label: "Review", onClick: () => {} }}
+      />
+
+      <Strip
+        label="Scope"
+        items={[
+          { key: "now", label: "Now", active: true, onSelect: () => {} },
+          { key: "morning", label: "Morning", onSelect: () => {} },
+          { key: "week", label: "Week", onSelect: () => {} },
+          { key: "month", label: "Month", onSelect: () => {} },
+        ]}
+        wrap
+      />
+
+      <Strip
+        label="Cleared today"
+        progress="cleared-today"
+        items={[{ key: "cleared", label: "Cleared today — 4", count: null, tone: "success", trailing: <span aria-hidden="true">✓✓✓✓</span> }]}
+        wrap
+      />
+
+      <Pulse
+        stats={[
+          { label: "Received", value: inr(2015000), series: [2, 4, 3, 6, 9, 15, 20], tone: "success", delta: 12 },
+          { label: "Outstanding", value: inr(1712000), series: [22, 21, 20, 19, 18, 17, 17], tone: "danger", delta: -4, invertDelta: true },
+        ]}
+      />
+
+      <Queue title="Waiting on you" rows={rows} total={6} onSeeAll={() => {}} />
+
+      <Grid
+        title="Where the money is"
+        items={[
+          { id: "g1", label: "Raw material", value: inr(1264000) },
+          { id: "g2", label: "Salaries", value: inr(1724000) },
+        ]}
+        renderTile={(t) => (
+          <>
+            <span className="text-[length:var(--text-label)] font-semibold leading-4 text-muted-foreground">{t.label}</span>
+            <span className="mt-1 block font-heading text-lg font-bold tabular-nums">{t.value}</span>
+          </>
+        )}
+      />
+
+      <Board
+        columns={[
+          { key: "quote", label: "Quotation", count: 3, done: 1, total: 3, items: [{ id: "b1", title: "Order #4801" }, { id: "b2", title: "Order #4802" }] },
+          { key: "prod", label: "Production", count: 5, done: 2, total: 5, items: [{ id: "b3", title: "Order #4803" }] },
+          { key: "disp", label: "Dispatch", count: 2, done: 2, total: 2, items: [] },
+        ]}
+        renderItem={(it) => (
+          <div className="rounded-xl border border-border bg-card p-3">
+            <p className="text-sm font-semibold">{it.title}</p>
+          </div>
+        )}
+        onMove={() => {}}
+      />
+
+      <EmptyState
+        icon={Camera}
+        title="Nothing recorded yet."
+        hint="Snap a bill and Dex will file it."
+        actionLabel="Photograph a bill"
+        onAction={() => {}}
+      />
+    </div>
+  );
+}
+
 export default function DesignLab() {
   const [screen, setScreen] = useState(SCREENS[0].path);
   const [states, setStates] = useState(FIXTURE_NAMES);
+  const [showBlocks, setShowBlocks] = useState(true);
 
   const shown = useMemo(() => FIXTURE_NAMES.filter((f) => states.includes(f)), [states]);
 
@@ -184,6 +282,17 @@ export default function DesignLab() {
           </button>
         ))}
         <span className="mx-1 h-6 w-px bg-border" />
+        <button
+          type="button"
+          onClick={() => setShowBlocks((v) => !v)}
+          data-testid="lab-toggle-blocks"
+          className={`rounded-pill border px-3 text-sm font-semibold ${
+            showBlocks ? "border-transparent bg-foreground text-background" : "border-border bg-card"
+          }`}
+          style={{ minHeight: "var(--control-h-sm)" }}
+        >
+          Blocks
+        </button>
         {FIXTURE_NAMES.map((f) => (
           <button
             key={f}
@@ -203,6 +312,7 @@ export default function DesignLab() {
       </div>
 
       <div className="flex gap-6 overflow-x-auto pb-4">
+        {showBlocks && <BlockGallery />}
         {shown.map((f) => (
           <Frame key={`${screen}|${f}`} path={screen} fixture={f} />
         ))}

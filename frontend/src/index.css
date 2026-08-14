@@ -205,7 +205,61 @@
     /* A control that opted into a taller tier keeps it. */
     .min-h-touch-md { min-height: var(--control-h-md) !important; }
     .min-h-touch-lg { min-height: var(--control-h-lg) !important; }
+
+    /* ---- MPWA-02 (§5.2.8) — safe area + touch behaviour ----
+       These live under the same query so desktop is untouched. */
+
+    /* Remove the 300ms double-tap delay without disabling pinch-zoom
+       (touch-action: none would break accessibility zoom). */
+    a, button, [role="button"], [role="tab"], input, select, textarea, label {
+        touch-action: manipulation;
+    }
+
+    /* Pull-to-refresh firing mid-list is the single most disorienting thing
+       on a long feed, so scroll containers keep their own chain. */
+    .overflow-y-auto,
+    .overflow-y-scroll,
+    .overflow-auto {
+        overscroll-behavior-y: contain;
+        -webkit-overflow-scrolling: touch;
+    }
 }
+
+/* ---------------------------------------------------------------------------
+   MPWA-02 — safe-area helpers. Named utilities rather than inline env() calls
+   so the insets are applied consistently and stay greppable. Each falls back
+   to 0 where the inset is unsupported or zero.
+
+   The horizontal helpers use max(gutter, inset) rather than the bare inset:
+   a plain `padding-left: env(...)` sits after Tailwind's utilities in source
+   order, so it *replaces* the `p-4` gutter and, on a device with no side
+   inset, flushes content against the edge — which is how the first cut of
+   this slice pushed every card to x=0.
+
+   Mobile-only rules live inside the query so `lg:px-8` still wins on desktop.
+--------------------------------------------------------------------------- */
+.pt-safe { padding-top: env(safe-area-inset-top, 0px); }
+.pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
+@media (max-width: 1023.98px) {
+    /* Page gutter: never tighter than the 16px design gutter, wider when a
+       notch eats into the edge in landscape. */
+    .px-gutter-safe {
+        padding-left: max(1rem, env(safe-area-inset-left, 0px));
+        padding-right: max(1rem, env(safe-area-inset-right, 0px));
+    }
+    /* Chrome that sets its own asymmetric padding keeps it as the floor. */
+    .px-chrome-safe {
+        padding-left: max(1rem, env(safe-area-inset-left, 0px));
+        padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+    }
+}
+
+/* The dock in MPWA-03 floats this far above the home indicator. */
+.bottom-safe-4 { bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); }
+/* Scroll containers must clear the floating dock (§8 MPWA-03: 96px) plus the
+   home indicator, or the last row is trapped underneath it. */
+.pb-dock { padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px)); }
 
 @layer base {
     * {

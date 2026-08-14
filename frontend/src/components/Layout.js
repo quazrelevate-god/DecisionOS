@@ -301,7 +301,11 @@ export default function Layout({ children }) {
         </header>
 
         {/* Mobile top app bar */}
-        <header className="lg:hidden h-14 border-b border-border bg-background/80 backdrop-blur-xl flex items-center justify-between gap-2 pl-4 pr-3 sticky top-0 z-20">
+        {/* MPWA-02: h-14 becomes min-h-14 + top inset — a fixed height would
+            put the controls under the status bar in iOS standalone, where
+            there is no browser chrome above us. px-safe covers landscape,
+            where the notch eats the left or right edge instead. */}
+        <header className="lg:hidden min-h-14 border-b border-border bg-background/80 backdrop-blur-xl flex items-center justify-between gap-2 px-chrome-safe pt-safe sticky top-0 z-20">
           <Logo markOnly />
           <div className="flex items-center gap-touch-gap shrink-0">
             <LanguageSwitcher />
@@ -356,11 +360,16 @@ export default function Layout({ children }) {
           </div>
         </header>
 
-        <main className="flex-1 p-4 lg:p-8 pb-24 lg:pb-8 overflow-x-hidden app-canvas">{children}</main>
+        {/* MPWA-02: pb-dock clears the tab bar (and, from MPWA-03, the floating
+            dock) plus the home indicator, so the last row is never trapped. */}
+        <main className="flex-1 p-4 lg:p-8 pb-dock lg:pb-8 px-gutter-safe overflow-x-hidden app-canvas">{children}</main>
       </div>
 
       {/* Mobile bottom tab bar */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 border-t border-black bg-white flex z-[10000]" data-testid="mobile-bottom-nav">
+      {/* MPWA-02: the bottom inset keeps the tabs off the home indicator.
+          This whole nav is replaced by FloatingDock in MPWA-03 — the inset
+          work is done here anyway so the app is correct in between. */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 border-t border-black bg-white flex z-[10000] pb-safe" data-testid="mobile-bottom-nav">
         {navBottom.map(({ to, label, tkey, icon: Icon }) => {
           const active = to === "/" ? location.pathname === "/" : location.pathname.startsWith(to);
           return (

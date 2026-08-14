@@ -1,21 +1,32 @@
-DecisionOS — mobile audit
+DecisionOS — mobile audit BASELINE
 ==============================================================================
-base url      http://localhost:3000
-generated     2026-08-14T01:29:53.204Z
-viewports     390x844, 360x640
-routes        22 in scope (spec §6)
+Captured on unmodified 54067b0 (Epic 2 Sprint 5 kick), using the harness as of
+MPWA-11. Regenerated after MPWA-01 and MPWA-03 corrected two audit rules that
+were producing false positives, so these numbers are directly comparable to a
+post-change run:
+  * out-of-flow descendants at any depth (a count badge pinned with -top-2
+    -right-2) no longer count as right-edge overflow
+  * dev-server error overlays are reported as a runtime-error finding and are
+    stripped before screenshots, instead of poisoning the diff with bundle
+    line numbers that shift on every rebuild
+The clock is frozen and webfonts are force-loaded, so runs are reproducible.
+
+FINAL STATE ON mobile-pwa: 0 failing, 130 warnings, desktop diff EMPTY.
+Reproduce with:  cd frontend && npm run fixture-api &  npm start &  npm run audit:mobile
+==============================================================================
+
 
 SUMMARY
 ------------------------------------------------------------------------------
-2804 failing violation(s), 1656 warning(s) across 22 routes
+2827 failing violation(s), 1656 warning(s) across 22 routes
 
   FAIL   1115  touch-target-min-44
   FAIL   1398  text-below-13px
-  FAIL    165  horizontal-overflow
+  FAIL    186  horizontal-overflow
   FAIL     62  native-select-in-scroll
   FAIL      4  screen-over-2500px
   FAIL      2  leaked-system-string
-  FAIL     58  non-indian-inr-grouping
+  FAIL     60  non-indian-inr-grouping
   warn     12  horizontal-scroll-strip
   warn   1644  uppercase-text
 
@@ -1097,7 +1108,7 @@ Rendered text below the 13px mobile floor (§3.4)
       · 12px — button[data-testid="demo-login-production"].border.border-black.px-3.py-2 — “PRODUCTION”
       · 12px — button[data-testid="demo-login-finance"].border.border-black.px-3.py-2 — “FINANCE”
 
-FAIL · horizontal-overflow — 165
+FAIL · horizontal-overflow — 186
 Content clipped at the right edge (§5.2.1)
 ------------------------------------------------------------------------------
   /brief [390x844] — 3
@@ -1119,77 +1130,87 @@ Content clipped at the right edge (§5.2.1)
       · 361>332 (overflow-x:visible) — div.flex.items-stretch.gap-2 — “SEND”
       · 409>358 (overflow-x:visible) — div.flex.flex-col.h-[calc(100vh-15rem)].lg:h-[calc(100vh-12rem)] — “ASK YOUR COMPANY ANYTHING Every answer is computed from your authorised workspace data — w”
       · 409>358 (overflow-x:visible) — form.flex.gap-2.mt-3 — “> ASK”
-  /inbox [360x640] — 5
+  /inbox [360x640] — 6
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 Decision Desk 6 decisions waiting on you · 5 on fire · 3 due today NEEDS YO”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 Decision Desk 6 decisions waiting on you · 5 on fire · 3 due today NEEDS YO”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 Decision Desk 6 decisions waiting on you · 5 on fire · 3 due today NEEDS YO”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 Decision Desk 6 decisions waiting on you · 5 on fire · 3 due today NEEDS YO”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
-  /brief [360x640] — 8
+  /brief [360x640] — 9
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 MORNING EVENING WEEKLY MONTHLY CEO JOURNAL 1 FIRES TO PUT OUT TODAY HANDLE ”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 MORNING EVENING WEEKLY MONTHLY CEO JOURNAL 1 FIRES TO PUT OUT TODAY HANDLE ”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 MORNING EVENING WEEKLY MONTHLY CEO JOURNAL 1 FIRES TO PUT OUT TODAY HANDLE ”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 MORNING EVENING WEEKLY MONTHLY CEO JOURNAL 1 FIRES TO PUT OUT TODAY HANDLE ”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
       · 400>328 (overflow-x:visible) — div.flex.flex-col — “MORNING EVENING WEEKLY MONTHLY CEO JOURNAL 1 FIRES TO PUT OUT TODAY HANDLE NOW 4 delayed t”
       · 400>328 (overflow-x:visible) — div[data-testid="brief-controls"].order-2.lg:order-1.mt-8.lg:mt-0 — “MORNING EVENING WEEKLY MONTHLY CEO JOURNAL”
       · 399>326 (overflow-x:visible) — div.flex.border.border-black.w-full — “MORNING EVENING WEEKLY MONTHLY”
-  /my-work [360x640] — 6
+  /my-work [360x640] — 7
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE ALL 13 OPER”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE ALL 13 OPER”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE ALL 13 OPER”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE ALL 13 OPER”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
       · 78>74 (overflow-x:visible) — button[data-testid="work-view-workflows"].flex.items-center.justify-center.gap-1.5 — “WORKFLOWS”
-  /my-work?view=leave [360x640] — 8
+  /my-work?view=leave [360x640] — 9
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE REPORT ABSE”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE REPORT ABSE”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE REPORT ABSE”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE REPORT ABSE”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
       · 388>328 (overflow-x:visible) — div — “NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE REPORT ABSENCE TODAY REQUE”
       · 78>74 (overflow-x:visible) — button[data-testid="work-view-workflows"].flex.items-center.justify-center.gap-1.5 — “WORKFLOWS”
       · 388>328 (overflow-x:visible) — div — “REPORT ABSENCE TODAY REQUEST LEAVE MY LEAVE 3 APPROVALS 2 SETTINGS PENDING CASUAL Priya Sh”
-  /my-work?view=workflows [360x640] — 6
+  /my-work?view=workflows [360x640] — 7
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE PIPELINES T”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE PIPELINES T”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE PIPELINES T”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 NEW TASK MY TASKS ALL TASKS AI PRIORITY MY WORK WORKFLOWS LEAVE PIPELINES T”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
       · 78>74 (overflow-x:visible) — button[data-testid="work-view-workflows"].flex.items-center.justify-center.gap-1.5 — “WORKFLOWS”
-  /crm [360x640] — 5
+  /crm [360x640] — 6
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 ADD CUSTOMER ADD SUPPLIER ALL CUSTOMERS SUPPLIERS MINE All statuses lead ac”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 ADD CUSTOMER ADD SUPPLIER ALL CUSTOMERS SUPPLIERS MINE All statuses lead ac”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 ADD CUSTOMER ADD SUPPLIER ALL CUSTOMERS SUPPLIERS MINE All statuses lead ac”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 ADD CUSTOMER ADD SUPPLIER ALL CUSTOMERS SUPPLIERS MINE All statuses lead ac”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
-  /contacts/c_1 [360x640] — 7
+  /contacts/c_1 [360x640] — 8
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 BACK TO PEOPLE CUSTOMER ACTIVE KRISHNA GARMENTS Krishna Garments Pvt Ltd +9”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 BACK TO PEOPLE CUSTOMER ACTIVE KRISHNA GARMENTS Krishna Garments Pvt Ltd +9”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 BACK TO PEOPLE CUSTOMER ACTIVE KRISHNA GARMENTS Krishna Garments Pvt Ltd +9”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 BACK TO PEOPLE CUSTOMER ACTIVE KRISHNA GARMENTS Krishna Garments Pvt Ltd +9”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
       · 138>124 (overflow-x:visible) — p.font-heading.text-2xl.font-black.tracking-tight — “₹3,800,000”
       · 137>124 (overflow-x:visible) — p.font-heading.text-2xl.font-black.tracking-tight — “₹3,400,000”
-  /team [360x640] — 5
+  /team [360x640] — 6
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 ADD MEMBER MEMBERS R Rajesh Kumar rajesh@balajitextiles.in OWNER ACCESS P P”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 ADD MEMBER MEMBERS R Rajesh Kumar rajesh@balajitextiles.in OWNER ACCESS P P”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 ADD MEMBER MEMBERS R Rajesh Kumar rajesh@balajitextiles.in OWNER ACCESS P P”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 ADD MEMBER MEMBERS R Rajesh Kumar rajesh@balajitextiles.in OWNER ACCESS P P”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
-  /finance [360x640] — 8
+  /finance [360x640] — 9
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX FIX OLD PURCHASES UPLOAD B”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX FIX OLD PURCHASES UPLOAD B”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX FIX OLD PURCHASES UPLOAD B”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX FIX OLD PURCHASES UPLOAD B”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
       · 136>124 (overflow-x:visible) — p.font-heading.text-2xl.font-black.tracking-tight — “₹2,589,000”
       · 132>124 (overflow-x:visible) — p.font-heading.text-2xl.font-black.tracking-tight — “₹2,015,000”
       · 132>124 (overflow-x:visible) — p.font-heading.text-2xl.font-black.tracking-tight — “₹3,785,000”
-  /finance?tab=revenue [360x640] — 11
+  /finance?tab=revenue [360x640] — 12
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD INCOME FIX OLD PURCHAS”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD INCOME FIX OLD PURCHAS”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD INCOME FIX OLD PURCHAS”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD INCOME FIX OLD PURCHAS”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
       · 347>328 (overflow-x:visible) — div — “OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD INCOME FIX OLD PURCHASES UPLOAD BILL ”
@@ -1198,34 +1219,39 @@ Content clipped at the right edge (§5.2.1)
       · 77>67 (overflow-x:visible) — div.flex.items-center.gap-2.text-muted-foreground — “RECEIVED”
       · 119>99 (overflow-x:visible) — div[data-testid="kpi-outstanding"].card-brutal.p-4 — “OUTSTANDING ₹0”
       · 103>67 (overflow-x:visible) — div.flex.items-center.gap-2.text-muted-foreground — “OUTSTANDING”
-  /finance?tab=expenses [360x640] — 5
+  /finance?tab=expenses [360x640] — 6
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD EXPENSE FIX OLD PURCHA”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD EXPENSE FIX OLD PURCHA”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD EXPENSE FIX OLD PURCHA”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD EXPENSE FIX OLD PURCHA”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
-  /finance?tab=assets [360x640] — 5
+  /finance?tab=assets [360x640] — 6
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD ASSET FIX OLD PURCHASE”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD ASSET FIX OLD PURCHASE”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD ASSET FIX OLD PURCHASE”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD ASSET FIX OLD PURCHASE”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
-  /finance?tab=inventory [360x640] — 5
+  /finance?tab=inventory [360x640] — 6
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD ITEM FIX OLD PURCHASES”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD ITEM FIX OLD PURCHASES”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD ITEM FIX OLD PURCHASES”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX ADD ITEM FIX OLD PURCHASES”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
-  /finance?tab=inbox [360x640] — 5
+  /finance?tab=inbox [360x640] — 6
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX FIX OLD PURCHASES UPLOAD B”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX FIX OLD PURCHASES UPLOAD B”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX FIX OLD PURCHASES UPLOAD B”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 OVERVIEW REVENUE EXPENSES ASSETS INVENTORY INBOX FIX OLD PURCHASES UPLOAD B”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
-  /brain [360x640] — 11
+  /brain [360x640] — 12
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 ASK SEARCH DOCUMENTS Speak, type, ask, search — Dex remembers everything. S”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 ASK SEARCH DOCUMENTS Speak, type, ask, search — Dex remembers everything. S”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 ASK SEARCH DOCUMENTS Speak, type, ask, search — Dex remembers everything. S”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 ASK SEARCH DOCUMENTS Speak, type, ask, search — Dex remembers everything. S”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
       · 409>328 (overflow-x:visible) — div — “ASK SEARCH DOCUMENTS Speak, type, ask, search — Dex remembers everything. SEND ASK YOUR CO”
@@ -1234,22 +1260,25 @@ Content clipped at the right edge (§5.2.1)
       · 361>302 (overflow-x:visible) — div.flex.items-stretch.gap-2 — “SEND”
       · 409>328 (overflow-x:visible) — div.flex.flex-col.h-[calc(100vh-15rem)].lg:h-[calc(100vh-12rem)] — “ASK YOUR COMPANY ANYTHING Every answer is computed from your authorised workspace data — w”
       · 409>328 (overflow-x:visible) — form.flex.gap-2.mt-3 — “> ASK”
-  /calendar [360x640] — 5
+  /calendar [360x640] — 6
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 ALL (0) MEETINGS (0) PAYMENTS (0) TASKS (0) DELIVERIES (0) COMPLAINTS (0) B”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 ALL (0) MEETINGS (0) PAYMENTS (0) TASKS (0) DELIVERIES (0) COMPLAINTS (0) B”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 ALL (0) MEETINGS (0) PAYMENTS (0) TASKS (0) DELIVERIES (0) COMPLAINTS (0) B”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 ALL (0) MEETINGS (0) PAYMENTS (0) TASKS (0) DELIVERIES (0) COMPLAINTS (0) B”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
-  /notifications [360x640] — 5
+  /notifications [360x640] — 6
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 MARK ALL READ REMINDER 14 HRS AGO Approve ₹4,80,000 yarn purchase Decision ”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 MARK ALL READ REMINDER 14 HRS AGO Approve ₹4,80,000 yarn purchase Decision ”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 MARK ALL READ REMINDER 14 HRS AGO Approve ₹4,80,000 yarn purchase Decision ”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 MARK ALL READ REMINDER 14 HRS AGO Approve ₹4,80,000 yarn purchase Decision ”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
-  /settings [360x640] — 23
+  /settings [360x640] — 24
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 COMPANY DETAILS Update your company profile, products, and team roles. COMP”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 COMPANY DETAILS Update your company profile, products, and team roles. COMP”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 COMPANY DETAILS Update your company profile, products, and team roles. COMP”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 COMPANY DETAILS Update your company profile, products, and team roles. COMP”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
       · 272>260 (overflow-x:visible) — div.mt-3.space-y-1.5 — “STAGES (IN ORDER) Add stage”
@@ -1258,26 +1287,28 @@ Content clipped at the right edge (§5.2.1)
       · 272>260 (overflow-x:visible) — div[data-testid="op-stage-0-2"].flex.items-center.gap-1.5
       · 272>260 (overflow-x:visible) — div[data-testid="op-stage-0-3"].flex.items-center.gap-1.5
       · 272>260 (overflow-x:visible) — div.mt-3.space-y-1.5 — “STAGES (IN ORDER) Add stage”
-      · 272>260 (overflow-x:visible) — div[data-testid="op-stage-1-0"].flex.items-center.gap-1.5
-      … 11 more
-  /journal [360x640] — 7
+      … 12 more
+  /journal [360x640] — 8
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 SEARCH Nothing logged yet Decisions you capture and approve will appear her”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 SEARCH Nothing logged yet Decisions you capture and approve will appear her”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 SEARCH Nothing logged yet Decisions you capture and approve will appear her”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 SEARCH Nothing logged yet Decisions you capture and approve will appear her”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
       · 335>328 (overflow-x:visible) — div — “SEARCH Nothing logged yet Decisions you capture and approve will appear here, grouped by d”
       · 335>328 (overflow-x:visible) — form.flex.gap-2.mb-8.max-w-xl — “SEARCH”
-  /operating-score [360x640] — 5
+  /operating-score [360x640] — 6
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 68 / 100 COMPANY HEALTH EXECUTION 74 FINANCE 52 SALES 71 RESPONSIVENESS 80 ”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 68 / 100 COMPANY HEALTH EXECUTION 74 FINANCE 52 SALES 71 RESPONSIVENESS 80 ”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 68 / 100 COMPANY HEALTH EXECUTION 74 FINANCE 52 SALES 71 RESPONSIVENESS 80 ”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 68 / 100 COMPANY HEALTH EXECUTION 74 FINANCE 52 SALES 71 RESPONSIVENESS 80 ”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
-  /coach [360x640] — 5
+  /coach [360x640] — 6
       · page scrollWidth 391 > viewport 360
       · 391>360 (overflow-x:visible) — div — “D DECISIONOS 3 REFRESH COMPLETED TASKS OPEN 9 OVERDUE 4 COMPLETION % PROOF UPLOADS % PLANS”
       · 391>360 (overflow-x:visible) — div.App — “D DECISIONOS 3 REFRESH COMPLETED TASKS OPEN 9 OVERDUE 4 COMPLETION % PROOF UPLOADS % PLANS”
+      · 391>360 (overflow-x:visible) — div.min-h-screen.flex.bg-brand-paper.text-brand-ink — “D DECISIONOS 3 REFRESH COMPLETED TASKS OPEN 9 OVERDUE 4 COMPLETION % PROOF UPLOADS % PLANS”
       · 391>360 (overflow-x:visible) — div.flex-1.flex.flex-col.min-w-0 — “D DECISIONOS 3 REFRESH COMPLETED TASKS OPEN 9 OVERDUE 4 COMPLETION % PROOF UPLOADS % PLANS”
       · 391>360 (overflow-x:visible) — header.lg:hidden.h-14.border-b.border-border — “D DECISIONOS 3”
 
@@ -1347,13 +1378,16 @@ Env var / table / field / HTTP status on screen (§5.4)
   /settings [360x640] — 1
       · env var “WA_TENANT_ID” — … ID (WhatsApp routing fallback — set as WA_TENANT_ID) COPY Messages from unregistered numbe…
 
-FAIL · non-indian-inr-grouping — 58
+FAIL · non-indian-inr-grouping — 60
 Currency not in Indian digit grouping (§5.3)
 ------------------------------------------------------------------------------
   /inbox [390x844] — 3
       · ₹480,000 — …· From Suresh Patel · Unblocks 3 tasks ₹480,000 REVIEW → Write off ₹1,15,000 from Kri…
       · ₹115,000 — …s · From Anita Desai · Unblocks 1 task ₹115,000 REVIEW → Hire second cutting master o…
       · ₹2,200,000 — … · From Priya Sharma · Unblocks 1 task ₹2,200,000 REVIEW → Replace the failing Jacquard…
+  /brief [390x844] — 2
+      · ₹585,000 — …VIEW DETAILS 2 overdue receivable(s) ₹585,000 VIEW DETAILS 2 supplier bill(s) to p…
+      · ₹428,000 — …EW DETAILS 2 supplier bill(s) to pay ₹428,000 VIEW DETAILS 1 payment(s) to match …
   /contacts/c_1 [390x844] — 3
       · ₹400,000 — …ad, India 24AABCS1429B1ZX OUTSTANDING ₹400,000 TOTAL INVOICED ₹3,800,000 TOTAL PAID…
       · ₹3,800,000 — … OUTSTANDING ₹400,000 TOTAL INVOICED ₹3,800,000 TOTAL PAID ₹3,400,000 OPEN COMPLAINT…
@@ -2059,7 +2093,6 @@ text-transform: uppercase (§3.4 forbids uppercase)
 
 DESKTOP BASELINE (§9.2 — must stay empty)
 ------------------------------------------------------------------------------
-captured 42 baseline screenshot(s) at frontend/.audit-desktop-baseline
 desktop diff: EMPTY
 
 

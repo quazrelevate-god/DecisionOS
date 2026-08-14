@@ -126,7 +126,9 @@ check('panel is at most 80vh', panelMaxH <= 80, `${panelMaxH}vh`);
 const tile = await page.locator('[data-testid="allapps-tile-calendar"]').boundingBox();
 check('tiles are >= 88x88', tile.width >= 88 && tile.height >= 88,
   `${Math.round(tile.width)}x${Math.round(tile.height)}`);
-const cols = await page.locator('[data-testid="allapps-group-account"] > div').evaluate(
+// MPWA-12h replaced the four category sections with one bento grid, so the
+// column count is read from that grid rather than from a per-category one.
+const cols = await page.locator('[data-testid="allapps-group-destinations"] > div').evaluate(
   (el) => getComputedStyle(el).gridTemplateColumns.split(' ').length
 );
 check('3 columns at 390px', cols === 3, `${cols} columns`);
@@ -144,22 +146,29 @@ check('Dex has no All Apps tile (it is the FAB)', !tileKeys.includes('dex') && !
   tileKeys.join(', '));
 check('Meeting Notes is not in the grid', !tileKeys.some((k) => /meeting/i.test(k)));
 
-// Send Daily Digest must not be adjacent to Sign out (§8)
-const acct = await page.locator('[data-testid="allapps-group-account"] [data-testid^="allapps-tile-"]')
+// Send Daily Digest must not be adjacent to Sign out (§8). 12h settles this
+// structurally: Digest is a tile in the bento, Sign out lives in the utility
+// strip, so they are never neighbours regardless of ordering.
+const utilKeys = await page.locator('[data-testid="allapps-utility"] [data-testid^="allapps-tile-"]')
   .evaluateAll((els) => els.map((e) => e.getAttribute('data-testid').replace('allapps-tile-', '')));
-const di = acct.indexOf('digest');
-const si = acct.indexOf('signout');
 check('Send Daily Digest is not adjacent to Sign out',
-  di === -1 || si === -1 || Math.abs(di - si) > 1,
-  `order: ${acct.join(' | ')}`);
+  !utilKeys.includes('digest') && utilKeys.includes('signout'), `utility: ${utilKeys.join(' | ')}`);
+check('Sign out is last in the utility strip',
+  utilKeys[utilKeys.length - 1] === 'signout', utilKeys.join(' | '));
 
-// search filters live
-await page.locator('[data-testid="allapps-search"]').fill('cal');
-await page.waitForTimeout(300);
-const shown = await page.locator('[data-testid^="allapps-tile-"]').count();
-check('search filters tiles live', shown === 1, `${shown} tile(s) match "cal"`);
-await page.locator('[data-testid="allapps-search"]').fill('');
-await page.waitForTimeout(250);
+// §5.7: search renders only above twelve entries, so with twelve it is absent.
+const tileTotal = await page.locator('[data-testid^="allapps-tile-"]').count();
+const searchShown = (await page.locator('[data-testid="allapps-search"]').count()) > 0;
+check('search appears only when it would earn its row',
+  searchShown === tileTotal > 12, `${tileTotal} entries, search ${searchShown ? 'shown' : 'hidden'}`);
+if (searchShown) {
+  await page.locator('[data-testid="allapps-search"]').fill('cal');
+  await page.waitForTimeout(300);
+  const shown = await page.locator('[data-testid^="allapps-tile-"]').count();
+  check('search filters tiles live', shown === 1, `${shown} tile(s) match "cal"`);
+  await page.locator('[data-testid="allapps-search"]').fill('');
+  await page.waitForTimeout(250);
+}
 
 // scroll lock + restore
 const refBefore = await page.evaluate(() => Math.round(document.body.getBoundingClientRect().top));

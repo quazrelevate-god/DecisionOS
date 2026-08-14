@@ -5,7 +5,7 @@
 // in length on purpose — several titles are deliberately long enough to need the
 // 2-line clamp, and amounts span ₹8,000 to ₹40,00,000 so column alignment is
 // actually tested.
-import { buildRoutes, TENANT, TEAM, series, ymd, iso } from "./_shared";
+import { buildRoutes, buildWrites, TENANT, TEAM, series, ymd, iso } from "./_shared";
 
 const COMPANIES = [
   "Reliance Trends", "Krishna Garments", "Anand Fabrics", "Nashik Traders",
@@ -348,4 +348,4 @@ const data = {
   operatingModel: { pipelines: PIPELINES },
 };
 
-export const BUSY = { name: "busy", data, routes: buildRoutes(data) };
+export const BUSY = { name: "busy", data, routes: buildRoutes(data), writes: buildWrites() };

@@ -73,7 +73,17 @@ export function resolveFixture(name, method, url) {
 
   // Writes are accepted and echoed so a fixture screen stays interactive, but
   // nothing is persisted — a fixture is for looking at layout, not for state.
+  //
+  // A handful of writes have to answer with a real shape rather than `ok: true`,
+  // because the UI's next step reads a field out of the response. Listed
+  // explicitly: an echo that silently lacked `id` is how MPWA-13's wrong-verb
+  // class of bug survives.
   if (method && method.toUpperCase() !== "GET") {
+    for (const w of set.writes || []) {
+      if (typeof w.match === "string" ? w.match === path : w.match.test(path)) {
+        return { hit: true, data: typeof w.data === "function" ? w.data({ path, query }) : w.data };
+      }
+    }
     return { hit: true, data: { ok: true, fixture: name } };
   }
 

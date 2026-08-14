@@ -233,8 +233,18 @@ await page.locator('[data-testid="dex-fab"]').click();
 await page.waitForSelector('[data-testid="dex-sheet"]', { timeout: 5000 });
 await page.waitForTimeout(400);
 check('Dex FAB opens DexSheet', await page.locator('[data-testid="dex-sheet"]').isVisible());
-check('DexSheet hosts the existing DexCaptureBar',
-  await page.locator('[data-testid="dex-capture-bar"]').isVisible());
+// MPWA-12e replaced the sheet's presentation (§5.6: it "looks like a support
+// form, and Dex is the product's personality") while keeping the behaviour —
+// hooks/useDexCapture holds the recorder and the same Sprint 5 endpoints, and
+// DexCaptureBar still renders it verbatim on desktop /brain.
+check('DexSheet opens on the idle state',
+  (await page.locator('[data-testid="dex-sheet-stage"]').getAttribute('data-stage')) === 'idle');
+check('DexSheet offers speak, type and attach',
+  (await page.locator('[data-testid="dex-mic-record"]').isVisible())
+    && (await page.locator('[data-testid="dex-text-input"]').isVisible())
+    && (await page.locator('[data-testid="dex-file-upload"]').isVisible()));
+check('the old capture-bar form is gone from the sheet',
+  (await page.locator('[data-testid="dex-sheet"] [data-testid="dex-capture-bar"]').count()) === 0);
 check('DexSheet offers "Open Dex"',
   await page.locator('[data-testid="dex-sheet-open-full"]').isVisible());
 const sendBox = await page.locator('[data-testid="dex-send"]').boundingBox();
@@ -243,6 +253,8 @@ check('Dex send button is not clipped at the right edge',
   `right edge at ${Math.round(sendBox.x + sendBox.width)} of ${vw}`);
 const micBox = await page.locator('[data-testid="dex-mic-record"]').boundingBox();
 check('Dex mic is >= 56px', micBox.height >= 56, `${Math.round(micBox.height)}px`);
+check('Dex mic is the sheet\'s hero, not one control in a row', micBox.height >= 64,
+  `${Math.round(micBox.width)}x${Math.round(micBox.height)}`);
 await page.locator('[data-testid="dex-sheet-open-full"]').click();
 await page.waitForTimeout(700);
 check('"Open Dex" navigates to /brain', new URL(page.url()).pathname === '/brain',

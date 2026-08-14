@@ -4,7 +4,7 @@
 // shipped screens were built against, and the one the density floor (L2, §3) is
 // measured in: content must fill >= 85% of the first viewport at 390x844 HERE,
 // where there is least to show. If a layout passes in sparse it passes anywhere.
-import { buildRoutes, TENANT, TEAM, series, ymd, iso } from "./_shared";
+import { buildRoutes, buildWrites, TENANT, TEAM, series, ymd, iso } from "./_shared";
 
 const CONTACTS = [
   { id: "c_pack", name: "PackWell Industries", company: "PackWell Industries", type: "vendor", status: "active", phone: "+919820011001", email: "ops@packwell.example", address: "Vapi, Gujarat", outstanding: 0, last_activity_at: iso(-4) },
@@ -197,4 +197,4 @@ const data = {
   },
 };
 
-export const SPARSE = { name: "sparse", data, routes: buildRoutes(data) };
+export const SPARSE = { name: "sparse", data, routes: buildRoutes(data), writes: buildWrites() };

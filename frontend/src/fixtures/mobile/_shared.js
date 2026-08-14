@@ -35,6 +35,18 @@ export const series = (...points) => points.map((v, i) => ({ x: i, v }));
  * its own data. Anything a state leaves undefined simply does not match, and
  * the request falls through to the network rather than silently returning {}.
  */
+/**
+ * Writes that must answer with a real shape rather than a bare `ok: true`,
+ * because the UI reads a field out of the response and takes its next step from
+ * it. MPWA-12e: DexSheet follows the returned note id to build §5.6's
+ * "understanding" state, so a response without `id` would silently skip it.
+ */
+export function buildWrites() {
+  return [
+    { match: /^\/voice-notes(\/text)?$/, data: { id: "vn_fixture", status: "queued" } },
+  ];
+}
+
 export function buildRoutes(d) {
   const R = [];
   const add = (match, data) => { if (data !== undefined) R.push({ match, data }); };
@@ -84,6 +96,48 @@ export function buildRoutes(d) {
     });
   }
   add("/brief/details", { key: "", actionable: false, items: d.briefDetails || [] });
+
+  // MPWA-12e — the capture pipeline, simulated. The real backend queues a
+  // BackgroundTask and walks the note queued -> transcribing -> structuring ->
+  // done, and §5.6's "understanding" state exists to show that happening. A
+  // fixture that answered `done` instantly, or not at all, would leave the only
+  // screen where the founder sees the AI being smart untested.
+  const DEX_NOTE = "vn_fixture";
+  const DEX_DECISION = "dec_fixture";
+  const dexTasks = (d.tasks || []).slice(0, 2);
+  let dexReads = 0;
+  R.push({
+    match: `/voice-notes/${DEX_NOTE}`,
+    data: () => {
+      dexReads += 1;
+      const status = dexReads === 1 ? "transcribing" : dexReads === 2 ? "structuring" : "done";
+      return {
+        id: DEX_NOTE,
+        kind: "text",
+        status,
+        transcript: "Tell Suresh to ship the indigo lot before Friday",
+        detected_language_name: "English",
+        ...(status === "done"
+          ? {
+              decision_id: DEX_DECISION,
+              execution_summary: { tasks: dexTasks.length, assignees: dexTasks.length, approvals: 1, workflows: 0, meetings: 0, reminders: 0 },
+            }
+          : {}),
+      };
+    },
+  });
+  R.push({
+    match: `/decisions/${DEX_DECISION}`,
+    data: {
+      id: DEX_DECISION,
+      title: "Ship the indigo lot to Tirupur before Friday",
+      summary: "Suresh owns the dispatch; the lot is already dyed and waiting on packing.",
+      dtype: "directive",
+      confidence: 0.91,
+      status: "pending_approval",
+      task_ids: dexTasks.map((t) => t.id),
+    },
+  });
 
   add("/tasks", d.tasks);
   // A fire IS a task (`target_kind: "task"`), so GET /tasks/<fire id> has to

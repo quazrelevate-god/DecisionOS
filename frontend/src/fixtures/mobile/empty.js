@@ -3,7 +3,7 @@
 // A brand-new tenant with nothing recorded. What this state proves: "empty
 // states invite rather than dead-end." Every screen rendered against this must
 // end in a sentence and a button, never a full stop.
-import { buildRoutes, TENANT, TEAM, series } from "./_shared";
+import { buildRoutes, buildWrites, TENANT, TEAM, series } from "./_shared";
 
 const data = {
   tenant: { ...TENANT, name: "New Textiles Co" },
@@ -62,4 +62,4 @@ const data = {
   operatingModel: { pipelines: [] },
 };
 
-export const EMPTY = { name: "empty", data, routes: buildRoutes(data) };
+export const EMPTY = { name: "empty", data, routes: buildRoutes(data), writes: buildWrites() };

@@ -15,11 +15,10 @@
 // so instrumentation is unambiguous and future auth-persona checks
 // can key on it.
 
-import { useState, useRef, useEffect } from "react";
-import api from "../lib/api";
+import { useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
-import { toast } from "sonner";
+import { useDexCapture } from "../hooks/useDexCapture";
 import {
   Microphone, Stop, PaperPlaneTilt, Paperclip, Spinner,
 } from "@phosphor-icons/react";
@@ -35,6 +34,12 @@ import {
 //                                       the input instead of duplicating the
 //                                       send logic.
 //   size="lg"                           thumb-sized mic/input for the sheet.
+//
+// MPWA-12e: the recorder, the uploads and the endpoints moved into
+// hooks/useDexCapture so the mobile Dex sheet could present them as a centred
+// mic with a live waveform (§5.6) without a second copy of the mic lifecycle.
+// The markup below is untouched — /brain is a desktop screen and §9.2's diff
+// must stay empty.
 export function DexCaptureBar({
   onCaptured,
   placeholder = "Ask Dex or capture a decision…",
@@ -44,112 +49,17 @@ export function DexCaptureBar({
 }) {
   const { user } = useAuth();
   const canCapture = user?.role === "owner" || hasPerm(user, "voice_capture");
-  const [text, setText] = useState("");
-  const [sending, setSending] = useState(false);
-  const [recording, setRecording] = useState(false);
-  const [recordSecs, setRecordSecs] = useState(0);
-  const mediaRef = useRef(null);
-  const chunksRef = useRef([]);
-  const timerRef = useRef(null);
-  const fileRef = useRef(null);
+  const {
+    text, setText, sending, recording, recordSecs,
+    sendText, startRecording, stopRecording, uploadFile, fileRef,
+  } = useDexCapture({ onCaptured, onRecordingChange });
   const lg = size === "lg";
 
   useEffect(() => {
-    onRecordingChange?.(recording, recordSecs);
-    // onRecordingChange is a stable callback from the caller; re-running on
-    // every identity change would fire on each parent render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recording, recordSecs]);
-
-  useEffect(() => {
     if (seedText) setText(seedText);
-  }, [seedText]);
-
-  // Never leave the mic hot or the interval running if the sheet unmounts
-  // mid-recording — §5.6: a long job must be cancellable, not orphaned.
-  useEffect(
-    () => () => {
-      clearInterval(timerRef.current);
-      if (mediaRef.current?.state === "recording") mediaRef.current.stop();
-    },
-    []
-  );
+  }, [seedText, setText]);
 
   if (!canCapture) return null;
-
-  const sendText = async () => {
-    if (!text.trim()) return;
-    setSending(true);
-    try {
-      await api.post("/voice-notes/text", { text: text.trim() });
-      toast.success("Captured — Dex is structuring it now");
-      setText("");
-      onCaptured && onCaptured();
-    } catch (e) {
-      toast.error(e.response?.data?.detail || "Capture failed");
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mr = new MediaRecorder(stream);
-      chunksRef.current = [];
-      mr.ondataavailable = (e) => e.data.size && chunksRef.current.push(e.data);
-      mr.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop());
-        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-        const fd = new FormData();
-        fd.append("file", blob, "capture.webm");
-        fd.append("language", "auto");
-        setSending(true);
-        try {
-          await api.post("/voice-notes", fd, {
-            headers: { "Content-Type": "multipart/form-data" },
-          });
-          toast.success("Voice captured — Dex is structuring it");
-          onCaptured && onCaptured();
-        } catch (e) {
-          toast.error(e.response?.data?.detail || "Upload failed");
-        } finally {
-          setSending(false);
-        }
-      };
-      mediaRef.current = mr;
-      mr.start();
-      setRecording(true);
-      setRecordSecs(0);
-      timerRef.current = setInterval(() => setRecordSecs((s) => s + 1), 1000);
-    } catch (e) {
-      toast.error("Microphone not available");
-    }
-  };
-
-  const stopRecording = () => {
-    if (mediaRef.current?.state === "recording") mediaRef.current.stop();
-    setRecording(false);
-    clearInterval(timerRef.current);
-  };
-
-  const uploadFile = async (e) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    const fd = new FormData();
-    fd.append("file", f);
-    setSending(true);
-    try {
-      await api.post("/files", fd, { headers: { "Content-Type": "multipart/form-data" } });
-      toast.success("File uploaded to Dex");
-      onCaptured && onCaptured();
-    } catch (err) {
-      toast.error(err.response?.data?.detail || "Upload failed");
-    } finally {
-      setSending(false);
-      e.target.value = "";
-    }
-  };
 
   return (
     <div

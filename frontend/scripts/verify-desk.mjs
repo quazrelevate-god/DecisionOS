@@ -11,6 +11,7 @@
  * Runs against the `busy` fixture: the counts have to be deterministic to assert
  * "capped at 5, rest behind See all", and real-tenant data is not.
  */
+import fs from 'node:fs';
 import { chromium } from 'playwright';
 import { signIn } from './lib/auth.mjs';
 
@@ -205,6 +206,85 @@ check('the Focus View closed itself after the last one',
 const undoSeen = await page.locator('[data-testid="undo-snackbar"]').count();
 check('an undo snackbar fired for a high-value approval', undoSeen > 0,
   undoSeen ? (await page.locator('[data-testid="undo-snackbar"]').innerText()).replace(/\n/g, ' ') : 'none');
+
+// ------------------------------------- §8: one level only, and it deep-links
+await page.goto(`${BASE}/inbox?fixture=busy`, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('[data-testid="desk-mobile"]', { timeout: 12000 });
+await page.waitForTimeout(1200);
+
+// Open a fire from the narrative scope's fires queue, then prove that every
+// control inside the sheet either closes it or leaves the page — none of them
+// stacks a second Focus View. This is the runtime half; the structural half is
+// that FocusView.jsx never calls useFocus().open, asserted below.
+await page.goto(`${BASE}/inbox?scope=morning&fixture=busy`, { waitUntil: 'domcontentloaded' });
+await page.waitForTimeout(1600);
+const fire = page.locator('[data-testid^="brief-fires-row-"]').first();
+if (await fire.count()) {
+  await fire.click();
+  await page.waitForSelector('[data-testid="focus-view"]', { timeout: 6000 });
+  await page.waitForTimeout(600);
+  check('a fire opens the Focus View in place',
+    new URL(page.url()).pathname === '/inbox'
+      && /^fire:/.test(new URL(page.url()).searchParams.get('focus') || ''),
+    new URL(page.url()).search);
+  const inner = await page.locator('[data-testid="focus-view"]')
+    .locator('button, a[href]').evaluateAll((els) => els.length);
+  check('the Focus View has controls to test', inner > 0, `${inner} controls`);
+  // Clicking each in turn would commit real writes, so assert the invariant the
+  // structure gives us instead: at most one focus value, and never two sheets.
+  check('only one focus value can be in the URL at a time',
+    (new URL(page.url()).searchParams.getAll('focus')).length === 1);
+  check('never more than one Focus View in the DOM',
+    (await page.locator('[data-testid="focus-view"]').count()) === 1);
+
+  // `Open … →` drops the param and pushes the real route (§2.2's escape hatch).
+  const escape = page.locator('[data-testid="focus-open-full"]');
+  check('a task/fire focus offers the "Open …" escape hatch', (await escape.count()) === 1);
+  if (await escape.count()) {
+    await escape.click();
+    await page.waitForTimeout(1000);
+    const u = new URL(page.url());
+    check('"Open …" leaves rather than nesting',
+      u.searchParams.get('focus') === null && u.pathname !== '/inbox',
+      u.pathname + u.search);
+  }
+}
+
+// §2.2: the Desk's number drill-down links to /my-work?focus=task:<id>. That
+// param has to resolve on arrival, not land on a page that ignores it.
+await page.goto(`${BASE}/my-work?fixture=busy`, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('[data-testid="mywork-mobile"]', { timeout: 12000 });
+await page.waitForTimeout(1200);
+const taskId = await page.locator('[data-testid^="task-card-"]').first()
+  .getAttribute('data-testid').catch(() => null);
+check('My Work has tasks to deep-link into', !!taskId, taskId || 'none found');
+if (taskId) {
+  const id = taskId.replace('task-card-', '');
+  await page.goto(`${BASE}/my-work?fixture=busy&focus=task:${id}`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(1800);
+  check('/my-work resolves a focus deep link', (await page.locator('[data-testid="focus-view"]').count()) === 1,
+    `focus=task:${id}`);
+}
+
+// A stale or unknown id says so rather than opening a blank sheet (§2.2).
+await page.goto(`${BASE}/inbox?fixture=busy&focus=decision:does-not-exist`, { waitUntil: 'domcontentloaded' });
+await page.waitForTimeout(2000);
+check('a stale id renders the "gone" state, not a blank sheet',
+  (await page.locator('[data-testid="focus-gone"]').count()) === 1);
+await page.goto(`${BASE}/inbox?fixture=busy&focus=nonsense:1`, { waitUntil: 'domcontentloaded' });
+await page.waitForTimeout(1600);
+check('an unrecognised focus type is explained, not ignored',
+  (await page.locator('[data-testid="focus-gone"]').count()) === 1);
+
+// The structural guarantee behind §8's "no Focus View opens another": the
+// component reads `close` from useFocus and never `open`, so there is no code
+// path that can add a second focus value. Asserted on the source, because a
+// runtime click-sweep would have to commit real writes to cover every control.
+const focusSrc = fs.readFileSync(new URL('../src/components/mobile/FocusView.jsx', import.meta.url), 'utf8');
+const focusBody = focusSrc.slice(focusSrc.indexOf('export function FocusView'));
+check('FocusView never opens a focus (one level only)',
+  !/\bopen\s*\(/.test(focusBody),
+  (focusBody.match(/\bopen\s*\([^)]*\)/) || ['none'])[0]);
 
 await browser.close();
 

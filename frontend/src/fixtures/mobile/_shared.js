@@ -86,7 +86,25 @@ export function buildRoutes(d) {
   add("/brief/details", { key: "", actionable: false, items: d.briefDetails || [] });
 
   add("/tasks", d.tasks);
-  add(/^\/tasks\/[^/]+$/, ({ path }) => (d.tasks || []).find((t) => path.endsWith(t.id)) || {});
+  // A fire IS a task (`target_kind: "task"`), so GET /tasks/<fire id> has to
+  // resolve — otherwise a `?focus=fire:f_0` deep link renders the "this item is
+  // gone" state against data that plainly exists in the same fixture.
+  add(/^\/tasks\/[^/]+$/, ({ path }) => {
+    const id = path.split("/").pop();
+    const fromTasks = (d.tasks || []).find((t) => t.id === id);
+    if (fromTasks) return fromTasks;
+    const fire = (d.desk?.cards?.on_fire || []).find((c) => (c.target_id || c.id) === id);
+    if (!fire) return {};
+    return {
+      id,
+      title: fire.title,
+      description: fire.context_line || null,
+      status: "in_progress",
+      due_date: fire.due_date || null,
+      assignee_name: fire.from_name || null,
+      amount: fire.amount ?? null,
+    };
+  });
   add("/decisions", d.decisions);
   add(/^\/decisions\/[^/]+$/, ({ path }) => (d.decisions || []).find((x) => path.endsWith(x.id)) || {});
   add("/contacts", d.contacts);

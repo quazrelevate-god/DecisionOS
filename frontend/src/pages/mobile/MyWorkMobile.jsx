@@ -23,6 +23,7 @@ import { useAuth } from "../../context/AuthContext";
 import { userPerms } from "../../lib/perms";
 import { opModel } from "../../lib/operatingModel";
 import { inr } from "../../lib/format";
+import { FocusView } from "../../components/mobile/FocusView";
 import {
   BottomSheet, SheetSelect, MobileCard, EmptyState, ListSkeleton, StatusChip,
 } from "../../components/mobile";
@@ -622,6 +623,14 @@ export default function MyWorkMobile() {
         members={members}
         roleOptions={roleOptions}
       />
+
+      {/* MPWA-12d (§2.2): this page is a deep-link target — the Desk's number
+          drill-down links to /my-work?focus=task:<id>, and notifications will
+          too. Without this the param would land on the page and show nothing.
+          Row taps keep the richer TaskSheet (it reassigns and edits roles,
+          which TaskFocus does not); 12f unifies the two when it recomposes
+          this screen into the stage board. */}
+      <FocusView onChanged={refresh} />
     </div>
   );
 }

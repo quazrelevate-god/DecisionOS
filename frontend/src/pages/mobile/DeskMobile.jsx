@@ -23,11 +23,12 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Fire, Sun, Star, Stamp, CheckCircle, ArrowRight, Check,
+  Receipt, Clock, HandCoins,
 } from "@phosphor-icons/react";
 import api from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
 import { inr } from "../../lib/format";
-import { EmptyState, ListSkeleton, UndoSnackbar } from "../../components/mobile";
+import { EmptyState, LandsGrid, ListSkeleton, UndoSnackbar, openDex } from "../../components/mobile";
 import { Verdict, Pulse, Queue, Strip } from "../../components/mobile/blocks";
 import {
   FiresQueue, NumbersGrid, NumbersDetailSheet, fallbackVerdict,
@@ -499,14 +500,28 @@ function Narrative({
       )}
 
       {waiting === 0 && (counters.fires || 0) === 0 && (
-        <EmptyState
-          icon={CheckCircle}
-          title="Nothing needs you this period."
-          hint="No fires, no approvals, nothing overdue."
-          actionLabel="Open the desk"
-          onAction={onClearThem}
-          data-testid="desk-empty-state"
-        />
+        <>
+          <EmptyState
+            icon={CheckCircle}
+            title="Nothing needs you this period."
+            hint="No fires, no approvals, nothing overdue."
+            actionLabel="Open the desk"
+            onAction={onClearThem}
+            data-testid="desk-empty-state"
+          />
+          {/* L2's next stratum. A quiet period is good news, not a reason to
+              leave 256px of the screen blank under the sentence saying so. */}
+          <LandsGrid
+            title="What shows up here"
+            data-testid="desk-lands"
+            items={[
+              { id: "fires", icon: Fire, title: "Anything on fire", body: "Overdue money and work that has stopped moving." },
+              { id: "approvals", icon: Stamp, title: "Waiting on you", body: "Decisions Dex raised from what your team said." },
+              { id: "money", icon: HandCoins, title: "What came in", body: "Received against outstanding, as payments land." },
+              { id: "late", icon: Clock, title: "What ran late", body: "Tasks past their date, and who has them." },
+            ]}
+          />
+        </>
       )}
     </>
   );

@@ -9,6 +9,7 @@
 // not be scanned at all.
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { UsersThree, ShieldCheck, UserMinus, PaperPlaneTilt, Phone } from "@phosphor-icons/react";
 import api from "../../lib/api";
@@ -19,6 +20,7 @@ const roleLabel = (r) => (r ? String(r).replace(/^./, (c) => c.toUpperCase()) : 
 
 export default function TeamMobile() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -75,7 +77,17 @@ export default function TeamMobile() {
       <div className="mt-3 space-y-3" data-testid="team-list">
         {isLoading && <ListSkeleton rows={4} />}
         {!isLoading && members.length === 0 && (
-          <EmptyState icon={UsersThree} title="No one on the team yet." />
+          <EmptyState
+            icon={UsersThree}
+            title="No one on the team yet."
+            // Adding a teammate is POST /users behind a form that only exists on
+            // desktop today, so the action does not promise otherwise. A sentence
+            // and a button — never a full stop (§5.3) — but a true one.
+            hint="Teammates get added from a computer. Once they are here, Dex can hand work straight to them."
+            actionLabel="See your own work"
+            onAction={() => navigate("/my-work")}
+            data-testid="team-empty"
+          />
         )}
         {members.map((u) => {
           const n = userPerms(u).length;

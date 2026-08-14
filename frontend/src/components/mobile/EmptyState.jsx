@@ -25,6 +25,12 @@ export function EmptyState({
   return (
     <div
       data-testid={testId}
+      // MPWA-12i: a stable marker independent of the testid. The audit's
+      // empty-state-action rule matched on `[data-testid$="empty-state"]`, so
+      // giving a call-site a more specific testid — `finance-list-revenue-empty`
+      // — silently moved it out of the rule's reach. The count fell to zero and
+      // looked like a pass. Every EmptyState is now findable by what it IS.
+      data-empty-state="true"
       className={cn(
         "flex flex-col items-center rounded-xl border border-dashed border-border bg-card px-6 py-10 text-center",
         className

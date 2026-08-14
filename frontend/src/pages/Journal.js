@@ -123,29 +123,36 @@ export default function Journal() {
   // Capping DAYS was the wrong cut: the live journal has only 2 days, one of
   // which holds 23 notes. The length is inside a day, so the cap has to be on
   // entries. Mobile only; desktop still renders everything.
+  // MPWA-12i: the per-day cap alone was not enough either. It was sized against
+  // a live journal of two days; a tenant with a fortnight of entries renders
+  // 5 x N and came back to 3,166px. So the budget is on the TOTAL, spent
+  // newest-first, with the per-day cap kept as a secondary guard so one very
+  // loud day cannot consume all of it.
   const isMobile = useIsMobile();
   const [showAllEntries, setShowAllEntries] = useState(false);
   const PER_DAY_ON_MOBILE = 5;
+  const TOTAL_ON_MOBILE = 12;
   const capped = isMobile && !showAllEntries;
-  const visibleDays = useMemo(
-    () => (capped
-      ? allDays.map((d) => ({
-          ...d,
-          decisions: (d.decisions || []).slice(0, PER_DAY_ON_MOBILE),
-          notes: (d.notes || []).slice(0, PER_DAY_ON_MOBILE),
-        }))
-      : allDays),
-    [allDays, capped]
-  );
-  const hiddenEntryCount = useMemo(
-    () => allDays.reduce(
-      (n, d) =>
-        n + Math.max(0, (d.decisions || []).length - (capped ? PER_DAY_ON_MOBILE : Infinity))
-          + Math.max(0, (d.notes || []).length - (capped ? PER_DAY_ON_MOBILE : Infinity)),
+  const { visibleDays, hiddenEntryCount } = useMemo(() => {
+    const totalAll = allDays.reduce(
+      (n, d) => n + (d.decisions || []).length + (d.notes || []).length,
       0
-    ),
-    [allDays, capped]
-  );
+    );
+    if (!capped) return { visibleDays: allDays, hiddenEntryCount: 0 };
+
+    let budget = TOTAL_ON_MOBILE;
+    const days = [];
+    for (const d of allDays) {
+      if (budget <= 0) break;
+      const decisions = (d.decisions || []).slice(0, Math.min(PER_DAY_ON_MOBILE, budget));
+      budget -= decisions.length;
+      const notes = (d.notes || []).slice(0, Math.max(0, Math.min(PER_DAY_ON_MOBILE, budget)));
+      budget -= notes.length;
+      if (decisions.length || notes.length) days.push({ ...d, decisions, notes });
+    }
+    const shown = days.reduce((n, d) => n + d.decisions.length + d.notes.length, 0);
+    return { visibleDays: days, hiddenEntryCount: Math.max(0, totalAll - shown) };
+  }, [allDays, capped]);
 
   return (
     <div>

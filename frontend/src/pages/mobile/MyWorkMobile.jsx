@@ -15,7 +15,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import {
-  ListChecks, ArrowRight, AirplaneTakeoff, Sparkle, CheckCircle, Paperclip,
+  ListChecks, ArrowRight, AirplaneTakeoff, Sparkle, CheckCircle, Paperclip, Briefcase, UsersThree,
   ChatText, WarningCircle, ArrowBendUpRight, Clock, CaretRight, Spinner, Alarm,
 } from "@phosphor-icons/react";
 import api from "../../lib/api";
@@ -26,7 +26,8 @@ import { inr } from "../../lib/format";
 import { FocusView } from "../../components/mobile/FocusView";
 import { Board, Queue, Strip, Pulse } from "../../components/mobile/blocks";
 import {
-  BottomSheet, SheetSelect, MobileCard, EmptyState, ListSkeleton, StatusChip,
+  BottomSheet, SheetSelect, MobileCard, EmptyScreen, EmptyState, ListSkeleton,
+  StatusChip, openDex,
 } from "../../components/mobile";
 
 const STATUS_OPTIONS = [
@@ -623,14 +624,40 @@ export default function MyWorkMobile() {
           <div data-testid="mywork-list">
             {tasksQ.isLoading && <ListSkeleton rows={4} />}
 
-            {!tasksQ.isLoading && list.length === 0 && (
+            {/* A filtered-to-nothing tab keeps the in-place card; a genuinely
+                empty work list is an empty SCREEN and gets composed (§12i). */}
+            {!tasksQ.isLoading && list.length === 0 && tab !== "all" && (
               <EmptyState
                 icon={CheckCircle}
-                title={tab === "completed" ? "Nothing finished yet." : "Nothing on your list."}
+                title={tab === "completed" ? "Nothing finished yet." : "Nothing under this heading."}
                 hint="Swipe left on a row to push it to tomorrow."
-                actionLabel="See what's waiting on you"
-                onAction={() => navigate("/inbox")}
+                actionLabel="Show everything"
+                onAction={() => setTab("all")}
                 data-testid="mywork-empty"
+              />
+            )}
+            {!tasksQ.isLoading && list.length === 0 && tab === "all" && (
+              <EmptyScreen
+                data-testid="mywork-empty"
+                eyebrow="My Work"
+                headline="Nothing on your list."
+                hint="Work lands here when Dex turns something you said into a task, or when a teammate hands one over."
+                action={{ label: "Tell Dex what needs doing", onSelect: openDex }}
+                more={[
+                  { key: "desk", label: "What needs deciding", icon: CheckCircle, onSelect: () => navigate("/inbox") },
+                  { key: "flows", label: "See the flows", icon: ArrowRight, onSelect: () => setView("workflows") },
+                ]}
+                lands={[
+                  { id: "yours", icon: Briefcase, title: "What you owe", body: "Grouped by today, this week and later." },
+                  { id: "theirs", icon: UsersThree, title: "What you handed out", body: "Who has it and whether it moved." },
+                  { id: "late", icon: Clock, title: "What ran late", body: "Past its date, with the person who has it." },
+                  { id: "flow", icon: ArrowRight, title: "Work in flight", body: "Quotations, orders and dispatches by stage." },
+                ]}
+                stats={[
+                  { label: "Done today", value: "0", tone: "neutral" },
+                  { label: "Running late", value: "0", tone: "neutral" },
+                ]}
+                progress="tasks-done-today"
               />
             )}
 
@@ -681,7 +708,10 @@ export default function MyWorkMobile() {
             {/* L2's next stratum, and the screen's one L3 element. Both numbers
                 are counted from the same list on screen, so they cannot drift
                 from what he is looking at. */}
-            {!tasksQ.isLoading && (
+            {/* The composed empty screen brings its own Pulse (and with it the
+                screen's single L3 element), so this one stands down rather than
+                giving the page two. */}
+            {!tasksQ.isLoading && !(list.length === 0 && tab === "all") && (
               <Pulse
                 data-testid="mywork-pulse"
                 stats={[
@@ -733,6 +763,7 @@ export default function MyWorkMobile() {
 // ---------------------------------------------------------------------------
 function LeaveList() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const [scope, setScope] = useState("mine");
   const [open, setOpen] = useState(null);
   const { data, isLoading } = useQuery({
@@ -780,7 +811,14 @@ function LeaveList() {
       <div className="mt-3 space-y-3">
         {isLoading && <ListSkeleton rows={2} />}
         {!isLoading && rows.length === 0 && (
-          <EmptyState icon={AirplaneTakeoff} title="No leave to look at." />
+          <EmptyState
+            icon={AirplaneTakeoff}
+            title="No leave to look at."
+            hint="Requests land here the moment someone asks — nothing to chase in the meantime."
+            actionLabel="Back to my work"
+            onAction={() => navigate("/my-work")}
+            data-testid="leave-empty"
+          />
         )}
         {rows.map((lv) => (
           <MobileCard

@@ -16,10 +16,11 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
   MagnifyingGlass, AddressBook, Users, Package, SlidersHorizontal, Check,
+  Receipt, ChatText, HandCoins,
 } from "@phosphor-icons/react";
 import api from "../../lib/api";
 import { inr, inrCompact } from "../../lib/format";
-import { BottomSheet, EmptyState, ListSkeleton } from "../../components/mobile";
+import { BottomSheet, EmptyScreen, EmptyState, ListSkeleton, openDex } from "../../components/mobile";
 import { Grid, Pulse, Strip } from "../../components/mobile/blocks";
 
 // Business language, not schema (§5.4): the API's `vendor` is a supplier.
@@ -232,20 +233,43 @@ export default function CRMMobile() {
       <div data-testid="crm-list">
         {isLoading && <ListSkeleton rows={4} />}
 
-        {!isLoading && rows.length === 0 && (
+        {/* A search that matched nothing is a filter problem, not an empty
+            screen — it keeps the small in-place card. A book with nobody in it
+            is an empty SCREEN and gets composed (§12i). */}
+        {!isLoading && rows.length === 0 && q && (
           <EmptyState
             icon={AddressBook}
-            title={q ? `Nobody matches “${q}”.` : "No one here yet."}
-            hint={
-              q
-                ? "Try a shorter search — part of a name is enough."
-                : "Your customers and suppliers land here as Dex reads your bills and invoices."
-            }
-            actionLabel={q ? "Clear the search" : "Tell Dex about a customer"}
-            onAction={
-              q ? () => setQ("") : () => window.dispatchEvent(new CustomEvent("dos:open-dex"))
-            }
+            title={`Nobody matches “${q}”.`}
+            hint="Try a shorter search — part of a name is enough."
+            actionLabel="Clear the search"
+            onAction={() => setQ("")}
             data-testid="crm-empty"
+          />
+        )}
+        {!isLoading && rows.length === 0 && !q && (
+          <EmptyScreen
+            data-testid="crm-empty"
+            eyebrow="People"
+            headline={type ? "Nobody in this group yet." : "No customers or suppliers yet."}
+            hint="Dex adds them as it reads your bills, invoices and messages — you should not have to type a contact list."
+            action={{ label: "Tell Dex about a customer", onSelect: openDex }}
+            more={[
+              type
+                ? { key: "all", label: "Show everyone", icon: AddressBook, onSelect: () => setType("") }
+                : { key: "bill", label: "Snap a bill", icon: Receipt, onSelect: openDex },
+              { key: "note", label: "Log a call", icon: ChatText, onSelect: openDex },
+            ]}
+            lands={[
+              { id: "who", icon: Users, title: "Who you sell to", body: "Named from your invoices, with what they still owe." },
+              { id: "supplier", icon: Package, title: "Who you buy from", body: "Named from your bills, with what you owe them." },
+              { id: "owed", icon: HandCoins, title: "What is owed", body: "Kept current as payments land." },
+              { id: "touch", icon: ChatText, title: "When you last spoke", body: "Every call or note you log against them." },
+            ]}
+            stats={[
+              { label: "Outstanding", value: "₹0", tone: "neutral" },
+              { label: "Warmed this week", value: "0", tone: "neutral" },
+            ]}
+            progress="relationships-warmed"
           />
         )}
 
@@ -254,6 +278,7 @@ export default function CRMMobile() {
             for ordered work (§9). */}
         <Grid
           items={rows.map((c) => ({ ...c, onOpen: () => navigate(`/contacts/${c.id}`) }))}
+          title={rows.length && rows.length < 8 ? "Your relationships" : undefined}
           max={limit}
           onSeeAll={() => setLimit((n) => n + 18)}
           data-testid="crm-grid"
@@ -294,6 +319,31 @@ export default function CRMMobile() {
           }}
         />
       </div>
+
+      {/* L2's next stratum: a book of three or four names leaves ~350px of white
+          space under the grid, and §3 says render the next stratum rather than
+          leave it. "What lands here" is the honest next stratum for a thin book —
+          it is the same guidance the empty screen gives, and it stops being shown
+          the moment there is enough to look at. */}
+      {!isLoading && rows.length > 0 && rows.length < 8 && (
+        <Grid
+          title="What else lands here"
+          data-testid="crm-lands"
+          items={[
+            { id: "owed", icon: HandCoins, title: "What is owed", body: "Kept current as invoices and payments land." },
+            { id: "touch", icon: ChatText, title: "When you last spoke", body: "Every call or note you log against them." },
+          ]}
+          renderTile={(it) => (
+            <>
+              <span className="flex items-center gap-1.5 text-[length:var(--text-label)] font-semibold leading-4 text-muted-foreground">
+                <it.icon size={16} weight="bold" aria-hidden="true" />
+                {it.title}
+              </span>
+              <span className="mt-1.5 block text-sm leading-snug">{it.body}</span>
+            </>
+          )}
+        />
+      )}
 
       {/* The folded second chip row (§5.5). A sheet, so the list keeps its
           height and the choice is a deliberate act. */}

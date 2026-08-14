@@ -21,6 +21,7 @@ import { inr, inrCompact } from "../../lib/format";
 import {
   BottomSheet, MobileCard, EmptyState, ListSkeleton, MoneySkeleton, StatusChip,
 } from "../../components/mobile";
+import { LandsGrid, openDex } from "../../components/mobile/EmptyScreen";
 import { Verdict, Pulse, Grid, Strip } from "../../components/mobile/blocks";
 import { useFocus, FocusView } from "../../components/mobile/FocusView";
 
@@ -345,7 +346,32 @@ function OverviewLists({ summary, loading }) {
   const byCat = (summary?.by_category || []).filter((c) => c.amount > 0).slice(0, 6);
   const byVendor = (summary?.by_vendor || []).filter((v) => v.amount > 0).slice(0, 6);
   if (!byCat.length && !byVendor.length) {
-    return <div className="mt-4"><EmptyState icon={Receipt} title="Nothing recorded yet." /></div>;
+    // §5.3 names this one: "`Nothing recorded yet.` is a dead end. It becomes
+    // *'Snap a bill and Dex will file it.'* with a camera button."
+    return (
+      <div className="mt-4">
+        <EmptyState
+          icon={Camera}
+          title="Snap a bill and Dex will file it."
+          hint="Photograph it, forward it on WhatsApp, or just say what you spent."
+          actionLabel="Snap a bill"
+          onAction={openDex}
+          data-testid="finance-overview-empty"
+        />
+        {/* L2's next stratum — a first-day ledger left 232px blank below the
+            sentence telling him it was empty. */}
+        <LandsGrid
+          title="What lands here"
+          data-testid="finance-lands"
+          items={[
+            { id: "bills", icon: Receipt, title: "What you spent", body: "Read off the bill — vendor, amount, date, category." },
+            { id: "sales", icon: CurrencyDollar, title: "What you billed", body: "And how much of it has actually come in." },
+            { id: "owned", icon: Buildings, title: "What you own", body: "Machines, vehicles and the godown, at cost." },
+            { id: "stock", icon: Package, title: "What is in stock", body: "Counted, valued and kept current." },
+          ]}
+        />
+      </div>
+    );
   }
   return (
     <>
@@ -390,6 +416,35 @@ const ENDPOINT = {
 // real API, hidden by the fixture, which did return an array.
 const LIST_KEY = { revenue: "invoices" };
 
+// §5.3: "Same treatment everywhere — a sentence and a button, never a full stop."
+// Each tab says what would put something here, in the words he would use.
+const TAB_EMPTY = {
+  revenue: {
+    icon: Receipt,
+    title: "No invoices yet.",
+    hint: "Say who you billed and for how much, and Dex raises it.",
+    action: "Record a sale",
+  },
+  expenses: {
+    icon: Camera,
+    title: "Snap a bill and Dex will file it.",
+    hint: "A photo is enough — Dex reads the vendor, the amount and the date.",
+    action: "Snap a bill",
+  },
+  assets: {
+    icon: Buildings,
+    title: "Nothing on the books yet.",
+    hint: "Machines, vehicles, the godown — tell Dex what you own and what it cost.",
+    action: "Add something you own",
+  },
+  inventory: {
+    icon: Package,
+    title: "No stock counted yet.",
+    hint: "Say what is in the godown and Dex keeps the value current.",
+    action: "Count some stock",
+  },
+};
+
 function LedgerList({ tab, onOpen }) {
   // MPWA-12g: a busy ledger tab rendered every row — 24 expenses ran 3,927px,
   // past §5.2.7's ceiling. Show a screenful, then let him ask for more.
@@ -411,8 +466,12 @@ function LedgerList({ tab, onOpen }) {
     return (
       <div className="mt-4">
         <EmptyState
-          icon={Receipt}
-          title={`Nothing under ${TABS.find((t) => t.key === tab)?.label.toLowerCase()} yet.`}
+          icon={TAB_EMPTY[tab]?.icon || Receipt}
+          title={TAB_EMPTY[tab]?.title || `Nothing under ${TABS.find((t) => t.key === tab)?.label.toLowerCase()} yet.`}
+          hint={TAB_EMPTY[tab]?.hint}
+          actionLabel={TAB_EMPTY[tab]?.action || "Tell Dex"}
+          onAction={openDex}
+          data-testid={`finance-list-${tab}-empty`}
         />
       </div>
     );
@@ -558,7 +617,14 @@ function CaptureInbox() {
       <div className="mt-2 space-y-3">
         {isLoading && <ListSkeleton rows={2} />}
         {!isLoading && rows.length === 0 && (
-          <EmptyState icon={CheckCircle} title="Nothing waiting to be read." />
+          <EmptyState
+            icon={CheckCircle}
+            title="Nothing waiting to be read."
+            hint="Bills you snap or forward land here until Dex has filed them."
+            actionLabel="Snap a bill"
+            onAction={openDex}
+            data-testid="finance-inbox-empty"
+          />
         )}
         {rows.map((c) => (
           <MobileCard

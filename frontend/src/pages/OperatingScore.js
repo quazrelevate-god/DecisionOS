@@ -28,6 +28,7 @@ export default function OperatingScore() {
   if (isLoading || !data) return <div className="font-mono text-sm py-20 text-center">Computing operating score…</div>;
 
   const { company, stats } = data;
+  // `stats` can be {} on a brand-new tenant — every read below is guarded.
   const overall = company.overall;
   const enough = company.enough_data !== false;
 
@@ -53,17 +54,25 @@ export default function OperatingScore() {
               The Operating Score kicks in once there's enough real activity to measure — roughly <strong>3+ actionable tasks</strong> or your <strong>first invoices</strong>.
               Capture a few decisions on the Decision Desk and import or add invoices, and your score will start tracking automatically.
             </p>
-            <div className="grid grid-cols-3 gap-3 mt-4">
+            {/* MPWA-12i: two bugs lived in this block.
+                1. `stats.done + stats.open` is NaN whenever the API returns
+                   `stats: {}` — which is exactly what a tenant with no activity
+                   gets, i.e. the only tenant that ever sees this panel. It read
+                   "NaN Actionable tasks" on desktop too.
+                2. At 390px the three columns give each label a 63px box for a
+                   94px string, so every label was clipped. One column below lg;
+                   desktop is untouched. */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mt-4">
               <div className="border border-black/30 p-3 text-center">
-                <p className="font-heading text-2xl font-black">{stats.done + stats.open}</p>
+                <p className="font-heading text-2xl font-black">{(stats?.done || 0) + (stats?.open || 0)}</p>
                 <p className="label-mono text-muted-foreground">Actionable tasks</p>
               </div>
               <div className="border border-black/30 p-3 text-center">
-                <p className="font-heading text-2xl font-black">{stats.done}</p>
+                <p className="font-heading text-2xl font-black">{stats?.done || 0}</p>
                 <p className="label-mono text-muted-foreground">Completed</p>
               </div>
               <div className="border border-black/30 p-3 text-center">
-                <p className="font-heading text-2xl font-black">{stats.total_decisions}</p>
+                <p className="font-heading text-2xl font-black">{stats?.total_decisions || 0}</p>
                 <p className="label-mono text-muted-foreground">Decisions</p>
               </div>
             </div>

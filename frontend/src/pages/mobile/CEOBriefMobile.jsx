@@ -57,6 +57,17 @@ export default function CEOBriefMobile() {
     refetchInterval: 30000,
   });
 
+  // "Received" is NOT in /brief's finance_amounts — verified against the live
+  // API, which returns only receivables_overdue, bills_due and
+  // unmatched_payments. Reading it from the brief left a skeleton on screen
+  // forever, which is worse than a wrong number: §5.3's skeleton means "still
+  // loading", and a field that never arrives never stops loading. So take it
+  // from its authoritative source instead.
+  const summaryQ = useQuery({
+    queryKey: ["ledger-summary"],
+    queryFn: () => api.get("/ledger/summary").then((r) => r.data),
+  });
+
   const counters = data?.counters || {};
   const amounts = data?.finance_amounts || {};
 
@@ -69,8 +80,13 @@ export default function CEOBriefMobile() {
     [counters]
   );
 
-  const received = amounts.received ?? null;
-  const outstanding = amounts.receivables_overdue ?? null;
+  // null ONLY while genuinely in flight. Once a query has resolved, an absent
+  // field means zero — a resolved-but-empty payload is a fact, not a pending
+  // load, and rendering it as a skeleton would be a permanent lie.
+  const received = summaryQ.isLoading
+    ? null
+    : Number(amounts.received ?? summaryQ.data?.totals?.revenue_received ?? 0);
+  const outstanding = isLoading ? null : Number(amounts.receivables_overdue ?? 0);
 
   return (
     <div data-testid="brief-mobile">
@@ -380,6 +396,14 @@ const capitalise = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
  * If the API has no verdict field, build the same kind of sentence from the
  * counters rather than falling back to a grid of numbers — §2's rule holds
  * whether or not the backend cooperates.
+ *
+ * VERIFIED AGAINST THE LIVE API: `GET /brief` returns exactly
+ * [completed_label, counters, finance_amounts, greeting, period, role] — there
+ * is NO `verdict` and NO `fires_detail`. Those were my fixture's invention. So
+ * on real data this fallback is the hero sentence, and the fires section does
+ * not render at all. Delivering §8's "one written verdict sentence" from real
+ * business context (which retailer, how many days) needs a backend field; this
+ * is the honest client-side approximation until there is one.
  */
 export function fallbackVerdict(counters = {}, amounts = {}) {
   if ((amounts.receivables_overdue || 0) > 0) {

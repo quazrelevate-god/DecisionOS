@@ -28,6 +28,25 @@ const STATUSES = [
 const stageLabel = (s) =>
   s ? String(s).replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()) : null;
 
+const norm = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/**
+ * Name, plus the company only when it says something new.
+ *
+ * Live data pairs "Gujarat Cotton Mills" with "Gujarat Cotton Mills Ltd", which
+ * a naive `name !== company` check rendered as "Gujarat Cotton Mills — Gujarat
+ * Cotton Mills Ltd" and then two-line-clamped it.
+ */
+export function contactTitle(c = {}) {
+  const name = c.name || c.company || "";
+  const co = c.company || "";
+  if (!co) return name;
+  const a = norm(name);
+  const b = norm(co);
+  if (!a || a === b || b.startsWith(a) || a.startsWith(b)) return name;
+  return `${name} — ${co}`;
+}
+
 export default function CRMMobile() {
   const navigate = useNavigate();
   const [type, setType] = useState("");
@@ -138,7 +157,10 @@ export default function CRMMobile() {
           <MobileCard
             key={c.id}
             data-testid={`crm-row-${c.id}`}
-            title={c.company && c.company !== c.name ? `${c.name} — ${c.company}` : c.name}
+            // Real data has near-duplicate name/company pairs ("Gujarat Cotton
+            // Mills" / "Gujarat Cotton Mills Ltd"), which rendered as
+            // "X — X Ltd". Only show the company when it adds something.
+            title={contactTitle(c)}
             status={
               c.lifecycle_stage === "at_risk" || c.status === "inactive"
                 ? "overdue"

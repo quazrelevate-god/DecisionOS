@@ -25,9 +25,15 @@ import {
   BottomSheet, MobileCard, EmptyState, ListSkeleton, UndoSnackbar, StatusChip,
 } from "../../components/mobile";
 
-// §10 Q1: tenant.high_value_threshold exists on this branch (owner-configurable
-// on the tenants collection). The backend's own default when unset is
-// CAPTURE_OWNER_THRESHOLD || 50000, so match it rather than inventing a number.
+// §10 Q1, verified against the live API rather than the schema:
+//   * `high_value_threshold` IS in the write contract — PATCH /tenant/settings
+//     accepts it (server.py:1770).
+//   * It is NOT set on the Sharma Textiles tenant, so it is absent from
+//     /auth/me's tenant object entirely (12 fields, none of them this one).
+// So in practice this fallback is what runs today, which is exactly the case
+// §10 Q1 anticipated ("If absent, use a hardcoded ₹50,000 and flag it"). 50000
+// also matches the backend's own CAPTURE_OWNER_THRESHOLD default, so mobile and
+// server agree on which approvals are high-value until someone sets it.
 const DEFAULT_HIGH_VALUE = 50000;
 
 const CHIPS = [
@@ -316,6 +322,9 @@ export default function DeskMobile() {
   const qc = useQueryClient();
   const { tenant } = useAuth();
   const [chip, setChip] = useState("needs_decision");
+  // Whether he has actually picked a chip. Until he does, the landing chip is
+  // derived from the counters — see the effect below.
+  const [chipPinned, setChipPinned] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [sheetAt, setSheetAt] = useState(null); // index into the queue
   const [undo, setUndo] = useState(null);
@@ -343,6 +352,20 @@ export default function DeskMobile() {
 
   useEffect(() => setShowAll(false), [chip]);
   useEffect(() => () => clearTimeout(undoTimer.current), []);
+
+  // Land on a chip that actually has something in it. Verified against live
+  // data: the demo tenant has needs_decision=0 and on_fire=2, and defaulting to
+  // needs_decision meant the one chip on screen read "0" — which §2 forbids
+  // ("If it reads zero, it does not render") and which also hid the two things
+  // that did need him. Only applies until he picks a chip himself.
+  useEffect(() => {
+    if (chipPinned) return;
+    if ((counters[chip] || 0) > 0) return;
+    const best = CHIPS.map((c) => c.key).find((k) => (counters[k] || 0) > 0);
+    if (best && best !== chip) setChip(best);
+    // Keyed on the counters map only; `chip` is read, not depended on.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [counters.needs_decision, counters.on_fire, counters.due_today, counters.important, chipPinned]);
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["desk"] });
 
@@ -411,7 +434,7 @@ export default function DeskMobile() {
             <button
               key={c.key}
               type="button"
-              onClick={() => setChip(c.key)}
+              onClick={() => { setChip(c.key); setChipPinned(true); }}
               data-testid={`desk-chip-${c.key}`}
               aria-pressed={active}
               className={`flex items-center gap-1.5 rounded-pill border px-3.5 text-sm font-semibold transition-colors ${

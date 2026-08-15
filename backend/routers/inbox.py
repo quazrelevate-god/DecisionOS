@@ -11,7 +11,7 @@ and STATUS-mutation surface — the smallest coherent slice.
 """
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from core import db, get_current_user
 from models.inbox import INBOX_CLASSES, InboxStatusInput
@@ -24,6 +24,10 @@ router = APIRouter(prefix="/api")
 async def list_inbox(
     classification: Optional[str] = None,
     status: Optional[str] = None,
+    # E2-64: `limit` param + higher max so tenants with >300 open inbox
+    # items can page. Counters still reflect the full total_open so the
+    # UI can show 'showing N of M'.
+    limit: int = Query(300, ge=1, le=1000),
     user: dict = Depends(get_current_user),
 ):
     tid = user["tenant_id"]
@@ -32,7 +36,7 @@ async def list_inbox(
         query["classification"] = classification
     if status in ("open", "done", "dismissed"):
         query["status"] = status
-    items = await db.inbox.find(query, {"_id": 0}).sort("created_at", -1).to_list(300)
+    items = await db.inbox.find(query, {"_id": 0}).sort("created_at", -1).to_list(limit)
     counts: dict = {}
     # PyMongo Async: aggregate() returns a coroutine yielding the cursor, so
     # it must be awaited BEFORE `async for` iteration (Motor let you skip the

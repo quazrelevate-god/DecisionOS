@@ -634,15 +634,29 @@ async def desk_nudge(item_id: str, inp: NudgeInput = None,
     if not target:
         raise HTTPException(status_code=404, detail="Target user not found")
 
-    # Write a notification for the target user (the persistent record)
+    # Write a notification for the target user (the persistent record).
+    # E2-61 (2026-08-15): use the same schema push_notification writes
+    # (type + message + sender_name + level) so the notifications bell
+    # switch(n.type) matches 'desk_nudge' instead of falling through to
+    # a generic 'reminder'.
+    # E2-66: link points to routes that actually resolve today. Tasks
+    # -> /my-work?task=X (works). Decisions -> /inbox?decision=X and
+    # Desk.js now scrolls + highlights the matching card.
+    link = (f"/my-work?task={item_id}"
+            if target_kind == "task"
+            else f"/inbox?decision={item_id}")
     notif = {
         "id": new_id(),
         "tenant_id": tid,
         "user_id": target_id,
-        "kind": "desk_nudge",
-        "title": f"Nudge from {user.get('name') or 'the owner'}",
-        "body": f"Please prioritise: {subject}",
-        "link": f"/my-work?task={item_id}" if target_kind == "task" else f"/inbox?decision={item_id}",
+        "type": "desk_nudge",              # E2-61
+        "level": "chase",                  # visual weight in the bell
+        "message": f"Please prioritise: {subject}",  # E2-61 (was: body)
+        "work_title": subject,
+        "sender_name": user.get("name") or "the owner",  # E2-61
+        "entity_type": target_kind,
+        "entity_id": item_id,
+        "link": link,                      # E2-66
         "read": False,
         "created_at": now_iso(),
         "meta": {

@@ -20,9 +20,9 @@
 // The old Inbox.js is left orphaned in the tree for one commit so
 // nothing breaks in the interim; a follow-up will delete it.
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "../lib/api";
 import { toast } from "sonner";
 import { DecisionDialog } from "../components/DecisionDialog";
@@ -333,11 +333,33 @@ export default function Desk() {
   const [chip, setChip] = useState("needs_decision");
   const [openDecision, setOpenDecision] = useState(null); // decision id for the DecisionDialog
 
+  // E2-66 (2026-08-15): support deep-link from a decision-focused nudge
+  // notification. `/inbox?decision=<id>` -> flip to needs_decision chip,
+  // then when its cards land -> auto-open the DecisionDialog for that id.
+  const [searchParams] = useSearchParams();
+  const focusDecisionId = searchParams.get("decision");
+
   const { data, isLoading, isFetching } = useQuery({
     queryKey: ["desk", chip],
     queryFn: () => api.get(`/desk?chip=${chip}`).then((r) => r.data),
     refetchInterval: 30000,
   });
+
+  // E2-66: when a ?decision=<id> deep-link lands, force the chip to
+  // needs_decision AND auto-open the DecisionDialog for that id once
+  // the cards load. Only fires the first time the id is seen so a
+  // subsequent chip click doesn't yank the user back.
+  useEffect(() => {
+    if (focusDecisionId) {
+      setChip("needs_decision");
+    }
+  }, [focusDecisionId]);
+  useEffect(() => {
+    if (!focusDecisionId || !data?.cards) return;
+    const match = data.cards.find(
+      (c) => c.target_id === focusDecisionId && c.target_kind === "decision");
+    if (match) setOpenDecision(focusDecisionId);
+  }, [focusDecisionId, data?.cards]);
 
   const counters = data?.counters || { needs_decision: 0, on_fire: 0, due_today: 0, important: 0 };
   const cards = data?.cards || [];

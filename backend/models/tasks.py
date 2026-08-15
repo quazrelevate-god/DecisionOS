@@ -7,7 +7,7 @@ importing from `server.py`.
 """
 from typing import List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class TaskCreateInput(BaseModel):
@@ -66,7 +66,8 @@ class StepAskInput(BaseModel):
 
 
 class TaskUpdateNoteInput(BaseModel):
-    text: str
+    # E2-60: cap at 4000 chars (~1 A4 page of prose). Was unbounded.
+    text: str = Field(..., min_length=1, max_length=4000)
     step_id: Optional[str] = None
     action: str = "note"  # "note" | "handoff" | "escalate"
     to_id: Optional[str] = None      # member id (handoff to a person)

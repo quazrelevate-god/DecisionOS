@@ -259,8 +259,13 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
     if not t:
         raise HTTPException(status_code=404, detail="Not found")
     updates = {k: v for k, v in inp.model_dump(exclude_unset=True).items() if v is not None}
+    # E2-59: reject invalid status instead of silent .pop() -- otherwise
+    # client sees 200 with the task unchanged and thinks its edit stuck.
     if "status" in updates and updates["status"] not in TASK_STATUSES:
-        updates.pop("status")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid status '{updates['status']}'. Use one of: {sorted(TASK_STATUSES)}",
+        )
     if "progress" in updates:
         updates["progress"] = max(0, min(100, int(updates["progress"])))
     if updates.get("status") == "done":
@@ -277,8 +282,14 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
     if t.get("approval_required") and t.get("approval_status") != "approved":
         if any(k in updates for k in ("status", "progress")):
             raise HTTPException(status_code=403, detail="This task is awaiting approval before work can begin.")
-    if "assignee_role" in updates and updates["assignee_role"] not in await tenant_role_keys(user["tenant_id"]):
-        updates.pop("assignee_role")
+    # E2-59: reject invalid role too instead of silent .pop().
+    if "assignee_role" in updates:
+        role_keys = await tenant_role_keys(user["tenant_id"])
+        if updates["assignee_role"] not in role_keys:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid assignee_role '{updates['assignee_role']}'. Use one of: {sorted(role_keys)}",
+            )
     if updates.get("assignee_id"):
         member = await db.users.find_one({"id": updates["assignee_id"], "tenant_id": user["tenant_id"]}, {"_id": 0, "role": 1})
         if not member:

@@ -31,6 +31,8 @@ import {
   // Epic 2 Sprint 6 (E2-43..E2-45): Desk absorbs CEO Brief header
   Sparkle, TrendUp, TrendDown, Minus, ChartBar, BookOpen, Gauge, UsersFour,
   ChatCircleText, CurrencyInr, Warning as WarningIcon,
+  // Epic 2 Sprint 6.5 (E2-51): Delayed-tasks row on Trends card
+  Clock,
 } from "@phosphor-icons/react";
 import { useAuth } from "../context/AuthContext";
 
@@ -111,14 +113,46 @@ function DeskBriefHeader() {
 
       {/* Trends + Shortcuts side-by-side (stack on mobile) */}
       <div className="grid gap-4 md:grid-cols-2">
-        {/* Trends card */}
+        {/* Trends card — Epic 2 Sprint 6.5 (E2-51/52): rows are click-through.
+            Weekly completion  -> /my-work?filter=completed
+            Complaints         -> /crm?complaint=open  (CRM 'With Complaints' chip)
+            Cash-flow          -> /finance?tab=revenue if overdue receivables,
+                                  else /finance?tab=inbox if unmatched,
+                                  else /finance?tab=overview. */}
         <div className="border border-black bg-white p-4" data-testid="desk-brief-trends">
           <p className="label-mono text-muted-foreground text-[10px] mb-3 flex items-center gap-1">
             <ChartBar size={12} weight="bold" /> TRENDS
           </p>
-          <div className="space-y-3">
+          <div className="space-y-1">
+            {/* Delayed tasks — Epic 2 Sprint 6.5 (E2-51): most urgent, at top.
+                Founder ask 2026-08-15: 'compalanits, delayed task how we plan
+                to show them, redirecting to task section and crm section right'. */}
+            <button
+              type="button"
+              data-testid="desk-trend-delayed"
+              onClick={() => navigate("/my-work?filter=overdue")}
+              className="w-full flex items-center justify-between text-sm p-2 -mx-2 rounded hover:bg-black/5 transition-colors text-left"
+              title="See overdue tasks"
+            >
+              <span className="flex items-center gap-2">
+                <Clock size={14} weight="bold" className="text-muted-foreground" />
+                Delayed tasks
+              </span>
+              <span className={`flex items-center gap-1 font-mono font-bold ${(data.counters?.delayed || 0) > 0 ? "text-brand-red" : "text-green-600"}`}>
+                {(data.counters?.delayed || 0) > 0
+                  ? <TrendUp size={12} weight="bold" />
+                  : <Minus size={12} weight="bold" />}
+                {data.counters?.delayed ?? 0}
+              </span>
+            </button>
             {/* Weekly completion */}
-            <div className="flex items-center justify-between text-sm">
+            <button
+              type="button"
+              data-testid="desk-trend-completion"
+              onClick={() => navigate("/my-work?filter=completed")}
+              className="w-full flex items-center justify-between text-sm p-2 -mx-2 rounded hover:bg-black/5 transition-colors text-left"
+              title="See completed tasks"
+            >
               <span className="flex items-center gap-2">
                 <CheckCircle size={14} weight="bold" className="text-muted-foreground" />
                 Weekly completion
@@ -132,9 +166,15 @@ function DeskBriefHeader() {
                   </span>
                 )}
               </span>
-            </div>
+            </button>
             {/* Complaints */}
-            <div className="flex items-center justify-between text-sm">
+            <button
+              type="button"
+              data-testid="desk-trend-complaints"
+              onClick={() => navigate("/crm?complaint=open")}
+              className="w-full flex items-center justify-between text-sm p-2 -mx-2 rounded hover:bg-black/5 transition-colors text-left"
+              title="See customers with open complaints"
+            >
               <span className="flex items-center gap-2">
                 <ChatCircleText size={14} weight="bold" className="text-muted-foreground" />
                 Complaints
@@ -146,9 +186,22 @@ function DeskBriefHeader() {
                   <span className="text-[10px] opacity-70">(+{comp.new_7d} 7d)</span>
                 )}
               </span>
-            </div>
+            </button>
             {/* Cash-flow */}
-            <div className="flex items-center justify-between text-sm">
+            <button
+              type="button"
+              data-testid="desk-trend-cashflow"
+              onClick={() => {
+                const dest = (cash.overdue_receivables_amount || 0) > 0
+                  ? "/finance?tab=revenue"
+                  : (cash.unmatched_payments || 0) > 0
+                    ? "/finance?tab=inbox"
+                    : "/finance?tab=overview";
+                navigate(dest);
+              }}
+              className="w-full flex items-center justify-between text-sm p-2 -mx-2 rounded hover:bg-black/5 transition-colors text-left"
+              title="Open Finance"
+            >
               <span className="flex items-center gap-2">
                 <CurrencyInr size={14} weight="bold" className="text-muted-foreground" />
                 Cash-flow
@@ -157,7 +210,7 @@ function DeskBriefHeader() {
                 <CF_ICON size={12} weight="bold" />
                 {cash.clear ? "All clear" : "Attention"}
               </span>
-            </div>
+            </button>
           </div>
         </div>
 

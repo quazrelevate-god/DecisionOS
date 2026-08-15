@@ -17,9 +17,9 @@
 // workflow-engine feed, activity timeline, and lifecycle chip;
 // that's E2-07 / E2-08 / E2-03 respectively.
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useTranslation } from "react-i18next";
 import { hasPerm } from "../lib/perms";
@@ -30,7 +30,7 @@ import api from "../lib/api";
 import { toast } from "sonner";
 import {
   Plus, MagnifyingGlass, PencilSimple, Trash, Phone, EnvelopeSimple,
-  MapPin, Eye, AddressBook, Truck, UsersFour,
+  MapPin, Eye, AddressBook, Truck, UsersFour, Warning as WarningIcon,
 } from "@phosphor-icons/react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
@@ -163,7 +163,13 @@ export default function CRM() {
   const qc = useQueryClient();
   const navigate = useNavigate();
 
-  const [scope, setScope] = useState("all"); // all | customers | suppliers | mine
+  // Epic 2 Sprint 6.5 (E2-52): `?complaint=open` deep-link from the
+  // Desk Trends card 'Complaints' row lands here with the complaints
+  // filter chip pre-selected.
+  const [searchParams] = useSearchParams();
+  const complaintParam = searchParams.get("complaint");
+
+  const [scope, setScope] = useState(complaintParam === "open" ? "complaints" : "all"); // all | customers | suppliers | mine | complaints
   const [status, setStatus] = useState("");
   const [q, setQ] = useState("");
 
@@ -175,6 +181,17 @@ export default function CRM() {
     queryFn: () => api.get(`/contacts?type=&status=${status}&q=${encodeURIComponent(q)}`).then((r) => r.data),
   });
   const { data: users } = useQuery({ queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data) });
+  // Epic 2 Sprint 6.5 (E2-52): fetch open complaints when the 'With
+  // complaints' chip is active; used to filter contacts by customer_id.
+  const { data: openComplaints } = useQuery({
+    queryKey: ["complaints-open"],
+    queryFn: () => api.get("/complaints?status=open").then((r) => r.data),
+    enabled: scope === "complaints",
+  });
+
+  useEffect(() => {
+    if (complaintParam === "open") setScope("complaints");
+  }, [complaintParam]);
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["crm-contacts"] });
 
@@ -183,9 +200,13 @@ export default function CRM() {
     if (scope === "customers") list = list.filter((c) => CUSTOMER_TYPES.includes(c.type));
     else if (scope === "suppliers") list = list.filter((c) => VENDOR_TYPES.includes(c.type));
     else if (scope === "mine") list = list.filter((c) => c.assigned_id === user?.id);
+    else if (scope === "complaints") {
+      const cids = new Set((openComplaints || []).map((c) => c.customer_id).filter(Boolean));
+      list = list.filter((c) => cids.has(c.id));
+    }
     // "all" → no type filter
     return list;
-  }, [data, scope, user?.id]);
+  }, [data, scope, user?.id, openComplaints]);
 
   const remove = async (id) => {
     if (!window.confirm("Delete this contact permanently?")) return;
@@ -203,6 +224,9 @@ export default function CRM() {
     { key: "customers", label: L.customer_plural, icon: AddressBook },
     { key: "suppliers", label: L.vendor_plural, icon: Truck },
     { key: "mine", label: t("crm.mine"), icon: null },
+    // Epic 2 Sprint 6.5 (E2-52): 'With complaints' chip. Only lights up
+    // when the Desk Trends card sends the user here via ?complaint=open.
+    { key: "complaints", label: "With Complaints", icon: WarningIcon },
   ];
 
   return (

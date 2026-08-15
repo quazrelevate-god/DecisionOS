@@ -983,6 +983,16 @@ export default function MyWork() {
     return () => clearTimeout(timer);
   }, [focusTaskId, focusQ.data, scope]);
 
+  // Epic 2 Sprint 6.5 (E2-51): When Desk Trends deep-links here with
+  // ?filter=overdue|completed, an owner should see ALL tenant tasks
+  // (the Desk counter is tenant-wide). Auto-flip scope=all so the list
+  // isn't empty just because none of them are the owner's own todos.
+  useEffect(() => {
+    const f = params.get("filter");
+    if (f && isOwner && scope !== "all") setScope("all");
+    if (f === "completed") setTab("completed");
+  }, [params, isOwner]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const scoreMap = {};
   (prioritiesQ.data?.tasks || []).forEach((pt) => { if (pt.ai_scores) scoreMap[pt.id] = pt.ai_scores; });
   const scoring = aiPriority && prioritiesQ.isFetching && !prioritiesQ.data;
@@ -994,8 +1004,15 @@ export default function MyWork() {
     return all.filter((t) => !isTerminal(t) && t.task_type === key).length;
   };
 
+  // Epic 2 Sprint 6.5 (E2-51): `?filter=overdue|completed` URL param
+  // deep-link from Desk Trends card. Overdue narrows the All-tab list
+  // to just isOverdue rows; completed forces the Completed tab.
+  const urlFilter = params.get("filter");
+
   let list;
-  if (tab === "completed") {
+  if (urlFilter === "overdue") {
+    list = all.filter((t) => !isTerminal(t) && isOverdue(t));
+  } else if (urlFilter === "completed" || tab === "completed") {
     list = all.filter(isTerminal);
   } else if (tab === "all") {
     list = all.filter((t) => !isTerminal(t));

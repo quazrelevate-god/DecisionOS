@@ -39,6 +39,42 @@ router = APIRouter(prefix="/api")
 
 
 # ---------------------------------------------------------------------------
+# IST helpers. Server runs in UTC; India tenants would otherwise see
+# yesterday's data between 18:30-23:59 UTC (00:00-05:29 IST next day) or
+# blow through their real day boundary. E2-56 fix.
+# ---------------------------------------------------------------------------
+_IST_OFFSET = timedelta(hours=5, minutes=30)
+
+
+def _today_ist() -> str:
+    """IST 'today' as YYYY-MM-DD. Use for anything compared to date-only
+    fields (due_date, attendance.date, leaves.from_date/to_date)."""
+    return (datetime.now(timezone.utc) + _IST_OFFSET).date().isoformat()
+
+
+def _yesterday_ist_window_utc() -> tuple[str, str]:
+    """(start_utc_iso, end_utc_iso) for the IST-yesterday window. Use for
+    timestamp comparisons against UTC-stored created_at/updated_at."""
+    utc_now = datetime.now(timezone.utc)
+    ist_now_naive = utc_now + _IST_OFFSET
+    ist_today_midnight_naive = ist_now_naive.replace(
+        hour=0, minute=0, second=0, microsecond=0)
+    today_midnight_utc = (ist_today_midnight_naive - _IST_OFFSET).replace(
+        tzinfo=timezone.utc)
+    yesterday_midnight_utc = today_midnight_utc - timedelta(days=1)
+    return yesterday_midnight_utc.isoformat(), today_midnight_utc.isoformat()
+
+
+def _week_ago_ist_utc() -> tuple[str, str]:
+    """(week_ago_utc_iso, two_weeks_ago_utc_iso) both aligned to IST-midnight.
+    For weekly-completion trend deltas."""
+    _, today_midnight_utc = _yesterday_ist_window_utc()
+    # Reparse to compute deltas from IST midnight boundary
+    tm = datetime.fromisoformat(today_midnight_utc)
+    return (tm - timedelta(days=7)).isoformat(), (tm - timedelta(days=14)).isoformat()
+
+
+# ---------------------------------------------------------------------------
 # Epic 2 Sprint 6 (E2-46): /api/desk/summary -- Greeting + Dex narrative +
 # Trends + Shortcuts. Feeds the merged CEO-Brief-on-Desk header. Reuses the
 # same underlying data the /api/brief endpoint uses so no source-of-truth
@@ -50,7 +86,7 @@ def _greeting_for(user: dict) -> str:
     """Time-of-day greeting. Server is UTC; add IST offset (+5:30) for
     Kapoor tenant defaults. If we grow beyond India we'll thread tenant
     timezone through here."""
-    hour_ist = (datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)).hour
+    hour_ist = (datetime.now(timezone.utc) + _IST_OFFSET).hour
     if hour_ist < 12:
         tod = "Good morning"
     elif hour_ist < 17:
@@ -63,8 +99,9 @@ def _greeting_for(user: dict) -> str:
 
 async def _delayed_count(tid: str, user: dict) -> int:
     """Count tasks past due_date, not done/cancelled. Owner sees all,
-    non-owner sees their own."""
-    today = datetime.now(timezone.utc).date().isoformat()
+    non-owner sees their own. IST-today so we roll the "delayed" cliff
+    at IST-midnight (E2-56)."""
+    today = _today_ist()
     q = {"tenant_id": tid, "status": {"$nin": ["done", "cancelled"]},
          "due_date": {"$lt": today, "$ne": None}}
     if user.get("role") != "owner":
@@ -73,14 +110,17 @@ async def _delayed_count(tid: str, user: dict) -> int:
 
 
 async def _completed_yesterday(tid: str, user: dict) -> int:
-    """Tasks that hit status=done in the last 24h."""
-    since = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
-    q = {"tenant_id": tid, "status": "done"}
+    """Count 'task_done' activity events in the IST-yesterday window.
+    E2-55 fix: previously counted tasks with status=done + updated_at
+    in the last 24h, which inflated the number every time someone
+    edited a done task (rename, comment, attachment). Activity log
+    is append-only per completion so it's the correct source."""
+    y_start, y_end = _yesterday_ist_window_utc()
+    q = {"tenant_id": tid, "kind": "task_done",
+         "created_at": {"$gte": y_start, "$lt": y_end}}
     if user.get("role") != "owner":
-        q["assignee_id"] = user["id"]
-    # updated_at fallback -- tasks may not have a `completed_at`.
-    q["updated_at"] = {"$gte": since}
-    return await db.tasks.count_documents(q)
+        q["actor"] = user["id"]
+    return await db.activity.count_documents(q)
 
 
 async def _pending_decisions_for(tid: str, user: dict) -> int:
@@ -97,19 +137,24 @@ async def _pending_decisions_for(tid: str, user: dict) -> int:
 
 
 async def _cash_flow_status(tid: str) -> dict:
-    """Compact cash-flow summary. All numbers in tenant currency."""
-    # Overdue receivables: sales invoices where balance_due > 0 and past due
-    today = datetime.now(timezone.utc).date().isoformat()
-    overdue_receivables = 0
-    async for inv in db.invoices.find({"tenant_id": tid, "balance_due": {"$gt": 0}}, {"_id": 0}):
-        due = inv.get("due_date") or inv.get("date")
-        if due and due < today:
-            overdue_receivables += float(inv.get("balance_due") or 0)
-    # Unmatched payments (need matching to a bill or invoice)
-    unmatched_count = await db.payments.count_documents(
-        {"tenant_id": tid, "matched": {"$ne": True}, "direction": "in"}
-    )
-    # Overall clear? no overdue receivables + no unmatched inbound payments
+    """Compact cash-flow summary. All numbers in tenant currency.
+
+    E2-54 fix: previously queried invoices.balance_due which is never
+    written by the ledger (the ledger tracks amount and amount_paid,
+    then derives remaining as amount - amount_paid). Every tenant
+    therefore saw 'cash-flow all clear' regardless of actual state.
+    Now reuses the same _overdue_receivables + _inv_remaining helpers
+    /api/brief already uses, so the Desk narrative and the legacy
+    Brief show the same numbers. Also fixes the unmatched-payments
+    query: real field is `match_status ∈ {unmatched, partial}` (not
+    the boolean `matched` the old code checked, which never existed)."""
+    from server import _overdue_receivables, _inv_remaining, _unmatched_payments  # deferred
+    overdue_rows = await _overdue_receivables(tid)
+    overdue_receivables = round(sum(_inv_remaining(r) for r in overdue_rows), 2)
+    # Unmatched INBOUND payments only (out payments live on a separate
+    # workflow; inbound is what the owner "needs to match to reconcile").
+    unmatched_rows = await _unmatched_payments(tid)
+    unmatched_count = sum(1 for p in unmatched_rows if p.get("direction") == "in")
     clear = overdue_receivables == 0 and unmatched_count == 0
     return {
         "clear": clear,
@@ -119,18 +164,22 @@ async def _cash_flow_status(tid: str) -> dict:
 
 
 async def _weekly_completion_rate(tid: str, user: dict) -> dict:
-    """Completed tasks this week vs last week. Returns count + delta_pct."""
-    now = datetime.now(timezone.utc)
-    week_ago = (now - timedelta(days=7)).isoformat()
-    two_weeks_ago = (now - timedelta(days=14)).isoformat()
-    scope_this = {"tenant_id": tid, "status": "done", "updated_at": {"$gte": week_ago}}
-    scope_last = {"tenant_id": tid, "status": "done",
-                    "updated_at": {"$gte": two_weeks_ago, "$lt": week_ago}}
+    """Completed tasks this week vs last week. Returns count + delta_pct.
+
+    E2-55 (same fix): uses activity.kind='task_done' events over an
+    IST-aligned week so trend deltas can't be inflated by post-completion
+    edits, and don't drift by up to 5.5h between UTC-run cron windows
+    and the tenant's real week boundary."""
+    week_ago, two_weeks_ago = _week_ago_ist_utc()
+    scope_this = {"tenant_id": tid, "kind": "task_done",
+                  "created_at": {"$gte": week_ago}}
+    scope_last = {"tenant_id": tid, "kind": "task_done",
+                  "created_at": {"$gte": two_weeks_ago, "$lt": week_ago}}
     if user.get("role") != "owner":
-        scope_this["assignee_id"] = user["id"]
-        scope_last["assignee_id"] = user["id"]
-    this_wk = await db.tasks.count_documents(scope_this)
-    last_wk = await db.tasks.count_documents(scope_last)
+        scope_this["actor"] = user["id"]
+        scope_last["actor"] = user["id"]
+    this_wk = await db.activity.count_documents(scope_this)
+    last_wk = await db.activity.count_documents(scope_last)
     if last_wk == 0:
         delta_pct = 100 if this_wk > 0 else 0
     else:
@@ -140,11 +189,13 @@ async def _weekly_completion_rate(tid: str, user: dict) -> dict:
 
 
 async def _complaints_trend(tid: str) -> dict:
-    """Open complaints (all-time) + how many opened in the last 7 days."""
+    """Open complaints (all-time) + how many opened in the last 7 days.
+    E2-56: use the IST-aligned 7-day window so the trend arrow flips
+    on IST-midnight, not UTC-midnight."""
     open_now = await db.complaints.count_documents(
         {"tenant_id": tid, "status": {"$ne": "resolved"}}
     )
-    week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    week_ago, _ = _week_ago_ist_utc()
     new_7d = await db.complaints.count_documents(
         {"tenant_id": tid, "created_at": {"$gte": week_ago}}
     )
@@ -243,7 +294,10 @@ async def desk_summary(user: dict = Depends(get_current_user)):
 # Helpers
 # ---------------------------------------------------------------------------
 def _iso_today() -> str:
-    return datetime.now(timezone.utc).date().isoformat()
+    """IST-today (see _today_ist). E2-56 fix — chip builders using this
+    for 'due today' and 'overdue' comparisons were 5.5h off for India
+    tenants between 18:30-23:59 UTC."""
+    return _today_ist()
 
 
 def _days_between(iso_start: Optional[str], iso_end: Optional[str] = None) -> int:

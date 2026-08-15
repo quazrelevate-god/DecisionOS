@@ -26,6 +26,16 @@ from services.tasks import enrich_tasks
 router = APIRouter(prefix="/api")
 
 
+# E2-56 fix: server runs in UTC; date-only comparisons (attendance.date,
+# leaves.from_date/to_date) need to roll at IST-midnight so India tenants
+# don't see yesterday's "on leave" list from 00:00-05:29 IST.
+_IST_OFFSET = timedelta(hours=5, minutes=30)
+
+
+def _today_ist() -> str:
+    return (datetime.now(timezone.utc) + _IST_OFFSET).date().isoformat()
+
+
 # ---------------------------------------------------------------------------
 # Notifications
 # ---------------------------------------------------------------------------
@@ -69,7 +79,7 @@ async def ceo_brief(period: str = "morning", user: dict = Depends(get_current_us
     tid = user["tenant_id"]
     await run_followup(tid)
     now = datetime.now(timezone.utc)
-    today = now.strftime("%Y-%m-%d")
+    today = _today_ist()  # E2-56: IST date so India tenants roll at IST-midnight
     midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
     if period == "weekly":
         start_iso = (now - timedelta(days=7)).isoformat()
@@ -150,7 +160,7 @@ async def brief_details(key: str, period: str = "morning", user: dict = Depends(
     tid = user["tenant_id"]
     now = datetime.now(timezone.utc)
     midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    today = now.strftime("%Y-%m-%d")
+    today = _today_ist()  # E2-56: IST-today for date-only comparisons
     if period == "weekly":
         start_iso = (now - timedelta(days=7)).isoformat()
     elif period == "monthly":

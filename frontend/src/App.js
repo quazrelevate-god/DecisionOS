@@ -21,7 +21,9 @@ import CEOBrief from "./pages/CEOBrief";
 import Notifications from "./pages/Notifications";
 import MyWork from "./pages/MyWork";
 import Settings from "./pages/Settings";
-import Ingest from "./pages/Ingest";
+// E2-30 (2026-08-15): Ingest.js retired. /ingest URL still redirects
+// to /finance?tab=inbox (see route below). ReviewPanel + WhatsAppCard
+// live in pages/finance/*, imported directly by Ledger.js.
 import ContactProfile from "./pages/ContactProfile";
 import Journal from "./pages/Journal";
 import Calendar from "./pages/Calendar";

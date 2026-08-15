@@ -19,7 +19,9 @@ import {
 // upload ReviewPanel, and WhatsApp status card from Ingest.js so
 // document-capture lives on /finance as the merged surface.
 import { CaptureReview } from "./Captures";
-import { ReviewPanel, WhatsAppCard } from "./Ingest";
+// E2-30 (2026-08-15): extracted from Ingest.js so it could be retired.
+import ReviewPanel from "./finance/ReviewPanel";
+import WhatsAppCard from "./finance/WhatsAppCard";
 import { hasPerm } from "../lib/perms";
 import { formatApiError } from "../lib/api";
 import {

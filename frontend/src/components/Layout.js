@@ -223,7 +223,10 @@ export default function Layout({ children }) {
               {fires}
             </span>
           )}
-          {to === "/ingest" && captureCount > 0 && (
+          {/* E2-30 (2026-08-15): review badge follows the Inbox tab into
+              /finance now that /ingest is retired. Same testid so any
+              existing E2E tests still find it. */}
+          {to === "/finance" && captureCount > 0 && (
             <span data-testid="nav-review-badge" title={`${captureCount} item(s) to review`}
               className="ml-auto bg-brand-red text-white text-[10px] min-w-5 h-5 px-1 flex items-center justify-center border border-black font-bold rounded-full">
               {captureCount}

@@ -8,8 +8,9 @@ import { LockKey } from "@phosphor-icons/react";
 import Layout from "./components/Layout";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
-import Inbox from "./pages/Inbox";
-// Epic 2 Sprint 2 — new Decision Desk (4-chip design) replaces the mixed Inbox.
+// E2-73 (2026-08-15): legacy Inbox.js retired. Sprint 2 shipped the
+// new Decision Desk at /inbox; the old Inbox page had no users left.
+// /inbox-legacy now redirects to /inbox so any lingering bookmarks work.
 import Desk from "./pages/Desk";
 import Brain from "./pages/Brain";
 import People from "./pages/People";
@@ -17,7 +18,9 @@ import People from "./pages/People";
 // Team (employees) pages replace the tabbed /contacts People surface.
 import CRM from "./pages/CRM";
 import TeamPage from "./pages/Team";
-import CEOBrief from "./pages/CEOBrief";
+// E2-73 (2026-08-15): CEOBrief.js retired. Sprint 6 merged its content
+// into the Decision Desk header; /brief already redirects to /inbox
+// so the page had no live users.
 import Notifications from "./pages/Notifications";
 import MyWork from "./pages/MyWork";
 import Settings from "./pages/Settings";
@@ -27,10 +30,9 @@ import Settings from "./pages/Settings";
 import ContactProfile from "./pages/ContactProfile";
 import Journal from "./pages/Journal";
 import Calendar from "./pages/Calendar";
-// Epic 2 Sprint 3 (E2-31): Meetings hidden this phase.
-// Re-enable: uncomment this import, restore the /meetings route in
-// place of the Navigate below, restore the sidebar NAV entry.
-// import Meetings from "./pages/Meetings";
+// E2-73 (2026-08-15): Meetings.js retired. Sprint 3 (E2-31) hid it
+// from the sidebar and redirected /meetings to /. Re-enable path: git
+// revert this commit + restore the sidebar NAV entry.
 import OperatingScore from "./pages/OperatingScore";
 import WorkCoach from "./pages/WorkCoach";
 import Ledger from "./pages/Ledger";
@@ -104,12 +106,11 @@ function App() {
             <Route path="/settings" element={<Protected><Settings /></Protected>} />
             <Route path="/review" element={<Navigate to="/ingest" replace />} />
             <Route path="/notifications" element={<Protected><Notifications /></Protected>} />
-            {/* Epic 2 Sprint 2 (E2-16/17/18/19/22): /inbox now renders the
-                new 4-chip Desk. Old Inbox.js kept alive at /inbox-legacy
-                for one commit so any deep-link we missed still resolves,
-                and can be removed in a follow-up. */}
+            {/* Epic 2 Sprint 2: /inbox renders the 4-chip Decision Desk.
+                E2-73 (2026-08-15): legacy Inbox page deleted; /inbox-legacy
+                now redirects so any lingering bookmark still resolves. */}
             <Route path="/inbox" element={<Protected perm="inbox"><Desk /></Protected>} />
-            <Route path="/inbox-legacy" element={<Protected perm="inbox"><Inbox /></Protected>} />
+            <Route path="/inbox-legacy" element={<Navigate to="/inbox" replace />} />
             <Route path="/workflows" element={<Navigate to="/my-work?view=workflows" replace />} />
             {/* Epic 2 Sprint A — E2-01: /contacts is retired, redirects to /crm.
                 /contacts/:id (ContactProfile 360°) still works so any deep-links

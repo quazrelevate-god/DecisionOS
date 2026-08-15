@@ -298,19 +298,72 @@ elif st.session_state.step == "website":
         help="Analysis runs automatically once you press Enter or click out of the field.")
 
     current_url = st.session_state.website_url.strip()
+
+    # State machine: idle | loading | success | error. Prevents the previous
+    # infinite-retry bug where a failed analysis kept re-triggering itself
+    # on every Streamlit rerun (world_url wasn't being locked on failure).
+    # Now we ALWAYS lock world_url after an attempt — retry is explicit via
+    # the "Try analyzing again" button below.
+    st.session_state.setdefault("website_analysis_status", "idle")
+
     if current_url and current_url != st.session_state.get("world_url", ""):
+        st.session_state.website_analysis_status = "loading"
         with st.spinner("Reading your website…"):
             try:
-                st.session_state.world = ob.analyze_website(current_url, st.session_state.company_name)
-                st.session_state.last_error = ""
+                result = ob.analyze_website(current_url, st.session_state.company_name)
+                st.session_state.world = result
+                if isinstance(result, dict) and result.get("fetched"):
+                    st.session_state.website_analysis_status = "success"
+                    st.session_state.last_error = ""
+                else:
+                    st.session_state.website_analysis_status = "error"
+                    st.session_state.last_error = (result or {}).get("error") or (result or {}).get("reason") or "analysis_failed"
             except ob.LLMError as e:
+                st.session_state.world = {"fetched": False, "reason": "llm_error", "error": str(e)}
+                st.session_state.website_analysis_status = "error"
                 st.session_state.last_error = str(e)
             except Exception as e:
+                st.session_state.world = {"fetched": False, "reason": "exception",
+                                          "error": f"{type(e).__name__}: {e}"}
+                st.session_state.website_analysis_status = "error"
                 st.session_state.last_error = f"{type(e).__name__}: {e}"
-            st.session_state.world_url = current_url
+            finally:
+                # ALWAYS lock world_url to this URL after an attempt. Without
+                # this, a failure leaves world_url stale, so the very next
+                # Streamlit rerun re-enters this block and re-runs analysis
+                # — an infinite "Reading your website…" spinner loop.
+                st.session_state.world_url = current_url
         st.rerun()
 
     world = st.session_state.world
+
+    # Visible failure card when analysis didn't succeed. Previously silent,
+    # which is why the Industry dropdown stayed at "Choose an option" with
+    # no explanation. Also offers a Retry button.
+    if world and not world.get("fetched"):
+        reason = world.get("reason", "unknown")
+        friendly = {
+            "empty_url":        "Enter a website URL to analyze.",
+            "fetch_failed":     "Couldn't reach that website. Check the URL and try again.",
+            "too_little_text":  "That page has very little readable text (often the case for JS-only single-page apps). Try a different page URL, or fill the fields manually below.",
+            "analysis_failed":  "The AI couldn't read the page this time. Try again or fill the fields manually below.",
+            "llm_error":        "The AI is temporarily unavailable. Try again or fill the fields manually below.",
+            "exception":        "Something went wrong while reading the page. Try again or fill the fields manually below.",
+        }.get(reason, "The website analysis did not complete. Fill the fields manually below.")
+        err_detail = world.get("error") or ""
+        st.markdown(
+            f'<div class="dos-card" style="border-color:#FF3B30">'
+            f'<p style="color:#FF3B30;margin:0 0 .3rem;font-weight:600">⚠ Website analysis didn\'t auto-fill the fields</p>'
+            f'<p style="margin:0 0 .4rem;font-size:.9rem">{friendly}</p>'
+            f'{"<p style=font-size:.75rem;color:#6b6b73;margin:0>detail: " + err_detail + "</p>" if err_detail else ""}'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+        if st.button("Try analyzing again", key="retry_website_intel"):
+            # Force re-run by resetting the tracker.
+            st.session_state.world_url = ""
+            st.rerun()
+
     if world and world.get("fetched"):
         eyebrow("We did our homework")
         chips = ""

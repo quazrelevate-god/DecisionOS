@@ -441,10 +441,18 @@ class LLMError(RuntimeError):
     """Raised when no configured key succeeded. Callers can render this in UI."""
 
 
+# Hard upper bound for a single LLM call so the UI can never hang forever.
+# The Streamlit spinner has no natural timeout; this makes sure every call
+# either returns a response or raises LLMError within ~45s.
+_LLM_CALL_TIMEOUT_SECONDS = 45
+
+
 def _call_claude_sync(session_id: str, system_message: str, user_text: str) -> str:
     """Synchronous wrapper around emergentintegrations.LlmChat for Streamlit.
     Streamlit reruns the script per interaction so a fresh event loop each call
-    is fine — matches how core.py's stateless-LLM pattern already works."""
+    is fine — matches how core.py's stateless-LLM pattern already works.
+    A hard asyncio.wait_for cap prevents the wrapped SDK from hanging forever
+    on a stalled Anthropic/Emergent connection."""
     from emergentintegrations.llm.chat import LlmChat, UserMessage
     keys = _keys_in_order()
     if not keys:
@@ -459,7 +467,14 @@ def _call_claude_sync(session_id: str, system_message: str, user_text: str) -> s
             try:
                 chat = LlmChat(api_key=key, session_id=session_id,
                                system_message=system_message).with_model(*LLM_MODEL)
-                return await chat.send_message(UserMessage(text=user_text))
+                return await asyncio.wait_for(
+                    chat.send_message(UserMessage(text=user_text)),
+                    timeout=_LLM_CALL_TIMEOUT_SECONDS,
+                )
+            except asyncio.TimeoutError as e:
+                # Treat timeout the same as any other failure of this key —
+                # move to the next key, and if all fail, raise LLMError below.
+                last_err = TimeoutError(f"LLM call exceeded {_LLM_CALL_TIMEOUT_SECONDS}s")
             except Exception as e:
                 last_err = e
         raise LLMError(f"All configured keys failed. Last error: {last_err}")
@@ -471,6 +486,129 @@ def _call_claude_sync(session_id: str, system_message: str, user_text: str) -> s
 # Public API — these mirror the /api/signup/* endpoints, but take dicts and
 # return dicts. Callers own the session state.
 # ---------------------------------------------------------------------------
+# Synonym map — real LLM answers we've seen that don't exactly match INDUSTRIES.
+# Keys are LOWERCASE substrings; the first matching key wins. Order is meaningful:
+# more specific patterns FIRST (e.g. "vehicle" before generic "automotive" fallback).
+# Kept small and generic — no company-specific hardcoding.
+_INDUSTRY_ALIASES = [
+    # Explicit compound overrides — placed FIRST so length-sort keeps them
+    # ahead of shorter generic keys that would otherwise mis-classify
+    # ambiguous inputs like "Automotive Technology" or "Automotive Software".
+    ("automotive technology",      "Automotive"),
+    ("automotive software",        "Automotive"),
+    ("fleet management",           "Automotive"),
+    ("vehicle safety",             "Automotive"),
+    # Automotive family — before Tech family so ties (equal-length needles)
+    # resolve toward Automotive (list-order tiebreak after stable sort).
+    ("automotive",                 "Automotive"),
+    ("automobile",                 "Automotive"),
+    ("vehicle",                    "Automotive"),
+    ("fleet",                      "Automotive"),
+    ("telematics",                 "Automotive"),
+    # IoT / hardware devices → typically manufactured products
+    ("iot",                        "Manufacturing"),
+    ("internet of things",         "Manufacturing"),
+    ("hardware",                   "Manufacturing"),
+    ("device manufactur",          "Manufacturing"),
+    ("electronics",                "Manufacturing"),
+    # Tech / SaaS umbrella (checked AFTER industry-specific families above).
+    ("saas",                       "Technology / SaaS"),
+    ("software",                   "Technology / SaaS"),
+    ("technology",                 "Technology / SaaS"),
+    ("it services",                "Technology / SaaS"),
+    ("information technology",     "Technology / SaaS"),
+    ("cybersecurity",              "Technology / SaaS"),
+    ("cloud computing",            "Technology / SaaS"),
+    ("cloud",                      "Technology / SaaS"),
+    # Logistics / supply chain family
+    ("supply chain",               "Logistics & Transport"),
+    ("shipping",                   "Logistics & Transport"),
+    ("freight",                    "Logistics & Transport"),
+    ("courier",                    "Logistics & Transport"),
+    ("last mile",                  "Logistics & Transport"),
+    # Retail / commerce family
+    ("ecommerce",                  "Retail / E-commerce"),
+    ("e-commerce",                 "Retail / E-commerce"),
+    ("dtc",                        "Retail / E-commerce"),
+    ("d2c",                        "Retail / E-commerce"),
+    # Food family
+    ("cloud kitchen",              "Restaurant / Food & Beverage"),
+    ("cafe",                       "Restaurant / Food & Beverage"),
+    ("food ",                      "Restaurant / Food & Beverage"),
+    ("beverage",                   "Restaurant / Food & Beverage"),
+    # Healthcare family
+    ("clinic",                     "Healthcare"),
+    ("hospital",                   "Healthcare"),
+    ("medical",                    "Healthcare"),
+    ("wellness clinic",            "Healthcare"),
+    # Fintech → Financial Services
+    ("fintech",                    "Financial Services"),
+    ("banking",                    "Financial Services"),
+    ("insurance",                  "Financial Services"),
+    ("lending",                    "Financial Services"),
+    # Real estate family
+    ("proptech",                   "Real Estate"),
+    ("property",                   "Real Estate"),
+    # Education family
+    ("edtech",                     "Education"),
+    ("e-learning",                 "Education"),
+    ("learning",                   "Education"),
+    ("training",                   "Education"),
+    # Media
+    ("gaming",                     "Media & Entertainment"),
+    ("streaming",                  "Media & Entertainment"),
+    # Marketing/advertising
+    ("advertising",                "Marketing & Advertising"),
+    ("agency",                     "Marketing & Advertising"),
+    # NGO
+    ("nonprofit",                  "Non-profit / NGO"),
+    ("non profit",                 "Non-profit / NGO"),
+    ("charity",                    "Non-profit / NGO"),
+]
+
+
+def _normalize_industry(value: str) -> str:
+    """Map an arbitrary LLM industry string to one of INDUSTRIES.
+    Order of checks:
+      1. Empty / missing → 'Other'  (fallback; the caller can still show 'Other')
+      2. Exact match against INDUSTRIES → use it
+      3. Case-insensitive exact match against INDUSTRIES → normalize to the canonical case
+      4. Substring alias match (e.g. 'saas' → 'Technology / SaaS')
+      5. Case-insensitive containment against any INDUSTRIES entry (e.g. 'automotive parts' → 'Automotive')
+      6. Fall through to 'Other'
+    Never returns a value that isn't in INDUSTRIES.
+    """
+    if not value:
+        return "Other"
+    v = value.strip()
+    if v in INDUSTRIES:
+        return v
+    v_low = v.lower()
+    # Case-insensitive exact
+    for i in INDUSTRIES:
+        if i.lower() == v_low:
+            return i
+    # Alias substring — sort by needle length DESCENDING so that more specific
+    # compound keys ("cloud kitchen", "vehicle safety", "internet of things")
+    # match before shorter generic ones ("cloud", "technology") that would
+    # otherwise win by list order and mis-classify compound values like
+    # "Automotive Technology" or "Cloud Kitchen".
+    for needle, target in sorted(_INDUSTRY_ALIASES, key=lambda a: -len(a[0])):
+        if needle in v_low:
+            return target
+    # Loose: does the value contain (or is contained in) an INDUSTRIES entry?
+    for i in INDUSTRIES:
+        if i == "Other":
+            continue
+        i_low = i.lower()
+        # Split canonical entries on ' / ' so 'Retail / E-commerce' matches either half
+        parts = [p.strip() for p in i_low.split("/")]
+        for p in parts + [i_low]:
+            if p and (p in v_low or v_low in p):
+                return i
+    return "Other"
+
+
 def analyze_website(url: str, company_name: str = "") -> dict:
     """Mirror of POST /api/signup/website-intel."""
     url = (url or "").strip()
@@ -521,7 +659,7 @@ def analyze_website(url: str, company_name: str = "") -> dict:
     except Exception as e:
         return {"fetched": False, "reason": "analysis_failed", "error": str(e)}
 
-    industry = data.get("industry") if data.get("industry") in INDUSTRIES else "Other"
+    industry = _normalize_industry(data.get("industry"))
     model = data.get("business_model") if data.get("business_model") in BUSINESS_MODELS else ""
     return {
         "fetched": True,

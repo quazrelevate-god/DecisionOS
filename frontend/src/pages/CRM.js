@@ -17,7 +17,7 @@
 // workflow-engine feed, activity timeline, and lifecycle chip;
 // that's E2-07 / E2-08 / E2-03 respectively.
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -31,7 +31,7 @@ import { toast } from "sonner";
 import {
   Plus, MagnifyingGlass, PencilSimple, Trash, Phone, EnvelopeSimple,
   MapPin, Eye, AddressBook, Truck, UsersFour, Warning as WarningIcon,
-  ArrowsDownUp, CurrencyInr, Clock,
+  ArrowsDownUp, CurrencyInr, Clock, UploadSimple,
 } from "@phosphor-icons/react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
@@ -311,6 +311,40 @@ export default function CRM() {
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["crm-contacts"] });
 
+  // Epic 2 Sprint 8 (E2-72): bulk CSV/XLSX import for contacts. The
+  // extraction pipeline is already wired end-to-end -- POST /ingest/csv
+  // runs the AI mapper, creates an `ingestion` in status='review', and
+  // auto-adds it to the inbox. All we do here is give founders a fast
+  // entry point from CRM and drop them at the existing Review UI.
+  const canImport = hasPerm(user, "data_input");
+  const csvInputRef = useRef(null);
+  const [csvBusy, setCsvBusy] = useState(false);
+  const onCsvChosen = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";  // let the user re-pick the same file later
+    setCsvBusy(true);
+    const label = toast.loading(`Uploading ${file.name}…`);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const { data: ing } = await api.post("/ingest/csv", fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const rows = ing.row_count ?? 0;
+      const detected = (ing.records?.contacts || []).length;
+      toast.success(
+        `${rows} row${rows === 1 ? "" : "s"} read${detected ? ` · ${detected} contact${detected === 1 ? "" : "s"} detected` : ""} — opening Inbox for review`,
+        { id: label }
+      );
+      navigate("/finance?tab=inbox");
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Could not read the file", { id: label });
+    } finally {
+      setCsvBusy(false);
+    }
+  };
+
   // Epic 2 Sprint 8 (E2-68): per-scope counts for the chip labels.
   // Computed off the FULL list (not scope-filtered) so numbers match
   // however the founder is currently filtered.
@@ -386,28 +420,56 @@ export default function CRM() {
         eyebrow={t("crm.eyebrow", { customers: L.customer_plural.toLowerCase(), suppliers: L.vendor_plural.toLowerCase() })}
         title={t("crm.title")}
       >
-        {canManage && (
+        {(canManage || canImport) && (
           <div className="flex flex-wrap gap-2">
-            <CrmContactDialog
-              users={users}
-              defaultType="customer"
-              onSaved={refresh}
-              trigger={
-                <button data-testid="crm-add-customer" className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
-                  <Plus size={16} weight="bold" /> {t("crm.add_customer", { name: L.customer_singular })}
+            {canManage && (
+              <CrmContactDialog
+                users={users}
+                defaultType="customer"
+                onSaved={refresh}
+                trigger={
+                  <button data-testid="crm-add-customer" className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
+                    <Plus size={16} weight="bold" /> {t("crm.add_customer", { name: L.customer_singular })}
+                  </button>
+                }
+              />
+            )}
+            {canManage && (
+              <CrmContactDialog
+                users={users}
+                defaultType="vendor"
+                onSaved={refresh}
+                trigger={
+                  <button data-testid="crm-add-supplier" className="flex items-center gap-2 bg-brand-yellow text-black px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
+                    <Plus size={16} weight="bold" /> {t("crm.add_supplier", { name: L.vendor_singular })}
+                  </button>
+                }
+              />
+            )}
+            {/* E2-72: bulk CSV / XLSX import. Perm gate matches the
+                backend endpoint (data_input) so we don't surface a
+                button that would 403. */}
+            {canImport && (
+              <>
+                <input
+                  ref={csvInputRef}
+                  type="file"
+                  accept=".csv,.xlsx,.xls"
+                  onChange={onCsvChosen}
+                  className="hidden"
+                  data-testid="crm-import-csv-input"
+                />
+                <button
+                  onClick={() => csvInputRef.current?.click()}
+                  disabled={csvBusy}
+                  data-testid="crm-import-csv"
+                  title="Bulk-import contacts from CSV or Excel. The AI reads the columns; you review + file in the Finance inbox."
+                  className="flex items-center gap-2 bg-white text-black px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all disabled:opacity-50"
+                >
+                  <UploadSimple size={16} weight="bold" /> {csvBusy ? "Uploading…" : "Import CSV"}
                 </button>
-              }
-            />
-            <CrmContactDialog
-              users={users}
-              defaultType="vendor"
-              onSaved={refresh}
-              trigger={
-                <button data-testid="crm-add-supplier" className="flex items-center gap-2 bg-brand-yellow text-black px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
-                  <Plus size={16} weight="bold" /> {t("crm.add_supplier", { name: L.vendor_singular })}
-                </button>
-              }
-            />
+              </>
+            )}
           </div>
         )}
       </PageHeader>

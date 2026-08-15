@@ -4977,6 +4977,8 @@ from routers.brain_context_api import router as brain_context_router  # noqa: E4
 app.include_router(brain_context_router)
 from routers.brain_router import router as brain_agent_router  # noqa: E402
 app.include_router(brain_agent_router)
+from routers.chatbot import router as chatbot_router  # noqa: E402
+app.include_router(chatbot_router)
 from routers.signup import router as signup_router  # noqa: E402
 app.include_router(signup_router)
 from routers.auth import router as auth_router  # noqa: E402

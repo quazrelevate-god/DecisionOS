@@ -1,0 +1,9 @@
+# Force a light theme so text contrast works on OS dark mode.
+# (Same fix as streamlit_onboarding.)
+[theme]
+base = "light"
+primaryColor = "#FF3B30"
+backgroundColor = "#F4F4F5"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#0A0A0B"
+font = "sans serif"

@@ -10,6 +10,7 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Inbox from "./pages/Inbox";
 import Brain from "./pages/Brain";
+import Chatbot from "./pages/Chatbot";
 import People from "./pages/People";
 import CEOBrief from "./pages/CEOBrief";
 import Notifications from "./pages/Notifications";
@@ -102,6 +103,7 @@ function App() {
             <Route path="/operating-score" element={<Protected ownerOnly><OperatingScore /></Protected>} />
             <Route path="/coach" element={<Protected><WorkCoach /></Protected>} />
             <Route path="/brain" element={<Protected perm="brain"><Brain /></Protected>} />
+            <Route path="/chatbot" element={<Protected perm="ask"><Chatbot /></Protected>} />
             <Route path="/ledger" element={<Protected perms={["ledger", "finance"]}><Ledger /></Protected>} />
             <Route path="/finance" element={<Navigate to="/ledger" replace />} />
             <Route path="/ask" element={<Navigate to="/brain" replace />} />

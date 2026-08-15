@@ -1,0 +1,5 @@
+# Streamlit chatbot harness — thin HTTP client, no backend deps needed.
+# Reuses backend/streamlit_env, which already has these installed.
+streamlit
+requests
+python-dotenv>=1,<2

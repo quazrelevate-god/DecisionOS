@@ -4,7 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import api from "../lib/api";
 import { timeAgo, fullTime } from "../lib/format";
-import { PageHeader, Chip, EmptyState } from "../components/common";
+import { PageHeader, Chip, EmptyState, SkeletonCard } from "../components/common";
 import { useAuth } from "../context/AuthContext";
 import { userPerms } from "../lib/perms";
 import { opModel } from "../lib/operatingModel";
@@ -1100,7 +1100,27 @@ export default function MyWork() {
               </button>
             ))}
           </div>
-          {list.length === 0 && <EmptyState title={tab === "completed" ? t("mywork.empty_completed_title") : t("mywork.empty_title")} hint={tab === "all" ? t("mywork.empty_all_hint") : t("mywork.empty_cat_hint")} />}
+          {/* E2-14: skeleton on first load so the tab strip doesn't
+              jump when tasks land. */}
+          {tasksQ.isLoading && !tasksQ.data && (
+            <div className="space-y-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <SkeletonCard key={i} lines={3} />
+              ))}
+            </div>
+          )}
+          {/* E2-13: empty state with a CTA. Sends the founder to Desk
+              (where decisions become tasks) rather than a dead screen. */}
+          {!tasksQ.isLoading && list.length === 0 && (
+            <EmptyState
+              testid="mywork-empty"
+              title={tab === "completed" ? t("mywork.empty_completed_title") : t("mywork.empty_title")}
+              hint={tab === "all" ? t("mywork.empty_all_hint") : t("mywork.empty_cat_hint")}
+              ctaLabel={tab === "completed" ? null : "+ Open Decision Desk"}
+              ctaTo={tab === "completed" ? null : "/inbox"}
+              secondary={tab === "completed" ? null : "Tasks appear here once decisions are approved"}
+            />
+          )}
           <div className="space-y-4">
             {list.map((t) => <TaskCard key={t.id} t={t} onChange={refresh} members={members} roleOptions={roleOptions} showAssignee={showAssignee} highlight={t.id === focusTaskId} scores={aiPriority && tab !== "completed" ? scoreMap[t.id] : undefined} />)}
           </div>

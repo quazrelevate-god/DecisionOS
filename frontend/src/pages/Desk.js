@@ -25,6 +25,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "../lib/api";
 import { toast } from "sonner";
+import { SkeletonCard } from "../components/common";
 import { DecisionDialog } from "../components/DecisionDialog";
 import {
   Fire, Sun, Star, CheckCircle, ArrowClockwise, Spinner,
@@ -443,8 +444,14 @@ export default function Desk() {
       </div>
 
       {/* Card list */}
+      {/* E2-14: skeleton cards on first load so the chip strip doesn't
+          collapse into a "Loading…" text jump when data lands. */}
       {isLoading && (
-        <p className="font-mono text-sm text-muted-foreground py-8 text-center">Loading…</p>
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <SkeletonCard key={i} lines={3} />
+          ))}
+        </div>
       )}
       {!isLoading && cards.length === 0 && (
         <div className="border border-black border-dashed bg-white p-10 text-center" data-testid="desk-empty">

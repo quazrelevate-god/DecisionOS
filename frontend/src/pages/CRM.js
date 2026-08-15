@@ -24,7 +24,7 @@ import { useAuth } from "../context/AuthContext";
 import { useTranslation } from "react-i18next";
 import { hasPerm } from "../lib/perms";
 import { lex } from "../lib/lexicon";
-import { PageHeader, Chip, EmptyState } from "../components/common";
+import { PageHeader, Chip, EmptyState, SkeletonGrid } from "../components/common";
 import { typeLabel } from "../lib/format";
 import api from "../lib/api";
 import { toast } from "sonner";
@@ -275,7 +275,7 @@ export default function CRM() {
   const canManage = user?.role === "owner" || user?.role === "sales";
   const can360 = hasPerm(user, "finance");
 
-  const { data } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["crm-contacts", status, q],
     queryFn: () => api.get(`/contacts?type=&status=${status}&q=${encodeURIComponent(q)}`).then((r) => r.data),
   });
@@ -534,10 +534,18 @@ export default function CRM() {
       </div>
 
       {/* Card grid */}
-      {contacts.length === 0 && (
+      {/* E2-14: skeleton while first page loads so the header/chips
+          don't jump when data lands. */}
+      {isLoading && !data && <SkeletonGrid count={6} lines={3} />}
+      {/* E2-13: empty state carries a specific CTA a fresh tenant can act on. */}
+      {!isLoading && contacts.length === 0 && (
         <EmptyState
+          testid="crm-empty"
           title={t("crm.empty_title")}
           hint={canManage ? t("crm.empty_hint_manage") : t("crm.empty_hint")}
+          ctaLabel={canManage ? `+ Add your first ${L.customer_singular.toLowerCase()}` : null}
+          onCta={canManage ? () => document.querySelector('[data-testid="crm-add-customer"]')?.click() : null}
+          secondary={canImport ? "or click Import CSV to bulk-add" : null}
         />
       )}
 

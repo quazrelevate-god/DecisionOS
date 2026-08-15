@@ -4,15 +4,21 @@ Owns:
   • GET  /api/brief                       — role-scoped dashboard counters (owner sees all;
                                              non-owners see their own delayed/todo/in_progress/etc.)
   • GET  /api/brief/details               — drill-down items behind a counter block
-  • POST /api/brief/send-digest           — owner-only: mail today's brief to themselves
   • GET  /api/notifications               — user's notifications + unread count
   • POST /api/notifications/{nid}/read    — mark one read
   • POST /api/notifications/read-all      — mark all read
 
+E2-63 (2026-08-15): POST /brief/send-digest was retired. The digest
+emailed a snapshot of today's brief to the owner -- superseded by
+Sprint 6 which merged the Brief into the Decision Desk itself. The
+Desk is live, one-click actionable, and doesn't require SMTP setup
+(a real barrier for India SMEs). If we ever want push-to-phone we'll
+build it on WhatsApp outbound templates, not email.
+
 Server-level helpers deferred-imported inside handlers:
   `run_followup`, `_overdue_receivables`, `_bills_due_or_overdue`,
   `_unmatched_payments`, `_inv_remaining`, `_pay_remaining_amt`,
-  `enrich_decisions`, `dashboard`, `send_email`, `DIGEST_I18N`.
+  `enrich_decisions`.
 """
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -328,29 +334,6 @@ async def brief_details(key: str, period: str = "morning", user: dict = Depends(
     return {"key": key, "actionable": actionable, "items": items}
 
 
-# ---------------------------------------------------------------------------
-# Send digest (owner only)
-# ---------------------------------------------------------------------------
-@router.post("/brief/send-digest")
-async def send_digest(user: dict = Depends(require_role("owner"))):
-    from server import dashboard, send_email, DIGEST_I18N  # deferred
-    data = await dashboard(user)  # reuse
-    tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
-    stats = data["stats"]
-    L = DIGEST_I18N.get(user.get("language") or "en", DIGEST_I18N["en"])
-    html = f"""
-    <h2>DecisionOS {L['brief']} — {tenant['name']}</h2>
-    <p>{stats['pending_approvals']} {L['pending']} · {stats['open_tasks']} {L['open']} · {len(data['overdue_tasks'])} {L['overdue']} · {stats['active_workflows']} {L['active']}</p>
-    <h3>{L['pending_h']}</h3>
-    <ul>{''.join(f"<li>{d['title']}</li>" for d in data['pending_decisions']) or f'<li>{L["none"]}</li>'}</ul>
-    <h3>{L['overdue_h']}</h3>
-    <ul>{''.join(f"<li>{t['title']}</li>" for t in data['overdue_tasks']) or f'<li>{L["none"]}</li>'}</ul>
-    """
-    result = await send_email(user["email"], f"DecisionOS {L['brief']} — {tenant['name']}", html)
-    if result.get("sent"):
-        return {"sent": True, "to": user["email"], "provider": result["provider"]}
-    if result.get("error") == "smtp_auth_failed":
-        raise HTTPException(status_code=400, detail="Gmail rejected the sender login. The account needs a 16-character Gmail App Password (enable 2-Step Verification, then create an App Password) — the normal account password won't work for sending.")
-    if result.get("error"):
-        raise HTTPException(status_code=400, detail="Couldn't send the email. Please check the sender email settings.")
-    return {"sent": False, "mocked": True, "to": user["email"], "preview_html": html}
+# E2-63 (2026-08-15): send-digest endpoint deleted -- see module
+# docstring for rationale. If bringing back, use WhatsApp outbound,
+# not email.

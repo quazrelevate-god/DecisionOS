@@ -3344,14 +3344,8 @@ async def send_email(to, subject: str, html: str) -> dict:
     return {"sent": False, "mocked": True, "to": to_list}
 
 
-DIGEST_I18N = {
-    "en": {"brief": "Daily Brief", "pending": "pending approvals", "open": "open tasks", "overdue": "overdue",
-           "active": "active workflows", "pending_h": "Pending Approvals", "overdue_h": "Overdue Tasks", "none": "None"},
-    "hi": {"brief": "दैनिक ब्रीफ़", "pending": "लंबित स्वीकृतियाँ", "open": "खुले कार्य", "overdue": "अतिदेय",
-           "active": "सक्रिय वर्कफ़्लो", "pending_h": "लंबित स्वीकृतियाँ", "overdue_h": "अतिदेय कार्य", "none": "कोई नहीं"},
-    "ta": {"brief": "தினசரி சுருக்கம்", "pending": "நிலுவை ஒப்புதல்கள்", "open": "திறந்த பணிகள்", "overdue": "தாமதமானவை",
-           "active": "செயலில் உள்ள பணிப்பாய்வுகள்", "pending_h": "நிலுவை ஒப்புதல்கள்", "overdue_h": "தாமதமான பணிகள்", "none": "எதுவுமில்லை"},
-}
+# E2-63 (2026-08-15): DIGEST_I18N deleted along with the send-digest
+# endpoint that was its only consumer. Rationale in routers/brief.py.
 
 
 

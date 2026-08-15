@@ -23,7 +23,6 @@ import {
   Brain as BrainIcon,
   AddressBook,
   SignOut,
-  EnvelopeSimple,
   Bell,
   Sun,
   MoonStars,
@@ -189,14 +188,9 @@ export default function Layout({ children }) {
     navigate("/login");
   };
 
-  const sendDigest = async () => {
-    try {
-      const { data } = await api.post("/brief/send-digest");
-      toast.success(data.sent ? `Digest emailed to ${data.to}` : `Digest generated (email not configured — logged)`);
-    } catch (e) {
-      toast.error(e.response?.data?.detail || "Could not send digest");
-    }
-  };
+  // E2-63 (2026-08-15): send-digest retired. The Desk itself is the
+  // brief now (Sprint 6 merged CEOBrief into Desk header) so this
+  // email-a-snapshot flow duplicated live data behind an SMTP gate.
 
   const NavItems = ({ onNavigate }) => (
     <>
@@ -278,27 +272,13 @@ export default function Layout({ children }) {
               {user?.role}
             </span>
           </div>
-          {user?.role === "owner" && (
-            <div className="flex items-center gap-3">
-              <button
-                onClick={sendDigest}
-                data-testid="send-digest-button"
-                className="flex items-center gap-2 px-4 py-2 text-sm rounded-lg bg-foreground text-background font-semibold hover:opacity-90 transition-opacity"
-              >
-                <EnvelopeSimple size={16} weight="bold" /> {t("header.send_digest")}
-              </button>
-              <LanguageSwitcher />
-              <ThemeToggle />
-              <Bellicon />
-            </div>
-          )}
-          {user?.role !== "owner" && (
-            <div className="flex items-center gap-3">
-              <LanguageSwitcher />
-              <ThemeToggle />
-              <Bellicon />
-            </div>
-          )}
+          {/* E2-63: send-digest button retired. Same set of controls
+              for owner + non-owner now that the digest is gone. */}
+          <div className="flex items-center gap-3">
+            <LanguageSwitcher />
+            <ThemeToggle />
+            <Bellicon />
+          </div>
         </header>
 
         {/* Mobile top app bar */}
@@ -335,15 +315,7 @@ export default function Layout({ children }) {
                 <NavItems onNavigate={() => setDrawerOpen(false)} />
               </nav>
               <div className="border-t border-black p-4 space-y-2 pb-24">
-                {user?.role === "owner" && (
-                  <button
-                    onClick={() => { setDrawerOpen(false); sendDigest(); }}
-                    data-testid="mobile-send-digest-button"
-                    className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm rounded-lg bg-foreground text-background font-semibold"
-                  >
-                    <EnvelopeSimple size={16} weight="bold" /> {t("header.send_digest")}
-                  </button>
-                )}
+                {/* E2-63: mobile send-digest button retired. */}
                 <button
                   onClick={doLogout}
                   data-testid="mobile-logout-button"

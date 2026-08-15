@@ -92,7 +92,10 @@ function App() {
             <Route path="/admin/*" element={<AdminPortal />} />
             <Route path="/" element={<Home />} />
             <Route path="/dashboard" element={<Navigate to="/brief" replace />} />
-            <Route path="/brief" element={<Protected><CEOBrief /></Protected>} />
+            {/* Epic 2 Sprint 6 (E2-47): CEO Brief merged into Desk header.
+                /brief redirects to /inbox (Desk). CEOBrief.js kept orphaned
+                for one commit as safety net; E2-49 removes it. */}
+            <Route path="/brief" element={<Navigate to="/inbox" replace />} />
             <Route path="/journal" element={<Protected ownerOnly><Journal /></Protected>} />
             <Route path="/my-work" element={<Protected><MyWork /></Protected>} />
             <Route path="/leave" element={<Navigate to="/my-work?view=leave" replace />} />

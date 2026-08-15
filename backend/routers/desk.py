@@ -26,7 +26,7 @@ Chips explained (all tenant + user scoped):
 
 Deep-linked from front-end Desk.js. Zero server.py churn.
 """
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone, date, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -36,6 +36,207 @@ from core import db, get_current_user, now_iso, new_id
 
 
 router = APIRouter(prefix="/api")
+
+
+# ---------------------------------------------------------------------------
+# Epic 2 Sprint 6 (E2-46): /api/desk/summary -- Greeting + Dex narrative +
+# Trends + Shortcuts. Feeds the merged CEO-Brief-on-Desk header. Reuses the
+# same underlying data the /api/brief endpoint uses so no source-of-truth
+# drift. Template-based narrative for MVP; LLM-generated variant deferred
+# (E2-48). All computation happens live -- 15-min cache lives on the
+# LLM upgrade item, not the template.
+# ---------------------------------------------------------------------------
+def _greeting_for(user: dict) -> str:
+    """Time-of-day greeting. Server is UTC; add IST offset (+5:30) for
+    Kapoor tenant defaults. If we grow beyond India we'll thread tenant
+    timezone through here."""
+    hour_ist = (datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)).hour
+    if hour_ist < 12:
+        tod = "Good morning"
+    elif hour_ist < 17:
+        tod = "Good afternoon"
+    else:
+        tod = "Good evening"
+    first_name = (user.get("name") or "").split(" ")[0] or "there"
+    return f"{tod}, {first_name}"
+
+
+async def _delayed_count(tid: str, user: dict) -> int:
+    """Count tasks past due_date, not done/cancelled. Owner sees all,
+    non-owner sees their own."""
+    today = datetime.now(timezone.utc).date().isoformat()
+    q = {"tenant_id": tid, "status": {"$nin": ["done", "cancelled"]},
+         "due_date": {"$lt": today, "$ne": None}}
+    if user.get("role") != "owner":
+        q["assignee_id"] = user["id"]
+    return await db.tasks.count_documents(q)
+
+
+async def _completed_yesterday(tid: str, user: dict) -> int:
+    """Tasks that hit status=done in the last 24h."""
+    since = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    q = {"tenant_id": tid, "status": "done"}
+    if user.get("role") != "owner":
+        q["assignee_id"] = user["id"]
+    # updated_at fallback -- tasks may not have a `completed_at`.
+    q["updated_at"] = {"$gte": since}
+    return await db.tasks.count_documents(q)
+
+
+async def _pending_decisions_for(tid: str, user: dict) -> int:
+    """Decisions this user needs to approve. Mirrors the on-desk
+    needs_decision chip logic."""
+    uid = user["id"]
+    is_owner = user.get("role") == "owner"
+    q = {"tenant_id": tid, "status": "pending"}
+    if is_owner:
+        q["$or"] = [{"approver_id": uid}, {"approver_id": {"$in": [None, ""]}}]
+    else:
+        q["approver_id"] = uid
+    return await db.decisions.count_documents(q)
+
+
+async def _cash_flow_status(tid: str) -> dict:
+    """Compact cash-flow summary. All numbers in tenant currency."""
+    # Overdue receivables: sales invoices where balance_due > 0 and past due
+    today = datetime.now(timezone.utc).date().isoformat()
+    overdue_receivables = 0
+    async for inv in db.invoices.find({"tenant_id": tid, "balance_due": {"$gt": 0}}, {"_id": 0}):
+        due = inv.get("due_date") or inv.get("date")
+        if due and due < today:
+            overdue_receivables += float(inv.get("balance_due") or 0)
+    # Unmatched payments (need matching to a bill or invoice)
+    unmatched_count = await db.payments.count_documents(
+        {"tenant_id": tid, "matched": {"$ne": True}, "direction": "in"}
+    )
+    # Overall clear? no overdue receivables + no unmatched inbound payments
+    clear = overdue_receivables == 0 and unmatched_count == 0
+    return {
+        "clear": clear,
+        "overdue_receivables_amount": overdue_receivables,
+        "unmatched_payments": unmatched_count,
+    }
+
+
+async def _weekly_completion_rate(tid: str, user: dict) -> dict:
+    """Completed tasks this week vs last week. Returns count + delta_pct."""
+    now = datetime.now(timezone.utc)
+    week_ago = (now - timedelta(days=7)).isoformat()
+    two_weeks_ago = (now - timedelta(days=14)).isoformat()
+    scope_this = {"tenant_id": tid, "status": "done", "updated_at": {"$gte": week_ago}}
+    scope_last = {"tenant_id": tid, "status": "done",
+                    "updated_at": {"$gte": two_weeks_ago, "$lt": week_ago}}
+    if user.get("role") != "owner":
+        scope_this["assignee_id"] = user["id"]
+        scope_last["assignee_id"] = user["id"]
+    this_wk = await db.tasks.count_documents(scope_this)
+    last_wk = await db.tasks.count_documents(scope_last)
+    if last_wk == 0:
+        delta_pct = 100 if this_wk > 0 else 0
+    else:
+        delta_pct = round(((this_wk - last_wk) / last_wk) * 100)
+    direction = "up" if delta_pct > 5 else "down" if delta_pct < -5 else "flat"
+    return {"value": this_wk, "delta_pct": delta_pct, "direction": direction}
+
+
+async def _complaints_trend(tid: str) -> dict:
+    """Open complaints (all-time) + how many opened in the last 7 days."""
+    open_now = await db.complaints.count_documents(
+        {"tenant_id": tid, "status": {"$ne": "resolved"}}
+    )
+    week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    new_7d = await db.complaints.count_documents(
+        {"tenant_id": tid, "created_at": {"$gte": week_ago}}
+    )
+    direction = "up" if new_7d >= 2 else "flat" if new_7d == 1 else "down"
+    return {"value": open_now, "new_7d": new_7d, "direction": direction}
+
+
+def _narrative(*, delayed: int, completed_yday: int, pending_decisions: int,
+                cash: dict, is_owner: bool) -> str:
+    """Deterministic template narrative. LLM variant lands in E2-48
+    (Backlog). Ordered by urgency -- delays first (bad), completed next
+    (good), cash-flow last (steady)."""
+    bits = []
+    if delayed > 0:
+        bits.append(
+            f"{delayed} task{'s' if delayed != 1 else ''} "
+            f"{'are' if delayed != 1 else 'is'} delayed"
+        )
+    if completed_yday > 0:
+        bits.append(f"{completed_yday} completed yesterday")
+    if cash.get("clear"):
+        bits.append("cash-flow all clear")
+    else:
+        n_over = int(cash.get("overdue_receivables_amount") or 0)
+        n_unm = int(cash.get("unmatched_payments") or 0)
+        parts = []
+        if n_over > 0:
+            parts.append(f"Rs {n_over:,.0f} in overdue receivables")
+        if n_unm > 0:
+            parts.append(f"{n_unm} payments to match")
+        if parts:
+            bits.append("cash-flow needs attention -- " + ", ".join(parts))
+    if not bits:
+        return ("You're all clear -- nothing pressing right now. "
+                "Nice place to be.")
+    lead = f"{len(bits)} thing{'s' if len(bits) != 1 else ''} worth knowing: "
+    body = ". ".join(bits[:-1]) + ("." if len(bits) > 1 else "")
+    tail = " " + bits[-1] + "."
+    prose = (lead + body + tail).replace("..", ".")
+    if is_owner and pending_decisions > 0:
+        prose += (f" {pending_decisions} decision"
+                    f"{'s are' if pending_decisions != 1 else ' is'} "
+                    f"waiting on you -- see below.")
+    return prose
+
+
+@router.get("/desk/summary")
+async def desk_summary(user: dict = Depends(get_current_user)):
+    tid = user["tenant_id"]
+    is_owner = user.get("role") == "owner"
+
+    delayed = await _delayed_count(tid, user)
+    completed_yday = await _completed_yesterday(tid, user)
+    pending_decisions = await _pending_decisions_for(tid, user)
+    cash = await _cash_flow_status(tid)
+    weekly_completion = await _weekly_completion_rate(tid, user)
+    complaints = await _complaints_trend(tid)
+
+    narrative = _narrative(
+        delayed=delayed, completed_yday=completed_yday,
+        pending_decisions=pending_decisions, cash=cash,
+        is_owner=is_owner,
+    )
+
+    # Shortcuts: which top-of-Desk quick-links to render.
+    # Owner-only for CEO Journal and Ops health.
+    shortcuts = {
+        "ceo_journal": is_owner,
+        "ops_health": is_owner,
+        "team_leaderboard": is_owner,
+    }
+
+    return {
+        "greeting": _greeting_for(user),
+        "narrative": narrative,
+        "trends": {
+            "weekly_completion_rate": weekly_completion,
+            "complaints_trend": complaints,
+            "cash_flow": {
+                "clear": cash.get("clear"),
+                "overdue_receivables_amount": cash.get("overdue_receivables_amount") or 0,
+                "unmatched_payments": cash.get("unmatched_payments") or 0,
+                "direction": "flat" if cash.get("clear") else "down",
+            },
+        },
+        "shortcuts": shortcuts,
+        "counters": {
+            "delayed": delayed,
+            "completed_yesterday": completed_yday,
+            "pending_decisions": pending_decisions,
+        },
+    }
 
 
 # ---------------------------------------------------------------------------

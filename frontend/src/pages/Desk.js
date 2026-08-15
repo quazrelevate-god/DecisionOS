@@ -28,13 +28,185 @@ import { toast } from "sonner";
 import { DecisionDialog } from "../components/DecisionDialog";
 import {
   Fire, Sun, Star, CheckCircle, ArrowClockwise, Spinner,
+  // Epic 2 Sprint 6 (E2-43..E2-45): Desk absorbs CEO Brief header
+  Sparkle, TrendUp, TrendDown, Minus, ChartBar, BookOpen, Gauge, UsersFour,
+  ChatCircleText, CurrencyInr, Warning as WarningIcon,
 } from "@phosphor-icons/react";
+import { useAuth } from "../context/AuthContext";
 
 // Epic 2 Sprint 5 (E2-33/E2-34): Desk CaptureBar retired. Voice + text +
 // file capture now lives on /brain (Dex) at the top of every sub-tab.
 // Founder ask 2026-08-14: 'remove the ai from the desk button and
-// integrate with brain, make it single AI name.' Desk is a pure
-// 4-chip decision viewer -- matches the original mocks.
+// integrate with brain, make it single AI name.'
+//
+// Epic 2 Sprint 6 (E2-43..E2-47): CEO Brief merged INTO Desk. New top
+// section shows Greeting + Dex narrative bubble + Trends card +
+// Shortcuts card. Old /brief page redirects to /inbox. Bottom-nav
+// 'Brief' slot retired (5 -> 4 slots). Founder ask 2026-08-14 after
+// audit: 'in the decision desk itself at top we will have a section
+// CEO brief'. Backend feeds via GET /api/desk/summary.
+
+
+// -----------------------------------------------------------------------------
+// Epic 2 Sprint 6 (E2-43): Greeting + Dex narrative bubble.
+// Renders as the first thing on Desk. Template-generated narrative
+// today; upgrade to LLM-generated in E2-48 (Backlog).
+// -----------------------------------------------------------------------------
+function DeskBriefHeader() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const isOwner = user?.role === "owner";
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["desk-summary"],
+    queryFn: () => api.get("/desk/summary").then((r) => r.data),
+    refetchInterval: 60000,
+  });
+
+  if (isLoading || !data) {
+    return (
+      <div className="mb-6">
+        <div className="h-8 w-64 bg-black/5 mb-2 animate-pulse" />
+        <div className="h-16 bg-black/5 animate-pulse" />
+      </div>
+    );
+  }
+
+  const trends = data.trends || {};
+  const wc = trends.weekly_completion_rate || {};
+  const comp = trends.complaints_trend || {};
+  const cash = trends.cash_flow || {};
+
+  const dirIcon = (d) => d === "up" ? TrendUp : d === "down" ? TrendDown : Minus;
+  const dirColor = (d, positiveIsUp = true) => {
+    if (d === "up") return positiveIsUp ? "text-green-600" : "text-brand-red";
+    if (d === "down") return positiveIsUp ? "text-brand-red" : "text-green-600";
+    return "text-muted-foreground";
+  };
+
+  const WC_ICON = dirIcon(wc.direction);
+  const CO_ICON = dirIcon(comp.direction);
+  const CF_ICON = dirIcon(cash.direction);
+
+  return (
+    <div className="mb-8" data-testid="desk-brief-header">
+      {/* Greeting */}
+      <h2 className="font-heading text-2xl font-black tracking-tighter mb-3" data-testid="desk-brief-greeting">
+        {data.greeting}.
+      </h2>
+
+      {/* Dex narrative bubble */}
+      <div
+        data-testid="desk-brief-narrative"
+        className="border border-black bg-white p-4 mb-4 shadow-brutal-sm flex gap-3"
+      >
+        <div className="w-9 h-9 shrink-0 flex items-center justify-center bg-brand-ink text-white">
+          <Sparkle size={18} weight="bold" />
+        </div>
+        <div className="flex-1">
+          <p className="label-mono text-muted-foreground text-[10px] mb-1">DEX →</p>
+          <p className="text-sm leading-relaxed">{data.narrative}</p>
+        </div>
+      </div>
+
+      {/* Trends + Shortcuts side-by-side (stack on mobile) */}
+      <div className="grid gap-4 md:grid-cols-2">
+        {/* Trends card */}
+        <div className="border border-black bg-white p-4" data-testid="desk-brief-trends">
+          <p className="label-mono text-muted-foreground text-[10px] mb-3 flex items-center gap-1">
+            <ChartBar size={12} weight="bold" /> TRENDS
+          </p>
+          <div className="space-y-3">
+            {/* Weekly completion */}
+            <div className="flex items-center justify-between text-sm">
+              <span className="flex items-center gap-2">
+                <CheckCircle size={14} weight="bold" className="text-muted-foreground" />
+                Weekly completion
+              </span>
+              <span className={`flex items-center gap-1 font-mono font-bold ${dirColor(wc.direction)}`}>
+                <WC_ICON size={12} weight="bold" />
+                {wc.value ?? 0}
+                {typeof wc.delta_pct === "number" && wc.delta_pct !== 0 && (
+                  <span className="text-[10px] opacity-70">
+                    ({wc.delta_pct > 0 ? "+" : ""}{wc.delta_pct}%)
+                  </span>
+                )}
+              </span>
+            </div>
+            {/* Complaints */}
+            <div className="flex items-center justify-between text-sm">
+              <span className="flex items-center gap-2">
+                <ChatCircleText size={14} weight="bold" className="text-muted-foreground" />
+                Complaints
+              </span>
+              <span className={`flex items-center gap-1 font-mono font-bold ${dirColor(comp.direction, false)}`}>
+                <CO_ICON size={12} weight="bold" />
+                {comp.value ?? 0}
+                {typeof comp.new_7d === "number" && comp.new_7d > 0 && (
+                  <span className="text-[10px] opacity-70">(+{comp.new_7d} 7d)</span>
+                )}
+              </span>
+            </div>
+            {/* Cash-flow */}
+            <div className="flex items-center justify-between text-sm">
+              <span className="flex items-center gap-2">
+                <CurrencyInr size={14} weight="bold" className="text-muted-foreground" />
+                Cash-flow
+              </span>
+              <span className={`flex items-center gap-1 font-mono font-bold ${cash.clear ? "text-green-600" : "text-brand-red"}`}>
+                <CF_ICON size={12} weight="bold" />
+                {cash.clear ? "All clear" : "Attention"}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Shortcuts card */}
+        <div className="border border-black bg-white p-4" data-testid="desk-brief-shortcuts">
+          <p className="label-mono text-muted-foreground text-[10px] mb-3">SHORTCUTS</p>
+          <div className="space-y-2">
+            {isOwner && (
+              <button
+                data-testid="desk-shortcut-journal"
+                onClick={() => navigate("/journal")}
+                className="w-full flex items-center gap-2 border border-black bg-white px-3 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors"
+              >
+                <BookOpen size={14} weight="bold" /> CEO Journal
+              </button>
+            )}
+            {isOwner && (
+              <button
+                data-testid="desk-shortcut-ops"
+                onClick={() => navigate("/operating-score")}
+                className="w-full flex items-center gap-2 border border-black bg-white px-3 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors"
+              >
+                <Gauge size={14} weight="bold" /> Ops health
+              </button>
+            )}
+            {isOwner && (
+              <button
+                data-testid="desk-shortcut-team"
+                onClick={() => navigate("/operating-score")}
+                className="w-full flex items-center gap-2 border border-black bg-white px-3 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors"
+              >
+                <UsersFour size={14} weight="bold" /> Team leaderboard
+              </button>
+            )}
+            {!isOwner && (
+              <button
+                data-testid="desk-shortcut-coach"
+                onClick={() => navigate("/coach")}
+                className="w-full flex items-center gap-2 border border-black bg-white px-3 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors"
+              >
+                <Sparkle size={14} weight="bold" /> AI Coach
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 
 // -----------------------------------------------------------------------------
@@ -157,7 +329,9 @@ export default function Desk() {
   return (
     <div className="max-w-5xl mx-auto">
       {/* Epic 2 Sprint 5 (E2-34): capture bar moved to /brain (Dex).
-          Desk is now pure decision viewer, matching the original mocks. */}
+          Desk is now pure decision viewer.
+          Epic 2 Sprint 6 (E2-43..45): CEO Brief absorbed into Desk. */}
+      <DeskBriefHeader />
 
       {/* Header */}
       <div className="mb-4">

@@ -47,7 +47,9 @@ import { WelcomeOverlay } from "./WelcomeOverlay";
 // new owner-only shortcut to Operating Score (removed from Brief in E2-11).
 const NAV = [
   { to: "/", label: "Decision Desk", tkey: "inbox", icon: Tray, testid: "nav-inbox", perm: "inbox" },
-  { to: "/brief", label: "CEO Brief", tkey: "brief", icon: Sun, testid: "nav-ceo-brief" },
+  // Epic 2 Sprint 6 (E2-47): 'CEO Brief' merged into Desk header. Nav
+  // entry retired; /brief URL redirects to /inbox in App.js.
+  // { to: "/brief", label: "CEO Brief", tkey: "brief", icon: Sun, testid: "nav-ceo-brief" },
   { to: "/my-work", label: "My Work", tkey: "mywork", icon: Briefcase, testid: "nav-my-work" },
   { to: "/operating-score", label: "Ops", tkey: "ops", icon: Gauge, testid: "nav-ops", ownerOnly: true },
   { to: "/crm", label: "CRM", tkey: "crm", icon: AddressBook, testid: "nav-crm", perm: "people" },
@@ -71,7 +73,9 @@ const NAV = [
 // Team lives in the sidebar drawer only.
 const BOTTOM_NAV = [
   { to: "/", label: "Desk", tkey: "desk", icon: Tray, perm: "inbox" },
-  { to: "/brief", label: "Brief", tkey: "brief", icon: Sun },
+  // Epic 2 Sprint 6 (E2-47): 'Brief' bottom-nav slot retired.
+  // Bottom-nav is now 4 slots (Desk / Work / CRM / Dex).
+  // { to: "/brief", label: "Brief", tkey: "brief", icon: Sun },
   { to: "/my-work", label: "Work", tkey: "work", icon: Briefcase },
   { to: "/crm", label: "CRM", tkey: "crm", icon: AddressBook, perm: "people" },
   { to: "/brain", label: "Dex", tkey: "brain", icon: BrainIcon, perm: "brain" },

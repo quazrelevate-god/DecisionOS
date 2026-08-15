@@ -179,6 +179,16 @@ CONTACT_TYPES = ("customer", "dealer", "vendor")
 CONTACT_STATUS = ("lead", "active", "inactive")
 
 
+# Epic 2 Sprint 1 (E2-03): relationship lifecycle stages. Enum differs
+# by contact type -- customers have a sales-funnel journey, suppliers
+# have a procurement journey. Backend accepts any value in the UNION so
+# a single validator works regardless of type; the CRM frontend renders
+# type-appropriate options. Empty string is allowed (means "unset").
+CUSTOMER_STAGES = ["lead", "qualified", "active", "at_risk", "churned"]
+SUPPLIER_STAGES = ["prospect", "active", "preferred", "on_hold", "retired"]
+LIFECYCLE_STAGES = list({*CUSTOMER_STAGES, *SUPPLIER_STAGES}) + [""]
+
+
 class ContactInput(BaseModel):
     type: str = "customer"
     name: str
@@ -192,6 +202,7 @@ class ContactInput(BaseModel):
     assigned_id: Optional[str] = None
     notes: Optional[str] = ""
     birthday: Optional[str] = ""
+    lifecycle_stage: Optional[str] = ""  # E2-03
 
 
 class ContactUpdateInput(BaseModel):
@@ -207,6 +218,7 @@ class ContactUpdateInput(BaseModel):
     assigned_id: Optional[str] = None
     notes: Optional[str] = None
     birthday: Optional[str] = None
+    lifecycle_stage: Optional[str] = None  # E2-03
 
 
 # ---------------------------------------------------------------------------
@@ -2255,12 +2267,17 @@ async def create_contact(inp: ContactInput, user: dict = Depends(require_role("o
         raise HTTPException(status_code=400, detail="Invalid contact type")
     status = inp.status if inp.status in CONTACT_STATUS else "lead"
     cid = new_id()
+    # E2-03: accept lifecycle_stage from the union of customer +
+    # supplier stages. Empty string means unset (unfamiliar contact).
+    stage = (inp.lifecycle_stage or "").strip().lower()
+    if stage and stage not in LIFECYCLE_STAGES:
+        stage = ""
     doc = {
         "id": cid, "tenant_id": user["tenant_id"], "type": inp.type, "name": inp.name,
         "company": inp.company or "", "phone": inp.phone or "", "email": inp.email or "",
         "address": inp.address or "", "tax_id": inp.tax_id or "", "tags": inp.tags or [],
         "status": status, "assigned_id": inp.assigned_id, "notes": inp.notes or "",
-        "birthday": inp.birthday or "",
+        "birthday": inp.birthday or "", "lifecycle_stage": stage,
         "created_by": user["id"], "created_at": now_iso(),
     }
     await db.contacts.insert_one(doc)
@@ -2279,6 +2296,11 @@ async def update_contact(contact_id: str, inp: ContactUpdateInput, user: dict = 
         updates.pop("type")
     if "status" in updates and updates["status"] not in CONTACT_STATUS:
         updates.pop("status")
+    # E2-03: normalise + validate lifecycle_stage against the union.
+    # Empty string is a legit value (means "unset" / no stage yet).
+    if "lifecycle_stage" in updates:
+        s = (updates["lifecycle_stage"] or "").strip().lower()
+        updates["lifecycle_stage"] = s if s in LIFECYCLE_STAGES else ""
     # FIX-003-C (S2-09): denormalized-name cascade. `contact_name` is
     # copied at write time into invoices, payments, and workflows
     # (workflows.counterparty). Without a cascade, renaming a contact

@@ -41,6 +41,33 @@ import {
 const CUSTOMER_TYPES = ["customer", "dealer"];
 const VENDOR_TYPES = ["vendor"];
 const STATUSES = ["lead", "active", "inactive"];
+
+// Epic 2 Sprint 1 (E2-03): lifecycle stages. Enum differs by contact
+// type -- customers travel a sales funnel; suppliers travel a
+// procurement journey. Colours below are the visual cue on the card
+// so founder can spot at-risk / on-hold instantly.
+const CUSTOMER_STAGES = [
+  { key: "lead", label: "Lead", cls: "bg-black/10 text-black" },
+  { key: "qualified", label: "Qualified", cls: "bg-brand-blue/20 text-brand-blue" },
+  { key: "active", label: "Active", cls: "bg-brand-green/20 text-brand-green" },
+  { key: "at_risk", label: "At Risk", cls: "bg-brand-red/20 text-brand-red" },
+  { key: "churned", label: "Churned", cls: "bg-black/30 text-white" },
+];
+const SUPPLIER_STAGES = [
+  { key: "prospect", label: "Prospect", cls: "bg-black/10 text-black" },
+  { key: "active", label: "Active", cls: "bg-brand-green/20 text-brand-green" },
+  { key: "preferred", label: "Preferred", cls: "bg-brand-yellow text-black" },
+  { key: "on_hold", label: "On Hold", cls: "bg-brand-red/20 text-brand-red" },
+  { key: "retired", label: "Retired", cls: "bg-black/30 text-white" },
+];
+function stagesForType(t) {
+  if (VENDOR_TYPES.includes(t)) return SUPPLIER_STAGES;
+  return CUSTOMER_STAGES;
+}
+function stageMeta(type, stage) {
+  if (!stage) return null;
+  return stagesForType(type).find((s) => s.key === stage) || null;
+}
 const inp = "w-full border border-black px-3 py-2 text-sm font-mono focus:outline-none focus:shadow-brutal-sm";
 
 // Epic 2 Sprint 8 (E2-70): sort options for the CRM card grid. Founder
@@ -132,7 +159,7 @@ function ComplaintDialog({ contact, onSaved }) {
 
 function CrmContactDialog({ trigger, initial, onSaved, users, defaultType }) {
   const [open, setOpen] = useState(false);
-  const blank = { type: defaultType || "customer", name: "", company: "", phone: "", email: "", address: "", tax_id: "", tags: "", status: "lead", assigned_id: "", notes: "", birthday: "" };
+  const blank = { type: defaultType || "customer", name: "", company: "", phone: "", email: "", address: "", tax_id: "", tags: "", status: "lead", assigned_id: "", notes: "", birthday: "", lifecycle_stage: "" };
   const [form, setForm] = useState(blank);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
@@ -140,9 +167,17 @@ function CrmContactDialog({ trigger, initial, onSaved, users, defaultType }) {
     setOpen(o);
     if (o) {
       setForm(initial
-        ? { ...initial, tags: (initial.tags || []).join(", "), assigned_id: initial.assigned_id || "", company: initial.company || "", phone: initial.phone || "", email: initial.email || "", address: initial.address || "", tax_id: initial.tax_id || "", notes: initial.notes || "", birthday: initial.birthday || "" }
+        ? { ...initial, tags: (initial.tags || []).join(", "), assigned_id: initial.assigned_id || "", company: initial.company || "", phone: initial.phone || "", email: initial.email || "", address: initial.address || "", tax_id: initial.tax_id || "", notes: initial.notes || "", birthday: initial.birthday || "", lifecycle_stage: initial.lifecycle_stage || "" }
         : { ...blank, type: defaultType || "customer" });
     }
+  };
+
+  // E2-03: reset stage when type changes so we never end up with a
+  // 'churned' supplier (invalid combo).
+  const changeType = (e) => {
+    const t = e.target.value;
+    const valid = new Set(stagesForType(t).map((s) => s.key));
+    setForm((f) => ({ ...f, type: t, lifecycle_stage: valid.has(f.lifecycle_stage) ? f.lifecycle_stage : "" }));
   };
 
   const save = async () => {
@@ -152,6 +187,7 @@ function CrmContactDialog({ trigger, initial, onSaved, users, defaultType }) {
       address: form.address, tax_id: form.tax_id, status: form.status,
       assigned_id: form.assigned_id || null, notes: form.notes, birthday: form.birthday,
       tags: form.tags ? form.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
+      lifecycle_stage: form.lifecycle_stage || "",  // E2-03
     };
     try {
       if (initial) await api.patch(`/contacts/${initial.id}`, payload);
@@ -170,11 +206,23 @@ function CrmContactDialog({ trigger, initial, onSaved, users, defaultType }) {
       <DialogContent className="border border-black rounded-none max-w-lg" data-testid="crm-contact-dialog">
         <DialogHeader><DialogTitle className="font-heading uppercase tracking-tight">{initial ? "Edit" : "New"} contact</DialogTitle></DialogHeader>
         <div className="grid grid-cols-2 gap-3">
-          <select className={inp} value={form.type} onChange={set("type")} data-testid="crm-contact-type">
+          <select className={inp} value={form.type} onChange={changeType} data-testid="crm-contact-type">
             {["customer", "dealer", "vendor"].map((t) => <option key={t} value={t}>{typeLabel(t)}</option>)}
           </select>
           <select className={inp} value={form.status} onChange={set("status")}>
             {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          {/* E2-03: lifecycle_stage select. Options change with type. */}
+          <select
+            className={`${inp} col-span-2`}
+            value={form.lifecycle_stage || ""}
+            onChange={set("lifecycle_stage")}
+            data-testid="crm-contact-lifecycle"
+          >
+            <option value="">Lifecycle stage — unset</option>
+            {stagesForType(form.type).map((s) => (
+              <option key={s.key} value={s.key}>{s.label}</option>
+            ))}
           </select>
           <input className={`${inp} col-span-2`} placeholder="Name *" value={form.name} onChange={set("name")} data-testid="crm-contact-name" />
           <input className={inp} placeholder="Company" value={form.company} onChange={set("company")} />
@@ -467,6 +515,14 @@ export default function CRM() {
                     value={c.status}
                     className={c.status === "active" ? "bg-brand-ink text-white" : c.status === "lead" ? "bg-brand-yellow text-black" : "bg-black/10 text-black"}
                   />
+                  {/* E2-03: lifecycle stage chip. Only renders when set. */}
+                  {stageMeta(c.type, c.lifecycle_stage) && (
+                    <Chip
+                      value={stageMeta(c.type, c.lifecycle_stage).label}
+                      className={stageMeta(c.type, c.lifecycle_stage).cls}
+                      data-testid={`crm-stage-${c.id}`}
+                    />
+                  )}
                   {(c.tags || []).slice(0, 2).map((tag) => (
                     <Chip key={tag} value={tag} className="bg-black/5 text-black" />
                   ))}

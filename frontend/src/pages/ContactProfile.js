@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
-import { Chip, EmptyState } from "../components/common";
+import { Chip, EmptyState, DexBadge } from "../components/common";
 import { money, typeLabel } from "../lib/format";
 import { toast } from "sonner";
 import {
@@ -168,7 +168,8 @@ export default function ContactProfile() {
       <div className="card-brutal p-6 mb-8" data-testid="relationship-card">
         <div className="flex items-center justify-between gap-4 flex-wrap mb-4">
           <div className="flex items-center gap-2">
-            <Sparkle size={18} weight="bold" className="text-brand-red" />
+            {/* E2-40: consistent persona voice marker on the AI card header. */}
+            <DexBadge />
             <h2 className="font-heading text-xl font-extrabold uppercase tracking-tight">Relationship Intelligence</h2>
           </div>
           <button

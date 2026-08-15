@@ -6798,6 +6798,10 @@ app.include_router(team_router)
 # Epic 2 Sprint 8 (E2-67): per-contact outstanding aggregation for CRM pills.
 from routers.crm import router as crm_router  # noqa: E402
 app.include_router(crm_router)
+# Epic 2 Sprint 5 (E2-35 + E2-41): Dex persona endpoints (in-flight
+# capture count + unified capture proxy).
+from routers.dex import router as dex_router  # noqa: E402
+app.include_router(dex_router)
 # FIX-006-B (S0-02): strict CORS allow-list — no more `allow_origin_regex=".*"`.
 # The old default of `*` combined with `allow_credentials=True` was echoed
 # back per-origin via `allow_origin_regex='.*'`, which sidesteps the CORS

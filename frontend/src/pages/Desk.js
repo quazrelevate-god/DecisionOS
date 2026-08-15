@@ -25,7 +25,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "../lib/api";
 import { toast } from "sonner";
-import { SkeletonCard } from "../components/common";
+import { SkeletonCard, DexBadge } from "../components/common";
 import { DecisionDialog } from "../components/DecisionDialog";
 import {
   Fire, Sun, Star, CheckCircle, ArrowClockwise, Spinner,

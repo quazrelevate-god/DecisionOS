@@ -10,6 +10,8 @@ import {
   ArrowRight, WarningCircle, LinkSimple, Broom,
 } from "@phosphor-icons/react";
 import { MicDictateButton } from "../components/MicDictateButton";
+// Epic 2 Sprint 5 (E2-40): persona voice marker on every AI response.
+import { DexBadge } from "../components/common";
 
 const DEEP_TYPES = {
   task: "Task", employee: "Employee", invoice: "Invoice", payment: "Payment",
@@ -164,7 +166,11 @@ function AiAnswer({ m, onGo, onAsk, currency }) {
   const r = m.resp || {};
   return (
     <div className="space-y-1" data-testid="brain-answer">
-      {r.answer && <div className="text-sm leading-relaxed whitespace-pre-wrap mb-3">{r.answer}</div>}
+      {r.answer && (
+        <div className="text-sm leading-relaxed whitespace-pre-wrap mb-3">
+          <DexBadge inline />{r.answer}
+        </div>
+      )}
       <KpiGrid kpis={r.kpis} currency={r.currency || currency} />
       <DataTable table={r.table} currency={r.currency || currency} />
       <Sources sources={r.sources} onGo={onGo} />

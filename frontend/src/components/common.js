@@ -159,6 +159,40 @@ export function SkeletonRow({ cols = 4 }) {
   );
 }
 
+// Epic 2 Sprint 5 (E2-40): consistent voice marker on every AI-generated
+// string. Small Sparkle icon + "DEX →" prefix in mono caps so users
+// know which responses came from the persona vs static app copy.
+// Wrap: <DexBadge inline /> for a compact chip that sits before the
+// response text; <DexBadge /> for the block-header variant used at the
+// top of AI panels (Ledger AI, Relationship Intelligence, Coach reports).
+export function DexBadge({ inline = false, className = "" }) {
+  if (inline) {
+    return (
+      <span
+        data-testid="dex-badge-inline"
+        className={`inline-flex items-center gap-1 mr-1.5 text-[10px] font-bold uppercase tracking-wider text-brand-red ${className}`}
+      >
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M12 2l2.4 5.6L20 10l-5.6 2.4L12 18l-2.4-5.6L4 10l5.6-2.4L12 2z"/>
+        </svg>
+        DEX →
+      </span>
+    );
+  }
+  return (
+    <div
+      data-testid="dex-badge-block"
+      className={`inline-flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-brand-ink text-white border border-black ${className}`}
+    >
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M12 2l2.4 5.6L20 10l-5.6 2.4L12 18l-2.4-5.6L4 10l5.6-2.4L12 2z"/>
+      </svg>
+      DEX →
+    </div>
+  );
+}
+
+
 export function SkeletonTable({ rows = 5, cols = 4 }) {
   return (
     <div

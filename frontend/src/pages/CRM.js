@@ -31,6 +31,7 @@ import { toast } from "sonner";
 import {
   Plus, MagnifyingGlass, PencilSimple, Trash, Phone, EnvelopeSimple,
   MapPin, Eye, AddressBook, Truck, UsersFour, Warning as WarningIcon,
+  ArrowsDownUp, CurrencyInr, Clock,
 } from "@phosphor-icons/react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
@@ -41,6 +42,53 @@ const CUSTOMER_TYPES = ["customer", "dealer"];
 const VENDOR_TYPES = ["vendor"];
 const STATUSES = ["lead", "active", "inactive"];
 const inp = "w-full border border-black px-3 py-2 text-sm font-mono focus:outline-none focus:shadow-brutal-sm";
+
+// Epic 2 Sprint 8 (E2-70): sort options for the CRM card grid. Founder
+// scans a lot of cards at once -- sorting by name (default), most-
+// recently-touched, outstanding balance desc, or last touched lets
+// them find who to call today without scrolling.
+const SORT_OPTIONS = [
+  { key: "name", label: "Name A-Z" },
+  { key: "recent", label: "Recently added" },
+  { key: "outstanding", label: "Outstanding (highest)" },
+  { key: "touched", label: "Last touched (oldest)" },
+];
+
+// Epic 2 Sprint 8 (E2-71): render "3 days ago" style timestamp from a
+// UTC ISO string. Small helper -- kept inline because it's the only
+// place that needs this style in the CRM card grid.
+function daysSince(iso) {
+  if (!iso) return null;
+  const then = new Date(iso).getTime();
+  if (!then || Number.isNaN(then)) return null;
+  const days = Math.floor((Date.now() - then) / 86400000);
+  if (days < 0) return null;
+  return days;
+}
+
+function touchedLabel(days) {
+  if (days == null) return null;
+  if (days === 0) return "Touched today";
+  if (days === 1) return "Touched yesterday";
+  if (days < 30) return `Touched ${days} days ago`;
+  if (days < 365) return `Touched ${Math.floor(days / 30)}mo ago`;
+  return `Touched ${Math.floor(days / 365)}y ago`;
+}
+
+// Epic 2 Sprint 8 (E2-67): Rs 4,80,000 style Indian formatting so the
+// outstanding pill reads the way an Indian owner writes numbers.
+function formatIndianCurrency(n) {
+  if (n == null || Number.isNaN(n)) return null;
+  if (n < 1) return null; // hide sub-rupee noise
+  const rounded = Math.round(n);
+  if (rounded < 1000) return `Rs ${rounded}`;
+  // Indian grouping: last three digits, then pairs.
+  const s = String(rounded);
+  const last3 = s.slice(-3);
+  const rest = s.slice(0, -3);
+  const grouped = rest.replace(/\B(?=(\d{2})+(?!\d))/g, ",");
+  return `Rs ${grouped},${last3}`;
+}
 
 // -----------------------------------------------------------------------------
 // Dialogs (identical shape to the old ContactsPanel — kept inline so /crm has
@@ -172,6 +220,9 @@ export default function CRM() {
   const [scope, setScope] = useState(complaintParam === "open" ? "complaints" : "all"); // all | customers | suppliers | mine | complaints
   const [status, setStatus] = useState("");
   const [q, setQ] = useState("");
+  // Epic 2 Sprint 8 (E2-70): sort state persists via URL param so a
+  // deep-link to /crm?sort=outstanding lands on the same view.
+  const [sort, setSort] = useState(searchParams.get("sort") || "name");
 
   const canManage = user?.role === "owner" || user?.role === "sales";
   const can360 = hasPerm(user, "finance");
@@ -181,19 +232,50 @@ export default function CRM() {
     queryFn: () => api.get(`/contacts?type=&status=${status}&q=${encodeURIComponent(q)}`).then((r) => r.data),
   });
   const { data: users } = useQuery({ queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data) });
-  // Epic 2 Sprint 6.5 (E2-52): fetch open complaints when the 'With
-  // complaints' chip is active; used to filter contacts by customer_id.
+  // Epic 2 Sprint 6.5 (E2-52) + Sprint 8 (E2-69): always fetch open
+  // complaints so we can (a) filter to 'With complaints', (b) render
+  // the red complaint dot on any card with N>=1 open complaints.
   const { data: openComplaints } = useQuery({
     queryKey: ["complaints-open"],
     queryFn: () => api.get("/complaints?status=open").then((r) => r.data),
-    enabled: scope === "complaints",
   });
+  // Epic 2 Sprint 8 (E2-67): per-contact outstanding totals for the
+  // Rs pill on each card. Server aggregates so we don't ship every
+  // invoice to the client.
+  const { data: outstandingMap } = useQuery({
+    queryKey: ["crm-outstanding"],
+    queryFn: () => api.get("/crm/outstanding").then((r) => r.data),
+    staleTime: 30_000,  // this doesn't change second-to-second
+  });
+
+  // Epic 2 Sprint 8 (E2-69): {contact_id: N open complaints}
+  const complaintCountByContact = useMemo(() => {
+    const map = {};
+    (openComplaints || []).forEach((c) => {
+      if (c.customer_id) map[c.customer_id] = (map[c.customer_id] || 0) + 1;
+    });
+    return map;
+  }, [openComplaints]);
 
   useEffect(() => {
     if (complaintParam === "open") setScope("complaints");
   }, [complaintParam]);
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["crm-contacts"] });
+
+  // Epic 2 Sprint 8 (E2-68): per-scope counts for the chip labels.
+  // Computed off the FULL list (not scope-filtered) so numbers match
+  // however the founder is currently filtered.
+  const scopeCounts = useMemo(() => {
+    const list = data || [];
+    return {
+      all: list.length,
+      customers: list.filter((c) => CUSTOMER_TYPES.includes(c.type)).length,
+      suppliers: list.filter((c) => VENDOR_TYPES.includes(c.type)).length,
+      mine: list.filter((c) => c.assigned_id === user?.id).length,
+      complaints: (openComplaints || []).filter((c) => c.customer_id).length,
+    };
+  }, [data, user?.id, openComplaints]);
 
   const contacts = useMemo(() => {
     let list = data || [];
@@ -204,9 +286,29 @@ export default function CRM() {
       const cids = new Set((openComplaints || []).map((c) => c.customer_id).filter(Boolean));
       list = list.filter((c) => cids.has(c.id));
     }
-    // "all" → no type filter
-    return list;
-  }, [data, scope, user?.id, openComplaints]);
+    // Epic 2 Sprint 8 (E2-70): sort AFTER filter so the user sees
+    // the biggest debtor (say) inside the current scope.
+    const outMap = outstandingMap || {};
+    const sorted = [...list];
+    if (sort === "name") {
+      sorted.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    } else if (sort === "recent") {
+      sorted.sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
+    } else if (sort === "outstanding") {
+      sorted.sort((a, b) => {
+        const oa = outMap[a.id] || {};
+        const ob = outMap[b.id] || {};
+        const va = (oa.receivables || 0) + (oa.payables || 0);
+        const vb = (ob.receivables || 0) + (ob.payables || 0);
+        return vb - va;
+      });
+    } else if (sort === "touched") {
+      // Oldest first -- these are the relationships going cold.
+      sorted.sort((a, b) => String(a.updated_at || a.created_at || "")
+        .localeCompare(String(b.updated_at || b.created_at || "")));
+    }
+    return sorted;
+  }, [data, scope, user?.id, openComplaints, sort, outstandingMap]);
 
   const remove = async (id) => {
     if (!window.confirm("Delete this contact permanently?")) return;
@@ -219,14 +321,15 @@ export default function CRM() {
     }
   };
 
+  // Epic 2 Sprint 8 (E2-68): every chip label carries its live count so
+  // the founder scans "Customers 12 / Suppliers 8 / With Complaints 3"
+  // without opening each chip to check.
   const SCOPES = [
-    { key: "all", label: t("crm.all"), icon: UsersFour },
-    { key: "customers", label: L.customer_plural, icon: AddressBook },
-    { key: "suppliers", label: L.vendor_plural, icon: Truck },
-    { key: "mine", label: t("crm.mine"), icon: null },
-    // Epic 2 Sprint 6.5 (E2-52): 'With complaints' chip. Only lights up
-    // when the Desk Trends card sends the user here via ?complaint=open.
-    { key: "complaints", label: "With Complaints", icon: WarningIcon },
+    { key: "all", label: t("crm.all"), icon: UsersFour, count: scopeCounts.all },
+    { key: "customers", label: L.customer_plural, icon: AddressBook, count: scopeCounts.customers },
+    { key: "suppliers", label: L.vendor_plural, icon: Truck, count: scopeCounts.suppliers },
+    { key: "mine", label: t("crm.mine"), icon: null, count: scopeCounts.mine },
+    { key: "complaints", label: "With Complaints", icon: WarningIcon, count: scopeCounts.complaints },
   ];
 
   return (
@@ -261,7 +364,7 @@ export default function CRM() {
         )}
       </PageHeader>
 
-      {/* Filter chips + search */}
+      {/* Filter chips + search + sort */}
       <div className="flex flex-col lg:flex-row lg:items-center gap-3 mb-6">
         <div className="flex border border-black overflow-x-auto" data-testid="crm-scope-chips">
           {SCOPES.map((s) => (
@@ -271,7 +374,17 @@ export default function CRM() {
               data-testid={`crm-scope-${s.key}`}
               className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border-r border-black last:border-r-0 transition-colors ${scope === s.key ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}
             >
-              {s.icon && <s.icon size={16} weight="bold" />} {s.label}
+              {s.icon && <s.icon size={16} weight="bold" />}
+              <span>{s.label}</span>
+              {/* E2-68: live count per chip -- always render (0 is signal too) */}
+              <span
+                className={`text-[11px] font-mono px-1.5 py-0.5 rounded ${
+                  scope === s.key ? "bg-white/20 text-white" : "bg-black/10 text-black"
+                }`}
+                data-testid={`crm-scope-count-${s.key}`}
+              >
+                {s.count}
+              </span>
             </button>
           ))}
         </div>
@@ -294,6 +407,20 @@ export default function CRM() {
           <option value="">{t("crm.all_statuses")}</option>
           {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
+        {/* E2-70: sort dropdown. Default = name A-Z. */}
+        <div className="flex items-center border border-black bg-white px-3">
+          <ArrowsDownUp size={16} weight="bold" className="text-muted-foreground" />
+          <select
+            data-testid="crm-sort"
+            value={sort}
+            onChange={(e) => setSort(e.target.value)}
+            className="py-2 px-2 text-sm font-mono focus:outline-none bg-transparent"
+          >
+            {SORT_OPTIONS.map((o) => (
+              <option key={o.key} value={o.key}>{o.label}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Card grid */}
@@ -307,13 +434,29 @@ export default function CRM() {
       <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
         {contacts.map((c) => {
           const isCustomer = CUSTOMER_TYPES.includes(c.type);
+          // Epic 2 Sprint 8 (E2-67 / E2-69 / E2-71): per-card derived data.
+          const outstanding = outstandingMap?.[c.id];
+          const receivablesTxt = formatIndianCurrency(outstanding?.receivables || 0);
+          const payablesTxt = formatIndianCurrency(outstanding?.payables || 0);
+          const complaintCount = complaintCountByContact[c.id] || 0;
+          const touched = touchedLabel(daysSince(c.updated_at || c.created_at));
           return (
             <div
               key={c.id}
               data-testid={`crm-card-${c.id}`}
-              className="card-brutal p-5 shadow-hover cursor-pointer"
+              className="card-brutal p-5 shadow-hover cursor-pointer relative"
               onClick={() => can360 && navigate(`/contacts/${c.id}`)}
             >
+              {/* E2-69: red dot when this customer has open complaints. */}
+              {complaintCount > 0 && (
+                <div
+                  data-testid={`crm-complaint-dot-${c.id}`}
+                  title={`${complaintCount} open complaint${complaintCount === 1 ? "" : "s"}`}
+                  className="absolute -top-1.5 -right-1.5 min-w-[22px] h-[22px] px-1.5 flex items-center justify-center bg-brand-red text-white text-[11px] font-bold border border-black shadow-brutal-sm"
+                >
+                  {complaintCount}
+                </div>
+              )}
               <div className="flex items-start justify-between gap-2 mb-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <Chip
@@ -370,11 +513,47 @@ export default function CRM() {
                 {c.email && <p className="flex items-center gap-2 break-all"><EnvelopeSimple size={14} weight="bold" className="text-muted-foreground" /> {c.email}</p>}
                 {c.address && <p className="flex items-center gap-2"><MapPin size={14} weight="bold" className="text-muted-foreground" /> {c.address}</p>}
               </div>
-              {c.assigned_id && users && (
-                <p className="mt-3 text-[11px] uppercase tracking-wider text-muted-foreground">
-                  Owner: {users.find((u) => u.id === c.assigned_id)?.name || "—"}
-                </p>
+              {/* E2-67: outstanding pill. Only renders when there's an
+                  actual number to show -- keeps healthy cards clean. */}
+              {(receivablesTxt || payablesTxt) && (
+                <div className="mt-3 flex flex-wrap items-center gap-2" data-testid={`crm-outstanding-${c.id}`}>
+                  {receivablesTxt && (
+                    <span
+                      className="inline-flex items-center gap-1 px-2 py-1 border border-black bg-brand-red/10 text-brand-red text-xs font-mono font-bold"
+                      title="They owe you (unpaid customer invoices)"
+                    >
+                      <CurrencyInr size={12} weight="bold" /> {receivablesTxt} owed
+                    </span>
+                  )}
+                  {payablesTxt && (
+                    <span
+                      className="inline-flex items-center gap-1 px-2 py-1 border border-black bg-brand-yellow/40 text-black text-xs font-mono font-bold"
+                      title="You owe them (unpaid supplier bills)"
+                    >
+                      <CurrencyInr size={12} weight="bold" /> {payablesTxt} to pay
+                    </span>
+                  )}
+                  {outstanding?.oldest_days != null && outstanding.oldest_days > 30 && (
+                    <span className="text-[11px] text-brand-red font-mono">
+                      · oldest {outstanding.oldest_days}d
+                    </span>
+                  )}
+                </div>
               )}
+              {/* E2-71: last-touched hint so relationships going cold surface. */}
+              <div className="mt-3 flex items-center justify-between gap-2 text-[11px] uppercase tracking-wider text-muted-foreground">
+                {c.assigned_id && users && (
+                  <span>Owner: {users.find((u) => u.id === c.assigned_id)?.name || "—"}</span>
+                )}
+                {touched && (
+                  <span
+                    className="flex items-center gap-1 font-mono normal-case tracking-normal"
+                    data-testid={`crm-touched-${c.id}`}
+                  >
+                    <Clock size={12} weight="bold" /> {touched}
+                  </span>
+                )}
+              </div>
             </div>
           );
         })}

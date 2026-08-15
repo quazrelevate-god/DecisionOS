@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import {
   ArrowLeft, Phone, EnvelopeSimple, MapPin, Receipt, CurrencyCircleDollar,
   Warning, Truck, TrendUp, Brain, CheckSquare, Buildings, Sparkle, Heart, ShieldWarning,
-  Note, Clock, ChatCircleDots, WhatsappLogo, Handshake, Flow,
+  Note, Clock, ChatCircleDots, WhatsappLogo, Handshake, FlowArrow,
 } from "@phosphor-icons/react";
 
 // Epic 2 Sprint 1 (E2-08): activity kind -> icon + colour. Small map
@@ -262,7 +262,7 @@ export default function ContactProfile() {
       {/* E2-07: full workflow feed for this contact. Every workflow --
           not just pending_deliveries -- so completed/cancelled ones are
           also visible in context. */}
-      <Section icon={Flow} title="Workflows" count={(workflows || []).length}>
+      <Section icon={FlowArrow} title="Workflows" count={(workflows || []).length}>
         {(!workflows || workflows.length === 0) ? (
           <p className="text-sm text-muted-foreground">No workflows linked yet.</p>
         ) : (

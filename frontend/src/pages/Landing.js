@@ -1,24 +1,13 @@
 import { Link } from "react-router-dom";
+import { Wordmark } from "../components/Wordmark";
 import {
   Sparkle, Microphone, TreeStructure, Brain, ChartLineUp, Package,
   Storefront, UsersThree, Gear, ArrowRight, CheckCircle, WarningCircle, Lightning,
 } from "@phosphor-icons/react";
 
-const Logo = ({ size = "md" }) => {
-  const box = size === "sm" ? "w-8 h-8" : "w-9 h-9";
-  const dtext = size === "sm" ? "text-lg" : "text-xl";
-  const word = size === "sm" ? "text-xl" : "text-2xl";
-  return (
-    <div className="flex items-center gap-2.5">
-      <div className={`${box} bg-brand-600 rounded-lg flex items-center justify-center shrink-0`}>
-        <span className={`font-logo font-black text-white ${dtext} leading-none`}>D</span>
-      </div>
-      <span className={`font-logo font-black ${word} tracking-tight uppercase leading-none`}>
-        <span className="text-white">Decision</span><span className="text-brand-600">OS</span>
-      </span>
-    </div>
-  );
-};
+// The landing page is dark at every breakpoint and in both themes, so the
+// wordmark always needs its plate here.
+const Logo = ({ size = "md" }) => <Wordmark size={size === "sm" ? 18 : 22} plate />;
 
 const NavBar = () => (
   <header className="sticky top-0 z-50 bg-[#16161a]/90 backdrop-blur-md border-b border-white/10">

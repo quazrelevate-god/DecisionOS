@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../hooks/useTheme";
 import api, { formatApiError } from "../lib/api";
+import { Wordmark } from "../components/Wordmark";
 import { Microphone, DeviceMobile, Sun, MoonStars } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
@@ -187,10 +188,9 @@ export default function Login() {
       </button>
       {/* Left brand panel */}
       <div className="hidden lg:flex flex-col justify-between bg-brand-ink text-white p-12 border-r border-black">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-brand-600 rounded-lg flex items-center justify-center"><span className="font-logo font-black text-white text-xl">D</span></div>
-          <span className="font-logo font-black text-2xl tracking-tight uppercase leading-none"><span className="text-white">Decision</span><span className="text-brand-600">OS</span></span>
-        </div>
+        {/* The hero panel is dark in both themes, so `dark:` never fires here
+            and the plate has to be explicit. */}
+        <Wordmark size={24} plate />
         <div>
           <p className="label-mono text-brand-600 mb-4">The operational brain for founder-led SMEs</p>
           <h1 className="font-heading text-5xl xl:text-6xl font-black uppercase tracking-tighter leading-[0.95]">
@@ -206,9 +206,8 @@ export default function Login() {
       {/* Right form */}
       <div className="flex items-center justify-center p-6 lg:p-12">
         <div className="w-full max-w-md">
-          <div className="lg:hidden flex items-center gap-2 mb-8">
-            <div className="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center"><span className="font-logo font-black text-white">D</span></div>
-            <span className="font-logo font-black text-xl tracking-tight uppercase leading-none"><span className="text-foreground">Decision</span><span className="text-brand-600">OS</span></span>
+          <div className="lg:hidden mb-8">
+            <Wordmark size={20} />
           </div>
 
           <h2 className="font-heading text-3xl font-black uppercase tracking-tighter mb-1">Sign in</h2>

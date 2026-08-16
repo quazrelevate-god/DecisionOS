@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
+import { Wordmark } from "../components/Wordmark";
 import { BasicsFlow } from "./onboarding/BasicsFlow";
 import { WebsiteIntel } from "./onboarding/WebsiteIntel";
 import { VoiceInterview } from "./onboarding/VoiceInterview";
@@ -48,10 +49,7 @@ export default function Signup() {
       {/* Top bar */}
       <header className="flex items-center justify-between px-6 lg:px-12 py-5 border-b border-black/10">
         <Link to="/" className="flex items-center gap-2.5" data-testid="signup-logo">
-          <div className="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center"><span className="font-logo font-black text-white">D</span></div>
-          <span className="font-logo font-black text-lg tracking-tight uppercase leading-none hidden sm:inline">
-            <span className="text-foreground">Decision</span><span className="text-brand-600">OS</span>
-          </span>
+          <Wordmark size={18} />
         </Link>
         <div className="flex items-center gap-6" data-testid="signup-phase-bar">
           {PHASES.map((p, i) => (

@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../hooks/useTheme";
 import { hasPerm } from "../lib/perms";
+import { Wordmark } from "./Wordmark";
 import { toast } from "sonner";
 import api from "../lib/api";
 import { timeAgo } from "../lib/format";
@@ -78,18 +79,11 @@ const NAV = [
 // full wordmark plus four 44px controls at 390px (it measured 407 > 390 once
 // the §5.1 touch floor landed), and §5.2.1 forbids clipping at the right edge.
 // Interim — MPWA-03 rebuilds this header down to two controls.
-const Logo = ({ markOnly = false }) => (
-  <div className="flex items-center gap-2.5">
-    <div className="w-9 h-9 bg-brand-600 rounded-lg flex items-center justify-center shrink-0">
-      <span className="font-logo font-black text-white text-xl leading-none">D</span>
-    </div>
-    {!markOnly && (
-      <span className="font-logo font-black text-2xl tracking-tight uppercase leading-none">
-        <span className="text-foreground">Decision</span><span className="text-brand-600">OS</span>
-      </span>
-    )}
-  </div>
-);
+// The supplied lockup, at two sizes. `markOnly` used to mean "the D tile
+// without the words" — there is no separate mark in the artwork we were given,
+// only the full horizontal lockup, so it now means "the compact size" and the
+// mobile app bar shows the whole wordmark rather than a lone letter.
+const Logo = ({ markOnly = false }) => <Wordmark size={markOnly ? 15 : 22} />;
 
 export default function Layout({ children }) {
   const { user, tenant, logout } = useAuth();

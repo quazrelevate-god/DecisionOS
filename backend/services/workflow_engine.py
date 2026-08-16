@@ -438,7 +438,24 @@ async def advance(
     # WE-09: atomic transition via find_one_and_update on stage_version.
     # If the workflow was already advanced by another writer, the CAS
     # filter misses and we exit cleanly with already_advanced=True.
-    prev_version = int(wf.get("stage_version") or 0)
+    #
+    # Edge case (from we_epic5_edge_cases case_11): a legacy or
+    # corrupted document may carry stage_version: None on disk. The
+    # int(...) coercion below gives us 0 in Python, but a Mongo query
+    # for {stage_version: 0} does NOT match {stage_version: null}.
+    # So when prev_version resolves to 0, we widen the filter to
+    # accept the field being 0, absent, or null -- three equivalent
+    # states for "never advanced by the engine". Post-first-advance
+    # the field is always a real integer.
+    raw_version = wf.get("stage_version")
+    prev_version = int(raw_version) if isinstance(raw_version, int) else 0
+    if prev_version == 0:
+        version_match = {"$in": [0, None]}
+        # Note: {$in: [0, None]} matches missing OR null OR 0. Explicit
+        # $exists:False is unnecessary -- Mongo's $in with null covers
+        # absent fields too.
+    else:
+        version_match = prev_version
     hist_entry = {
         "stage": target_stage, "note": note or "",
         "by": actor_id, "by_name": actor_name or "",
@@ -449,7 +466,7 @@ async def advance(
         hist_entry["reason"] = reason.strip()
     updated = await db.workflows.find_one_and_update(
         {"id": workflow_id, "tenant_id": tenant_id,
-         "stage_version": prev_version, "stage": current_stage},
+         "stage_version": version_match, "stage": current_stage},
         {"$set": {"stage": target_stage, "stage_version": prev_version + 1,
                   "updated_at": now_iso()},
          "$push": {"history": hist_entry}},

@@ -90,7 +90,9 @@ const ROUTES = [
   // the redirect target is clean.
   { path: '/inbox?scope=morning', label: 'Desk · morning brief', primary: true },
   { path: '/inbox?scope=week', label: 'Desk · this week', primary: true },
-  { path: '/brief', label: 'CEO Brief (desktop) / redirect (mobile)' },
+  // Epic 2 Sprint 6 (E2-47) + MPWA-12c: /brief is a redirect for every viewport
+  // now, so landing elsewhere is the correct behaviour rather than a leak.
+  { path: '/brief', label: 'Brief (redirects to the Desk)', redirects: true },
   { path: '/my-work', label: 'My Work', primary: true },
   { path: '/my-work?view=leave', label: 'My Work · leave' },
   { path: '/my-work?view=workflows', label: 'My Work · workflows' },
@@ -553,9 +555,16 @@ async function settle(page) {
   await page
     .waitForFunction(() => document.querySelectorAll('[data-skeleton]').length === 0, { timeout: 10000 })
     .catch(() => {});
-  // Kill animations so screenshots are deterministic.
+  // Kill animations so screenshots are deterministic — and with them the live
+  // counters, which are not layout. The notification badge polls every 20s and
+  // its value changed between two runs of IDENTICAL code, moving 289px in the
+  // header of whichever route happened to straddle a refetch. Hiding it removes
+  // a whole class of phantom desktop diffs; anything that actually reflows when
+  // the badge appears is still caught, because the badge is absolutely
+  // positioned and reserves no space.
   await page.addStyleTag({
-    content: `*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}`,
+    content: `*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}
+              [data-testid="notif-count"],[data-testid="dock-more-badge"]{visibility:hidden!important}`,
   }).catch(() => {});
   // Webfonts (Chivo/Geist/IBM Plex Mono) arrive via an @import chain, so a
   // bare `document.fonts.ready` resolves *before* that CSS is parsed — no font
@@ -696,7 +705,7 @@ async function desktopBaseline(browser, report) {
       // screenshot would silently compare two different pages and report the
       // difference as a layout move.
       const at = new URL(page.url()).pathname;
-      if (at !== route.path.split('?')[0]) {
+      if (!route.redirects && at !== route.path.split('?')[0]) {
         report.desktop.diffs.push({
           route: route.path, viewport: vp.name,
           detail: `redirected to ${at} on desktop — a mobile-only redirect leaked above lg`,

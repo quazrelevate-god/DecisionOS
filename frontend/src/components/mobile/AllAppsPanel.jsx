@@ -32,7 +32,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
-  CalendarBlank, AddressBook, UsersThree, Sparkle, BookOpen, Gauge,
+  CalendarBlank, AddressBook, Sparkle, BookOpen, Gauge,
   Bell, GearSix, Translate, MoonStars, Sun, SignOut, X,
   MagnifyingGlass, ArrowRight,
 } from "@phosphor-icons/react";
@@ -115,12 +115,19 @@ function buildTiles({ user, t, counts, live }) {
       live: live.crm,
     },
     { key: "notifications", to: "/notifications", label: t("nav.notifications", "Notifications"), icon: Bell, size: "small", badge: counts.notifications },
-    { key: "team", to: "/team", label: t("nav.team", "Team"), icon: UsersThree, size: "small", perm: "team_manage" },
+    // Team has no tile below lg. The roster now lives inside Ops as the member
+    // grid, with Access / Invite / Mark-absent on each member's card, so a
+    // second door to the same people would be the "nothing reachable from two
+    // places" rule (§8) broken on purpose. The /team route still resolves for
+    // anyone holding a link, and the desktop sidebar keeps its Team entry —
+    // that page is untouched and is still the fuller surface on a big screen.
     {
       key: "operating-score",
       to: "/operating-score",
-      // Not t("nav.ops") — that bundle says "Ops", which is jargon for a tile.
-      label: t("allapps.operating_score", "Operating Score"),
+      // Was "Operating Score" here on the reasoning that "Ops" is jargon for a
+      // tile. Overridden deliberately: the screen is now named Ops everywhere,
+      // and a tile that disagrees with the nav and the page is worse than terse.
+      label: t("nav.ops", "Ops"),
       icon: Gauge,
       size: "wide",
       ownerOnly: true,

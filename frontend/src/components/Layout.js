@@ -1,11 +1,12 @@
 import { useEffect, useState, useMemo } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../hooks/useTheme";
 import { hasPerm } from "../lib/perms";
 import { Wordmark } from "./Wordmark";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import api from "../lib/api";
 import { timeAgo } from "../lib/format";
@@ -83,7 +84,27 @@ const NAV = [
 // without the words" — there is no separate mark in the artwork we were given,
 // only the full horizontal lockup, so it now means "the compact size" and the
 // mobile app bar shows the whole wordmark rather than a lone letter.
-const Logo = ({ markOnly = false }) => <Wordmark size={markOnly ? 15 : 22} />;
+// `self-center` overrides the `self-start` the Wordmark carries for its plate.
+// That rule exists so a column-flex parent cannot stretch the plate into a slab;
+// in the app bar it did something else — it top-aligned a 15px logo inside a
+// 56px row, so the wordmark sat on the viewport edge while the bell was
+// centred. twMerge resolves the conflict in favour of the caller.
+const Logo = ({ markOnly = false, tone }) => (
+  <Wordmark size={markOnly ? 15 : 22} tone={tone} className="self-center" />
+);
+
+// Routes whose mobile screen owns its own top edge.
+//
+// The default chrome is a bordered, blurred bar that pushes content down. An
+// immersive screen opens on a full-bleed dark hero instead, and a bar sitting
+// above it would put a seam exactly where the design wants none. So the bar is
+// not removed — losing the bell would cost a real affordance — it is lifted off
+// the flow and laid over the hero, and `main` gives up the padding that would
+// otherwise inset the hero from three edges.
+//
+// The dock and the Dex FAB are untouched: they are `fixed` at z-[10000] and
+// were never part of this flow.
+const IMMERSIVE_MOBILE_ROUTES = new Set(["/operating-score"]);
 
 export default function Layout({ children }) {
   const { user, tenant, logout } = useAuth();
@@ -95,6 +116,8 @@ export default function Layout({ children }) {
     return !n.perm || hasPerm(user, n.perm);
   }), [user]);
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const immersive = IMMERSIVE_MOBILE_ROUTES.has(pathname);
   const { isDark, toggle: toggleTheme } = useTheme();
   const [profileOpen, setProfileOpen] = useState(false);
   // MPWA-03 mobile navigation state.
@@ -147,7 +170,16 @@ export default function Layout({ children }) {
         <PopoverTrigger asChild>
           <button data-testid="notif-bell"
             aria-label={count > 0 ? `Notifications, ${count} need you` : "Notifications"}
-            className={`relative flex items-center justify-center border border-black hover:bg-brand-ink hover:text-white transition-colors ${mobile ? "w-12 h-12" : "w-10 h-10"}`}>
+            className={cn(
+              "relative flex items-center justify-center transition-colors",
+              mobile ? "w-12 h-12" : "w-10 h-10",
+              // On the immersive hero the bordered chip reads as a bright slab
+              // punched into the dark. Same 48px target, same badge — just the
+              // icon, in white, sitting in the hero rather than on it.
+              mobile && immersive
+                ? "rounded-full text-white border-0 bg-white/0 active:bg-white/10"
+                : "border border-black hover:bg-brand-ink hover:text-white"
+            )}>
             <Bell size={mobile ? 22 : 18} weight="bold" />
             {count > 0 && (
               <span data-testid="notif-count" className="absolute -top-2 -right-2 bg-brand-600 text-white text-[10px] min-w-5 h-5 px-1 flex items-center justify-center border border-black font-bold">
@@ -280,8 +312,9 @@ export default function Layout({ children }) {
         </div>
       </aside>
 
-      {/* Main */}
-      <div className="flex-1 flex flex-col min-w-0">
+      {/* Main — `relative` so an immersive screen's overlaid header has a
+          positioning context that is this column, not the page. */}
+      <div className="flex-1 flex flex-col min-w-0 relative">
         {/* Desktop top bar */}
         <header className="hidden lg:flex h-16 border-b border-border bg-background/70 backdrop-blur-xl items-center justify-between px-8 sticky top-0 z-10">
           <div className="flex items-center gap-3">
@@ -307,8 +340,17 @@ export default function Layout({ children }) {
             entirely — nothing should be reachable from two places (§8).
             MPWA-02: min-h + top inset so nothing sits under the status bar in
             iOS standalone, where there is no browser chrome above us. */}
-        <header className="lg:hidden min-h-14 border-b border-border bg-background/80 backdrop-blur-xl flex items-center justify-between gap-2 px-chrome-safe pt-safe sticky top-0 z-20">
-          <Logo markOnly />
+        <header className={cn(
+          "lg:hidden min-h-14 flex items-center justify-between gap-2 px-chrome-safe pt-safe",
+          immersive
+            // Over the hero, not above it: no border, no blur, no background —
+            // the seam is the thing being removed. Absolute rather than fixed so
+            // it scrolls away with the hero it belongs to, and z-30 keeps it
+            // under the dock's z-[10000].
+            ? "absolute inset-x-0 top-0 z-30 text-white"
+            : "border-b border-border bg-background/80 backdrop-blur-xl sticky top-0 z-20"
+        )}>
+          <Logo markOnly tone={immersive ? "reversed" : undefined} />
           <div className="flex items-center gap-touch-gap shrink-0">
             <Bellicon mobile />
           </div>
@@ -316,7 +358,12 @@ export default function Layout({ children }) {
 
         {/* MPWA-02: pb-dock clears the tab bar (and, from MPWA-03, the floating
             dock) plus the home indicator, so the last row is never trapped. */}
-        <main className="flex-1 p-4 lg:p-8 pb-dock lg:pb-8 px-gutter-safe overflow-x-hidden app-canvas">{children}</main>
+        <main className={cn(
+          "flex-1 lg:p-8 lg:pb-8 overflow-x-hidden app-canvas",
+          // An immersive screen is full-bleed below lg and pays for its own
+          // bottom clearance, so it takes neither the gutters nor pb-dock.
+          immersive ? "p-0 lg:px-8" : "p-4 pb-dock px-gutter-safe"
+        )}>{children}</main>
       </div>
 
       {/* MPWA-03 — mobile navigation.

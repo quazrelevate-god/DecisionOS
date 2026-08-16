@@ -567,6 +567,15 @@
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: hsl(240 6% 82%); border: 2px solid transparent; background-clip: padding-box; border-radius: 8px; }
 
+/* For scrollers that are a surface rather than a document — the Ops sheet — the
+   10px bar above claims a gutter inside the rounded corners and draws a line up
+   the edge of the card. Touch scrollbars are overlays and cost nothing, so this
+   only ever removes chrome the phone was not going to draw anyway.
+   Plain CSS, not @layer utilities: the JIT tree-shakes custom rules out of that
+   layer, which is what silently dropped the type scale. */
+.scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
+.scrollbar-none::-webkit-scrollbar { width: 0; height: 0; display: none; }
+
 @keyframes pulse-ring {
     0% { box-shadow: 0 0 0 0 hsl(var(--destructive) / .5); }
     70% { box-shadow: 0 0 0 22px hsl(var(--destructive) / 0); }

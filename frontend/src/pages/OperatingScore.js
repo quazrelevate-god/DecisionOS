@@ -2,6 +2,8 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import api from "../lib/api";
+import { useIsMobile } from "../hooks/useIsMobile";
+import OpsMobile from "./mobile/OpsMobile";
 import { PageHeader } from "../components/common";
 import { Gauge, Lightning, CurrencyCircleDollar, TrendUp, ChatCenteredDots, Trophy, Sparkle, CaretRight } from "@phosphor-icons/react";
 
@@ -15,6 +17,10 @@ const CATS = [
 const scoreColor = (v) => v == null ? "text-black/30" : v >= 70 ? "text-green-600" : v >= 40 ? "text-amber-600" : "text-brand-600";
 
 export default function OperatingScore() {
+  // Rebuilt below lg as a fixed hero + overlay sheet; desktop is untouched.
+  // Declared before any other hook so the branch cannot reorder the ones below.
+  const isMobile = useIsMobile();
+
   const { data, isLoading } = useQuery({
     queryKey: ["operating-score"],
     queryFn: () => api.get("/operating-score").then((r) => r.data),
@@ -25,6 +31,10 @@ export default function OperatingScore() {
     [data]
   );
 
+  // Below every hook, so the mobile branch can never reorder them. OpsMobile
+  // re-reads the same query key, which TanStack dedupes to one request.
+  if (isMobile) return <OpsMobile />;
+
   if (isLoading || !data) return <div className="font-mono text-sm py-20 text-center">Computing operating score…</div>;
 
   const { company, stats } = data;
@@ -34,7 +44,7 @@ export default function OperatingScore() {
 
   return (
     <div>
-      <PageHeader eyebrow="How well the business is running" title="Operating Score" />
+      <PageHeader eyebrow="How well the business is running" title="Ops" />
 
       {!enough ? (
         <div className="card-brutal p-8 mb-8 flex flex-col lg:flex-row items-center gap-8" data-testid="operating-overall">

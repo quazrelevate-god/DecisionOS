@@ -42,8 +42,24 @@ const INK_H = 269;
  * @param {boolean} [plate]  force the light plate, for surfaces that are dark in
  *                           BOTH themes (the Landing nav, the Login hero) where
  *                           a `dark:` variant never fires
+ * @param {"ink"|"reversed"} [tone]
+ *   "reversed" renders the lockup in solid white, for dark surfaces that want
+ *   the logo *in* them rather than on a plate (the Ops hero).
+ *
+ *   This is not the failed trick described above. `invert(1) hue-rotate(180deg)`
+ *   tries to keep two colours and mangles one of them — #0000D9 comes out pale
+ *   lavender. `brightness(0) invert(1)` instead collapses to a SINGLE colour:
+ *   brightness(0) takes every pixel to black while leaving alpha alone, then
+ *   invert(1) takes that black to white. Nothing is approximated, because
+ *   nothing is trying to survive: this is the one-colour reversed lockup, the
+ *   ordinary companion to a two-colour positive one, and the letterforms and
+ *   their anti-aliasing come through exactly as supplied.
+ *
+ *   It is still not a substitute for a real reversed asset with the blue intact.
+ *   When one arrives, prefer it here and delete the filter.
  */
-export function Wordmark({ size = 20, plate = false, className }) {
+export function Wordmark({ size = 20, plate = false, tone = "ink", className }) {
+  const reversed = tone === "reversed";
   const scale = size / INK_H;
   const win = { width: Math.round(INK_W * scale), height: Math.round(INK_H * scale) };
   const img = {
@@ -52,6 +68,7 @@ export function Wordmark({ size = 20, plate = false, className }) {
     marginLeft: -Math.round(INK_X * scale),
     marginTop: -Math.round(INK_Y * scale),
     maxWidth: "none",   // the app sets img{max-width:100%}; that would rescale it
+    ...(reversed ? { filter: "brightness(0) invert(1)" } : null),
   };
 
   return (
@@ -68,9 +85,13 @@ export function Wordmark({ size = 20, plate = false, className }) {
         // and left "Decision" invisible on it — the exact failure the plate is
         // here to prevent. The ramp step is fixed in both themes, which is what
         // a plate needs.
-        plate
-          ? "rounded-lg bg-neutral-50 px-2.5 py-2"
-          : "dark:rounded-lg dark:bg-neutral-50 dark:px-2.5 dark:py-2",
+        // A reversed lockup needs no plate — being legible on dark is the whole
+        // point of it, and a plate in both themes is what it exists to avoid.
+        reversed
+          ? null
+          : plate
+            ? "rounded-lg bg-neutral-50 px-2.5 py-2"
+            : "dark:rounded-lg dark:bg-neutral-50 dark:px-2.5 dark:py-2",
         className
       )}
     >

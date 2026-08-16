@@ -188,7 +188,9 @@ const DESTINATIONS = [
   // /my-work moved to the dock in MPWA-12c — asserted as a 1-tap below.
   ['/calendar', 'allapps-tile-calendar'],
   ['/crm', 'allapps-tile-crm'],
-  ['/team', 'allapps-tile-team'],
+  // /team has no tile below lg any more — the roster moved into Ops as the
+  // member grid, so a Team tile would be a second door to the same people.
+  // Reaching the team is asserted below, through Ops, instead.
   ['/coach', 'allapps-tile-coach'],
   ['/journal', 'allapps-tile-journal'],
   ['/operating-score', 'allapps-tile-operating-score'],
@@ -205,6 +207,46 @@ for (const [route, testid] of DESTINATIONS) {
   await page.waitForTimeout(700);
   const at = new URL(page.url()).pathname;
   check(`${route} reachable in 2 taps`, at === route, `landed on ${at}`);
+}
+
+// ------------------------------------------- the team moved inside Ops
+// Removing the Team tile only counts if the people it reached are still
+// reachable. Assert both halves: the tile is gone, and the roster answers on
+// Ops with the three management actions on each member.
+await page.goto(`${BASE}/inbox`, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('[data-testid="dock-more"]', { timeout: 8000 });
+await page.waitForTimeout(300);
+await page.locator('[data-testid="dock-more"]').click();
+await page.waitForTimeout(500);
+check(
+  'Team has no tile below lg — one door to the roster, not two',
+  (await page.locator('[data-testid="allapps-tile-team"]').count()) === 0,
+  `${await page.locator('[data-testid="allapps-tile-team"]').count()} tile(s)`
+);
+await page.keyboard.press('Escape');
+
+await page.goto(`${BASE}/operating-score`, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('[data-testid="ops-employees"]', { timeout: 12000 }).catch(() => {});
+const tiles = await page.locator('[data-testid^="ops-emp-"]').count();
+check('Ops carries the roster as a grid', tiles > 0, `${tiles} member box(es)`);
+
+if (tiles > 0) {
+  await page.locator('[data-testid^="ops-emp-"]').first().click();
+  await page.waitForSelector('[data-testid="member-card"]', { timeout: 8000 });
+  check('a member box opens the expanded card', true, 'member-card visible');
+  for (const [pill, label] of [['access', 'Access'], ['invite', 'Invite'], ['absent', 'Mark absent']]) {
+    check(
+      `the card carries the ${label} pill`,
+      (await page.locator(`[data-testid="member-pill-${pill}"]`).count()) === 1
+    );
+  }
+  // The four tiles that were asked to be dropped must not come back.
+  const cardText = (await page.locator('[data-testid="member-card"]').innerText()).toLowerCase();
+  for (const gone of ['proof', 'plans used', 'photos', 'voice']) {
+    check(`the card omits "${gone}"`, !cardText.includes(gone));
+  }
+  await page.locator('[data-testid="member-card-close"]').click();
+  await page.waitForTimeout(300);
 }
 
 // --------------------------------------------- MPWA-12c · the promoted slot

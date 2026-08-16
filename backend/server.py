@@ -6110,6 +6110,17 @@ async def fixup_demo_tenant():
 async def _bootstrap():
     """Idempotent bootstrap (indexes, migrations, demo seed). Runs in the background so it
     never blocks the app from becoming ready, and never crashes the process on failure."""
+    # S5-05 audit fix (2026-08-16): hoist the migration ledger import
+    # to function-top. Was previously imported at line 6365 (inside the
+    # same function) which made `_apply_migration` an UnboundLocal for
+    # every earlier reference (backfill_memberships_v1,
+    # backfill_grandfathered_plans_v1, rename_production_role). The
+    # try/except right after each call silently swallowed the
+    # UnboundLocalError, so those 3 migrations have been failing at
+    # every boot for weeks -- causing real DB drift: orphaned users
+    # missing membership rows, tenants missing plan field, tenants
+    # still holding the old 'production' role key.
+    from services.migrations import apply_migration as _apply_migration  # noqa: F401
     try:
         # Core tenant-scoped indexes (P0 for multi-tenant scale — every read
         # of these collections filters by tenant_id, so unindexed = full scans).
@@ -6362,7 +6373,7 @@ async def _bootstrap():
         # FIX-002-C: phone_norm backfill routed through the migration ledger.
         # Idempotent internally (only touches docs missing the field) AND
         # tracked in db.migrations_applied so subsequent boots skip cleanly.
-        from services.migrations import apply_migration as _apply_migration
+        # (2026-08-16: import hoisted to _bootstrap top -- see comment there.)
 
         async def _backfill_phone_norm(_db):
             from services.phone import norm_phone as _np

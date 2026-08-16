@@ -1,6 +1,10 @@
 // Industry-specific operating model: workflow pipelines (with stages) + task
 // categories. Mirrors the backend default so the UI never breaks on a missing model.
-const st = (key, label) => ({ key, label });
+// WE-04 (2026-08-16): default stages carry the WE-03 empty extensions
+// (tasks[], approval=null, side_effects[]) so a tenant that has no
+// stored operating_model yet still renders in OperatingModelEditor
+// without a stage.tasks.map crash on first paint.
+const st = (key, label) => ({ key, label, tasks: [], approval: null, side_effects: [] });
 
 export const DEFAULT_OPERATING_MODEL = {
   pipelines: [

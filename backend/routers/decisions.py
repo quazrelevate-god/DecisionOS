@@ -193,26 +193,45 @@ async def approve_decision(decision_id: str, user: dict = Depends(require_perm("
         {"$set": {"status": "todo"}})
     await add_decision_event(decision_id, "Approved — tasks unblocked", user["name"], "approved")
     # Auto-advance any Procurement workflows spawned by this decision from their
-    # initial "requested" stage to the pipeline's approval_stage. FIX-001-A:
-    # previously hardcoded to type='purchase_payment' + stage='requested', which
-    # silently broke for any non-textile tenant whose AI-designed procurement
-    # pipeline is keyed differently (e.g. 'procurement', 'ingredient_purchase').
+    # initial "requested" stage to the pipeline's approval_stage.
+    # WE-07 (2026-08-16): routed through services/workflow_engine.advance()
+    # with override=True + a reason -- the decision-approval flow is
+    # allowed to bypass check_stage_ready (the initial stage almost
+    # never has template tasks to satisfy) but the override + reason
+    # land in wf.history + audit_log so the "why did this workflow
+    # advance without user input?" answer is one grep away.
     from services.workflows import tenant_procurement_pipeline, procurement_initial_stage
+    from services.workflow_engine import advance as _engine_advance
+    from services.workflow_engine import WorkflowAdvanceError
     proc = await tenant_procurement_pipeline(user["tenant_id"])
     wf_advanced = 0
     if proc and proc.get("approval_stage"):
         init_stage = procurement_initial_stage(proc)
         appr_stage = proc["approval_stage"]
         if init_stage and appr_stage != init_stage:
+            _reason = f"Auto-advanced by decision approval ({user['name']})"
             async for wf in db.workflows.find({
                 "tenant_id": user["tenant_id"], "decision_id": decision_id,
                 "type": proc["key"], "stage": init_stage,
-            }):
-                entry = {"stage": appr_stage, "note": f"Auto-approved with decision by {user['name']}", "by": user["id"], "at": now_iso()}
-                # FIX-001-C: tenant-scoped write on the workflow.
-                await db.workflows.update_one(tenant_filter(wf["id"], user["tenant_id"]),
-                                              {"$set": {"stage": appr_stage}, "$push": {"history": entry}})
-                wf_advanced += 1
+            }, {"_id": 0, "id": 1}):
+                try:
+                    await _engine_advance(
+                        user["tenant_id"], wf["id"],
+                        user["id"], user.get("name") or "",
+                        user.get("role") or "",
+                        target_stage=appr_stage,
+                        note=_reason,
+                        override=True, reason=_reason,
+                    )
+                    wf_advanced += 1
+                except WorkflowAdvanceError as _e:
+                    # Best-effort: never let a decision approval fail
+                    # because one linked workflow could not advance.
+                    from core import logger as _lg
+                    _lg.warning(
+                        f"[WE-07] decision-approve auto-advance skipped "
+                        f"for workflow {wf.get('id')}: {_e}"
+                    )
     if wf_advanced:
         await add_decision_event(decision_id, f"{wf_advanced} procurement workflow(s) advanced to {proc.get('approval_stage')}", user["name"], "workflow")
     # FIX-001-C: read spawned tasks with tenant filter too (defense-in-depth).

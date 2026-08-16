@@ -169,6 +169,13 @@ class WorkflowCreateInput(BaseModel):
 class WorkflowAdvanceInput(BaseModel):
     stage: str
     note: Optional[str] = ""
+    # WE-07 / WE-13 (2026-08-16): audited override. When override=True
+    # the engine skips check_stage_ready but demands a non-empty reason
+    # (rejected as 400 otherwise). The reason lands in wf.history +
+    # audit_log so "why was this advanced past its contract?" is never
+    # invisible.
+    override: Optional[bool] = False
+    reason: Optional[str] = ""
 
 
 class AskInput(BaseModel):
@@ -2977,112 +2984,47 @@ async def create_workflow(inp: WorkflowCreateInput, user: dict = Depends(require
 
 
 @api.patch("/workflows/{workflow_id}/advance")
-async def advance_workflow(workflow_id: str, inp: WorkflowAdvanceInput, user: dict = Depends(require_perm("workflows"))):
-    from services.tenancy import tenant_filter  # FIX-001-C carried over: writes below now tenant-scoped
-    wf = await db.workflows.find_one({"id": workflow_id, "tenant_id": user["tenant_id"]})
-    if not wf:
-        raise HTTPException(status_code=404, detail="Not found")
-    if inp.stage not in wf["stages"]:
-        raise HTTPException(status_code=400, detail="Invalid stage")
-    cur_idx = wf["stages"].index(wf["stage"])
-    tgt_idx = wf["stages"].index(inp.stage)
-    if tgt_idx != cur_idx + 1:
-        raise HTTPException(status_code=400, detail="Can only advance to the next stage")
-    # dynamic approval gate: only owner may advance to a pipeline's approval_stage
-    om = await tenant_operating_model(user["tenant_id"])
-    pipeline = next((p for p in om["pipelines"] if p["key"] == wf["type"]), None)
-    appr_stage = pipeline.get("approval_stage") if pipeline else ("approved" if wf["type"] == "purchase_payment" else None)
-    if appr_stage and inp.stage == appr_stage and user["role"] != "owner":
-        raise HTTPException(status_code=403, detail="Only the owner can approve this stage")
-    entry = {"stage": inp.stage, "note": inp.note or "", "by": user["id"], "at": now_iso()}
-    await db.workflows.update_one(
-        tenant_filter(workflow_id, user["tenant_id"]),
-        {"$set": {"stage": inp.stage}, "$push": {"history": entry}},
-    )
-    await log_activity(user["tenant_id"], user["id"], "workflow_advanced", f"'{wf['title']}' → {inp.stage}", "workflow", workflow_id)
-    # FIX-007-B (S4-10): workflow-stage advances were invisible to the
-    # Brain — "when did the Kapoor order actually ship?" queries came
-    # back empty because the paid → dispatched → delivered chain never
-    # got captured as a queryable outcome. Now every advance writes one
-    # brain_context row keyed by (workflow_id, decision_id) so both
-    # "downstream of decision X" and "history of workflow Y" queries
-    # resolve. Terminal-stage advances get outcome="completed" so
-    # retrieval can rank a completed workflow above one still in flight.
+async def advance_workflow(workflow_id: str, inp: WorkflowAdvanceInput,
+                            user: dict = Depends(require_perm("workflows"))):
+    """WE-07 (2026-08-16): this endpoint is now a THIN wrapper around
+    services/workflow_engine.advance. The engine is the single writer
+    of workflows.stage across the codebase (verified by
+    tests/test_we07_single_writer.py). Manual advances from the UI
+    still work exactly as before, plus:
+      * inp.override + inp.reason enable the WE-13 audited-override
+        path (owner can force a transition even when
+        check_stage_ready returns False; reason is required and
+        lands in wf.history + audit_log).
+      * If check_stage_ready is True, the engine advances; if not,
+        409 with the reason.
+
+    The legacy FIX-001-B (procurement -> Finance handoff) has moved
+    into the WE-08 side-effects registry (services/workflow_engine.py
+    _side_effect_create_expense). Tenants who want the auto-expense
+    now bind {kind: create_expense} to the terminal stage's
+    side_effects[] in Settings > Operations. Existing tenants keep
+    the legacy behaviour via a one-time backfill migration
+    (see backfill_procurement_side_effects_v1 in _bootstrap).
+    """
+    from services.workflow_engine import advance as _engine_advance
+    from services.workflow_engine import WorkflowAdvanceError
     try:
-        _final_stage = wf["stages"][-1] if wf.get("stages") else None
-        _is_terminal = _final_stage and inp.stage == _final_stage
-        await brain_context.record_context(
-            tenant_id=user["tenant_id"], kind="workflow",
-            title=f"{wf.get('title') or 'Workflow'} → {inp.stage}",
-            outcome="completed" if _is_terminal else "advanced",
-            why=(inp.note or ""),
-            tags=[wf.get("type")] if wf.get("type") else [],
-            source_type="workflow", source_id=workflow_id,
-            decision_id=wf.get("decision_id"),
-            related_ids={"workflow_type": wf.get("type"),
-                          "counterparty": wf.get("counterparty")},
-            actor_id=user["id"], actor_name=user.get("name") or "",
-            department=user.get("role") or "", visibility="public",
+        result = await _engine_advance(
+            user["tenant_id"], workflow_id,
+            user["id"], user.get("name") or "", user.get("role") or "",
+            target_stage=inp.stage,
+            note=inp.note or "",
+            override=bool(getattr(inp, "override", False)),
+            reason=(getattr(inp, "reason", "") or ""),
         )
-    except Exception as _e:
-        # Fail-open — never let a Brain write break the workflow advance.
-        logger.warning(f"S4-10 workflow brain_context failed for {workflow_id}: {_e}")
-
-    # FIX-001-B: workflow -> Finance handoff. When a procurement workflow
-    # advances to its final stage ("paid" / "settled" / "invoice_paid" etc.,
-    # whatever the tenant's AI-designed pipeline calls it), auto-create a
-    # PENDING-BILL expense in Finance so the founder doesn't have to record
-    # the same purchase twice. Idempotent: never double-creates for the
-    # same workflow_id, so re-advancing (or later stage tweaks) don't
-    # spawn duplicate expenses. All failures are best-effort try/except so
-    # a Finance-side hiccup can't 500 the workflow advance itself.
-    try:
-        from services.workflows import tenant_procurement_pipeline, procurement_terminal_stage
-        proc = await tenant_procurement_pipeline(user["tenant_id"])
-        if proc and proc.get("key") == wf["type"]:
-            term = procurement_terminal_stage(proc)
-            if term and inp.stage == term:
-                existing = await db.expenses.find_one(
-                    {"tenant_id": user["tenant_id"], "workflow_id": workflow_id},
-                    {"_id": 0, "id": 1},
-                )
-                if not existing:
-                    from routers.ledger import create_expense
-                    est_amt = wf.get("amount") if isinstance(wf.get("amount"), (int, float)) else 0.0
-                    exp = await create_expense(
-                        user["tenant_id"], user["id"],
-                        {
-                            "title": wf.get("title") or "Procurement expense",
-                            "amount": est_amt,
-                            "vendor_name": wf.get("counterparty") or "",
-                            "status": "awaiting_bill",
-                            "notes": f"Auto-created from procurement workflow: {wf.get('title')}. "
-                                     f"Estimated amount from the workflow card; upload the actual bill to reconcile.",
-                            "workflow_id": workflow_id,
-                            "workflow_type": wf.get("type"),
-                        },
-                        source="workflow", write_brain=True,
-                    )
-                    # Notify Finance role so they know to upload the bill.
-                    finance_ids = await _finance_user_ids(user["tenant_id"])
-                    # Don't ping the person who just advanced the workflow if they
-                    # ARE finance — they already know.
-                    finance_ids = [u for u in finance_ids if u and u != user["id"]]
-                    if finance_ids:
-                        cur = await _tenant_currency(user["tenant_id"])
-                        est_txt = f"{cur} {int(est_amt):,}" if est_amt else f"amount not on card"
-                        await push_notification(
-                            user["tenant_id"], finance_ids, 2,
-                            f"Upload bill for '{wf.get('title')}' (est. {est_txt}) — auto-created from a completed workflow",
-                            "expense", exp["id"],
-                            ntype="bill_upload", title=wf.get("title"),
-                            sender=user.get("name"),
-                        )
-    except Exception as e:
-        # Fire-and-forget: never let the Finance handoff block the workflow advance.
-        logger.warning(f"FIX-001-B: workflow->expense auto-create failed for {workflow_id}: {e}")
-
-    return await db.workflows.find_one(tenant_filter(workflow_id, user["tenant_id"]), {"_id": 0})
+    except WorkflowAdvanceError as e:
+        raise HTTPException(status_code=e.http_status, detail=str(e))
+    if result.get("already_advanced"):
+        # Concurrency guard fired: another writer got there first. That
+        # is not an error -- return the (now-current) workflow so the
+        # UI just picks up the new stage.
+        return result.get("workflow")
+    return result.get("workflow")
 
 
 @api.delete("/workflows/{workflow_id}")
@@ -6492,6 +6434,89 @@ async def _bootstrap():
                 logger.info("Migration applied: drop_ghost_workflow_collections_v1")
         except Exception as e:
             logger.exception(f"drop_ghost_workflow_collections migration: {e}")  # WE-02
+        # WE-08 (2026-08-16): the FIX-001-B behaviour that used to be
+        # hardcoded in the advance endpoint (procurement -> Finance
+        # auto-expense) is now a `create_expense` side-effect bound to
+        # the procurement pipeline's TERMINAL stage. This migration
+        # walks every tenant whose operating_model has a procurement
+        # pipeline (identified by approval_stage or the legacy
+        # 'purchase_payment' key) and appends the side-effect to the
+        # terminal stage if it is not already present. Idempotent:
+        # skips stages already carrying it. Zero-behaviour-diff for
+        # existing tenants -- the engine will call the same handler
+        # with the same effect as the old inline block.
+        async def _backfill_procurement_side_effect(_db):
+            touched = scanned = 0
+            async for _t in _db.tenants.find(
+                {"operating_model.pipelines": {"$exists": True}},
+                {"_id": 0, "id": 1, "operating_model": 1},
+            ):
+                scanned += 1
+                om = _t.get("operating_model") or {}
+                changed = False
+                for _p in (om.get("pipelines") or []):
+                    # Identify procurement: pipelines with an
+                    # approval_stage, plus the legacy purchase_payment key.
+                    if not (_p.get("approval_stage") or
+                            _p.get("key") == "purchase_payment"):
+                        continue
+                    _stages = _p.get("stages") or []
+                    if not _stages:
+                        continue
+                    _term = _stages[-1]
+                    if not isinstance(_term, dict):
+                        continue  # legacy string stage; WE-03 migration handles this pre-run
+                    _ses = _term.setdefault("side_effects", [])
+                    if any((_se or {}).get("kind") == "create_expense" for _se in _ses):
+                        continue
+                    _ses.append({
+                        "kind": "create_expense",
+                        "params": {"status": "awaiting_bill"},
+                    })
+                    changed = True
+                if changed:
+                    await _db.tenants.update_one(
+                        {"id": _t["id"]},
+                        {"$set": {"operating_model": om,
+                                  "updated_at": now_iso()}},
+                    )
+                    touched += 1
+            logger.info(
+                f"[WE-08] backfill_procurement_side_effect: "
+                f"scanned={scanned} touched={touched}"
+            )
+        try:
+            _pres = await _apply_migration(
+                db, "backfill_procurement_side_effect_v1",
+                _backfill_procurement_side_effect,
+                description="WE-08: bind create_expense side-effect to procurement terminal stage",
+            )
+            if _pres == "applied":
+                logger.info("Migration applied: backfill_procurement_side_effect_v1")
+        except Exception as e:
+            logger.exception(f"backfill_procurement_side_effect migration: {e}")  # WE-08
+        # WE-09 (2026-08-16): stage_version = optimistic-lock counter for
+        # engine.advance's find_one_and_update CAS. Backfill every
+        # existing workflow to stage_version=0 so the first engine
+        # advance transitions to 1 cleanly.
+        async def _backfill_stage_version(_db):
+            _r = await _db.workflows.update_many(
+                {"stage_version": {"$exists": False}},
+                {"$set": {"stage_version": 0}},
+            )
+            logger.info(
+                f"[WE-09] backfill_stage_version: "
+                f"workflows initialised={getattr(_r, 'modified_count', 0)}"
+            )
+        try:
+            _svres = await _apply_migration(
+                db, "backfill_stage_version_v1", _backfill_stage_version,
+                description="WE-09: initialise workflows.stage_version=0 for optimistic-lock CAS",
+            )
+            if _svres == "applied":
+                logger.info("Migration applied: backfill_stage_version_v1")
+        except Exception as e:
+            logger.exception(f"backfill_stage_version migration: {e}")  # WE-09
         # WE-01: indexes for the new query patterns unlocked by the
         # workflow linkage. Compound (tenant_id, workflow_id, stage_key)
         # supports both "all tasks for this card" (uses the tenant_id +

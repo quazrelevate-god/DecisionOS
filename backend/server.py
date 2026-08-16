@@ -1022,6 +1022,7 @@ async def _create_workflows(tenant_id, note, decision_id, extracted):
             "id": wid, "tenant_id": tenant_id, "type": wtype, "title": title,
             "detail": ev.get("detail", ""), "amount": amount, "counterparty": cp, "contact_id": contact_id,
             "stage": stages[0], "stages": stages,
+            "stage_version": 0,
             "history": [{"stage": stages[0], "note": "Auto-created from directive", "by": note["created_by"], "at": now_iso()}],
             "source": "voice", "decision_id": decision_id,
             "created_by": note["created_by"], "created_at": now_iso(),
@@ -3072,6 +3073,7 @@ async def create_workflow(inp: WorkflowCreateInput, user: dict = Depends(require
         "id": wid, "tenant_id": user["tenant_id"], "type": inp.type, "title": inp.title,
         "detail": inp.detail or "", "amount": inp.amount, "counterparty": counterparty, "contact_id": contact_id,
         "stage": stages[0], "stages": stages,
+        "stage_version": 0,
         "history": [{"stage": stages[0], "note": "Created", "by": user["id"], "at": now_iso()}],
         "created_by": user["id"], "created_at": now_iso(),
     }

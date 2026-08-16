@@ -1111,22 +1111,48 @@ async def process_voice_note(note_id: str):
         wf_ids = await _create_workflows(tenant_id, note, decision_id, extracted)
         # WE-01 (2026-08-16): post-pass to link the decision's tasks to
         # their workflow. Voice capture normally produces 1 decision ->
-        # (N tasks, 1 workflow) so a single-workflow shortcut is the
-        # common case. If the extract produced multiple workflows we
-        # leave tasks unlinked (ambiguous which workflow owns which
-        # task); WE-06 engine will handle proper spawn-from-stage
-        # semantics for new cards.
+        # (N tasks, 1 workflow). If the extract produced multiple
+        # workflows we leave tasks unlinked (ambiguous ownership).
+        #
+        # WE-01.5 (2026-08-16): each task is routed to the stage its
+        # ROLE owns -- not the workflow's initial stage. A Kapoor
+        # decision with sales/finance/ops tasks lands them at
+        # order_received/confirmed/in_production respectively, so the
+        # engine's auto-advance chain covers the full workflow instead
+        # of stalling after the first stage. Falls back to the
+        # workflow's current stage when a role has no matching stage
+        # (preserves pre-WE-01.5 behaviour for degenerate cases).
         if wf_ids and task_ids and len(wf_ids) == 1:
             _wf = await db.workflows.find_one(
                 {"id": wf_ids[0], "tenant_id": tenant_id},
-                {"_id": 0, "stage": 1},
+                {"_id": 0, "stage": 1, "type": 1},
             )
             if _wf:
-                await db.tasks.update_many(
+                from services.workflows import stage_owned_by  # WE-01.5
+                _pipeline = pmap.get(_wf.get("type") or "") if 'pmap' in dir() else None
+                if _pipeline is None:
+                    # pmap is defined inside _create_workflows; fetch pipeline directly.
+                    _om = await tenant_operating_model(tenant_id)
+                    _pipeline = next(
+                        (p for p in (_om or {}).get("pipelines") or []
+                         if p.get("key") == _wf.get("type")), None,
+                    )
+                _fallback = _wf.get("stage")
+                # Batch-fetch the tasks so we know each one's role.
+                _tk_rows = await db.tasks.find(
                     {"id": {"$in": task_ids}, "tenant_id": tenant_id},
-                    {"$set": {"workflow_id": wf_ids[0],
-                              "stage_key": _wf.get("stage")}},
-                )
+                    {"_id": 0, "id": 1, "assignee_role": 1},
+                ).to_list(len(task_ids))
+                # Per-task update -- routing depends on role.
+                for _tk in _tk_rows:
+                    _role = (_tk.get("assignee_role") or "").strip()
+                    _stage_key = (stage_owned_by(_pipeline, _role) or _fallback
+                                  if _pipeline else _fallback)
+                    await db.tasks.update_one(
+                        {"id": _tk["id"], "tenant_id": tenant_id},
+                        {"$set": {"workflow_id": wf_ids[0],
+                                  "stage_key": _stage_key}},
+                    )
         # Execution summary — real counts of what this directive produced
         execution_summary = {
             "tasks": len(task_ids),
@@ -1209,7 +1235,7 @@ async def ai_generate_operating_model(industry: str, company_size: str = "", rol
         "the specific industry — a salon has NO 'production' or 'dispatch'; it has a service/appointment flow. "
         "Return ONLY valid JSON, no prose, EXACTLY this shape: "
         "{\"pipelines\": [{\"key\": lowercase_snake_case, \"label\": str, \"sub\": short 'A → B' subtitle, "
-        "\"stages\": [{\"key\": lowercase_snake_case, \"label\": str}], "
+        "\"stages\": [{\"key\": lowercase_snake_case, \"label\": str, \"role\": role_slug_or_empty}], "
         "\"approval_stage\": key of the stage that needs owner sign-off or null}], "
         "\"task_categories\": [{\"key\": lowercase_snake_case, \"label\": str}]}. "
         "PIPELINES = the core multi-step operational flows this business tracks on a kanban board, from start to finish. "
@@ -1218,6 +1244,12 @@ async def ai_generate_operating_model(industry: str, company_size: str = "", rol
         "and 'Procurement' (Requested→Approved→Received→Paid); a COACHING INSTITUTE → 'Enrollment' "
         "(Inquiry→Counselling→Enrolled→Onboarded) and 'Course Delivery' (Scheduled→Ongoing→Completed); a RESTAURANT → "
         "'Orders' and 'Procurement'. Set approval_stage only where an owner must sign off (e.g. procurement 'approved'), else null. "
+        "WE-01.5: For each stage set \"role\" to the ONE department that primarily owns work at that stage -- must be a slug "
+        "matching one of the tenant's departments (lowercase, e.g. 'sales', 'finance', 'operations', 'owner'). This is what "
+        "routes decision-spawned tasks to the correct stage. Examples: procurement.requested → 'operations', "
+        "procurement.approved → 'owner', procurement.paid → 'finance'; sales.order_received → 'sales', "
+        "sales.confirmed → 'finance' (they raise the invoice), sales.ready → 'operations'. Set role='' only if truly "
+        "no single department owns the stage. "
         "TASK_CATEGORIES = 4-7 department buckets that a task in this business belongs to (e.g. salon → Front Desk, Service, "
         "Inventory, Finance, HR; coaching → Admissions, Academic, Operations, Finance, HR). Always keep the categories relevant to the industry. "
         "Keep every label 1-3 words, Title Case. Use the industry's real terminology; never force manufacturing terms onto a service business."
@@ -6558,6 +6590,63 @@ async def _bootstrap():
                 logger.info("Migration applied: backfill_stage_version_v1")
         except Exception as e:
             logger.exception(f"backfill_stage_version migration: {e}")  # WE-09
+        # WE-01.5 (2026-08-16): backfill stage.role for existing
+        # tenants. The AI didn't emit it before, so we derive it from
+        # (a) stage.tasks[0].role if a template task exists there, or
+        # (b) the legacy WORKFLOW_OWNER_ROLE map for the well-known
+        # pipeline types (production / distribution / purchase_payment
+        # / sales_dispatch). Skip stages that already have role set.
+        # Idempotent -- filter excludes tenants where every stage
+        # already carries the field.
+        async def _backfill_stage_role(_db):
+            touched = scanned = 0
+            async for _t in _db.tenants.find(
+                {"operating_model.pipelines": {"$exists": True}},
+                {"_id": 0, "id": 1, "operating_model": 1},
+            ):
+                scanned += 1
+                om = _t.get("operating_model") or {}
+                changed = False
+                for _p in (om.get("pipelines") or []):
+                    _p_key = _p.get("key")
+                    _legacy = WORKFLOW_OWNER_ROLE.get(_p_key) or {}
+                    for _s in (_p.get("stages") or []):
+                        if not isinstance(_s, dict):
+                            continue
+                        if _s.get("role"):
+                            continue
+                        _stage_key = _s.get("key")
+                        # (a) derive from first template task's role
+                        _from_task = None
+                        for _tk in (_s.get("tasks") or []):
+                            if _tk.get("role"):
+                                _from_task = _tk["role"]
+                                break
+                        # (b) legacy per-stage map
+                        _from_legacy = _legacy.get(_stage_key)
+                        _role = _from_task or _from_legacy or ""
+                        if _role:
+                            _s["role"] = _role
+                            changed = True
+                if changed:
+                    await _db.tenants.update_one(
+                        {"id": _t["id"]},
+                        {"$set": {"operating_model": om,
+                                  "updated_at": now_iso()}},
+                    )
+                    touched += 1
+            logger.info(
+                f"[WE-01.5] backfill_stage_role: scanned={scanned} touched={touched}"
+            )
+        try:
+            _srres = await _apply_migration(
+                db, "backfill_stage_role_v1", _backfill_stage_role,
+                description="WE-01.5: derive stage.role from tasks[0].role or WORKFLOW_OWNER_ROLE legacy map",
+            )
+            if _srres == "applied":
+                logger.info("Migration applied: backfill_stage_role_v1")
+        except Exception as e:
+            logger.exception(f"backfill_stage_role migration: {e}")  # WE-01.5
         # WE-01: indexes for the new query patterns unlocked by the
         # workflow linkage. Compound (tenant_id, workflow_id, stage_key)
         # supports both "all tasks for this card" (uses the tenant_id +

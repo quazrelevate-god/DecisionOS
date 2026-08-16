@@ -848,9 +848,23 @@ def _norm_stage(s, used):
         if len(side_effects) >= 6:
             break
 
+    # WE-01.5 (2026-08-16): stage.role -- the department that "owns"
+    # this stage. Set by the AI on generation, or backfilled from
+    # tasks[0].role, or from the legacy WORKFLOW_OWNER_ROLE map. Used
+    # by voice-capture to route each spawned task to the stage its
+    # role naturally owns, so the engine can auto-advance the full
+    # chain (not just one step). Empty string when no owner is set --
+    # engine falls back to workflow's current stage in that case.
+    role = _slugify_key(obj.get("role") or "")[:40] if isinstance(obj.get("role"), str) else ""
+    # Fallback: if no explicit role, derive from the first template
+    # task's role. Keeps the AI prompt simpler (role is optional).
+    if not role and tasks:
+        role = (tasks[0].get("role") or "").strip()
+
     return {
         "key": key, "label": label,
         "tasks": tasks, "approval": approval, "side_effects": side_effects,
+        "role": role,
     }
 
 

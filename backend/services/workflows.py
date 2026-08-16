@@ -227,6 +227,48 @@ async def derive_task_workflow_link(
     return (None, None)
 
 
+def stage_owned_by(pipeline: dict, role: str) -> Optional[str]:
+    """WE-01.5 (2026-08-16): return the pipeline stage.key where the
+    given role is the natural owner.
+
+    Used by voice-capture to route each freshly-spawned task to the
+    stage that role owns, so the engine can auto-advance the full
+    chain instead of stalling after one transition. A Kapoor decision
+    that spawns [sales task, finance task, ops task] now lands them
+    at [order_received, confirmed, in_production] respectively --
+    each task-close pushes the card to the next stage where the next
+    task is already waiting.
+
+    Resolution order:
+      1. Explicit stage.role field matches -> return it.
+      2. Any task template on the stage has this role -> return it.
+      3. No match -> None (caller falls back to workflow's current
+         stage, which preserves pre-WE-01.5 behaviour).
+
+    Returns None (not empty string) when nothing matches, so callers
+    can distinguish "unassigned" from a legitimately empty role.
+    """
+    if not (pipeline and role):
+        return None
+    role_s = role.strip().lower()
+    if not role_s:
+        return None
+    # Pass 1: explicit stage.role
+    for s in (pipeline.get("stages") or []):
+        if not isinstance(s, dict):
+            continue
+        if (s.get("role") or "").strip().lower() == role_s:
+            return s.get("key")
+    # Pass 2: derive from stage.tasks[*].role
+    for s in (pipeline.get("stages") or []):
+        if not isinstance(s, dict):
+            continue
+        for t in (s.get("tasks") or []):
+            if (t.get("role") or "").strip().lower() == role_s:
+                return s.get("key")
+    return None
+
+
 def stage_key_for_backfill(workflow_doc: dict) -> Optional[str]:
     """WE-01: pick a safe stage_key value when back-linking a legacy
     task to a workflow that has since advanced past its origin stage.

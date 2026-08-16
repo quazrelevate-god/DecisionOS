@@ -417,6 +417,35 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
             await add_decision_event(t["decision_id"], f"{t['title']} → {updates['status'].replace('_',' ')}", user["name"], "task")
         if updates.get("status") == "done":
             await log_activity(user["tenant_id"], user["id"], "task_done", f"Completed task '{t['title']}'", "task", task_id)
+            # WE-06.5 (2026-08-16, live-test surfaced): task-close hook.
+            # If the task was linked to a workflow (WE-01 fields set) and
+            # its stage_key matches the workflow's current stage, ask
+            # the engine to try advancing. Engine's check_stage_ready
+            # handles the "other tasks still open" case gracefully --
+            # returns not_ready and we swallow. Never blocks the task
+            # close itself; the advance is fire-and-forget best-effort.
+            if t.get("workflow_id") and t.get("stage_key"):
+                try:
+                    from services.workflow_engine import advance as _engine_advance
+                    from services.workflow_engine import WorkflowAdvanceError
+                    _wf_check = await db.workflows.find_one(
+                        {"id": t["workflow_id"], "tenant_id": user["tenant_id"]},
+                        {"_id": 0, "stage": 1})
+                    if _wf_check and _wf_check.get("stage") == t.get("stage_key"):
+                        try:
+                            await _engine_advance(
+                                user["tenant_id"], t["workflow_id"],
+                                user["id"], user.get("name") or "",
+                                user.get("role") or "",
+                            )
+                        except WorkflowAdvanceError:
+                            # Common: stage still has other open tasks.
+                            # Not an error -- card just waits.
+                            pass
+                except Exception as e:
+                    # Fail-open: never let engine issue break the task close.
+                    from core import logger as _lg
+                    _lg.warning(f"[WE-06.5] task-close engine hook skipped for {task_id}: {e}")
             # FIX-007-B (S4-02): thread decision_id through so the
             # decision → task → outcome chain is reconstructable.
             await brain_context.record_context(

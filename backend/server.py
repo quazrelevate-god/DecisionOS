@@ -1110,48 +1110,73 @@ async def process_voice_note(note_id: str):
         meetings = await _create_meetings(tenant_id, note, decision_id, extracted)
         wf_ids = await _create_workflows(tenant_id, note, decision_id, extracted)
         # WE-01 (2026-08-16): post-pass to link the decision's tasks to
-        # their workflow. Voice capture normally produces 1 decision ->
-        # (N tasks, 1 workflow). If the extract produced multiple
-        # workflows we leave tasks unlinked (ambiguous ownership).
+        # their workflow.
         #
         # WE-01.5 (2026-08-16): each task is routed to the stage its
         # ROLE owns -- not the workflow's initial stage. A Kapoor
         # decision with sales/finance/ops tasks lands them at
         # order_received/confirmed/in_production respectively, so the
         # engine's auto-advance chain covers the full workflow instead
-        # of stalling after the first stage. Falls back to the
-        # workflow's current stage when a role has no matching stage
-        # (preserves pre-WE-01.5 behaviour for degenerate cases).
-        if wf_ids and task_ids and len(wf_ids) == 1:
-            _wf = await db.workflows.find_one(
-                {"id": wf_ids[0], "tenant_id": tenant_id},
-                {"_id": 0, "stage": 1, "type": 1},
-            )
-            if _wf:
-                from services.workflows import stage_owned_by  # WE-01.5
-                _pipeline = pmap.get(_wf.get("type") or "") if 'pmap' in dir() else None
-                if _pipeline is None:
-                    # pmap is defined inside _create_workflows; fetch pipeline directly.
-                    _om = await tenant_operating_model(tenant_id)
-                    _pipeline = next(
-                        (p for p in (_om or {}).get("pipelines") or []
-                         if p.get("key") == _wf.get("type")), None,
-                    )
-                _fallback = _wf.get("stage")
-                # Batch-fetch the tasks so we know each one's role.
-                _tk_rows = await db.tasks.find(
-                    {"id": {"$in": task_ids}, "tenant_id": tenant_id},
-                    {"_id": 0, "id": 1, "assignee_role": 1},
-                ).to_list(len(task_ids))
-                # Per-task update -- routing depends on role.
-                for _tk in _tk_rows:
-                    _role = (_tk.get("assignee_role") or "").strip()
-                    _stage_key = (stage_owned_by(_pipeline, _role) or _fallback
-                                  if _pipeline else _fallback)
+        # of stalling after the first stage.
+        #
+        # WE-01.5.1 (2026-08-16, live bug fix): the AI often generates
+        # MULTIPLE workflows for one decision (e.g. Delhi Retail order
+        # gets both a Production and a Distribution card). Original
+        # guard len(wf_ids)==1 left every task unlinked in that case.
+        # Now we iterate each workflow's pipeline and let the role
+        # decide OWNERSHIP: each task is linked to the workflow whose
+        # pipeline has a stage matching the task's role. Tasks whose
+        # role doesn't match ANY workflow fall back to the first
+        # workflow's current stage. Prevents the "all tasks stranded"
+        # regression while keeping ambiguity-safe (we never pick a
+        # workflow at random).
+        if wf_ids and task_ids:
+            from services.workflows import stage_owned_by  # WE-01.5
+            # Batch-fetch tasks + all candidate workflows.
+            _tk_rows = await db.tasks.find(
+                {"id": {"$in": task_ids}, "tenant_id": tenant_id},
+                {"_id": 0, "id": 1, "assignee_role": 1},
+            ).to_list(len(task_ids))
+            _wfs = await db.workflows.find(
+                {"id": {"$in": wf_ids}, "tenant_id": tenant_id},
+                {"_id": 0, "id": 1, "type": 1, "stage": 1},
+            ).to_list(len(wf_ids))
+            # Resolve the pipeline object per workflow (needed for
+            # stage_owned_by).
+            _om = await tenant_operating_model(tenant_id)
+            _om_pipelines = {p.get("key"): p
+                             for p in (_om or {}).get("pipelines") or []
+                             if p.get("key")}
+            _wf_map = []
+            for _wf in _wfs:
+                _wf_map.append({
+                    "wf": _wf,
+                    "pipeline": _om_pipelines.get(_wf.get("type") or ""),
+                })
+
+            # Fallback if a task doesn't match any pipeline's role stages
+            _fallback_wf = _wf_map[0] if _wf_map else None
+
+            for _tk in _tk_rows:
+                _role = (_tk.get("assignee_role") or "").strip()
+                _chosen_wf_id = None
+                _chosen_stage = None
+                # Pass 1: find the workflow whose pipeline owns this role
+                for _entry in _wf_map:
+                    _sk = stage_owned_by(_entry["pipeline"], _role) if _entry["pipeline"] else None
+                    if _sk:
+                        _chosen_wf_id = _entry["wf"]["id"]
+                        _chosen_stage = _sk
+                        break
+                # Fallback: first workflow's current stage
+                if not _chosen_wf_id and _fallback_wf:
+                    _chosen_wf_id = _fallback_wf["wf"]["id"]
+                    _chosen_stage = _fallback_wf["wf"].get("stage")
+                if _chosen_wf_id:
                     await db.tasks.update_one(
                         {"id": _tk["id"], "tenant_id": tenant_id},
-                        {"$set": {"workflow_id": wf_ids[0],
-                                  "stage_key": _stage_key}},
+                        {"$set": {"workflow_id": _chosen_wf_id,
+                                  "stage_key": _chosen_stage}},
                     )
         # Execution summary — real counts of what this directive produced
         execution_summary = {

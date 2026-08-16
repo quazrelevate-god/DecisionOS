@@ -634,13 +634,12 @@ def _bp_departments(data: dict) -> list:
     return departments[:12]
 
 
-def _bp_workflows(data: dict) -> list:
-    out = []
-    for w in (data.get("workflows") or data.get("workflow_templates") or []):
-        name = (w if isinstance(w, str) else (w.get("name") or w.get("title") or "")).strip()
-        if name:
-            out.append({"name": name})
-    return out[:16]
+# WE-02 (2026-08-16): _bp_workflows removed. tenant.workflow_templates
+# was a dead brainstorm list -- written but never consumed to drive
+# behaviour. operating_model.pipelines is the single source of truth
+# for what pipelines exist; the free-text template list served no
+# purpose but confused Settings (three cards, three shapes, one
+# concept). See Epic 5 spec deck slides 4 + 9.
 
 
 def _bp_op_tasks(data: dict) -> list:
@@ -670,10 +669,13 @@ def _bp_rules(data: dict) -> list:
 
 
 def normalize_os_blueprint(data: dict) -> dict:
-    """Coerce a raw (AI or user) blueprint into clean, editable lists."""
+    """Coerce a raw (AI or user) blueprint into clean, editable lists.
+
+    WE-02 (2026-08-16): 'workflows' key removed -- the ghost
+    tenant.workflow_templates collection is retired; operating_model
+    is the single source of truth for pipelines now."""
     return {
         "departments": _bp_departments(data),
-        "workflows": _bp_workflows(data),
         "operational_tasks": _bp_op_tasks(data),
         "approval_rules": _bp_rules(data),
     }
@@ -683,15 +685,14 @@ def normalize_os_blueprint(data: dict) -> dict:
 # Business vocabulary (industry-tailored UI terminology)
 # ---------------------------------------------------------------------------
 DEFAULT_LEXICON = {
+    # WE-02 (2026-08-16): 'workflows' key removed. The three hardcoded
+    # label/sub pairs (production/distribution/purchase_payment) were
+    # a dead output -- nothing in the app read them. Pipeline labels
+    # come from tenant.operating_model.pipelines[].label instead.
     "customer_singular": "Customer",
     "customer_plural": "Customers",
     "vendor_singular": "Supplier",
     "vendor_plural": "Suppliers",
-    "workflows": {
-        "production": {"label": "Production", "sub": "Order → Ready"},
-        "distribution": {"label": "Distribution", "sub": "Dispatch → Deliver"},
-        "purchase_payment": {"label": "Procurement", "sub": "Purchase → Payment"},
-    },
     "task_types": {
         "operational": "Operational",
         "sales": "Sales",
@@ -717,13 +718,11 @@ def normalize_lexicon(data: dict) -> dict:
         "customer_plural": _s(d.get("customer_plural"), base["customer_plural"]),
         "vendor_singular": _s(d.get("vendor_singular"), base["vendor_singular"]),
         "vendor_plural": _s(d.get("vendor_plural"), base["vendor_plural"]),
-        "workflows": {},
         "task_types": {},
     }
-    wf_in = d.get("workflows") or {}
-    for k, dv in base["workflows"].items():
-        v = wf_in.get(k) or {}
-        out["workflows"][k] = {"label": _s(v.get("label"), dv["label"]), "sub": _s(v.get("sub"), dv["sub"])}
+    # WE-02: workflows key dropped. Legacy tenants with stored
+    # lexicon.workflows are $unset by the drop_ghost_collections
+    # migration; the read side ignores whatever was there anyway.
     tt_in = d.get("task_types") or {}
     for k, dv in base["task_types"].items():
         out["task_types"][k] = _s(tt_in.get(k), dv)
@@ -849,9 +848,23 @@ def _norm_stage(s, used):
         if len(side_effects) >= 6:
             break
 
+    # WE-01.5 (2026-08-16): stage.role -- the department that "owns"
+    # this stage. Set by the AI on generation, or backfilled from
+    # tasks[0].role, or from the legacy WORKFLOW_OWNER_ROLE map. Used
+    # by voice-capture to route each spawned task to the stage its
+    # role naturally owns, so the engine can auto-advance the full
+    # chain (not just one step). Empty string when no owner is set --
+    # engine falls back to workflow's current stage in that case.
+    role = _slugify_key(obj.get("role") or "")[:40] if isinstance(obj.get("role"), str) else ""
+    # Fallback: if no explicit role, derive from the first template
+    # task's role. Keeps the AI prompt simpler (role is optional).
+    if not role and tasks:
+        role = (tasks[0].get("role") or "").strip()
+
     return {
         "key": key, "label": label,
         "tasks": tasks, "approval": approval, "side_effects": side_effects,
+        "role": role,
     }
 
 

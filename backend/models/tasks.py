@@ -37,6 +37,13 @@ class TaskCreateInput(BaseModel):
     contact_id: Optional[str] = None
     contact_name: Optional[str] = None
     amount: Optional[float] = None
+    # WE-01 (2026-08-16): workflow linkage. Every task can point at its
+    # parent workflow card + the specific stage that owns it. Both null
+    # for ad-hoc tasks (call the accountant, follow up on invoice).
+    # Router validates both against the tenant on write; stage_key
+    # without workflow_id is rejected as semantically invalid.
+    workflow_id: Optional[str] = None
+    stage_key: Optional[str] = None
 
 
 class TaskUpdateInput(BaseModel):

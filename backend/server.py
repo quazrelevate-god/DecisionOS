@@ -169,6 +169,13 @@ class WorkflowCreateInput(BaseModel):
 class WorkflowAdvanceInput(BaseModel):
     stage: str
     note: Optional[str] = ""
+    # WE-07 / WE-13 (2026-08-16): audited override. When override=True
+    # the engine skips check_stage_ready but demands a non-empty reason
+    # (rejected as 400 otherwise). The reason lands in wf.history +
+    # audit_log so "why was this advanced past its contract?" is never
+    # invisible.
+    override: Optional[bool] = False
+    reason: Optional[str] = ""
 
 
 class AskInput(BaseModel):
@@ -936,6 +943,10 @@ async def _create_decision_tasks(tenant_id, note, decision_id, extracted, troles
             "status": "blocked", "due_date": due, "decision_id": decision_id,
             "task_type": task_cat,
             "source": "voice", "created_at": now_iso(),
+            # WE-01: null placeholders. The process_voice_note post-pass
+            # fills these in AFTER _create_workflows runs, once we know
+            # which workflow this decision spawned.
+            "workflow_id": None, "stage_key": None,
             "updated_at": now_iso(), "last_action": "Created",
         })
         task_ids.append(tid)
@@ -1011,6 +1022,7 @@ async def _create_workflows(tenant_id, note, decision_id, extracted):
             "id": wid, "tenant_id": tenant_id, "type": wtype, "title": title,
             "detail": ev.get("detail", ""), "amount": amount, "counterparty": cp, "contact_id": contact_id,
             "stage": stages[0], "stages": stages,
+            "stage_version": 0,
             "history": [{"stage": stages[0], "note": "Auto-created from directive", "by": note["created_by"], "at": now_iso()}],
             "source": "voice", "decision_id": decision_id,
             "created_by": note["created_by"], "created_at": now_iso(),
@@ -1098,6 +1110,75 @@ async def process_voice_note(note_id: str):
         await _create_reminders_and_memory(tenant_id, note, extracted)
         meetings = await _create_meetings(tenant_id, note, decision_id, extracted)
         wf_ids = await _create_workflows(tenant_id, note, decision_id, extracted)
+        # WE-01 (2026-08-16): post-pass to link the decision's tasks to
+        # their workflow.
+        #
+        # WE-01.5 (2026-08-16): each task is routed to the stage its
+        # ROLE owns -- not the workflow's initial stage. A Kapoor
+        # decision with sales/finance/ops tasks lands them at
+        # order_received/confirmed/in_production respectively, so the
+        # engine's auto-advance chain covers the full workflow instead
+        # of stalling after the first stage.
+        #
+        # WE-01.5.1 (2026-08-16, live bug fix): the AI often generates
+        # MULTIPLE workflows for one decision (e.g. Delhi Retail order
+        # gets both a Production and a Distribution card). Original
+        # guard len(wf_ids)==1 left every task unlinked in that case.
+        # Now we iterate each workflow's pipeline and let the role
+        # decide OWNERSHIP: each task is linked to the workflow whose
+        # pipeline has a stage matching the task's role. Tasks whose
+        # role doesn't match ANY workflow fall back to the first
+        # workflow's current stage. Prevents the "all tasks stranded"
+        # regression while keeping ambiguity-safe (we never pick a
+        # workflow at random).
+        if wf_ids and task_ids:
+            from services.workflows import stage_owned_by  # WE-01.5
+            # Batch-fetch tasks + all candidate workflows.
+            _tk_rows = await db.tasks.find(
+                {"id": {"$in": task_ids}, "tenant_id": tenant_id},
+                {"_id": 0, "id": 1, "assignee_role": 1},
+            ).to_list(len(task_ids))
+            _wfs = await db.workflows.find(
+                {"id": {"$in": wf_ids}, "tenant_id": tenant_id},
+                {"_id": 0, "id": 1, "type": 1, "stage": 1},
+            ).to_list(len(wf_ids))
+            # Resolve the pipeline object per workflow (needed for
+            # stage_owned_by).
+            _om = await tenant_operating_model(tenant_id)
+            _om_pipelines = {p.get("key"): p
+                             for p in (_om or {}).get("pipelines") or []
+                             if p.get("key")}
+            _wf_map = []
+            for _wf in _wfs:
+                _wf_map.append({
+                    "wf": _wf,
+                    "pipeline": _om_pipelines.get(_wf.get("type") or ""),
+                })
+
+            # Fallback if a task doesn't match any pipeline's role stages
+            _fallback_wf = _wf_map[0] if _wf_map else None
+
+            for _tk in _tk_rows:
+                _role = (_tk.get("assignee_role") or "").strip()
+                _chosen_wf_id = None
+                _chosen_stage = None
+                # Pass 1: find the workflow whose pipeline owns this role
+                for _entry in _wf_map:
+                    _sk = stage_owned_by(_entry["pipeline"], _role) if _entry["pipeline"] else None
+                    if _sk:
+                        _chosen_wf_id = _entry["wf"]["id"]
+                        _chosen_stage = _sk
+                        break
+                # Fallback: first workflow's current stage
+                if not _chosen_wf_id and _fallback_wf:
+                    _chosen_wf_id = _fallback_wf["wf"]["id"]
+                    _chosen_stage = _fallback_wf["wf"].get("stage")
+                if _chosen_wf_id:
+                    await db.tasks.update_one(
+                        {"id": _tk["id"], "tenant_id": tenant_id},
+                        {"$set": {"workflow_id": _chosen_wf_id,
+                                  "stage_key": _chosen_stage}},
+                    )
         # Execution summary — real counts of what this directive produced
         execution_summary = {
             "tasks": len(task_ids),
@@ -1180,7 +1261,7 @@ async def ai_generate_operating_model(industry: str, company_size: str = "", rol
         "the specific industry — a salon has NO 'production' or 'dispatch'; it has a service/appointment flow. "
         "Return ONLY valid JSON, no prose, EXACTLY this shape: "
         "{\"pipelines\": [{\"key\": lowercase_snake_case, \"label\": str, \"sub\": short 'A → B' subtitle, "
-        "\"stages\": [{\"key\": lowercase_snake_case, \"label\": str}], "
+        "\"stages\": [{\"key\": lowercase_snake_case, \"label\": str, \"role\": role_slug_or_empty}], "
         "\"approval_stage\": key of the stage that needs owner sign-off or null}], "
         "\"task_categories\": [{\"key\": lowercase_snake_case, \"label\": str}]}. "
         "PIPELINES = the core multi-step operational flows this business tracks on a kanban board, from start to finish. "
@@ -1189,6 +1270,12 @@ async def ai_generate_operating_model(industry: str, company_size: str = "", rol
         "and 'Procurement' (Requested→Approved→Received→Paid); a COACHING INSTITUTE → 'Enrollment' "
         "(Inquiry→Counselling→Enrolled→Onboarded) and 'Course Delivery' (Scheduled→Ongoing→Completed); a RESTAURANT → "
         "'Orders' and 'Procurement'. Set approval_stage only where an owner must sign off (e.g. procurement 'approved'), else null. "
+        "WE-01.5: For each stage set \"role\" to the ONE department that primarily owns work at that stage -- must be a slug "
+        "matching one of the tenant's departments (lowercase, e.g. 'sales', 'finance', 'operations', 'owner'). This is what "
+        "routes decision-spawned tasks to the correct stage. Examples: procurement.requested → 'operations', "
+        "procurement.approved → 'owner', procurement.paid → 'finance'; sales.order_received → 'sales', "
+        "sales.confirmed → 'finance' (they raise the invoice), sales.ready → 'operations'. Set role='' only if truly "
+        "no single department owns the stage. "
         "TASK_CATEGORIES = 4-7 department buckets that a task in this business belongs to (e.g. salon → Front Desk, Service, "
         "Inventory, Finance, HR; coaching → Admissions, Academic, Operations, Finance, HR). Always keep the categories relevant to the industry. "
         "Keep every label 1-3 words, Title Case. Use the industry's real terminology; never force manufacturing terms onto a service business."
@@ -2912,11 +2999,52 @@ from services.tasks import _tenant_industry, _attach_reference_ids  # noqa: E402
 # Workflows
 # ---------------------------------------------------------------------------
 @api.get("/workflows")
-async def list_workflows(type: Optional[str] = None, user: dict = Depends(get_current_user)):
+async def list_workflows(type: Optional[str] = None,
+                         with_tasks: Optional[bool] = False,
+                         user: dict = Depends(get_current_user)):
     q = {"tenant_id": user["tenant_id"]}
     if type:
         q["type"] = type
     wfs = await db.workflows.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
+    # WE-12 (2026-08-16): when the client asks with_tasks=true, we
+    # hydrate each card with the OPEN tasks at its current stage
+    # (workflow_id + stage_key + status not-in done/cancelled), plus
+    # each task's assignee_name for the avatar. One batch query for
+    # all cards, then a single users query -- keeps the payload O(1)
+    # network round trips regardless of card count.
+    if with_tasks and wfs:
+        wf_pairs = [(w.get("id"), w.get("stage")) for w in wfs if w.get("id") and w.get("stage")]
+        if wf_pairs:
+            # Mongo `$or` on (workflow_id, stage_key) pairs -- much
+            # narrower than fetching all tasks and filtering client-side.
+            or_clauses = [
+                {"workflow_id": wid, "stage_key": sk}
+                for wid, sk in wf_pairs
+            ]
+            task_rows = await db.tasks.find(
+                {"tenant_id": user["tenant_id"],
+                 "status": {"$nin": ["done", "cancelled"]},
+                 "$or": or_clauses},
+                {"_id": 0, "id": 1, "title": 1, "workflow_id": 1,
+                 "stage_key": 1, "assignee_id": 1, "assignee_role": 1,
+                 "priority": 1, "status": 1, "due_date": 1},
+            ).to_list(1000)
+            # Hydrate assignee_name in one query.
+            assignee_ids = {t["assignee_id"] for t in task_rows if t.get("assignee_id")}
+            umap = {}
+            if assignee_ids:
+                async for u in db.users.find(
+                    {"id": {"$in": list(assignee_ids)}, "tenant_id": user["tenant_id"]},
+                    {"_id": 0, "id": 1, "name": 1},
+                ):
+                    umap[u["id"]] = u.get("name")
+            # Bucket tasks by workflow_id -> the current-stage lane.
+            by_wf: dict = {}
+            for t in task_rows:
+                t["assignee_name"] = umap.get(t.get("assignee_id"))
+                by_wf.setdefault(t["workflow_id"], []).append(t)
+            for w in wfs:
+                w["stage_tasks"] = by_wf.get(w.get("id")) or []
     return wfs
 
 
@@ -2945,6 +3073,7 @@ async def create_workflow(inp: WorkflowCreateInput, user: dict = Depends(require
         "id": wid, "tenant_id": user["tenant_id"], "type": inp.type, "title": inp.title,
         "detail": inp.detail or "", "amount": inp.amount, "counterparty": counterparty, "contact_id": contact_id,
         "stage": stages[0], "stages": stages,
+        "stage_version": 0,
         "history": [{"stage": stages[0], "note": "Created", "by": user["id"], "at": now_iso()}],
         "created_by": user["id"], "created_at": now_iso(),
     }
@@ -2955,112 +3084,47 @@ async def create_workflow(inp: WorkflowCreateInput, user: dict = Depends(require
 
 
 @api.patch("/workflows/{workflow_id}/advance")
-async def advance_workflow(workflow_id: str, inp: WorkflowAdvanceInput, user: dict = Depends(require_perm("workflows"))):
-    from services.tenancy import tenant_filter  # FIX-001-C carried over: writes below now tenant-scoped
-    wf = await db.workflows.find_one({"id": workflow_id, "tenant_id": user["tenant_id"]})
-    if not wf:
-        raise HTTPException(status_code=404, detail="Not found")
-    if inp.stage not in wf["stages"]:
-        raise HTTPException(status_code=400, detail="Invalid stage")
-    cur_idx = wf["stages"].index(wf["stage"])
-    tgt_idx = wf["stages"].index(inp.stage)
-    if tgt_idx != cur_idx + 1:
-        raise HTTPException(status_code=400, detail="Can only advance to the next stage")
-    # dynamic approval gate: only owner may advance to a pipeline's approval_stage
-    om = await tenant_operating_model(user["tenant_id"])
-    pipeline = next((p for p in om["pipelines"] if p["key"] == wf["type"]), None)
-    appr_stage = pipeline.get("approval_stage") if pipeline else ("approved" if wf["type"] == "purchase_payment" else None)
-    if appr_stage and inp.stage == appr_stage and user["role"] != "owner":
-        raise HTTPException(status_code=403, detail="Only the owner can approve this stage")
-    entry = {"stage": inp.stage, "note": inp.note or "", "by": user["id"], "at": now_iso()}
-    await db.workflows.update_one(
-        tenant_filter(workflow_id, user["tenant_id"]),
-        {"$set": {"stage": inp.stage}, "$push": {"history": entry}},
-    )
-    await log_activity(user["tenant_id"], user["id"], "workflow_advanced", f"'{wf['title']}' → {inp.stage}", "workflow", workflow_id)
-    # FIX-007-B (S4-10): workflow-stage advances were invisible to the
-    # Brain — "when did the Kapoor order actually ship?" queries came
-    # back empty because the paid → dispatched → delivered chain never
-    # got captured as a queryable outcome. Now every advance writes one
-    # brain_context row keyed by (workflow_id, decision_id) so both
-    # "downstream of decision X" and "history of workflow Y" queries
-    # resolve. Terminal-stage advances get outcome="completed" so
-    # retrieval can rank a completed workflow above one still in flight.
+async def advance_workflow(workflow_id: str, inp: WorkflowAdvanceInput,
+                            user: dict = Depends(require_perm("workflows"))):
+    """WE-07 (2026-08-16): this endpoint is now a THIN wrapper around
+    services/workflow_engine.advance. The engine is the single writer
+    of workflows.stage across the codebase (verified by
+    tests/test_we07_single_writer.py). Manual advances from the UI
+    still work exactly as before, plus:
+      * inp.override + inp.reason enable the WE-13 audited-override
+        path (owner can force a transition even when
+        check_stage_ready returns False; reason is required and
+        lands in wf.history + audit_log).
+      * If check_stage_ready is True, the engine advances; if not,
+        409 with the reason.
+
+    The legacy FIX-001-B (procurement -> Finance handoff) has moved
+    into the WE-08 side-effects registry (services/workflow_engine.py
+    _side_effect_create_expense). Tenants who want the auto-expense
+    now bind {kind: create_expense} to the terminal stage's
+    side_effects[] in Settings > Operations. Existing tenants keep
+    the legacy behaviour via a one-time backfill migration
+    (see backfill_procurement_side_effects_v1 in _bootstrap).
+    """
+    from services.workflow_engine import advance as _engine_advance
+    from services.workflow_engine import WorkflowAdvanceError
     try:
-        _final_stage = wf["stages"][-1] if wf.get("stages") else None
-        _is_terminal = _final_stage and inp.stage == _final_stage
-        await brain_context.record_context(
-            tenant_id=user["tenant_id"], kind="workflow",
-            title=f"{wf.get('title') or 'Workflow'} → {inp.stage}",
-            outcome="completed" if _is_terminal else "advanced",
-            why=(inp.note or ""),
-            tags=[wf.get("type")] if wf.get("type") else [],
-            source_type="workflow", source_id=workflow_id,
-            decision_id=wf.get("decision_id"),
-            related_ids={"workflow_type": wf.get("type"),
-                          "counterparty": wf.get("counterparty")},
-            actor_id=user["id"], actor_name=user.get("name") or "",
-            department=user.get("role") or "", visibility="public",
+        result = await _engine_advance(
+            user["tenant_id"], workflow_id,
+            user["id"], user.get("name") or "", user.get("role") or "",
+            target_stage=inp.stage,
+            note=inp.note or "",
+            override=bool(getattr(inp, "override", False)),
+            reason=(getattr(inp, "reason", "") or ""),
         )
-    except Exception as _e:
-        # Fail-open — never let a Brain write break the workflow advance.
-        logger.warning(f"S4-10 workflow brain_context failed for {workflow_id}: {_e}")
-
-    # FIX-001-B: workflow -> Finance handoff. When a procurement workflow
-    # advances to its final stage ("paid" / "settled" / "invoice_paid" etc.,
-    # whatever the tenant's AI-designed pipeline calls it), auto-create a
-    # PENDING-BILL expense in Finance so the founder doesn't have to record
-    # the same purchase twice. Idempotent: never double-creates for the
-    # same workflow_id, so re-advancing (or later stage tweaks) don't
-    # spawn duplicate expenses. All failures are best-effort try/except so
-    # a Finance-side hiccup can't 500 the workflow advance itself.
-    try:
-        from services.workflows import tenant_procurement_pipeline, procurement_terminal_stage
-        proc = await tenant_procurement_pipeline(user["tenant_id"])
-        if proc and proc.get("key") == wf["type"]:
-            term = procurement_terminal_stage(proc)
-            if term and inp.stage == term:
-                existing = await db.expenses.find_one(
-                    {"tenant_id": user["tenant_id"], "workflow_id": workflow_id},
-                    {"_id": 0, "id": 1},
-                )
-                if not existing:
-                    from routers.ledger import create_expense
-                    est_amt = wf.get("amount") if isinstance(wf.get("amount"), (int, float)) else 0.0
-                    exp = await create_expense(
-                        user["tenant_id"], user["id"],
-                        {
-                            "title": wf.get("title") or "Procurement expense",
-                            "amount": est_amt,
-                            "vendor_name": wf.get("counterparty") or "",
-                            "status": "awaiting_bill",
-                            "notes": f"Auto-created from procurement workflow: {wf.get('title')}. "
-                                     f"Estimated amount from the workflow card; upload the actual bill to reconcile.",
-                            "workflow_id": workflow_id,
-                            "workflow_type": wf.get("type"),
-                        },
-                        source="workflow", write_brain=True,
-                    )
-                    # Notify Finance role so they know to upload the bill.
-                    finance_ids = await _finance_user_ids(user["tenant_id"])
-                    # Don't ping the person who just advanced the workflow if they
-                    # ARE finance — they already know.
-                    finance_ids = [u for u in finance_ids if u and u != user["id"]]
-                    if finance_ids:
-                        cur = await _tenant_currency(user["tenant_id"])
-                        est_txt = f"{cur} {int(est_amt):,}" if est_amt else f"amount not on card"
-                        await push_notification(
-                            user["tenant_id"], finance_ids, 2,
-                            f"Upload bill for '{wf.get('title')}' (est. {est_txt}) — auto-created from a completed workflow",
-                            "expense", exp["id"],
-                            ntype="bill_upload", title=wf.get("title"),
-                            sender=user.get("name"),
-                        )
-    except Exception as e:
-        # Fire-and-forget: never let the Finance handoff block the workflow advance.
-        logger.warning(f"FIX-001-B: workflow->expense auto-create failed for {workflow_id}: {e}")
-
-    return await db.workflows.find_one(tenant_filter(workflow_id, user["tenant_id"]), {"_id": 0})
+    except WorkflowAdvanceError as e:
+        raise HTTPException(status_code=e.http_status, detail=str(e))
+    if result.get("already_advanced"):
+        # Concurrency guard fired: another writer got there first. That
+        # is not an error -- return the (now-current) workflow so the
+        # UI just picks up the new stage.
+        return result.get("workflow")
+    return result.get("workflow")
 
 
 @api.delete("/workflows/{workflow_id}")
@@ -6392,6 +6456,240 @@ async def _bootstrap():
                 logger.info("Migration applied: stage_objects_extend_v1")
         except Exception as e:
             logger.exception(f"stage_objects_extend migration: {e}")  # WE-03
+        # WE-01 (2026-08-16): task -> workflow linkage backfill.
+        # Every task with a decision_id gets workflow_id set to the
+        # matching workflow (looked up by shared decision_id, tenant-
+        # scoped). stage_key is set to the workflow's INITIAL stage --
+        # NOT current -- because the task was spawned when the card
+        # was created; setting current would falsely gate advance out
+        # of the current stage. Ambiguous matches (0 or >1 workflow
+        # for a decision_id) leave both fields null. Idempotent: the
+        # match filter excludes tasks that already have workflow_id.
+        async def _backfill_task_workflow_link(_db):
+            from services.workflows import stage_key_for_backfill
+            scanned = matched = 0
+            async for _tsk in _db.tasks.find(
+                {"decision_id": {"$exists": True, "$nin": [None, ""]},
+                 "$or": [{"workflow_id": {"$exists": False}},
+                         {"workflow_id": {"$in": [None, ""]}}]},
+                {"_id": 0, "id": 1, "tenant_id": 1, "decision_id": 1},
+            ):
+                scanned += 1
+                _wfs = await _db.workflows.find(
+                    {"tenant_id": _tsk["tenant_id"],
+                     "decision_id": _tsk["decision_id"]},
+                    {"_id": 0, "id": 1, "stages": 1},
+                ).to_list(2)
+                if len(_wfs) != 1:
+                    continue  # ambiguous: leave unlinked
+                _wf = _wfs[0]
+                _stage_key = stage_key_for_backfill(_wf)
+                await _db.tasks.update_one(
+                    {"id": _tsk["id"]},
+                    {"$set": {"workflow_id": _wf["id"],
+                              "stage_key": _stage_key}},
+                )
+                matched += 1
+            logger.info(
+                f"[WE-01] backfill_task_workflow_link: "
+                f"scanned={scanned} matched={matched}"
+            )
+        try:
+            _bwlres = await _apply_migration(
+                db, "backfill_task_workflow_link_v1", _backfill_task_workflow_link,
+                description="WE-01: link tasks to workflows via shared decision_id (initial stage, tenant-scoped)",
+            )
+            if _bwlres == "applied":
+                logger.info("Migration applied: backfill_task_workflow_link_v1")
+        except Exception as e:
+            logger.exception(f"backfill_task_workflow_link migration: {e}")  # WE-01
+        # WE-02 (2026-08-16): drop the two ghost collections that
+        # confused Settings ("three cards, three shapes, one concept").
+        # Nothing reads workflow_templates now that /tenant/os-blueprint
+        # ignores it and the Settings UI editor is gone; nothing reads
+        # lexicon.workflows now that lex()'s workflows merge is gone.
+        # $unset both fields on every tenant so exports + admin views
+        # don't carry stale garbage. Idempotent (unset is a no-op when
+        # the field is already absent).
+        async def _drop_ghost_workflow_collections(_db):
+            _r1 = await _db.tenants.update_many(
+                {"workflow_templates": {"$exists": True}},
+                {"$unset": {"workflow_templates": ""}},
+            )
+            _r2 = await _db.tenants.update_many(
+                {"lexicon.workflows": {"$exists": True}},
+                {"$unset": {"lexicon.workflows": ""}},
+            )
+            logger.info(
+                f"[WE-02] drop_ghost_workflow_collections: "
+                f"tenants.workflow_templates unset={getattr(_r1, 'modified_count', 0)} "
+                f"tenants.lexicon.workflows unset={getattr(_r2, 'modified_count', 0)}"
+            )
+        try:
+            _dres = await _apply_migration(
+                db, "drop_ghost_workflow_collections_v1", _drop_ghost_workflow_collections,
+                description="WE-02: $unset tenant.workflow_templates and tenant.lexicon.workflows (dead outputs)",
+            )
+            if _dres == "applied":
+                logger.info("Migration applied: drop_ghost_workflow_collections_v1")
+        except Exception as e:
+            logger.exception(f"drop_ghost_workflow_collections migration: {e}")  # WE-02
+        # WE-08 (2026-08-16): the FIX-001-B behaviour that used to be
+        # hardcoded in the advance endpoint (procurement -> Finance
+        # auto-expense) is now a `create_expense` side-effect bound to
+        # the procurement pipeline's TERMINAL stage. This migration
+        # walks every tenant whose operating_model has a procurement
+        # pipeline (identified by approval_stage or the legacy
+        # 'purchase_payment' key) and appends the side-effect to the
+        # terminal stage if it is not already present. Idempotent:
+        # skips stages already carrying it. Zero-behaviour-diff for
+        # existing tenants -- the engine will call the same handler
+        # with the same effect as the old inline block.
+        async def _backfill_procurement_side_effect(_db):
+            touched = scanned = 0
+            async for _t in _db.tenants.find(
+                {"operating_model.pipelines": {"$exists": True}},
+                {"_id": 0, "id": 1, "operating_model": 1},
+            ):
+                scanned += 1
+                om = _t.get("operating_model") or {}
+                changed = False
+                for _p in (om.get("pipelines") or []):
+                    # Identify procurement: pipelines with an
+                    # approval_stage, plus the legacy purchase_payment key.
+                    if not (_p.get("approval_stage") or
+                            _p.get("key") == "purchase_payment"):
+                        continue
+                    _stages = _p.get("stages") or []
+                    if not _stages:
+                        continue
+                    _term = _stages[-1]
+                    if not isinstance(_term, dict):
+                        continue  # legacy string stage; WE-03 migration handles this pre-run
+                    _ses = _term.setdefault("side_effects", [])
+                    if any((_se or {}).get("kind") == "create_expense" for _se in _ses):
+                        continue
+                    _ses.append({
+                        "kind": "create_expense",
+                        "params": {"status": "awaiting_bill"},
+                    })
+                    changed = True
+                if changed:
+                    await _db.tenants.update_one(
+                        {"id": _t["id"]},
+                        {"$set": {"operating_model": om,
+                                  "updated_at": now_iso()}},
+                    )
+                    touched += 1
+            logger.info(
+                f"[WE-08] backfill_procurement_side_effect: "
+                f"scanned={scanned} touched={touched}"
+            )
+        try:
+            _pres = await _apply_migration(
+                db, "backfill_procurement_side_effect_v1",
+                _backfill_procurement_side_effect,
+                description="WE-08: bind create_expense side-effect to procurement terminal stage",
+            )
+            if _pres == "applied":
+                logger.info("Migration applied: backfill_procurement_side_effect_v1")
+        except Exception as e:
+            logger.exception(f"backfill_procurement_side_effect migration: {e}")  # WE-08
+        # WE-09 (2026-08-16): stage_version = optimistic-lock counter for
+        # engine.advance's find_one_and_update CAS. Backfill every
+        # existing workflow to stage_version=0 so the first engine
+        # advance transitions to 1 cleanly.
+        async def _backfill_stage_version(_db):
+            _r = await _db.workflows.update_many(
+                {"stage_version": {"$exists": False}},
+                {"$set": {"stage_version": 0}},
+            )
+            logger.info(
+                f"[WE-09] backfill_stage_version: "
+                f"workflows initialised={getattr(_r, 'modified_count', 0)}"
+            )
+        try:
+            _svres = await _apply_migration(
+                db, "backfill_stage_version_v1", _backfill_stage_version,
+                description="WE-09: initialise workflows.stage_version=0 for optimistic-lock CAS",
+            )
+            if _svres == "applied":
+                logger.info("Migration applied: backfill_stage_version_v1")
+        except Exception as e:
+            logger.exception(f"backfill_stage_version migration: {e}")  # WE-09
+        # WE-01.5 (2026-08-16): backfill stage.role for existing
+        # tenants. The AI didn't emit it before, so we derive it from
+        # (a) stage.tasks[0].role if a template task exists there, or
+        # (b) the legacy WORKFLOW_OWNER_ROLE map for the well-known
+        # pipeline types (production / distribution / purchase_payment
+        # / sales_dispatch). Skip stages that already have role set.
+        # Idempotent -- filter excludes tenants where every stage
+        # already carries the field.
+        async def _backfill_stage_role(_db):
+            touched = scanned = 0
+            async for _t in _db.tenants.find(
+                {"operating_model.pipelines": {"$exists": True}},
+                {"_id": 0, "id": 1, "operating_model": 1},
+            ):
+                scanned += 1
+                om = _t.get("operating_model") or {}
+                changed = False
+                for _p in (om.get("pipelines") or []):
+                    _p_key = _p.get("key")
+                    _legacy = WORKFLOW_OWNER_ROLE.get(_p_key) or {}
+                    for _s in (_p.get("stages") or []):
+                        if not isinstance(_s, dict):
+                            continue
+                        if _s.get("role"):
+                            continue
+                        _stage_key = _s.get("key")
+                        # (a) derive from first template task's role
+                        _from_task = None
+                        for _tk in (_s.get("tasks") or []):
+                            if _tk.get("role"):
+                                _from_task = _tk["role"]
+                                break
+                        # (b) legacy per-stage map
+                        _from_legacy = _legacy.get(_stage_key)
+                        _role = _from_task or _from_legacy or ""
+                        if _role:
+                            _s["role"] = _role
+                            changed = True
+                if changed:
+                    await _db.tenants.update_one(
+                        {"id": _t["id"]},
+                        {"$set": {"operating_model": om,
+                                  "updated_at": now_iso()}},
+                    )
+                    touched += 1
+            logger.info(
+                f"[WE-01.5] backfill_stage_role: scanned={scanned} touched={touched}"
+            )
+        try:
+            _srres = await _apply_migration(
+                db, "backfill_stage_role_v1", _backfill_stage_role,
+                description="WE-01.5: derive stage.role from tasks[0].role or WORKFLOW_OWNER_ROLE legacy map",
+            )
+            if _srres == "applied":
+                logger.info("Migration applied: backfill_stage_role_v1")
+        except Exception as e:
+            logger.exception(f"backfill_stage_role migration: {e}")  # WE-01.5
+        # WE-01: indexes for the new query patterns unlocked by the
+        # workflow linkage. Compound (tenant_id, workflow_id, stage_key)
+        # supports both "all tasks for this card" (uses the tenant_id +
+        # workflow_id prefix) and "all tasks in this specific stage of
+        # this card" (uses the full compound). Partial filter on
+        # workflow_id !=  null keeps the index small -- most ad-hoc
+        # tasks won't have workflow_id and shouldn't bloat the index.
+        try:
+            await db.tasks.create_index(
+                [("tenant_id", 1), ("workflow_id", 1), ("stage_key", 1)],
+                name="tasks_tenant_workflow_stage",
+                partialFilterExpression={
+                    "workflow_id": {"$type": "string"}},
+            )
+        except Exception as e:
+            logger.warning(f"WE-01 tasks_tenant_workflow_stage index: {e}")
         # FIX-003-D (S2-07): auth_email_tokens for email verification +
         # password reset. Unique index on the token string, TTL index on
         # expires_at so used/expired rows auto-purge. Kind + email combo

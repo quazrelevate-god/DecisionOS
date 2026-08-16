@@ -7,11 +7,10 @@ import { Translate, FloppyDisk, Sparkle } from "@phosphor-icons/react";
 
 const inp = "w-full border border-border rounded-lg px-3 py-2 text-sm font-mono bg-card focus:outline-none focus:ring-2 focus:ring-ring/40";
 
-const WF_KEYS = [
-  { key: "production", hint: "Core delivery / fulfilment pipeline" },
-  { key: "distribution", hint: "Handover / dispatch to the customer" },
-  { key: "purchase_payment", hint: "Procurement & paying vendors" },
-];
+// WE-02 (2026-08-16): WF_KEYS + workflow pipelines editor removed. The
+// three labels were a dead output; pipeline labels are edited via the
+// Operating Model editor (Operations tab) which is the single source of
+// truth per Epic 5 spec.
 const TT_KEYS = ["operational", "sales", "purchase", "production", "finance", "hr"];
 
 function Row({ label, hint, value, onChange, testid }) {
@@ -31,7 +30,7 @@ export function BusinessVocabulary() {
   const [regen, setRegen] = useState(false);
 
   const setField = (k, v) => setForm((s) => ({ ...s, [k]: v }));
-  const setWf = (k, field, v) => setForm((s) => ({ ...s, workflows: { ...s.workflows, [k]: { ...s.workflows[k], [field]: v } } }));
+  // WE-02: setWf removed alongside the workflow-vocab editor block.
   const setTt = (k, v) => setForm((s) => ({ ...s, task_types: { ...s.task_types, [k]: v } }));
 
   const save = async () => {
@@ -79,17 +78,9 @@ export function BusinessVocabulary() {
           <Row label="Vendors (plural)" testid="vocab-vendor-plural" value={form.vendor_plural} onChange={(v) => setField("vendor_plural", v)} />
         </div>
 
-        <div>
-          <p className="label-mono text-brand-600 mb-2">Workflow pipelines</p>
-          <div className="space-y-3">
-            {WF_KEYS.map(({ key, hint }) => (
-              <div key={key} className="grid grid-cols-2 gap-3">
-                <Row label="Name" hint={hint} testid={`vocab-wf-${key}-label`} value={form.workflows[key].label} onChange={(v) => setWf(key, "label", v)} />
-                <Row label="Subtitle" testid={`vocab-wf-${key}-sub`} value={form.workflows[key].sub} onChange={(v) => setWf(key, "sub", v)} />
-              </div>
-            ))}
-          </div>
-        </div>
+        {/* WE-02 (2026-08-16): "Workflow pipelines" editor removed.
+             Pipeline labels + stages are edited via the Operating Model
+             editor (see OperatingModelEditor.js). */}
 
         <div>
           <p className="label-mono text-brand-600 mb-2">Task type / department labels</p>

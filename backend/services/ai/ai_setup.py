@@ -41,11 +41,48 @@ def _is_meaningful_lexicon(data: dict) -> bool:
 
 
 def _is_meaningful_operating_model(data: dict) -> bool:
-    """Operating model is meaningful only if pipelines is a non-empty list."""
+    """Operating model is meaningful only if pipelines is a non-empty
+    list AND NOT the textile-era DEFAULT_OPERATING_MODEL fallback.
+
+    WE-EPIC5-BUG-2 (2026-08-16): the underlying ai_generate_operating_model
+    catches its own exceptions and returns normalize_operating_model({})
+    -- which is the DEFAULT model with production/distribution/
+    purchase_payment pipelines. Previously this function saw "pipelines
+    non-empty" and reported STATUS_GENERATED, hiding the AI failure.
+    The tenant then thought their model was industry-tailored when it
+    was the built-in fallback.
+
+    Fix: compare against the DEFAULT model's pipeline signature.
+    Signature = sorted (pipeline.key, first_stage.key) tuples across
+    all pipelines. Cheap, robust to WE-01.5 role additions, no false
+    positives on legitimately-different AI output.
+    """
     if not isinstance(data, dict):
         return False
     p = data.get("pipelines")
-    return isinstance(p, list) and len(p) > 0
+    if not (isinstance(p, list) and len(p) > 0):
+        return False
+    # Cheap default-signature check.
+    from core import DEFAULT_OPERATING_MODEL
+
+    def _sig(model: dict) -> tuple:
+        pipes = (model or {}).get("pipelines") or []
+        out = []
+        for pl in pipes:
+            if not isinstance(pl, dict):
+                continue
+            k = pl.get("key") or ""
+            stages = pl.get("stages") or []
+            first_key = ""
+            if stages:
+                fs = stages[0]
+                first_key = fs.get("key") if isinstance(fs, dict) else str(fs)
+            out.append((k, first_key or ""))
+        return tuple(sorted(out))
+
+    if _sig(data) == _sig(DEFAULT_OPERATING_MODEL):
+        return False  # this IS the fallback -- AI didn't contribute
+    return True
 
 
 def _is_meaningful_finance(data: dict) -> bool:

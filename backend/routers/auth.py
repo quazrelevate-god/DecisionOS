@@ -276,6 +276,30 @@ async def register(inp: RegisterInput, request: Request, response: Response):
             seen.add(k)
             clean_roles.append({"key": k, "label": r.get("label") or k.replace("_", " ").title()})
 
+    # WE-EPIC5-BUG-2 (2026-08-16): before we can call the AI helpers,
+    # the RBAC-25 DPDP consent gate needs a tenant doc with granted
+    # consent -- otherwise every LLM call raises 451. On signup the
+    # tenant doesn't exist yet, so the AI silently defaulted to the
+    # textile-era pipeline for every new tenant (surfaced by the live
+    # tech-manufacturer signup E2E). Fix: insert a stub tenant with
+    # ai_consent pre-populated BEFORE the AI calls fire. The signup
+    # click IS the consent event -- the founder cannot proceed
+    # without it. We fill in the real fields (lexicon, operating_model,
+    # etc.) via update_one below once AI returns.
+    from services.ai_consent import build_grant_payload as _consent_grant
+    _stub_consent = _consent_grant(
+        actor_user_id="signup-provisional",  # user_id not yet minted
+        actor_email=email,
+        ip=(request.client.host if request.client else None),
+        ua=(request.headers.get("user-agent") or "")[:500],
+    )
+    await db.tenants.insert_one({
+        "id": tenant_id, "name": inp.company_name,
+        "industry": inp.industry or "General",
+        "ai_consent": _stub_consent,
+        "created_at": now_iso(),
+    })
+
     # FIX-001-D: use status-aware AI wrappers so a silent LLM failure /
     # default-fallback is RECORDED on the tenant doc as `ai_setup_status`.
     # Frontend can then show "AI setup incomplete — click to regenerate."
@@ -297,6 +321,11 @@ async def register(inp: RegisterInput, request: Request, response: Response):
     # plan set by the backfill migration in server.py._bootstrap.
     from services.plans import new_tenant_plan_fields
     _plan_fields = new_tenant_plan_fields()
+    # Stub tenant was inserted above (with ai_consent) so the AI calls
+    # could run. Now UPDATE it with everything the signup collected +
+    # the AI-generated fields. Preserves ai_consent + id + created_at
+    # (already set). Keep the local tenant_doc var built for the
+    # login-response payload downstream.
     tenant_doc = {
         "id": tenant_id, "name": inp.company_name,
         "industry": inp.industry or "General",
@@ -311,19 +340,26 @@ async def register(inp: RegisterInput, request: Request, response: Response):
         "invited_employees": [],
         "roles": clean_roles or DEFAULT_ROLES,
         "products": [p.model_dump() for p in (inp.products or [])],
-        "workflow_templates": bp["workflows"] if bp else [],
+        # WE-02: workflow_templates removed (dead brainstorm list).
         "operational_task_templates": bp["operational_tasks"] if bp else [],
         "approval_rules": bp["approval_rules"] if bp else [],
         "lexicon": lexicon,
         "operating_model": om,
         "finance_categories": fc,
         "ai_setup_status": ai_setup_status,  # FIX-001-D
+        "ai_consent": _stub_consent,  # preserve the stub-time consent record
         "created_at": now_iso(),
         # FIX-005-A (S3-02): plan defaults (plan / trial_ends_at /
         # seat_limit_override / usage_quotas / feature_flags).
         **_plan_fields,
     }
-    await db.tenants.insert_one(tenant_doc)
+    # Update the stub instead of insert (row already exists thanks to
+    # the pre-AI ai_consent stub above).
+    _stub_only = {"id", "name", "industry", "ai_consent", "created_at"}
+    await db.tenants.update_one(
+        {"id": tenant_id},
+        {"$set": {k: v for k, v in tenant_doc.items() if k not in _stub_only}},
+    )
     user_id = new_id()
     # FIX-002-A: also write phone_norm so OTP login + WhatsApp routing
     # can query by exact-match on the indexed field.
@@ -464,8 +500,9 @@ async def register(inp: RegisterInput, request: Request, response: Response):
         **_ctx,
     )
     os_summary = {
+        # WE-02: 'workflows' count removed (was reading the ghost
+        # workflow_templates field that no longer exists on tenant).
         "departments": len(clean_roles),
-        "workflows": len(tenant_doc["workflow_templates"]),
         "operational_tasks": len(tenant_doc["operational_task_templates"]),
         "approval_rules": len(tenant_doc["approval_rules"]),
     }

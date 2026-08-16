@@ -59,6 +59,32 @@ def _task_activity(t: dict):
     return cand[-1]
 
 
+async def _fetch_workflow_summaries(tenant_id: str, wf_ids: set) -> dict:
+    """WE-11 (2026-08-16): pull a compact summary for every workflow
+    referenced by a batch of tasks. Returns
+        { wf_id: {id, type, title, stage, short_id} }
+    where short_id is the last 4 chars of the workflow id (used by the
+    UI chip like 'Order #4821 - Confirmed'). Only the fields the chip
+    needs -- keeps the payload small.
+    """
+    if not wf_ids:
+        return {}
+    out = {}
+    async for wf in db.workflows.find(
+        {"id": {"$in": list(wf_ids)}, "tenant_id": tenant_id},
+        {"_id": 0, "id": 1, "type": 1, "title": 1, "stage": 1},
+    ):
+        wf_id = wf["id"]
+        out[wf_id] = {
+            "id": wf_id,
+            "type": wf.get("type") or "",
+            "title": wf.get("title") or "",
+            "stage": wf.get("stage") or "",
+            "short_id": wf_id[-4:] if len(wf_id) > 4 else wf_id,
+        }
+    return out
+
+
 async def enrich_task(t: Optional[dict]) -> Optional[dict]:
     if not t:
         return t
@@ -75,19 +101,36 @@ async def enrich_task(t: Optional[dict]) -> Optional[dict]:
     t["task_type"] = _derive_task_type(t)
     at, action = _task_activity(t)
     t["updated_at"], t["last_action"] = at, action
+    # WE-11: workflow_summary is the compact payload the MyWork stage
+    # chip renders from. Only fetched when workflow_id is set (ad-hoc
+    # tasks stay unaffected).
+    if t.get("workflow_id") and t.get("tenant_id"):
+        wf_map = await _fetch_workflow_summaries(t["tenant_id"], {t["workflow_id"]})
+        t["workflow_summary"] = wf_map.get(t["workflow_id"]) or None
+    else:
+        t["workflow_summary"] = None
     return t
 
 
 async def enrich_tasks(tasks: List[dict]) -> List[dict]:
     ids = set()
+    wf_ids = set()
+    tenant_id = None
     for t in tasks:
         for k in ("assignee_id", "support_id", "approver_id", "created_by"):
             if t.get(k):
                 ids.add(t[k])
+        if t.get("workflow_id"):
+            wf_ids.add(t["workflow_id"])
+        if t.get("tenant_id") and tenant_id is None:
+            tenant_id = t["tenant_id"]
     umap = {}
     if ids:
         for u in await db.users.find({"id": {"$in": list(ids)}}, {"_id": 0, "id": 1, "name": 1}).to_list(500):
             umap[u["id"]] = u["name"]
+    # WE-11: single batch fetch for every workflow the tasks reference
+    # (one round trip covers a whole MyWork list).
+    wf_map = await _fetch_workflow_summaries(tenant_id, wf_ids) if tenant_id else {}
     for t in tasks:
         t["assignee_name"] = umap.get(t.get("assignee_id"))
         t["support_name"] = umap.get(t.get("support_id"))
@@ -97,6 +140,8 @@ async def enrich_tasks(tasks: List[dict]) -> List[dict]:
         t["task_type"] = _derive_task_type(t)
         at, action = _task_activity(t)
         t["updated_at"], t["last_action"] = at, action
+        t["workflow_summary"] = (wf_map.get(t.get("workflow_id"))
+                                 if t.get("workflow_id") else None)
     return tasks
 
 

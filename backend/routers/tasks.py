@@ -201,6 +201,11 @@ async def _resolve_task_handoff(user, t, task_id, action, text, step_text, inp):
         "priority": "high" if action == "escalate" else (t.get("priority") or "medium"),
         "status": "todo", "due_date": t.get("due_date"),
         "decision_id": t.get("decision_id"), "parent_task_id": task_id,
+        # WE-01: a handoff/escalation follow-up inherits the parent
+        # task's workflow linkage so the child appears on the same
+        # stage of the same card. If parent was ad-hoc, child is too.
+        "workflow_id": t.get("workflow_id"),
+        "stage_key": t.get("stage_key"),
         "raised_by": user["id"], "raised_by_name": user.get("name"),
         "raised_step_text": step_text, "raised_note": text,
         "source": "escalation" if action == "escalate" else "handoff", "created_at": now_iso(),
@@ -272,7 +277,21 @@ async def delete_task(task_id: str, user: dict = Depends(require_role("owner")))
 @router.post("/tasks")
 async def create_task(inp: TaskCreateInput, background: BackgroundTasks, user: dict = Depends(get_current_user)):
     from server import pick_least_loaded_member, push_notification, _approver_ids  # deferred
+    from services.workflows import derive_task_workflow_link  # WE-01
     tid = new_id()
+    # WE-01: resolve workflow linkage BEFORE the DB write. If the user
+    # supplied an invalid workflow_id or a cross-tenant one, this
+    # raises ValueError and we translate to 400 so the client sees
+    # the reason instead of the task landing silently unlinked.
+    try:
+        link_wf, link_stage = await derive_task_workflow_link(
+            user["tenant_id"],
+            workflow_id=inp.workflow_id,
+            stage_key=inp.stage_key,
+            strict=True,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     due = None
     if inp.due_date:
         due = f"{inp.due_date}T{inp.due_time}:00" if inp.due_time else inp.due_date
@@ -310,6 +329,9 @@ async def create_task(inp: TaskCreateInput, background: BackgroundTasks, user: d
         "contact_id": inp.contact_id,
         "contact_name": inp.contact_name or "",
         "amount": inp.amount,
+        # WE-01: workflow linkage (both None for ad-hoc tasks).
+        "workflow_id": link_wf,
+        "stage_key": link_stage,
         "updated_at": now_iso(), "last_action": "Created",
     })
     if inp.reference_file_ids:
@@ -395,6 +417,35 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
             await add_decision_event(t["decision_id"], f"{t['title']} → {updates['status'].replace('_',' ')}", user["name"], "task")
         if updates.get("status") == "done":
             await log_activity(user["tenant_id"], user["id"], "task_done", f"Completed task '{t['title']}'", "task", task_id)
+            # WE-06.5 (2026-08-16, live-test surfaced): task-close hook.
+            # If the task was linked to a workflow (WE-01 fields set) and
+            # its stage_key matches the workflow's current stage, ask
+            # the engine to try advancing. Engine's check_stage_ready
+            # handles the "other tasks still open" case gracefully --
+            # returns not_ready and we swallow. Never blocks the task
+            # close itself; the advance is fire-and-forget best-effort.
+            if t.get("workflow_id") and t.get("stage_key"):
+                try:
+                    from services.workflow_engine import advance as _engine_advance
+                    from services.workflow_engine import WorkflowAdvanceError
+                    _wf_check = await db.workflows.find_one(
+                        {"id": t["workflow_id"], "tenant_id": user["tenant_id"]},
+                        {"_id": 0, "stage": 1})
+                    if _wf_check and _wf_check.get("stage") == t.get("stage_key"):
+                        try:
+                            await _engine_advance(
+                                user["tenant_id"], t["workflow_id"],
+                                user["id"], user.get("name") or "",
+                                user.get("role") or "",
+                            )
+                        except WorkflowAdvanceError:
+                            # Common: stage still has other open tasks.
+                            # Not an error -- card just waits.
+                            pass
+                except Exception as e:
+                    # Fail-open: never let engine issue break the task close.
+                    from core import logger as _lg
+                    _lg.warning(f"[WE-06.5] task-close engine hook skipped for {task_id}: {e}")
             # FIX-007-B (S4-02): thread decision_id through so the
             # decision → task → outcome chain is reconstructable.
             await brain_context.record_context(

@@ -19,13 +19,15 @@ def _first_stage(om: dict) -> dict:
 
 def test_old_string_stages_upgrade_with_empty_defaults():
     """A pre-WE-03 tenant with string stage entries lands on the new
-    shape with all three fields defaulted to empty."""
+    shape with all three fields defaulted to empty. WE-01.5 also
+    adds an empty role field."""
     r = normalize_operating_model({
         "pipelines": [{"key": "p", "label": "P", "stages": ["first", "second"]}]
     })
     st = _first_stage(r)
     assert st == {"key": "first", "label": "first",
-                  "tasks": [], "approval": None, "side_effects": []}
+                  "tasks": [], "approval": None, "side_effects": [],
+                  "role": ""}
 
 
 def test_old_dict_stages_upgrade_with_empty_defaults():

@@ -3430,6 +3430,16 @@ async def run_followup(tenant_id: str):
     if last and (now - last).total_seconds() < 60:
         return
     _followup_last_run[tenant_id] = now
+    # RBAC-27 (2026-08-15): sweep expired temp perms so contractor
+    # grants auto-revoke without a separate cron. Cheap query -- only
+    # touches memberships that HAVE a temp_grants entry past expiry.
+    try:
+        from routers.access import sweep_expired_temp_grants
+        revoked = await sweep_expired_temp_grants(tenant_id)
+        if revoked:
+            logger.info(f"[rbac-27] auto-revoked {revoked} expired temp grant(s) in tenant {tenant_id[:8]}...")
+    except Exception as e:
+        logger.warning(f"[rbac-27] temp-grant sweep failed: {e}")
     tasks = await db.tasks.find(
         {"tenant_id": tenant_id, "status": {"$in": ["todo", "in_progress"]}, "due_date": {"$ne": None, "$lt": now.isoformat()}},
         {"_id": 0}
@@ -6802,6 +6812,10 @@ app.include_router(crm_router)
 # capture count + unified capture proxy).
 from routers.dex import router as dex_router  # noqa: E402
 app.include_router(dex_router)
+# Epic 1 Batch 2 (RBAC-26 + RBAC-27): acting-as delegation + time-
+# bounded elevated permissions.
+from routers.access import router as access_router  # noqa: E402
+app.include_router(access_router)
 # FIX-006-B (S0-02): strict CORS allow-list — no more `allow_origin_regex=".*"`.
 # The old default of `*` combined with `allow_credentials=True` was echoed
 # back per-origin via `allow_origin_regex='.*'`, which sidesteps the CORS

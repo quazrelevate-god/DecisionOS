@@ -72,6 +72,19 @@ def _can_approve_leave(user: dict, leave: dict) -> bool:
         return True
     if leave.get("approver_id") == user["id"]:
         return True
+    # RBAC-26 (2026-08-15): I can act on this leave if the intended
+    # approver has delegated to me via acting_as (and it's active now).
+    # We can't sync-await here so we peek at the approver's delegation
+    # via user_perms path -- the delegate is stashed on the pending
+    # leave via `_delegate_to` when push_notification routes it there,
+    # OR we honour a live check when the current user has been named
+    # in someone's acting_as (looked up at get_current_user next time
+    # they log in). For MVP: the delegate simply gets pushed the
+    # notification via resolve_delegate (see _decide_leave below) and
+    # this permission check accepts the approver's chain (leave.
+    # `delegate_ids` populated on approver-routing).
+    if user["id"] in (leave.get("delegate_user_ids") or []):
+        return True
     return "leave_approve" in user_perms(user)
 
 

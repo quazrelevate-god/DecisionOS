@@ -470,6 +470,14 @@ async def get_current_user(
                 _role_perms_map[_k] = list(_perms)
         user["_role_perms_map"] = _role_perms_map
         user["_owner_exclusions"] = list(_tenant.get("owner_exclusions") or [])
+    # RBAC-27 (2026-08-15): non-expired temp grants merged in by user_perms().
+    # membership.temp_grants[] = [{perm, granted_by, expires_at, reason}]
+    user["_temp_grants"] = list(membership.get("temp_grants") or [])
+    # RBAC-26 (2026-08-15): acting_as delegation. When active (today
+    # between from and to), any approval intended for THIS user
+    # auto-routes to the delegate. Approval-routing sites (_can_approve_*,
+    # push_notification of pending approvals) read user['_acting_as'].
+    user["_acting_as"] = user.get("acting_as") or {}
     set_usage_tenant(user.get("tenant_id"))
     return user
 
@@ -526,17 +534,33 @@ def user_perms(user: dict) -> set:
     role = user.get("role")
     if role == "owner":
         excluded = set(user.get("_owner_exclusions") or [])
-        return set(PERMISSION_KEYS) - excluded
-    # 2. Explicit per-user override wins over any role default.
-    p = user.get("permissions")
-    if isinstance(p, list) and len(p) > 0:
-        return {k for k in p if k in PERMISSION_KEYS}
-    # 3. Tenant-level role permissions.
-    role_map = user.get("_role_perms_map") or {}
-    if role and role in role_map:
-        return {k for k in role_map[role] if k in PERMISSION_KEYS}
-    # 4. Global ROLE_DEFAULT_PERMS, then 5. _BASE_PERMS fallback.
-    return set(ROLE_DEFAULT_PERMS.get(role, _BASE_PERMS))
+        base = set(PERMISSION_KEYS) - excluded
+    else:
+        # 2. Explicit per-user override wins over any role default.
+        p = user.get("permissions")
+        if isinstance(p, list) and len(p) > 0:
+            base = {k for k in p if k in PERMISSION_KEYS}
+        else:
+            # 3. Tenant-level role permissions.
+            role_map = user.get("_role_perms_map") or {}
+            if role and role in role_map:
+                base = {k for k in role_map[role] if k in PERMISSION_KEYS}
+            else:
+                # 4. Global ROLE_DEFAULT_PERMS, then 5. _BASE_PERMS fallback.
+                base = set(ROLE_DEFAULT_PERMS.get(role, _BASE_PERMS))
+    # RBAC-27 (2026-08-15): non-expired temp grants get merged in on top.
+    # Format: user._temp_grants = [{perm, granted_by, expires_at, reason}]
+    # populated by get_current_user from the membership doc. Stays a
+    # simple union — no priority conflict since these ADD perms, never
+    # remove them.
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+    for g in (user.get("_temp_grants") or []):
+        perm = g.get("perm")
+        exp = str(g.get("expires_at") or "")
+        if perm in PERMISSION_KEYS and (not exp or exp > now):
+            base.add(perm)
+    return base
 
 
 def clean_perms(perms) -> list:

@@ -479,9 +479,12 @@ export function DexSheet({ open, onClose, onRecordingChange, onCaptured }) {
                 </button>
               ))}
             </div>
+            {/* §5.2.2's fade mask. It was at right-[-1rem], which put it past
+                the sheet's own edge and therefore off-screen — the row scrolled
+                with a hard cut and nothing to say so. */}
             <span
               aria-hidden="true"
-              className="pointer-events-none absolute inset-y-0 right-[-1rem] w-10 bg-gradient-to-l from-card to-transparent"
+              className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-card to-transparent"
             />
           </div>
 

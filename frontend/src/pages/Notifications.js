@@ -35,7 +35,9 @@ export default function Notifications() {
   // desktop still renders everything, so §9.2's diff is untouched.
   const isMobile = useIsMobile();
   const [showAll, setShowAll] = useState(false);
-  const PER_SCREEN = 12;
+  // 8, not 12: a notification body can run three lines, and twelve of them ran
+  // 2,733px at 360px wide.
+  const PER_SCREEN = 8;
   const capped = isMobile && !showAll;
   const shown = capped ? items.slice(0, PER_SCREEN) : items;
   const hidden = items.length - shown.length;

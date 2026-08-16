@@ -269,10 +269,19 @@ function NowMode({ counters, cards, chip, onChip, loading, showAll, onSeeAll, on
 
   // The hero. §5.1: "The current build shows the fire as a chip AND a card below
   // — two elements for one fact. Collapse them: the hero is the fire."
+  //
+  // `heroFire` keys off the COUNT, not off which chip happens to be selected.
+  // Keying it off the card meant that with 12 fires and the Needs-decision chip
+  // active, the verdict read "Nothing on fire." two inches under a chip reading
+  // "On fire 12". The hero is allowed to have no record to show — it is not
+  // allowed to contradict the counters beside it.
   const fireCard = chip === "on_fire" ? cards[0] : null;
-  const heroFire = fires > 0 && fireCard;
+  const heroFire = fires > 0;
 
-  const rows = (heroFire ? cards.slice(1) : cards).map((c) => ({
+  // Drop the first card only when the hero is actually SHOWING it. Keyed off
+  // heroFire alone, a fire count on another chip hid an unrelated decision from
+  // the queue — 30 waiting, 29 listed.
+  const rows = (heroFire && fireCard ? cards.slice(1) : cards).map((c) => ({
     id: c.id,
     title: c.title,
     status: c.kind === "task_overdue" || c.kind === "task_escalation" ? "overdue" : "pending",
@@ -309,15 +318,24 @@ function NowMode({ counters, cards, chip, onChip, loading, showAll, onSeeAll, on
             <Verdict
               tone="danger"
               headline={fires === 1 ? "1 thing is on fire." : `${fires} things are on fire.`}
+              // The record itself, but only when this chip is showing fires.
+              // On another chip the sentence still has to be true, so it states
+              // the count and offers the way to it.
               detail={
-                <>
-                  <p className="font-heading text-[0.9375rem] font-semibold leading-snug line-clamp-2">
-                    {fireCard.title}
-                  </p>
-                  <p className="mt-1 text-sm opacity-80">{cardContext(fireCard)}</p>
-                </>
+                fireCard ? (
+                  <>
+                    <p className="font-heading text-[0.9375rem] font-semibold leading-snug line-clamp-2">
+                      {fireCard.title}
+                    </p>
+                    <p className="mt-1 text-sm opacity-80">{cardContext(fireCard)}</p>
+                  </>
+                ) : undefined
               }
-              action={{ label: "Review", onClick: () => onOpen(fireCard) }}
+              action={
+                fireCard
+                  ? { label: "Review", onClick: () => onOpen(fireCard) }
+                  : { label: `Show me ${fires === 1 ? "it" : "them"}`, onClick: () => onChip("on_fire") }
+              }
               data-testid="desk-verdict"
             />
           ) : (
@@ -355,7 +373,9 @@ function NowMode({ counters, cards, chip, onChip, loading, showAll, onSeeAll, on
             wrap
             items={[{
               key: "cleared",
-              label: `Cleared today — ${counters.cleared_today ?? counters.completed ?? 0}`,
+              label: (counters.cleared_today ?? counters.completed ?? 0) > 0
+                ? `Cleared today — ${counters.cleared_today ?? counters.completed}`
+                : "Nothing cleared yet today",
               tone: "success",
               onSelect: onClearedToday,
               trailing: (

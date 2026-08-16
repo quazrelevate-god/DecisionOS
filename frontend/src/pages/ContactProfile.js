@@ -118,7 +118,11 @@ export default function ContactProfile() {
   if (isLoading) return <div className="font-mono text-sm uppercase tracking-widest py-20 text-center">Loading profile…</div>;
   // MPWA-12i: a dead end is worst on an error path — he arrived from a link and
   // has nowhere to go. E2-13's own CTA, on the surface it missed.
-  if (error) {
+  // `!data?.contact` as well as `error`: the API answers 200 with an empty body
+  // for a contact that no longer exists, and the destructure below reads
+  // `c.type` — which threw "Cannot read properties of undefined" and took the
+  // whole page down rather than showing this state.
+  if (error || !data?.contact) {
     return (
       <EmptyState
         title="That contact isn't here."

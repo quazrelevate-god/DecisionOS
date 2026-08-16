@@ -70,9 +70,21 @@ export function Verdict({
               {eyebrow}
             </p>
           )}
+          {/* §3 puts a Verdict at 180-240px. The AI finance sentence can run to
+              25 words, which at 26px is six lines and ~500px — the hero ate the
+              whole first viewport on Money. Long sentences step down a size
+              rather than being clamped: losing the tail of a sentence about
+              money is worse than setting it smaller. */}
           <h1
             data-testid={`${testId}-headline`}
-            className="mt-1 font-heading text-[1.625rem] font-bold leading-[1.15] tracking-tight"
+            className={cn(
+              "mt-1 font-heading font-bold tracking-tight",
+              String(headline || "").length > 108
+                ? "text-[1.1875rem] leading-[1.3]"
+                : String(headline || "").length > 64
+                  ? "text-[1.375rem] leading-[1.2]"
+                  : "text-[1.625rem] leading-[1.15]"
+            )}
           >
             {headline}
           </h1>

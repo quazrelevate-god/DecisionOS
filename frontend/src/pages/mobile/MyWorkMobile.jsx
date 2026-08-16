@@ -1048,6 +1048,7 @@ function WorkflowList() {
             onMove={(wf, stage) => moveTo(wf, stage)}
             renderItem={(wf) => (
               <MobileCard
+                compact
                 data-testid={`workflow-card-${wf.id}`}
                 title={wf.title || wf.contact_name || "Workflow"}
                 status="pending"

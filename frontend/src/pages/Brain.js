@@ -162,6 +162,24 @@ export default function Brain() {
     { key: "documents", label: "Documents", icon: Books },
   ];
 
+  // Epic 2 Sprint 5 (E2-35): poll for captures Dex is still structuring.
+  // Backend counts capture_drafts with status in {processing/queued/
+  // structuring} scoped to this user. When > 0, render a small badge
+  // under the tabs so the founder sees 'did my capture go through?'
+  // answered with 'Dex is structuring N right now'. Refetch every 8s
+  // so the badge disappears within ~8s of the AI finishing.
+  //
+  // MPWA-13 (merge): this sat BELOW the mobile early return, which made it a
+  // conditional hook — the hook count differed between a phone and a desktop
+  // render of the same component, and React would have thrown on any viewport
+  // change. Both branches need the count anyway.
+  const { data: inflight } = useQuery({
+    queryKey: ["dex-inflight-count"],
+    queryFn: () => api.get("/dex/inflight-count").then((r) => r.data),
+    refetchInterval: 8000,
+  });
+  const inflightN = inflight?.count || 0;
+
   if (isMobile) {
     return (
       <div data-testid="brain-mobile">
@@ -212,19 +230,6 @@ export default function Brain() {
   // Epic 2 Sprint 5 (E2-32): 'Company Brain' becomes 'Dex' -- single AI
   // persona. Founder ask 2026-08-14. Route stays /brain for bookmark
   // safety; /dex is an alias set up in App.js.
-
-  // Epic 2 Sprint 5 (E2-35): poll for captures Dex is still structuring.
-  // Backend counts capture_drafts with status in {processing/queued/
-  // structuring} scoped to this user. When > 0, render a small badge
-  // under the tabs so the founder sees 'did my capture go through?'
-  // answered with 'Dex is structuring N right now'. Refetch every 8s
-  // so the badge disappears within ~8s of the AI finishing.
-  const { data: inflight } = useQuery({
-    queryKey: ["dex-inflight-count"],
-    queryFn: () => api.get("/dex/inflight-count").then((r) => r.data),
-    refetchInterval: 8000,
-  });
-  const inflightN = inflight?.count || 0;
 
   return (
     <div>

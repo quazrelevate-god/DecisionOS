@@ -66,6 +66,11 @@ function Avatar({ name, className }) {
  * @param {string}  [context]    the third line — "From Suresh · Unblocks 3 tasks"
  * @param {string}  [person]     name for the avatar on the row
  * @param {number}  [amount]     right-aligned, tabular, always exact (§5.3)
+ * @param {boolean} [compact]    the card is in a narrow column (the Board's are
+ *                               232px). The amount moves UNDER the title instead
+ *                               of beside it — at that width the two shared a
+ *                               line and read as one string: "Order #4800
+ *                               ₹96,000 — Reliance Trends".
  * @param {Function} onOpen      whole-card tap
  */
 export function MobileCard({
@@ -77,6 +82,7 @@ export function MobileCard({
   person,
   amount,
   onOpen,
+  compact = false,
   className,
   "data-testid": testId,
 }) {
@@ -97,6 +103,12 @@ export function MobileCard({
         <span className="block font-heading text-[0.9375rem] font-semibold leading-snug tracking-tight line-clamp-2">
           {title}
         </span>
+
+        {compact && amount != null && amount !== "" && Number(amount) !== 0 && (
+          <span className="mt-1 block text-[0.9375rem] font-semibold tabular-nums">
+            {inr(amount)}
+          </span>
+        )}
 
         {/* line 2 — status + relative due */}
         {(status || d) && (
@@ -129,7 +141,7 @@ export function MobileCard({
       {/* tabular-nums so amounts align down a list (§5.3), but NOT font-mono —
           §3.4 reserves mono for code, and IBM Plex Mono's wide comma makes
           "₹4,80,000" read as three separate groups. */}
-      {amount != null && amount !== "" && Number(amount) !== 0 && (
+      {!compact && amount != null && amount !== "" && Number(amount) !== 0 && (
         <span className="shrink-0 self-start text-right text-sm font-semibold tabular-nums">
           {inr(amount)}
         </span>

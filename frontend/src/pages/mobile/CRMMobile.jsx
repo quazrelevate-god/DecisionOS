@@ -291,7 +291,9 @@ export default function CRMMobile() {
                   <span className="relative shrink-0">
                     <span
                       aria-hidden="true"
-                      className="grid h-9 w-9 place-items-center rounded-pill bg-accent font-heading text-sm font-bold"
+                      // border, not just a fill: the tile's hover state is also
+                      // bg-accent, and the avatar disappeared into it.
+                      className="grid h-9 w-9 place-items-center rounded-pill border border-border bg-card font-heading text-sm font-bold"
                     >
                       {initials(c)}
                     </span>

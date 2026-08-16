@@ -765,14 +765,94 @@ DEFAULT_OPERATING_MODEL = {
 }
 
 
+def _norm_stage_task(t: dict) -> Optional[dict]:
+    """WE-03 (2026-08-16): normalize one stage-template task.
+
+    Shape: {title, role, evidence_required}. Missing role stays empty
+    (engine treats as unassigned); missing evidence_required defaults
+    False. Title over 120 chars is truncated -- title is UI-facing
+    and long ones break the stage card layout."""
+    if not isinstance(t, dict):
+        return None
+    title = str(t.get("title") or "").strip()[:120]
+    if not title:
+        return None
+    role = _slugify_key(str(t.get("role") or ""))[:40]
+    ev = bool(t.get("evidence_required"))
+    return {"title": title, "role": role, "evidence_required": ev}
+
+
+def _norm_stage_approval(a) -> Optional[dict]:
+    """WE-03: normalize a stage's approval gate.
+
+    Shape: {role, required} or None. `required=False` means the gate
+    exists in the template but can be skipped -- WE-06 engine will
+    still record if satisfied. Empty role -> None."""
+    if not isinstance(a, dict):
+        return None
+    role = _slugify_key(str(a.get("role") or ""))[:40]
+    if not role:
+        return None
+    return {"role": role, "required": bool(a.get("required", True))}
+
+
+def _norm_stage_side_effect(se: dict) -> Optional[dict]:
+    """WE-03: normalize a side-effect hook. `kind` is a slug registry
+    lookup (create_expense, notify_role, post_to_slack, ...); `params`
+    is an arbitrary dict the engine passes through to the hook."""
+    if not isinstance(se, dict):
+        return None
+    kind = _slugify_key(str(se.get("kind") or ""))[:40]
+    if not kind:
+        return None
+    params = se.get("params") if isinstance(se.get("params"), dict) else {}
+    return {"kind": kind, "params": params}
+
+
 def _norm_stage(s, used):
-    label = (s if isinstance(s, str) else (s.get("label") or s.get("name") or "")).strip()
-    key = (s.get("key") if isinstance(s, dict) else "") or _slugify_key(label)
-    key = _slugify_key(key)
+    """WE-03 extended (2026-08-16): stages carry tasks[], approval,
+    side_effects[] in addition to {key,label}. Old string / two-field
+    dict inputs still normalize -- new fields default to empty so
+    behaviour matches today until an owner edits them in."""
+    if isinstance(s, str):
+        label = s.strip()
+        obj = {}
+    elif isinstance(s, dict):
+        label = str(s.get("label") or s.get("name") or "").strip()
+        obj = s
+    else:
+        return None
+    key = _slugify_key(obj.get("key") or "") or _slugify_key(label)
     if not key or not label or key in used:
         return None
     used.add(key)
-    return {"key": key, "label": label}
+
+    # WE-03: preserve/default the three new fields. Caps kept tight so
+    # bad AI output can't blow up the operating-model document size.
+    raw_tasks = obj.get("tasks") if isinstance(obj.get("tasks"), list) else []
+    tasks = []
+    for t in raw_tasks:
+        nt = _norm_stage_task(t)
+        if nt:
+            tasks.append(nt)
+        if len(tasks) >= 6:
+            break
+
+    approval = _norm_stage_approval(obj.get("approval"))
+
+    raw_ses = obj.get("side_effects") if isinstance(obj.get("side_effects"), list) else []
+    side_effects = []
+    for se in raw_ses:
+        nse = _norm_stage_side_effect(se)
+        if nse:
+            side_effects.append(nse)
+        if len(side_effects) >= 6:
+            break
+
+    return {
+        "key": key, "label": label,
+        "tasks": tasks, "approval": approval, "side_effects": side_effects,
+    }
 
 
 def normalize_operating_model(data: dict) -> dict:

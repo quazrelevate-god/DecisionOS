@@ -6343,6 +6343,55 @@ async def _bootstrap():
                 logger.info("Migration applied: rename_production_role_v1")
         except Exception as e:
             logger.exception(f"rename_production_role migration: {e}")  # S5-05
+        # WE-03 (2026-08-16): stage objects extend. Existing tenant
+        # operating_model.pipelines[].stages[] entries only carry
+        # {key,label}. This migration re-runs normalize_operating_model
+        # over every tenant so the three new fields (tasks[], approval,
+        # side_effects[]) get defaulted in place. Empty defaults =
+        # today's behaviour verbatim; WE-06 engine treats empty
+        # tasks[] as "no auto-spawn on entry" and approval=None as
+        # "no gate required". Backward-compatible by construction.
+        async def _stage_objects_extend(_db):
+            from core import normalize_operating_model
+            scanned = touched = 0
+            async for _t in _db.tenants.find(
+                {"operating_model": {"$exists": True}},
+                {"_id": 0, "id": 1, "operating_model": 1},
+            ):
+                scanned += 1
+                om_in = _t.get("operating_model") or {}
+                om_out = normalize_operating_model(om_in)
+                # Cheap change-detect: only write if any stage is missing
+                # one of the three new fields. Skips the write for
+                # tenants who were already on the new shape.
+                needs = False
+                for _p in (om_in.get("pipelines") or []):
+                    for _s in (_p.get("stages") or []):
+                        if not isinstance(_s, dict):
+                            needs = True; break
+                        if "tasks" not in _s or "approval" not in _s or "side_effects" not in _s:
+                            needs = True; break
+                    if needs:
+                        break
+                if not needs:
+                    continue
+                await _db.tenants.update_one(
+                    {"id": _t["id"]},
+                    {"$set": {"operating_model": om_out, "updated_at": now_iso()}},
+                )
+                touched += 1
+            logger.info(
+                f"[WE-03] stage_objects_extend: scanned={scanned} touched={touched}"
+            )
+        try:
+            _sres = await _apply_migration(
+                db, "stage_objects_extend_v1", _stage_objects_extend,
+                description="WE-03: add tasks[]/approval/side_effects[] to every pipeline stage (empty defaults preserve behaviour)",
+            )
+            if _sres == "applied":
+                logger.info("Migration applied: stage_objects_extend_v1")
+        except Exception as e:
+            logger.exception(f"stage_objects_extend migration: {e}")  # WE-03
         # FIX-003-D (S2-07): auth_email_tokens for email verification +
         # password reset. Unique index on the token string, TTL index on
         # expires_at so used/expired rows auto-purge. Kind + email combo

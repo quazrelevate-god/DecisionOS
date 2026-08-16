@@ -6816,6 +6816,11 @@ app.include_router(dex_router)
 # bounded elevated permissions.
 from routers.access import router as access_router  # noqa: E402
 app.include_router(access_router)
+# Epic 1 (S3-01, 2026-08-16): Razorpay billing module -- redirect to
+# marketing landing page for the actual Checkout; webhook handler on
+# our side upgrades tenant.plan on payment.captured.
+from routers.billing import router as billing_router  # noqa: E402
+app.include_router(billing_router)
 # FIX-006-B (S0-02): strict CORS allow-list — no more `allow_origin_regex=".*"`.
 # The old default of `*` combined with `allow_credentials=True` was echoed
 # back per-origin via `allow_origin_regex='.*'`, which sidesteps the CORS

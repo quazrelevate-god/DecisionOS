@@ -72,6 +72,19 @@ def _can_approve_leave(user: dict, leave: dict) -> bool:
         return True
     if leave.get("approver_id") == user["id"]:
         return True
+    # RBAC-26 (2026-08-15): I can act on this leave if the intended
+    # approver has delegated to me via acting_as (and it's active now).
+    # We can't sync-await here so we peek at the approver's delegation
+    # via user_perms path -- the delegate is stashed on the pending
+    # leave via `_delegate_to` when push_notification routes it there,
+    # OR we honour a live check when the current user has been named
+    # in someone's acting_as (looked up at get_current_user next time
+    # they log in). For MVP: the delegate simply gets pushed the
+    # notification via resolve_delegate (see _decide_leave below) and
+    # this permission check accepts the approver's chain (leave.
+    # `delegate_ids` populated on approver-routing).
+    if user["id"] in (leave.get("delegate_user_ids") or []):
+        return True
     return "leave_approve" in user_perms(user)
 
 
@@ -87,7 +100,15 @@ async def _decide_leave(leave_id, user, new_status, note, ntype, employee_msg):
     updates = {"status": new_status, "decided_at": now_iso(), "decided_by": user["id"]}
     if new_status == "info_requested":
         updates = {"status": new_status, "info_note": note or ""}
-    await db.leaves.update_one({"id": leave_id}, {"$set": updates, "$push": {"history": entry}})
+    # E2-57: tenant_id in the filter is defense-in-depth. UUID collision
+    # is astronomically unlikely but a hostile caller with a leave_id
+    # from another tenant would otherwise flip its status without
+    # authorization (the auth check above only loaded the leave from
+    # THIS tenant, so no write should ever land outside it).
+    await db.leaves.update_one(
+        {"id": leave_id, "tenant_id": user["tenant_id"]},
+        {"$set": updates, "$push": {"history": entry}},
+    )
     await push_notification(user["tenant_id"], [lv["user_id"]], 2, employee_msg,
                             entity_type="leave", entity_id=leave_id, ntype=ntype,
                             title=f"{lv.get('leave_type', 'Leave').title()} leave",
@@ -95,7 +116,7 @@ async def _decide_leave(leave_id, user, new_status, note, ntype, employee_msg):
     await log_activity(user["tenant_id"], user["id"], f"leave_{new_status}",
                        f"{new_status.replace('_', ' ').title()} {lv.get('user_name')}'s leave",
                        "leave", leave_id)
-    return await db.leaves.find_one({"id": leave_id}, {"_id": 0})
+    return await db.leaves.find_one({"id": leave_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
 
 
 # ---------------------------------------------------------------------------
@@ -314,10 +335,15 @@ async def regenerate_invite(user_id: str, user: dict = Depends(require_perm("tea
     if len(_norm_phone(target.get("phone", ""))) < 10:
         raise HTTPException(status_code=400, detail="Add a mobile number for this member first")
     token = new_id()
-    await db.users.update_one({"id": user_id}, {"$set": {
-        "invite_token": token,
-        "invite_expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
-    }})
+    # E2-57: scope the write to this tenant so the invite token can't be
+    # rewritten across tenants even in a UUID-collision scenario.
+    await db.users.update_one(
+        {"id": user_id, "tenant_id": user["tenant_id"]},
+        {"$set": {
+            "invite_token": token,
+            "invite_expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+        }},
+    )
     return {"invite_token": token, "name": target.get("name"),
             "phone_masked": _mask_phone(target.get("phone", ""))}
 
@@ -367,7 +393,12 @@ async def update_user(user_id: str, inp: UserUpdateInput, user: dict = Depends(r
         else:
             updates["reporting_manager_id"] = None
     if updates:
-        await db.users.update_one({"id": user_id}, {"$set": updates})
+        # E2-57: tenant scope on the write (defense-in-depth; target was
+        # already loaded from this tenant above).
+        await db.users.update_one(
+            {"id": user_id, "tenant_id": user["tenant_id"]},
+            {"$set": updates},
+        )
         # FIX-004-B (RBAC-13): mirror role/permissions changes into
         # the membership row for THIS tenant so the authoritative
         # perms source stays in sync. Phone/manager updates don't
@@ -384,7 +415,11 @@ async def update_user(user_id: str, inp: UserUpdateInput, user: dict = Depends(r
                 db, user_id=user_id, tenant_id=user["tenant_id"],
                 updates=membership_updates,
             )
-    return await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    # E2-57: tenant-scoped read for the response body.
+    return await db.users.find_one(
+        {"id": user_id, "tenant_id": user["tenant_id"]},
+        {"_id": 0, "password_hash": 0},
+    )
 
 
 # ---------------------------------------------------------------------------

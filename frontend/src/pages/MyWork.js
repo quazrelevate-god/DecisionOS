@@ -4,7 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import api from "../lib/api";
 import { timeAgo, fullTime } from "../lib/format";
-import { PageHeader, Chip, EmptyState } from "../components/common";
+import { PageHeader, Chip, EmptyState, SkeletonCard } from "../components/common";
 import { useAuth } from "../context/AuthContext";
 import { userPerms } from "../lib/perms";
 import { opModel } from "../lib/operatingModel";
@@ -693,13 +693,15 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
   };
 
   const complete = async () => {
+    // FUP-49 (2026-08-15): removed window.confirm() -- some browsers /
+    // embed contexts silently returned without showing UI, so the click
+    // looked like a silent no-op. Reopen button already covers undo.
     if (t.evidence_required && !hasEvidence) {
       return toast.error("This task requires proof — add a photo, voice note, or file before completing.");
     }
-    if (!window.confirm(`Mark "${t.title}" as complete? You can reopen it later if needed.`)) return;
     try {
       await api.patch(`/tasks/${t.id}`, { status: "done" });
-      toast.success("Task completed");
+      toast.success("Task completed — reopen from the card if needed.");
       onChange();
     } catch (e) { toast.error(e.response?.data?.detail || "Could not complete task"); }
   };
@@ -893,7 +895,12 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
 
       {!isTerminal(t) && !awaitingApproval && (
         <div className="flex flex-wrap gap-2 mt-4">
-          <button onClick={complete} disabled={t.evidence_required && !hasEvidence} data-testid={`complete-${t.id}`} className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+          {/* FUP-49: don't disable — always click-through, handler
+              shows a clear toast if evidence is missing. Silent-
+              disabled buttons were the original bug. */}
+          <button onClick={complete} data-testid={`complete-${t.id}`}
+            title={t.evidence_required && !hasEvidence ? "Add a photo, voice note, or file first" : "Mark as complete"}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all ${t.evidence_required && !hasEvidence ? "bg-black/20 text-black" : "bg-brand-ink text-white"}`}>
             <CheckCircle size={16} weight="bold" /> Complete
           </button>
           <button onClick={() => fileRef.current?.click()} disabled={uploading} data-testid={`photo-${t.id}`} className="flex items-center gap-2 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-black/5">
@@ -988,6 +995,16 @@ export default function MyWork() {
     return () => clearTimeout(timer);
   }, [focusTaskId, focusQ.data, scope]);
 
+  // Epic 2 Sprint 6.5 (E2-51): When Desk Trends deep-links here with
+  // ?filter=overdue|completed, an owner should see ALL tenant tasks
+  // (the Desk counter is tenant-wide). Auto-flip scope=all so the list
+  // isn't empty just because none of them are the owner's own todos.
+  useEffect(() => {
+    const f = params.get("filter");
+    if (f && isOwner && scope !== "all") setScope("all");
+    if (f === "completed") setTab("completed");
+  }, [params, isOwner]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const scoreMap = {};
   (prioritiesQ.data?.tasks || []).forEach((pt) => { if (pt.ai_scores) scoreMap[pt.id] = pt.ai_scores; });
   const scoring = aiPriority && prioritiesQ.isFetching && !prioritiesQ.data;
@@ -999,8 +1016,15 @@ export default function MyWork() {
     return all.filter((t) => !isTerminal(t) && t.task_type === key).length;
   };
 
+  // Epic 2 Sprint 6.5 (E2-51): `?filter=overdue|completed` URL param
+  // deep-link from Desk Trends card. Overdue narrows the All-tab list
+  // to just isOverdue rows; completed forces the Completed tab.
+  const urlFilter = params.get("filter");
+
   let list;
-  if (tab === "completed") {
+  if (urlFilter === "overdue") {
+    list = all.filter((t) => !isTerminal(t) && isOverdue(t));
+  } else if (urlFilter === "completed" || tab === "completed") {
     list = all.filter(isTerminal);
   } else if (tab === "all") {
     list = all.filter((t) => !isTerminal(t));
@@ -1090,7 +1114,27 @@ export default function MyWork() {
               </button>
             ))}
           </div>
-          {list.length === 0 && <EmptyState title={tab === "completed" ? t("mywork.empty_completed_title") : t("mywork.empty_title")} hint={tab === "all" ? t("mywork.empty_all_hint") : t("mywork.empty_cat_hint")} />}
+          {/* E2-14: skeleton on first load so the tab strip doesn't
+              jump when tasks land. */}
+          {tasksQ.isLoading && !tasksQ.data && (
+            <div className="space-y-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <SkeletonCard key={i} lines={3} />
+              ))}
+            </div>
+          )}
+          {/* E2-13: empty state with a CTA. Sends the founder to Desk
+              (where decisions become tasks) rather than a dead screen. */}
+          {!tasksQ.isLoading && list.length === 0 && (
+            <EmptyState
+              testid="mywork-empty"
+              title={tab === "completed" ? t("mywork.empty_completed_title") : t("mywork.empty_title")}
+              hint={tab === "all" ? t("mywork.empty_all_hint") : t("mywork.empty_cat_hint")}
+              ctaLabel={tab === "completed" ? null : "+ Open Decision Desk"}
+              ctaTo={tab === "completed" ? null : "/inbox"}
+              secondary={tab === "completed" ? null : "Tasks appear here once decisions are approved"}
+            />
+          )}
           <div className="space-y-4">
             {list.map((t) => <TaskCard key={t.id} t={t} onChange={refresh} members={members} roleOptions={roleOptions} showAssignee={showAssignee} highlight={t.id === focusTaskId} scores={aiPriority && tab !== "completed" ? scoreMap[t.id] : undefined} />)}
           </div>

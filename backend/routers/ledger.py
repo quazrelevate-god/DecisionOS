@@ -616,7 +616,7 @@ async def list_expenses(user: dict = Depends(require_ledger)):
 @router.post("/expenses")
 async def add_expense(inp: ExpenseInput, user: dict = Depends(require_ledger)):
     doc = await create_expense(user["tenant_id"], user["id"], inp.model_dump(), source="manual", write_brain=True)
-    await log_activity(user["tenant_id"], user["name"], "expense_added", f"Added expense '{doc['title']}'", "expense", doc["id"])
+    await log_activity(user["tenant_id"], user["id"], "expense_added", f"Added expense '{doc['title']}'", "expense", doc["id"])
     return doc
 
 
@@ -674,7 +674,7 @@ async def add_expense_with_file(
     if not (str(data.get("title") or "").strip()) and not _num(data.get("amount")):
         raise HTTPException(status_code=400, detail="Add a title/amount or attach a readable bill")
     doc = await create_expense(user["tenant_id"], user["id"], data, source="manual", write_brain=True)
-    await log_activity(user["tenant_id"], user["name"], "expense_added", f"Added expense '{doc['title']}'", "expense", doc["id"])
+    await log_activity(user["tenant_id"], user["id"], "expense_added", f"Added expense '{doc['title']}'", "expense", doc["id"])
     return doc
 
 
@@ -695,7 +695,12 @@ async def update_expense(eid: str, inp: ExpensePatch, user: dict = Depends(requi
 
 @router.delete("/expenses/{eid}")
 async def delete_expense(eid: str, user: dict = Depends(require_ledger)):
-    await db.expenses.delete_one({"id": eid, "tenant_id": user["tenant_id"]})
+    # E2-65: 404 on non-existent / cross-tenant id -- was silently returning
+    # 200 with deleted_count=0, so the UI showed "Deleted!" toast for
+    # nothing. Now the toast reflects reality.
+    r = await db.expenses.delete_one({"id": eid, "tenant_id": user["tenant_id"]})
+    if not r.deleted_count:
+        raise HTTPException(status_code=404, detail="Expense not found")
     return {"ok": True}
 
 
@@ -713,7 +718,7 @@ async def list_assets(user: dict = Depends(require_ledger)):
 @router.post("/assets")
 async def add_asset(inp: AssetInput, user: dict = Depends(require_ledger)):
     doc = await create_asset(user["tenant_id"], user["id"], inp.model_dump(), source="manual", write_brain=True)
-    await log_activity(user["tenant_id"], user["name"], "asset_added", f"Added asset '{doc['name']}'", "asset", doc["id"])
+    await log_activity(user["tenant_id"], user["id"], "asset_added", f"Added asset '{doc['name']}'", "asset", doc["id"])
     return doc
 
 
@@ -730,7 +735,7 @@ async def add_asset_with_file(
     if not (str(data.get("name") or "").strip()):
         raise HTTPException(status_code=400, detail="Add an asset name or attach a readable bill")
     doc = await create_asset(user["tenant_id"], user["id"], data, source="manual", write_brain=True)
-    await log_activity(user["tenant_id"], user["name"], "asset_added", f"Added asset '{doc['name']}'", "asset", doc["id"])
+    await log_activity(user["tenant_id"], user["id"], "asset_added", f"Added asset '{doc['name']}'", "asset", doc["id"])
     return doc
 
 
@@ -748,7 +753,10 @@ async def update_asset(aid: str, inp: AssetInput, user: dict = Depends(require_l
 
 @router.delete("/assets/{aid}")
 async def delete_asset(aid: str, user: dict = Depends(require_ledger)):
-    await db.assets.delete_one({"id": aid, "tenant_id": user["tenant_id"]})
+    # E2-65: 404 on non-existent / cross-tenant id.
+    r = await db.assets.delete_one({"id": aid, "tenant_id": user["tenant_id"]})
+    if not r.deleted_count:
+        raise HTTPException(status_code=404, detail="Asset not found")
     return {"ok": True}
 
 
@@ -761,7 +769,7 @@ async def list_inventory(user: dict = Depends(require_ledger)):
 @router.post("/inventory")
 async def add_inventory(inp: InventoryInput, user: dict = Depends(require_ledger)):
     doc = await create_inventory(user["tenant_id"], user["id"], inp.model_dump(), source="manual", write_brain=True)
-    await log_activity(user["tenant_id"], user["name"], "inventory_added", f"Added inventory '{doc['item']}'", "inventory", doc["id"])
+    await log_activity(user["tenant_id"], user["id"], "inventory_added", f"Added inventory '{doc['item']}'", "inventory", doc["id"])
     return doc
 
 
@@ -778,7 +786,7 @@ async def add_inventory_with_file(
     if not (str(data.get("item") or "").strip()):
         raise HTTPException(status_code=400, detail="Add an item name or attach a readable bill")
     doc = await create_inventory(user["tenant_id"], user["id"], data, source="manual", write_brain=True)
-    await log_activity(user["tenant_id"], user["name"], "inventory_added", f"Added inventory '{doc['item']}'", "inventory", doc["id"])
+    await log_activity(user["tenant_id"], user["id"], "inventory_added", f"Added inventory '{doc['item']}'", "inventory", doc["id"])
     return doc
 
 
@@ -794,7 +802,10 @@ async def update_inventory(iid: str, inp: InventoryInput, user: dict = Depends(r
 
 @router.delete("/inventory/{iid}")
 async def delete_inventory(iid: str, user: dict = Depends(require_ledger)):
-    await db.inventory.delete_one({"id": iid, "tenant_id": user["tenant_id"]})
+    # E2-65: 404 on non-existent / cross-tenant id.
+    r = await db.inventory.delete_one({"id": iid, "tenant_id": user["tenant_id"]})
+    if not r.deleted_count:
+        raise HTTPException(status_code=404, detail="Inventory item not found")
     return {"ok": True}
 
 
@@ -873,7 +884,7 @@ async def _do_match_payment(tid: str, user: dict, pid: str, invoice_id: str) -> 
         raise HTTPException(status_code=404, detail="Invoice not found")
     applied = await _apply_payment_to_invoice(tid, inv, pay, "manual")
     leftover = _pay_remaining(pay)
-    await log_activity(tid, user["name"], "payment_matched",
+    await log_activity(tid, user["id"], "payment_matched",
                        f"Matched {applied:,.0f} of a payment to {inv.get('number') or inv.get('title') or 'invoice'}"
                        + (f" ({leftover:,.0f} still to match)" if leftover > 0.01 else ""), "payment", pid)
     return {"ok": True, "applied": applied, "payment_remaining": leftover, "invoice_status": pay.get("match_status")}
@@ -923,7 +934,7 @@ async def add_revenue(inp: IncomeInput, user: dict = Depends(require_ledger)):
     if not (inp.title or "").strip() and not _num(inp.amount) and not (inp.customer_name or "").strip():
         raise HTTPException(status_code=400, detail="Add a title, customer or amount")
     doc = await create_income(user["tenant_id"], user["id"], inp.model_dump(), source="manual")
-    await log_activity(user["tenant_id"], user["name"], "income_added",
+    await log_activity(user["tenant_id"], user["id"], "income_added",
                        f"Recorded income '{doc.get('title') or doc.get('contact_name') or 'Sale'}'", "invoice", doc["id"])
     return doc
 
@@ -943,21 +954,32 @@ async def add_revenue_with_file(
     if not (str(data.get("title") or "").strip()) and not _num(data.get("amount")) and not (str(data.get("customer_name") or "").strip()):
         raise HTTPException(status_code=400, detail="Add a title/amount or attach a readable invoice")
     doc = await create_income(user["tenant_id"], user["id"], data, source="manual")
-    await log_activity(user["tenant_id"], user["name"], "income_added",
+    await log_activity(user["tenant_id"], user["id"], "income_added",
                        f"Recorded income '{doc.get('title') or doc.get('contact_name') or 'Sale'}'", "invoice", doc["id"])
     return doc
 
 
 @router.delete("/revenue/invoice/{iid}")
 async def delete_revenue_invoice(iid: str, user: dict = Depends(require_ledger)):
-    await db.invoices.delete_one({"id": iid, "tenant_id": user["tenant_id"], "type": "sales_invoice"})
-    await db.payments.delete_many({"tenant_id": user["tenant_id"], "invoice_id": iid, "direction": "in"})
+    # E2-65: 404 if the invoice doesn't exist (or isn't a sales invoice
+    # or isn't in this tenant). The payments-cascade still runs after
+    # so a valid delete cleans linked receipts too.
+    r = await db.invoices.delete_one(
+        {"id": iid, "tenant_id": user["tenant_id"], "type": "sales_invoice"})
+    if not r.deleted_count:
+        raise HTTPException(status_code=404, detail="Sales invoice not found")
+    await db.payments.delete_many(
+        {"tenant_id": user["tenant_id"], "invoice_id": iid, "direction": "in"})
     return {"ok": True}
 
 
 @router.delete("/revenue/payment/{pid}")
 async def delete_revenue_payment(pid: str, user: dict = Depends(require_ledger)):
-    await db.payments.delete_one({"id": pid, "tenant_id": user["tenant_id"], "direction": "in"})
+    # E2-65: 404 on non-existent / wrong-direction id.
+    r = await db.payments.delete_one(
+        {"id": pid, "tenant_id": user["tenant_id"], "direction": "in"})
+    if not r.deleted_count:
+        raise HTTPException(status_code=404, detail="Payment not found")
     return {"ok": True}
 
 
@@ -1137,7 +1159,10 @@ async def resync_finance(tid: str, uid: str, user_name: str = "System") -> dict:
     summary.update(await _recompute_outstanding(tid))
 
     await db.ledger_ai.delete_many({"tenant_id": tid})
-    await log_activity(tid, user_name, "finance_resynced",
+    # E2-62: log_activity actor is uid (user id), consistent with every
+    # other router. user_name is kept as the fn param for its message
+    # body but is no longer the actor field.
+    await log_activity(tid, uid, "finance_resynced",
                        f"Finance re-sync: reviewed {summary['reviewed']} bills "
                        f"({summary['to_asset']}→asset, {summary['to_inventory']}→inventory), "
                        f"re-categorized {summary['expenses_recategorized']} expenses, "

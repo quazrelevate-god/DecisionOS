@@ -229,3 +229,44 @@ _OPENAI_STT_PER_MIN = 0.006     # transcription $/minute (approx)
 _SARVAM_STT_PER_MIN = 0.0072    # Sarvam Saaras STT ~ Rs 0.60/min (approx)
 _COST_IN_PER_M = 3.0
 _COST_OUT_PER_M = 15.0
+
+
+# ---------------------------------------------------------------------------
+# S3-01 (2026-08-16): Razorpay billing config.
+#
+# Design: our frontend hands the user off to a pricing landing page
+# (BILLING_LANDING_URL) with a signed tenant identity in the query
+# string. That page hosts the actual Razorpay Checkout / Payment Link.
+# Razorpay POSTs a webhook to us on payment.captured; we verify the
+# signature (HMAC-SHA256 using RAZORPAY_WEBHOOK_SECRET) and upgrade
+# tenant.plan.
+#
+# BILLING_LANDING_URL points to the pricing page in the marketing
+# domain (or a route in this same app). Must accept
+# `plan=<key>&tenant_id=<uuid>&sig=<hmac>&return_to=<url>` params.
+# If unset, /api/billing/checkout returns 503 -- the module is inert
+# but the routes are wired so the frontend can still probe them.
+# ---------------------------------------------------------------------------
+BILLING_LANDING_URL = os.environ.get("BILLING_LANDING_URL", "").strip()
+BILLING_RETURN_URL = os.environ.get("BILLING_RETURN_URL", "").strip() or "/settings"
+
+RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID", "").strip()
+RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "").strip()
+RAZORPAY_WEBHOOK_SECRET = os.environ.get("RAZORPAY_WEBHOOK_SECRET", "").strip()
+
+# Signing key for the tenant-identity handoff to the landing page.
+# Separate from JWT_SECRET so leaking one doesn't compromise the
+# other; falls back to JWT_SECRET when unset so dev/test flows work.
+BILLING_SIGNING_SECRET = (
+    os.environ.get("BILLING_SIGNING_SECRET", "").strip() or JWT_SECRET
+)
+
+# Per-plan monthly price in INR paise (Razorpay's unit). Populate via
+# env if you're using Payment Links; leave 0 for plans you don't sell.
+# The catalogue endpoint uses this to render prices; the checkout
+# endpoint just passes plan_key + amount to the landing page.
+BILLING_PLAN_PRICES_INR_PAISE = {
+    "starter": int(os.environ.get("BILLING_PRICE_STARTER_PAISE", "0") or 0),
+    "business": int(os.environ.get("BILLING_PRICE_BUSINESS_PAISE", "0") or 0),
+    "enterprise": 0,  # enterprise is talk-to-sales, not self-serve
+}

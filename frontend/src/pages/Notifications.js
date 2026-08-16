@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
@@ -5,6 +6,7 @@ import { PageHeader, Chip, EmptyState } from "../components/common";
 import { timeAgo, fullTime } from "../lib/format";
 import { notifMeta, notifLink } from "../lib/notif";
 import { BellRinging, Check, UserCircle, CaretRight } from "@phosphor-icons/react";
+import { useIsMobile } from "../hooks/useIsMobile";
 
 export default function Notifications() {
   const qc = useQueryClient();
@@ -28,6 +30,16 @@ export default function Notifications() {
 
   const items = data?.notifications || [];
 
+  // MPWA-12i (§5.2.7): the feed grows without bound and hit 2,515px at 360px
+  // wide on a live tenant. Mobile shows a screenful and asks for the rest;
+  // desktop still renders everything, so §9.2's diff is untouched.
+  const isMobile = useIsMobile();
+  const [showAll, setShowAll] = useState(false);
+  const PER_SCREEN = 12;
+  const capped = isMobile && !showAll;
+  const shown = capped ? items.slice(0, PER_SCREEN) : items;
+  const hidden = items.length - shown.length;
+
   return (
     <div>
       <PageHeader eyebrow="Work updates, approvals & reminders" title="Notifications">
@@ -38,10 +50,18 @@ export default function Notifications() {
         )}
       </PageHeader>
 
-      {items.length === 0 && <EmptyState title="You're all caught up" hint="Work assignments, approvals and updates will appear here." />}
+      {/* MPWA-12i: completing E2-13's sweep — this list surface never got its CTA. */}
+      {items.length === 0 && (
+        <EmptyState
+          title="You're all caught up."
+          hint="Work assignments, approvals and updates appear here."
+          ctaLabel="+ Open Decision Desk"
+          ctaTo="/inbox"
+        />
+      )}
 
       <div className="card-brutal divide-y divide-black/10" data-testid="notifications-list">
-        {items.map((n) => {
+        {shown.map((n) => {
           const meta = notifMeta(n);
           const clickable = !!notifLink(n);
           return (
@@ -59,6 +79,18 @@ export default function Notifications() {
                     <Chip value={meta.label} className={meta.cls} />
                     <span className="label-mono text-muted-foreground flex items-center gap-1" title={fullTime(n.created_at)}>{timeAgo(n.created_at)}</span>
                   </div>
+
+      {hidden > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowAll(true)}
+          data-testid="notifications-show-all"
+          className="mt-3 flex w-full items-center justify-center rounded-xl border border-border text-sm font-semibold transition-colors hover:bg-accent lg:hidden"
+          style={{ minHeight: "var(--control-h-sm)" }}
+        >
+          Show {hidden} older
+        </button>
+      )}
                   <p className="text-sm font-semibold mt-1.5 truncate">{n.work_title || n.message}</p>
                   {n.work_title && n.message && <p className="text-xs text-muted-foreground mt-0.5 truncate">{n.message}</p>}
                   {n.sender_name && (

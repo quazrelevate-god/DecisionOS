@@ -7,7 +7,7 @@ importing from `server.py`.
 """
 from typing import List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class TaskCreateInput(BaseModel):
@@ -29,6 +29,14 @@ class TaskCreateInput(BaseModel):
     progress: Optional[int] = None
     evidence_required: Optional[bool] = False
     reference_file_ids: Optional[List[str]] = None
+    # FUP-50 (2026-08-15): finance metadata that carries forward from
+    # decisions -> tasks -> auto-drafted invoices when the task
+    # completes. Missing until now, so any task that came from a
+    # decision like "raise Rs 5L GST invoice for X" lost the amount
+    # + contact link by the time it reached MyWork.
+    contact_id: Optional[str] = None
+    contact_name: Optional[str] = None
+    amount: Optional[float] = None
 
 
 class TaskUpdateInput(BaseModel):
@@ -66,7 +74,8 @@ class StepAskInput(BaseModel):
 
 
 class TaskUpdateNoteInput(BaseModel):
-    text: str
+    # E2-60: cap at 4000 chars (~1 A4 page of prose). Was unbounded.
+    text: str = Field(..., min_length=1, max_length=4000)
     step_id: Optional[str] = None
     action: str = "note"  # "note" | "handoff" | "escalate"
     to_id: Optional[str] = None      # member id (handoff to a person)

@@ -67,7 +67,13 @@ export default function Calendar() {
       {isLoading ? (
         <p className="font-mono text-sm">Loading calendar…</p>
       ) : days.length === 0 ? (
-        <EmptyState title="Nothing scheduled" hint="Payment due dates, task deadlines, deliveries and complaints will appear here." />
+        // MPWA-12i: completing E2-13's sweep — this list surface never got its CTA.
+        <EmptyState
+          title="Nothing scheduled."
+          hint="Payment due dates, task deadlines, deliveries and complaints appear here."
+          ctaLabel="+ Open Decision Desk"
+          ctaTo="/inbox"
+        />
       ) : (
         <div className="space-y-8" data-testid="calendar-days">
           {days.map((day) => (

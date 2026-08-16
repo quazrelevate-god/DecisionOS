@@ -2,14 +2,14 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import api from "../lib/api";
 import { PageHeader, Chip, EmptyState } from "../components/common";
-import { MagnifyingGlass, ChatCircleText, Lock, Books } from "@phosphor-icons/react";
+import { MagnifyingGlass, ChatCircleText, Lock, Books, Sparkle, Spinner } from "@phosphor-icons/react";
 import { AskPanel } from "./AskAI";
 import { DocumentsPanel } from "./BrainDocuments";
 import { MicDictateButton } from "../components/MicDictateButton";
 // Epic 2 Sprint 5 (E2-33): capture bar moves here from Desk. Single AI home.
 import { DexCaptureBar } from "../components/DexCaptureBar";
 import { useIsMobile } from "../hooks/useIsMobile";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 function SearchPanel() {
   const { t } = useTranslation();
@@ -212,6 +212,20 @@ export default function Brain() {
   // Epic 2 Sprint 5 (E2-32): 'Company Brain' becomes 'Dex' -- single AI
   // persona. Founder ask 2026-08-14. Route stays /brain for bookmark
   // safety; /dex is an alias set up in App.js.
+
+  // Epic 2 Sprint 5 (E2-35): poll for captures Dex is still structuring.
+  // Backend counts capture_drafts with status in {processing/queued/
+  // structuring} scoped to this user. When > 0, render a small badge
+  // under the tabs so the founder sees 'did my capture go through?'
+  // answered with 'Dex is structuring N right now'. Refetch every 8s
+  // so the badge disappears within ~8s of the AI finishing.
+  const { data: inflight } = useQuery({
+    queryKey: ["dex-inflight-count"],
+    queryFn: () => api.get("/dex/inflight-count").then((r) => r.data),
+    refetchInterval: 8000,
+  });
+  const inflightN = inflight?.count || 0;
+
   return (
     <div>
       <PageHeader eyebrow={t("brain.eyebrow")} title={t("brain.title")}>
@@ -236,7 +250,28 @@ export default function Brain() {
 
       {/* Epic 2 Sprint 5 (E2-33): capture bar migrated from Desk. Always-visible
           at the top of Dex so speak/type/upload is one click from every sub-tab. */}
-      <DexCaptureBar onCaptured={() => qc.invalidateQueries({ queryKey: ["voice-notes"] })} />
+      <DexCaptureBar onCaptured={() => {
+        qc.invalidateQueries({ queryKey: ["voice-notes"] });
+        // E2-35: bump the in-flight badge immediately, don't wait for the
+        // 8s poll to catch up.
+        qc.invalidateQueries({ queryKey: ["dex-inflight-count"] });
+      }} />
+
+      {/* E2-35: in-flight badge. Only renders while Dex is actively
+          structuring at least one capture. Kills 'did my capture go
+          through?' anxiety. */}
+      {inflightN > 0 && (
+        <div
+          data-testid="dex-inflight-badge"
+          className="mb-4 inline-flex items-center gap-2 border border-black bg-brand-yellow px-3 py-1.5 shadow-brutal-sm"
+        >
+          <Spinner size={14} weight="bold" className="animate-spin text-brand-ink" />
+          <Sparkle size={12} weight="fill" className="text-brand-red" />
+          <span className="text-xs font-semibold uppercase tracking-wider text-brand-ink">
+            Dex is structuring {inflightN} capture{inflightN === 1 ? "" : "s"} right now
+          </span>
+        </div>
+      )}
 
       {tab === "ask" ? <AskPanel /> : tab === "search" ? <SearchPanel /> : <DocumentsPanel />}
     </div>

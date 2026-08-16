@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "../lib/api";
@@ -5,13 +6,38 @@ import { useIsMobile } from "../hooks/useIsMobile";
 import ContactProfileMobile from "./mobile/ContactProfileMobile";
 import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
-import { Chip, EmptyState } from "../components/common";
+import { Chip, EmptyState, DexBadge } from "../components/common";
 import { money, typeLabel } from "../lib/format";
 import { toast } from "sonner";
 import {
   ArrowLeft, Phone, EnvelopeSimple, MapPin, Receipt, CurrencyCircleDollar,
   Warning, Truck, TrendUp, Brain, CheckSquare, Buildings, Sparkle, Heart, ShieldWarning,
+  Note, Clock, ChatCircleDots, WhatsappLogo, Handshake, FlowArrow,
 } from "@phosphor-icons/react";
+
+// Epic 2 Sprint 1 (E2-08): activity kind -> icon + colour. Small map
+// so the timeline reads at a glance.
+const ACTIVITY_META = {
+  call: { icon: Phone, label: "Call", cls: "bg-brand-blue text-white" },
+  meeting: { icon: Handshake, label: "Meeting", cls: "bg-brand-yellow text-black" },
+  note: { icon: Note, label: "Note", cls: "bg-black/10 text-black" },
+  whatsapp: { icon: WhatsappLogo, label: "WhatsApp", cls: "bg-brand-green text-white" },
+  email: { icon: EnvelopeSimple, label: "Email", cls: "bg-brand-ink text-white" },
+  other: { icon: ChatCircleDots, label: "Other", cls: "bg-black/10 text-black" },
+};
+
+function timeAgo(iso) {
+  if (!iso) return "";
+  const then = new Date(iso).getTime();
+  const mins = Math.floor((Date.now() - then) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  return `${Math.floor(days / 30)}mo ago`;
+}
 
 const Stat = ({ label, value, accent, testid }) => (
   <div className="card-brutal p-4" data-testid={testid}>
@@ -58,6 +84,27 @@ export default function ContactProfile() {
     retry: false,
   });
 
+  // Epic 2 Sprint 1 (E2-08): CRM activity timeline.
+  const canWriteActivity = user?.role === "owner" || user?.role === "sales";
+  const { data: activities } = useQuery({
+    queryKey: ["crm-activity", id],
+    queryFn: () => api.get(`/crm/activity/${id}`).then((r) => r.data),
+    enabled: canView,
+  });
+  const [actKind, setActKind] = useState("call");
+  const [actText, setActText] = useState("");
+  const logActivity = useMutation({
+    mutationFn: () => api.post(`/crm/activity/${id}`, { kind: actKind, text: actText.trim() }).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["crm-activity", id] });
+      // Bump "last touched" pill on the /crm card grid too
+      qc.invalidateQueries({ queryKey: ["crm-contacts"] });
+      setActText(""); setActKind("call");
+      toast.success("Activity logged");
+    },
+    onError: (e) => toast.error(e.response?.data?.detail || "Could not save"),
+  });
+
   const rescore = useMutation({
     mutationFn: () => api.post(`/contacts/${id}/rescore`).then((r) => r.data),
     onSuccess: () => {
@@ -69,9 +116,20 @@ export default function ContactProfile() {
 
   if (!canView) return <EmptyState title="Restricted" hint="The 360° profile is available to Owner and Finance only." />;
   if (isLoading) return <div className="font-mono text-sm uppercase tracking-widest py-20 text-center">Loading profile…</div>;
-  if (error) return <EmptyState title="Not found" hint="This contact could not be loaded." />;
+  // MPWA-12i: a dead end is worst on an error path — he arrived from a link and
+  // has nowhere to go. E2-13's own CTA, on the surface it missed.
+  if (error) {
+    return (
+      <EmptyState
+        title="That contact isn't here."
+        hint="It may have been merged or removed. Everyone else is still in People."
+        ctaLabel="+ Back to People"
+        ctaTo="/crm"
+      />
+    );
+  }
 
-  const { contact: c, summary, invoices, payments, complaints, pending_deliveries, follow_ups, decisions, price_history, ai_relationship } = data;
+  const { contact: c, summary, invoices, payments, complaints, pending_deliveries, workflows, follow_ups, decisions, price_history, ai_relationship } = data;
   const isVendor = c.type === "vendor";
   const cur = invoices?.[0]?.currency || "INR";
   const rel = ai_relationship;
@@ -127,7 +185,8 @@ export default function ContactProfile() {
       <div className="card-brutal p-6 mb-8" data-testid="relationship-card">
         <div className="flex items-center justify-between gap-4 flex-wrap mb-4">
           <div className="flex items-center gap-2">
-            <Sparkle size={18} weight="bold" className="text-brand-red" />
+            {/* E2-40: consistent persona voice marker on the AI card header. */}
+            <DexBadge />
             <h2 className="font-heading text-xl font-extrabold uppercase tracking-tight">Relationship Intelligence</h2>
           </div>
           <button
@@ -158,6 +217,86 @@ export default function ContactProfile() {
           </div>
         )}
       </div>
+
+      {/* E2-08: Activity timeline. Small logger + list. Owner + sales
+          may log; anyone with finance perm can view. */}
+      <Section icon={ChatCircleDots} title="Recent Activity" count={(activities || []).length}>
+        {canWriteActivity && (
+          <div className="border border-black bg-white p-3 mb-3 flex flex-col md:flex-row gap-2" data-testid="crm-activity-logger">
+            <select
+              value={actKind}
+              onChange={(e) => setActKind(e.target.value)}
+              data-testid="crm-activity-kind"
+              className="border border-black bg-white px-3 py-2 text-sm font-mono focus:outline-none"
+            >
+              {Object.entries(ACTIVITY_META).map(([k, m]) => (
+                <option key={k} value={k}>{m.label}</option>
+              ))}
+            </select>
+            <input
+              value={actText}
+              onChange={(e) => setActText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && actText.trim()) logActivity.mutate(); }}
+              placeholder="What happened? (e.g. 'Rang about Rs 8L invoice, promised payment by Friday')"
+              data-testid="crm-activity-text"
+              className="flex-1 border border-black bg-white px-3 py-2 text-sm font-mono focus:outline-none focus:shadow-brutal-sm"
+            />
+            <button
+              onClick={() => actText.trim() && logActivity.mutate()}
+              disabled={!actText.trim() || logActivity.isPending}
+              data-testid="crm-activity-save"
+              className="bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-50"
+            >
+              {logActivity.isPending ? "Saving…" : "Log"}
+            </button>
+          </div>
+        )}
+        {(!activities || activities.length === 0) ? (
+          <p className="text-sm text-muted-foreground">No calls / meetings / notes logged yet.{canWriteActivity ? " Log the first one above." : ""}</p>
+        ) : (
+          <div className="space-y-2">
+            {activities.map((a) => {
+              const meta = ACTIVITY_META[a.kind] || ACTIVITY_META.other;
+              const Icon = meta.icon;
+              return (
+                <div key={a.id} data-testid={`crm-activity-${a.id}`} className="border border-black bg-white p-3">
+                  <div className="flex items-start gap-2 mb-1">
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold uppercase tracking-wider ${meta.cls}`}>
+                      <Icon size={12} weight="bold" /> {meta.label}
+                    </span>
+                    <span className="text-xs text-muted-foreground font-mono ml-auto flex items-center gap-1">
+                      <Clock size={11} weight="bold" /> {timeAgo(a.created_at)}
+                    </span>
+                  </div>
+                  <p className="text-sm">{a.text}</p>
+                  {a.actor_name && <p className="text-[11px] text-muted-foreground mt-1 font-mono">— {a.actor_name}</p>}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Section>
+
+      {/* E2-07: full workflow feed for this contact. Every workflow --
+          not just pending_deliveries -- so completed/cancelled ones are
+          also visible in context. */}
+      <Section icon={FlowArrow} title="Workflows" count={(workflows || []).length}>
+        {(!workflows || workflows.length === 0) ? (
+          <p className="text-sm text-muted-foreground">No workflows linked yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {workflows.map((w) => (
+              <div key={w.id} data-testid={`crm-workflow-${w.id}`} className="border border-black bg-white p-3 flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-semibold">{w.title || "(untitled)"}</p>
+                  <p className="text-xs text-muted-foreground font-mono">{w.type} · created {timeAgo(w.created_at)}</p>
+                </div>
+                <Chip value={w.stage || "unknown"} />
+              </div>
+            ))}
+          </div>
+        )}
+      </Section>
 
       <Section icon={Receipt} title={isVendor ? "Purchase Bills" : "Sales Bills"} count={invoices.length}>
         {invoices.length === 0 ? <p className="text-sm text-muted-foreground">No bills recorded.</p> : (

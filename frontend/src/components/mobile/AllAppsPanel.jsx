@@ -33,7 +33,7 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   CalendarBlank, AddressBook, UsersThree, Sparkle, BookOpen, Gauge,
-  Bell, GearSix, Translate, MoonStars, Sun, EnvelopeSimple, SignOut, X,
+  Bell, GearSix, Translate, MoonStars, Sun, SignOut, X,
   MagnifyingGlass, ArrowRight,
 } from "@phosphor-icons/react";
 import { hasPerm } from "@/lib/perms";
@@ -136,10 +136,12 @@ function buildTiles({ user, t, counts, live }) {
       live: live.cal,
     },
     { key: "coach", to: "/coach", label: t("nav.coach", "Work Coach"), icon: Sparkle, size: "small" },
-    // §8: Send Daily Digest is nowhere near Sign out. 12h puts it in the tile
-    // grid and Sign out in the utility strip, so they cannot be mis-tapped for
-    // each other at all.
-    { key: "digest", action: "digest", label: t("header.send_digest", "Send Daily Digest"), icon: EnvelopeSimple, size: "small", ownerOnly: true },
+    // §5.7 listed "Send Daily Digest" as a Small tile, and §8 asked for it to sit
+    // nowhere near Sign out. E2-63 (2026-08-15) then deleted
+    // POST /brief/send-digest outright — "the Desk itself is the brief now, so
+    // this email-a-snapshot flow duplicated live data behind an SMTP gate". A
+    // tile whose endpoint is gone is a button that always fails, so it goes with
+    // the endpoint. Eleven entries; the search row stays hidden either way.
   ];
 
   return tiles.filter((tile) => {
@@ -249,7 +251,6 @@ function Tile({ tile, onPick }) {
  * @param {object}   user
  * @param {boolean}  isDark
  * @param {Function} onToggleTheme
- * @param {Function} onSendDigest
  * @param {Function} onSignOut
  * @param {Function} onOpenLanguage
  * @param {{myWork?:number,notifications?:number}} [counts]
@@ -260,7 +261,6 @@ export function AllAppsPanel({
   user,
   isDark,
   onToggleTheme,
-  onSendDigest,
   onSignOut,
   onOpenLanguage,
   counts = {},
@@ -309,10 +309,6 @@ export function AllAppsPanel({
       case "language":
         onClose?.();
         onOpenLanguage?.();
-        break;
-      case "digest":
-        onClose?.();
-        onSendDigest?.();
         break;
       case "signout":
         onClose?.();

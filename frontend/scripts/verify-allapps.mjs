@@ -153,8 +153,15 @@ const settingsColour = await page.locator('[data-testid="allapps-tile-settings"]
   .evaluate((el) => getComputedStyle(el).color);
 check('Sign out is in danger text', signoutColour !== settingsColour,
   `${signoutColour} vs ${settingsColour}`);
-check('Send Daily Digest is nowhere near Sign out',
-  !utilKeys.includes('digest') && (await page.locator('[data-testid="allapps-tile-digest"]').getAttribute('data-size')) !== null);
+// §5.7 put Send Daily Digest in the tile grid, far from Sign out. E2-63
+// (2026-08-15) then deleted POST /brief/send-digest, so the tile went with the
+// endpoint — a button whose route is gone is worse than no button. What still
+// has to hold is that nothing dangerous sits beside Sign out.
+check('Send Daily Digest is gone with its endpoint (E2-63)',
+  (await page.locator('[data-testid="allapps-tile-digest"]').count()) === 0
+    && !utilKeys.includes('digest'), utilKeys.join(', '));
+check('nothing destructive sits beside Sign out',
+  utilKeys[utilKeys.length - 2] === 'theme', utilKeys.join(' | '));
 
 // §5.7: search only when there are more than twelve.
 const tileCount = sizes.length;

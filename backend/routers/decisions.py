@@ -21,7 +21,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from core import db, get_current_user, require_perm, new_id, now_iso
 from models.tasks import TaskCreateInput
@@ -33,7 +33,10 @@ router = APIRouter(prefix="/api")
 
 
 class DecisionCommentInput(BaseModel):
-    text: str
+    # E2-60: cap at 4000 chars (~1 A4 page of prose). Was unbounded --
+    # a paste of a PDF-as-text bloated decisions.timeline[] AND every
+    # participant's notification body.
+    text: str = Field(..., min_length=1, max_length=4000)
 
 
 async def _decision_participants(tenant_id: str, d: dict) -> set:

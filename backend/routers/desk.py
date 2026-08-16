@@ -26,7 +26,7 @@ Chips explained (all tenant + user scoped):
 
 Deep-linked from front-end Desk.js. Zero server.py churn.
 """
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone, date, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -39,10 +39,265 @@ router = APIRouter(prefix="/api")
 
 
 # ---------------------------------------------------------------------------
+# IST helpers. Server runs in UTC; India tenants would otherwise see
+# yesterday's data between 18:30-23:59 UTC (00:00-05:29 IST next day) or
+# blow through their real day boundary. E2-56 fix.
+# ---------------------------------------------------------------------------
+_IST_OFFSET = timedelta(hours=5, minutes=30)
+
+
+def _today_ist() -> str:
+    """IST 'today' as YYYY-MM-DD. Use for anything compared to date-only
+    fields (due_date, attendance.date, leaves.from_date/to_date)."""
+    return (datetime.now(timezone.utc) + _IST_OFFSET).date().isoformat()
+
+
+def _yesterday_ist_window_utc() -> tuple[str, str]:
+    """(start_utc_iso, end_utc_iso) for the IST-yesterday window. Use for
+    timestamp comparisons against UTC-stored created_at/updated_at."""
+    utc_now = datetime.now(timezone.utc)
+    ist_now_naive = utc_now + _IST_OFFSET
+    ist_today_midnight_naive = ist_now_naive.replace(
+        hour=0, minute=0, second=0, microsecond=0)
+    today_midnight_utc = (ist_today_midnight_naive - _IST_OFFSET).replace(
+        tzinfo=timezone.utc)
+    yesterday_midnight_utc = today_midnight_utc - timedelta(days=1)
+    return yesterday_midnight_utc.isoformat(), today_midnight_utc.isoformat()
+
+
+def _week_ago_ist_utc() -> tuple[str, str]:
+    """(week_ago_utc_iso, two_weeks_ago_utc_iso) both aligned to IST-midnight.
+    For weekly-completion trend deltas."""
+    _, today_midnight_utc = _yesterday_ist_window_utc()
+    # Reparse to compute deltas from IST midnight boundary
+    tm = datetime.fromisoformat(today_midnight_utc)
+    return (tm - timedelta(days=7)).isoformat(), (tm - timedelta(days=14)).isoformat()
+
+
+# ---------------------------------------------------------------------------
+# Epic 2 Sprint 6 (E2-46): /api/desk/summary -- Greeting + Dex narrative +
+# Trends + Shortcuts. Feeds the merged CEO-Brief-on-Desk header. Reuses the
+# same underlying data the /api/brief endpoint uses so no source-of-truth
+# drift. Template-based narrative for MVP; LLM-generated variant deferred
+# (E2-48). All computation happens live -- 15-min cache lives on the
+# LLM upgrade item, not the template.
+# ---------------------------------------------------------------------------
+def _greeting_for(user: dict) -> str:
+    """Time-of-day greeting. Server is UTC; add IST offset (+5:30) for
+    Kapoor tenant defaults. If we grow beyond India we'll thread tenant
+    timezone through here."""
+    hour_ist = (datetime.now(timezone.utc) + _IST_OFFSET).hour
+    if hour_ist < 12:
+        tod = "Good morning"
+    elif hour_ist < 17:
+        tod = "Good afternoon"
+    else:
+        tod = "Good evening"
+    first_name = (user.get("name") or "").split(" ")[0] or "there"
+    return f"{tod}, {first_name}"
+
+
+async def _delayed_count(tid: str, user: dict) -> int:
+    """Count tasks past due_date, not done/cancelled. Owner sees all,
+    non-owner sees their own. IST-today so we roll the "delayed" cliff
+    at IST-midnight (E2-56)."""
+    today = _today_ist()
+    q = {"tenant_id": tid, "status": {"$nin": ["done", "cancelled"]},
+         "due_date": {"$lt": today, "$ne": None}}
+    if user.get("role") != "owner":
+        q["assignee_id"] = user["id"]
+    return await db.tasks.count_documents(q)
+
+
+async def _completed_yesterday(tid: str, user: dict) -> int:
+    """Count 'task_done' activity events in the IST-yesterday window.
+    E2-55 fix: previously counted tasks with status=done + updated_at
+    in the last 24h, which inflated the number every time someone
+    edited a done task (rename, comment, attachment). Activity log
+    is append-only per completion so it's the correct source."""
+    y_start, y_end = _yesterday_ist_window_utc()
+    q = {"tenant_id": tid, "kind": "task_done",
+         "created_at": {"$gte": y_start, "$lt": y_end}}
+    if user.get("role") != "owner":
+        q["actor"] = user["id"]
+    return await db.activity.count_documents(q)
+
+
+async def _pending_decisions_for(tid: str, user: dict) -> int:
+    """Decisions this user needs to approve. Mirrors the on-desk
+    needs_decision chip logic."""
+    uid = user["id"]
+    is_owner = user.get("role") == "owner"
+    q = {"tenant_id": tid, "status": "pending"}
+    if is_owner:
+        q["$or"] = [{"approver_id": uid}, {"approver_id": {"$in": [None, ""]}}]
+    else:
+        q["approver_id"] = uid
+    return await db.decisions.count_documents(q)
+
+
+async def _cash_flow_status(tid: str) -> dict:
+    """Compact cash-flow summary. All numbers in tenant currency.
+
+    E2-54 fix: previously queried invoices.balance_due which is never
+    written by the ledger (the ledger tracks amount and amount_paid,
+    then derives remaining as amount - amount_paid). Every tenant
+    therefore saw 'cash-flow all clear' regardless of actual state.
+    Now reuses the same _overdue_receivables + _inv_remaining helpers
+    /api/brief already uses, so the Desk narrative and the legacy
+    Brief show the same numbers. Also fixes the unmatched-payments
+    query: real field is `match_status ∈ {unmatched, partial}` (not
+    the boolean `matched` the old code checked, which never existed)."""
+    from server import _overdue_receivables, _inv_remaining, _unmatched_payments  # deferred
+    overdue_rows = await _overdue_receivables(tid)
+    overdue_receivables = round(sum(_inv_remaining(r) for r in overdue_rows), 2)
+    # Unmatched INBOUND payments only (out payments live on a separate
+    # workflow; inbound is what the owner "needs to match to reconcile").
+    unmatched_rows = await _unmatched_payments(tid)
+    unmatched_count = sum(1 for p in unmatched_rows if p.get("direction") == "in")
+    clear = overdue_receivables == 0 and unmatched_count == 0
+    return {
+        "clear": clear,
+        "overdue_receivables_amount": overdue_receivables,
+        "unmatched_payments": unmatched_count,
+    }
+
+
+async def _weekly_completion_rate(tid: str, user: dict) -> dict:
+    """Completed tasks this week vs last week. Returns count + delta_pct.
+
+    E2-55 (same fix): uses activity.kind='task_done' events over an
+    IST-aligned week so trend deltas can't be inflated by post-completion
+    edits, and don't drift by up to 5.5h between UTC-run cron windows
+    and the tenant's real week boundary."""
+    week_ago, two_weeks_ago = _week_ago_ist_utc()
+    scope_this = {"tenant_id": tid, "kind": "task_done",
+                  "created_at": {"$gte": week_ago}}
+    scope_last = {"tenant_id": tid, "kind": "task_done",
+                  "created_at": {"$gte": two_weeks_ago, "$lt": week_ago}}
+    if user.get("role") != "owner":
+        scope_this["actor"] = user["id"]
+        scope_last["actor"] = user["id"]
+    this_wk = await db.activity.count_documents(scope_this)
+    last_wk = await db.activity.count_documents(scope_last)
+    if last_wk == 0:
+        delta_pct = 100 if this_wk > 0 else 0
+    else:
+        delta_pct = round(((this_wk - last_wk) / last_wk) * 100)
+    direction = "up" if delta_pct > 5 else "down" if delta_pct < -5 else "flat"
+    return {"value": this_wk, "delta_pct": delta_pct, "direction": direction}
+
+
+async def _complaints_trend(tid: str) -> dict:
+    """Open complaints (all-time) + how many opened in the last 7 days.
+    E2-56: use the IST-aligned 7-day window so the trend arrow flips
+    on IST-midnight, not UTC-midnight."""
+    open_now = await db.complaints.count_documents(
+        {"tenant_id": tid, "status": {"$ne": "resolved"}}
+    )
+    week_ago, _ = _week_ago_ist_utc()
+    new_7d = await db.complaints.count_documents(
+        {"tenant_id": tid, "created_at": {"$gte": week_ago}}
+    )
+    direction = "up" if new_7d >= 2 else "flat" if new_7d == 1 else "down"
+    return {"value": open_now, "new_7d": new_7d, "direction": direction}
+
+
+def _narrative(*, delayed: int, completed_yday: int, pending_decisions: int,
+                cash: dict, is_owner: bool) -> str:
+    """Deterministic template narrative. LLM variant lands in E2-48
+    (Backlog). Ordered by urgency -- delays first (bad), completed next
+    (good), cash-flow last (steady)."""
+    bits = []
+    if delayed > 0:
+        bits.append(
+            f"{delayed} task{'s' if delayed != 1 else ''} "
+            f"{'are' if delayed != 1 else 'is'} delayed"
+        )
+    if completed_yday > 0:
+        bits.append(f"{completed_yday} completed yesterday")
+    if cash.get("clear"):
+        bits.append("cash-flow all clear")
+    else:
+        n_over = int(cash.get("overdue_receivables_amount") or 0)
+        n_unm = int(cash.get("unmatched_payments") or 0)
+        parts = []
+        if n_over > 0:
+            parts.append(f"Rs {n_over:,.0f} in overdue receivables")
+        if n_unm > 0:
+            parts.append(f"{n_unm} payments to match")
+        if parts:
+            bits.append("cash-flow needs attention -- " + ", ".join(parts))
+    if not bits:
+        return ("You're all clear -- nothing pressing right now. "
+                "Nice place to be.")
+    lead = f"{len(bits)} thing{'s' if len(bits) != 1 else ''} worth knowing: "
+    body = ". ".join(bits[:-1]) + ("." if len(bits) > 1 else "")
+    tail = " " + bits[-1] + "."
+    prose = (lead + body + tail).replace("..", ".")
+    if is_owner and pending_decisions > 0:
+        prose += (f" {pending_decisions} decision"
+                    f"{'s are' if pending_decisions != 1 else ' is'} "
+                    f"waiting on you -- see below.")
+    return prose
+
+
+@router.get("/desk/summary")
+async def desk_summary(user: dict = Depends(get_current_user)):
+    tid = user["tenant_id"]
+    is_owner = user.get("role") == "owner"
+
+    delayed = await _delayed_count(tid, user)
+    completed_yday = await _completed_yesterday(tid, user)
+    pending_decisions = await _pending_decisions_for(tid, user)
+    cash = await _cash_flow_status(tid)
+    weekly_completion = await _weekly_completion_rate(tid, user)
+    complaints = await _complaints_trend(tid)
+
+    narrative = _narrative(
+        delayed=delayed, completed_yday=completed_yday,
+        pending_decisions=pending_decisions, cash=cash,
+        is_owner=is_owner,
+    )
+
+    # Shortcuts: which top-of-Desk quick-links to render.
+    # Owner-only for CEO Journal and Ops health.
+    shortcuts = {
+        "ceo_journal": is_owner,
+        "ops_health": is_owner,
+        "team_leaderboard": is_owner,
+    }
+
+    return {
+        "greeting": _greeting_for(user),
+        "narrative": narrative,
+        "trends": {
+            "weekly_completion_rate": weekly_completion,
+            "complaints_trend": complaints,
+            "cash_flow": {
+                "clear": cash.get("clear"),
+                "overdue_receivables_amount": cash.get("overdue_receivables_amount") or 0,
+                "unmatched_payments": cash.get("unmatched_payments") or 0,
+                "direction": "flat" if cash.get("clear") else "down",
+            },
+        },
+        "shortcuts": shortcuts,
+        "counters": {
+            "delayed": delayed,
+            "completed_yesterday": completed_yday,
+            "pending_decisions": pending_decisions,
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 def _iso_today() -> str:
-    return datetime.now(timezone.utc).date().isoformat()
+    """IST-today (see _today_ist). E2-56 fix — chip builders using this
+    for 'due today' and 'overdue' comparisons were 5.5h off for India
+    tenants between 18:30-23:59 UTC."""
+    return _today_ist()
 
 
 def _days_between(iso_start: Optional[str], iso_end: Optional[str] = None) -> int:
@@ -379,15 +634,29 @@ async def desk_nudge(item_id: str, inp: NudgeInput = None,
     if not target:
         raise HTTPException(status_code=404, detail="Target user not found")
 
-    # Write a notification for the target user (the persistent record)
+    # Write a notification for the target user (the persistent record).
+    # E2-61 (2026-08-15): use the same schema push_notification writes
+    # (type + message + sender_name + level) so the notifications bell
+    # switch(n.type) matches 'desk_nudge' instead of falling through to
+    # a generic 'reminder'.
+    # E2-66: link points to routes that actually resolve today. Tasks
+    # -> /my-work?task=X (works). Decisions -> /inbox?decision=X and
+    # Desk.js now scrolls + highlights the matching card.
+    link = (f"/my-work?task={item_id}"
+            if target_kind == "task"
+            else f"/inbox?decision={item_id}")
     notif = {
         "id": new_id(),
         "tenant_id": tid,
         "user_id": target_id,
-        "kind": "desk_nudge",
-        "title": f"Nudge from {user.get('name') or 'the owner'}",
-        "body": f"Please prioritise: {subject}",
-        "link": f"/my-work?task={item_id}" if target_kind == "task" else f"/inbox?decision={item_id}",
+        "type": "desk_nudge",              # E2-61
+        "level": "chase",                  # visual weight in the bell
+        "message": f"Please prioritise: {subject}",  # E2-61 (was: body)
+        "work_title": subject,
+        "sender_name": user.get("name") or "the owner",  # E2-61
+        "entity_type": target_kind,
+        "entity_id": item_id,
+        "link": link,                      # E2-66
         "read": False,
         "created_at": now_iso(),
         "meta": {

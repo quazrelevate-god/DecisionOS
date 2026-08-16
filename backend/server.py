@@ -179,6 +179,16 @@ CONTACT_TYPES = ("customer", "dealer", "vendor")
 CONTACT_STATUS = ("lead", "active", "inactive")
 
 
+# Epic 2 Sprint 1 (E2-03): relationship lifecycle stages. Enum differs
+# by contact type -- customers have a sales-funnel journey, suppliers
+# have a procurement journey. Backend accepts any value in the UNION so
+# a single validator works regardless of type; the CRM frontend renders
+# type-appropriate options. Empty string is allowed (means "unset").
+CUSTOMER_STAGES = ["lead", "qualified", "active", "at_risk", "churned"]
+SUPPLIER_STAGES = ["prospect", "active", "preferred", "on_hold", "retired"]
+LIFECYCLE_STAGES = list({*CUSTOMER_STAGES, *SUPPLIER_STAGES}) + [""]
+
+
 class ContactInput(BaseModel):
     type: str = "customer"
     name: str
@@ -192,6 +202,7 @@ class ContactInput(BaseModel):
     assigned_id: Optional[str] = None
     notes: Optional[str] = ""
     birthday: Optional[str] = ""
+    lifecycle_stage: Optional[str] = ""  # E2-03
 
 
 class ContactUpdateInput(BaseModel):
@@ -207,6 +218,7 @@ class ContactUpdateInput(BaseModel):
     assigned_id: Optional[str] = None
     notes: Optional[str] = None
     birthday: Optional[str] = None
+    lifecycle_stage: Optional[str] = None  # E2-03
 
 
 # ---------------------------------------------------------------------------
@@ -2255,12 +2267,17 @@ async def create_contact(inp: ContactInput, user: dict = Depends(require_role("o
         raise HTTPException(status_code=400, detail="Invalid contact type")
     status = inp.status if inp.status in CONTACT_STATUS else "lead"
     cid = new_id()
+    # E2-03: accept lifecycle_stage from the union of customer +
+    # supplier stages. Empty string means unset (unfamiliar contact).
+    stage = (inp.lifecycle_stage or "").strip().lower()
+    if stage and stage not in LIFECYCLE_STAGES:
+        stage = ""
     doc = {
         "id": cid, "tenant_id": user["tenant_id"], "type": inp.type, "name": inp.name,
         "company": inp.company or "", "phone": inp.phone or "", "email": inp.email or "",
         "address": inp.address or "", "tax_id": inp.tax_id or "", "tags": inp.tags or [],
         "status": status, "assigned_id": inp.assigned_id, "notes": inp.notes or "",
-        "birthday": inp.birthday or "",
+        "birthday": inp.birthday or "", "lifecycle_stage": stage,
         "created_by": user["id"], "created_at": now_iso(),
     }
     await db.contacts.insert_one(doc)
@@ -2279,6 +2296,11 @@ async def update_contact(contact_id: str, inp: ContactUpdateInput, user: dict = 
         updates.pop("type")
     if "status" in updates and updates["status"] not in CONTACT_STATUS:
         updates.pop("status")
+    # E2-03: normalise + validate lifecycle_stage against the union.
+    # Empty string is a legit value (means "unset" / no stage yet).
+    if "lifecycle_stage" in updates:
+        s = (updates["lifecycle_stage"] or "").strip().lower()
+        updates["lifecycle_stage"] = s if s in LIFECYCLE_STAGES else ""
     # FIX-003-C (S2-09): denormalized-name cascade. `contact_name` is
     # copied at write time into invoices, payments, and workflows
     # (workflows.counterparty). Without a cascade, renaming a contact
@@ -3322,14 +3344,8 @@ async def send_email(to, subject: str, html: str) -> dict:
     return {"sent": False, "mocked": True, "to": to_list}
 
 
-DIGEST_I18N = {
-    "en": {"brief": "Daily Brief", "pending": "pending approvals", "open": "open tasks", "overdue": "overdue",
-           "active": "active workflows", "pending_h": "Pending Approvals", "overdue_h": "Overdue Tasks", "none": "None"},
-    "hi": {"brief": "दैनिक ब्रीफ़", "pending": "लंबित स्वीकृतियाँ", "open": "खुले कार्य", "overdue": "अतिदेय",
-           "active": "सक्रिय वर्कफ़्लो", "pending_h": "लंबित स्वीकृतियाँ", "overdue_h": "अतिदेय कार्य", "none": "कोई नहीं"},
-    "ta": {"brief": "தினசரி சுருக்கம்", "pending": "நிலுவை ஒப்புதல்கள்", "open": "திறந்த பணிகள்", "overdue": "தாமதமானவை",
-           "active": "செயலில் உள்ள பணிப்பாய்வுகள்", "pending_h": "நிலுவை ஒப்புதல்கள்", "overdue_h": "தாமதமான பணிகள்", "none": "எதுவுமில்லை"},
-}
+# E2-63 (2026-08-15): DIGEST_I18N deleted along with the send-digest
+# endpoint that was its only consumer. Rationale in routers/brief.py.
 
 
 
@@ -3414,6 +3430,16 @@ async def run_followup(tenant_id: str):
     if last and (now - last).total_seconds() < 60:
         return
     _followup_last_run[tenant_id] = now
+    # RBAC-27 (2026-08-15): sweep expired temp perms so contractor
+    # grants auto-revoke without a separate cron. Cheap query -- only
+    # touches memberships that HAVE a temp_grants entry past expiry.
+    try:
+        from routers.access import sweep_expired_temp_grants
+        revoked = await sweep_expired_temp_grants(tenant_id)
+        if revoked:
+            logger.info(f"[rbac-27] auto-revoked {revoked} expired temp grant(s) in tenant {tenant_id[:8]}...")
+    except Exception as e:
+        logger.warning(f"[rbac-27] temp-grant sweep failed: {e}")
     tasks = await db.tasks.find(
         {"tenant_id": tenant_id, "status": {"$in": ["todo", "in_progress"]}, "due_date": {"$ne": None, "$lt": now.isoformat()}},
         {"_id": 0}
@@ -5255,7 +5281,16 @@ async def process_whatsapp_message(message: dict):
                 await send_wa_reply(sender, "📎 Received — your document is being reviewed by the right team before it's filed.")
 
         elif mtype == "text":
-            text = message["text"]["body"]
+            # S5-05 audit fix (2026-08-16): guarded key access. WA
+            # webhooks are public; a malformed text message (Meta bug,
+            # deep-link handler, template response) would crash this
+            # handler with KeyError -> 500 back to Meta -> they retry
+            # -> we crash again. Missing body is treated as an empty
+            # message and short-circuited to the "unrelated" path.
+            text = ((message.get("text") or {}).get("body") or "").strip()
+            if not text:
+                await update_wa_event(ev_id, status="ignored", reason="Empty text body")
+                return
             tri = await ai_capture_triage(text, sorted(troles))
             if tri.get("unrelated"):
                 await update_wa_event(ev_id, status="ignored", reason="Unrelated / not a business instruction")
@@ -6084,6 +6119,17 @@ async def fixup_demo_tenant():
 async def _bootstrap():
     """Idempotent bootstrap (indexes, migrations, demo seed). Runs in the background so it
     never blocks the app from becoming ready, and never crashes the process on failure."""
+    # S5-05 audit fix (2026-08-16): hoist the migration ledger import
+    # to function-top. Was previously imported at line 6365 (inside the
+    # same function) which made `_apply_migration` an UnboundLocal for
+    # every earlier reference (backfill_memberships_v1,
+    # backfill_grandfathered_plans_v1, rename_production_role). The
+    # try/except right after each call silently swallowed the
+    # UnboundLocalError, so those 3 migrations have been failing at
+    # every boot for weeks -- causing real DB drift: orphaned users
+    # missing membership rows, tenants missing plan field, tenants
+    # still holding the old 'production' role key.
+    from services.migrations import apply_migration as _apply_migration  # noqa: F401
     try:
         # Core tenant-scoped indexes (P0 for multi-tenant scale — every read
         # of these collections filters by tenant_id, so unindexed = full scans).
@@ -6147,6 +6193,38 @@ async def _bootstrap():
             )
         except Exception as e:
             logger.warning(f"memberships query indexes: {e}")
+
+        # S5-05 audit fix (2026-08-16): indexes for collections shipped
+        # in the last 2 sessions that were queried WITHOUT indexes,
+        # causing full-scan hot paths + one race-condition bug.
+        try:
+            # billing_events: UNIQUE on idempotency_key so a webhook
+            # retry that races between find_one() and insert_one() in
+            # routers/billing.py::razorpay_webhook can't insert a
+            # duplicate + double-upgrade a plan. Belt (unique index)
+            # AND braces (DuplicateKeyError catch at insert site).
+            await db.billing_events.create_index(
+                "idempotency_key", unique=True,
+                name="billing_events_idempotency_key_unique",
+            )
+            # crm_activities: tenant+contact+created for the
+            # ContactProfile timeline read; sorted DESC to match the
+            # find(...).sort("created_at", -1) in routers/crm.py.
+            await db.crm_activities.create_index(
+                [("tenant_id", 1), ("contact_id", 1), ("created_at", -1)],
+                name="crm_activities_tenant_contact_created",
+            )
+            # invoices.source_task_id: FUP-50 auto-invoice dedup key
+            # in routers/tasks.py::_maybe_auto_invoice. Partial so
+            # only auto-drafted rows contribute (~5% of invoices).
+            await db.invoices.create_index(
+                [("tenant_id", 1), ("source_task_id", 1)],
+                partialFilterExpression={"source_task_id": {"$type": "string"}},
+                name="invoices_source_task_id_partial",
+            )
+        except Exception as e:
+            logger.warning(f"S5-05 pre-audit indexes: {e}")
+
         # Backfill: for every existing user with a tenant_id (the
         # legacy 1:1 model), synthesize the matching membership row.
         # Idempotent: skips users who already have a row for that
@@ -6187,7 +6265,7 @@ async def _bootstrap():
             if _mres == "applied":
                 logger.info("Migration applied: backfill_memberships_v1")
         except Exception as e:
-            logger.warning(f"backfill_memberships migration: {e}")
+            logger.exception(f"backfill_memberships migration: {e}")  # S5-05: surface tracebacks
         # FIX-005-A (S3-02): backfill plan fields on existing tenants
         # that predate the plan model. Every legacy tenant gets
         # plan=grandfathered (unlimited seats + quotas, feature-flag
@@ -6217,7 +6295,7 @@ async def _bootstrap():
             if _pres == "applied":
                 logger.info("Migration applied: backfill_grandfathered_plans_v1")
         except Exception as e:
-            logger.warning(f"backfill_grandfathered_plans migration: {e}")
+            logger.exception(f"backfill_grandfathered_plans migration: {e}")  # S5-05
         # FIX-004-D (RBAC-16): canonical role rename production -> operations.
         # Prior code had config.ROLES with 'production' but
         # config.DEFAULT_ROLES with 'operations' — silent inconsistency
@@ -6264,7 +6342,56 @@ async def _bootstrap():
             if _rres == "applied":
                 logger.info("Migration applied: rename_production_role_v1")
         except Exception as e:
-            logger.warning(f"rename_production_role migration: {e}")
+            logger.exception(f"rename_production_role migration: {e}")  # S5-05
+        # WE-03 (2026-08-16): stage objects extend. Existing tenant
+        # operating_model.pipelines[].stages[] entries only carry
+        # {key,label}. This migration re-runs normalize_operating_model
+        # over every tenant so the three new fields (tasks[], approval,
+        # side_effects[]) get defaulted in place. Empty defaults =
+        # today's behaviour verbatim; WE-06 engine treats empty
+        # tasks[] as "no auto-spawn on entry" and approval=None as
+        # "no gate required". Backward-compatible by construction.
+        async def _stage_objects_extend(_db):
+            from core import normalize_operating_model
+            scanned = touched = 0
+            async for _t in _db.tenants.find(
+                {"operating_model": {"$exists": True}},
+                {"_id": 0, "id": 1, "operating_model": 1},
+            ):
+                scanned += 1
+                om_in = _t.get("operating_model") or {}
+                om_out = normalize_operating_model(om_in)
+                # Cheap change-detect: only write if any stage is missing
+                # one of the three new fields. Skips the write for
+                # tenants who were already on the new shape.
+                needs = False
+                for _p in (om_in.get("pipelines") or []):
+                    for _s in (_p.get("stages") or []):
+                        if not isinstance(_s, dict):
+                            needs = True; break
+                        if "tasks" not in _s or "approval" not in _s or "side_effects" not in _s:
+                            needs = True; break
+                    if needs:
+                        break
+                if not needs:
+                    continue
+                await _db.tenants.update_one(
+                    {"id": _t["id"]},
+                    {"$set": {"operating_model": om_out, "updated_at": now_iso()}},
+                )
+                touched += 1
+            logger.info(
+                f"[WE-03] stage_objects_extend: scanned={scanned} touched={touched}"
+            )
+        try:
+            _sres = await _apply_migration(
+                db, "stage_objects_extend_v1", _stage_objects_extend,
+                description="WE-03: add tasks[]/approval/side_effects[] to every pipeline stage (empty defaults preserve behaviour)",
+            )
+            if _sres == "applied":
+                logger.info("Migration applied: stage_objects_extend_v1")
+        except Exception as e:
+            logger.exception(f"stage_objects_extend migration: {e}")  # WE-03
         # FIX-003-D (S2-07): auth_email_tokens for email verification +
         # password reset. Unique index on the token string, TTL index on
         # expires_at so used/expired rows auto-purge. Kind + email combo
@@ -6336,7 +6463,7 @@ async def _bootstrap():
         # FIX-002-C: phone_norm backfill routed through the migration ledger.
         # Idempotent internally (only touches docs missing the field) AND
         # tracked in db.migrations_applied so subsequent boots skip cleanly.
-        from services.migrations import apply_migration as _apply_migration
+        # (2026-08-16: import hoisted to _bootstrap top -- see comment there.)
 
         async def _backfill_phone_norm(_db):
             from services.phone import norm_phone as _np
@@ -6356,7 +6483,7 @@ async def _bootstrap():
             if _result == "applied":
                 logger.info("Migration applied: backfill_users_phone_norm_v1")
         except Exception as e:
-            logger.warning(f"phone_norm backfill migration: {e}")
+            logger.exception(f"phone_norm backfill migration: {e}")  # S5-05
         # FIX-003-A (S2-03): otp_codes are keyed by (phone, tenant_id) so
         # two tenants that share a phone can each hold their own live
         # OTP. The migration ledger call:
@@ -6408,7 +6535,7 @@ async def _bootstrap():
             if _fix003_res == "applied":
                 logger.info("Migration applied: otp_codes_tenant_scope_v1")
         except Exception as e:
-            logger.warning(f"otp_codes tenant-scope migration: {e}")
+            logger.exception(f"otp_codes tenant-scope migration: {e}")  # S5-05
 
         # FIX-007-A (S4-03): rename brain_contexts → brain_query_cache to
         # kill the name collision with brain_context (singular, decision-
@@ -6457,7 +6584,7 @@ async def _bootstrap():
             if _s403_res == "applied":
                 logger.info("Migration applied: rename_brain_contexts_to_query_cache_v1")
         except Exception as e:
-            logger.warning(f"brain_contexts rename migration: {e}")
+            logger.exception(f"brain_contexts rename migration: {e}")  # S5-05
 
         # FIX-007-A (S4-01): drop text indexes that were created with
         # default_language="none" so the create_index calls below can
@@ -6492,7 +6619,7 @@ async def _bootstrap():
             if _s401_res == "applied":
                 logger.info("Migration applied: drop_none_language_text_indexes_v1")
         except Exception as e:
-            logger.warning(f"drop-none-language text indexes migration: {e}")
+            logger.exception(f"drop-none-language text indexes migration: {e}")  # S5-05
         # New compound unique index — one live OTP per (phone, tenant).
         try:
             await db.otp_codes.create_index(
@@ -6634,7 +6761,7 @@ async def _bootstrap():
             if _tres == "applied":
                 logger.info("Migration applied: migrate_tenants_backfill_roles_v1")
         except Exception as e:
-            logger.warning(f"migrate_tenants migration: {e}")
+            logger.exception(f"migrate_tenants migration: {e}")  # S5-05
         # FIX-002-E: copy any legacy local-disk uploads into obj_store and
         # rewrite the referring domain records to point at the new
         # storage_path. Runs exactly once via ledger; safe on second boot.
@@ -6647,7 +6774,7 @@ async def _bootstrap():
             if _ures == "applied":
                 logger.info("Migration applied: migrate_local_disk_uploads_to_obj_store_v1")
         except Exception as e:
-            logger.warning(f"local-disk uploads migration: {e}")
+            logger.exception(f"local-disk uploads migration: {e}")  # S5-05
         await fixup_demo_tenant()
         await write_test_credentials()
         logger.info("Bootstrap complete.")
@@ -6779,6 +6906,22 @@ from routers.brief import router as brief_router  # noqa: E402
 app.include_router(brief_router)
 from routers.team import router as team_router  # noqa: E402
 app.include_router(team_router)
+# Epic 2 Sprint 8 (E2-67): per-contact outstanding aggregation for CRM pills.
+from routers.crm import router as crm_router  # noqa: E402
+app.include_router(crm_router)
+# Epic 2 Sprint 5 (E2-35 + E2-41): Dex persona endpoints (in-flight
+# capture count + unified capture proxy).
+from routers.dex import router as dex_router  # noqa: E402
+app.include_router(dex_router)
+# Epic 1 Batch 2 (RBAC-26 + RBAC-27): acting-as delegation + time-
+# bounded elevated permissions.
+from routers.access import router as access_router  # noqa: E402
+app.include_router(access_router)
+# Epic 1 (S3-01, 2026-08-16): Razorpay billing module -- redirect to
+# marketing landing page for the actual Checkout; webhook handler on
+# our side upgrades tenant.plan on payment.captured.
+from routers.billing import router as billing_router  # noqa: E402
+app.include_router(billing_router)
 # FIX-006-B (S0-02): strict CORS allow-list — no more `allow_origin_regex=".*"`.
 # The old default of `*` combined with `allow_credentials=True` was echoed
 # back per-origin via `allow_origin_regex='.*'`, which sidesteps the CORS

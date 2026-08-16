@@ -161,11 +161,20 @@ const dctx = await browser.newContext({ viewport: { width: 1280, height: 900 } }
 const dpage = await dctx.newPage();
 check('signed in on desktop', await signIn(dpage, BASE));
 await dpage.goto(`${BASE}/brief`, { waitUntil: 'domcontentloaded' });
-await dpage.waitForTimeout(1400);
-check('desktop /brief does NOT redirect', new URL(dpage.url()).pathname === '/brief',
-  new URL(dpage.url()).pathname);
-check('desktop /brief still renders its own page',
+await dpage.waitForSelector('aside a[data-testid^="nav-"]', { timeout: 15000 }).catch(() => {});
+await dpage.waitForTimeout(900);
+// Epic 2 Sprint 6 (E2-47) retired CEOBrief.js and made /brief redirect for
+// everyone; MPWA-12c had already made the mobile redirect carry the scope. The
+// merged rule is one Navigate for both viewports — so desktop redirects too, and
+// what it must NOT do is land on the mobile Desk.
+const dl = new URL(dpage.url());
+check('desktop /brief redirects to the Desk as well', dl.pathname === '/inbox', dl.pathname);
+check('…carrying the same scope, which the desktop Desk simply ignores',
+  dl.searchParams.get('scope') === 'morning', dl.search);
+check('desktop lands on the desktop Desk, not the mobile one',
   (await dpage.locator('[data-testid="desk-mobile"]').count()) === 0);
+check('the desktop sidebar is still there after the redirect',
+  await dpage.locator('aside').isVisible());
 await dctx.close();
 
 await browser.close();

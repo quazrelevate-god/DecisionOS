@@ -184,7 +184,17 @@ export default function Journal() {
       {isLoading ? (
         <p className="font-mono text-sm">Loading journal…</p>
       ) : !hasContent ? (
-        <EmptyState title="Nothing logged yet" hint="Decisions you capture and approve will appear here, grouped by day." />
+        // MPWA-12i: E2-13 gave EmptyState a CTA so "a fresh tenant sees a
+        // next-action button instead of a dead 'Nothing here' screen", and
+        // MyWork/CRM took it up — the Journal was the list surface that got
+        // missed. Same component, same API, so this completes E2-13's own sweep
+        // rather than inventing a pattern.
+        <EmptyState
+          title="Nothing logged yet."
+          hint="Decisions you capture and approve appear here, grouped by day."
+          ctaLabel="+ Open Decision Desk"
+          ctaTo="/inbox"
+        />
       ) : (
         <div className="space-y-10" data-testid="journal-days">
           {visibleDays.map((day) => (

@@ -15,7 +15,6 @@ import {
   Brain as BrainIcon,
   AddressBook,
   SignOut,
-  EnvelopeSimple,
   Bell,
   Sun,
   MoonStars,
@@ -43,7 +42,9 @@ import { InstallPrompt } from "./mobile/InstallPrompt";
 // new owner-only shortcut to Operating Score (removed from Brief in E2-11).
 const NAV = [
   { to: "/", label: "Decision Desk", tkey: "inbox", icon: Tray, testid: "nav-inbox", perm: "inbox" },
-  { to: "/brief", label: "CEO Brief", tkey: "brief", icon: Sun, testid: "nav-ceo-brief" },
+  // Epic 2 Sprint 6 (E2-47): 'CEO Brief' merged into Desk header. Nav
+  // entry retired; /brief URL redirects to /inbox in App.js.
+  // { to: "/brief", label: "CEO Brief", tkey: "brief", icon: Sun, testid: "nav-ceo-brief" },
   { to: "/my-work", label: "My Work", tkey: "mywork", icon: Briefcase, testid: "nav-my-work" },
   { to: "/operating-score", label: "Ops", tkey: "ops", icon: Gauge, testid: "nav-ops", ownerOnly: true },
   { to: "/crm", label: "CRM", tkey: "crm", icon: AddressBook, testid: "nav-crm", perm: "people" },
@@ -65,9 +66,13 @@ const NAV = [
 // MPWA-03 (§8): BOTTOM_NAV is retired. The mobile 5-item tab bar put CRM and
 // My Work in slots the owner rarely flips between, and left Money — the
 // second-most-consulted screen for an MSME owner — two taps deep in a drawer.
-// Slots now live in FloatingDock (Desk · Brief · Money · More) with Dex as the
-// FAB; everything else is in AllAppsPanel. This supersedes Epic 2's E2-10
-// bottom-nav rebalance, which was a founder decision — confirm before merging.
+// Slots now live in FloatingDock (Desk · Work · Money · More) with Dex as the
+// FAB; everything else is in AllAppsPanel.
+//
+// Epic 2 Sprint 6 (E2-47) reached the same place from the other side: it retired
+// the Brief slot and took the bottom nav to four. Both agree the tab bar was
+// carrying the wrong things — MPWA-03 replaced the bar itself. This supersedes
+// Epic 2's E2-10 bottom-nav rebalance, which was a founder decision.
 
 // MPWA-01: `markOnly` drops the wordmark. The mobile app bar cannot hold the
 // full wordmark plus four 44px controls at 390px (it measured 407 > 390 once
@@ -208,14 +213,9 @@ export default function Layout({ children }) {
     navigate("/login");
   };
 
-  const sendDigest = async () => {
-    try {
-      const { data } = await api.post("/brief/send-digest");
-      toast.success(data.sent ? `Digest emailed to ${data.to}` : `Digest generated (email not configured — logged)`);
-    } catch (e) {
-      toast.error(e.response?.data?.detail || "Could not send digest");
-    }
-  };
+  // E2-63 (2026-08-15): send-digest retired. The Desk itself is the
+  // brief now (Sprint 6 merged CEOBrief into Desk header) so this
+  // email-a-snapshot flow duplicated live data behind an SMTP gate.
 
   const NavItems = ({ onNavigate }) => (
     <>
@@ -242,7 +242,10 @@ export default function Layout({ children }) {
               {fires}
             </span>
           )}
-          {to === "/ingest" && captureCount > 0 && (
+          {/* E2-30 (2026-08-15): review badge follows the Inbox tab into
+              /finance now that /ingest is retired. Same testid so any
+              existing E2E tests still find it. */}
+          {to === "/finance" && captureCount > 0 && (
             <span data-testid="nav-review-badge" title={`${captureCount} item(s) to review`}
               className="ml-auto bg-brand-red text-white text-[10px] min-w-5 h-5 px-1 flex items-center justify-center border border-black font-bold rounded-full">
               {captureCount}
@@ -294,27 +297,13 @@ export default function Layout({ children }) {
               {user?.role}
             </span>
           </div>
-          {user?.role === "owner" && (
-            <div className="flex items-center gap-3">
-              <button
-                onClick={sendDigest}
-                data-testid="send-digest-button"
-                className="flex items-center gap-2 px-4 py-2 text-sm rounded-lg bg-foreground text-background font-semibold hover:opacity-90 transition-opacity"
-              >
-                <EnvelopeSimple size={16} weight="bold" /> {t("header.send_digest")}
-              </button>
-              <LanguageSwitcher />
-              <ThemeToggle />
-              <Bellicon />
-            </div>
-          )}
-          {user?.role !== "owner" && (
-            <div className="flex items-center gap-3">
-              <LanguageSwitcher />
-              <ThemeToggle />
-              <Bellicon />
-            </div>
-          )}
+          {/* E2-63: send-digest button retired. Same set of controls
+              for owner + non-owner now that the digest is gone. */}
+          <div className="flex items-center gap-3">
+            <LanguageSwitcher />
+            <ThemeToggle />
+            <Bellicon />
+          </div>
         </header>
 
         {/* Mobile top app bar — MPWA-03.
@@ -358,7 +347,6 @@ export default function Layout({ children }) {
         user={user}
         isDark={isDark}
         onToggleTheme={toggleTheme}
-        onSendDigest={sendDigest}
         onSignOut={doLogout}
         onOpenLanguage={() => setLangOpen(true)}
         counts={{ notifications: bellCount, myWork: fires }}

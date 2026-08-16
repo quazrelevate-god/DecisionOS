@@ -243,9 +243,16 @@ async def list_documents(
     if q:
         tokens = _keywords(q)
         if tokens:
-            regex_or = [{"title": {"$regex": q, "$options": "i"}},
-                        {"summary": {"$regex": q, "$options": "i"}},
-                        {"original_filename": {"$regex": q, "$options": "i"}},
+            # E2-58 fix: escape the user-supplied `q` before feeding it to
+            # $regex. An unescaped payload like "(a+)+$" causes exponential
+            # regex backtracking (ReDoS) and pins one Mongo connection for
+            # seconds -- a single curl loops that into a cheap tenant DoS.
+            # We only need substring-match, not regex, so re.escape is a
+            # proper fix rather than a defense-in-depth patch.
+            q_esc = re.escape(q)
+            regex_or = [{"title": {"$regex": q_esc, "$options": "i"}},
+                        {"summary": {"$regex": q_esc, "$options": "i"}},
+                        {"original_filename": {"$regex": q_esc, "$options": "i"}},
                         {"keywords": {"$in": tokens}},
                         {"tags": {"$in": tokens}}]
             filt.setdefault("$and", []).append({"$or": regex_or})

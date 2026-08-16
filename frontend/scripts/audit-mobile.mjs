@@ -544,6 +544,15 @@ async function settle(page) {
       return t.trim().length > 0 && !/^\s*Loading…\s*$/i.test(t);
     }, { timeout: 8000 })
     .catch(() => {});
+  // …and then for the CONTENT, not just for text. Several queries poll on an
+  // interval so `networkidle` never fires, and the first render is a skeleton
+  // that has plenty of text — so the two waits above were both satisfied while
+  // /my-work was still loading. It reported a density failure and a 184px gap
+  // for a screen that composes correctly a second later. Skeletons are marked
+  // (`data-skeleton`) precisely so this wait can exist.
+  await page
+    .waitForFunction(() => document.querySelectorAll('[data-skeleton]').length === 0, { timeout: 10000 })
+    .catch(() => {});
   // Kill animations so screenshots are deterministic.
   await page.addStyleTag({
     content: `*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}`,

@@ -54,35 +54,55 @@ function Frame({ path, fixture }) {
       const types = [...new Set(blocks.map((b) => b.getAttribute("data-block")))];
       const progress = doc.querySelectorAll("[data-progress]").length;
 
-      // Fill: union of content-box coverage over the first viewport, measured in
-      // 8px rows so a row counts as filled if any leaf element covers it.
+      // The lab has to agree with the harness or it teaches the wrong lesson, so
+      // it measures the same two things the same two ways (MPWA-12i):
+      //   fill — content-box coverage, over the band that starts at <main>
+      //   gap  — INK coverage, so a tall empty container cannot pass by being tall
       const ROW = 8;
-      const rows = Math.floor(VH / ROW);
-      const covered = new Array(rows).fill(false);
+      const bandTop = Math.max(0, Math.round(main.getBoundingClientRect().top));
+      const rows = Math.max(1, Math.floor((VH - bandTop) / ROW));
+      const mark = (arr, r) => {
+        const from = Math.max(0, Math.floor((r.top - bandTop) / ROW));
+        const to = Math.min(rows - 1, Math.floor((r.bottom - bandTop) / ROW));
+        for (let i = from; i <= to; i++) arr[i] = true;
+      };
+      const visible = (el) => {
+        const cs = win.getComputedStyle(el);
+        return cs.visibility !== "hidden" && cs.display !== "none" && Number(cs.opacity) !== 0;
+      };
+
+      const boxCovered = new Array(rows).fill(false);
+      for (const el of main.querySelectorAll(
+        '[data-block], [data-empty-screen], [data-empty-state], h1, section, form, ul, ol, table, input, textarea, button'
+      )) {
+        const r = el.getBoundingClientRect();
+        if (r.width < 8 || r.height < 8 || !visible(el)) continue;
+        mark(boxCovered, r);
+      }
+      const fill = Math.round((boxCovered.filter(Boolean).length / rows) * 100);
+
+      const inkCovered = new Array(rows).fill(false);
       const leaves = [...main.querySelectorAll("*")].filter(
-        (el) => el.children.length === 0 || /^(P|H1|H2|H3|SPAN|BUTTON|A|LI|IMG|SVG)$/.test(el.tagName)
+        (el) => el.children.length === 0 || /^(P|H1|H2|H3|SPAN|BUTTON|A|LI|IMG|SVG|INPUT|TEXTAREA)$/.test(el.tagName)
       );
       for (const el of leaves) {
         const r = el.getBoundingClientRect();
-        if (r.width < 2 || r.height < 2) continue;
-        const cs = win.getComputedStyle(el);
-        if (cs.visibility === "hidden" || cs.display === "none" || Number(cs.opacity) === 0) continue;
-        const from = Math.max(0, Math.floor(r.top / ROW));
-        const to = Math.min(rows - 1, Math.floor(r.bottom / ROW));
-        for (let i = from; i <= to; i++) covered[i] = true;
+        if (r.width < 2 || r.height < 2 || !visible(el)) continue;
+        mark(inkCovered, r);
       }
-      const fill = Math.round((covered.filter(Boolean).length / rows) * 100);
+      const ink = Math.round((inkCovered.filter(Boolean).length / rows) * 100);
 
-      // Largest run of uncovered rows = largest vertical white gap.
+      // Largest run of uncovered ink rows = largest vertical white gap.
       let gap = 0;
       let run = 0;
-      for (const c of covered) {
+      for (const c of inkCovered) {
         run = c ? 0 : run + 1;
         gap = Math.max(gap, run);
       }
 
       setM({
         fill,
+        ink,
         gap: gap * ROW,
         types,
         progress,
@@ -107,7 +127,7 @@ function Frame({ path, fixture }) {
         <span className="text-sm font-semibold">{FIXTURE_LABEL[fixture]}</span>
         {m && (
           <span className="text-[length:var(--text-label)] leading-4 text-muted-foreground">
-            <span className={ok(m.fill >= 85)}>{m.fill}% fill</span>
+            <span className={ok(m.fill >= 85)} title={`${m.ink}% ink`}>{m.fill}% fill</span>
             {" · "}
             <span className={ok(m.types.length >= 3)}>{m.types.length} blocks</span>
             {" · "}
@@ -243,7 +263,10 @@ export default function DesignLab() {
         <p className="mt-1 text-sm text-muted-foreground">
           Real routes, real components, real query layer — rendered at 390×844 against each
           fixture state (§4). Thresholds from §8: ≥85% fill, ≥3 block types, exactly 1 progress
-          element, ≤120px largest gap. Development only.
+          element, ≤120px largest gap. Fill is content-box coverage from the top of{" "}
+          <code>main</code>; the gap is measured on ink, so a tall empty box cannot pass by being
+          tall. §8 gates the fill on fixture B only — A and C report it for information.
+          Development only.
         </p>
         <p className="mt-1 text-sm text-muted-foreground">
           Browsing the app yourself?{" "}

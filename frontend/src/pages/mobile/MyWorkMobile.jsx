@@ -26,8 +26,8 @@ import { inr } from "../../lib/format";
 import { FocusView } from "../../components/mobile/FocusView";
 import { Board, Queue, Strip, Pulse } from "../../components/mobile/blocks";
 import {
-  BottomSheet, SheetSelect, MobileCard, EmptyScreen, EmptyState, ListSkeleton,
-  StatusChip, openDex,
+  BottomSheet, SheetSelect, MobileCard, EmptyScreen, EmptyState, LandsGrid,
+  ListSkeleton, StatusChip, openDex,
 } from "../../components/mobile";
 
 const STATUS_OPTIONS = [
@@ -606,7 +606,11 @@ export default function MyWorkMobile() {
 
       {view === "mywork" && (
         <>
-          {categories.length > 1 && (
+          {/* Rendered from one category up: with a single category this is the
+              screen's third block type, and §3's L1 floor of three shapes is not
+              something a thin tenant should fail. The chip still says what it
+              filters to, so it is not chrome. */}
+          {categories.length >= 1 && (
             <Strip
               label="Filter"
               wrap
@@ -704,6 +708,22 @@ export default function MyWorkMobile() {
                 />
               );
             })}
+
+            {/* L2's next stratum for a THIN list. The real tenant has three tasks:
+                not empty, so the composed empty screen does not apply, but the
+                strata above still left 392px blank underneath. */}
+            {!tasksQ.isLoading && list.length > 0 && list.length < 4 && (
+              <LandsGrid
+                title="What else lands here"
+                data-testid="mywork-lands"
+                items={[
+                  { id: "theirs", icon: UsersThree, title: "What you handed out", body: "Who has it and whether it moved." },
+                  { id: "late", icon: Clock, title: "What ran late", body: "Past its date, with the person who has it." },
+                  { id: "flow", icon: ArrowRight, title: "Work in flight", body: "Quotations, orders and dispatches by stage." },
+                  { id: "leave", icon: AirplaneTakeoff, title: "Who is away", body: "Leave requests, and who is out today." },
+                ]}
+              />
+            )}
 
             {/* L2's next stratum, and the screen's one L3 element. Both numbers
                 are counted from the same list on screen, so they cannot drift

@@ -63,6 +63,12 @@ const CHIPS = [
 
 const VISIBLE_ROWS = 5;
 
+/** How many of the Brief's counters have anything in them. */
+const NUMBERS_LIVE = (counters = {}) =>
+  ["delayed", "awaiting_approval", "completed", "absent", "complaints",
+   "receivables_overdue", "bills_due", "unmatched_payments"]
+    .filter((k) => (counters[k] || 0) > 0).length;
+
 const headerFor = (scope) =>
   ({ now: "Desk", morning: "Morning brief", evening: "Evening brief", week: "This week", month: "This month" }[scope] || "Desk");
 
@@ -425,6 +431,11 @@ function Narrative({
 
   const waiting = counters.awaiting_approval || 0;
   const throughput = brief?.throughput?.map((p) => (typeof p === "number" ? p : p.v)) || [];
+  const hasSpark = throughput.length > 1;
+  const cleared = brief?.cleared_period ?? counters.completed ?? 0;
+  // L2's next stratum: on a tenant whose brief is thin (no fires_detail, few
+  // live numbers) the strata above leave the lower half of the screen blank.
+  const thin = (counters.fires || 0) === 0 && NUMBERS_LIVE(counters) < 3;
 
   if (loading || !brief) return <ListSkeleton rows={4} />;
 
@@ -441,7 +452,7 @@ function Narrative({
         headline={brief.verdict || fallbackVerdict(counters, amounts)}
         // L3 for narrative scopes: a 7-day decision-throughput sparkline (§3).
         aside={
-          throughput.length > 1 ? (
+          hasSpark ? (
             <span data-progress="decision-throughput" className="block">
               <ThroughputSpark points={throughput} />
             </span>
@@ -485,17 +496,37 @@ function Narrative({
         onOpen={onNumber}
       />
 
-      {/* Cleared this period, as the closing note (§5.2). */}
-      {(brief.cleared_period ?? counters.completed) > 0 && (
-        <Strip
-          label="Cleared this period"
-          wrap
-          data-testid="desk-cleared-period"
-          items={[{
-            key: "cleared",
-            label: `${brief.cleared_period ?? counters.completed} ${brief.completed_label || "completed"}`,
-            tone: "success",
-          }]}
+      {/* Cleared this period, as the closing note (§5.2) — and this screen's L3
+          element whenever the API gave us no throughput series to draw.
+          `GET /brief` on the real tenant returns no `throughput`, so the
+          sparkline above never rendered there and the narrative scopes carried
+          ZERO progress elements against §3's "exactly one". This one is built
+          from a counter the API does return, and it renders at zero: "nothing
+          cleared yet this period" is throughput, not a dead filter chip. */}
+      <Strip
+        label="Cleared this period"
+        wrap
+        progress={hasSpark ? undefined : "cleared-period"}
+        data-testid="desk-cleared-period"
+        items={[{
+          key: "cleared",
+          label: cleared > 0
+            ? `${cleared} ${brief.completed_label || "completed"}`
+            : `Nothing ${brief.completed_label ? "" : "cleared "}yet this period`,
+          tone: cleared > 0 ? "success" : "neutral",
+        }]}
+      />
+
+      {/* A brief with almost nothing in it is not empty, so it keeps its numbers
+          and gains the explanation rather than an empty state (§3 L2). */}
+      {thin && waiting > 0 && (
+        <LandsGrid
+          title="What else shows up here"
+          data-testid="desk-lands"
+          items={[
+            { id: "fires", icon: Fire, title: "Anything on fire", body: "Overdue money and work that has stopped moving." },
+            { id: "money", icon: HandCoins, title: "What came in", body: "Received against outstanding, as payments land." },
+          ]}
         />
       )}
 

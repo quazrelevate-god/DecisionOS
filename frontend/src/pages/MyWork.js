@@ -9,7 +9,10 @@ import { useAuth } from "../context/AuthContext";
 import { userPerms } from "../lib/perms";
 import { opModel } from "../lib/operatingModel";
 import { toast } from "sonner";
-import { TaskBoard, NewTaskDialog } from "./Tasks";
+// WE-14 (2026-08-16): TaskBoard import retired -- the Board sub-tab
+// under Workflows is gone. NewTaskDialog stays -- it is used by the
+// New-task launcher.
+import { NewTaskDialog } from "./Tasks";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import Workflows from "./Workflows";
 import Leave from "./Leave";
@@ -20,6 +23,7 @@ import {
   Paperclip, UserCircle, ShieldCheck, Tag, ClockCounterClockwise,
   ArrowClockwise, XCircle, LockKey, X, AirplaneTakeoff, MagnifyingGlassPlus, Eye,
   File, FileArrowUp, Lightbulb, Info,
+  FlowArrow,  // WE-11 stage chip
 } from "@phosphor-icons/react";
 
 const CTRL = "flex items-center justify-center gap-1.5 px-2 lg:px-4 py-2 text-[11px] lg:text-sm font-semibold uppercase tracking-wider border border-black transition-all text-center leading-tight";
@@ -753,6 +757,32 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
         </div>
       )}
 
+      {/* WE-11 (2026-08-16): stage chip. When the task is linked to a
+          workflow, show a click-through "Order #4821 - Confirmed" chip
+          just above the status band. Clicking navigates to the parent
+          workflow tab (my-work?view=workflows&focus=<id>) so the user
+          can see the whole card. Ad-hoc tasks (no workflow_summary)
+          render nothing here -- behaviour unchanged. */}
+      {t.workflow_summary && t.workflow_summary.id && (
+        <div className="mt-3">
+          <a
+            href={`/my-work?view=workflows&type=${encodeURIComponent(t.workflow_summary.type || "")}&focus=${encodeURIComponent(t.workflow_summary.id)}`}
+            data-testid={`wf-chip-${t.id}`}
+            className="inline-flex items-center gap-1.5 border border-black px-2.5 py-1 text-xs font-mono bg-brand-paper hover:bg-brand-yellow transition-colors"
+            title={`Open workflow: ${t.workflow_summary.title}`}
+          >
+            <FlowArrow size={12} weight="bold" className="text-brand-red" />
+            <span className="font-semibold uppercase tracking-wider text-[10px]">
+              {(t.workflow_summary.title || "Workflow").slice(0, 32)}
+            </span>
+            <span className="text-muted-foreground">·</span>
+            <span className="uppercase tracking-wider text-[10px]">
+              {(t.workflow_summary.stage || "").replace(/_/g, " ")}
+            </span>
+          </a>
+        </div>
+      )}
+
       <div className="flex items-center flex-wrap gap-1.5 mt-3">
         <span data-testid={`status-chip-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-black bg-white">{STATUS_LABEL[t.status] || t.status}</span>
         {isOverdue(t) && <span data-testid={`overdue-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-black bg-brand-red text-white">Overdue</span>}
@@ -954,7 +984,10 @@ export default function MyWork() {
   const initialView = rawView === "board" ? "workflows"
     : (rawView === "workflows" ? "workflows" : rawView === "leave" ? "leave" : "mywork");
   const [view, setView] = useState(focusTaskId ? "mywork" : initialView);
-  const [wfTab, setWfTab] = useState(rawView === "board" ? "board" : "pipelines");
+  // WE-14 (2026-08-16): wfTab state retired -- Board sub-tab is gone,
+  // only the pipelines view remains. Retained a no-op reference to
+  // rawView so eslint's no-unused-vars doesn't fire on line above.
+  void rawView;
   const canSeeWorkflows = isOwner || userPerms(user).includes("workflows");
   const [scope, setScope] = useState("mine");
   const [tab, setTab] = useState("all");
@@ -1080,18 +1113,14 @@ export default function MyWork() {
       )}
 
       {view === "workflows" && canSeeWorkflows ? (
+        // WE-14 (2026-08-16): "Board" sub-tab retired. The pipelines
+        // view now carries inline task lists per card (WE-12), so a
+        // separate role-lane kanban was a redundant lens on the same
+        // data. Any /my-work?view=workflows&wf_tab=board deep link
+        // now silently lands on the pipelines view -- the wf_tab
+        // param is intentionally ignored below.
         <div data-testid="workflows-hub">
-          <div className="flex flex-wrap gap-1.5 mb-5 border-b border-black/10 pb-3" data-testid="workflows-subtabs">
-            <button onClick={() => setWfTab("pipelines")} data-testid="wf-subtab-pipelines"
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-black transition-colors ${wfTab === "pipelines" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
-              <ArrowRight size={14} weight="bold" /> {t("mywork.wf_pipelines")}
-            </button>
-            <button onClick={() => setWfTab("board")} data-testid="wf-subtab-board"
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-black transition-colors ${wfTab === "board" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
-              <Kanban size={14} weight="bold" /> {t("mywork.wf_task_board")}
-            </button>
-          </div>
-          {wfTab === "board" ? <TaskBoard /> : <Workflows embedded />}
+          <Workflows embedded />
         </div>
       ) : view === "leave" ? (
         <Leave embedded />

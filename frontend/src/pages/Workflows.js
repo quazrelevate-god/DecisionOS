@@ -9,12 +9,21 @@ import { opModel } from "../lib/operatingModel";
 import { PageHeader, Chip } from "../components/common";
 import { money, timeAgo, fullTime } from "../lib/format";
 import { toast } from "sonner";
-import { Plus, ArrowRight, Trash, ClockCounterClockwise } from "@phosphor-icons/react";
+import { Plus, ArrowRight, Trash, ClockCounterClockwise, UserCircle, WarningCircle } from "@phosphor-icons/react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter,
 } from "../components/ui/dialog";
 
 const STAGE_LABEL = (s) => (s || "").replace(/_/g, " ");
+
+// WE-11/12 helper: a compact avatar chip from a name string (first-name
+// initial + last-name initial fallback to first two chars).
+function _initials(name) {
+  if (!name) return "?";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
 
 function NewWorkflowDialog({ type, typeLabel, custLabel, vendLabel, onCreated }) {
   const { t } = useTranslation();
@@ -78,6 +87,53 @@ function NewWorkflowDialog({ type, typeLabel, custLabel, vendLabel, onCreated })
   );
 }
 
+// WE-13 (2026-08-16): manual-advance UX. When check_stage_ready is
+// False on the backend (409), the engine returns a message like
+// "Stage not ready: 2 task(s) still open at this stage". We surface
+// that inline in a modal and ask the user for a reason. If they
+// supply one, we retry with override=true + reason. The reason lands
+// in wf.history + audit_log so an override is never invisible.
+function OverrideReasonDialog({ open, onOpenChange, wfTitle, blockedReason, onConfirm }) {
+  const [reason, setReason] = useState("");
+  useEffect(() => { if (!open) setReason(""); }, [open]);
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="border border-black rounded-none" data-testid="wf-override-dialog">
+        <DialogHeader>
+          <DialogTitle className="font-heading uppercase tracking-tight flex items-center gap-2">
+            <WarningCircle size={18} weight="bold" className="text-brand-red" />
+            Stage not ready
+          </DialogTitle>
+          <DialogDescription className="text-sm text-muted-foreground">
+            <span className="font-semibold text-foreground">{wfTitle}</span> can't auto-advance yet: {blockedReason}.
+            You can still force the transition, but you must record a reason. It goes into the
+            workflow history and the audit log.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2">
+          <label className="label-mono text-muted-foreground">Reason for override</label>
+          <textarea data-testid="wf-override-reason" className="w-full border border-black px-3 py-2 text-sm font-mono focus:outline-none focus:shadow-brutal-sm"
+            rows={3}
+            placeholder="e.g. Bill is delayed but customer has confirmed by phone, moving on"
+            value={reason} onChange={(e) => setReason(e.target.value)} />
+        </div>
+        <DialogFooter>
+          <button data-testid="wf-override-cancel" onClick={() => onOpenChange(false)}
+            className="border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-black/5">
+            Cancel
+          </button>
+          <button data-testid="wf-override-confirm"
+            onClick={() => { if (reason.trim()) onConfirm(reason.trim()); }}
+            disabled={!reason.trim()}
+            className="bg-brand-red text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-50">
+            Override
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function Workflows({ embedded = false }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
@@ -86,11 +142,15 @@ export default function Workflows({ embedded = false }) {
   const om = opModel(tenant);
   const pipelines = om.pipelines;
   const [params] = useSearchParams();
-  const focusWf = params.get("wf");
-  const focusWfType = params.get("wf_type");
+  const focusWf = params.get("wf") || params.get("focus");
+  const focusWfType = params.get("wf_type") || params.get("type");
   const [tab, setTab] = useState(() => (focusWfType && pipelines.some((p) => p.key === focusWfType)) ? focusWfType : pipelines[0]?.key);
   const activeKey = pipelines.some((p) => p.key === tab) ? tab : pipelines[0]?.key;
-  const { data } = useQuery({ queryKey: ["workflows", activeKey], queryFn: () => api.get(`/workflows?type=${activeKey}`).then((r) => r.data) });
+  // WE-12: fetch with with_tasks=true so each card carries stage_tasks[].
+  const { data } = useQuery({
+    queryKey: ["workflows", activeKey, "with_tasks"],
+    queryFn: () => api.get(`/workflows?type=${activeKey}&with_tasks=true`).then((r) => r.data),
+  });
 
   useEffect(() => {
     if (!focusWf || !data) return;
@@ -108,18 +168,47 @@ export default function Workflows({ embedded = false }) {
   const newWfDialog = (
     <NewWorkflowDialog
       type={activeKey} typeLabel={tabLabel} custLabel={L.customer_singular} vendLabel={L.vendor_singular}
-      onCreated={() => qc.invalidateQueries({ queryKey: ["workflows", activeKey] })} />
+      onCreated={() => qc.invalidateQueries({ queryKey: ["workflows", activeKey, "with_tasks"] })} />
   );
+
+  // WE-13: override state -- when the engine returns 409, we open the
+  // reason dialog for the workflow the user was trying to advance.
+  const [overrideCtx, setOverrideCtx] = useState(null); // {wf, blockedReason, targetStage}
+
+  const _postAdvance = async (wf, targetStage, opts = {}) => {
+    const body = { stage: targetStage, note: t("workflows.moved_to", { stage: labelOf(targetStage) }) };
+    if (opts.override) { body.override = true; body.reason = opts.reason; }
+    await api.patch(`/workflows/${wf.id}/advance`, body);
+    toast.success(`→ ${labelOf(targetStage)}`);
+    qc.invalidateQueries({ queryKey: ["workflows", activeKey, "with_tasks"] });
+    qc.invalidateQueries({ queryKey: ["dashboard"] });
+    qc.invalidateQueries({ queryKey: ["tasks"] });
+  };
 
   const advance = async (wf) => {
     const idx = wf.stages.indexOf(wf.stage);
     if (idx >= wf.stages.length - 1) return toast.info(t("workflows.already_final"));
     const next = wf.stages[idx + 1];
     try {
-      await api.patch(`/workflows/${wf.id}/advance`, { stage: next, note: t("workflows.moved_to", { stage: labelOf(next) }) });
-      toast.success(`→ ${labelOf(next)}`);
-      qc.invalidateQueries({ queryKey: ["workflows", activeKey] });
-      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      await _postAdvance(wf, next);
+    } catch (e) {
+      const status = e.response?.status;
+      const detail = e.response?.data?.detail || t("workflows.cannot_advance");
+      // WE-13: 409 == stage not ready. Open reason dialog for override.
+      if (status === 409) {
+        setOverrideCtx({ wf, blockedReason: detail.replace(/^Stage not ready:\s*/, ""), targetStage: next });
+      } else {
+        toast.error(detail);
+      }
+    }
+  };
+
+  const confirmOverride = async (reason) => {
+    if (!overrideCtx) return;
+    try {
+      await _postAdvance(overrideCtx.wf, overrideCtx.targetStage,
+        { override: true, reason });
+      setOverrideCtx(null);
     } catch (e) {
       toast.error(e.response?.data?.detail || t("workflows.cannot_advance"));
     }
@@ -130,7 +219,7 @@ export default function Workflows({ embedded = false }) {
     try {
       await api.delete(`/workflows/${wf.id}`);
       toast.success(t("workflows.deleted"));
-      qc.invalidateQueries({ queryKey: ["workflows", activeKey] });
+      qc.invalidateQueries({ queryKey: ["workflows", activeKey, "with_tasks"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
     } catch (e) {
       toast.error(e.response?.data?.detail || t("workflows.delete_failed"));
@@ -176,6 +265,11 @@ export default function Workflows({ embedded = false }) {
                     const lastEv = (w.history || [])[(w.history || []).length - 1];
                     const updAt = lastEv?.at || w.created_at;
                     const updLabel = lastEv?.note || t("workflows.created_label");
+                    // WE-12: inline task list -- current-stage open tasks
+                    // enriched with assignee_name. Backend returns
+                    // stage_tasks[] on the workflow doc when we call
+                    // ?with_tasks=true.
+                    const stageTasks = w.stage_tasks || [];
                     return (
                       <div key={w.id} id={`workflow-card-${w.id}`} data-testid={`workflow-card-${w.id}`} className={`border border-black p-3 shadow-hover bg-white transition-all ${w.id === focusWf ? "ring-4 ring-brand-red ring-offset-2" : ""}`}>
                         <div className="flex items-start justify-between gap-2">
@@ -189,6 +283,34 @@ export default function Workflows({ embedded = false }) {
                         </div>
                         {w.counterparty && <p className="text-xs text-muted-foreground mt-1">{w.counterparty}</p>}
                         {w.amount != null && <p className="font-mono text-xs mt-1">{money(w.amount, tenant?.currency)}</p>}
+
+                        {/* WE-12 (2026-08-16): inline task list for this
+                            card's CURRENT stage. Each row shows the
+                            task title truncated + an assignee avatar
+                            chip. Clicking the row opens the task in
+                            My Work. Empty stage-task list renders a
+                            small italic "no open tasks" hint. */}
+                        {stageTasks.length > 0 ? (
+                          <div className="mt-2 space-y-1" data-testid={`wf-card-tasks-${w.id}`}>
+                            {stageTasks.slice(0, 4).map((tk) => (
+                              <a key={tk.id} href={`/my-work?task=${encodeURIComponent(tk.id)}`}
+                                data-testid={`wf-card-task-${w.id}-${tk.id}`}
+                                className="flex items-center gap-1.5 text-[11px] border border-border/60 bg-brand-paper/40 px-1.5 py-1 hover:bg-brand-yellow transition-colors">
+                                <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-brand-ink text-white text-[9px] font-bold shrink-0"
+                                  title={tk.assignee_name || tk.assignee_role || "Unassigned"}>
+                                  {_initials(tk.assignee_name) || (tk.assignee_role ? tk.assignee_role.slice(0, 1).toUpperCase() : "?")}
+                                </span>
+                                <span className="truncate">{tk.title}</span>
+                              </a>
+                            ))}
+                            {stageTasks.length > 4 && (
+                              <p className="text-[10px] text-muted-foreground italic pl-1">+ {stageTasks.length - 4} more</p>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="mt-2 text-[10px] text-muted-foreground italic">No open tasks at this stage.</p>
+                        )}
+
                         {updAt && (
                           <p className="label-mono text-muted-foreground mt-2 flex items-center gap-1" data-testid={`workflow-updated-${w.id}`} title={fullTime(updAt)}>
                             <ClockCounterClockwise size={11} weight="bold" /> {updLabel} · {timeAgo(updAt)}
@@ -210,6 +332,15 @@ export default function Workflows({ embedded = false }) {
           })}
         </div>
       </div>
+
+      {/* WE-13 override reason dialog */}
+      <OverrideReasonDialog
+        open={!!overrideCtx}
+        onOpenChange={(v) => { if (!v) setOverrideCtx(null); }}
+        wfTitle={overrideCtx?.wf?.title || ""}
+        blockedReason={overrideCtx?.blockedReason || ""}
+        onConfirm={confirmOverride}
+      />
     </div>
   );
 }

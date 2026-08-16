@@ -2941,11 +2941,52 @@ from services.tasks import _tenant_industry, _attach_reference_ids  # noqa: E402
 # Workflows
 # ---------------------------------------------------------------------------
 @api.get("/workflows")
-async def list_workflows(type: Optional[str] = None, user: dict = Depends(get_current_user)):
+async def list_workflows(type: Optional[str] = None,
+                         with_tasks: Optional[bool] = False,
+                         user: dict = Depends(get_current_user)):
     q = {"tenant_id": user["tenant_id"]}
     if type:
         q["type"] = type
     wfs = await db.workflows.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
+    # WE-12 (2026-08-16): when the client asks with_tasks=true, we
+    # hydrate each card with the OPEN tasks at its current stage
+    # (workflow_id + stage_key + status not-in done/cancelled), plus
+    # each task's assignee_name for the avatar. One batch query for
+    # all cards, then a single users query -- keeps the payload O(1)
+    # network round trips regardless of card count.
+    if with_tasks and wfs:
+        wf_pairs = [(w.get("id"), w.get("stage")) for w in wfs if w.get("id") and w.get("stage")]
+        if wf_pairs:
+            # Mongo `$or` on (workflow_id, stage_key) pairs -- much
+            # narrower than fetching all tasks and filtering client-side.
+            or_clauses = [
+                {"workflow_id": wid, "stage_key": sk}
+                for wid, sk in wf_pairs
+            ]
+            task_rows = await db.tasks.find(
+                {"tenant_id": user["tenant_id"],
+                 "status": {"$nin": ["done", "cancelled"]},
+                 "$or": or_clauses},
+                {"_id": 0, "id": 1, "title": 1, "workflow_id": 1,
+                 "stage_key": 1, "assignee_id": 1, "assignee_role": 1,
+                 "priority": 1, "status": 1, "due_date": 1},
+            ).to_list(1000)
+            # Hydrate assignee_name in one query.
+            assignee_ids = {t["assignee_id"] for t in task_rows if t.get("assignee_id")}
+            umap = {}
+            if assignee_ids:
+                async for u in db.users.find(
+                    {"id": {"$in": list(assignee_ids)}, "tenant_id": user["tenant_id"]},
+                    {"_id": 0, "id": 1, "name": 1},
+                ):
+                    umap[u["id"]] = u.get("name")
+            # Bucket tasks by workflow_id -> the current-stage lane.
+            by_wf: dict = {}
+            for t in task_rows:
+                t["assignee_name"] = umap.get(t.get("assignee_id"))
+                by_wf.setdefault(t["workflow_id"], []).append(t)
+            for w in wfs:
+                w["stage_tasks"] = by_wf.get(w.get("id")) or []
     return wfs
 
 

@@ -936,6 +936,10 @@ async def _create_decision_tasks(tenant_id, note, decision_id, extracted, troles
             "status": "blocked", "due_date": due, "decision_id": decision_id,
             "task_type": task_cat,
             "source": "voice", "created_at": now_iso(),
+            # WE-01: null placeholders. The process_voice_note post-pass
+            # fills these in AFTER _create_workflows runs, once we know
+            # which workflow this decision spawned.
+            "workflow_id": None, "stage_key": None,
             "updated_at": now_iso(), "last_action": "Created",
         })
         task_ids.append(tid)
@@ -1098,6 +1102,24 @@ async def process_voice_note(note_id: str):
         await _create_reminders_and_memory(tenant_id, note, extracted)
         meetings = await _create_meetings(tenant_id, note, decision_id, extracted)
         wf_ids = await _create_workflows(tenant_id, note, decision_id, extracted)
+        # WE-01 (2026-08-16): post-pass to link the decision's tasks to
+        # their workflow. Voice capture normally produces 1 decision ->
+        # (N tasks, 1 workflow) so a single-workflow shortcut is the
+        # common case. If the extract produced multiple workflows we
+        # leave tasks unlinked (ambiguous which workflow owns which
+        # task); WE-06 engine will handle proper spawn-from-stage
+        # semantics for new cards.
+        if wf_ids and task_ids and len(wf_ids) == 1:
+            _wf = await db.workflows.find_one(
+                {"id": wf_ids[0], "tenant_id": tenant_id},
+                {"_id": 0, "stage": 1},
+            )
+            if _wf:
+                await db.tasks.update_many(
+                    {"id": {"$in": task_ids}, "tenant_id": tenant_id},
+                    {"$set": {"workflow_id": wf_ids[0],
+                              "stage_key": _wf.get("stage")}},
+                )
         # Execution summary — real counts of what this directive produced
         execution_summary = {
             "tasks": len(task_ids),
@@ -6392,6 +6414,69 @@ async def _bootstrap():
                 logger.info("Migration applied: stage_objects_extend_v1")
         except Exception as e:
             logger.exception(f"stage_objects_extend migration: {e}")  # WE-03
+        # WE-01 (2026-08-16): task -> workflow linkage backfill.
+        # Every task with a decision_id gets workflow_id set to the
+        # matching workflow (looked up by shared decision_id, tenant-
+        # scoped). stage_key is set to the workflow's INITIAL stage --
+        # NOT current -- because the task was spawned when the card
+        # was created; setting current would falsely gate advance out
+        # of the current stage. Ambiguous matches (0 or >1 workflow
+        # for a decision_id) leave both fields null. Idempotent: the
+        # match filter excludes tasks that already have workflow_id.
+        async def _backfill_task_workflow_link(_db):
+            from services.workflows import stage_key_for_backfill
+            scanned = matched = 0
+            async for _tsk in _db.tasks.find(
+                {"decision_id": {"$exists": True, "$nin": [None, ""]},
+                 "$or": [{"workflow_id": {"$exists": False}},
+                         {"workflow_id": {"$in": [None, ""]}}]},
+                {"_id": 0, "id": 1, "tenant_id": 1, "decision_id": 1},
+            ):
+                scanned += 1
+                _wfs = await _db.workflows.find(
+                    {"tenant_id": _tsk["tenant_id"],
+                     "decision_id": _tsk["decision_id"]},
+                    {"_id": 0, "id": 1, "stages": 1},
+                ).to_list(2)
+                if len(_wfs) != 1:
+                    continue  # ambiguous: leave unlinked
+                _wf = _wfs[0]
+                _stage_key = stage_key_for_backfill(_wf)
+                await _db.tasks.update_one(
+                    {"id": _tsk["id"]},
+                    {"$set": {"workflow_id": _wf["id"],
+                              "stage_key": _stage_key}},
+                )
+                matched += 1
+            logger.info(
+                f"[WE-01] backfill_task_workflow_link: "
+                f"scanned={scanned} matched={matched}"
+            )
+        try:
+            _bwlres = await _apply_migration(
+                db, "backfill_task_workflow_link_v1", _backfill_task_workflow_link,
+                description="WE-01: link tasks to workflows via shared decision_id (initial stage, tenant-scoped)",
+            )
+            if _bwlres == "applied":
+                logger.info("Migration applied: backfill_task_workflow_link_v1")
+        except Exception as e:
+            logger.exception(f"backfill_task_workflow_link migration: {e}")  # WE-01
+        # WE-01: indexes for the new query patterns unlocked by the
+        # workflow linkage. Compound (tenant_id, workflow_id, stage_key)
+        # supports both "all tasks for this card" (uses the tenant_id +
+        # workflow_id prefix) and "all tasks in this specific stage of
+        # this card" (uses the full compound). Partial filter on
+        # workflow_id !=  null keeps the index small -- most ad-hoc
+        # tasks won't have workflow_id and shouldn't bloat the index.
+        try:
+            await db.tasks.create_index(
+                [("tenant_id", 1), ("workflow_id", 1), ("stage_key", 1)],
+                name="tasks_tenant_workflow_stage",
+                partialFilterExpression={
+                    "workflow_id": {"$type": "string"}},
+            )
+        except Exception as e:
+            logger.warning(f"WE-01 tasks_tenant_workflow_stage index: {e}")
         # FIX-003-D (S2-07): auth_email_tokens for email verification +
         # password reset. Unique index on the token string, TTL index on
         # expires_at so used/expired rows auto-purge. Kind + email combo

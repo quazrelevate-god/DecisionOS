@@ -143,10 +143,26 @@ async def add_decision_task(decision_id: str, inp: TaskCreateInput, user: dict =
     # Blocked while the decision is still pending; unblocks on approval like the rest.
     status = "blocked" if d.get("status") == "pending_approval" else ("cancelled" if d.get("status") == "rejected" else "todo")
     tid = new_id()
+    # WE-01: link to the decision's workflow if the caller supplied
+    # workflow_id explicitly OR if the decision spawned exactly one
+    # workflow (the common voice-capture case). derive_task_workflow_link
+    # falls back to the decision_id lookup automatically.
+    from services.workflows import derive_task_workflow_link
+    try:
+        link_wf, link_stage = await derive_task_workflow_link(
+            user["tenant_id"],
+            workflow_id=inp.workflow_id,
+            stage_key=inp.stage_key,
+            decision_id=decision_id,
+            strict=True,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     await db.tasks.insert_one({
         "id": tid, "tenant_id": user["tenant_id"], "title": inp.title, "description": inp.description or "",
         "assignee_role": role, "assignee_id": assignee_id, "priority": inp.priority or "medium",
         "status": status, "due_date": due, "decision_id": decision_id, "source": "manual", "created_at": now_iso(),
+        "workflow_id": link_wf, "stage_key": link_stage,  # WE-01
     })
     # FIX-001-C: tenant-scoped write (was update_one({"id": ...}) alone).
     await db.decisions.update_one(tenant_filter(decision_id, user["tenant_id"]), {"$push": {"task_ids": tid}})

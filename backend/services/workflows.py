@@ -127,3 +127,125 @@ async def tenant_terminal_stages(tenant_id: str,
     from server import tenant_operating_model  # deferred: avoid import cycle
     om = await tenant_operating_model(tenant_id)
     return all_terminal_stages(om, include_legacy=include_legacy)
+
+
+async def derive_task_workflow_link(
+    tenant_id: str,
+    *,
+    workflow_id: Optional[str] = None,
+    stage_key: Optional[str] = None,
+    decision_id: Optional[str] = None,
+    strict: bool = True,
+) -> tuple:
+    """WE-01 (2026-08-16): resolve the (workflow_id, stage_key) pair for
+    a task that is about to be written.
+
+    Resolution rules (first match wins):
+
+    1. `workflow_id` supplied — validate against tenant scope. Reject
+       cross-tenant / nonexistent refs when `strict=True` (returns
+       (None, None) with `strict=False` so bulk/backfill paths can
+       skip silently). If `stage_key` is also given, it must be one of
+       the workflow's declared stage keys; otherwise it's replaced by
+       the workflow's current stage.
+
+    2. `decision_id` supplied and exactly ONE workflow shares it — link
+       to that workflow's current stage. Zero or multiple matches ->
+       (None, None) since ambiguity is worse than "no link".
+
+    3. Otherwise (None, None) — an ad-hoc task.
+
+    Returns (workflow_id_or_None, stage_key_or_None). Guarantees the
+    two are consistent: stage_key is never returned without a
+    workflow_id. Callers store the tuple directly on the task doc.
+
+    strict: when True (default, used by user-facing endpoints), an
+    invalid workflow_id RAISES the caller-visible error the way the
+    router expects. When False (backfill / voice post-pass), invalid
+    refs are silently dropped to (None, None) so a single stale ref
+    doesn't crash a batch of 100 tasks.
+    """
+    from core import db
+
+    if workflow_id:
+        wf = await db.workflows.find_one(
+            {"id": workflow_id, "tenant_id": tenant_id},
+            {"_id": 0, "id": 1, "stage": 1, "stages": 1},
+        )
+        if not wf:
+            if strict:
+                # Caller will translate this into 400/404. Raising here
+                # centralises the "workflow not found" message so every
+                # task-create endpoint says the same thing.
+                raise ValueError(
+                    f"workflow_id {workflow_id!r} not found in this workspace"
+                )
+            return (None, None)
+        # Validate stage_key against the workflow's declared stages.
+        valid_keys = set()
+        for s in wf.get("stages") or []:
+            valid_keys.add(s if isinstance(s, str) else s.get("key"))
+        valid_keys.discard(None)
+        if stage_key and stage_key not in valid_keys:
+            if strict:
+                raise ValueError(
+                    f"stage_key {stage_key!r} is not a stage of workflow "
+                    f"{workflow_id!r} (valid: {sorted(valid_keys)})"
+                )
+            stage_key = None
+        # No stage_key supplied -> default to the workflow's current
+        # stage so a task from the "Add task to this card" button lands
+        # on the stage the user is looking at.
+        if not stage_key:
+            stage_key = wf.get("stage")
+        return (wf["id"], stage_key)
+
+    # stage_key without workflow_id is semantically invalid. Ad-hoc
+    # tasks don't belong to any stage. Reject rather than silently
+    # coerce; the caller either wanted linkage (and should supply the
+    # workflow_id too) or didn't (and shouldn't have sent stage_key).
+    if stage_key and not workflow_id:
+        if strict:
+            raise ValueError(
+                "stage_key was provided without workflow_id -- "
+                "ad-hoc tasks cannot have a stage"
+            )
+        return (None, None)
+
+    if decision_id:
+        wfs = await db.workflows.find(
+            {"tenant_id": tenant_id, "decision_id": decision_id},
+            {"_id": 0, "id": 1, "stage": 1},
+        ).to_list(2)
+        if len(wfs) == 1:
+            return (wfs[0]["id"], wfs[0].get("stage"))
+        # Zero: this decision didn't spawn a workflow. Multiple: rare
+        # (one decision, two workflows) but disambiguation would need
+        # extra caller-supplied signal we don't have -- leave unlinked
+        # rather than pick wrong.
+
+    return (None, None)
+
+
+def stage_key_for_backfill(workflow_doc: dict) -> Optional[str]:
+    """WE-01: pick a safe stage_key value when back-linking a legacy
+    task to a workflow that has since advanced past its origin stage.
+
+    Uses the INITIAL stage (not current) because:
+      * The task was spawned when the workflow was created, i.e. at
+        stages[0]. That's the stage it originally "belonged to".
+      * Setting stage_key to the current stage would falsely make the
+        engine think this task is gating advance out of the current
+        stage -- but the task was for the OLD stage. False block =
+        bug.
+      * Setting stage_key to the initial stage means engine's
+        check_stage_ready(current_stage) doesn't see this task at
+        all -- correct: legacy tasks don't gate anything.
+
+    Returns None if the workflow has no stages array (defensive).
+    """
+    stages = (workflow_doc or {}).get("stages") or []
+    if not stages:
+        return None
+    first = stages[0]
+    return first if isinstance(first, str) else first.get("key")

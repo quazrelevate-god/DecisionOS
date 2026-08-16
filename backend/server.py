@@ -5281,7 +5281,16 @@ async def process_whatsapp_message(message: dict):
                 await send_wa_reply(sender, "📎 Received — your document is being reviewed by the right team before it's filed.")
 
         elif mtype == "text":
-            text = message["text"]["body"]
+            # S5-05 audit fix (2026-08-16): guarded key access. WA
+            # webhooks are public; a malformed text message (Meta bug,
+            # deep-link handler, template response) would crash this
+            # handler with KeyError -> 500 back to Meta -> they retry
+            # -> we crash again. Missing body is treated as an empty
+            # message and short-circuited to the "unrelated" path.
+            text = ((message.get("text") or {}).get("body") or "").strip()
+            if not text:
+                await update_wa_event(ev_id, status="ignored", reason="Empty text body")
+                return
             tri = await ai_capture_triage(text, sorted(troles))
             if tri.get("unrelated"):
                 await update_wa_event(ev_id, status="ignored", reason="Unrelated / not a business instruction")
@@ -6184,6 +6193,38 @@ async def _bootstrap():
             )
         except Exception as e:
             logger.warning(f"memberships query indexes: {e}")
+
+        # S5-05 audit fix (2026-08-16): indexes for collections shipped
+        # in the last 2 sessions that were queried WITHOUT indexes,
+        # causing full-scan hot paths + one race-condition bug.
+        try:
+            # billing_events: UNIQUE on idempotency_key so a webhook
+            # retry that races between find_one() and insert_one() in
+            # routers/billing.py::razorpay_webhook can't insert a
+            # duplicate + double-upgrade a plan. Belt (unique index)
+            # AND braces (DuplicateKeyError catch at insert site).
+            await db.billing_events.create_index(
+                "idempotency_key", unique=True,
+                name="billing_events_idempotency_key_unique",
+            )
+            # crm_activities: tenant+contact+created for the
+            # ContactProfile timeline read; sorted DESC to match the
+            # find(...).sort("created_at", -1) in routers/crm.py.
+            await db.crm_activities.create_index(
+                [("tenant_id", 1), ("contact_id", 1), ("created_at", -1)],
+                name="crm_activities_tenant_contact_created",
+            )
+            # invoices.source_task_id: FUP-50 auto-invoice dedup key
+            # in routers/tasks.py::_maybe_auto_invoice. Partial so
+            # only auto-drafted rows contribute (~5% of invoices).
+            await db.invoices.create_index(
+                [("tenant_id", 1), ("source_task_id", 1)],
+                partialFilterExpression={"source_task_id": {"$type": "string"}},
+                name="invoices_source_task_id_partial",
+            )
+        except Exception as e:
+            logger.warning(f"S5-05 pre-audit indexes: {e}")
+
         # Backfill: for every existing user with a tenant_id (the
         # legacy 1:1 model), synthesize the matching membership row.
         # Idempotent: skips users who already have a row for that
@@ -6224,7 +6265,7 @@ async def _bootstrap():
             if _mres == "applied":
                 logger.info("Migration applied: backfill_memberships_v1")
         except Exception as e:
-            logger.warning(f"backfill_memberships migration: {e}")
+            logger.exception(f"backfill_memberships migration: {e}")  # S5-05: surface tracebacks
         # FIX-005-A (S3-02): backfill plan fields on existing tenants
         # that predate the plan model. Every legacy tenant gets
         # plan=grandfathered (unlimited seats + quotas, feature-flag
@@ -6254,7 +6295,7 @@ async def _bootstrap():
             if _pres == "applied":
                 logger.info("Migration applied: backfill_grandfathered_plans_v1")
         except Exception as e:
-            logger.warning(f"backfill_grandfathered_plans migration: {e}")
+            logger.exception(f"backfill_grandfathered_plans migration: {e}")  # S5-05
         # FIX-004-D (RBAC-16): canonical role rename production -> operations.
         # Prior code had config.ROLES with 'production' but
         # config.DEFAULT_ROLES with 'operations' — silent inconsistency
@@ -6301,7 +6342,7 @@ async def _bootstrap():
             if _rres == "applied":
                 logger.info("Migration applied: rename_production_role_v1")
         except Exception as e:
-            logger.warning(f"rename_production_role migration: {e}")
+            logger.exception(f"rename_production_role migration: {e}")  # S5-05
         # FIX-003-D (S2-07): auth_email_tokens for email verification +
         # password reset. Unique index on the token string, TTL index on
         # expires_at so used/expired rows auto-purge. Kind + email combo
@@ -6393,7 +6434,7 @@ async def _bootstrap():
             if _result == "applied":
                 logger.info("Migration applied: backfill_users_phone_norm_v1")
         except Exception as e:
-            logger.warning(f"phone_norm backfill migration: {e}")
+            logger.exception(f"phone_norm backfill migration: {e}")  # S5-05
         # FIX-003-A (S2-03): otp_codes are keyed by (phone, tenant_id) so
         # two tenants that share a phone can each hold their own live
         # OTP. The migration ledger call:
@@ -6445,7 +6486,7 @@ async def _bootstrap():
             if _fix003_res == "applied":
                 logger.info("Migration applied: otp_codes_tenant_scope_v1")
         except Exception as e:
-            logger.warning(f"otp_codes tenant-scope migration: {e}")
+            logger.exception(f"otp_codes tenant-scope migration: {e}")  # S5-05
 
         # FIX-007-A (S4-03): rename brain_contexts → brain_query_cache to
         # kill the name collision with brain_context (singular, decision-
@@ -6494,7 +6535,7 @@ async def _bootstrap():
             if _s403_res == "applied":
                 logger.info("Migration applied: rename_brain_contexts_to_query_cache_v1")
         except Exception as e:
-            logger.warning(f"brain_contexts rename migration: {e}")
+            logger.exception(f"brain_contexts rename migration: {e}")  # S5-05
 
         # FIX-007-A (S4-01): drop text indexes that were created with
         # default_language="none" so the create_index calls below can
@@ -6529,7 +6570,7 @@ async def _bootstrap():
             if _s401_res == "applied":
                 logger.info("Migration applied: drop_none_language_text_indexes_v1")
         except Exception as e:
-            logger.warning(f"drop-none-language text indexes migration: {e}")
+            logger.exception(f"drop-none-language text indexes migration: {e}")  # S5-05
         # New compound unique index — one live OTP per (phone, tenant).
         try:
             await db.otp_codes.create_index(
@@ -6671,7 +6712,7 @@ async def _bootstrap():
             if _tres == "applied":
                 logger.info("Migration applied: migrate_tenants_backfill_roles_v1")
         except Exception as e:
-            logger.warning(f"migrate_tenants migration: {e}")
+            logger.exception(f"migrate_tenants migration: {e}")  # S5-05
         # FIX-002-E: copy any legacy local-disk uploads into obj_store and
         # rewrite the referring domain records to point at the new
         # storage_path. Runs exactly once via ledger; safe on second boot.
@@ -6684,7 +6725,7 @@ async def _bootstrap():
             if _ures == "applied":
                 logger.info("Migration applied: migrate_local_disk_uploads_to_obj_store_v1")
         except Exception as e:
-            logger.warning(f"local-disk uploads migration: {e}")
+            logger.exception(f"local-disk uploads migration: {e}")  # S5-05
         await fixup_demo_tenant()
         await write_test_credentials()
         logger.info("Bootstrap complete.")

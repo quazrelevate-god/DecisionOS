@@ -226,6 +226,13 @@ async def razorpay_webhook(request: Request):
 
     # Idempotency -- Razorpay retries webhooks. Key on payment.id or
     # subscription.id + event so a re-delivery is a no-op.
+    # S5-05 audit fix (2026-08-16): the find_one -> insert_one pattern
+    # races if the same webhook fires twice in quick succession. The
+    # unique index on billing_events.idempotency_key (see server.py
+    # _bootstrap) is the belt; catching DuplicateKeyError below is the
+    # braces. Both are required -- neither on its own is safe under
+    # concurrent Razorpay retries.
+    from pymongo.errors import DuplicateKeyError
     entity_id = body_ent.get("id") or ""
     idempotency_key = f"razorpay:{event}:{entity_id}"
     existing = await db.billing_events.find_one(
@@ -233,16 +240,22 @@ async def razorpay_webhook(request: Request):
     if existing:
         return {"ok": True, "already_processed": True}
 
-    await db.billing_events.insert_one({
-        "idempotency_key": idempotency_key,
-        "tenant_id": tenant_id,
-        "event": event,
-        "plan_key": plan_key,
-        "amount_paise": int(body_ent.get("amount") or 0),
-        "razorpay_entity_id": entity_id,
-        "created_at": now_iso(),
-        "raw": body_ent,
-    })
+    try:
+        await db.billing_events.insert_one({
+            "idempotency_key": idempotency_key,
+            "tenant_id": tenant_id,
+            "event": event,
+            "plan_key": plan_key,
+            "amount_paise": int(body_ent.get("amount") or 0),
+            "razorpay_entity_id": entity_id,
+            "created_at": now_iso(),
+            "raw": body_ent,
+        })
+    except DuplicateKeyError:
+        # Race: another replica processed this webhook between our
+        # find_one and insert_one. Not an error -- return the same
+        # already-processed response the fast path returns.
+        return {"ok": True, "already_processed": True, "raced": True}
 
     if event in ("payment.captured", "subscription.charged"):
         if not plan_key:

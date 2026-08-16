@@ -296,7 +296,15 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
               )}
             </div>
 
-            {error && <p className="text-sm text-brand-red font-semibold mb-4" data-testid="build-error">{error}</p>}
+            {/* FUP-46: prominent error banner so 422/409/429 rejections
+                (e.g. reserved TLD like .test) actually catch the eye
+                instead of vanishing into a small red line. */}
+            {error && (
+              <div className="mb-4 border-2 border-brand-red bg-brand-red/10 p-4 shadow-brutal-sm" data-testid="build-error-banner">
+                <p className="text-sm font-bold text-brand-red uppercase tracking-wider mb-1">Couldn't create your workspace</p>
+                <p className="text-sm text-brand-red font-semibold" data-testid="build-error">{error}</p>
+              </div>
+            )}
 
             <div className="flex items-center gap-3">
               <button onClick={confirmAndRegister} disabled={refining} data-testid="build-confirm-button"

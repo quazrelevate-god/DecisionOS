@@ -29,6 +29,14 @@ class TaskCreateInput(BaseModel):
     progress: Optional[int] = None
     evidence_required: Optional[bool] = False
     reference_file_ids: Optional[List[str]] = None
+    # FUP-50 (2026-08-15): finance metadata that carries forward from
+    # decisions -> tasks -> auto-drafted invoices when the task
+    # completes. Missing until now, so any task that came from a
+    # decision like "raise Rs 5L GST invoice for X" lost the amount
+    # + contact link by the time it reached MyWork.
+    contact_id: Optional[str] = None
+    contact_name: Optional[str] = None
+    amount: Optional[float] = None
 
 
 class TaskUpdateInput(BaseModel):

@@ -691,13 +691,15 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
   };
 
   const complete = async () => {
+    // FUP-49 (2026-08-15): removed window.confirm() -- some browsers /
+    // embed contexts silently returned without showing UI, so the click
+    // looked like a silent no-op. Reopen button already covers undo.
     if (t.evidence_required && !hasEvidence) {
       return toast.error("This task requires proof — add a photo, voice note, or file before completing.");
     }
-    if (!window.confirm(`Mark "${t.title}" as complete? You can reopen it later if needed.`)) return;
     try {
       await api.patch(`/tasks/${t.id}`, { status: "done" });
-      toast.success("Task completed");
+      toast.success("Task completed — reopen from the card if needed.");
       onChange();
     } catch (e) { toast.error(e.response?.data?.detail || "Could not complete task"); }
   };
@@ -891,7 +893,12 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
 
       {!isTerminal(t) && !awaitingApproval && (
         <div className="flex flex-wrap gap-2 mt-4">
-          <button onClick={complete} disabled={t.evidence_required && !hasEvidence} data-testid={`complete-${t.id}`} className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+          {/* FUP-49: don't disable — always click-through, handler
+              shows a clear toast if evidence is missing. Silent-
+              disabled buttons were the original bug. */}
+          <button onClick={complete} data-testid={`complete-${t.id}`}
+            title={t.evidence_required && !hasEvidence ? "Add a photo, voice note, or file first" : "Mark as complete"}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all ${t.evidence_required && !hasEvidence ? "bg-black/20 text-black" : "bg-brand-ink text-white"}`}>
             <CheckCircle size={16} weight="bold" /> Complete
           </button>
           <button onClick={() => fileRef.current?.click()} disabled={uploading} data-testid={`photo-${t.id}`} className="flex items-center gap-2 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-black/5">

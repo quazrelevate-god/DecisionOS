@@ -81,6 +81,76 @@ router = APIRouter(prefix="/api")
 
 
 # ---------------------------------------------------------------------------
+# FUP-50 (2026-08-15): auto-create a PENDING sales-invoice row when an
+# invoice-raise task is marked done. Kills the 'INVOICES=0 / Brain says
+# data gap' cash-flow blind spot without waiting on the WE-06 side-
+# effects framework. Deliberately narrow trigger + minimal payload;
+# founder/finance fill in HSN / GST rate / advance details from the
+# Finance page.
+# ---------------------------------------------------------------------------
+_INVOICE_KEYWORDS = ("invoice", "gst bill", "raise bill", "issue bill",
+                     "sales invoice", "billing", "raise gst")
+
+
+def _looks_like_invoice_task(task: dict) -> bool:
+    title = (task.get("title") or "").lower()
+    if not any(k in title for k in _INVOICE_KEYWORDS):
+        return False
+    # Must have SOMETHING to seed the invoice with -- a contact link
+    # or a numeric amount. Without either, we'd write a useless row.
+    return bool(task.get("contact_id") or task.get("customer_id")
+                or task.get("amount") or task.get("invoice_meta"))
+
+
+async def _maybe_auto_invoice(tenant_id: str, actor_id: str,
+                              task: dict, task_id: str) -> None:
+    """Idempotent: if we've already created an invoice for this task,
+    do nothing. Uses invoices.source_task_id as the dedup key."""
+    if not _looks_like_invoice_task(task):
+        return
+    existing = await db.invoices.find_one(
+        {"tenant_id": tenant_id, "source_task_id": task_id},
+        {"_id": 0, "id": 1})
+    if existing:
+        return
+    meta = task.get("invoice_meta") or {}
+    contact_id = task.get("contact_id") or task.get("customer_id") or meta.get("contact_id")
+    contact_name = task.get("contact_name") or meta.get("contact_name") or ""
+    if contact_id and not contact_name:
+        c = await db.contacts.find_one({"id": contact_id, "tenant_id": tenant_id},
+                                        {"_id": 0, "name": 1, "company": 1})
+        if c:
+            contact_name = c.get("company") or c.get("name") or ""
+    amount = float(task.get("amount") or meta.get("amount") or 0)
+    today = datetime.now(timezone.utc).date().isoformat()
+    doc = {
+        "id": new_id(),
+        "tenant_id": tenant_id,
+        "type": "sales_invoice",
+        "status": "draft",           # explicit -- founder must confirm in Finance
+        "source": "auto_from_task",  # audit trail
+        "source_task_id": task_id,
+        "contact_id": contact_id,
+        "contact_name": contact_name,
+        "amount": amount,
+        "amount_paid": 0,
+        "date": today,
+        "due_date": today,
+        "number": "",                # user fills at review
+        "notes": (
+            f"Auto-drafted from completed task '{task.get('title', '')}'. "
+            "Fill in invoice number, HSN, GST rate, and confirm amount "
+            "before sending to the customer."),
+        "created_by": actor_id,
+        "created_at": now_iso(),
+    }
+    await db.invoices.insert_one(dict(doc))
+    await log_activity(tenant_id, actor_id, "invoice_auto_drafted",
+                       f"Auto-drafted invoice from task '{task.get('title', '')}'",
+                       "invoice", doc["id"])
+
+
+# ---------------------------------------------------------------------------
 # Task-only helpers (called only by handlers in this router)
 # ---------------------------------------------------------------------------
 def _can_approve_task(user: dict, t: dict) -> bool:
@@ -235,6 +305,11 @@ async def create_task(inp: TaskCreateInput, background: BackgroundTasks, user: d
         "approval_status": "pending" if needs_approval else None,
         "approver_id": approver_id, "progress": progress, "created_by": user["id"],
         "evidence_required": bool(inp.evidence_required),
+        # FUP-50: carry finance metadata forward so the FUP-50 auto-
+        # invoice hook has something to seed the draft with.
+        "contact_id": inp.contact_id,
+        "contact_name": inp.contact_name or "",
+        "amount": inp.amount,
         "updated_at": now_iso(), "last_action": "Created",
     })
     if inp.reference_file_ids:
@@ -331,6 +406,16 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
                 actor_id=user["id"], actor_name=user.get("name") or "",
                 department=user.get("role") or "", visibility="dept",
             )
+            # FUP-50 (2026-08-15): if this task looks like an invoice-
+            # raise action, create a PENDING sales invoice so the
+            # finance page stops showing INVOICES=0 while the Brain
+            # narrates 'this is a data gap'. Detection is deliberately
+            # narrow -- title contains 'invoice' AND task has a
+            # contact link OR an amount. Full AI extraction of HSN /
+            # GST rate / advance-adjustment lives with the Workflow
+            # Engine side-effects framework (WE-06) -- this MVP
+            # unblocks the cash-flow blind spot without waiting.
+            await _maybe_auto_invoice(user["tenant_id"], user["id"], t, task_id)
         elif updates.get("assignee_id"):
             member = await db.users.find_one({"id": updates["assignee_id"]}, {"_id": 0, "name": 1})
             await log_activity(user["tenant_id"], user["id"], "task_assigned",

@@ -311,7 +311,7 @@ async def register(inp: RegisterInput, request: Request, response: Response):
         "invited_employees": [],
         "roles": clean_roles or DEFAULT_ROLES,
         "products": [p.model_dump() for p in (inp.products or [])],
-        "workflow_templates": bp["workflows"] if bp else [],
+        # WE-02: workflow_templates removed (dead brainstorm list).
         "operational_task_templates": bp["operational_tasks"] if bp else [],
         "approval_rules": bp["approval_rules"] if bp else [],
         "lexicon": lexicon,
@@ -464,8 +464,9 @@ async def register(inp: RegisterInput, request: Request, response: Response):
         **_ctx,
     )
     os_summary = {
+        # WE-02: 'workflows' count removed (was reading the ghost
+        # workflow_templates field that no longer exists on tenant).
         "departments": len(clean_roles),
-        "workflows": len(tenant_doc["workflow_templates"]),
         "operational_tasks": len(tenant_doc["operational_task_templates"]),
         "approval_rules": len(tenant_doc["approval_rules"]),
     }

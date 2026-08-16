@@ -67,14 +67,17 @@ def registered(blueprint):
 class TestOsBlueprintGen:
     def test_shape(self, blueprint):
         assert isinstance(blueprint, dict)
-        for k in ("departments", "workflows", "operational_tasks", "approval_rules"):
+        # WE-02 (2026-08-16): 'workflows' key dropped from
+        # normalize_os_blueprint output.
+        for k in ("departments", "operational_tasks", "approval_rules"):
             assert k in blueprint, f"missing key {k}"
             assert isinstance(blueprint[k], list)
+        assert "workflows" not in blueprint, \
+            "ghost 'workflows' key should not appear in os-blueprint output"
 
     def test_content_counts(self, blueprint):
-        # normalised caps: 12 dept, 16 wf, 20 op, 10 rules
+        # normalised caps: 12 dept, 20 op, 10 rules (workflows dropped WE-02)
         assert 4 <= len(blueprint["departments"]) <= 12
-        assert 4 <= len(blueprint["workflows"]) <= 16
         assert 4 <= len(blueprint["operational_tasks"]) <= 20
         assert 2 <= len(blueprint["approval_rules"]) <= 10
 
@@ -83,9 +86,7 @@ class TestOsBlueprintGen:
         assert "key" in d and "label" in d
         assert d["key"] and d["key"] != "owner"
 
-    def test_workflow_shape(self, blueprint):
-        w = blueprint["workflows"][0]
-        assert "name" in w and w["name"]
+    # WE-02: test_workflow_shape removed (blueprint.workflows no longer exists).
 
     def test_optask_shape(self, blueprint):
         t = blueprint["operational_tasks"][0]
@@ -105,7 +106,8 @@ class TestRegisterWithBlueprint:
         assert "os_summary" in d, f"os_summary missing: {d.keys()}"
         s = d["os_summary"]
         assert s["departments"] == len(blueprint["departments"])
-        assert s["workflows"] == len(blueprint["workflows"])
+        # WE-02 (2026-08-16): 'workflows' key removed from os_summary.
+        assert "workflows" not in s, f"os_summary should not include ghost 'workflows' key: {s}"
         assert s["operational_tasks"] == len(blueprint["operational_tasks"])
         assert s["approval_rules"] == len(blueprint["approval_rules"])
 
@@ -118,7 +120,8 @@ class TestRegisterWithBlueprint:
 
     def test_templates_stored_on_tenant(self, registered, blueprint):
         tenant = registered["data"]["tenant"]
-        assert len(tenant.get("workflow_templates", [])) == len(blueprint["workflows"])
+        # WE-02: workflow_templates removed from tenant doc entirely.
+        assert "workflow_templates" not in tenant, "workflow_templates should be gone from tenant doc"
         assert len(tenant.get("operational_task_templates", [])) == len(blueprint["operational_tasks"])
         assert len(tenant.get("approval_rules", [])) == len(blueprint["approval_rules"])
 
@@ -138,29 +141,27 @@ class TestRegisterWithBlueprint:
 # ------------------------ PATCH /tenant/os-blueprint ------------------------
 
 class TestPatchOsBlueprint:
-    def test_add_workflow_persists(self, registered):
+    # WE-02 (2026-08-16): test_add_workflow_persists removed. The endpoint
+    # no longer stores workflow_templates. Any client that still sends the
+    # field gets it silently dropped by Pydantic. See test_workflow_field_silently_ignored.
+
+    def test_workflow_field_silently_ignored(self, registered):
+        """WE-02: legacy clients that still POST workflow_templates get
+        200 back (extra fields dropped); the tenant doc is unchanged."""
         sess = registered["session"]
         token = registered["token"]
         headers = {"Authorization": f"Bearer {token}"}
-        me = sess.get(f"{API}/auth/me", headers=headers, timeout=15)
-        assert me.status_code == 200
-        tenant = me.json()["tenant"]
-        wfs = list(tenant.get("workflow_templates", []))
-        wfs.append({"name": "TEST_new_workflow"})
-
         r = sess.patch(f"{API}/tenant/os-blueprint",
                        headers=headers,
-                       json={"workflow_templates": wfs},
+                       json={"workflow_templates": [{"name": "TEST_legacy_ghost"}]},
                        timeout=15)
         assert r.status_code == 200, f"patch failed: {r.status_code} {r.text}"
+        # The endpoint returns the whole tenant doc. WE-02 migration
+        # $unset'd workflow_templates, so it should not appear even
+        # after a legacy PATCH.
         got = r.json()
-        names = [w["name"] for w in got.get("workflow_templates", [])]
-        assert "TEST_new_workflow" in names
-
-        # GET to verify persisted
-        me2 = sess.get(f"{API}/auth/me", headers=headers, timeout=15).json()
-        names2 = [w["name"] for w in me2["tenant"].get("workflow_templates", [])]
-        assert "TEST_new_workflow" in names2
+        assert "workflow_templates" not in got, \
+            f"workflow_templates ghost re-created by PATCH: {got.get('workflow_templates')}"
 
     def test_update_rules(self, registered):
         sess = registered["session"]
@@ -192,7 +193,10 @@ class TestPatchOsBlueprint:
 # ------------------------ Legacy owner (no blueprint) ------------------------
 
 class TestLegacyOwner:
-    def test_legacy_owner_can_still_patch(self):
+    def test_legacy_owner_patch_still_returns_200(self):
+        """WE-02: even a legacy client posting the ghost field gets 200
+        (silently dropped) rather than a 422 that would break older
+        installs. The tenant doc is not corrupted."""
         sess = requests.Session()
         r = sess.post(f"{API}/auth/login",
                       json={"email": "owner@sharma.com", "password": "demo1234"},
@@ -204,5 +208,5 @@ class TestLegacyOwner:
                         json={"workflow_templates": [{"name": "TEST_legacy_wf"}]},
                         timeout=15)
         assert r2.status_code == 200
-        names = [w["name"] for w in r2.json().get("workflow_templates", [])]
-        assert "TEST_legacy_wf" in names
+        assert "workflow_templates" not in r2.json(), \
+            "ghost field re-appeared after legacy PATCH"

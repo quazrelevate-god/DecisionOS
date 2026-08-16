@@ -82,7 +82,10 @@ class OSBlueprintGenInput(BaseModel):
 
 
 class OSBlueprintInput(BaseModel):
-    workflow_templates: Optional[List[dict]] = None
+    # WE-02 (2026-08-16): workflow_templates removed. The Settings UI
+    # for it is gone; if a stale client still POSTs the field it's
+    # silently ignored by Pydantic (extra fields are dropped by
+    # default here), which is the safe migration behaviour.
     operational_task_templates: Optional[List[dict]] = None
     approval_rules: Optional[List[dict]] = None
 
@@ -157,8 +160,7 @@ async def onboarding_os_blueprint(inp: OSBlueprintGenInput, request: Request):
 async def update_os_blueprint(inp: OSBlueprintInput, user: dict = Depends(require_perm("team_manage"))):
     """Edit the generated Operating System templates (workflows, operational tasks, approval rules)."""
     updates = {}
-    if inp.workflow_templates is not None:
-        updates["workflow_templates"] = [{"name": (w.get("name") or "").strip()} for w in inp.workflow_templates if (w.get("name") or "").strip()]
+    # WE-02: workflow_templates branch removed (field dropped from input).
     if inp.operational_task_templates is not None:
         updates["operational_task_templates"] = [
             {"title": (t.get("title") or "").strip(), "category": (t.get("category") or "Other").strip() or "Other"}

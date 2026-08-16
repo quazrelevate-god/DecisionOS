@@ -6461,6 +6461,37 @@ async def _bootstrap():
                 logger.info("Migration applied: backfill_task_workflow_link_v1")
         except Exception as e:
             logger.exception(f"backfill_task_workflow_link migration: {e}")  # WE-01
+        # WE-02 (2026-08-16): drop the two ghost collections that
+        # confused Settings ("three cards, three shapes, one concept").
+        # Nothing reads workflow_templates now that /tenant/os-blueprint
+        # ignores it and the Settings UI editor is gone; nothing reads
+        # lexicon.workflows now that lex()'s workflows merge is gone.
+        # $unset both fields on every tenant so exports + admin views
+        # don't carry stale garbage. Idempotent (unset is a no-op when
+        # the field is already absent).
+        async def _drop_ghost_workflow_collections(_db):
+            _r1 = await _db.tenants.update_many(
+                {"workflow_templates": {"$exists": True}},
+                {"$unset": {"workflow_templates": ""}},
+            )
+            _r2 = await _db.tenants.update_many(
+                {"lexicon.workflows": {"$exists": True}},
+                {"$unset": {"lexicon.workflows": ""}},
+            )
+            logger.info(
+                f"[WE-02] drop_ghost_workflow_collections: "
+                f"tenants.workflow_templates unset={getattr(_r1, 'modified_count', 0)} "
+                f"tenants.lexicon.workflows unset={getattr(_r2, 'modified_count', 0)}"
+            )
+        try:
+            _dres = await _apply_migration(
+                db, "drop_ghost_workflow_collections_v1", _drop_ghost_workflow_collections,
+                description="WE-02: $unset tenant.workflow_templates and tenant.lexicon.workflows (dead outputs)",
+            )
+            if _dres == "applied":
+                logger.info("Migration applied: drop_ghost_workflow_collections_v1")
+        except Exception as e:
+            logger.exception(f"drop_ghost_workflow_collections migration: {e}")  # WE-02
         # WE-01: indexes for the new query patterns unlocked by the
         # workflow linkage. Compound (tenant_id, workflow_id, stage_key)
         # supports both "all tasks for this card" (uses the tenant_id +

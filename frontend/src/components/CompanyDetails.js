@@ -28,7 +28,8 @@ export function CompanyDetails() {
   const [roles, setRoles] = useState([]);
   const [roleInput, setRoleInput] = useState("");
   const [roleBusy, setRoleBusy] = useState(false);
-  const [workflows, setWorkflows] = useState([]);
+  // WE-02 (2026-08-16): workflows state removed. Pipeline editing lives
+  // in the Operating Model editor (single source of truth).
   const [opTasks, setOpTasks] = useState([]);
   const [approvalRules, setApprovalRules] = useState([]);
   const [osBusy, setOsBusy] = useState(false);
@@ -41,7 +42,7 @@ export function CompanyDetails() {
     });
     setProducts((tenant.products || []).map((p) => ({ name: p.name || "", description: p.description || "", _key: uid() })));
     setRoles((tenant.roles || []).map((r) => ({ ...r })));
-    setWorkflows((tenant.workflow_templates || []).map((w) => ({ name: w.name || "", _key: uid() })));
+    // WE-02: setWorkflows removed.
     setOpTasks((tenant.operational_task_templates || []).map((t) => ({ title: t.title || "", category: t.category || "Other", _key: uid() })));
     setApprovalRules((tenant.approval_rules || []).map((r) => ({ name: r.name || "", description: r.description || "", _key: uid() })));
   }, [tenant]);
@@ -95,9 +96,7 @@ export function CompanyDetails() {
   const setProduct = (i, k, v) => setProducts((p) => p.map((it, idx) => (idx === i ? { ...it, [k]: v } : it)));
   const removeProduct = (i) => setProducts((p) => p.filter((_, idx) => idx !== i));
 
-  const addWorkflow = () => setWorkflows((w) => [...w, { name: "", _key: uid() }]);
-  const setWorkflow = (i, v) => setWorkflows((w) => w.map((it, idx) => (idx === i ? { ...it, name: v } : it)));
-  const removeWorkflow = (i) => setWorkflows((w) => w.filter((_, idx) => idx !== i));
+  // WE-02: addWorkflow/setWorkflow/removeWorkflow removed.
   const addOpTask = () => setOpTasks((t) => [...t, { title: "", category: "Other", _key: uid() }]);
   const setOpTaskField = (i, k, v) => setOpTasks((t) => t.map((it, idx) => (idx === i ? { ...it, [k]: v } : it)));
   const removeOpTask = (i) => setOpTasks((t) => t.filter((_, idx) => idx !== i));
@@ -109,7 +108,9 @@ export function CompanyDetails() {
     setOsBusy(true);
     try {
       await api.patch("/tenant/os-blueprint", {
-        workflow_templates: workflows.filter((w) => w.name.trim()),
+        // WE-02: workflow_templates key removed (backend Pydantic
+        // input no longer defines it; extra fields are silently
+        // dropped on the server side).
         operational_task_templates: opTasks.filter((t) => t.title.trim()),
         approval_rules: approvalRules.filter((r) => r.name.trim()),
       });
@@ -252,20 +253,16 @@ export function CompanyDetails() {
             <Kanban size={18} weight="bold" className="text-brand-red" />
             <h3 className="font-heading font-extrabold uppercase tracking-tight">Operating System</h3>
           </div>
-          <p className="text-xs text-muted-foreground mb-3">Your generated workflows, operational tasks and approval rules. Add, edit or delete anytime.</p>
+          <p className="text-xs text-muted-foreground mb-3">Operational tasks and approval rules. Edit anytime. Pipelines are configured in the Operating Model editor below.</p>
 
-          <label className="label-mono text-muted-foreground flex items-center gap-1.5"><Kanban size={13} weight="bold" /> Workflows</label>
-          <div className="space-y-2 mt-1.5" data-testid="os-workflows-list">
-            {workflows.map((w, i) => (
-              <div key={w._key || i} className="flex gap-2" data-testid={`os-workflow-${i}`}>
-                <input data-testid={`os-workflow-name-${i}`} className={inp} value={w.name} onChange={(e) => setWorkflow(i, e.target.value)} placeholder="Workflow name" />
-                <button onClick={() => removeWorkflow(i)} data-testid={`os-workflow-remove-${i}`} className="border border-black p-2 hover:bg-brand-red hover:text-white transition-colors shrink-0"><Trash size={14} weight="bold" /></button>
-              </div>
-            ))}
-          </div>
-          <button onClick={addWorkflow} data-testid="os-workflow-add" className="mt-1.5 flex items-center gap-1 text-sm text-brand-blue font-semibold hover:underline"><Plus size={14} weight="bold" /> Add workflow</button>
+          {/* WE-02 (2026-08-16): "Workflows" list removed from this
+              card. It was a free-text brainstorm list that never drove
+              any behaviour -- the actual pipelines are edited in the
+              Operating Model editor and lived on tenant.operating_model
+              all along. Kept the section header + Operational tasks +
+              Approval rules editors below because those ARE alive. */}
 
-          <label className="label-mono text-muted-foreground flex items-center gap-1.5 mt-4"><ListChecks size={13} weight="bold" /> Operational tasks</label>
+          <label className="label-mono text-muted-foreground flex items-center gap-1.5"><ListChecks size={13} weight="bold" /> Operational tasks</label>
           <div className="space-y-2 mt-1.5" data-testid="os-optasks-list">
             {opTasks.map((t, i) => (
               <div key={t._key || i} className="flex gap-2" data-testid={`os-optask-${i}`}>

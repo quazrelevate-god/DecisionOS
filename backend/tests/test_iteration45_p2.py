@@ -61,12 +61,15 @@ class TestRefactorRegression:
 
     def test_patch_tenant_os_blueprint_owner_200(self, owner_token, owner_me):
         # snapshot current workflow templates and append a TEST_ one
-        current = owner_me.get("tenant", {}).get("workflow_templates", []) or []
-        payload = {"workflow_templates": current + [{"name": f"TEST_p2_regression_{int(time.time())}"}]}
+        # WE-02 (2026-08-16): workflow_templates ghost dropped. Use
+        # operational_task_templates for the regression check instead --
+        # it is a still-alive field on the tenant doc.
+        current = owner_me.get("tenant", {}).get("operational_task_templates", []) or []
+        payload = {"operational_task_templates": current + [{"title": f"TEST_p2_regression_{int(time.time())}", "category": "Other"}]}
         r = requests.patch(f"{API}/tenant/os-blueprint", json=payload, headers=_h(owner_token), timeout=30)
         assert r.status_code == 200, r.text
         updated = r.json()
-        names = [w.get("name") for w in updated.get("workflow_templates", [])]
+        names = [w.get("title") for w in updated.get("operational_task_templates", [])]
         assert any(n.startswith("TEST_p2_regression_") for n in names)
 
 

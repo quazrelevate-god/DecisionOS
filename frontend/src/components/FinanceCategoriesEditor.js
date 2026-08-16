@@ -16,14 +16,14 @@ const fromTenant = (tenant) => {
 function CategoryGroup({ title, items, onSet, onAdd, onDel, testid }) {
   return (
     <div data-testid={testid}>
-      <p className="label-mono text-brand-red mb-2">{title}</p>
+      <p className="label-mono text-brand-600 mb-2">{title}</p>
       <div className="flex flex-wrap gap-2">
         {items.map((c, i) => (
           <div key={c._uid} className="flex items-center gap-1 border border-border rounded-md pl-2 pr-1 py-1" data-testid={`${testid}-item-${i}`}>
             <input className="bg-transparent text-sm w-32 focus:outline-none" value={c.label}
               data-testid={`${testid}-input-${i}`}
               onChange={(e) => onSet(i, e.target.value)} />
-            <button onClick={() => onDel(i)} title="Remove" className="text-muted-foreground hover:text-brand-red">
+            <button onClick={() => onDel(i)} title="Remove" className="text-muted-foreground hover:text-danger-600">
               <Trash size={13} weight="bold" />
             </button>
           </div>
@@ -81,7 +81,7 @@ export function FinanceCategoriesEditor() {
   return (
     <div className="card-brutal p-5" data-testid="settings-finance-categories-card">
       <div className="flex items-center gap-2 mb-1">
-        <Tag size={20} weight="bold" className="text-brand-red" />
+        <Tag size={20} weight="bold" className="text-brand-600" />
         <h2 className="font-heading text-lg font-extrabold uppercase tracking-tight">Finance Categories</h2>
       </div>
       <p className="text-xs text-muted-foreground mb-4">

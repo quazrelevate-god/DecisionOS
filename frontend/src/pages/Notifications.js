@@ -74,8 +74,8 @@ export default function Notifications() {
               className={`p-4 flex items-start justify-between gap-4 transition-colors ${n.read ? "opacity-60" : ""} ${clickable ? "cursor-pointer hover:bg-black/[0.03]" : ""}`}
             >
               <div className="flex items-start gap-3 min-w-0">
-                {!n.read && <span className="mt-1.5 w-2 h-2 rounded-full bg-brand-red shrink-0" data-testid={`notif-unread-dot-${n.id}`} />}
-                <BellRinging size={18} weight="bold" className={`shrink-0 mt-0.5 ${n.level === "owner" ? "text-brand-red" : "text-brand-blue"}`} />
+                {!n.read && <span className="mt-1.5 w-2 h-2 rounded-full bg-brand-600 shrink-0" data-testid={`notif-unread-dot-${n.id}`} />}
+                <BellRinging size={18} weight="bold" className={`shrink-0 mt-0.5 ${n.level === "owner" ? "text-brand-600" : "text-brand-blue"}`} />
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <Chip value={meta.label} className={meta.cls} />

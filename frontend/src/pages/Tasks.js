@@ -188,7 +188,7 @@ export function NewTaskDialog({ onCreated, roleOptions, members, defaultType, tr
                 {files.map((f, i) => (
                   <li key={`${f.name}-${f.size}-${f.lastModified}`} className="flex items-center justify-between gap-2 border border-black/20 px-2 py-1 text-xs font-mono">
                     <span className="truncate">{f.name}</span>
-                    <button type="button" onClick={() => setFiles(files.filter((_, j) => j !== i))} className="text-brand-red font-bold shrink-0">Remove</button>
+                    <button type="button" onClick={() => setFiles(files.filter((_, j) => j !== i))} className="text-danger-600 font-bold shrink-0">Remove</button>
                   </li>
                 ))}
               </ul>
@@ -197,7 +197,7 @@ export function NewTaskDialog({ onCreated, roleOptions, members, defaultType, tr
           <p className="label-mono text-muted-foreground">Created by: {user?.name}</p>
         </div>
         <DialogFooter>
-          <button data-testid="task-create-submit" onClick={create} disabled={busy} className="bg-brand-red text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-50">{busy ? "Creating…" : "Create"}</button>
+          <button data-testid="task-create-submit" onClick={create} disabled={busy} className="bg-brand-600 text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-50">{busy ? "Creating…" : "Create"}</button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -281,7 +281,7 @@ export function TaskBoard() {
                       ) : (
                         <span className="text-xs text-muted-foreground italic">Unassigned</span>
                       )}
-                      {overdue(t) && <Chip value="overdue" className="bg-brand-red text-white" />}
+                      {overdue(t) && <Chip value="overdue" className="bg-danger-600 text-white" />}
                     </div>
                     {t.updated_at && (
                       <p className="label-mono text-muted-foreground mt-2 flex items-center gap-1" data-testid={`task-updated-${t.id}`} title={fullTime(t.updated_at)}>

@@ -399,7 +399,7 @@ function SwipeRow({ onSnooze, onOpen, children, testid }) {
   return (
     <div className="relative overflow-hidden rounded-xl" data-testid={testid}>
       {dx < -8 && (
-        <div className="absolute inset-y-0 right-0 flex w-24 items-center justify-center rounded-xl bg-caution-100 text-caution-800">
+        <div className="absolute inset-y-0 right-0 flex w-24 items-center justify-center rounded-xl bg-badge-pending text-badge-pending-fg">
           <span className="flex flex-col items-center gap-0.5">
             <Alarm size={20} weight="bold" />
             <span className="text-[length:var(--text-label)] font-semibold leading-4">Tomorrow</span>

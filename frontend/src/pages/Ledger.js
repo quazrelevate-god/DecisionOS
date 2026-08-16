@@ -41,8 +41,8 @@ const fmt = (cur) => (n) => {
 };
 
 const SOURCE_CHIP = { manual: "bg-black/5 text-foreground", whatsapp: "bg-green-600 text-white", ingest: "bg-brand-blue text-white", document: "bg-brand-blue text-white" };
-const LEVEL_DOT = { high: "bg-brand-red", medium: "bg-brand-yellow", low: "bg-brand-blue" };
-const LEVEL_ACCENT = { high: "border-l-brand-red", medium: "border-l-brand-yellow", low: "border-l-brand-blue" };
+const LEVEL_DOT = { high: "bg-danger-600", medium: "bg-brand-yellow", low: "bg-brand-blue" };
+const LEVEL_ACCENT = { high: "border-l-danger-600", medium: "border-l-brand-yellow", low: "border-l-brand-blue" };
 
 function Field({ label: l, children }) {
   return <div><label className={label}>{l}</label><div className="mt-1">{children}</div></div>;
@@ -62,7 +62,7 @@ function FileField({ file, setFile }) {
           setFile(sel);
         }} />
       </label>
-      {file && <button type="button" onClick={() => setFile(null)} className="mt-1 text-xs text-brand-red hover:underline">{t("finance.remove_attach")}</button>}
+      {file && <button type="button" onClick={() => setFile(null)} className="mt-1 text-xs text-danger-600 hover:underline">{t("finance.remove_attach")}</button>}
     </Field>
   );
 }
@@ -135,7 +135,7 @@ function AddExpenseDialog({ categories, onDone }) {
           <div>
             <div className="flex items-center justify-between">
               <label className={label}>{t("finance.c_category")}</label>
-              <button type="button" onClick={suggest} disabled={suggesting} data-testid="expense-suggest-category" className="flex items-center gap-1 text-xs font-semibold text-brand-red hover:underline disabled:opacity-50">
+              <button type="button" onClick={suggest} disabled={suggesting} data-testid="expense-suggest-category" className="flex items-center gap-1 text-xs font-semibold text-brand-600 hover:underline disabled:opacity-50">
                 <Sparkle size={13} weight="bold" /> {suggesting ? t("finance.thinking") : t("finance.ai_suggest")}
               </button>
             </div>
@@ -148,7 +148,7 @@ function AddExpenseDialog({ categories, onDone }) {
             <Field label={t("finance.c_date")}><input type="date" className={inp} value={f.date} onChange={(e) => set("date", e.target.value)} /></Field>
           </div>
           <Field label={t("finance.f_notes")}><textarea className={inp} rows={2} value={f.notes} onChange={(e) => set("notes", e.target.value)} /></Field>
-          <button onClick={save} disabled={busy} data-testid="expense-save" className="w-full bg-brand-red text-white py-2.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-60">
+          <button onClick={save} disabled={busy} data-testid="expense-save" className="w-full bg-brand-600 text-white py-2.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-60">
             {busy ? (file ? t("finance.ai_reading") : t("finance.saving")) : t("finance.save_expense")}
           </button>
         </div>
@@ -206,7 +206,7 @@ function AddAssetDialog({ categories, onDone }) {
               </select>
             </Field>
           </div>
-          <button onClick={save} disabled={busy} data-testid="asset-save" className="w-full bg-brand-red text-white py-2.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-60">
+          <button onClick={save} disabled={busy} data-testid="asset-save" className="w-full bg-brand-600 text-white py-2.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-60">
             {busy ? (file ? t("finance.ai_reading") : t("finance.saving")) : t("finance.save_asset")}
           </button>
         </div>
@@ -259,7 +259,7 @@ function AddInventoryDialog({ onDone }) {
             <Field label={t("finance.c_category")}><input className={inp} value={f.category} onChange={(e) => set("category", e.target.value)} /></Field>
             <Field label={t("finance.c_vendor")}><input className={inp} value={f.vendor_name} onChange={(e) => set("vendor_name", e.target.value)} /></Field>
           </div>
-          <button onClick={save} disabled={busy} data-testid="inv-save" className="w-full bg-brand-red text-white py-2.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-60">
+          <button onClick={save} disabled={busy} data-testid="inv-save" className="w-full bg-brand-600 text-white py-2.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-60">
             {busy ? (file ? t("finance.ai_reading") : t("finance.saving")) : t("finance.save_item")}
           </button>
         </div>
@@ -319,7 +319,7 @@ function AddIncomeDialog({ onDone }) {
             <Field label="Date"><input type="date" className={inp} value={f.date} onChange={(e) => set("date", e.target.value)} /></Field>
             <Field label="Due date"><input type="date" className={inp} value={f.due_date} onChange={(e) => set("due_date", e.target.value)} /></Field>
           </div>
-          <button onClick={save} disabled={busy} data-testid="income-save" className="w-full bg-brand-red text-white py-2.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-60">
+          <button onClick={save} disabled={busy} data-testid="income-save" className="w-full bg-brand-600 text-white py-2.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-60">
             {busy ? (file ? "AI reading…" : "Saving…") : "Save income"}
           </button>
         </div>
@@ -358,7 +358,7 @@ function CreateTaskFromInsight({ insight, members, roleOptions }) {
 
   return (
     <>
-      <button onClick={openDialog} data-testid="insight-create-task" className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider border border-black bg-brand-red text-white px-3 py-1.5 hover:shadow-brutal-sm transition-all">
+      <button onClick={openDialog} data-testid="insight-create-task" className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider border border-black bg-brand-600 text-white px-3 py-1.5 hover:shadow-brutal-sm transition-all">
         <ListPlus size={13} weight="bold" /> {t("finance.create_task")}
       </button>
       <Dialog open={open} onOpenChange={setOpen}>
@@ -381,7 +381,7 @@ function CreateTaskFromInsight({ insight, members, roleOptions }) {
                 </select>
               </Field>
             </div>
-            <button onClick={save} disabled={busy} data-testid="insight-task-save" className="w-full bg-brand-red text-white py-2.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-60">
+            <button onClick={save} disabled={busy} data-testid="insight-task-save" className="w-full bg-brand-600 text-white py-2.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-60">
               {busy ? t("finance.creating") : t("finance.create_task")}
             </button>
           </div>
@@ -461,7 +461,7 @@ function AiPanel({ scope, variant = "inline" }) {
     <div className={`card-brutal ${isBrief ? "p-6" : "p-5"} space-y-5`} data-testid={`ai-panel-${scope}`}>
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Sparkle size={isBrief ? 22 : 18} weight="fill" className="text-brand-red" />
+          <Sparkle size={isBrief ? 22 : 18} weight="fill" className="text-brand-600" />
           <h3 className={`font-heading font-black uppercase tracking-tight ${isBrief ? "text-lg" : "text-sm"}`}>{isBrief ? t("finance.finance_brief") : t("finance.ai_analysis")}</h3>
         </div>
         <div className="flex items-center gap-2">
@@ -523,8 +523,8 @@ function KpiRow({ summary }) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
       <KPI icon={CurrencyDollar} label="Revenue" value={f(tt.revenue_billed || 0)} accent="text-green-600" />
-      <KPI icon={TrendUp} label={t("finance.k_spend")} value={f(tt.total_spend)} accent="text-brand-red" />
-      <KPI icon={Coins} label="Net Profit" value={f(net)} accent={net >= 0 ? "text-green-600" : "text-brand-red"} />
+      <KPI icon={TrendUp} label={t("finance.k_spend")} value={f(tt.total_spend)} accent="text-brand-600" />
+      <KPI icon={Coins} label="Net Profit" value={f(net)} accent={net >= 0 ? "text-green-600" : "text-brand-600"} />
       <KPI icon={Receipt} label="Received" value={f(tt.revenue_received || 0)} />
       <KPI icon={Buildings} label={t("finance.k_asset")} value={f(tt.asset_value)} />
       <KPI icon={Package} label={t("finance.k_inv")} value={f(tt.inventory_value)} />
@@ -555,7 +555,7 @@ function InvoicePicker({ open, value, onChange, cur, testid }) {
             {filtered.map((o) => (
               <button key={o.id} type="button" data-testid={`${testid}-opt-${o.id}`}
                 onClick={() => { onChange(o.id); setShow(false); setQ(""); }}
-                className="block w-full text-left px-3 py-2 text-sm hover:bg-brand-red hover:text-white transition-colors border-b border-border/50">
+                className="block w-full text-left px-3 py-2 text-sm hover:bg-brand-600 hover:text-white transition-colors border-b border-border/50">
                 {label(o)}
               </button>
             ))}
@@ -589,9 +589,9 @@ function NeedsMatchingPanel({ title, hint, unmatched, open, cur, endpoint, stand
   };
 
   return (
-    <div className="card-brutal p-4 border-2 border-brand-red bg-brand-red/5" data-testid={testid}>
+    <div className="card-brutal p-4 border-2 border-brand-600 bg-brand-600/5" data-testid={testid}>
       <div className="flex items-center gap-2 mb-1">
-        <WarningCircle size={18} weight="bold" className="text-brand-red" />
+        <WarningCircle size={18} weight="bold" className="text-brand-600" />
         <h3 className="font-heading font-extrabold uppercase tracking-tight text-sm">{title} ({unmatched.length})</h3>
       </div>
       <p className="text-xs text-muted-foreground mb-3">{hint}</p>
@@ -623,7 +623,7 @@ function RevenueTab({ data, cur, onDelete, onChange }) {
       <div className="grid grid-cols-3 gap-3">
         <KPI icon={CurrencyDollar} label="Billed" value={f(tt.billed || 0)} accent="text-green-600" />
         <KPI icon={Receipt} label="Received" value={f(tt.received || 0)} />
-        <KPI icon={WarningCircle} label="Outstanding" value={f(tt.outstanding || 0)} accent="text-brand-red" />
+        <KPI icon={WarningCircle} label="Outstanding" value={f(tt.outstanding || 0)} accent="text-brand-600" />
       </div>
 
       <NeedsMatchingPanel title="Needs matching" testid="revenue-needs-matching"
@@ -654,7 +654,7 @@ function RevenueTab({ data, cur, onDelete, onChange }) {
                     <td className="p-3 text-muted-foreground">{s.date || "—"}</td>
                     <td className="p-3"><Chip value={st.label} className={st.cls} />{s.status === "partial" && <span className="ml-2 text-xs text-muted-foreground">bal {f(s.balance)}</span>}</td>
                     <td className="p-3 text-right font-mono font-semibold">{f(s.amount)}</td>
-                    <td className="p-3 text-right"><button onClick={() => onDelete("invoice", s.id)} data-testid={`revenue-invoice-delete-${s.id}`} className="text-muted-foreground hover:text-brand-red"><Trash size={15} /></button></td>
+                    <td className="p-3 text-right"><button onClick={() => onDelete("invoice", s.id)} data-testid={`revenue-invoice-delete-${s.id}`} className="text-muted-foreground hover:text-danger-600"><Trash size={15} /></button></td>
                   </tr>
                 );})}
               </tbody>
@@ -679,7 +679,7 @@ function RevenueTab({ data, cur, onDelete, onChange }) {
                     <td className="p-3 text-muted-foreground">{p.method || "—"}</td>
                     <td className="p-3 text-muted-foreground">{p.reference || p.invoice_number || "—"}</td>
                     <td className="p-3 text-right font-mono font-semibold text-green-600">{f(p.amount)}</td>
-                    <td className="p-3 text-right"><button onClick={() => onDelete("payment", p.id)} data-testid={`revenue-payment-delete-${p.id}`} className="text-muted-foreground hover:text-brand-red"><Trash size={15} /></button></td>
+                    <td className="p-3 text-right"><button onClick={() => onDelete("payment", p.id)} data-testid={`revenue-payment-delete-${p.id}`} className="text-muted-foreground hover:text-danger-600"><Trash size={15} /></button></td>
                   </tr>
                 ))}
               </tbody>
@@ -781,7 +781,7 @@ function ExpensesTable({ rows, cur, onDelete }) {
               <td className="p-3 text-muted-foreground">{e.date || "—"}</td>
               <td className="p-3"><Chip value={e.status} className={e.status === "paid" ? "bg-brand-ink text-white" : "bg-brand-yellow text-black"} /></td>
               <td className="p-3 text-right font-mono font-semibold">{f(e.amount)}</td>
-              <td className="p-3 text-right"><button onClick={() => onDelete(e.id)} data-testid={`expense-delete-${e.id}`} className="text-muted-foreground hover:text-brand-red"><Trash size={15} /></button></td>
+              <td className="p-3 text-right"><button onClick={() => onDelete(e.id)} data-testid={`expense-delete-${e.id}`} className="text-muted-foreground hover:text-danger-600"><Trash size={15} /></button></td>
             </tr>
           ))}
         </tbody>
@@ -809,7 +809,7 @@ function AssetsTable({ rows, cur, onDelete }) {
               <td className="p-3 text-muted-foreground">{a.purchase_date || "—"}</td>
               <td className="p-3"><Chip value={a.status} className={a.status === "active" ? "bg-brand-ink text-white" : "bg-black/5 text-foreground"} /></td>
               <td className="p-3 text-right font-mono font-semibold">{f(a.purchase_amount)}</td>
-              <td className="p-3 text-right"><button onClick={() => onDelete(a.id)} className="text-muted-foreground hover:text-brand-red"><Trash size={15} /></button></td>
+              <td className="p-3 text-right"><button onClick={() => onDelete(a.id)} className="text-muted-foreground hover:text-danger-600"><Trash size={15} /></button></td>
             </tr>
           ))}
         </tbody>
@@ -837,7 +837,7 @@ function InventoryTable({ rows, cur, onDelete }) {
               <td className="p-3 font-mono">{f(i.unit_cost)}</td>
               <td className="p-3 text-muted-foreground">{i.vendor_name || "—"}</td>
               <td className="p-3 text-right font-mono font-semibold">{f(i.value)}</td>
-              <td className="p-3 text-right"><button onClick={() => onDelete(i.id)} className="text-muted-foreground hover:text-brand-red"><Trash size={15} /></button></td>
+              <td className="p-3 text-right"><button onClick={() => onDelete(i.id)} className="text-muted-foreground hover:text-danger-600"><Trash size={15} /></button></td>
             </tr>
           ))}
         </tbody>
@@ -909,7 +909,7 @@ function CaptureHero({ pendingCount, onIngested, onOpenInbox }) {
         </span>
         <label
           data-testid="finance-hero-doc"
-          className={`flex items-center gap-2 border border-black bg-white px-3 py-2 text-xs font-semibold uppercase tracking-wider hover:bg-brand-red hover:text-white transition-colors cursor-pointer ${uploading ? "opacity-60 pointer-events-none" : ""}`}
+          className={`flex items-center gap-2 border border-black bg-white px-3 py-2 text-xs font-semibold uppercase tracking-wider hover:bg-brand-600 hover:text-white transition-colors cursor-pointer ${uploading ? "opacity-60 pointer-events-none" : ""}`}
           title="Upload a bill or receipt (PDF or photo)"
         >
           <FilePdf size={14} weight="bold" />
@@ -938,7 +938,7 @@ function CaptureHero({ pendingCount, onIngested, onOpenInbox }) {
           <button
             data-testid="finance-hero-inbox-badge"
             onClick={onOpenInbox}
-            className="flex items-center gap-2 border border-black bg-brand-red text-white px-3 py-2 text-xs font-semibold uppercase tracking-wider hover:shadow-brutal-sm transition-all"
+            className="flex items-center gap-2 border border-black bg-brand-600 text-white px-3 py-2 text-xs font-semibold uppercase tracking-wider hover:shadow-brutal-sm transition-all"
           >
             <Tray size={14} weight="bold" />
             {pendingCount} in Inbox →

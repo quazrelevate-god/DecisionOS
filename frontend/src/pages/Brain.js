@@ -44,7 +44,7 @@ function SearchPanel() {
           />
         </div>
         <MicDictateButton className="px-4" title={t("brain.speak_search")} onText={(txt) => setQ((v) => (v ? `${v} ${txt}` : txt))} />
-        <button data-testid="brain-search-button" className="bg-brand-red text-white px-6 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
+        <button data-testid="brain-search-button" className="bg-brand-600 text-white px-6 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
           {t("brain.search_btn")}
         </button>
       </form>
@@ -56,8 +56,8 @@ function SearchPanel() {
         <>
           <p className="label-mono text-muted-foreground mb-6">{t("brain.linked", { count: total })}</p>
           {res.scope && res.scope.finance_visible === false && (
-            <div data-testid="brain-finance-restricted" className="mb-6 flex items-center gap-2 text-xs border-l-2 border-brand-red bg-brand-red/5 px-3 py-2 rounded">
-              <Lock size={14} weight="bold" className="text-brand-red shrink-0" />
+            <div data-testid="brain-finance-restricted" className="mb-6 flex items-center gap-2 text-xs border-l-2 border-brand-600 bg-brand-600/5 px-3 py-2 rounded">
+              <Lock size={14} weight="bold" className="text-brand-600 shrink-0" />
               <span>Financial records (invoices, expenses, assets, inventory &amp; amounts) are restricted to Owner and Finance roles.</span>
             </div>
           )}
@@ -134,7 +134,7 @@ function SearchPanel() {
               <h3 className="font-heading font-extrabold uppercase tracking-tight text-lg mb-3">{t("brain.memory")} ({res.memory.length})</h3>
               <div className="grid md:grid-cols-2 gap-3">
                 {res.memory.map((m) => (
-                  <div key={m.id} data-testid={`brain-memory-${m.id}`} className="card-brutal p-4 border-l-4 border-l-brand-red">
+                  <div key={m.id} data-testid={`brain-memory-${m.id}`} className="card-brutal p-4 border-l-4 border-l-brand-600">
                     <p className="text-sm">{m.text}</p>
                     <Chip value={m.tag} className="mt-2 bg-brand-ink text-white" />
                   </div>
@@ -271,7 +271,7 @@ export default function Brain() {
           className="mb-4 inline-flex items-center gap-2 border border-black bg-brand-yellow px-3 py-1.5 shadow-brutal-sm"
         >
           <Spinner size={14} weight="bold" className="animate-spin text-brand-ink" />
-          <Sparkle size={12} weight="fill" className="text-brand-red" />
+          <Sparkle size={12} weight="fill" className="text-brand-600" />
           <span className="text-xs font-semibold uppercase tracking-wider text-brand-ink">
             Dex is structuring {inflightN} capture{inflightN === 1 ? "" : "s"} right now
           </span>

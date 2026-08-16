@@ -79,7 +79,7 @@ export function DexCaptureBar({
             disabled={sending}
             title="Record a voice note for Dex"
             aria-label="Record a voice note for Dex"
-            className={`flex items-center justify-center border border-black hover:bg-brand-red hover:text-white transition-colors disabled:opacity-50 ${lg ? "w-14 h-14 rounded-xl" : "w-11 h-11"}`}
+            className={`flex items-center justify-center border border-black hover:bg-brand-600 hover:text-white transition-colors disabled:opacity-50 ${lg ? "w-14 h-14 rounded-xl" : "w-11 h-11"}`}
           >
             <Microphone size={lg ? 26 : 18} weight="bold" />
           </button>
@@ -89,7 +89,7 @@ export function DexCaptureBar({
             data-testid="dex-mic-stop"
             onClick={stopRecording}
             aria-label={`Stop recording (${recordSecs} seconds)`}
-            className={`px-3 flex items-center justify-center gap-2 bg-brand-red text-white font-mono border border-black animate-pulse ${lg ? "h-14 rounded-xl text-sm" : "w-11 text-xs"}`}
+            className={`px-3 flex items-center justify-center gap-2 bg-brand-600 text-white font-mono border border-black animate-pulse ${lg ? "h-14 rounded-xl text-sm" : "w-11 text-xs"}`}
           >
             <Stop size={lg ? 22 : 16} weight="fill" />
             <span className="tabular-nums">{recordSecs}s</span>

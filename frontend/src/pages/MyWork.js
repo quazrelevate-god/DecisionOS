@@ -116,7 +116,7 @@ function TaskTrail({ t, members, roleOptions, onChange }) {
     <div className="mt-4 border-t border-black/10 pt-4" data-testid={`task-trail-${t.id}`}>
       <div className="flex items-center justify-between mb-2">
         <span className="flex items-center gap-2 font-heading font-extrabold uppercase tracking-tight text-sm">
-          <ChatCircleText size={16} weight="bold" className="text-brand-red" /> Activity &amp; Handoffs
+          <ChatCircleText size={16} weight="bold" className="text-brand-600" /> Activity &amp; Handoffs
         </span>
         {!open && (
           <button onClick={() => setOpen(true)} data-testid={`add-update-${t.id}`}
@@ -131,7 +131,7 @@ function TaskTrail({ t, members, roleOptions, onChange }) {
             const Icon = UPDATE_ICON[u.kind] || ChatText;
             return (
               <li key={u.id} className="flex items-start gap-2 border border-black/15 p-2.5">
-                <Icon size={15} weight="bold" className={`mt-0.5 shrink-0 ${u.kind === "escalate" ? "text-brand-red" : u.kind === "handoff" ? "text-brand-blue" : "text-muted-foreground"}`} />
+                <Icon size={15} weight="bold" className={`mt-0.5 shrink-0 ${u.kind === "escalate" ? "text-danger-600" : u.kind === "handoff" ? "text-brand-blue" : "text-muted-foreground"}`} />
                 <div className="min-w-0 flex-1">
                   {u.step_text && <p className="label-mono text-muted-foreground">On: {u.step_text}</p>}
                   <p className="text-sm">{u.text}</p>
@@ -257,7 +257,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
     return (
       <div className="mt-4 flex flex-col sm:flex-row gap-2" data-testid={`exec-plan-empty-${t.id}`}>
         <button onClick={generate} disabled={busy} data-testid={`generate-plan-${t.id}`}
-          className="flex-1 flex items-center justify-center gap-2 border border-dashed border-brand-red text-brand-red py-2.5 text-sm font-semibold uppercase tracking-wider hover:bg-brand-red hover:text-white transition-colors disabled:opacity-50">
+          className="flex-1 flex items-center justify-center gap-2 border border-dashed border-brand-600 text-brand-600 py-2.5 text-sm font-semibold uppercase tracking-wider hover:bg-brand-600 hover:text-white transition-colors disabled:opacity-50">
           <Sparkle size={16} weight="bold" /> {busy ? "Thinking…" : "Generate AI plan"}
         </button>
         <button onClick={startManual} disabled={busy} data-testid={`manual-plan-${t.id}`}
@@ -272,7 +272,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
     <div className="mt-4 border-t border-black/10 pt-4" data-testid={`exec-plan-${t.id}`}>
       <div className="flex items-center justify-between mb-2">
         <span className="flex items-center gap-2 font-heading font-extrabold uppercase tracking-tight text-sm">
-          <ListChecks size={16} weight="bold" className="text-brand-red" /> AI Execution Guide
+          <ListChecks size={16} weight="bold" className="text-brand-600" /> AI Execution Guide
         </span>
         <span className="label-mono" data-testid={`exec-progress-${t.id}`}>{progress}%</span>
       </div>
@@ -292,7 +292,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
                     <button onClick={() => setViewStep(s)} data-testid={`exec-expand-${t.id}-${i}`} className="p-2 sm:p-1 border border-black hover:bg-brand-blue hover:text-white" title="View full"><ArrowsOutSimple size={14} weight="bold" /></button>
                     <button onClick={() => moveStep(i, -1)} className="p-2 sm:p-1 border border-black hover:bg-black/5" title="Up"><ArrowUp size={14} weight="bold" /></button>
                     <button onClick={() => moveStep(i, 1)} className="p-2 sm:p-1 border border-black hover:bg-black/5" title="Down"><ArrowDown size={14} weight="bold" /></button>
-                    <button onClick={() => removeStep(i)} data-testid={`exec-remove-${t.id}-${i}`} className="p-2 sm:p-1 border border-black hover:bg-brand-red hover:text-white" title="Remove"><Trash size={14} weight="bold" /></button>
+                    <button onClick={() => removeStep(i)} data-testid={`exec-remove-${t.id}-${i}`} className="p-2 sm:p-1 border border-black hover:bg-danger-600 hover:text-white" title="Remove"><Trash size={14} weight="bold" /></button>
                   </div>
                 </>
               ) : (
@@ -325,7 +325,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
             {ask[s.id] && (
               <div className="ml-7 mt-1.5 mb-2 border border-black bg-brand-paper p-2.5 text-xs" data-testid={`exec-ask-result-${t.id}-${i}`}>
                 {ask[s.id].loading ? <p className="font-mono">AI is thinking…</p>
-                  : ask[s.id].error ? <p className="text-brand-red">Couldn't fetch a suggestion.</p>
+                  : ask[s.id].error ? <p className="text-danger-600">Couldn't fetch a suggestion.</p>
                   : (
                     <>
                       <p className="flex items-start gap-1.5"><Robot size={13} weight="bold" className="text-brand-blue mt-0.5 shrink-0" /><span>{ask[s.id].data.suggestion}</span></p>
@@ -337,7 +337,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
                           ))}
                         </div>
                       )}
-                      <button onClick={() => setAsk((a) => ({ ...a, [s.id]: undefined }))} className="mt-2 label-mono text-brand-red">dismiss</button>
+                      <button onClick={() => setAsk((a) => ({ ...a, [s.id]: undefined }))} className="mt-2 label-mono text-brand-600">dismiss</button>
                     </>
                   )}
               </div>
@@ -366,7 +366,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
               <ArrowClockwise size={15} weight="bold" /> Regenerate
             </button>
             <button onClick={cancelAIPlan} disabled={busy} data-testid={`exec-cancel-plan-${t.id}`}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black text-brand-red hover:bg-brand-red hover:text-white transition-colors disabled:opacity-50">
+              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black text-brand-600 hover:bg-brand-600 hover:text-white transition-colors disabled:opacity-50">
               <XCircle size={15} weight="bold" /> Cancel plan
             </button>
           </>
@@ -383,7 +383,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
       <Dialog open={!!viewStep} onOpenChange={(o) => !o && setViewStep(null)}>
         <DialogContent className="border border-black rounded-none">
           <DialogHeader>
-            <DialogTitle className="font-heading uppercase tracking-tight text-base flex items-center gap-2"><ListChecks size={18} weight="bold" className="text-brand-red" /> Execution Step</DialogTitle>
+            <DialogTitle className="font-heading uppercase tracking-tight text-base flex items-center gap-2"><ListChecks size={18} weight="bold" className="text-brand-600" /> Execution Step</DialogTitle>
           </DialogHeader>
           <p className="text-sm leading-relaxed whitespace-pre-wrap break-words" data-testid={`exec-step-detail-${t.id}`}>{viewStep?.text}</p>
           <p className="label-mono text-muted-foreground mt-1">Tap outside to close</p>
@@ -396,7 +396,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
 const PRIORITY_AXES = [
   { key: "business_impact", label: "Impact", color: "bg-brand-blue" },
   { key: "revenue", label: "Revenue", color: "bg-green-600" },
-  { key: "risk", label: "Risk", color: "bg-brand-red" },
+  { key: "risk", label: "Risk", color: "bg-brand-600" },
   { key: "urgency", label: "Urgency", color: "bg-orange-500" },
 ];
 
@@ -404,7 +404,7 @@ function PriorityScoreBars({ scores }) {
   return (
     <div className="mt-3 border border-black/15 bg-black/[0.02] p-3" data-testid="priority-score-bars">
       <div className="flex items-center justify-between mb-2">
-        <span className="label-mono text-muted-foreground flex items-center gap-1"><Sparkle size={12} weight="bold" className="text-brand-red" /> AI Priority</span>
+        <span className="label-mono text-muted-foreground flex items-center gap-1"><Sparkle size={12} weight="bold" className="text-brand-600" /> AI Priority</span>
         {scores.priority_score != null && (
           <span className="font-heading font-black text-lg leading-none" data-testid="priority-score-value">{scores.priority_score}</span>
         )}
@@ -476,7 +476,7 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
 
             {steps.length > 0 && (
               <div>
-                <p className="flex items-center gap-2 font-heading font-extrabold uppercase tracking-tight text-sm mb-2"><ListChecks size={16} weight="bold" className="text-brand-red" /> What was done</p>
+                <p className="flex items-center gap-2 font-heading font-extrabold uppercase tracking-tight text-sm mb-2"><ListChecks size={16} weight="bold" className="text-brand-600" /> What was done</p>
                 <ul className="space-y-1.5">
                   {steps.map((s) => (
                     <li key={s.id} className="flex items-start gap-2 text-sm" data-testid={`detail-step-${t.id}-${s.id}`}>
@@ -522,7 +522,7 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
             )}
 
             <div>
-              <p className="flex items-center gap-2 font-heading font-extrabold uppercase tracking-tight text-sm mb-2"><Paperclip size={15} weight="bold" className="text-brand-red" /> Proof of work{proof.length > 0 ? ` · ${proof.length}` : ""}</p>
+              <p className="flex items-center gap-2 font-heading font-extrabold uppercase tracking-tight text-sm mb-2"><Paperclip size={15} weight="bold" className="text-brand-600" /> Proof of work{proof.length > 0 ? ` · ${proof.length}` : ""}</p>
               {proof.length === 0 ? (
                 <p className="text-sm text-muted-foreground" data-testid={`detail-no-proof-${t.id}`}>No proof uploaded for this task.</p>
               ) : (
@@ -552,7 +552,7 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
 
             {updates.length > 0 && (
               <div>
-                <p className="flex items-center gap-2 font-heading font-extrabold uppercase tracking-tight text-sm mb-2"><ChatCircleText size={16} weight="bold" className="text-brand-red" /> Activity &amp; Handoffs</p>
+                <p className="flex items-center gap-2 font-heading font-extrabold uppercase tracking-tight text-sm mb-2"><ChatCircleText size={16} weight="bold" className="text-brand-600" /> Activity &amp; Handoffs</p>
                 <ul className="space-y-2">
                   {updates.map((u) => (
                     <li key={u.id} className="flex items-start gap-2 border border-black/15 p-2.5">
@@ -572,14 +572,14 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
               <div className="border-t border-black/15 pt-3">
                 {!confirmDel ? (
                   <button onClick={() => setConfirmDel(true)} data-testid={`delete-task-${t.id}`}
-                    className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-brand-red border border-brand-red px-3 py-1.5 hover:bg-brand-red hover:text-white transition-colors">
+                    className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-brand-600 border border-brand-600 px-3 py-1.5 hover:bg-brand-600 hover:text-white transition-colors">
                     <Trash size={13} weight="bold" /> Delete task
                   </button>
                 ) : (
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs font-semibold">Delete this task permanently?</span>
                     <button onClick={doDelete} disabled={deleting} data-testid={`delete-task-confirm-${t.id}`}
-                      className="text-xs font-semibold uppercase tracking-wider bg-brand-red text-white px-3 py-1.5 border border-brand-red hover:shadow-brutal-sm transition-all disabled:opacity-60">
+                      className="text-xs font-semibold uppercase tracking-wider bg-brand-600 text-white px-3 py-1.5 border border-brand-600 hover:shadow-brutal-sm transition-all disabled:opacity-60">
                       {deleting ? "Deleting…" : "Yes, delete"}
                     </button>
                     <button onClick={() => setConfirmDel(false)} disabled={deleting}
@@ -728,7 +728,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
   const selCls = "border border-black px-2 py-1 text-xs font-mono bg-white focus:outline-none";
 
   return (
-    <div id={`task-card-${t.id}`} data-testid={`mywork-task-${t.id}`} className={`card-brutal p-5 transition-all ${highlight ? "ring-4 ring-brand-red ring-offset-2 ring-offset-brand-paper" : ""}`}>
+    <div id={`task-card-${t.id}`} data-testid={`mywork-task-${t.id}`} className={`card-brutal p-5 transition-all ${highlight ? "ring-4 ring-brand-600 ring-offset-2 ring-offset-brand-paper" : ""}`}>
       <div className="flex items-start justify-between gap-2">
         <p className="font-heading font-bold text-lg leading-tight">{t.title}</p>
         <Chip value={t.priority} />
@@ -748,7 +748,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
           {t.assignee_name && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><UserCircle size={13} weight="bold" /> {t.assignee_name}</span>}
           {t.support_name && <span className="text-xs text-muted-foreground">+ {t.support_name}</span>}
           {t.approval_required && (
-            <span data-testid={`op-approval-${t.id}`} className={`inline-flex items-center gap-1 border border-black px-2 py-0.5 text-xs font-semibold uppercase tracking-wider ${t.approval_status === "approved" ? "bg-green-600 text-white" : t.approval_status === "pending" ? "bg-brand-yellow" : t.approval_status === "rejected" ? "bg-brand-red text-white" : "bg-brand-paper"}`}>
+            <span data-testid={`op-approval-${t.id}`} className={`inline-flex items-center gap-1 border border-black px-2 py-0.5 text-xs font-semibold uppercase tracking-wider ${t.approval_status === "approved" ? "bg-green-600 text-white" : t.approval_status === "pending" ? "bg-brand-yellow" : t.approval_status === "rejected" ? "bg-danger-600 text-white" : "bg-brand-paper"}`}>
               <ShieldCheck size={11} weight="bold" /> {t.approval_status === "approved" ? "Approved" : t.approval_status === "pending" ? "Pending approval" : t.approval_status === "rejected" ? "Changes requested" : `${t.approver_name || "Approval"} required`}
             </span>
           )}
@@ -757,8 +757,8 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
 
       <div className="flex items-center flex-wrap gap-1.5 mt-3">
         <span data-testid={`status-chip-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-black bg-white">{STATUS_LABEL[t.status] || t.status}</span>
-        {isOverdue(t) && <span data-testid={`overdue-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-black bg-brand-red text-white">Overdue</span>}
-        {t.source === "escalation" && <span data-testid={`badge-escalation-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-black bg-brand-red text-white">Escalation</span>}
+        {isOverdue(t) && <span data-testid={`overdue-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-black bg-danger-600 text-white">Overdue</span>}
+        {t.source === "escalation" && <span data-testid={`badge-escalation-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-black bg-danger-600 text-white">Escalation</span>}
         {t.source === "handoff" && <span data-testid={`badge-handoff-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-black bg-brand-blue text-white">Handoff</span>}
         {(t.attachment_count || 0) > 0 && <span data-testid={`att-count-${t.id}`} className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Paperclip size={12} weight="bold" /> {t.attachment_count}</span>}
         {t.due_date && <span className="text-xs text-muted-foreground">due {new Date(t.due_date).toLocaleString(undefined, { day: "numeric", month: "short", ...(t.due_date.includes("T") ? { hour: "2-digit", minute: "2-digit" } : {}) })}</span>}
@@ -860,11 +860,11 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
       {canApprove && awaitingApproval && (
         <div className="flex flex-wrap gap-2 mt-4 border border-black bg-brand-yellow/40 p-3" data-testid={`approval-actions-${t.id}`}>
           <span className="w-full label-mono text-muted-foreground">This task needs your approval before {t.assignee_name || "the assignee"} can start work.</span>
-          {t.approval_status === "rejected" && t.rejection_reason && <span className="w-full text-xs text-brand-red">Previously requested: {t.rejection_reason}</span>}
+          {t.approval_status === "rejected" && t.rejection_reason && <span className="w-full text-xs text-danger-600">Previously requested: {t.rejection_reason}</span>}
           <button onClick={approveTask} data-testid={`approve-${t.id}`} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">
             <CheckCircle size={16} weight="bold" /> Approve
           </button>
-          <button onClick={rejectTask} data-testid={`reject-${t.id}`} className="flex items-center gap-2 bg-brand-red text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">
+          <button onClick={rejectTask} data-testid={`reject-${t.id}`} className="flex items-center gap-2 bg-danger-600 text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">
             <WarningCircle size={16} weight="bold" /> Request changes
           </button>
           <button onClick={clarifyTask} data-testid={`clarify-${t.id}`} className="flex items-center gap-2 bg-orange-500 text-black px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">
@@ -875,18 +875,18 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
 
       {lockedForAssignee && (
         <div className="flex items-start gap-2 mt-4 border border-black bg-brand-paper p-3" data-testid={`approval-locked-${t.id}`}>
-          <LockKey size={18} weight="bold" className="text-brand-red shrink-0 mt-0.5" />
+          <LockKey size={18} weight="bold" className="text-brand-600 shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-bold uppercase tracking-tight">{t.approval_status === "rejected" ? "Changes requested" : "Awaiting approval"}</p>
             <p className="text-xs text-muted-foreground">You can start once {t.approver_name || "the approver"} approves this task. Status, progress and the execution plan are locked until then.</p>
-            {t.approval_status === "rejected" && t.rejection_reason && <p className="text-xs text-brand-red mt-1">Note: {t.rejection_reason}</p>}
+            {t.approval_status === "rejected" && t.rejection_reason && <p className="text-xs text-danger-600 mt-1">Note: {t.rejection_reason}</p>}
           </div>
         </div>
       )}
 
       {t.evidence_required && !isTerminal(t) && !awaitingApproval && (
         <div className={`mt-3 flex items-start gap-2 border border-black p-2.5 ${hasEvidence ? "bg-green-600/10" : "bg-brand-yellow/30"}`} data-testid={`evidence-required-${t.id}`}>
-          {hasEvidence ? <CheckCircle size={16} weight="fill" className="text-green-600 shrink-0 mt-0.5" /> : <Info size={16} weight="bold" className="text-brand-red shrink-0 mt-0.5" />}
+          {hasEvidence ? <CheckCircle size={16} weight="fill" className="text-green-600 shrink-0 mt-0.5" /> : <Info size={16} weight="bold" className="text-brand-600 shrink-0 mt-0.5" />}
           <p className="text-xs">{hasEvidence
             ? "Proof attached — you can mark this task complete."
             : "This task requires proof before it can be completed. Add a photo, voice note, or file below."}</p>
@@ -911,7 +911,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
             <FileArrowUp size={16} weight="bold" /> Upload file
           </button>
           <input ref={evidenceRef} type="file" className="hidden" onChange={onEvidence} />
-          <button onClick={toggleVoice} data-testid={`voice-${t.id}`} className={`flex items-center gap-2 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider transition-colors ${recording ? "bg-brand-red text-white" : "hover:bg-black/5"}`}>
+          <button onClick={toggleVoice} data-testid={`voice-${t.id}`} className={`flex items-center gap-2 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider transition-colors ${recording ? "bg-brand-600 text-white" : "hover:bg-black/5"}`}>
             {recording ? <Stop size={16} weight="fill" /> : <Microphone size={16} weight="bold" />} {recording ? "Stop & send" : "Voice reply"}
           </button>
           {recording && (
@@ -1053,7 +1053,7 @@ export default function MyWork() {
               </>
             )}
             <button onClick={() => { setAiPriority((v) => !v); setView("mywork"); }} data-testid="ai-priority-toggle"
-              className={`${CTRL} ${view === "mywork" && aiPriority ? "bg-brand-red text-white shadow-brutal-sm" : "bg-brand-yellow hover:shadow-brutal-sm"}`}>
+              className={`${CTRL} ${view === "mywork" && aiPriority ? "bg-brand-600 text-white shadow-brutal-sm" : "bg-brand-yellow hover:shadow-brutal-sm"}`}>
               <Sparkle size={15} weight="bold" /> {scoring ? t("mywork.scoring") : aiPriority ? t("mywork.ai_priority_on") : t("mywork.ai_priority")}
             </button>
           </div>
@@ -1077,7 +1077,7 @@ export default function MyWork() {
       </PageHeader>
 
       {focusDenied && (
-        <div data-testid="access-restricted-banner" className="card-brutal p-4 mb-6 bg-brand-red text-white flex items-center gap-3">
+        <div data-testid="access-restricted-banner" className="card-brutal p-4 mb-6 bg-brand-600 text-white flex items-center gap-3">
           <LockKey size={22} weight="bold" className="shrink-0" />
           <div>
             <p className="font-bold uppercase tracking-tight">{t("mywork.access_restricted")}</p>

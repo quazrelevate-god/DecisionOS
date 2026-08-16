@@ -5,16 +5,20 @@ module.exports = {
     theme: {
         extend: {
             fontFamily: {
-                sans: ['Geist', 'system-ui', 'sans-serif'],
-                heading: ['Geist', 'system-ui', 'sans-serif'],
+                sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
+                heading: ['Inter', 'system-ui', 'sans-serif'],
                 logo: ['Chivo', 'sans-serif'],
-                mono: ['IBM Plex Mono', 'monospace'],
+                mono: ['IBM Plex Mono', 'ui-monospace', 'monospace'],
             },
             borderRadius: {
+                // DS-1 gave the token file a real radius scale; these map onto
+                // it. lg/md/sm keep pointing at --radius so every shadcn
+                // component that hardcodes `rounded-md` stays consistent.
                 lg: 'var(--radius)',
                 md: 'var(--radius)',
                 sm: 'var(--radius)',
-                pill: '9999px',
+                xl: 'var(--radius-xl)',
+                pill: 'var(--radius-pill)',
             },
             // MPWA-01 (§5.1) — the mobile touch scale. 44 is the floor, 48 the
             // comfortable tier, 56 the money-committing tier (Approve/Reject).
@@ -53,36 +57,87 @@ module.exports = {
                 // One job each (§3.1): brand = the action to take · danger =
                 // money or a deadline at risk · caution = waiting on him ·
                 // success = settled/received · neutral = everything else.
+                // DS-2 — the ramps resolve through the token file, not through
+                // literals here. index.css owns every value; this maps the
+                // Tailwind names onto them, so a colour decision has exactly one
+                // home and light/dark cannot drift apart.
+                //
+                // One job each: brand = the action to take · danger = money or a
+                // deadline at risk · caution = waiting on him · success =
+                // settled/received · neutral = everything else.
                 brand: {
-                    red: '#FF3B30', blue: '#002FA7', yellow: '#FFCC00', ink: '#0A0A0B', paper: '#F4F4F5',
-                    50: 'hsl(233 100% 97%)', 100: 'hsl(236 100% 94%)', 200: 'hsl(238 100% 89%)',
-                    300: 'hsl(239 100% 82%)', 400: 'hsl(240 88% 71%)', 500: 'hsl(240 80% 61%)',
-                    600: 'hsl(239 60% 51%)', 700: 'hsl(238 57% 41%)', 800: 'hsl(237 56% 33%)',
-                    900: 'hsl(236 52% 26%)',
+                    // `red` retired in the indigo rebrand — 271 sites -> brand-600, 58 -> danger-600.
+                    // blue/yellow/ink/paper remain: they carry categorical meaning and need
+                    // per-site mapping, not a swap. Tracked as rebrand phase 2.
+                    blue: '#002FA7', yellow: '#FFCC00', ink: '#0A0A0B', paper: '#F4F4F5',
+                    50: 'hsl(var(--brand-50))', 100: 'hsl(var(--brand-100))', 200: 'hsl(var(--brand-200))',
+                    300: 'hsl(var(--brand-300))', 400: 'hsl(var(--brand-400))', 500: 'hsl(var(--brand-500))',
+                    600: 'hsl(var(--brand-600))', 700: 'hsl(var(--brand-700))', 800: 'hsl(var(--brand-800))',
+                    900: 'hsl(var(--brand-900))',
                 },
                 danger: {
-                    50: 'hsl(0 86% 97%)', 100: 'hsl(0 93% 94%)', 200: 'hsl(0 96% 89%)',
-                    300: 'hsl(0 94% 82%)', 400: 'hsl(0 91% 71%)', 500: 'hsl(0 84% 60%)',
-                    600: 'hsl(0 72% 51%)', 700: 'hsl(0 74% 42%)', 800: 'hsl(0 70% 35%)',
-                    900: 'hsl(0 63% 31%)',
+                    50: 'hsl(var(--danger-50))', 100: 'hsl(var(--danger-100))', 200: 'hsl(var(--danger-200))',
+                    300: 'hsl(var(--danger-300))', 400: 'hsl(var(--danger-400))', 500: 'hsl(var(--danger-500))',
+                    600: 'hsl(var(--danger-600))', 700: 'hsl(var(--danger-700))', 800: 'hsl(var(--danger-800))',
+                    900: 'hsl(var(--danger-900))',
                 },
                 caution: {
-                    50: 'hsl(48 100% 96%)', 100: 'hsl(48 96% 89%)', 200: 'hsl(48 97% 77%)',
-                    300: 'hsl(46 97% 65%)', 400: 'hsl(43 96% 56%)', 500: 'hsl(38 92% 50%)',
-                    600: 'hsl(32 95% 44%)', 700: 'hsl(26 90% 37%)', 800: 'hsl(23 83% 31%)',
-                    900: 'hsl(22 78% 26%)',
+                    50: 'hsl(var(--caution-50))', 100: 'hsl(var(--caution-100))', 200: 'hsl(var(--caution-200))',
+                    300: 'hsl(var(--caution-300))', 400: 'hsl(var(--caution-400))', 500: 'hsl(var(--caution-500))',
+                    600: 'hsl(var(--caution-600))', 700: 'hsl(var(--caution-700))', 800: 'hsl(var(--caution-800))',
+                    900: 'hsl(var(--caution-900))',
                 },
                 success: {
-                    50: 'hsl(138 76% 97%)', 100: 'hsl(141 84% 93%)', 200: 'hsl(141 79% 85%)',
-                    300: 'hsl(142 77% 73%)', 400: 'hsl(142 69% 58%)', 500: 'hsl(142 71% 45%)',
-                    600: 'hsl(142 76% 36%)', 700: 'hsl(142 72% 29%)', 800: 'hsl(143 61% 24%)',
-                    900: 'hsl(144 61% 20%)',
+                    50: 'hsl(var(--success-50))', 100: 'hsl(var(--success-100))', 200: 'hsl(var(--success-200))',
+                    300: 'hsl(var(--success-300))', 400: 'hsl(var(--success-400))', 500: 'hsl(var(--success-500))',
+                    600: 'hsl(var(--success-600))', 700: 'hsl(var(--success-700))', 800: 'hsl(var(--success-800))',
+                    900: 'hsl(var(--success-900))',
+                },
+                // DS-5 — the status-badge triples as first-class colours.
+                //
+                // StatusChip previously named ramp STEPS directly
+                // (bg-caution-50 text-caution-800). A ramp step is a fixed
+                // value, so in dark mode a "Waiting 1 day" chip kept its cream
+                // background and amber text on a near-black card — unreadable,
+                // and invisible to every check we have because nothing measures
+                // contrast inside a chip. The --badge-* tokens carry a dark
+                // override; naming them here is what makes the chip follow the
+                // theme instead of the ramp.
+                badge: {
+                    pending:   { DEFAULT: 'hsl(var(--badge-pending-bg))',   fg: 'hsl(var(--badge-pending-fg))',   line: 'hsl(var(--badge-pending-bd))' },
+                    directive: { DEFAULT: 'hsl(var(--badge-directive-bg))', fg: 'hsl(var(--badge-directive-fg))', line: 'hsl(var(--badge-directive-bd))' },
+                    overdue:   { DEFAULT: 'hsl(var(--badge-overdue-bg))',   fg: 'hsl(var(--badge-overdue-fg))',   line: 'hsl(var(--badge-overdue-bd))' },
+                    completed: { DEFAULT: 'hsl(var(--badge-completed-bg))', fg: 'hsl(var(--badge-completed-fg))', line: 'hsl(var(--badge-completed-bd))' },
+                    neutral:   { DEFAULT: 'hsl(var(--badge-neutral-bg))',   fg: 'hsl(var(--badge-neutral-fg))',   line: 'hsl(var(--badge-neutral-bd))' },
+                },
+                // The urgency rail on a card's left edge (§2). Not yet used;
+                // defined so a future rail reads a token rather than a ramp.
+                edge: {
+                    overdue: 'hsl(var(--edge-overdue))',
+                    today:   'hsl(var(--edge-today))',
+                    week:    'hsl(var(--edge-week))',
+                    later:   'hsl(var(--edge-later))',
+                },
+                // Semantic surfaces + text, so a component can say what it means
+                // rather than which grey it wants.
+                surface: {
+                    DEFAULT: 'hsl(var(--surface))',
+                    raised:  'hsl(var(--surface-raised))',
+                    sunken:  'hsl(var(--surface-sunken))',
+                    hover:   'hsl(var(--surface-hover))',
+                },
+                hairline: { DEFAULT: 'hsl(var(--hairline))', strong: 'hsl(var(--hairline-strong))' },
+                'brand-tint': {
+                    DEFAULT: 'hsl(var(--brand-tint))',
+                    hover:   'hsl(var(--brand-tint-hover))',
+                    line:    'hsl(var(--brand-tint-border))',
+                    fg:      'hsl(var(--brand-on-tint))',
                 },
                 neutral: {
-                    50: 'hsl(220 20% 98%)', 100: 'hsl(220 19% 95%)', 200: 'hsl(220 18% 90%)',
-                    300: 'hsl(219 14% 81%)', 400: 'hsl(218 11% 65%)', 500: 'hsl(220 10% 43%)',
-                    600: 'hsl(215 14% 34%)', 700: 'hsl(220 13% 26%)', 800: 'hsl(222 17% 11%)',
-                    900: 'hsl(223 17% 8%)',
+                    50: 'hsl(var(--neutral-50))', 100: 'hsl(var(--neutral-100))', 200: 'hsl(var(--neutral-200))',
+                    300: 'hsl(var(--neutral-300))', 400: 'hsl(var(--neutral-400))', 500: 'hsl(var(--neutral-500))',
+                    600: 'hsl(var(--neutral-600))', 700: 'hsl(var(--neutral-700))', 800: 'hsl(var(--neutral-800))',
+                    900: 'hsl(var(--neutral-900))',
                 },
             },
             boxShadow: {

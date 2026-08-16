@@ -33,7 +33,7 @@ const EVENT_ICON = {
 const EVENT_COLOR = {
   created: "text-brand-blue",
   approved: "text-green-600",
-  rejected: "text-brand-red",
+  rejected: "text-danger-600",
   assigned: "text-brand-ink",
   task: "text-amber-600",
   event: "text-muted-foreground",
@@ -175,7 +175,7 @@ export default function Journal() {
         <button
           type="submit"
           data-testid="journal-search-btn"
-          className="shrink-0 px-5 py-2.5 text-sm font-semibold uppercase tracking-wider bg-brand-ink text-white hover:bg-brand-red transition-colors"
+          className="shrink-0 px-5 py-2.5 text-sm font-semibold uppercase tracking-wider bg-brand-ink text-white hover:bg-brand-600 transition-colors"
         >
           Search
         </button>

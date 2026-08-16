@@ -34,8 +34,10 @@ export function StaleStamp({
       role="status"
       data-testid={testId}
       className={cn(
-        "flex items-center gap-2 rounded-lg border border-caution-200 bg-caution-50 px-3 py-2",
-        "text-sm text-caution-800",
+        // DS-5: the badge tokens, not ramp steps. `bg-caution-50` had no dark
+        // sibling, so this strip stayed cream on a near-black screen.
+        "flex items-center gap-2 rounded-lg border border-badge-pending-line bg-badge-pending px-3 py-2",
+        "text-sm text-badge-pending-fg",
         className
       )}
     >

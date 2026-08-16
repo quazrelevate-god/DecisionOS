@@ -16,13 +16,13 @@ const STATUS_STYLES = {
   in_progress: "bg-brand-blue text-white",
   done: "bg-brand-ink text-white",
   cancelled: "bg-black/10 text-muted-foreground line-through",
-  high: "bg-brand-red text-white",
+  high: "bg-danger-600 text-white",
   medium: "bg-brand-yellow text-black",
   low: "bg-black/10 text-black",
-  overdue: "bg-brand-red text-white",
+  overdue: "bg-danger-600 text-white",
   decision: "bg-brand-blue text-white",
   purchase: "bg-brand-yellow text-black",
-  owner: "bg-brand-red text-white",
+  owner: "bg-brand-600 text-white",
   sales: "bg-white text-black",
   production: "bg-white text-black",
   finance: "bg-white text-black",
@@ -170,7 +170,7 @@ export function DexBadge({ inline = false, className = "" }) {
     return (
       <span
         data-testid="dex-badge-inline"
-        className={`inline-flex items-center gap-1 mr-1.5 text-[10px] font-bold uppercase tracking-wider text-brand-red ${className}`}
+        className={`inline-flex items-center gap-1 mr-1.5 text-[10px] font-bold uppercase tracking-wider text-brand-600 ${className}`}
       >
         <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <path d="M12 2l2.4 5.6L20 10l-5.6 2.4L12 18l-2.4-5.6L4 10l5.6-2.4L12 2z"/>

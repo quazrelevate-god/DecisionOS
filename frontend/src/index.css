@@ -1,30 +1,131 @@
-@import url('https://fonts.googleapis.com/css2?family=Chivo:wght@700;800;900&family=Geist:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Chivo:wght@700;800;900&family=Inter:wght@100..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
+    /* -----------------------------------------------------------------------
+       DS-1 — the colour system, from decision-os-studio @82a225c.
+
+       Three layers, in order, and nothing skips a layer:
+
+         ramps      raw scales, 50..900. No component ever names one directly
+                    except through Tailwind (bg-brand-600, text-danger-700).
+         semantic   what a colour MEANS here — surface, hairline, text-primary,
+                    primary-action. Every one of these resolves to a ramp step.
+         aliases    the shadcn names the existing components already use. They
+                    now point at the semantic layer instead of carrying their
+                    own literals, so there is one place to change a decision.
+
+       One job per ramp, no exceptions:
+         brand    the action to take    (never a status, category or decoration)
+         danger   money or a deadline at risk   (never chrome, borders, sign-out)
+         caution  waiting on the user            (never a generic warning)
+         success  settled, received, on track    (never a brand accent)
+         neutral  everything else                (never anything urgent)
+
+       Colour never carries meaning alone — always paired with a label or icon.
+
+       The source repo's --terminal-* group is deliberately NOT ported: it reads
+       as developer software to a textile-mill owner, and MPWA-12 retires the
+       console block it styled.
+       ----------------------------------------------------------------------- */
     :root {
-        --background: 240 6% 98%;
-        --foreground: 240 10% 4%;
-        --card: 0 0% 100%;
-        --card-foreground: 240 10% 4%;
-        --popover: 0 0% 100%;
-        --popover-foreground: 240 10% 4%;
-        --primary: 4 100% 59%;
-        --primary-foreground: 0 0% 100%;
-        --secondary: 240 5% 96%;
-        --secondary-foreground: 240 10% 4%;
-        --muted: 240 5% 96%;
-        --muted-foreground: 240 4% 44%;
-        --accent: 240 5% 95%;
-        --accent-foreground: 240 10% 4%;
-        --destructive: 4 100% 59%;
+        /* ---- ramps ---- */
+        --brand-50: 236 100% 97%;  --brand-100: 236 100% 94%; --brand-200: 238 100% 89%;
+        --brand-300: 239 100% 82%; --brand-400: 240 88% 71%;  --brand-500: 240 80% 61%;
+        --brand-600: 239 60% 51%;  --brand-700: 238 57% 41%;  --brand-800: 237 56% 33%;
+        --brand-900: 237 52% 26%;
+
+        --danger-50: 0 87% 97%;    --danger-100: 0 94% 94%;   --danger-200: 0 96% 89%;
+        --danger-300: 0 93% 82%;   --danger-400: 0 91% 71%;   --danger-500: 0 84% 60%;
+        --danger-600: 0 72% 51%;   --danger-700: 0 74% 42%;   --danger-800: 0 70% 35%;
+        --danger-900: 0 63% 31%;
+
+        --caution-50: 48 100% 96%; --caution-100: 48 96% 89%; --caution-200: 48 97% 77%;
+        --caution-300: 46 97% 65%; --caution-400: 43 96% 56%; --caution-500: 38 92% 50%;
+        --caution-600: 32 95% 44%; --caution-700: 26 90% 37%; --caution-800: 23 84% 31%;
+        --caution-900: 22 77% 26%;
+
+        --success-50: 136 73% 97%; --success-100: 142 83% 93%; --success-200: 141 79% 85%;
+        --success-300: 142 77% 73%;--success-400: 142 69% 58%; --success-500: 142 71% 45%;
+        --success-600: 142 76% 36%;--success-700: 142 72% 29%; --success-800: 142 61% 24%;
+        --success-900: 144 61% 20%;
+
+        --neutral-50: 210 20% 98%; --neutral-100: 228 20% 95%; --neutral-200: 220 18% 90%;
+        --neutral-300: 217 13% 81%;--neutral-400: 219 11% 65%; --neutral-500: 221 10% 43%;
+        --neutral-600: 215 14% 34%;--neutral-700: 222 13% 26%; --neutral-800: 222 18% 11%;
+        --neutral-900: 223 17% 8%;
+
+        /* ---- semantic · light ---- */
+        --background:       var(--neutral-50);
+        --surface:          0 0% 100%;
+        --surface-raised:   0 0% 100%;
+        --surface-sunken:   var(--neutral-100);
+        --surface-hover:    var(--neutral-50);
+        --text-primary:     var(--neutral-900);
+        --text-secondary:   var(--neutral-600);
+        --text-tertiary:    var(--neutral-500);
+        --text-disabled:    var(--neutral-400);
+        --hairline:         var(--neutral-200);
+        --hairline-strong:  var(--neutral-300);
+        --primary-action:        var(--brand-600);
+        --primary-action-hover:  var(--brand-700);
+        --primary-action-active: var(--brand-800);
+        --on-primary:       0 0% 100%;
+        --focus-ring:       var(--brand-600);
+        --brand-tint:        var(--brand-50);
+        --brand-tint-hover:  var(--brand-100);
+        --brand-tint-border: var(--brand-200);
+        --brand-on-tint:     var(--brand-700);
+
+        /* ---- status badges ---- */
+        --badge-pending-bg:   var(--caution-50);  --badge-pending-fg:   var(--caution-800);  --badge-pending-bd:   var(--caution-200);
+        --badge-directive-bg: var(--brand-50);    --badge-directive-fg: var(--brand-700);    --badge-directive-bd: var(--brand-200);
+        --badge-overdue-bg:   var(--danger-50);   --badge-overdue-fg:   var(--danger-800);   --badge-overdue-bd:   var(--danger-200);
+        --badge-completed-bg: var(--success-50);  --badge-completed-fg: var(--success-800);  --badge-completed-bd: var(--success-200);
+        --badge-neutral-bg:   var(--neutral-100); --badge-neutral-fg:   var(--neutral-600);  --badge-neutral-bd:   var(--neutral-200);
+
+        /* ---- urgency edge (left rail on cards) ---- */
+        --edge-overdue: var(--danger-600);
+        --edge-today:   var(--brand-600);
+        --edge-week:    var(--caution-600);
+        --edge-later:   var(--neutral-300);
+
+        /* ---- destructive ---- */
+        --destructive-border: var(--danger-300);
+        --destructive-text:   var(--danger-700);
+        --destructive-hover:  var(--danger-50);
+
+        /* ---- radius ---- */
+        --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px; --radius-xl: 16px; --radius-pill: 999px;
+        --radius: 12px;
+
+        /* ---- shadow (flat by default — depth comes from the hairline) ---- */
+        --shadow-xs: 0 1px 2px rgba(17,19,24,.04);
+        --shadow-sm: 0 1px 2px rgba(17,19,24,.05), 0 1px 3px rgba(17,19,24,.04);
+        --shadow-md: 0 2px 4px rgba(17,19,24,.04), 0 8px 20px -8px rgba(17,19,24,.10);
+        --shadow-lg: 0 12px 32px -12px rgba(17,19,24,.16);
+
+        /* ---- shadcn aliases — every existing component keeps working ---- */
+        --foreground:            var(--text-primary);
+        --card:                  var(--surface);
+        --card-foreground:       var(--text-primary);
+        --popover:               var(--surface-raised);
+        --popover-foreground:    var(--text-primary);
+        --primary:               var(--primary-action);
+        --primary-foreground:    var(--on-primary);
+        --secondary:             var(--surface-sunken);
+        --secondary-foreground:  var(--text-primary);
+        --muted:                 var(--surface-sunken);
+        --muted-foreground:      var(--text-secondary);
+        --accent:                var(--surface-hover);
+        --accent-foreground:     var(--text-primary);
+        --destructive:           var(--danger-600);
         --destructive-foreground: 0 0% 100%;
-        --border: 240 6% 90%;
-        --input: 240 6% 90%;
-        --ring: 4 100% 59%;
-        --radius: 0.625rem;
+        --border:                var(--hairline);
+        --input:                 var(--hairline);
+        --ring:                  var(--focus-ring);
 
         /* ---------------------------------------------------------------
            MPWA-01 (§5.1) — control heights + the two sub-floor type tiers,
@@ -42,7 +143,13 @@
         --control-h-base: 2.25rem;  /* 36 — shadcn `default` + `icon` */
         --control-h-md: 2.5rem;     /* 40 — shadcn `lg` */
         --control-h-lg: 3rem;       /* 48 — money-committing tier */
-        --text-label: 0.75rem;      /* 12 */
+
+        /* DS-4: the two tiers the type scale puts below MPWA-01's 13px phone
+           floor. 11px is the desktop value from §3.2 and does not move; the
+           media query below lifts both to 13px under lg. No component edits —
+           .text-meta / .text-label read the variable. */
+        --text-label: 0.6875rem;    /* 11 */
+        --text-meta: 0.6875rem;     /* 11 */
 
         /* Tabs are a nested pair: the list is a fixed box and the trigger
            fills it minus p-1, so both need their own tier to stay exact. */
@@ -57,6 +164,7 @@
             --control-h-md: 3rem;       /* 48 */
             --control-h-lg: 3.5rem;     /* 56 */
             --text-label: 0.8125rem;    /* 13 — the hard mobile floor */
+            --text-meta: 0.8125rem;     /* 13 — same floor */
 
             --tabs-list-h: 3.25rem;     /* 52 = 44 trigger + 8 list padding */
             --tabs-trigger-h: 2.75rem;  /* 44 */
@@ -64,26 +172,45 @@
     }
 
     .dark {
-        --background: 240 6% 7%;
         color-scheme: dark;
-        --foreground: 0 0% 96%;
-        --card: 240 5% 10%;
-        --card-foreground: 0 0% 96%;
-        --popover: 240 6% 9%;
-        --popover-foreground: 0 0% 96%;
-        --primary: 4 100% 62%;
-        --primary-foreground: 0 0% 100%;
-        --secondary: 240 4% 15%;
-        --secondary-foreground: 0 0% 96%;
-        --muted: 240 4% 15%;
-        --muted-foreground: 240 5% 64%;
-        --accent: 240 4% 16%;
-        --accent-foreground: 0 0% 98%;
-        --destructive: 4 100% 62%;
-        --destructive-foreground: 0 0% 100%;
-        --border: 240 4% 18%;
-        --input: 240 4% 18%;
-        --ring: 4 100% 62%;
+
+        --background:       223 17% 8%;
+        --surface:          222 18% 11%;
+        --surface-raised:   225 15% 14%;
+        --surface-sunken:   228 16% 6%;
+        --surface-hover:    224 15% 14%;
+        --text-primary:     210 20% 98%;
+        --text-secondary:   217 13% 81%;
+        --text-tertiary:    219 11% 65%;
+        --text-disabled:    221 10% 43%;
+        --hairline:         223 14% 20%;
+        --hairline-strong:  221 13% 28%;
+        --primary-action:        var(--brand-500);
+        --primary-action-hover:  var(--brand-600);
+        --primary-action-active: var(--brand-700);
+        --focus-ring:       var(--brand-400);
+        --brand-tint:        237 46% 18%;
+        --brand-tint-hover:  237 52% 26%;
+        --brand-tint-border: 238 57% 41%;
+        --brand-on-tint:     var(--brand-300);
+
+        --badge-pending-bg:   29 49% 13%;   --badge-pending-fg:   var(--caution-300); --badge-pending-bd:   35 62% 22%;
+        --badge-directive-bg: 237 46% 18%;  --badge-directive-fg: var(--brand-300);   --badge-directive-bd: 238 57% 41%;
+        --badge-overdue-bg:   0 45% 15%;    --badge-overdue-fg:   var(--danger-300);  --badge-overdue-bd:   0 48% 24%;
+        --badge-completed-bg: 143 39% 13%;  --badge-completed-fg: var(--success-300); --badge-completed-bd: 143 43% 21%;
+        --badge-neutral-bg:   222 15% 22%;  --badge-neutral-fg:   217 13% 81%;        --badge-neutral-bd:   221 13% 28%;
+
+        --edge-overdue: var(--danger-500);
+        --edge-later:   221 13% 28%;
+
+        --destructive-border: 0 48% 24%;
+        --destructive-text:   var(--danger-300);
+        --destructive-hover:  0 45% 15%;
+
+        /* Dark overrides the semantic layer above; the shadcn aliases inherit
+           from :root and follow automatically. Only --destructive needs its own
+           step, because danger-600 is too dark to read on a dark surface. */
+        --destructive:      var(--danger-500);
     }
 }
 
@@ -124,7 +251,7 @@
     .dark .text-black\/40 { color: rgba(244,244,245,0.48); }
     .dark .text-muted-foreground { color: hsl(240 5% 64%); }
     .dark .text-brand-blue { color: #6ea8ff; }
-    .dark .hover\:text-brand-red:hover { color: #ff6b62; }
+    .dark .hover\:text-brand-600:hover { color: hsl(239 100% 82%); } /* brand-300 */
     .dark .text-green-600 { color: #4ade80; }
     .dark .text-amber-600 { color: #fbbf24; }
     .dark .text-orange-600, .dark .text-orange-500 { color: #fb923c; }
@@ -284,24 +411,139 @@
     * {
         @apply border-border;
     }
+    /* DS-3 — Geist is dropped. It was still hardcoded here, which is why the
+       app rendered in Geist even after tailwind.config.js said Inter: this rule
+       is more specific than the utility and won every time.
+
+       Inter is loaded on the VARIABLE axis (wght@100..900) at the top of this
+       file. That is not optional — .text-h3 asks for weight 650, which only
+       exists on a variable face. With static weights it silently rounds to 700
+       and the h2/h3 distinction disappears.
+
+       Chivo stays, on .font-logo only. The wordmark is identity, not theme. */
     body {
         @apply bg-background text-foreground;
-        font-family: 'Geist', system-ui, sans-serif;
+        font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+        font-size: 14px;
+        line-height: 21px;
+        letter-spacing: -0.011em;
+        /* Money columns align down a list without every call-site opting in. */
+        font-variant-numeric: tabular-nums lining-nums;
         -webkit-font-smoothing: antialiased;
-        letter-spacing: -0.006em;
     }
     h1, h2, h3, h4, .font-heading {
-        font-family: 'Geist', system-ui, sans-serif;
+        font-family: 'Inter', system-ui, sans-serif;
         letter-spacing: -0.02em;
     }
     .font-logo {
         font-family: 'Chivo', sans-serif;
     }
+    :focus-visible {
+        outline: 2px solid hsl(var(--focus-ring));
+        outline-offset: 2px;
+    }
     ::selection {
-        background: #FF3B30;
-        color: #fff;
+        background: hsl(var(--primary));
+        color: hsl(var(--on-primary));
     }
 }
+
+/* ---------------------------------------------------------------------------
+   DS-4 — the type scale (§3.2).
+
+   Hierarchy here is carried by WEIGHT and COLOUR, not by size. That is why the
+   steps sit close together: 22 / 17 / 15 / 14. Do not widen them "for clarity" —
+   the tight ladder is what stops a mobile screen reading as a poster.
+
+   `display` and `h1` step up at >= 640px; everything else is one size at every
+   width. `meta` and `label` are the exception in the other direction: they are
+   11px on desktop and lift to 13px below lg, because MPWA-01 set a hard 13px
+   floor on phones. Both read a custom property, so no component ever branches.
+
+   No uppercase anywhere. A label separates from body through three cues at once
+   — smaller, heavier, tertiary colour. `text-transform` is never one of them.
+
+   Deliberately NOT inside `@layer utilities`: Tailwind tree-shakes custom rules
+   in that layer against the content glob, so a scale no component has adopted
+   yet gets stripped and every tier silently falls back to the body default.
+   (Measured: text-h3 computed 14px/400 instead of 15px/650.) Plain CSS after
+   `@tailwind utilities` is never purged and still sits after the utilities layer
+   in source order, so an explicit override on a call-site still wins.
+   --------------------------------------------------------------------------- */
+    .text-display {
+        font-size: 1.75rem;        /* 28 */
+        line-height: 1.15;
+        letter-spacing: -0.028em;
+        font-weight: 800;
+    }
+    .text-h1 {
+        font-size: 1.375rem;       /* 22 */
+        line-height: 1.2;
+        letter-spacing: -0.024em;
+        font-weight: 700;
+    }
+    @media (min-width: 640px) {
+        .text-display { font-size: 2.125rem; }  /* 34 */
+        .text-h1      { font-size: 1.5rem;   }  /* 24 */
+    }
+    .text-h2 {
+        font-size: 1.0625rem;      /* 17 */
+        line-height: 1.3;
+        letter-spacing: -0.020em;
+        font-weight: 700;
+    }
+    .text-h3 {
+        font-size: 0.9375rem;      /* 15 */
+        line-height: 1.35;
+        letter-spacing: -0.017em;
+        /* 650 exists only on a variable face. If this computes to 700, the
+           Inter variable axis did not load — see the @import at the top. */
+        font-weight: 650;
+    }
+    .text-body {
+        font-size: 0.875rem;       /* 14 */
+        line-height: 1.5;
+        letter-spacing: -0.011em;
+        font-weight: 400;
+    }
+    .text-body-strong {
+        font-size: 0.875rem;       /* 14 */
+        line-height: 1.5;
+        letter-spacing: -0.011em;
+        font-weight: 600;
+    }
+    .text-lead {
+        font-size: 0.9375rem;      /* 15 */
+        line-height: 1.55;
+        letter-spacing: -0.013em;
+        font-weight: 400;
+    }
+    .text-small {
+        font-size: 0.8125rem;      /* 13 */
+        line-height: 1.45;
+        letter-spacing: -0.006em;
+        font-weight: 400;
+    }
+    /* 11px desktop, 13px below lg — the variable is defined in the token block. */
+    .text-meta {
+        font-size: var(--text-meta);
+        line-height: 1.4;
+        letter-spacing: -0.004em;
+        font-weight: 400;
+    }
+    .text-label {
+        font-size: var(--text-label);
+        line-height: 1.35;
+        letter-spacing: 0.008em;
+        font-weight: 600;
+    }
+    .text-code {
+        font-family: 'IBM Plex Mono', ui-monospace, monospace;
+        font-size: 0.8125rem;      /* 13 */
+        line-height: 22px;
+        letter-spacing: 0;
+        font-weight: 400;
+    }
 
 @layer components {
     /* Modern card: hairline border + soft layered depth (was hard brutalist box) */
@@ -326,9 +568,9 @@
 ::-webkit-scrollbar-thumb { background: hsl(240 6% 82%); border: 2px solid transparent; background-clip: padding-box; border-radius: 8px; }
 
 @keyframes pulse-ring {
-    0% { box-shadow: 0 0 0 0 rgba(255,59,48,0.5); }
-    70% { box-shadow: 0 0 0 22px rgba(255,59,48,0); }
-    100% { box-shadow: 0 0 0 0 rgba(255,59,48,0); }
+    0% { box-shadow: 0 0 0 0 hsl(var(--destructive) / .5); }
+    70% { box-shadow: 0 0 0 22px hsl(var(--destructive) / 0); }
+    100% { box-shadow: 0 0 0 0 hsl(var(--destructive) / 0); }
 }
 .recording-pulse { animation: pulse-ring 1.5s infinite; }
 
@@ -336,8 +578,8 @@
 @keyframes constellation-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 .constellation-spin { animation: constellation-spin 44s linear infinite; }
 @keyframes thinking-glow {
-    0%, 100% { opacity: 0.7; text-shadow: 0 0 18px rgba(255,59,48,0.35); }
-    50%      { opacity: 1;   text-shadow: 0 0 46px rgba(255,59,48,0.85); }
+    0%, 100% { opacity: 0.7; text-shadow: 0 0 18px rgba(55,58,205,0.35); }
+    50%      { opacity: 1;   text-shadow: 0 0 46px rgba(55,58,205,0.85); }
 }
 .thinking-text { animation: thinking-glow 2.2s ease-in-out infinite; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -346,7 +588,7 @@
 .app-canvas {
     background-color: hsl(var(--background));
     background-image:
-        radial-gradient(70% 45% at 50% -6%, rgba(255,59,48,0.06), transparent 62%),
+        radial-gradient(70% 45% at 50% -6%, rgba(55,58,205,0.06), transparent 62%),
         radial-gradient(hsl(var(--border)) 0.6px, transparent 0.6px);
     background-size: 100% 100%, 24px 24px;
     background-position: 0 0, 0 0;
@@ -366,4 +608,39 @@
 .es-reveal { opacity: 0; animation: es-reveal-kf 0.45s ease-out forwards; }
 @media (prefers-reduced-motion: reduce) {
   .es-reveal { animation: none; opacity: 1; }
+}
+
+/* ---------------------------------------------------------------------------
+   Motion — ported from decision-os-studio src/styles.css. These are what make
+   the Dex capture surface feel alive rather than like a form.
+   --------------------------------------------------------------------------- */
+@layer utilities {
+    @keyframes ds-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+    .ds-skeleton { background-color: hsl(var(--muted)); animation: ds-pulse 1.6s ease-in-out infinite; }
+
+    /* recording ring: see .recording-pulse above — already wired into DexFab. */
+
+    @keyframes wave-bar { 0%, 100% { transform: scaleY(.25); } 50% { transform: scaleY(1); } }
+    .wave-bar { transform-origin: center; animation: wave-bar 1s ease-in-out infinite; }
+
+    @keyframes halo-breathe {
+        0%, 100% { transform: scale(1);    opacity: .35; }
+        50%      { transform: scale(1.12); opacity: .60; }
+    }
+    .halo-breathe { animation: halo-breathe 3s ease-in-out infinite; }
+
+    @keyframes soft-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+    .soft-rise { animation: soft-rise 260ms cubic-bezier(.22, 1, .36, 1) both; }
+
+    @keyframes ring-flash {
+        0%, 100%  { box-shadow: 0 0 0 0 transparent; }
+        30%, 70%  { box-shadow: 0 0 0 3px hsl(var(--primary) / .35); }
+    }
+    .flash-ring { animation: ring-flash 1.8s ease-in-out 1; }
+
+    @media (prefers-reduced-motion: reduce) {
+        .ds-skeleton, .wave-bar, .halo-breathe, .soft-rise, .flash-ring {
+            animation: none !important;
+        }
+    }
 }

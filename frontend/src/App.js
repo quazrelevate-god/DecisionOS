@@ -48,7 +48,7 @@ function AccessDenied() {
   const navigate = useNavigate();
   return (
     <div className="max-w-lg mx-auto text-center py-20" data-testid="access-denied">
-      <div className="w-16 h-16 mx-auto flex items-center justify-center border-2 border-black bg-brand-red text-white mb-6">
+      <div className="w-16 h-16 mx-auto flex items-center justify-center border-2 border-black bg-brand-600 text-white mb-6">
         <LockKey size={30} weight="bold" />
       </div>
       <h1 className="font-heading text-4xl font-black tracking-tighter uppercase">Access Denied</h1>

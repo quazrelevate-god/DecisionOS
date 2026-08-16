@@ -32,7 +32,7 @@ const ABSENCE_REASONS = [
 const STATUS_META = {
   pending: { label: "Pending", cls: "bg-brand-yellow text-black" },
   approved: { label: "Approved", cls: "bg-green-600 text-white" },
-  rejected: { label: "Rejected", cls: "bg-brand-red text-white" },
+  rejected: { label: "Rejected", cls: "bg-danger-600 text-white" },
   info_requested: { label: "Info Requested", cls: "bg-orange-500 text-white" },
 };
 const inp = "w-full border border-black px-3 py-2 text-sm font-mono focus:outline-none focus:shadow-brutal-sm";
@@ -93,7 +93,7 @@ function RequestLeaveDialog({ onDone }) {
           <textarea data-testid="leave-reason-input" className={inp} rows={2} placeholder="Reason" value={form.reason} onChange={set("reason")} />
         </div>
         <DialogFooter>
-          <button data-testid="leave-submit" onClick={submit} className="bg-brand-red text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">Submit</button>
+          <button data-testid="leave-submit" onClick={submit} className="bg-brand-600 text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">Submit</button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -115,7 +115,7 @@ function AbsenceDialog({ onDone }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <button data-testid="report-absence-button" className="flex items-center gap-2 bg-brand-red text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
+        <button data-testid="report-absence-button" className="flex items-center gap-2 bg-brand-600 text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
           <WarningOctagon size={16} weight="bold" /> Report Absence Today
         </button>
       </DialogTrigger>
@@ -134,7 +134,7 @@ function AbsenceDialog({ onDone }) {
           <textarea data-testid="absence-note-input" className={inp} rows={2} placeholder="Optional note" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
         </div>
         <DialogFooter>
-          <button data-testid="absence-submit" onClick={submit} className="bg-brand-red text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">Notify Now</button>
+          <button data-testid="absence-submit" onClick={submit} className="bg-brand-600 text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">Notify Now</button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -205,7 +205,7 @@ function ImpactDialog({ leaveId, open, onOpenChange, onApplied }) {
       <DialogContent className="border border-black rounded-none max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="leave-impact-dialog">
         <DialogHeader>
           <DialogTitle className="font-heading uppercase tracking-tight flex items-center gap-2">
-            <Sparkle size={18} weight="fill" className="text-brand-red" /> AI Impact Analysis
+            <Sparkle size={18} weight="fill" className="text-brand-600" /> AI Impact Analysis
           </DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
             {data ? `What ${data.person}'s leave affects, and how to keep work on track.` : "Checking active tasks affected by this leave…"}
@@ -214,7 +214,7 @@ function ImpactDialog({ leaveId, open, onOpenChange, onApplied }) {
 
         {loading && (
           <div className="flex flex-col items-center justify-center py-12 text-muted-foreground" data-testid="impact-loading">
-            <CircleNotch size={34} weight="bold" className="animate-spin text-brand-red" />
+            <CircleNotch size={34} weight="bold" className="animate-spin text-brand-600" />
             <p className="text-sm mt-3">Analyzing workload &amp; suggesting cover…</p>
           </div>
         )}
@@ -308,7 +308,7 @@ function LeaveCard({ lv, canAct, onRefresh, highlight }) {
   };
 
   return (
-    <div data-testid={`leave-card-${lv.id}`} className={`card-brutal p-4 transition-all ${highlight ? "ring-4 ring-brand-red ring-offset-2" : ""}`}>
+    <div data-testid={`leave-card-${lv.id}`} className={`card-brutal p-4 transition-all ${highlight ? "ring-4 ring-brand-600 ring-offset-2" : ""}`}>
       <div className="flex items-center gap-1.5 flex-wrap mb-2">
         <Chip value={st.label} className={st.cls} data-testid={`leave-status-${lv.id}`} />
         <Chip value={typeLabel(lv.leave_type)} className="bg-brand-blue text-white" />
@@ -344,7 +344,7 @@ function LeaveCard({ lv, canAct, onRefresh, highlight }) {
                 <CheckCircle size={14} weight="bold" /> Approve
               </button>
               <button onClick={() => setAction("reject")} data-testid={`leave-reject-${lv.id}`}
-                className="flex items-center gap-1 bg-white py-1.5 px-3 text-xs font-semibold uppercase tracking-wider border border-black hover:bg-brand-red hover:text-white transition-colors">
+                className="flex items-center gap-1 bg-white py-1.5 px-3 text-xs font-semibold uppercase tracking-wider border border-black hover:bg-brand-600 hover:text-white transition-colors">
                 <XCircle size={14} weight="bold" /> Reject
               </button>
               <button onClick={() => setAction("info")} data-testid={`leave-info-${lv.id}`}
@@ -359,7 +359,7 @@ function LeaveCard({ lv, canAct, onRefresh, highlight }) {
                 value={note} onChange={(e) => setNote(e.target.value)} />
               <div className="flex gap-2">
                 <button onClick={() => decide(action === "reject" ? "reject" : "request-info")} data-testid={`leave-confirm-${lv.id}`}
-                  className="flex-1 bg-brand-ink text-white py-1.5 text-xs font-semibold uppercase tracking-wider border border-black hover:bg-brand-red transition-colors">
+                  className="flex-1 bg-brand-ink text-white py-1.5 text-xs font-semibold uppercase tracking-wider border border-black hover:bg-brand-600 transition-colors">
                   {action === "reject" ? "Confirm Reject" : "Send Request"}
                 </button>
                 <button onClick={() => { setAction(null); setNote(""); }} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-black hover:bg-black/5">Cancel</button>
@@ -387,7 +387,7 @@ function ApproverConfig({ roleOptions, members }) {
   };
   return (
     <div className="card-brutal p-4" data-testid="leave-approver-config">
-      <div className="flex items-center gap-2 mb-1"><Gear size={18} weight="bold" className="text-brand-red" />
+      <div className="flex items-center gap-2 mb-1"><Gear size={18} weight="bold" className="text-brand-600" />
         <h3 className="font-heading text-lg font-extrabold uppercase tracking-tight">Leave Approvers by Department</h3></div>
       <p className="text-xs text-muted-foreground mb-3">Choose who approves leave for each role. If an employee has a Reporting Manager set (in People → Employees), that manager takes priority. Otherwise this mapping is used, then the Owner.</p>
       <div className="space-y-2">
@@ -453,7 +453,7 @@ export default function Leave({ embedded = false }) {
           <button key={t.key} onClick={() => setTab(t.key)} data-testid={`leave-tab-${t.key}`}
             className={`flex items-center gap-2 px-5 py-2.5 text-sm font-semibold uppercase tracking-wider border-r border-black last:border-r-0 transition-colors ${tab === t.key ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
             {t.label}
-            {t.n > 0 && <span className={`min-w-5 h-5 px-1 flex items-center justify-center text-[10px] border border-black ${tab === t.key ? "bg-white text-black" : "bg-brand-red text-white"}`}>{t.n}</span>}
+            {t.n > 0 && <span className={`min-w-5 h-5 px-1 flex items-center justify-center text-[10px] border border-black ${tab === t.key ? "bg-white text-black" : "bg-brand-600 text-white"}`}>{t.n}</span>}
           </button>
         ))}
       </div>

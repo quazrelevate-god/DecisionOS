@@ -49,7 +49,7 @@ const Stat = ({ label, value, accent, testid }) => (
 const Section = ({ icon: Icon, title, count, children }) => (
   <div className="mb-8">
     <div className="flex items-center gap-2 mb-3">
-      <Icon size={18} weight="bold" className="text-brand-red" />
+      <Icon size={18} weight="bold" className="text-brand-600" />
       <h2 className="font-heading text-xl font-extrabold uppercase tracking-tight">{title}</h2>
       {count != null && <span className="label-mono text-muted-foreground">({count})</span>}
     </div>
@@ -139,8 +139,8 @@ export default function ContactProfile() {
   const rel = ai_relationship;
 
   const ScoreBox = ({ label, value, Icon, good }) => {
-    const color = value == null ? "text-black/30" : good ? (value >= 60 ? "text-green-600" : value >= 30 ? "text-amber-600" : "text-brand-red")
-      : (value >= 60 ? "text-brand-red" : value >= 30 ? "text-amber-600" : "text-green-600");
+    const color = value == null ? "text-black/30" : good ? (value >= 60 ? "text-green-600" : value >= 30 ? "text-amber-600" : "text-brand-600")
+      : (value >= 60 ? "text-brand-600" : value >= 30 ? "text-amber-600" : "text-green-600");
     return (
       <div className="flex items-center gap-3" data-testid={`rel-${label.toLowerCase()}`}>
         <div className="w-14 h-14 flex flex-col items-center justify-center border-2 border-black bg-white shrink-0">
@@ -157,7 +157,7 @@ export default function ContactProfile() {
 
   return (
     <div>
-      <button onClick={() => navigate("/contacts")} data-testid="profile-back" className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider mb-4 hover:text-brand-red transition-colors">
+      <button onClick={() => navigate("/contacts")} data-testid="profile-back" className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider mb-4 hover:text-brand-600 transition-colors">
         <ArrowLeft size={16} weight="bold" /> Back to People
       </button>
 
@@ -179,7 +179,7 @@ export default function ContactProfile() {
 
       {/* Financial summary */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
-        <Stat testid="stat-outstanding" label="Outstanding" value={money(summary.outstanding, cur)} accent={summary.outstanding > 0 ? "text-brand-red" : "text-brand-ink"} />
+        <Stat testid="stat-outstanding" label="Outstanding" value={money(summary.outstanding, cur)} accent={summary.outstanding > 0 ? "text-brand-600" : "text-brand-ink"} />
         <Stat testid="stat-billed" label={isVendor ? "Total Billed" : "Total Invoiced"} value={money(summary.total_billed, cur)} />
         <Stat testid="stat-paid" label="Total Paid" value={money(summary.total_paid, cur)} />
         <Stat testid="stat-complaints" label="Open Complaints" value={summary.open_complaints} accent={summary.open_complaints > 0 ? "text-purple-600" : ""} />

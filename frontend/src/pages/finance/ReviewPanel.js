@@ -165,7 +165,7 @@ export default function ReviewPanel({ ingestion, onFiled, onCancel }) {
       <div className="flex items-start justify-between gap-3 mb-4 flex-wrap">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <Sparkle size={18} weight="fill" className="text-brand-red" />
+            <Sparkle size={18} weight="fill" className="text-brand-600" />
             <span className="font-heading font-black uppercase tracking-tight text-lg">Review extracted data</span>
           </div>
           <p className="text-sm text-muted-foreground">{ingestion.summary || ingestion.filename}</p>
@@ -183,7 +183,7 @@ export default function ReviewPanel({ ingestion, onFiled, onCancel }) {
             Discard
           </button>
           <button data-testid="ingest-file-button" disabled={filing || total === 0} onClick={fileIt}
-            className="flex items-center gap-2 bg-brand-red text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all disabled:opacity-50">
+            className="flex items-center gap-2 bg-brand-600 text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all disabled:opacity-50">
             <CheckCircle size={16} weight="bold" /> {filing ? "Filing…" : "File it"}
           </button>
         </div>
@@ -192,8 +192,8 @@ export default function ReviewPanel({ ingestion, onFiled, onCancel }) {
       {total === 0 && <EmptyState title="Nothing detected" hint="The AI couldn't pull structured records from this file." />}
 
       {total > 0 && (
-        <div className="border-l-4 border-brand-red bg-brand-paper p-3 mb-5 flex items-start gap-2" data-testid="ingest-direction-banner">
-          <ArrowsLeftRight size={18} weight="bold" className="text-brand-red shrink-0 mt-0.5" />
+        <div className="border-l-4 border-brand-600 bg-brand-paper p-3 mb-5 flex items-start gap-2" data-testid="ingest-direction-banner">
+          <ArrowsLeftRight size={18} weight="bold" className="text-brand-600 shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-bold uppercase tracking-tight">{hint.label}</p>
             <p className="text-xs text-muted-foreground">{hint.desc} Use the dropdowns below to flip a party between <b>{L.customer_singular.toLowerCase()}</b> and <b>{L.vendor_singular.toLowerCase()}</b>, or the invoice between <b>sales</b> and <b>purchase</b>, before filing.</p>
@@ -211,7 +211,7 @@ export default function ReviewPanel({ ingestion, onFiled, onCancel }) {
       {/* Contacts */}
       {(records.contacts || []).length > 0 && (
         <div className="mb-5" data-testid="review-contacts">
-          <p className="label-mono text-brand-red mb-2 flex items-center gap-1"><UsersThree size={14} weight="bold" /> {L.customer_plural} & {L.vendor_plural} ({records.contacts.length})</p>
+          <p className="label-mono text-brand-600 mb-2 flex items-center gap-1"><UsersThree size={14} weight="bold" /> {L.customer_plural} & {L.vendor_plural} ({records.contacts.length})</p>
           <div className="space-y-2">
             {records.contacts.map((c, i) => (
               <div key={c._key} className={`border p-3 grid grid-cols-2 md:grid-cols-4 gap-2 relative ${isOwnCompany(c.name, ownNorm) ? "border-brand-yellow bg-brand-yellow/20" : "border-black/20"}`} data-testid={`review-contact-${i}`}>
@@ -219,7 +219,7 @@ export default function ReviewPanel({ ingestion, onFiled, onCancel }) {
                 <Field label="Name" value={c.name} onChange={(v) => setItem("contacts", i, "name", v)} />
                 <Field label="Phone" value={c.phone} onChange={(v) => setItem("contacts", i, "phone", v)} />
                 <Field label="Email" value={c.email} onChange={(v) => setItem("contacts", i, "email", v)} />
-                <button onClick={() => removeItem("contacts", i)} data-testid={`remove-contact-${i}`} className="absolute -top-2 -right-2 w-6 h-6 flex items-center justify-center border border-black bg-white hover:bg-brand-red hover:text-white transition-colors"><Trash size={12} weight="bold" /></button>
+                <button onClick={() => removeItem("contacts", i)} data-testid={`remove-contact-${i}`} className="absolute -top-2 -right-2 w-6 h-6 flex items-center justify-center border border-black bg-white hover:bg-danger-600 hover:text-white transition-colors"><Trash size={12} weight="bold" /></button>
               </div>
             ))}
           </div>
@@ -229,19 +229,19 @@ export default function ReviewPanel({ ingestion, onFiled, onCancel }) {
       {/* Invoices */}
       {(records.invoices || []).length > 0 && (
         <div className="mb-5" data-testid="review-invoices">
-          <p className="label-mono text-brand-red mb-2 flex items-center gap-1"><Receipt size={14} weight="bold" /> Invoices & Bills ({records.invoices.length})</p>
+          <p className="label-mono text-brand-600 mb-2 flex items-center gap-1"><Receipt size={14} weight="bold" /> Invoices & Bills ({records.invoices.length})</p>
           <div className="space-y-2">
             {records.invoices.map((inv, i) => {
               const isPurchase = inv.type === "purchase_bill";
               const pt = (inv.purchase_type || "").toLowerCase();
               const needsBucket = isPurchase && !PURCHASE_TYPE_OPTS.includes(pt);
               return (
-              <div key={inv._key} className={`border p-3 grid grid-cols-2 md:grid-cols-6 gap-2 relative ${needsBucket ? "border-brand-red border-2 bg-brand-red/5" : "border-black/20"}`} data-testid={`review-invoice-${i}`}>
+              <div key={inv._key} className={`border p-3 grid grid-cols-2 md:grid-cols-6 gap-2 relative ${needsBucket ? "border-brand-600 border-2 bg-brand-600/5" : "border-black/20"}`} data-testid={`review-invoice-${i}`}>
                 <SelectField label="Type" value={inv.type} onChange={(v) => setItem("invoices", i, "type", v)} options={INVOICE_TYPE_OPTS} />
                 {isPurchase && (
                   <label className="block" data-testid={`review-invoice-bucket-${i}`}>
-                    <span className="label-mono text-muted-foreground text-[10px]">Book as {needsBucket && <span className="text-brand-red">• pick one</span>}</span>
-                    <select className={`${inp} ${needsBucket ? "ring-2 ring-brand-red" : ""}`} value={pt}
+                    <span className="label-mono text-muted-foreground text-[10px]">Book as {needsBucket && <span className="text-brand-600">• pick one</span>}</span>
+                    <select className={`${inp} ${needsBucket ? "ring-2 ring-brand-600" : ""}`} value={pt}
                       data-testid={`review-invoice-bucket-select-${i}`}
                       onChange={(e) => setItem("invoices", i, "purchase_type", e.target.value)}>
                       <option value="">Choose…</option>
@@ -253,7 +253,7 @@ export default function ReviewPanel({ ingestion, onFiled, onCancel }) {
                 <Field label="Party" value={inv.contact_name} onChange={(v) => setItem("invoices", i, "contact_name", v)} />
                 <Field label="Amount" value={inv.amount} onChange={(v) => setItem("invoices", i, "amount", v)} />
                 <Field label="Due date" value={inv.due_date} onChange={(v) => setItem("invoices", i, "due_date", v)} />
-                <button onClick={() => removeItem("invoices", i)} data-testid={`remove-invoice-${i}`} className="absolute -top-2 -right-2 w-6 h-6 flex items-center justify-center border border-black bg-white hover:bg-brand-red hover:text-white transition-colors"><Trash size={12} weight="bold" /></button>
+                <button onClick={() => removeItem("invoices", i)} data-testid={`remove-invoice-${i}`} className="absolute -top-2 -right-2 w-6 h-6 flex items-center justify-center border border-black bg-white hover:bg-danger-600 hover:text-white transition-colors"><Trash size={12} weight="bold" /></button>
               </div>
             );})}
           </div>
@@ -263,7 +263,7 @@ export default function ReviewPanel({ ingestion, onFiled, onCancel }) {
       {/* Payments */}
       {(records.payments || []).length > 0 && (
         <div className="mb-5" data-testid="review-payments">
-          <p className="label-mono text-brand-red mb-2 flex items-center gap-1"><CurrencyCircleDollar size={14} weight="bold" /> Payments ({records.payments.length})</p>
+          <p className="label-mono text-brand-600 mb-2 flex items-center gap-1"><CurrencyCircleDollar size={14} weight="bold" /> Payments ({records.payments.length})</p>
           <div className="space-y-2">
             {records.payments.map((p, i) => (
               <div key={p._key} className="border border-black/20 p-3 grid grid-cols-2 md:grid-cols-5 gap-2 relative" data-testid={`review-payment-${i}`}>
@@ -272,7 +272,7 @@ export default function ReviewPanel({ ingestion, onFiled, onCancel }) {
                 <Field label="Party" value={p.contact_name} onChange={(v) => setItem("payments", i, "contact_name", v)} />
                 <Field label="Method" value={p.method} onChange={(v) => setItem("payments", i, "method", v)} />
                 <Field label="Reference" value={p.reference} onChange={(v) => setItem("payments", i, "reference", v)} />
-                <button onClick={() => removeItem("payments", i)} data-testid={`remove-payment-${i}`} className="absolute -top-2 -right-2 w-6 h-6 flex items-center justify-center border border-black bg-white hover:bg-brand-red hover:text-white transition-colors"><Trash size={12} weight="bold" /></button>
+                <button onClick={() => removeItem("payments", i)} data-testid={`remove-payment-${i}`} className="absolute -top-2 -right-2 w-6 h-6 flex items-center justify-center border border-black bg-white hover:bg-danger-600 hover:text-white transition-colors"><Trash size={12} weight="bold" /></button>
               </div>
             ))}
           </div>
@@ -282,12 +282,12 @@ export default function ReviewPanel({ ingestion, onFiled, onCancel }) {
       {/* Tasks */}
       {(records.tasks || []).length > 0 && (
         <div className="mb-1" data-testid="review-tasks">
-          <p className="label-mono text-brand-red mb-2 flex items-center gap-1"><ListChecks size={14} weight="bold" /> Follow-up tasks ({records.tasks.length})</p>
+          <p className="label-mono text-brand-600 mb-2 flex items-center gap-1"><ListChecks size={14} weight="bold" /> Follow-up tasks ({records.tasks.length})</p>
           <div className="space-y-2">
             {records.tasks.map((t, i) => (
               <div key={t._key} className="border border-black/20 p-3 flex items-center gap-2 relative" data-testid={`review-task-${i}`}>
                 <input className={inp} value={t.title ?? ""} onChange={(e) => setItem("tasks", i, "title", e.target.value)} />
-                <button onClick={() => removeItem("tasks", i)} data-testid={`remove-task-${i}`} className="shrink-0 w-8 h-8 flex items-center justify-center border border-black bg-white hover:bg-brand-red hover:text-white transition-colors"><Trash size={12} weight="bold" /></button>
+                <button onClick={() => removeItem("tasks", i)} data-testid={`remove-task-${i}`} className="shrink-0 w-8 h-8 flex items-center justify-center border border-black bg-white hover:bg-danger-600 hover:text-white transition-colors"><Trash size={12} weight="bold" /></button>
               </div>
             ))}
           </div>

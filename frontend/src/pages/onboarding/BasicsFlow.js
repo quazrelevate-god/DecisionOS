@@ -91,7 +91,7 @@ export function BasicsFlow({ form, setForm, onDone }) {
       <AnimatePresence mode="wait">
         <motion.div key={step.key} variants={variants} initial="enter" animate="center" exit="exit"
           transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}>
-          <p className="label-mono text-brand-red mb-3 flex items-center gap-3">
+          <p className="label-mono text-brand-600 mb-3 flex items-center gap-3">
             <span className="tabular-nums text-muted-foreground">{String(idx + 1).padStart(2, "0")}</span>
             {step.eyebrow}
           </p>
@@ -122,7 +122,7 @@ export function BasicsFlow({ form, setForm, onDone }) {
                 value={value}
                 onChange={(e) => setVal(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); advance(); } }}
-                className="w-full bg-transparent border-b-2 border-black py-3 pr-12 font-heading text-2xl sm:text-3xl font-bold tracking-tight placeholder:text-black/20 placeholder:font-normal focus:outline-none focus:border-brand-red transition-colors"
+                className="w-full bg-transparent border-b-2 border-black py-3 pr-12 font-heading text-2xl sm:text-3xl font-bold tracking-tight placeholder:text-black/20 placeholder:font-normal focus:outline-none focus:border-brand-600 transition-colors"
               />
               {step.type === "password" && (
                 <button type="button" onClick={() => setShowPw(!showPw)} data-testid="signup-toggle-password"
@@ -134,7 +134,7 @@ export function BasicsFlow({ form, setForm, onDone }) {
           )}
 
           {error && <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} data-testid="signup-basics-error"
-            className="mt-3 text-sm text-brand-red font-semibold">{error}</motion.p>}
+            className="mt-3 text-sm text-danger-600 font-semibold">{error}</motion.p>}
 
           {step.type !== "chips" && (
             <div className="mt-8 flex items-center gap-4">

@@ -29,7 +29,7 @@ export default function ExecutionSummary({ data, onReview, onClose }) {
     { key: "tasks", icon: CheckSquare, value: s.tasks, label: (n) => plural(n, "task created", "tasks created"), color: "bg-brand-ink" },
     { key: "assignees", icon: UsersThree, value: s.assignees, label: (n) => plural(n, "person assigned", "people assigned"), color: "bg-brand-blue" },
     { key: "workflows", icon: Truck, value: s.workflows, label: (n) => plural(n, "workflow generated", "workflows generated"), color: "bg-brand-ink" },
-    { key: "approvals", icon: SealCheck, value: s.approvals, label: (n) => plural(n, "approval to review", "approvals to review"), color: "bg-brand-red" },
+    { key: "approvals", icon: SealCheck, value: s.approvals, label: (n) => plural(n, "approval to review", "approvals to review"), color: "bg-brand-600" },
     { key: "meetings", icon: CalendarCheck, value: s.meetings, label: (n) => plural(n, "meeting scheduled", "meetings scheduled"), color: "bg-brand-ink" },
     { key: "reminders", icon: BellRinging, value: s.reminders, label: (n) => plural(n, "reminder set", "reminders set"), color: "bg-brand-ink" },
   ].filter((c) => (c.value || 0) > 0);
@@ -40,7 +40,7 @@ export default function ExecutionSummary({ data, onReview, onClose }) {
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="border-2 border-black rounded-none max-w-lg p-0 overflow-hidden" data-testid="execution-summary-panel">
         <div className="bg-brand-ink text-white px-6 py-5">
-          <div className="flex items-center gap-2 text-brand-red">
+          <div className="flex items-center gap-2 text-brand-600">
             <Lightning size={18} weight="fill" />
             <span className="label-mono">Structured in seconds</span>
           </div>
@@ -73,14 +73,14 @@ export default function ExecutionSummary({ data, onReview, onClose }) {
 
           <p className="mt-5 text-sm font-semibold es-reveal" style={{ animationDelay: `${chips.length * 120 + 150}ms` }} data-testid="es-closing-line">
             {hasApprovals
-              ? <>Approve the decision below to <span className="text-brand-red">activate execution</span> across your team.</>
-              : <>Your company is <span className="text-brand-red">ready to execute</span> today's priorities.</>}
+              ? <>Approve the decision below to <span className="text-brand-600">activate execution</span> across your team.</>
+              : <>Your company is <span className="text-brand-600">ready to execute</span> today's priorities.</>}
           </p>
 
           <div className="mt-5 flex gap-2">
             {hasApprovals && (
               <button onClick={onReview} data-testid="es-review-btn"
-                className="flex-1 flex items-center justify-center gap-2 bg-brand-red text-white px-4 py-2.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">
+                className="flex-1 flex items-center justify-center gap-2 bg-brand-600 text-white px-4 py-2.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">
                 Review &amp; approve <ArrowRight size={15} weight="bold" />
               </button>
             )}

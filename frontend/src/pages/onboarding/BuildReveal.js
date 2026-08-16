@@ -174,7 +174,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
         {stage === "building" && (
           <motion.div key="building" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
             className="text-center">
-            <p className="label-mono text-brand-red mb-2 flex items-center justify-center gap-2">
+            <p className="label-mono text-brand-600 mb-2 flex items-center justify-center gap-2">
               <Sparkle size={14} weight="fill" /> {refining ? "Dex is rewiring your OS" : "Meet Dex — your build engineer"}
             </p>
             <h1 className="font-heading text-3xl sm:text-4xl lg:text-5xl font-black uppercase tracking-tighter leading-[1.02] mb-6">
@@ -187,7 +187,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
               <>
                 <div className="mt-8 max-w-md mx-auto">
                   <div className="h-4 border-2 border-black bg-white overflow-hidden" data-testid="build-progress-bar">
-                    <motion.div className="h-full bg-brand-red" animate={{ width: `${pct}%` }} transition={{ duration: 0.4, ease: "easeOut" }} />
+                    <motion.div className="h-full bg-brand-600" animate={{ width: `${pct}%` }} transition={{ duration: 0.4, ease: "easeOut" }} />
                   </div>
                   <div className="flex items-center justify-between mt-2">
                     <AnimatePresence mode="wait">
@@ -208,7 +208,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
 
             {error && (
               <div className="mt-8">
-                <p data-testid="build-error" className="text-sm text-brand-red font-semibold mb-3">{error}</p>
+                <p data-testid="build-error" className="text-sm text-danger-600 font-semibold mb-3">{error}</p>
                 <button onClick={generate} data-testid="build-retry"
                   className="bg-brand-ink text-white text-sm font-semibold uppercase tracking-wider px-6 py-3 border border-black hover:shadow-brutal transition-all">
                   Try again
@@ -222,7 +222,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
         {stage === "preview" && bp && (
           <motion.div key="preview" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }}
             data-testid="signup-build-preview">
-            <p className="label-mono text-brand-red mb-3">Draft ready · review before you enter</p>
+            <p className="label-mono text-brand-600 mb-3">Draft ready · review before you enter</p>
             <h1 className="font-heading text-3xl sm:text-4xl lg:text-5xl font-black uppercase tracking-tighter leading-[1.02] mb-4">
               Here&apos;s how {payload.company_name} will run on DecisionOS.
             </h1>
@@ -247,12 +247,12 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
             {/* Refine panel — voice or type */}
             <div className="border border-black bg-white shadow-brutal-sm p-4 mb-6" data-testid="build-refine-panel">
               <div className="flex items-center justify-between mb-3">
-                <p className="label-mono text-brand-red flex items-center gap-2">
+                <p className="label-mono text-brand-600 flex items-center gap-2">
                   <PencilSimple size={14} weight="bold" /> Missing something? Tell Dex.
                 </p>
                 {!showRefine && (
                   <button onClick={() => setShowRefine(true)} data-testid="build-refine-open"
-                    className="text-[11px] font-semibold uppercase tracking-wider text-brand-ink underline underline-offset-4 hover:text-brand-red">
+                    className="text-[11px] font-semibold uppercase tracking-wider text-brand-ink underline underline-offset-4 hover:text-brand-600">
                     Add a workflow
                   </button>
                 )}
@@ -278,7 +278,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
                       data-testid="build-refine-mic"
                       onClick={recorder.recording ? recorder.stop : recorder.start}
                       disabled={refining || recorder.transcribing}
-                      className={`flex items-center gap-2 px-3 py-2 border border-black text-xs font-semibold uppercase tracking-wider transition-all disabled:opacity-50 ${recorder.recording ? "bg-brand-red text-white animate-pulse" : "bg-white hover:bg-black/5"}`}>
+                      className={`flex items-center gap-2 px-3 py-2 border border-black text-xs font-semibold uppercase tracking-wider transition-all disabled:opacity-50 ${recorder.recording ? "bg-brand-600 text-white animate-pulse" : "bg-white hover:bg-black/5"}`}>
                       {recorder.transcribing ? <CircleNotch size={14} className="animate-spin" />
                         : recorder.recording ? <Stop size={14} weight="fill" /> : <Microphone size={14} weight="bold" />}
                       {recorder.transcribing ? "Transcribing…" : recorder.recording ? "Stop" : "Speak"}
@@ -300,15 +300,15 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
                 (e.g. reserved TLD like .test) actually catch the eye
                 instead of vanishing into a small red line. */}
             {error && (
-              <div className="mb-4 border-2 border-brand-red bg-brand-red/10 p-4 shadow-brutal-sm" data-testid="build-error-banner">
-                <p className="text-sm font-bold text-brand-red uppercase tracking-wider mb-1">Couldn't create your workspace</p>
-                <p className="text-sm text-brand-red font-semibold" data-testid="build-error">{error}</p>
+              <div className="mb-4 border-2 border-danger-600 bg-danger-600/10 p-4 shadow-brutal-sm" data-testid="build-error-banner">
+                <p className="text-sm font-bold text-brand-600 uppercase tracking-wider mb-1">Couldn't create your workspace</p>
+                <p className="text-sm text-danger-600 font-semibold" data-testid="build-error">{error}</p>
               </div>
             )}
 
             <div className="flex items-center gap-3">
               <button onClick={confirmAndRegister} disabled={refining} data-testid="build-confirm-button"
-                className="flex items-center gap-2 bg-brand-red text-white font-semibold uppercase tracking-wider px-8 py-4 border border-black hover:shadow-brutal hover:-translate-y-0.5 transition-all disabled:opacity-50">
+                className="flex items-center gap-2 bg-brand-600 text-white font-semibold uppercase tracking-wider px-8 py-4 border border-black hover:shadow-brutal hover:-translate-y-0.5 transition-all disabled:opacity-50">
                 Looks good — Enter DecisionOS <ArrowRight size={18} weight="bold" />
               </button>
             </div>
@@ -319,7 +319,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
         {stage === "registering" && (
           <motion.div key="registering" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
             className="text-center" data-testid="signup-registering">
-            <p className="label-mono text-brand-red mb-2 flex items-center justify-center gap-2">
+            <p className="label-mono text-brand-600 mb-2 flex items-center justify-center gap-2">
               <Sparkle size={14} weight="fill" /> Locking it in
             </p>
             <h1 className="font-heading text-3xl sm:text-4xl lg:text-5xl font-black uppercase tracking-tighter leading-[1.02] mb-6">
@@ -332,7 +332,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
         {/* --------------------------------------------------------- REVEAL */}
         {stage === "reveal" && bp && (
           <motion.div key="reveal" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }}>
-            <p className="label-mono text-brand-red mb-3">Ready</p>
+            <p className="label-mono text-brand-600 mb-3">Ready</p>
             <h1 className="font-heading text-3xl sm:text-4xl lg:text-5xl font-black uppercase tracking-tighter leading-[1.02] mb-4">
               {payload.company_name} now runs on DecisionOS.
             </h1>
@@ -358,7 +358,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
               </div>
             )}
             <button onClick={onEnter} data-testid="signup-enter-button"
-              className="flex items-center gap-2 bg-brand-red text-white font-semibold uppercase tracking-wider px-10 py-4 border border-black hover:shadow-brutal hover:-translate-y-0.5 transition-all">
+              className="flex items-center gap-2 bg-brand-600 text-white font-semibold uppercase tracking-wider px-10 py-4 border border-black hover:shadow-brutal hover:-translate-y-0.5 transition-all">
               Enter DecisionOS <ArrowRight size={18} weight="bold" />
             </button>
           </motion.div>

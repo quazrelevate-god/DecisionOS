@@ -31,7 +31,7 @@ export function LanguageSwitcher({ variant = "icon" }) {
         <button key={l.code} onClick={() => choose(l.code)} data-testid={`lang-option-${l.code}`}
           className="w-full flex items-center justify-between gap-3 px-4 py-2.5 text-sm hover:bg-black/[0.04] transition-colors">
           <span className={current === l.code ? "font-semibold" : ""}>{l.label}</span>
-          {current === l.code && <Check size={16} weight="bold" className="text-brand-red" />}
+          {current === l.code && <Check size={16} weight="bold" className="text-brand-600" />}
         </button>
       ))}
     </div>

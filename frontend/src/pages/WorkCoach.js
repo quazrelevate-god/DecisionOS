@@ -39,7 +39,7 @@ export default function WorkCoach() {
       <div>
         <PageHeader eyebrow="AI Work Coach" title="Access denied" />
         <div className="card-brutal p-8 text-center" data-testid="coach-error">
-          <ShieldWarning size={32} weight="bold" className="text-brand-red mx-auto mb-3" />
+          <ShieldWarning size={32} weight="bold" className="text-brand-600 mx-auto mb-3" />
           <p className="font-heading text-lg font-extrabold uppercase tracking-tight">
             {status === 403 ? "Not allowed" : "Couldn't load coaching"}
           </p>
@@ -73,7 +73,7 @@ export default function WorkCoach() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         <Stat label="Completed Tasks" value={stats.completed} accent="text-green-600" />
         <Stat label="Open" value={stats.open} />
-        <Stat label="Overdue" value={stats.overdue} accent={stats.overdue > 0 ? "text-brand-red" : ""} />
+        <Stat label="Overdue" value={stats.overdue} accent={stats.overdue > 0 ? "text-danger-600" : ""} />
         <Stat label="Completion" value={stats.completion_rate} suffix="%" />
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
@@ -82,7 +82,7 @@ export default function WorkCoach() {
           <div><p className="label-mono text-muted-foreground">Proof uploads</p><p className="font-heading text-xl font-black">{stats.proof_upload_rate}%</p></div>
         </div>
         <div className="card-brutal p-4 flex items-center gap-3">
-          <Target size={22} weight="bold" className="text-brand-red" />
+          <Target size={22} weight="bold" className="text-brand-600" />
           <div><p className="label-mono text-muted-foreground">Plans used</p><p className="font-heading text-xl font-black">{stats.plans_used}</p></div>
         </div>
         <div className="card-brutal p-4 flex items-center gap-3">
@@ -98,7 +98,7 @@ export default function WorkCoach() {
       {/* AI review */}
       {!s ? (
         <div className="card-brutal p-8 text-center" data-testid="coach-empty">
-          <Trophy size={32} weight="bold" className="text-brand-red mx-auto mb-3" />
+          <Trophy size={32} weight="bold" className="text-brand-600 mx-auto mb-3" />
           <p className="font-heading text-lg font-extrabold uppercase tracking-tight">No coaching yet</p>
           <p className="text-sm text-muted-foreground mt-1">Generate an AI performance review based on the stats above.</p>
         </div>
@@ -139,8 +139,8 @@ export default function WorkCoach() {
             </div>
           </div>
 
-          <div className="card-brutal p-5 border-l-4 border-l-brand-red" data-testid="coach-recommendation">
-            <p className="label-mono text-brand-red mb-1">AI Recommendation</p>
+          <div className="card-brutal p-5 border-l-4 border-l-brand-600" data-testid="coach-recommendation">
+            <p className="label-mono text-brand-600 mb-1">AI Recommendation</p>
             <p className="text-sm font-medium leading-relaxed">{s.recommendation}</p>
           </div>
 

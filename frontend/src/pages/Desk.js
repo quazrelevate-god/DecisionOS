@@ -84,8 +84,8 @@ function DeskBriefHeader() {
 
   const dirIcon = (d) => d === "up" ? TrendUp : d === "down" ? TrendDown : Minus;
   const dirColor = (d, positiveIsUp = true) => {
-    if (d === "up") return positiveIsUp ? "text-green-600" : "text-brand-red";
-    if (d === "down") return positiveIsUp ? "text-brand-red" : "text-green-600";
+    if (d === "up") return positiveIsUp ? "text-green-600" : "text-brand-600";
+    if (d === "down") return positiveIsUp ? "text-brand-600" : "text-green-600";
     return "text-muted-foreground";
   };
 
@@ -141,7 +141,7 @@ function DeskBriefHeader() {
                 <Clock size={14} weight="bold" className="text-muted-foreground" />
                 Delayed tasks
               </span>
-              <span className={`flex items-center gap-1 font-mono font-bold ${(data.counters?.delayed || 0) > 0 ? "text-brand-red" : "text-green-600"}`}>
+              <span className={`flex items-center gap-1 font-mono font-bold ${(data.counters?.delayed || 0) > 0 ? "text-brand-600" : "text-green-600"}`}>
                 {(data.counters?.delayed || 0) > 0
                   ? <TrendUp size={12} weight="bold" />
                   : <Minus size={12} weight="bold" />}
@@ -209,7 +209,7 @@ function DeskBriefHeader() {
                 <CurrencyInr size={14} weight="bold" className="text-muted-foreground" />
                 Cash-flow
               </span>
-              <span className={`flex items-center gap-1 font-mono font-bold ${cash.clear ? "text-green-600" : "text-brand-red"}`}>
+              <span className={`flex items-center gap-1 font-mono font-bold ${cash.clear ? "text-green-600" : "text-brand-600"}`}>
                 <CF_ICON size={12} weight="bold" />
                 {cash.clear ? "All clear" : "Attention"}
               </span>
@@ -280,8 +280,8 @@ function DeskCard({ card, onAction }) {
 
   const ctaStyle = {
     review: "bg-brand-ink text-white hover:shadow-brutal-sm",
-    respond: "border border-black bg-white hover:bg-brand-red hover:text-white",
-    chase: "border border-black bg-white hover:bg-brand-red hover:text-white",
+    respond: "border border-black bg-white hover:bg-brand-600 hover:text-white",
+    chase: "border border-black bg-white hover:bg-brand-600 hover:text-white",
     nudge: "border border-black bg-white hover:bg-brand-yellow",
   }[card.cta] || "border border-black bg-white";
 

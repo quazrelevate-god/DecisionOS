@@ -13,7 +13,7 @@ const TYPES = {
   task: { label: "Tasks", icon: CheckSquare, color: "bg-brand-blue", text: "text-brand-blue" },
   delivery: { label: "Deliveries", icon: Truck, color: "bg-green-600", text: "text-green-600" },
   complaint: { label: "Complaints", icon: Warning, color: "bg-purple-600", text: "text-purple-600" },
-  birthday: { label: "Birthdays", icon: Cake, color: "bg-brand-red", text: "text-brand-red" },
+  birthday: { label: "Birthdays", icon: Cake, color: "bg-brand-600", text: "text-brand-600" },
   leave: { label: "Leave", icon: AirplaneTakeoff, color: "bg-teal-600", text: "text-teal-600" },
 };
 
@@ -79,7 +79,7 @@ export default function Calendar() {
           {days.map((day) => (
             <section key={day.date} data-testid={`cal-day-${day.date}`}>
               <div className="flex items-center gap-3 mb-3">
-                <span className={`font-heading text-lg font-black uppercase tracking-tight ${day.date < new Date().toISOString().slice(0, 10) ? "text-brand-red" : ""}`}>
+                <span className={`font-heading text-lg font-black uppercase tracking-tight ${day.date < new Date().toISOString().slice(0, 10) ? "text-brand-600" : ""}`}>
                   {fmtDay(day.date)}
                 </span>
                 <span className="label-mono text-muted-foreground">{day.date}</span>
@@ -102,7 +102,7 @@ export default function Calendar() {
                         <p className="text-sm font-semibold leading-tight truncate">{e.title}</p>
                         {e.subtitle && <p className="label-mono text-muted-foreground truncate">{e.subtitle}</p>}
                       </div>
-                      {e.overdue && <span className="px-2 py-0.5 text-xs uppercase tracking-wider font-semibold border border-black bg-brand-red text-white shrink-0">Overdue</span>}
+                      {e.overdue && <span className="px-2 py-0.5 text-xs uppercase tracking-wider font-semibold border border-black bg-danger-600 text-white shrink-0">Overdue</span>}
                     </div>
                   );
                 })}

@@ -71,7 +71,7 @@ function NewWorkflowDialog({ type, typeLabel, custLabel, vendLabel, onCreated })
           <textarea className={inp} rows={2} placeholder={t("workflows.detail_ph")} value={form.detail} onChange={set("detail")} />
         </div>
         <DialogFooter>
-          <button data-testid="wf-create-submit" onClick={create} className="bg-brand-red text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">{t("workflows.create")}</button>
+          <button data-testid="wf-create-submit" onClick={create} className="bg-brand-600 text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">{t("workflows.create")}</button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -177,12 +177,12 @@ export default function Workflows({ embedded = false }) {
                     const updAt = lastEv?.at || w.created_at;
                     const updLabel = lastEv?.note || t("workflows.created_label");
                     return (
-                      <div key={w.id} id={`workflow-card-${w.id}`} data-testid={`workflow-card-${w.id}`} className={`border border-black p-3 shadow-hover bg-white transition-all ${w.id === focusWf ? "ring-4 ring-brand-red ring-offset-2" : ""}`}>
+                      <div key={w.id} id={`workflow-card-${w.id}`} data-testid={`workflow-card-${w.id}`} className={`border border-black p-3 shadow-hover bg-white transition-all ${w.id === focusWf ? "ring-4 ring-brand-600 ring-offset-2" : ""}`}>
                         <div className="flex items-start justify-between gap-2">
                           <p className="font-semibold text-sm leading-tight">{w.title}</p>
                           {user?.role === "owner" && (
                             <button onClick={() => del(w)} data-testid={`delete-workflow-${w.id}`} title={t("workflows.delete_card")}
-                              className="shrink-0 text-muted-foreground hover:text-brand-red transition-colors">
+                              className="shrink-0 text-muted-foreground hover:text-brand-600 transition-colors">
                               <Trash size={14} weight="bold" />
                             </button>
                           )}

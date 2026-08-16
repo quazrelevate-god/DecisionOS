@@ -48,15 +48,15 @@ export default function Signup() {
       {/* Top bar */}
       <header className="flex items-center justify-between px-6 lg:px-12 py-5 border-b border-black/10">
         <Link to="/" className="flex items-center gap-2.5" data-testid="signup-logo">
-          <div className="w-8 h-8 bg-brand-red rounded-lg flex items-center justify-center"><span className="font-logo font-black text-white">D</span></div>
+          <div className="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center"><span className="font-logo font-black text-white">D</span></div>
           <span className="font-logo font-black text-lg tracking-tight uppercase leading-none hidden sm:inline">
-            <span className="text-foreground">Decision</span><span className="text-brand-red">OS</span>
+            <span className="text-foreground">Decision</span><span className="text-brand-600">OS</span>
           </span>
         </Link>
         <div className="flex items-center gap-6" data-testid="signup-phase-bar">
           {PHASES.map((p, i) => (
             <div key={p.key} className="flex items-center gap-2">
-              <div className={`w-6 h-1.5 border border-black transition-colors duration-500 ${i < phaseIdx ? "bg-brand-ink" : i === phaseIdx ? "bg-brand-red" : "bg-white"}`} />
+              <div className={`w-6 h-1.5 border border-black transition-colors duration-500 ${i < phaseIdx ? "bg-brand-ink" : i === phaseIdx ? "bg-brand-600" : "bg-white"}`} />
               <span className={`hidden md:inline text-[11px] font-semibold uppercase tracking-wider transition-colors ${i === phaseIdx ? "text-brand-ink" : "text-muted-foreground/60"}`}>{p.label}</span>
             </div>
           ))}

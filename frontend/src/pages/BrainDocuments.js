@@ -24,7 +24,7 @@ const VISIBILITIES = [
 ];
 const KIND_TINT = {
   policy: "bg-brand-yellow/40", filing: "bg-brand-blue/20", contract: "bg-white",
-  sop: "bg-brand-red/10", report: "bg-brand-paper", note: "bg-white", other: "bg-white",
+  sop: "bg-brand-600/10", report: "bg-brand-paper", note: "bg-white", other: "bg-white",
 };
 
 const fmtSize = (n) => {
@@ -155,7 +155,7 @@ function UploadDialog({ onClose, onUploaded }) {
         <div className="flex items-center justify-end gap-2 border-t border-black px-5 py-3 bg-white">
           <button onClick={onClose} className="px-4 py-2 border border-black text-xs font-semibold uppercase tracking-wider hover:bg-black/5">Cancel</button>
           <button onClick={submit} disabled={busy || !file} data-testid="brain-doc-upload-submit"
-            className="flex items-center gap-2 bg-brand-red text-white px-5 py-2 border border-black text-xs font-semibold uppercase tracking-wider hover:shadow-brutal-sm transition-all disabled:opacity-40">
+            className="flex items-center gap-2 bg-brand-600 text-white px-5 py-2 border border-black text-xs font-semibold uppercase tracking-wider hover:shadow-brutal-sm transition-all disabled:opacity-40">
             {busy ? <CircleNotch size={14} className="animate-spin" /> : <Upload size={14} weight="bold" />}
             {busy ? "Adding…" : "Add to Brain"}
           </button>
@@ -251,7 +251,7 @@ export function DocumentsPanel() {
         </select>
         {isOwner && (
           <button onClick={() => setShowUpload(true)} data-testid="brain-doc-add-btn"
-            className="flex items-center gap-2 bg-brand-red text-white px-5 py-3 border border-black text-xs font-semibold uppercase tracking-wider hover:shadow-brutal transition-all">
+            className="flex items-center gap-2 bg-brand-600 text-white px-5 py-3 border border-black text-xs font-semibold uppercase tracking-wider hover:shadow-brutal transition-all">
             <Upload size={14} weight="bold" /> Add document
           </button>
         )}
@@ -306,7 +306,7 @@ export function DocumentsPanel() {
                 </button>
                 {(isOwner || d.uploaded_by === user?.id) && (
                   <button onClick={() => remove(d)} disabled={deleting === d.id} data-testid={`brain-doc-delete-${d.id}`}
-                    className="flex items-center justify-center gap-1.5 border border-black py-2 px-3 text-[11px] font-semibold uppercase tracking-wider bg-white hover:bg-brand-red hover:text-white transition-colors disabled:opacity-40">
+                    className="flex items-center justify-center gap-1.5 border border-black py-2 px-3 text-[11px] font-semibold uppercase tracking-wider bg-white hover:bg-brand-600 hover:text-white transition-colors disabled:opacity-40">
                     {deleting === d.id ? <CircleNotch size={12} className="animate-spin" /> : <Trash size={12} weight="bold" />}
                   </button>
                 )}

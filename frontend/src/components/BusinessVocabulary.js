@@ -64,7 +64,7 @@ export function BusinessVocabulary() {
   return (
     <div className="card-brutal p-5" data-testid="settings-vocabulary-card">
       <div className="flex items-center gap-2 mb-1">
-        <Translate size={20} weight="bold" className="text-brand-red" />
+        <Translate size={20} weight="bold" className="text-brand-600" />
         <h2 className="font-heading text-lg font-extrabold uppercase tracking-tight">Business Vocabulary</h2>
       </div>
       <p className="text-xs text-muted-foreground mb-4">
@@ -80,7 +80,7 @@ export function BusinessVocabulary() {
         </div>
 
         <div>
-          <p className="label-mono text-brand-red mb-2">Workflow pipelines</p>
+          <p className="label-mono text-brand-600 mb-2">Workflow pipelines</p>
           <div className="space-y-3">
             {WF_KEYS.map(({ key, hint }) => (
               <div key={key} className="grid grid-cols-2 gap-3">
@@ -92,7 +92,7 @@ export function BusinessVocabulary() {
         </div>
 
         <div>
-          <p className="label-mono text-brand-red mb-2">Task type / department labels</p>
+          <p className="label-mono text-brand-600 mb-2">Task type / department labels</p>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             {TT_KEYS.map((k) => (
               <Row key={k} label={k} testid={`vocab-tt-${k}`} value={form.task_types[k]} onChange={(v) => setTt(k, v)} />

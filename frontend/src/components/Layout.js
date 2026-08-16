@@ -80,12 +80,12 @@ const NAV = [
 // Interim — MPWA-03 rebuilds this header down to two controls.
 const Logo = ({ markOnly = false }) => (
   <div className="flex items-center gap-2.5">
-    <div className="w-9 h-9 bg-brand-red rounded-lg flex items-center justify-center shrink-0">
+    <div className="w-9 h-9 bg-brand-600 rounded-lg flex items-center justify-center shrink-0">
       <span className="font-logo font-black text-white text-xl leading-none">D</span>
     </div>
     {!markOnly && (
       <span className="font-logo font-black text-2xl tracking-tight uppercase leading-none">
-        <span className="text-foreground">Decision</span><span className="text-brand-red">OS</span>
+        <span className="text-foreground">Decision</span><span className="text-brand-600">OS</span>
       </span>
     )}
   </div>
@@ -156,7 +156,7 @@ export default function Layout({ children }) {
             className={`relative flex items-center justify-center border border-black hover:bg-brand-ink hover:text-white transition-colors ${mobile ? "w-12 h-12" : "w-10 h-10"}`}>
             <Bell size={mobile ? 22 : 18} weight="bold" />
             {count > 0 && (
-              <span data-testid="notif-count" className="absolute -top-2 -right-2 bg-brand-red text-white text-[10px] min-w-5 h-5 px-1 flex items-center justify-center border border-black font-bold">
+              <span data-testid="notif-count" className="absolute -top-2 -right-2 bg-brand-600 text-white text-[10px] min-w-5 h-5 px-1 flex items-center justify-center border border-black font-bold">
                 {mobile ? Math.min(9, count) : (unread > 99 ? "99+" : unread)}
               </span>
             )}
@@ -165,7 +165,7 @@ export default function Layout({ children }) {
         <PopoverContent align="end" className="w-80 p-0 border border-black shadow-brutal" data-testid="notif-dropdown">
           <div className="flex items-center justify-between px-4 py-3 border-b border-black">
             <p className="text-sm font-bold uppercase tracking-tight">{t("header.notifications")}</p>
-            {unread > 0 && <span className="label-mono text-brand-red">{unread} {t("header.new")}</span>}
+            {unread > 0 && <span className="label-mono text-brand-600">{unread} {t("header.new")}</span>}
           </div>
           <div className="max-h-96 overflow-y-auto divide-y divide-black/10">
             {items.length === 0 && <p className="p-6 text-center text-sm text-muted-foreground">{t("header.all_caught_up")}</p>}
@@ -174,7 +174,7 @@ export default function Layout({ children }) {
               return (
                 <button key={n.id} data-testid={`notif-item-${n.id}`} onClick={() => openNotif(n)}
                   className={`w-full text-left px-4 py-3 flex items-start gap-2 hover:bg-black/[0.03] transition-colors ${n.read ? "opacity-60" : ""}`}>
-                  {!n.read && <span className="mt-1.5 w-2 h-2 rounded-full bg-brand-red shrink-0" />}
+                  {!n.read && <span className="mt-1.5 w-2 h-2 rounded-full bg-brand-600 shrink-0" />}
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <Chip value={meta.label} className={`${meta.cls} text-[9px]`} />
@@ -229,7 +229,7 @@ export default function Layout({ children }) {
           className={({ isActive }) =>
             `flex items-center gap-3 mx-3 px-3 py-2.5 text-sm rounded-lg border-l-2 transition-[background-color,color,border-color] duration-200 ${
               isActive
-                ? "border-brand-red bg-brand-red/[0.08] text-brand-red font-semibold"
+                ? "border-brand-600 bg-brand-600/[0.08] text-brand-600 font-semibold"
                 : "border-transparent text-foreground/70 hover:bg-accent hover:text-foreground"
             }`
           }
@@ -238,7 +238,7 @@ export default function Layout({ children }) {
           {t(`nav.${tkey}`)}
           {to === "/brief" && fires > 0 && (
             <span data-testid="nav-fires-badge" title={`${fires} fire(s) to put out`}
-              className="ml-auto bg-brand-red text-white text-[10px] min-w-5 h-5 px-1 flex items-center justify-center border border-black font-bold rounded-full animate-pulse">
+              className="ml-auto bg-brand-600 text-white text-[10px] min-w-5 h-5 px-1 flex items-center justify-center border border-black font-bold rounded-full animate-pulse">
               {fires}
             </span>
           )}
@@ -247,7 +247,7 @@ export default function Layout({ children }) {
               existing E2E tests still find it. */}
           {to === "/finance" && captureCount > 0 && (
             <span data-testid="nav-review-badge" title={`${captureCount} item(s) to review`}
-              className="ml-auto bg-brand-red text-white text-[10px] min-w-5 h-5 px-1 flex items-center justify-center border border-black font-bold rounded-full">
+              className="ml-auto bg-brand-600 text-white text-[10px] min-w-5 h-5 px-1 flex items-center justify-center border border-black font-bold rounded-full">
               {captureCount}
             </span>
           )}
@@ -266,7 +266,7 @@ export default function Layout({ children }) {
           <p data-testid="tenant-name" className="mt-3 label-mono text-muted-foreground truncate">
             {tenant?.name}
           </p>
-          {tenant?.industry && <p className="label-mono text-brand-red truncate mt-1">{tenant.industry}</p>}
+          {tenant?.industry && <p className="label-mono text-brand-600 truncate mt-1">{tenant.industry}</p>}
         </div>
         <nav className="flex-1 min-h-0 overflow-y-auto py-4">
           <NavItems />
@@ -279,7 +279,7 @@ export default function Layout({ children }) {
           <button
             onClick={doLogout}
             data-testid="logout-button"
-            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold uppercase tracking-wider bg-white text-brand-red border-2 border-brand-red hover:bg-brand-red hover:text-white transition-colors"
+            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold uppercase tracking-wider bg-white text-brand-600 border-2 border-brand-600 hover:bg-brand-600 hover:text-white transition-colors"
           >
             <SignOut size={16} weight="bold" /> {t("header.sign_out")}
           </button>
@@ -293,7 +293,7 @@ export default function Layout({ children }) {
           <div className="flex items-center gap-3">
             <span className="label-mono text-muted-foreground">{t("header.signed_in_as")}</span>
             <span className="font-semibold text-sm" data-testid="current-user-name">{user?.name}</span>
-            <span className="px-2 py-0.5 text-[11px] rounded-md uppercase tracking-wider bg-brand-red/10 text-brand-red border border-brand-red/20 font-semibold" data-testid="current-user-role">
+            <span className="px-2 py-0.5 text-[11px] rounded-md uppercase tracking-wider bg-brand-600/10 text-brand-600 border border-brand-600/20 font-semibold" data-testid="current-user-role">
               {user?.role}
             </span>
           </div>

@@ -59,7 +59,7 @@ function DataTable({ table, currency }) {
                 <td key={c.key} className="px-3 py-2 align-top border-t border-black/10">
                   {c.type === "money" ? money(r[c.key], currency)
                     : c.key === "on_time"
-                      ? <span className={r[c.key] === "Yes" ? "text-green-600 font-semibold" : "text-brand-red font-semibold"}>{r[c.key]}</span>
+                      ? <span className={r[c.key] === "Yes" ? "text-green-600 font-semibold" : "text-brand-600 font-semibold"}>{r[c.key]}</span>
                       : String(r[c.key] ?? "")}
                 </td>
               ))}
@@ -84,7 +84,7 @@ function Sources({ sources, onGo }) {
           <button key={`${s.id}-${i}`} onClick={() => onGo(s.deep_link)} data-testid={`brain-source-${i}`}
             title={s.confidence ? `${s.confidence}` : ""}
             className="inline-flex items-center gap-1 border border-black bg-white px-2 py-1 text-xs hover:bg-brand-ink hover:text-white transition-colors">
-            <span className="text-brand-red uppercase font-semibold">{DEEP_TYPES[s.type] || s.type}</span>
+            <span className="text-brand-600 uppercase font-semibold">{DEEP_TYPES[s.type] || s.type}</span>
             <span className="truncate max-w-[220px]">{s.title}</span>
           </button>
         ))}
@@ -143,8 +143,8 @@ function FollowUps({ items, onAsk }) {
 function AiAnswer({ m, onGo, onAsk, currency }) {
   if (m.resp?.type === "PERMISSION_DENIED") {
     return (
-      <div className="card-brutal p-4 border-l-4 border-l-brand-red" data-testid="brain-permission-denied">
-        <p className="flex items-center gap-2 font-semibold text-sm"><Lock size={16} weight="bold" className="text-brand-red" /> Restricted</p>
+      <div className="card-brutal p-4 border-l-4 border-l-brand-600" data-testid="brain-permission-denied">
+        <p className="flex items-center gap-2 font-semibold text-sm"><Lock size={16} weight="bold" className="text-brand-600" /> Restricted</p>
         <p className="text-sm text-muted-foreground mt-1">{m.resp.message}</p>
       </div>
     );
@@ -227,7 +227,7 @@ export function AskPanel() {
         {log.length === 0 && (
           <div className="card-brutal p-6" data-testid="brain-empty">
             <p className="flex items-center gap-2 font-heading text-lg font-black uppercase tracking-tight">
-              <Sparkle size={20} weight="fill" className="text-brand-red" /> Ask your company anything
+              <Sparkle size={20} weight="fill" className="text-brand-600" /> Ask your company anything
             </p>
             <p className="text-sm text-muted-foreground mt-1">Every answer is computed from your authorised workspace data — with clickable sources you can open.</p>
             <div className="flex flex-wrap gap-2 mt-4">
@@ -253,7 +253,7 @@ export function AskPanel() {
         ))}
         {busy && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground animate-pulse" data-testid="brain-loading">
-            <Sparkle size={16} weight="fill" className="text-brand-red" /> Understanding your question, checking access & searching your records…
+            <Sparkle size={16} weight="fill" className="text-brand-600" /> Understanding your question, checking access & searching your records…
           </div>
         )}
         <div ref={endRef} />
@@ -261,7 +261,7 @@ export function AskPanel() {
 
       <form onSubmit={(e) => { e.preventDefault(); ask(); }} className="flex gap-2 mt-3">
         <div className="flex-1 min-w-0 flex items-center border border-black bg-white px-4">
-          <span className="text-brand-red font-bold">{">"}</span>
+          <span className="text-brand-600 font-bold">{">"}</span>
           <input
             data-testid="ask-input"
             value={q}
@@ -277,7 +277,7 @@ export function AskPanel() {
           </button>
         )}
         <MicDictateButton className="px-4" title={t("ask.speak_q")} onText={(txt) => setQ((v) => (v ? `${v} ${txt}` : txt))} />
-        <button data-testid="ask-submit" disabled={busy} className="shrink-0 bg-brand-red text-white px-6 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all disabled:opacity-50">
+        <button data-testid="ask-submit" disabled={busy} className="shrink-0 bg-brand-600 text-white px-6 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all disabled:opacity-50">
           <PaperPlaneTilt size={16} weight="bold" /> {t("ask.btn")}
         </button>
       </form>

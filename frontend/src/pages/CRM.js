@@ -52,14 +52,14 @@ const CUSTOMER_STAGES = [
   { key: "lead", label: "Lead", cls: "bg-black/10 text-black" },
   { key: "qualified", label: "Qualified", cls: "bg-brand-blue/20 text-brand-blue" },
   { key: "active", label: "Active", cls: "bg-brand-green/20 text-brand-green" },
-  { key: "at_risk", label: "At Risk", cls: "bg-brand-red/20 text-brand-red" },
+  { key: "at_risk", label: "At Risk", cls: "bg-danger-600/20 text-danger-600" },
   { key: "churned", label: "Churned", cls: "bg-black/30 text-white" },
 ];
 const SUPPLIER_STAGES = [
   { key: "prospect", label: "Prospect", cls: "bg-black/10 text-black" },
   { key: "active", label: "Active", cls: "bg-brand-green/20 text-brand-green" },
   { key: "preferred", label: "Preferred", cls: "bg-brand-yellow text-black" },
-  { key: "on_hold", label: "On Hold", cls: "bg-brand-red/20 text-brand-red" },
+  { key: "on_hold", label: "On Hold", cls: "bg-brand-600/20 text-brand-600" },
   { key: "retired", label: "Retired", cls: "bg-black/30 text-white" },
 ];
 function stagesForType(t) {
@@ -576,7 +576,7 @@ export default function CRM() {
                 <div
                   data-testid={`crm-complaint-dot-${c.id}`}
                   title={`${complaintCount} open complaint${complaintCount === 1 ? "" : "s"}`}
-                  className="absolute -top-1.5 -right-1.5 min-w-[22px] h-[22px] px-1.5 flex items-center justify-center bg-brand-red text-white text-[11px] font-bold border border-black shadow-brutal-sm"
+                  className="absolute -top-1.5 -right-1.5 min-w-[22px] h-[22px] px-1.5 flex items-center justify-center bg-brand-600 text-white text-[11px] font-bold border border-black shadow-brutal-sm"
                 >
                   {complaintCount}
                 </div>
@@ -630,7 +630,7 @@ export default function CRM() {
                       <button
                         data-testid={`crm-delete-${c.id}`}
                         onClick={() => remove(c.id)}
-                        className="w-8 h-8 flex items-center justify-center border border-black hover:bg-brand-red hover:text-white transition-colors"
+                        className="w-8 h-8 flex items-center justify-center border border-black hover:bg-brand-600 hover:text-white transition-colors"
                       >
                         <Trash size={14} weight="bold" />
                       </button>
@@ -651,7 +651,7 @@ export default function CRM() {
                 <div className="mt-3 flex flex-wrap items-center gap-2" data-testid={`crm-outstanding-${c.id}`}>
                   {receivablesTxt && (
                     <span
-                      className="inline-flex items-center gap-1 px-2 py-1 border border-black bg-brand-red/10 text-brand-red text-xs font-mono font-bold"
+                      className="inline-flex items-center gap-1 px-2 py-1 border border-black bg-brand-600/10 text-brand-600 text-xs font-mono font-bold"
                       title="They owe you (unpaid customer invoices)"
                     >
                       <CurrencyInr size={12} weight="bold" /> {receivablesTxt} owed
@@ -666,7 +666,7 @@ export default function CRM() {
                     </span>
                   )}
                   {outstanding?.oldest_days != null && outstanding.oldest_days > 30 && (
-                    <span className="text-[11px] text-brand-red font-mono">
+                    <span className="text-[11px] text-brand-600 font-mono">
                       · oldest {outstanding.oldest_days}d
                     </span>
                   )}

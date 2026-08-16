@@ -112,14 +112,14 @@ export function OperatingModelEditor() {
   return (
     <div className="card-brutal p-5" data-testid="settings-operating-model-card">
       <div className="flex items-center gap-2 mb-1">
-        <FlowArrow size={20} weight="bold" className="text-brand-red" />
+        <FlowArrow size={20} weight="bold" className="text-brand-600" />
         <h2 className="font-heading text-lg font-extrabold uppercase tracking-tight">Operating Model</h2>
       </div>
       <p className="text-xs text-muted-foreground mb-4">
         The workflow pipelines and task categories that shape your Workflows board and My Work — tailored to <span className="font-semibold">{tenant?.industry || "your industry"}</span>. Add your own or let AI regenerate them.
       </p>
 
-      <p className="label-mono text-brand-red mb-2">Workflow pipelines</p>
+      <p className="label-mono text-brand-600 mb-2">Workflow pipelines</p>
       <div className="space-y-4">
         {model.pipelines.map((p, pi) => (
           <div key={p._uid} className="border border-border rounded-lg p-3" data-testid={`op-pipeline-${pi}`}>
@@ -128,7 +128,7 @@ export function OperatingModelEditor() {
                 <input data-testid={`op-pipeline-label-${pi}`} className={inp} placeholder="Pipeline name (e.g. Appointments)" value={p.label} onChange={(e) => setPipeline(pi, { label: e.target.value })} />
                 <input data-testid={`op-pipeline-sub-${pi}`} className={inp} placeholder="Subtitle (e.g. Booked → Completed)" value={p.sub} onChange={(e) => setPipeline(pi, { sub: e.target.value })} />
               </div>
-              <button onClick={() => delPipeline(pi)} data-testid={`op-pipeline-delete-${pi}`} title="Delete pipeline" className="mt-1 text-muted-foreground hover:text-brand-red transition-colors">
+              <button onClick={() => delPipeline(pi)} data-testid={`op-pipeline-delete-${pi}`} title="Delete pipeline" className="mt-1 text-muted-foreground hover:text-danger-600 transition-colors">
                 <Trash size={16} weight="bold" />
               </button>
             </div>
@@ -140,7 +140,7 @@ export function OperatingModelEditor() {
                   <input className={`${smInp} flex-1`} placeholder="Stage name" value={s.label} onChange={(e) => setStage(pi, si, { label: e.target.value })} />
                   <button onClick={() => moveStage(pi, si, -1)} disabled={si === 0} title="Move up" className="p-1 disabled:opacity-30 hover:text-brand-blue"><ArrowUp size={14} weight="bold" /></button>
                   <button onClick={() => moveStage(pi, si, 1)} disabled={si === p.stages.length - 1} title="Move down" className="p-1 disabled:opacity-30 hover:text-brand-blue"><ArrowDown size={14} weight="bold" /></button>
-                  <button onClick={() => delStage(pi, si)} title="Delete stage" className="p-1 text-muted-foreground hover:text-brand-red"><Trash size={14} weight="bold" /></button>
+                  <button onClick={() => delStage(pi, si)} title="Delete stage" className="p-1 text-muted-foreground hover:text-danger-600"><Trash size={14} weight="bold" /></button>
                 </div>
               ))}
               <button onClick={() => addStage(pi)} data-testid={`op-add-stage-${pi}`} className="flex items-center gap-1 text-xs font-semibold text-brand-blue hover:underline mt-1">
@@ -160,16 +160,16 @@ export function OperatingModelEditor() {
           </div>
         ))}
       </div>
-      <button onClick={addPipeline} data-testid="op-add-pipeline" className="flex items-center gap-1 text-sm font-semibold text-brand-red hover:underline mt-3">
+      <button onClick={addPipeline} data-testid="op-add-pipeline" className="flex items-center gap-1 text-sm font-semibold text-brand-600 hover:underline mt-3">
         <Plus size={14} weight="bold" /> Add pipeline
       </button>
 
-      <p className="label-mono text-brand-red mt-6 mb-2">Task categories</p>
+      <p className="label-mono text-brand-600 mt-6 mb-2">Task categories</p>
       <div className="flex flex-wrap gap-2">
         {model.task_categories.map((c, i) => (
           <div key={c._uid} className="flex items-center gap-1 border border-border rounded-md pl-2 pr-1 py-1" data-testid={`op-cat-${i}`}>
             <input className="bg-transparent text-sm w-28 focus:outline-none" value={c.label} onChange={(e) => setCat(i, e.target.value)} />
-            <button onClick={() => delCat(i)} title="Delete" className="text-muted-foreground hover:text-brand-red"><Trash size={13} weight="bold" /></button>
+            <button onClick={() => delCat(i)} title="Delete" className="text-muted-foreground hover:text-danger-600"><Trash size={13} weight="bold" /></button>
           </div>
         ))}
         <button onClick={addCat} data-testid="op-add-cat" className="flex items-center gap-1 text-sm font-semibold text-brand-blue hover:underline px-2 py-1">

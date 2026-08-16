@@ -12,7 +12,7 @@ const BAR_HEIGHTS = [14, 24, 18, 26, 12];
 const Bars = ({ active }) => (
   <div className="flex items-end gap-1 h-6">
     {BAR_HEIGHTS.map((h, i) => (
-      <motion.span key={`bar-${i}`} className="w-1 bg-brand-red"
+      <motion.span key={`bar-${i}`} className="w-1 bg-brand-600"
         animate={active ? { height: [6, h, 6] } : { height: 6 }}
         transition={active ? { repeat: Infinity, duration: 0.7 + i * 0.13, ease: "easeInOut" } : { duration: 0.2 }} />
     ))}
@@ -52,7 +52,7 @@ const LangChip = ({ value, onChange, disabled }) => {
                 key={l.code}
                 data-testid={`interview-lang-option-${l.code}`}
                 onClick={() => { onChange(l.code); setOpen(false); }}
-                className={`w-full flex items-center justify-between gap-3 px-3 py-2 text-left text-xs hover:bg-brand-red/10 ${value === l.code ? "bg-brand-red/5" : ""}`}
+                className={`w-full flex items-center justify-between gap-3 px-3 py-2 text-left text-xs hover:bg-brand-600/10 ${value === l.code ? "bg-brand-600/5" : ""}`}
               >
                 <span className="font-semibold">{l.label}</span>
                 {value === l.code && <Check size={12} weight="bold" />}
@@ -68,7 +68,7 @@ const LangChip = ({ value, onChange, disabled }) => {
 // Step 0 — the founder picks the interview language before Dex starts.
 const LanguagePick = ({ onPick, onSkip }) => (
   <div className="w-full max-w-2xl mx-auto" data-testid="signup-lang-pick">
-    <p className="label-mono text-brand-red mb-3 flex items-center gap-2"><Translate size={14} weight="bold" /> Your interview</p>
+    <p className="label-mono text-brand-600 mb-3 flex items-center gap-2"><Translate size={14} weight="bold" /> Your interview</p>
     <h1 className="font-heading text-3xl sm:text-4xl lg:text-5xl font-black uppercase tracking-tighter leading-[1.02] mb-2">
       Which language should Dex speak?
     </h1>
@@ -234,11 +234,11 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-4">
           <div className="relative w-16 h-16">
-            <motion.div className="absolute inset-0 rounded-full border-2 border-brand-red"
+            <motion.div className="absolute inset-0 rounded-full border-2 border-brand-600"
               animate={orbState === "listening" ? { scale: [1, 1.25, 1], opacity: [0.9, 0.25, 0.9] } :
                 orbState === "speaking" ? { scale: [1, 1.12, 1], opacity: [0.7, 0.35, 0.7] } : { scale: 1, opacity: 0.25 }}
               transition={{ repeat: Infinity, duration: orbState === "listening" ? 1.1 : 1.6, ease: "easeInOut" }} />
-            <div className={`absolute inset-1.5 rounded-full flex items-center justify-center border border-black transition-colors ${orbState === "listening" ? "bg-brand-red text-white" : "bg-brand-ink text-white"}`}>
+            <div className={`absolute inset-1.5 rounded-full flex items-center justify-center border border-black transition-colors ${orbState === "listening" ? "bg-brand-600 text-white" : "bg-brand-ink text-white"}`}>
               {orbState === "thinking"
                 ? <CircleNotch size={22} className="animate-spin" />
                 : orbState === "speaking" ? <Waveform size={24} weight="bold" /> : <Microphone size={22} weight="bold" />}
@@ -275,7 +275,7 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
               transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}>
               <div className="flex items-center gap-2 mb-3">
                 <motion.span
-                  className={`inline-block w-1.5 h-1.5 rounded-full ${speaking ? "bg-brand-red" : "bg-black/25"}`}
+                  className={`inline-block w-1.5 h-1.5 rounded-full ${speaking ? "bg-brand-600" : "bg-black/25"}`}
                   animate={speaking ? { scale: [1, 1.6, 1], opacity: [1, 0.5, 1] } : { scale: 1, opacity: 0.5 }}
                   transition={speaking ? { repeat: Infinity, duration: 1 } : { duration: 0.2 }}
                 />
@@ -311,7 +311,7 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
             data-testid="interview-mic-button"
             onClick={recorder.recording ? recorder.stop : recorder.start}
             disabled={starting || thinking || recorder.transcribing}
-            className={`flex items-center gap-2 px-4 py-2.5 border border-black text-xs font-semibold uppercase tracking-wider transition-all disabled:opacity-50 ${recorder.recording ? "bg-brand-red text-white animate-pulse" : "bg-white hover:bg-black/5"}`}>
+            className={`flex items-center gap-2 px-4 py-2.5 border border-black text-xs font-semibold uppercase tracking-wider transition-all disabled:opacity-50 ${recorder.recording ? "bg-brand-600 text-white animate-pulse" : "bg-white hover:bg-black/5"}`}>
             {recorder.transcribing ? <CircleNotch size={16} className="animate-spin" />
               : recorder.recording ? <Stop size={16} weight="fill" /> : <Microphone size={16} weight="bold" />}
             {recorder.transcribing ? "Sending…" : recorder.recording ? "Stop — sends answer" : "Speak"}
@@ -336,7 +336,7 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
           </button>
           <div className="flex gap-1.5">
             {Array.from({ length: max }).map((_, i) => (
-              <div key={`qdot-${i}`} className={`w-8 h-1.5 border border-black transition-colors ${i + 1 < index ? "bg-brand-ink" : i + 1 === index ? "bg-brand-red" : "bg-white"}`} />
+              <div key={`qdot-${i}`} className={`w-8 h-1.5 border border-black transition-colors ${i + 1 < index ? "bg-brand-ink" : i + 1 === index ? "bg-brand-600" : "bg-white"}`} />
             ))}
           </div>
         </div>

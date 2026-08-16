@@ -23,7 +23,7 @@ function LanguageCard() {
   return (
     <div className="card-brutal p-5" data-testid="settings-language-card">
       <div className="flex items-center gap-2 mb-1">
-        <Translate size={20} weight="bold" className="text-brand-red" />
+        <Translate size={20} weight="bold" className="text-brand-600" />
         <h2 className="font-heading text-lg font-extrabold uppercase tracking-tight">{t("settings.language_title")}</h2>
       </div>
       <p className="text-xs text-muted-foreground mb-4">{t("settings.language_desc")}</p>
@@ -36,7 +36,7 @@ function ProfileCard() {
   return (
     <div className="card-brutal p-5" data-testid="settings-profile-card">
       <div className="flex items-center gap-2 mb-1">
-        <UserCircle size={20} weight="bold" className="text-brand-red" />
+        <UserCircle size={20} weight="bold" className="text-brand-600" />
         <h2 className="font-heading text-lg font-extrabold uppercase tracking-tight">Your Profile</h2>
       </div>
       <p className="text-xs text-muted-foreground mb-4">Your personal details, sign-in and WhatsApp routing.</p>
@@ -49,7 +49,7 @@ function SecurityCard() {
   return (
     <div className="card-brutal p-5" data-testid="settings-security-card">
       <div className="flex items-center gap-2 mb-1">
-        <Lock size={20} weight="bold" className="text-brand-red" />
+        <Lock size={20} weight="bold" className="text-brand-600" />
         <h2 className="font-heading text-lg font-extrabold uppercase tracking-tight">Password & Security</h2>
       </div>
       <p className="text-xs text-muted-foreground mb-4">Change the password you use to sign in.</p>
@@ -118,7 +118,7 @@ export default function Settings() {
 
         <div className="card-brutal p-5" data-testid="settings-money-card">
           <div className="flex items-center gap-2 mb-1">
-            <CurrencyCircleDollar size={20} weight="bold" className="text-brand-red" />
+            <CurrencyCircleDollar size={20} weight="bold" className="text-brand-600" />
             <h2 className="font-heading text-lg font-extrabold tracking-tight">Money & Approvals</h2>
           </div>
           <p className="text-xs text-muted-foreground mb-4">Controls how incoming invoices & payments (WhatsApp / uploads) are flagged and approved.</p>

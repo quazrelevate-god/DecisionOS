@@ -17,9 +17,9 @@ const WA_STATUS_STYLE = {
   filed: "bg-green-600 text-white",
   structured: "bg-green-600 text-white",
   ignored: "bg-black/10 text-black",
-  rejected: "bg-brand-red text-white",
+  rejected: "bg-danger-600 text-white",
   signature_mismatch: "bg-orange-500 text-white",
-  error: "bg-brand-red text-white",
+  error: "bg-danger-600 text-white",
 };
 
 export default function WhatsAppCard() {
@@ -38,7 +38,7 @@ export default function WhatsAppCard() {
     <div className="card-brutal p-5 mb-8" data-testid="whatsapp-card">
       {!st?.configured && (
         <div className="flex items-center gap-2 mb-4">
-          <Chip value="not connected" className="bg-brand-red text-white" />
+          <Chip value="not connected" className="bg-brand-600 text-white" />
         </div>
       )}
 
@@ -59,8 +59,8 @@ export default function WhatsAppCard() {
 
         <div>
           {isOwner && st && st.token_error && (
-            <div className="flex items-center gap-2 mb-3 border border-brand-red/30 bg-brand-red/5 rounded-lg px-3 py-2" data-testid="whatsapp-token-error">
-              <Chip value="connection issue" className="bg-brand-red text-white" />
+            <div className="flex items-center gap-2 mb-3 border border-danger-600/30 bg-danger-600/5 rounded-lg px-3 py-2" data-testid="whatsapp-token-error">
+              <Chip value="connection issue" className="bg-brand-600 text-white" />
               <span className="text-xs text-muted-foreground">{st.token_error}</span>
             </div>
           )}

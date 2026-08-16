@@ -62,12 +62,12 @@ export function WebsiteIntel({ companyName, onDone }) {
       <AnimatePresence mode="wait">
         {stage === "ask" && (
           <motion.div key="ask" {...fade} transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}>
-            <p className="label-mono text-brand-red mb-3">Your world</p>
+            <p className="label-mono text-brand-600 mb-3">Your world</p>
             <h1 className="font-heading text-3xl sm:text-4xl lg:text-5xl font-black uppercase tracking-tighter leading-[1.02] mb-2">
               Does {companyName} live on the web?
             </h1>
             <p className="text-sm text-muted-foreground mb-8">Drop your website — our AI reads it so you don't have to explain yourself twice.</p>
-            <div className="flex items-center gap-3 border-b-2 border-black focus-within:border-brand-red transition-colors">
+            <div className="flex items-center gap-3 border-b-2 border-black focus-within:border-brand-600 transition-colors">
               <Globe size={26} weight="bold" className="text-muted-foreground shrink-0" />
               <input
                 autoFocus
@@ -81,7 +81,7 @@ export function WebsiteIntel({ companyName, onDone }) {
             </div>
             <div className="mt-8 flex items-center gap-5">
               <button onClick={analyse} disabled={!url.trim()} data-testid="signup-website-analyse"
-                className="flex items-center gap-2 bg-brand-red text-white font-semibold uppercase tracking-wider text-sm px-8 py-3.5 border border-black hover:shadow-brutal hover:-translate-y-0.5 transition-all disabled:opacity-40">
+                className="flex items-center gap-2 bg-brand-600 text-white font-semibold uppercase tracking-wider text-sm px-8 py-3.5 border border-black hover:shadow-brutal hover:-translate-y-0.5 transition-all disabled:opacity-40">
                 <MagnifyingGlass size={16} weight="bold" /> Read my website
               </button>
               <button onClick={() => setStage("manual")} data-testid="signup-website-skip"
@@ -95,7 +95,7 @@ export function WebsiteIntel({ companyName, onDone }) {
         {stage === "scanning" && (
           <motion.div key="scan" {...fade} className="text-center py-10" data-testid="signup-website-scanning">
             <div className="relative w-28 h-28 mx-auto mb-10">
-              <motion.div className="absolute inset-0 border-2 border-brand-red"
+              <motion.div className="absolute inset-0 border-2 border-brand-600"
                 animate={{ rotate: 90, scale: [1, 1.15, 1] }} transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }} />
               <motion.div className="absolute inset-3 border border-black bg-white flex items-center justify-center"
                 animate={{ rotate: -90 }} transition={{ repeat: Infinity, duration: 4, ease: "linear" }}>
@@ -112,7 +112,7 @@ export function WebsiteIntel({ companyName, onDone }) {
 
         {stage === "confirm" && intel && (
           <motion.div key="confirm" {...fade} transition={{ duration: 0.35 }}>
-            <p className="label-mono text-brand-red mb-3">We did our homework</p>
+            <p className="label-mono text-brand-600 mb-3">We did our homework</p>
             <h1 className="font-heading text-3xl sm:text-4xl font-black uppercase tracking-tighter leading-[1.02] mb-6">
               Here's what we learned.
             </h1>
@@ -123,7 +123,7 @@ export function WebsiteIntel({ companyName, onDone }) {
                   {intel.highlights.map((h, i) => (
                     <motion.div key={h} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 + i * 0.12 }}
                       className="flex items-center gap-2 text-sm">
-                      <CheckCircle size={16} weight="fill" className="text-brand-red shrink-0" /> {h}
+                      <CheckCircle size={16} weight="fill" className="text-brand-600 shrink-0" /> {h}
                     </motion.div>
                   ))}
                 </div>
@@ -174,7 +174,7 @@ export function WebsiteIntel({ companyName, onDone }) {
 
         {stage === "manual" && (
           <motion.div key="manual" {...fade} transition={{ duration: 0.35 }}>
-            <p className="label-mono text-brand-red mb-3">Your world</p>
+            <p className="label-mono text-brand-600 mb-3">Your world</p>
             <h1 className="font-heading text-3xl sm:text-4xl font-black uppercase tracking-tighter leading-[1.02] mb-2">
               Place {companyName} on the map.
             </h1>

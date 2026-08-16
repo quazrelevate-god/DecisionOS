@@ -10,13 +10,13 @@ import {
   ShieldWarning, Clock, FilePdf, ChatText,
 } from "@phosphor-icons/react";
 
-const inp = "w-full border border-black px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-red";
+const inp = "w-full border border-black px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-600";
 
 const CLASS_STYLE = {
   invoice: "bg-brand-blue text-white", payment: "bg-brand-blue text-white",
   purchase: "bg-purple-600 text-white", sales: "bg-green-600 text-white",
   hr: "bg-pink-600 text-white", meeting: "bg-amber-500 text-black",
-  decision: "bg-brand-ink text-white", approval: "bg-brand-red text-white",
+  decision: "bg-brand-ink text-white", approval: "bg-brand-600 text-white",
   workflow: "bg-teal-600 text-white", operational_task: "bg-black/10 text-black",
   other: "bg-black/10 text-black",
 };
@@ -164,14 +164,14 @@ function CaptureCard({ c, user, onChange }) {
           <div className="flex items-center gap-2 flex-wrap">
             <Chip value={c.classification.replace("_", " ")} className={CLASS_STYLE[c.classification] || "bg-black/10 text-black"} />
             <Chip value={`review: ${c.reviewer_role}`} className="bg-white border-black" />
-            <Chip value={c.priority} className={c.priority === "high" ? "bg-brand-red text-white" : "bg-white border-black"} />
-            {c.needs_owner && <span data-testid={`capture-escalated-${c.id}`} className="inline-flex items-center gap-1 text-xs font-bold uppercase text-brand-red"><ShieldWarning size={13} weight="bold" /> Owner approval</span>}
+            <Chip value={c.priority} className={c.priority === "high" ? "bg-danger-600 text-white" : "bg-white border-black"} />
+            {c.needs_owner && <span data-testid={`capture-escalated-${c.id}`} className="inline-flex items-center gap-1 text-xs font-bold uppercase text-danger-600"><ShieldWarning size={13} weight="bold" /> Owner approval</span>}
             {c.status === "needs_attention" && <Chip value="needs attention" className="bg-amber-500 text-black" />}
             {c.auto_processed && <Chip value="auto-filed" className="bg-green-600 text-white" />}
             {c.duplicate_of && <Chip value="possible duplicate" className="bg-amber-500 text-black" />}
             {c.confidence != null && (() => {
               const pct = Math.round(c.confidence * 100);
-              const tone = pct >= 80 ? "bg-green-600 text-white" : pct >= 50 ? "bg-amber-500 text-black" : "bg-brand-red text-white";
+              const tone = pct >= 80 ? "bg-green-600 text-white" : pct >= 50 ? "bg-amber-500 text-black" : "bg-brand-600 text-white";
               return <span data-testid={`capture-confidence-${c.id}`} className={`label-mono px-1.5 py-0.5 rounded ${tone}`} title="AI confidence in this classification">AI {pct}%</span>;
             })()}
             <span className="label-mono text-muted-foreground ml-auto flex items-center gap-1" title={c.sender_name ? `${c.sender_name}${c.wa_from ? " · " + c.wa_from : ""} · ${fullTime(c.created_at)}` : fullTime(c.created_at)}>
@@ -205,10 +205,10 @@ function CaptureCard({ c, user, onChange }) {
           {recCounts && <p className="label-mono text-muted-foreground mt-1">Extracted: {recCounts}{c.amount ? ` · ₹${Number(c.amount).toLocaleString()}` : ""}</p>}
           {!recCounts && c.amount ? <p className="label-mono text-muted-foreground mt-1">Amount: ₹{Number(c.amount).toLocaleString()}</p> : null}
           {c.attention_reason && <p className="text-xs text-amber-700 mt-1">⚠ {c.attention_reason}</p>}
-          {c.escalate_reason && <p className="text-xs text-brand-red mt-1">⚠ {c.escalate_reason}</p>}
+          {c.escalate_reason && <p className="text-xs text-danger-600 mt-1">⚠ {c.escalate_reason}</p>}
           {isPending && purchaseBills.length > 0 && (
             <div className="mt-3 border-2 border-black bg-brand-paper p-3" data-testid={`capture-buckets-${c.id}`}>
-              <p className="label-mono text-brand-red mb-2">Classify purchase{purchaseBills.length > 1 ? "s" : ""} before approving</p>
+              <p className="label-mono text-brand-600 mb-2">Classify purchase{purchaseBills.length > 1 ? "s" : ""} before approving</p>
               <div className="space-y-2">
                 {purchaseBills.map(({ inv, i }) => {
                   const pt = (inv.purchase_type || "").toLowerCase();
@@ -219,7 +219,7 @@ function CaptureCard({ c, user, onChange }) {
                         {inv.contact_name || "Supplier"}{inv.number ? ` · #${inv.number}` : ""}{inv.amount ? ` · ₹${Number(inv.amount).toLocaleString()}` : ""}
                       </span>
                       <select data-testid={`capture-bucket-select-${c.id}-${i}`}
-                        className={`${inp} w-auto ${needs ? "ring-2 ring-brand-red" : ""}`}
+                        className={`${inp} w-auto ${needs ? "ring-2 ring-brand-600" : ""}`}
                         value={pt} onChange={(e) => setBucket(i, e.target.value)}>
                         <option value="">Book as…</option>
                         <option value="expense">Expense</option>
@@ -294,15 +294,15 @@ function CaptureCard({ c, user, onChange }) {
               <button data-testid={`capture-edit-btn-${c.id}`} disabled={busy} onClick={() => setEdit(true)} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border-2 border-black transition-all hover:shadow-brutal-sm disabled:opacity-50 bg-white flex items-center gap-1"><PencilSimple size={14} weight="bold" /> Edit</button>
               <button data-testid={`capture-reassign-${c.id}`} disabled={busy} onClick={reassign} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border-2 border-black transition-all hover:shadow-brutal-sm disabled:opacity-50 bg-white flex items-center gap-1"><ArrowsClockwise size={14} weight="bold" /> Reassign</button>
               <button data-testid={`capture-clarify-${c.id}`} disabled={busy} onClick={clarify} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border-2 border-black transition-all hover:shadow-brutal-sm disabled:opacity-50 bg-white flex items-center gap-1"><Question size={14} weight="bold" /> Clarify</button>
-              <button data-testid={`capture-reject-${c.id}`} disabled={busy} onClick={reject} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border-2 border-black transition-all hover:shadow-brutal-sm disabled:opacity-50 bg-white text-brand-red flex items-center gap-1"><XCircle size={14} weight="bold" /> Reject</button>
+              <button data-testid={`capture-reject-${c.id}`} disabled={busy} onClick={reject} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border-2 border-black transition-all hover:shadow-brutal-sm disabled:opacity-50 bg-white text-danger-600 flex items-center gap-1"><XCircle size={14} weight="bold" /> Reject</button>
             </>
           )}
-          {blockedByEscalation && <span className="text-xs text-brand-red self-center">Waiting for Owner — you can still edit or reassign.</span>}
+          {blockedByEscalation && <span className="text-xs text-danger-600 self-center">Waiting for Owner — you can still edit or reassign.</span>}
         </div>
       )}
 
       {c.status === "executed" && <p className="text-xs text-green-700 mt-2 flex items-center gap-1"><CheckCircle size={13} weight="bold" /> {c.auto_processed ? "Auto-filed" : "Approved"} & created ({c.result_ref?.type})</p>}
-      {c.status === "rejected" && <p className="text-xs text-brand-red mt-2 flex items-center gap-1"><XCircle size={13} weight="bold" /> Rejected</p>}
+      {c.status === "rejected" && <p className="text-xs text-danger-600 mt-2 flex items-center gap-1"><XCircle size={13} weight="bold" /> Rejected</p>}
     </div>
   );
 }

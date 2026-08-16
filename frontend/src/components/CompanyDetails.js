@@ -140,7 +140,7 @@ export function CompanyDetails() {
   return (
     <div className="card-brutal p-5" data-testid="settings-company-card">
       <div className="flex items-center gap-2 mb-1">
-        <Buildings size={20} weight="bold" className="text-brand-red" />
+        <Buildings size={20} weight="bold" className="text-brand-600" />
         <h2 className="font-heading text-lg font-extrabold uppercase tracking-tight">Company Details</h2>
       </div>
       <p className="text-xs text-muted-foreground mb-4">Update your company profile, products, and team roles.</p>
@@ -207,7 +207,7 @@ export function CompanyDetails() {
               </div>
               {canManage && (
                 <button onClick={() => removeProduct(i)} data-testid={`company-product-remove-${i}`}
-                  className="border border-black p-2 hover:bg-brand-red hover:text-white transition-colors" title="Remove">
+                  className="border border-black p-2 hover:bg-danger-600 hover:text-white transition-colors" title="Remove">
                   <Trash size={14} weight="bold" />
                 </button>
               )}
@@ -218,7 +218,7 @@ export function CompanyDetails() {
 
       <div className="mt-4">
         <div className="flex items-center gap-2 mb-1">
-          <UsersThree size={18} weight="bold" className="text-brand-red" />
+          <UsersThree size={18} weight="bold" className="text-brand-600" />
           <h3 className="font-heading font-extrabold uppercase tracking-tight">Team Roles</h3>
         </div>
         <p className="text-xs text-muted-foreground mb-2">
@@ -235,7 +235,7 @@ export function CompanyDetails() {
               <span className="label-mono text-muted-foreground shrink-0 hidden sm:inline">{r.key}</span>
               {canManage && (
                 <button onClick={() => deleteRole(r.key)} disabled={roleBusy} data-testid={`role-delete-${r.key}`}
-                  className="border border-black p-2 hover:bg-brand-red hover:text-white transition-colors shrink-0" title="Delete role">
+                  className="border border-black p-2 hover:bg-danger-600 hover:text-white transition-colors shrink-0" title="Delete role">
                   <Trash size={14} weight="bold" />
                 </button>
               )}
@@ -260,7 +260,7 @@ export function CompanyDetails() {
       {canManage && (
         <div className="mt-6 border-t border-black/15 pt-4" data-testid="os-blueprint-section">
           <div className="flex items-center gap-2 mb-1">
-            <Kanban size={18} weight="bold" className="text-brand-red" />
+            <Kanban size={18} weight="bold" className="text-brand-600" />
             <h3 className="font-heading font-extrabold uppercase tracking-tight">Operating System</h3>
           </div>
           <p className="text-xs text-muted-foreground mb-3">Your generated workflows, operational tasks and approval rules. Add, edit or delete anytime.</p>
@@ -270,7 +270,7 @@ export function CompanyDetails() {
             {workflows.map((w, i) => (
               <div key={w._key || i} className="flex gap-2" data-testid={`os-workflow-${i}`}>
                 <input data-testid={`os-workflow-name-${i}`} className={inp} value={w.name} onChange={(e) => setWorkflow(i, e.target.value)} placeholder="Workflow name" />
-                <button onClick={() => removeWorkflow(i)} data-testid={`os-workflow-remove-${i}`} className="border border-black p-2 hover:bg-brand-red hover:text-white transition-colors shrink-0"><Trash size={14} weight="bold" /></button>
+                <button onClick={() => removeWorkflow(i)} data-testid={`os-workflow-remove-${i}`} className="border border-black p-2 hover:bg-danger-600 hover:text-white transition-colors shrink-0"><Trash size={14} weight="bold" /></button>
               </div>
             ))}
           </div>
@@ -284,7 +284,7 @@ export function CompanyDetails() {
                 <select data-testid={`os-optask-cat-${i}`} className="border border-black px-1 py-2 text-xs font-mono focus:outline-none w-28 shrink-0" value={t.category} onChange={(e) => setOpTaskField(i, "category", e.target.value)}>
                   {OP_CATS.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
-                <button onClick={() => removeOpTask(i)} data-testid={`os-optask-remove-${i}`} className="border border-black p-2 hover:bg-brand-red hover:text-white transition-colors shrink-0"><Trash size={14} weight="bold" /></button>
+                <button onClick={() => removeOpTask(i)} data-testid={`os-optask-remove-${i}`} className="border border-black p-2 hover:bg-danger-600 hover:text-white transition-colors shrink-0"><Trash size={14} weight="bold" /></button>
               </div>
             ))}
           </div>
@@ -296,7 +296,7 @@ export function CompanyDetails() {
               <div key={r._key || i} className="border border-black/30 p-2" data-testid={`os-rule-${i}`}>
                 <div className="flex gap-2">
                   <input data-testid={`os-rule-name-${i}`} className={inp} value={r.name} onChange={(e) => setRuleField(i, "name", e.target.value)} placeholder="Rule name" />
-                  <button onClick={() => removeRule(i)} data-testid={`os-rule-remove-${i}`} className="border border-black p-2 hover:bg-brand-red hover:text-white transition-colors shrink-0"><Trash size={14} weight="bold" /></button>
+                  <button onClick={() => removeRule(i)} data-testid={`os-rule-remove-${i}`} className="border border-black p-2 hover:bg-danger-600 hover:text-white transition-colors shrink-0"><Trash size={14} weight="bold" /></button>
                 </div>
                 <input data-testid={`os-rule-desc-${i}`} className={`${inp} mt-2`} value={r.description} onChange={(e) => setRuleField(i, "description", e.target.value)} placeholder="When does it apply?" />
               </div>
@@ -313,7 +313,7 @@ export function CompanyDetails() {
       {canManage && (
         <div className="mt-6 flex justify-end">
           <button data-testid="company-save-button" onClick={save} disabled={saving}
-            className="bg-brand-red text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-50">
+            className="bg-brand-600 text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-50">
             {saving ? "Saving…" : "Save changes"}
           </button>
         </div>

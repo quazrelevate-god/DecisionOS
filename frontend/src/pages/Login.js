@@ -78,7 +78,7 @@ const OtpBoxes = ({ value, onChange, disabled }) => {
           onChange={handleChange(i)}
           onKeyDown={handleKeyDown(i)}
           onFocus={(e) => e.target.select()}
-          className="w-full aspect-square min-w-0 border border-black bg-white text-center text-xl font-heading font-black focus:outline-none focus:shadow-brutal-sm focus:border-brand-red transition-all disabled:opacity-50"
+          className="w-full aspect-square min-w-0 border border-black bg-white text-center text-xl font-heading font-black focus:outline-none focus:shadow-brutal-sm focus:border-brand-600 transition-all disabled:opacity-50"
         />
       ))}
     </div>
@@ -188,13 +188,13 @@ export default function Login() {
       {/* Left brand panel */}
       <div className="hidden lg:flex flex-col justify-between bg-brand-ink text-white p-12 border-r border-black">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-brand-red rounded-lg flex items-center justify-center"><span className="font-logo font-black text-white text-xl">D</span></div>
-          <span className="font-logo font-black text-2xl tracking-tight uppercase leading-none"><span className="text-white">Decision</span><span className="text-brand-red">OS</span></span>
+          <div className="w-10 h-10 bg-brand-600 rounded-lg flex items-center justify-center"><span className="font-logo font-black text-white text-xl">D</span></div>
+          <span className="font-logo font-black text-2xl tracking-tight uppercase leading-none"><span className="text-white">Decision</span><span className="text-brand-600">OS</span></span>
         </div>
         <div>
-          <p className="label-mono text-brand-red mb-4">The operational brain for founder-led SMEs</p>
+          <p className="label-mono text-brand-600 mb-4">The operational brain for founder-led SMEs</p>
           <h1 className="font-heading text-5xl xl:text-6xl font-black uppercase tracking-tighter leading-[0.95]">
-            Speak the decision.<br /><span className="text-brand-red">We run</span> the company.
+            Speak the decision.<br /><span className="text-brand-600">We run</span> the company.
           </h1>
           <p className="mt-6 text-white/70 text-sm max-w-md leading-relaxed">
             Tailored to your industry — DecisionOS turns spoken directives into structured tasks, workflows and a shared operational brain.
@@ -207,8 +207,8 @@ export default function Login() {
       <div className="flex items-center justify-center p-6 lg:p-12">
         <div className="w-full max-w-md">
           <div className="lg:hidden flex items-center gap-2 mb-8">
-            <div className="w-8 h-8 bg-brand-red rounded-lg flex items-center justify-center"><span className="font-logo font-black text-white">D</span></div>
-            <span className="font-logo font-black text-xl tracking-tight uppercase leading-none"><span className="text-foreground">Decision</span><span className="text-brand-red">OS</span></span>
+            <div className="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center"><span className="font-logo font-black text-white">D</span></div>
+            <span className="font-logo font-black text-xl tracking-tight uppercase leading-none"><span className="text-foreground">Decision</span><span className="text-brand-600">OS</span></span>
           </div>
 
           <h2 className="font-heading text-3xl font-black uppercase tracking-tighter mb-1">Sign in</h2>
@@ -229,8 +229,8 @@ export default function Login() {
             <form onSubmit={doLogin} className="space-y-4">
               <input data-testid="login-email-input" type="email" className={inputCls} placeholder="Email" value={form.email} onChange={set("email")} required />
               <input data-testid="login-password-input" type="password" className={inputCls} placeholder="Password" value={form.password} onChange={set("password")} required />
-              {error && <p data-testid="auth-error" className="text-sm text-brand-red font-semibold">{error}</p>}
-              <button type="submit" disabled={busy} data-testid="auth-submit-button" className="w-full bg-brand-red text-white font-semibold uppercase tracking-wider py-3 border border-black hover:shadow-brutal transition-all disabled:opacity-50">{busy ? "…" : "Sign in"}</button>
+              {error && <p data-testid="auth-error" className="text-sm text-danger-600 font-semibold">{error}</p>}
+              <button type="submit" disabled={busy} data-testid="auth-submit-button" className="w-full bg-brand-600 text-white font-semibold uppercase tracking-wider py-3 border border-black hover:shadow-brutal transition-all disabled:opacity-50">{busy ? "…" : "Sign in"}</button>
             </form>
           )}
 
@@ -248,8 +248,8 @@ export default function Login() {
                     <label className={labelCls}>Mobile number</label>
                     <input data-testid="otp-phone-input" type="tel" className={`${inputCls} mt-1`} placeholder="Registered mobile number" value={otpPhone} onChange={(e) => setOtpPhone(e.target.value)} required />
                   </div>
-                  {error && <p data-testid="auth-error" className="text-sm text-brand-red font-semibold">{error}</p>}
-                  <button type="submit" disabled={busy} data-testid="otp-submit-button" className="w-full bg-brand-red text-white font-semibold uppercase tracking-wider py-3 border border-black hover:shadow-brutal transition-all disabled:opacity-50">
+                  {error && <p data-testid="auth-error" className="text-sm text-danger-600 font-semibold">{error}</p>}
+                  <button type="submit" disabled={busy} data-testid="otp-submit-button" className="w-full bg-brand-600 text-white font-semibold uppercase tracking-wider py-3 border border-black hover:shadow-brutal transition-all disabled:opacity-50">
                     {busy ? "Sending…" : "Send OTP"}
                   </button>
                 </>
@@ -257,7 +257,7 @@ export default function Login() {
                 <>
                   <div className="flex items-center justify-between border border-black bg-white px-3 py-2.5" data-testid="otp-phone-confirm">
                     <div className="flex items-center gap-2 min-w-0">
-                      <DeviceMobile size={16} weight="bold" className="text-brand-red shrink-0" />
+                      <DeviceMobile size={16} weight="bold" className="text-brand-600 shrink-0" />
                       <span className="text-sm font-mono truncate">Code sent to <strong>{invite?.phone_masked || maskPhone(otpPhone)}</strong></span>
                     </div>
                     <button type="button" onClick={() => { setOtpSent(false); setOtpCode(""); setError(""); setResendIn(0); }} data-testid="otp-change-number"
@@ -269,8 +269,8 @@ export default function Login() {
                       <OtpBoxes value={otpCode} onChange={setOtpCode} disabled={busy} />
                     </div>
                   </div>
-                  {error && <p data-testid="auth-error" className="text-sm text-brand-red font-semibold">{error}</p>}
-                  <button type="submit" disabled={busy || otpCode.length !== 6} data-testid="otp-submit-button" className="w-full bg-brand-red text-white font-semibold uppercase tracking-wider py-3 border border-black hover:shadow-brutal transition-all disabled:opacity-50">
+                  {error && <p data-testid="auth-error" className="text-sm text-danger-600 font-semibold">{error}</p>}
+                  <button type="submit" disabled={busy || otpCode.length !== 6} data-testid="otp-submit-button" className="w-full bg-brand-600 text-white font-semibold uppercase tracking-wider py-3 border border-black hover:shadow-brutal transition-all disabled:opacity-50">
                     {busy ? "Verifying…" : "Verify & sign in"}
                   </button>
                   <div className="text-center text-sm" data-testid="otp-resend-row">

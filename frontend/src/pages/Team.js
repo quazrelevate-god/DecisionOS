@@ -149,12 +149,12 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite, member
           </div>
           <div>
             <div className="flex items-center gap-1.5 mb-2 mt-1">
-              <ShieldCheck size={16} weight="bold" className="text-brand-red" />
+              <ShieldCheck size={16} weight="bold" className="text-brand-600" />
               <label className="label-mono text-muted-foreground">Access — pick what this member can open & use</label>
             </div>
             {form.role === "owner" ? (
-              <div className="border border-brand-red bg-brand-red/5 px-3 py-3 text-sm" data-testid="owner-access-note">
-                <p className="font-semibold flex items-center gap-1.5"><ShieldCheck size={15} weight="bold" className="text-brand-red" /> Full company access</p>
+              <div className="border border-brand-600 bg-brand-600/5 px-3 py-3 text-sm" data-testid="owner-access-note">
+                <p className="font-semibold flex items-center gap-1.5"><ShieldCheck size={15} weight="bold" className="text-brand-600" /> Full company access</p>
                 <p className="text-xs text-muted-foreground mt-1">Owners can open and manage everything — team, finances, workflows and all data. Individual permissions don't apply.</p>
               </div>
             ) : (
@@ -166,7 +166,7 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite, member
                   <button key={p.key} type="button" data-testid={`perm-${p.key}`} aria-pressed={on} onClick={() => togglePerm(p.key)}
                     className={`flex items-center justify-between gap-2 border border-black px-3 py-2 text-xs font-semibold text-left transition-colors ${on ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
                     <span>{p.label}</span>
-                    <span className={`w-4 h-4 shrink-0 flex items-center justify-center border border-current ${on ? "bg-brand-red text-white border-black" : ""}`}>{on && <Check size={10} weight="bold" />}</span>
+                    <span className={`w-4 h-4 shrink-0 flex items-center justify-center border border-current ${on ? "bg-brand-600 text-white border-black" : ""}`}>{on && <Check size={10} weight="bold" />}</span>
                   </button>
                 );
               })}
@@ -192,7 +192,7 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite, member
           </div>
         </div>
         <DialogFooter>
-          <button data-testid="member-save-submit" onClick={save} className="bg-brand-red text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">{editing ? "Save access" : "Add"}</button>
+          <button data-testid="member-save-submit" onClick={save} className="bg-brand-600 text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">{editing ? "Save access" : "Add"}</button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -275,7 +275,7 @@ export function TeamPanel() {
               {u.role !== "owner" && (
                 <span className="label-mono text-muted-foreground" data-testid={`member-access-count-${u.id}`}>{userPerms(u).length} access</span>
               )}
-              <Chip value={u.role} className={u.role === "owner" ? "bg-brand-red text-white" : "bg-brand-blue text-white"} />
+              <Chip value={u.role} className={u.role === "owner" ? "bg-brand-600 text-white" : "bg-brand-blue text-white"} />
               {absentIds.has(u.id) && <Chip value="absent" className="bg-black text-white" data-testid={`absent-badge-${u.id}`} />}
               {canManageTeam && (u.role !== "owner" || isOwner) && (
                 <MemberDialog roleOptions={roleOptions} initial={u} members={data || []} isOwner={isOwner} onSaved={refresh}
@@ -284,7 +284,7 @@ export function TeamPanel() {
               {canManageTeam && u.role !== "owner" && (
                 <>
                   {u.phone && (
-                    <button onClick={() => getInviteLink(u)} data-testid={`invite-link-${u.id}`} className="flex items-center gap-1 text-xs uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-red hover:text-white transition-colors"><LinkSimple size={12} weight="bold" /> Invite</button>
+                    <button onClick={() => getInviteLink(u)} data-testid={`invite-link-${u.id}`} className="flex items-center gap-1 text-xs uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-600 hover:text-white transition-colors"><LinkSimple size={12} weight="bold" /> Invite</button>
                   )}
                   <button onClick={() => toggleAbsent(u)} data-testid={`toggle-absent-${u.id}`} className="text-xs uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-ink hover:text-white transition-colors">
                     {absentIds.has(u.id) ? "Mark present" : "Mark absent"}

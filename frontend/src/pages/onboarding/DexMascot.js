@@ -11,7 +11,7 @@ export const DexMascot = () => (
     {[0, 1, 2].map((i) => (
       <motion.div
         key={`dex-block-${i}`}
-        className={`absolute w-9 h-9 border-2 border-black ${["bg-white", "bg-brand-yellow", "bg-brand-red"][i]}`}
+        className={`absolute w-9 h-9 border-2 border-black ${["bg-white", "bg-brand-yellow", "bg-brand-600"][i]}`}
         style={{ right: 26, bottom: 12 + i * 34 }}
         animate={{ opacity: [0, 1, 1, 1], y: [-28, 0, 0, 0], scale: [0.5, 1, 1, 1] }}
         transition={{ repeat: Infinity, repeatDelay: 1.4, duration: 4, delay: i * 1.3, times: [0, 0.15, 0.92, 1], ease: "easeOut" }}
@@ -38,7 +38,7 @@ export const DexMascot = () => (
       {/* antenna */}
       <div className="absolute left-1/2 -translate-x-1/2 top-0 w-0.5 h-4 bg-black" />
       <motion.div
-        className="absolute left-1/2 -translate-x-1/2 -top-2 w-3 h-3 rounded-full bg-brand-red border border-black"
+        className="absolute left-1/2 -translate-x-1/2 -top-2 w-3 h-3 rounded-full bg-brand-600 border border-black"
         animate={{ scale: [1, 1.35, 1], opacity: [1, 0.65, 1] }}
         transition={{ repeat: Infinity, duration: 1.2 }}
       />
@@ -67,7 +67,7 @@ export const DexMascot = () => (
         animate={{ rotate: [-32, 20, -32] }}
         transition={{ repeat: Infinity, duration: 0.9, ease: "easeInOut" }}
       >
-        <div className="absolute -right-1.5 -top-2.5 w-3.5 h-7 bg-brand-red border-2 border-black" />
+        <div className="absolute -right-1.5 -top-2.5 w-3.5 h-7 bg-brand-600 border-2 border-black" />
       </motion.div>
       {/* idle arm + legs */}
       <div className="absolute top-[70px] -left-2.5 w-6 h-2 bg-black" />

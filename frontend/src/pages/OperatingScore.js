@@ -12,7 +12,7 @@ const CATS = [
   { key: "responsiveness", label: "Responsiveness", icon: ChatCenteredDots, color: "bg-purple-600" },
 ];
 
-const scoreColor = (v) => v == null ? "text-black/30" : v >= 70 ? "text-green-600" : v >= 40 ? "text-amber-600" : "text-brand-red";
+const scoreColor = (v) => v == null ? "text-black/30" : v >= 70 ? "text-green-600" : v >= 40 ? "text-amber-600" : "text-brand-600";
 
 export default function OperatingScore() {
   const { data, isLoading } = useQuery({
@@ -44,7 +44,7 @@ export default function OperatingScore() {
               <span className="label-mono text-muted-foreground leading-tight" data-testid="operating-overall-score">Not enough data yet</span>
             </div>
             <div className="flex items-center gap-2 mt-3">
-              <Gauge size={16} weight="bold" className="text-brand-red" />
+              <Gauge size={16} weight="bold" className="text-brand-600" />
               <span className="font-heading font-extrabold uppercase tracking-tight text-sm">Company Health</span>
             </div>
           </div>
@@ -87,7 +87,7 @@ export default function OperatingScore() {
             <span className="label-mono text-muted-foreground mt-1">/ 100</span>
           </div>
           <div className="flex items-center gap-2 mt-3">
-            <Gauge size={16} weight="bold" className="text-brand-red" />
+            <Gauge size={16} weight="bold" className="text-brand-600" />
             <span className="font-heading font-extrabold uppercase tracking-tight text-sm">Company Health</span>
           </div>
         </div>
@@ -118,7 +118,7 @@ export default function OperatingScore() {
         {[
           { label: "Tasks Done", value: stats.done },
           { label: "Open Tasks", value: stats.open },
-          { label: "Overdue", value: stats.overdue, accent: stats.overdue > 0 ? "text-brand-red" : "" },
+          { label: "Overdue", value: stats.overdue, accent: stats.overdue > 0 ? "text-danger-600" : "" },
           { label: "Open Complaints", value: stats.open_complaints, accent: stats.open_complaints > 0 ? "text-purple-600" : "" },
         ].map((s) => (
           <div key={s.label} className="card-brutal p-4">
@@ -130,7 +130,7 @@ export default function OperatingScore() {
 
       {/* Employee leaderboard */}
       <div className="flex items-center gap-2 mb-4">
-        <Trophy size={18} weight="bold" className="text-brand-red" />
+        <Trophy size={18} weight="bold" className="text-brand-600" />
         <h2 className="font-heading text-xl font-extrabold uppercase tracking-tight">Team Execution</h2>
       </div>
       <p className="label-mono text-muted-foreground mb-3">Tap any member to see their full activity &amp; AI coaching.</p>
@@ -140,16 +140,16 @@ export default function OperatingScore() {
             className="p-4 flex items-center gap-4 hover:bg-black/[0.03] transition-colors group cursor-pointer">
             <span className="font-heading text-lg font-black text-black/30 w-6">{i + 1}</span>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold truncate group-hover:text-brand-red transition-colors">{e.name}</p>
+              <p className="text-sm font-semibold truncate group-hover:text-brand-600 transition-colors">{e.name}</p>
               <p className="label-mono text-muted-foreground">{e.role} · {e.done} done · {e.open} open{e.overdue > 0 ? ` · ${e.overdue} overdue` : ""}</p>
             </div>
-            <span className="hidden sm:flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground group-hover:text-brand-red transition-colors shrink-0">
+            <span className="hidden sm:flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground group-hover:text-brand-600 transition-colors shrink-0">
               <Sparkle size={13} weight="bold" /> Details
             </span>
             <div className="w-14 h-14 flex flex-col items-center justify-center border-2 border-black bg-white shrink-0">
               <span className={`font-heading text-2xl font-black leading-none ${scoreColor(e.score)}`}>{e.score != null ? e.score : "—"}</span>
             </div>
-            <CaretRight size={16} weight="bold" className="text-black/30 group-hover:text-brand-red transition-colors shrink-0" />
+            <CaretRight size={16} weight="bold" className="text-black/30 group-hover:text-brand-600 transition-colors shrink-0" />
           </Link>
         ))}
       </div>

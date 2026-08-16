@@ -119,7 +119,7 @@ function ContactDialog({ trigger, initial, onSaved, users, defaultType }) {
           <textarea className={inp} rows={2} placeholder="Notes" value={form.notes} onChange={set("notes")} />
         </div>
         <DialogFooter>
-          <button data-testid="contact-save-button" onClick={save} className="bg-brand-red text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">
+          <button data-testid="contact-save-button" onClick={save} className="bg-brand-600 text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">
             {initial ? "Save changes" : "Add contact"}
           </button>
         </DialogFooter>
@@ -203,7 +203,7 @@ export function ContactsPanel({ types, addLabel = "Add Contact" }) {
                     users={users} initial={c} onSaved={refresh}
                     trigger={<button data-testid={`edit-contact-${c.id}`} className="w-8 h-8 flex items-center justify-center border border-black hover:bg-brand-ink hover:text-white transition-colors"><PencilSimple size={14} weight="bold" /></button>}
                   />
-                  <button data-testid={`delete-contact-${c.id}`} onClick={() => remove(c.id)} className="w-8 h-8 flex items-center justify-center border border-black hover:bg-brand-red hover:text-white transition-colors"><Trash size={14} weight="bold" /></button>
+                  <button data-testid={`delete-contact-${c.id}`} onClick={() => remove(c.id)} className="w-8 h-8 flex items-center justify-center border border-black hover:bg-danger-600 hover:text-white transition-colors"><Trash size={14} weight="bold" /></button>
                 </div>
               )}
               {!canManage && can360 && (

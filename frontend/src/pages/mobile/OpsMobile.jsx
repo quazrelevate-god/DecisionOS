@@ -48,20 +48,20 @@ const CATS = [
 
 const roleLabel = (r) => (r ? String(r).replace(/^./, (c) => c.toUpperCase()) : "");
 
-// On the dark hero the 600-step ramps used on light surfaces go muddy, so the
-// hero reads from the 400 steps. Same three bands, same meaning.
-const bandOnDark = (v) =>
-  v == null ? "text-white/40" : v >= 70 ? "text-success-400" : v >= 40 ? "text-caution-400" : "text-danger-400";
-// (A matching stroke ramp lived here. The gauge is a fixed translucent white
-// now, so nothing needed it.)
-// The sheet is a light surface and keeps the ordinary steps.
-const bandOnLight = (v) =>
-  v == null ? "text-muted-foreground" : v >= 70 ? "text-success-600" : v >= 40 ? "text-caution-600" : "text-danger-600";
+// The three colour ramps this screen used to band by — a stroke ramp for the
+// arc, a 400-step text ramp for the hero, a 600-step one for the sheet — are
+// all gone. The screen is monochrome: white at varying opacity on the hero,
+// foreground at varying opacity in the sheet. Rank, size and position carry the
+// reading now, and the urgency colours are left to the surfaces that act on
+// them (the Desk's fires, a member's overdue count in their own card).
 
-const R = 47;                      // gauge radius
+const R = 52;                      // gauge radius
 const C = 2 * Math.PI * R;         // circumference, for the dash offset
-const GAUGE = 112;                 // box side; shrunk from 140 to make room
-                                   // for the counters that moved into the hero
+const GAUGE = 124;                 // box side. Sized so the gauge PLUS its
+                                   // caption comes out level with the category
+                                   // pane beside it — the row is centred, so if
+                                   // one column is much shorter the whole thing
+                                   // reads as lopsided.
 
 // The hero is one glass material: translucent white fill, a lighter hairline to
 // catch the "edge", and no colour of its own. Everything floating on the dark
@@ -80,27 +80,34 @@ const GLASS = "bg-white/[0.07] border border-white/[0.12] backdrop-blur-md";
 function Gauge({ value, armed }) {
   const pct = Math.max(0, Math.min(100, value ?? 0));
   return (
-    <div className="relative shrink-0" style={{ width: GAUGE, height: GAUGE }}>
-      <svg width={GAUGE} height={GAUGE} viewBox={`0 0 ${GAUGE} ${GAUGE}`} className="-rotate-90">
-        <circle cx={GAUGE / 2} cy={GAUGE / 2} r={R} fill="none" strokeWidth="9" className="stroke-white/[0.10]" />
-        <circle
-          cx={GAUGE / 2} cy={GAUGE / 2} r={R} fill="none" strokeWidth="9" strokeLinecap="round"
-          className="stroke-white/70 transition-[stroke-dashoffset] duration-[900ms] ease-out motion-reduce:transition-none"
-          strokeDasharray={C}
-          // Held at empty for the first frame so the sweep has somewhere to
-          // travel from; `armed` flips on the next tick.
-          strokeDashoffset={armed ? C - (pct / 100) * C : C}
-        />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span
-          className="font-heading text-[34px] font-black leading-none tabular-nums text-white/90"
-          data-testid="ops-overall-score"
-        >
-          {value == null ? "—" : value}
-        </span>
-        <span className="label-mono text-white/40 mt-0.5">/ 100</span>
+    <div className="shrink-0 flex flex-col items-center">
+      <div className="relative" style={{ width: GAUGE, height: GAUGE }}>
+        <svg width={GAUGE} height={GAUGE} viewBox={`0 0 ${GAUGE} ${GAUGE}`} className="-rotate-90">
+          <circle cx={GAUGE / 2} cy={GAUGE / 2} r={R} fill="none" strokeWidth="10" className="stroke-white/[0.10]" />
+          <circle
+            cx={GAUGE / 2} cy={GAUGE / 2} r={R} fill="none" strokeWidth="10" strokeLinecap="round"
+            className="stroke-white/70 transition-[stroke-dashoffset] duration-[900ms] ease-out motion-reduce:transition-none"
+            strokeDasharray={C}
+            // Held at empty for the first frame so the sweep has somewhere to
+            // travel from; `armed` flips on the next tick.
+            strokeDashoffset={armed ? C - (pct / 100) * C : C}
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span
+            className="font-heading text-[38px] font-black leading-none tabular-nums text-white/90"
+            data-testid="ops-overall-score"
+          >
+            {value == null ? "—" : value}
+          </span>
+          <span className="label-mono text-white/40 mt-0.5">/ 100</span>
+        </div>
       </div>
+      {/* The dial had no name. The four categories beside it are all labelled,
+          so the one unlabelled thing was the number the screen is about. */}
+      <span className="label-mono text-white/45 mt-1.5 whitespace-nowrap" data-testid="ops-score-caption">
+        Operating score
+      </span>
     </div>
   );
 }
@@ -121,7 +128,7 @@ function CatTrack({ cat, value, armed, index }) {
         <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-white/60">
           <cat.icon size={13} weight="bold" /> {cat.label}
         </span>
-        <span className={cn("font-heading text-sm font-black tabular-nums", bandOnDark(value))}>
+        <span className="font-heading text-sm font-black tabular-nums text-white/90">
           {has ? value : "—"}
         </span>
       </div>
@@ -138,12 +145,10 @@ function CatTrack({ cat, value, armed, index }) {
 }
 
 /** A company counter, as a glass tile on the hero rather than a card in the sheet. */
-function HeroCounter({ label, value, accent }) {
+function HeroCounter({ label, value }) {
   return (
     <div className={cn("rounded-xl px-1 py-1.5 text-center", GLASS)}>
-      <p className={cn("font-heading text-base font-black leading-none tabular-nums", accent || "text-white/90")}>
-        {value}
-      </p>
+      <p className="font-heading text-base font-black leading-none tabular-nums text-white/90">{value}</p>
       <p className="label-mono mt-1 text-[9px] tracking-normal text-white/45">{label}</p>
     </div>
   );
@@ -236,7 +241,11 @@ export default function OpsMobile() {
             content sized to itself, so the category tracks stopped ~70px short
             of the gutter. A column stretches children across the cross axis,
             which is the width, and justify-center still does the centring. */}
-        <div className="relative h-[43svh] flex flex-col justify-center gap-2 px-5 pb-4 pt-[calc(env(safe-area-inset-top,0px)+3.5rem)]">
+        {/* gap-4, not gap-2: the counters were crowding the dial and its
+            caption. The column is centred, so the extra 8px comes off the
+            clearance to the sheet lip at both ends — checked at 375x667, the
+            tightest common device, before raising it. */}
+        <div className="relative h-[43svh] flex flex-col justify-center gap-4 px-5 pb-4 pt-[calc(env(safe-area-inset-top,0px)+3.5rem)]">
           {enough ? (
             <>
               <div className="flex items-center gap-3">
@@ -257,8 +266,8 @@ export default function OpsMobile() {
               <div className="grid grid-cols-4 gap-2" data-testid="ops-stats">
                 <HeroCounter label="Done" value={stats?.done || 0} />
                 <HeroCounter label="Open" value={stats?.open || 0} />
-                <HeroCounter label="Overdue" value={stats?.overdue || 0} accent={(stats?.overdue || 0) > 0 ? "text-danger-400" : undefined} />
-                <HeroCounter label="Issues" value={stats?.open_complaints || 0} accent={(stats?.open_complaints || 0) > 0 ? "text-caution-400" : undefined} />
+                <HeroCounter label="Overdue" value={stats?.overdue || 0} />
+                <HeroCounter label="Issues" value={stats?.open_complaints || 0} />
               </div>
             </>
           ) : (
@@ -354,7 +363,7 @@ export default function OpsMobile() {
                             that reads as redaction, not as "no score yet". A
                             new member gets a light middle dot instead. */}
                         {p.score != null ? (
-                          <span className={cn("font-heading text-lg font-black leading-none tabular-nums", bandOnLight(p.score))}>
+                          <span className="font-heading text-lg font-black leading-none tabular-nums text-foreground">
                             {p.score}
                           </span>
                         ) : (

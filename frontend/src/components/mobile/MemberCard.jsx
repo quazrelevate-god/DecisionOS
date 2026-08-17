@@ -150,10 +150,13 @@ export function MemberCard({
               <>
                 {/* Proof uploads, plans used, photos and voice updates are
                     deliberately not here — four tiles removed by request. */}
+                {/* Monochrome, like the Ops hero these were opened from — a
+                    green Done beside a red Overdue made four counters argue
+                    when only their values differ. */}
                 <div className="grid grid-cols-4 gap-2" data-testid="member-card-stats">
-                  <Counter label="Done" value={stats.completed} accent="text-success-600" />
+                  <Counter label="Done" value={stats.completed} />
                   <Counter label="Open" value={stats.open} />
-                  <Counter label="Overdue" value={stats.overdue} accent={stats.overdue > 0 ? "text-danger-600" : ""} />
+                  <Counter label="Overdue" value={stats.overdue} />
                   <Counter label="Rate" value={stats.completion_rate} suffix="%" />
                 </div>
 

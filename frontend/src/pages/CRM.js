@@ -426,56 +426,80 @@ export default function CRM() {
         eyebrow={t("crm.eyebrow", { customers: L.customer_plural.toLowerCase(), suppliers: L.vendor_plural.toLowerCase() })}
         title={t("crm.title")}
       >
+        {/* U7-07 (2026-08-17): three equal-weight header CTAs (Add
+            Buyer / Add Supplier / Import CSV) collapsed to ONE primary
+            "+ Add contact" with a small popover menu. Founder ask:
+            HRM-minimalism -- one primary action, secondary paths tucked.
+            Hidden input for CSV lives once at the page root and is
+            triggered from the menu item. */}
         {(canManage || canImport) && (
-          <div className="flex flex-wrap gap-2">
-            {canManage && (
-              <CrmContactDialog
-                users={users}
-                defaultType="customer"
-                onSaved={refresh}
-                trigger={
-                  <button data-testid="crm-add-customer" className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
-                    <Plus size={16} weight="bold" /> {t("crm.add_customer", { name: L.customer_singular })}
-                  </button>
-                }
-              />
-            )}
-            {canManage && (
-              <CrmContactDialog
-                users={users}
-                defaultType="vendor"
-                onSaved={refresh}
-                trigger={
-                  <button data-testid="crm-add-supplier" className="flex items-center gap-2 bg-brand-yellow text-black px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
-                    <Plus size={16} weight="bold" /> {t("crm.add_supplier", { name: L.vendor_singular })}
-                  </button>
-                }
-              />
-            )}
-            {/* E2-72: bulk CSV / XLSX import. Perm gate matches the
-                backend endpoint (data_input) so we don't surface a
-                button that would 403. */}
+          <div className="flex items-center gap-2">
             {canImport && (
-              <>
-                <input
-                  ref={csvInputRef}
-                  type="file"
-                  accept=".csv,.xlsx,.xls"
-                  onChange={onCsvChosen}
-                  className="hidden"
-                  data-testid="crm-import-csv-input"
-                />
-                <button
-                  onClick={() => csvInputRef.current?.click()}
-                  disabled={csvBusy}
-                  data-testid="crm-import-csv"
-                  title="Bulk-import contacts from CSV or Excel. The AI reads the columns; you review + file in the Finance inbox."
-                  className="flex items-center gap-2 bg-white text-black px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all disabled:opacity-50"
-                >
-                  <UploadSimple size={16} weight="bold" /> {csvBusy ? "Uploading…" : "Import CSV"}
-                </button>
-              </>
+              <input
+                ref={csvInputRef}
+                type="file"
+                accept=".csv,.xlsx,.xls"
+                onChange={onCsvChosen}
+                className="hidden"
+                data-testid="crm-import-csv-input"
+              />
             )}
+            <CrmContactDialog
+              users={users}
+              defaultType="customer"
+              onSaved={refresh}
+              trigger={
+                <button data-testid="crm-add-customer" className="hidden" aria-hidden="true" />
+              }
+            />
+            <CrmContactDialog
+              users={users}
+              defaultType="vendor"
+              onSaved={refresh}
+              trigger={
+                <button data-testid="crm-add-supplier" className="hidden" aria-hidden="true" />
+              }
+            />
+            <details className="relative" data-testid="crm-add-menu">
+              <summary className="list-none cursor-pointer flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold border border-black hover:shadow-brutal transition-all">
+                <Plus size={16} weight="bold" /> Add contact
+                <span className="text-white/60">▾</span>
+              </summary>
+              <div className="absolute right-0 top-full mt-1 z-30 min-w-[220px] border border-black bg-white shadow-brutal">
+                {canManage && (
+                  <button
+                    type="button"
+                    onClick={() => document.querySelector('[data-testid="crm-add-customer"]')?.click()}
+                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-brand-yellow border-b border-black/10"
+                  >
+                    <span className="font-semibold">+ {L.customer_singular}</span>
+                    <span className="block label-mono text-muted-foreground">A buyer / retail account / dealer</span>
+                  </button>
+                )}
+                {canManage && (
+                  <button
+                    type="button"
+                    onClick={() => document.querySelector('[data-testid="crm-add-supplier"]')?.click()}
+                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-brand-yellow border-b border-black/10"
+                  >
+                    <span className="font-semibold">+ {L.vendor_singular}</span>
+                    <span className="block label-mono text-muted-foreground">A supplier / vendor / raw-material source</span>
+                  </button>
+                )}
+                {canImport && (
+                  <button
+                    type="button"
+                    onClick={() => csvInputRef.current?.click()}
+                    disabled={csvBusy}
+                    data-testid="crm-import-csv"
+                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-brand-yellow disabled:opacity-50"
+                  >
+                    <span className="font-semibold">{csvBusy ? "Uploading…" : "Import CSV / Excel"}</span>
+                    <span className="block label-mono text-muted-foreground">Bulk-add from a spreadsheet</span>
+                  </button>
+                )}
+              </div>
+            </details>
           </div>
         )}
       </PageHeader>
@@ -564,129 +588,129 @@ export default function CRM() {
           const payablesTxt = formatIndianCurrency(outstanding?.payables || 0);
           const complaintCount = complaintCountByContact[c.id] || 0;
           const touched = touchedLabel(daysSince(c.updated_at || c.created_at));
+          // U7-07 (2026-08-17): card density fix. Was 11+ elements per card
+          // (5 chips + 4 action icons + 3 contact lines + owner + outstanding
+          // + touched + red badge). Now: name + one type chip + status dot
+          // + one key signal + touched. Chip row max 2 (type + lifecycle).
+          // Contact info + tags + all actions move to the profile page --
+          // card face is scan-only. Whole card click goes to profile
+          // (kills redundant 360° icon). Owner is a subtle line at bottom.
+          // Lexicon-consistent: uses L.customer_singular / L.vendor_singular
+          // so "BUYER"/"SUPPLIER" matches the tenant lexicon on both the
+          // scope chip and the card.
+          const typeChipLabel = isCustomer
+            ? L.customer_singular.toUpperCase()
+            : L.vendor_singular.toUpperCase();
+          const stage = stageMeta(c.type, c.lifecycle_stage);
+          const statusDot =
+            c.status === "active" ? "bg-green-600"
+            : c.status === "lead" ? "bg-amber-500"
+            : "bg-black/30";
+          const ownerName = c.assigned_id && users
+            ? users.find((u) => u.id === c.assigned_id)?.name
+            : null;
+          const isOverdue = outstanding?.oldest_days != null && outstanding.oldest_days > 30;
+
+          // The card's one "key signal" -- pick the most urgent piece of
+          // information to surface, don't stack them all.
+          let keySignal = null;
+          if (complaintCount > 0) {
+            keySignal = {
+              icon: WarningIcon,
+              text: `${complaintCount} open complaint${complaintCount === 1 ? "" : "s"}`,
+              tone: "text-danger-600",
+            };
+          } else if (receivablesTxt) {
+            keySignal = {
+              icon: CurrencyInr,
+              text: `${receivablesTxt} owed${isOverdue ? ` · oldest ${outstanding.oldest_days}d` : ""}`,
+              tone: isOverdue ? "text-danger-600" : "text-brand-600",
+            };
+          } else if (payablesTxt) {
+            keySignal = {
+              icon: CurrencyInr,
+              text: `${payablesTxt} to pay`,
+              tone: "text-black/70",
+            };
+          }
+
           return (
-            <div
+            <button
+              type="button"
               key={c.id}
               data-testid={`crm-card-${c.id}`}
-              className="card-brutal p-5 shadow-hover cursor-pointer relative"
               onClick={() => can360 && navigate(`/contacts/${c.id}`)}
+              disabled={!can360}
+              className="text-left border border-black/15 p-4 bg-white hover:border-black hover:shadow-brutal-sm transition-all disabled:cursor-default"
             >
-              {/* E2-69: red dot when this customer has open complaints. */}
-              {complaintCount > 0 && (
-                <div
-                  data-testid={`crm-complaint-dot-${c.id}`}
-                  title={`${complaintCount} open complaint${complaintCount === 1 ? "" : "s"}`}
-                  className="absolute -top-1.5 -right-1.5 min-w-[22px] h-[22px] px-1.5 flex items-center justify-center bg-brand-600 text-white text-[11px] font-bold border border-black shadow-brutal-sm"
-                >
-                  {complaintCount}
-                </div>
-              )}
-              <div className="flex items-start justify-between gap-2 mb-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Chip
-                    value={typeLabel(c.type)}
-                    className={isCustomer ? "bg-brand-blue text-white" : "bg-brand-yellow text-black"}
-                  />
-                  <Chip
-                    value={c.status}
-                    className={c.status === "active" ? "bg-brand-ink text-white" : c.status === "lead" ? "bg-brand-yellow text-black" : "bg-black/10 text-black"}
-                  />
-                  {/* E2-03: lifecycle stage chip. Only renders when set. */}
-                  {stageMeta(c.type, c.lifecycle_stage) && (
-                    <Chip
-                      value={stageMeta(c.type, c.lifecycle_stage).label}
-                      className={stageMeta(c.type, c.lifecycle_stage).cls}
-                      data-testid={`crm-stage-${c.id}`}
+              {/* Header: name + type + subtle status dot. Complaint red
+                  dot sits inline next to name -- softer than the floating
+                  corner badge that used to hover the card. */}
+              <div className="flex items-start justify-between gap-2 mb-1">
+                <div className="min-w-0 flex-1">
+                  <p className="font-heading font-bold text-base leading-tight flex items-center gap-2">
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDot}`}
+                      aria-hidden="true"
+                      title={c.status}
                     />
-                  )}
-                  {(c.tags || []).slice(0, 2).map((tag) => (
-                    <Chip key={tag} value={tag} className="bg-black/5 text-black" />
-                  ))}
-                </div>
-                <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                  {can360 && (
-                    <button
-                      data-testid={`crm-view-profile-${c.id}`}
-                      onClick={() => navigate(`/contacts/${c.id}`)}
-                      title="360° profile"
-                      className="w-8 h-8 flex items-center justify-center border border-black hover:bg-brand-blue hover:text-white transition-colors"
-                    >
-                      <Eye size={14} weight="bold" />
-                    </button>
-                  )}
-                  {canManage && (
-                    <>
-                      {isCustomer && <ComplaintDialog contact={c} onSaved={refresh} />}
-                      <CrmContactDialog
-                        users={users}
-                        initial={c}
-                        onSaved={refresh}
-                        trigger={
-                          <button data-testid={`crm-edit-${c.id}`} className="w-8 h-8 flex items-center justify-center border border-black hover:bg-brand-ink hover:text-white transition-colors">
-                            <PencilSimple size={14} weight="bold" />
-                          </button>
-                        }
-                      />
-                      <button
-                        data-testid={`crm-delete-${c.id}`}
-                        onClick={() => remove(c.id)}
-                        className="w-8 h-8 flex items-center justify-center border border-black hover:bg-brand-600 hover:text-white transition-colors"
+                    <span className="truncate">{c.name}</span>
+                    {complaintCount > 0 && (
+                      <span
+                        data-testid={`crm-complaint-dot-${c.id}`}
+                        title={`${complaintCount} open complaint${complaintCount === 1 ? "" : "s"}`}
+                        className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-danger-600 text-white text-[10px] font-bold rounded-full shrink-0"
                       >
-                        <Trash size={14} weight="bold" />
-                      </button>
-                    </>
-                  )}
+                        {complaintCount}
+                      </span>
+                    )}
+                  </p>
+                  {c.company && <p className="text-xs text-muted-foreground truncate">{c.company}</p>}
                 </div>
-              </div>
-              <p className="font-heading font-bold text-lg leading-tight">{c.name}</p>
-              {c.company && <p className="text-sm text-muted-foreground">{c.company}</p>}
-              <div className="mt-3 space-y-1 text-sm">
-                {c.phone && <p className="flex items-center gap-2"><Phone size={14} weight="bold" className="text-muted-foreground" /> {c.phone}</p>}
-                {c.email && <p className="flex items-center gap-2 break-all"><EnvelopeSimple size={14} weight="bold" className="text-muted-foreground" /> {c.email}</p>}
-                {c.address && <p className="flex items-center gap-2"><MapPin size={14} weight="bold" className="text-muted-foreground" /> {c.address}</p>}
-              </div>
-              {/* E2-67: outstanding pill. Only renders when there's an
-                  actual number to show -- keeps healthy cards clean. */}
-              {(receivablesTxt || payablesTxt) && (
-                <div className="mt-3 flex flex-wrap items-center gap-2" data-testid={`crm-outstanding-${c.id}`}>
-                  {receivablesTxt && (
-                    <span
-                      className="inline-flex items-center gap-1 px-2 py-1 border border-black bg-brand-600/10 text-brand-600 text-xs font-mono font-bold"
-                      title="They owe you (unpaid customer invoices)"
-                    >
-                      <CurrencyInr size={12} weight="bold" /> {receivablesTxt} owed
-                    </span>
-                  )}
-                  {payablesTxt && (
-                    <span
-                      className="inline-flex items-center gap-1 px-2 py-1 border border-black bg-brand-yellow/40 text-black text-xs font-mono font-bold"
-                      title="You owe them (unpaid supplier bills)"
-                    >
-                      <CurrencyInr size={12} weight="bold" /> {payablesTxt} to pay
-                    </span>
-                  )}
-                  {outstanding?.oldest_days != null && outstanding.oldest_days > 30 && (
-                    <span className="text-[11px] text-brand-600 font-mono">
-                      · oldest {outstanding.oldest_days}d
-                    </span>
-                  )}
-                </div>
-              )}
-              {/* E2-71: last-touched hint so relationships going cold surface. */}
-              <div className="mt-3 flex items-center justify-between gap-2 text-[11px] uppercase tracking-wider text-muted-foreground">
-                {c.assigned_id && users && (
-                  <span>Owner: {users.find((u) => u.id === c.assigned_id)?.name || "—"}</span>
-                )}
-                {touched && (
+                <div className="flex items-center gap-1 shrink-0">
                   <span
-                    className="flex items-center gap-1 font-mono normal-case tracking-normal"
-                    data-testid={`crm-touched-${c.id}`}
+                    className={`label-mono px-1.5 py-0.5 border ${isCustomer ? "border-brand-blue text-brand-blue" : "border-black text-black"}`}
+                    data-testid={`crm-type-chip-${c.id}`}
                   >
-                    <Clock size={12} weight="bold" /> {touched}
+                    {typeChipLabel}
+                  </span>
+                  {stage && (
+                    <span
+                      className={`label-mono px-1.5 py-0.5 ${stage.cls}`}
+                      data-testid={`crm-stage-${c.id}`}
+                    >
+                      {stage.label}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* One-line key signal -- complaints > receivables > payables.
+                  Absent when the relationship is healthy, keeps those cards
+                  clean. */}
+              {keySignal && (
+                <p
+                  className={`mt-3 flex items-center gap-1.5 text-sm font-mono font-semibold ${keySignal.tone}`}
+                  data-testid={`crm-signal-${c.id}`}
+                >
+                  <keySignal.icon size={13} weight="bold" />
+                  {keySignal.text}
+                </p>
+              )}
+
+              {/* Footer meta: touched-ago + owner (if any). Small, muted,
+                  right-aligned owner. */}
+              <div className="mt-3 pt-3 border-t border-black/10 flex items-center justify-between text-xs text-muted-foreground">
+                {touched && (
+                  <span className="flex items-center gap-1" data-testid={`crm-touched-${c.id}`}>
+                    <Clock size={11} weight="bold" /> {touched}
                   </span>
                 )}
+                {ownerName && (
+                  <span className="truncate ml-2">Owner: {ownerName}</span>
+                )}
               </div>
-            </div>
+            </button>
           );
         })}
       </div>

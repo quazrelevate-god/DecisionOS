@@ -731,3 +731,102 @@
         }
     }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   NM-1 — the soft-depth (neumorphic) layer. NEUMORPHIC-REVAMP.md §2.
+
+   Additive on top of the RD-1 token file above: nothing there moves. The rule
+   that governs every use of these tokens is §0's — soft depth styles the
+   FURNITURE (cards, panels, tiles, inputs); it never styles the MESSAGE
+   (text, money, status badges, the primary action). And every raised surface
+   carries the low-opacity hairline: invisible in good light, it is what keeps
+   a component boundary at WCAG's 3:1 when glare eats the shadows. Not
+   decoration — do not remove it.
+   ═════════════════════════════════════════════════════════════════════════ */
+@layer base {
+    :root {
+        /* Soft-depth surface. Depth needs a mid-tone to cast onto, so the page
+           background moves off near-white. Cards then sit at the SAME value
+           and are separated by shadow, not by fill. */
+        --nm-bg:          228 30% 95%;   /* #EEF0F6 — page + card surface */
+        --nm-raised:      228 33% 97%;   /* #F5F6FA — one step up */
+        --nm-sunken:      228 26% 92%;   /* #E5E8F0 — inset wells */
+
+        /* The light source: top-left. Two shadows, always as a pair. The dark
+           shadow is a cool indigo-grey, never pure black (§6). */
+        --nm-light:       255 255 255;
+        --nm-dark:        163 172 196;
+
+        --nm-shadow-sm:
+             3px  3px  6px rgb(var(--nm-dark) / .30),
+            -3px -3px  6px rgb(var(--nm-light) / .85);
+        --nm-shadow-md:
+             6px  6px 14px rgb(var(--nm-dark) / .32),
+            -6px -6px 14px rgb(var(--nm-light) / .90);
+        --nm-shadow-lg:
+            10px 10px 26px rgb(var(--nm-dark) / .34),
+           -10px -10px 26px rgb(var(--nm-light) / .92);
+        --nm-inset:
+            inset  3px  3px 7px rgb(var(--nm-dark) / .38),
+            inset -3px -3px 7px rgb(var(--nm-light) / .85);
+        --nm-pressed:
+            inset  2px  2px 5px rgb(var(--nm-dark) / .45),
+            inset -2px -2px 5px rgb(var(--nm-light) / .70);
+
+        /* THE ACCESSIBILITY HAIRLINE. */
+        --nm-edge: 228 20% 82%;
+
+        --radius-control: 14px;
+        --radius-tile:    16px;
+        --radius-card:    20px;
+    }
+
+    .dark {
+        /* Dark neumorphism goes muddy if both shadows stay equal: the
+           highlight has nowhere to go. Drop it to a whisper and lean on a
+           slightly raised surface instead. */
+        --nm-bg:      223 17% 10%;
+        --nm-raised:  222 16% 13%;
+        --nm-sunken:  225 18% 7%;
+        --nm-light:   90 96 112;
+        --nm-dark:    5 6 9;
+        --nm-shadow-sm:  3px 3px  6px rgb(var(--nm-dark) / .55), -3px -3px 6px rgb(var(--nm-light) / .16);
+        --nm-shadow-md:  6px 6px 14px rgb(var(--nm-dark) / .60), -6px -6px 14px rgb(var(--nm-light) / .14);
+        --nm-shadow-lg: 10px 10px 26px rgb(var(--nm-dark) / .65), -10px -10px 26px rgb(var(--nm-light) / .12);
+        --nm-inset:      inset 3px 3px 7px rgb(var(--nm-dark) / .65), inset -3px -3px 7px rgb(var(--nm-light) / .12);
+        --nm-pressed:    inset 2px 2px 5px rgb(var(--nm-dark) / .70), inset -2px -2px 5px rgb(var(--nm-light) / .10);
+        --nm-edge: 223 14% 24%;
+    }
+}
+
+/* The three surface recipes. Every call site uses one of these — no hand-
+   rolled box-shadow at a call site, ever (§6). @layer components, not
+   utilities: this codebase has measured Tailwind tree-shaking custom
+   utilities-layer rules out; components-layer classes referenced statically
+   in JSX survive (proven by .label-mono above), and the layer keeps plain
+   utilities able to override individual properties at a call site. */
+@layer components {
+    .nm-raised { @apply bg-nm rounded-cardlg shadow-nm border border-nm-edge/40; }
+    .nm-tile   { @apply bg-nm rounded-tile   shadow-nm-sm border border-nm-edge/40; }
+    .nm-inset  { @apply bg-nm-sunken rounded-control shadow-nm-in border border-nm-edge/25; }
+}
+
+/* §4 — mobile constraints, in the tokens themselves rather than at call
+   sites: below lg every recipe's spread shrinks ~40% (large soft shadows on
+   a 390px screen eat perceived space and cost paint), nm-lg collapses to md
+   so it cannot appear at all, and the hairline rises from barely-there to
+   clearly-there because glare kills the shadow and the hairline is what
+   survives. Call sites stay identical across breakpoints; the tokens flex. */
+@media (max-width: 1023.98px) {
+    :root {
+        --nm-shadow-sm:
+             2px  2px  4px rgb(var(--nm-dark) / .30),
+            -2px -2px  4px rgb(var(--nm-light) / .85);
+        --nm-shadow-md:
+             4px  4px  8px rgb(var(--nm-dark) / .32),
+            -4px -4px  8px rgb(var(--nm-light) / .90);
+        --nm-shadow-lg: var(--nm-shadow-md);
+    }
+    .nm-raised, .nm-tile { border-color: hsl(var(--nm-edge) / .70); }
+    .nm-inset            { border-color: hsl(var(--nm-edge) / .50); }
+}

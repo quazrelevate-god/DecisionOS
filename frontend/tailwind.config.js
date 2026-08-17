@@ -24,6 +24,12 @@ module.exports = {
                 sm: 'var(--radius)',
                 xl: 'var(--radius-xl)',
                 pill: 'var(--radius-pill)',
+                // NM-1 — the soft-depth radius scale (§2): 14 controls,
+                // 16 tiles, 20 cards. `cardlg`, not `card`: rounded-card would
+                // shadow the card colour utilities' namespace in class names.
+                control: 'var(--radius-control)',
+                tile: 'var(--radius-tile)',
+                cardlg: 'var(--radius-card)',
             },
             // MPWA-01 (§5.1) — the mobile touch scale. 44 is the floor, 48 the
             // comfortable tier, 56 the money-committing tier (Approve/Reject).
@@ -156,6 +162,28 @@ module.exports = {
                 brutal: 'none',
                 'brutal-sm': 'none',
                 'brutal-lg': '0 16px 40px -12px rgba(12,12,20,.16), 0 4px 12px -4px rgba(12,12,20,.06)',
+                /* NM-1 — the soft-depth recipes (§2). Values live in index.css;
+                   these are names only, so light/dark/mobile variants flex in
+                   one place. RD-1's "no shadow on resting surfaces" rule is
+                   amended by NEUMORPHIC-REVAMP §0: furniture may now carry the
+                   dual shadow, but always WITH the border-nm-edge hairline —
+                   the shadow is atmosphere, the hairline is the boundary. */
+                'nm-sm': 'var(--nm-shadow-sm)',
+                nm: 'var(--nm-shadow-md)',
+                'nm-lg': 'var(--nm-shadow-lg)',
+                'nm-in': 'var(--nm-inset)',
+                'nm-press': 'var(--nm-pressed)',
+            },
+            /* NM-1 — surface + edge names. backgroundColor/borderColor rather
+               than `colors` so bg-nm cannot spawn text-nm/ring-nm variants
+               nobody should use: the nm tokens are surfaces, not a palette. */
+            backgroundColor: {
+                nm: 'hsl(var(--nm-bg))',
+                'nm-raised': 'hsl(var(--nm-raised))',
+                'nm-sunken': 'hsl(var(--nm-sunken))',
+            },
+            borderColor: {
+                'nm-edge': 'hsl(var(--nm-edge))',
             },
             keyframes: {
                 'accordion-down': { from: { height: '0' }, to: { height: 'var(--radix-accordion-content-height)' } },

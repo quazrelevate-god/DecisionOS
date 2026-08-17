@@ -159,8 +159,17 @@ function ComplaintDialog({ contact, onSaved }) {
   );
 }
 
+// U7-07 (2026-08-17): dialog polished for the "add contact" flow.
+// Was: 10 fields in a raw 2-col grid, `type` and `status` selects
+// on top, name buried in row 4. Now: segmented Type control (only
+// on new), name auto-focused, sectioned layout (Identity → Contact
+// → Classification), and everything the owner rarely fills on
+// first-touch (GSTIN, address, tags, owner, notes) hidden behind
+// a "More details" toggle. Editing an existing contact expands the
+// advanced section by default so nothing looks missing.
 function CrmContactDialog({ trigger, initial, onSaved, users, defaultType }) {
   const [open, setOpen] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const blank = { type: defaultType || "customer", name: "", company: "", phone: "", email: "", address: "", tax_id: "", tags: "", status: "lead", assigned_id: "", notes: "", birthday: "", lifecycle_stage: "" };
   const [form, setForm] = useState(blank);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -171,13 +180,15 @@ function CrmContactDialog({ trigger, initial, onSaved, users, defaultType }) {
       setForm(initial
         ? { ...initial, tags: (initial.tags || []).join(", "), assigned_id: initial.assigned_id || "", company: initial.company || "", phone: initial.phone || "", email: initial.email || "", address: initial.address || "", tax_id: initial.tax_id || "", notes: initial.notes || "", birthday: initial.birthday || "", lifecycle_stage: initial.lifecycle_stage || "" }
         : { ...blank, type: defaultType || "customer" });
+      // Expand advanced when editing (details may already exist);
+      // collapse when creating fresh (name + phone is enough to start).
+      setShowAdvanced(!!initial);
     }
   };
 
   // E2-03: reset stage when type changes so we never end up with a
   // 'churned' supplier (invalid combo).
-  const changeType = (e) => {
-    const t = e.target.value;
+  const applyType = (t) => {
     const valid = new Set(stagesForType(t).map((s) => s.key));
     setForm((f) => ({ ...f, type: t, lifecycle_stage: valid.has(f.lifecycle_stage) ? f.lifecycle_stage : "" }));
   };
@@ -202,52 +213,257 @@ function CrmContactDialog({ trigger, initial, onSaved, users, defaultType }) {
     }
   };
 
+  const TYPE_TABS = [
+    { key: "customer", label: typeLabel("customer") },
+    { key: "dealer", label: typeLabel("dealer") },
+    { key: "vendor", label: typeLabel("vendor") },
+  ];
+
+  const dialogTitle = initial
+    ? `Edit ${initial.name}`
+    : `New ${typeLabel(form.type).toLowerCase()}`;
+
   return (
     <Dialog open={open} onOpenChange={openChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="border border-black rounded-none max-w-lg" data-testid="crm-contact-dialog">
-        <DialogHeader><DialogTitle className="font-heading uppercase tracking-tight">{initial ? "Edit" : "New"} contact</DialogTitle></DialogHeader>
-        <div className="grid grid-cols-2 gap-3">
-          <select className={inp} value={form.type} onChange={changeType} data-testid="crm-contact-type">
-            {["customer", "dealer", "vendor"].map((t) => <option key={t} value={t}>{typeLabel(t)}</option>)}
-          </select>
-          <select className={inp} value={form.status} onChange={set("status")}>
-            {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-          {/* E2-03: lifecycle_stage select. Options change with type. */}
-          <select
-            className={`${inp} col-span-2`}
-            value={form.lifecycle_stage || ""}
-            onChange={set("lifecycle_stage")}
-            data-testid="crm-contact-lifecycle"
-          >
-            <option value="">Lifecycle stage — unset</option>
-            {stagesForType(form.type).map((s) => (
-              <option key={s.key} value={s.key}>{s.label}</option>
-            ))}
-          </select>
-          <input className={`${inp} col-span-2`} placeholder="Name *" value={form.name} onChange={set("name")} data-testid="crm-contact-name" />
-          <input className={inp} placeholder="Company" value={form.company} onChange={set("company")} />
-          <input className={inp} placeholder="Phone" value={form.phone} onChange={set("phone")} />
-          <input className={inp} placeholder="Email" value={form.email} onChange={set("email")} />
-          <input className={inp} placeholder="GSTIN / Tax ID" value={form.tax_id} onChange={set("tax_id")} />
-          <input className={`${inp} col-span-2`} placeholder="Address" value={form.address} onChange={set("address")} />
-          <input className={`${inp} col-span-2`} placeholder="Tags (comma separated)" value={form.tags} onChange={set("tags")} />
-          {users && users.length > 0 && (
-            <select className={`${inp} col-span-2`} value={form.assigned_id} onChange={set("assigned_id")}>
-              <option value="">Owner — unassigned</option>
-              {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-            </select>
+      <DialogContent className="border border-black rounded-none max-w-xl" data-testid="crm-contact-dialog">
+        <DialogHeader>
+          <DialogTitle className="font-heading uppercase tracking-tight">{dialogTitle}</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-5">
+          {/* Type — segmented control; only shown when creating. Editing
+              locks the type since changing it silently resets lifecycle. */}
+          {!initial && (
+            <div>
+              <p className="label-mono text-muted-foreground mb-2">Type</p>
+              <div className="flex border border-black" data-testid="crm-contact-type">
+                {TYPE_TABS.map((tab, i) => {
+                  const active = form.type === tab.key;
+                  return (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      onClick={() => applyType(tab.key)}
+                      data-testid={`crm-contact-type-${tab.key}`}
+                      className={`flex-1 py-2 text-sm font-semibold uppercase tracking-wider transition-colors ${
+                        active ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"
+                      } ${i < TYPE_TABS.length - 1 ? "border-r border-black" : ""}`}
+                    >
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           )}
-          <textarea className={`${inp} col-span-2`} rows={2} placeholder="Notes" value={form.notes} onChange={set("notes")} />
+
+          {/* Identity */}
+          <div className="space-y-2">
+            <p className="label-mono text-muted-foreground">Identity</p>
+            <input
+              className={inp}
+              placeholder="Name *"
+              value={form.name}
+              onChange={set("name")}
+              data-testid="crm-contact-name"
+              autoFocus
+            />
+            <input
+              className={inp}
+              placeholder="Company (optional)"
+              value={form.company}
+              onChange={set("company")}
+            />
+          </div>
+
+          {/* Contact */}
+          <div className="space-y-2">
+            <p className="label-mono text-muted-foreground">Contact</p>
+            <div className="grid grid-cols-2 gap-2">
+              <input className={inp} placeholder="Phone" value={form.phone} onChange={set("phone")} />
+              <input className={inp} placeholder="Email" value={form.email} onChange={set("email")} />
+            </div>
+          </div>
+
+          {/* Classification: status + lifecycle stage */}
+          <div className="space-y-2">
+            <p className="label-mono text-muted-foreground">Classification</p>
+            <div className="grid grid-cols-2 gap-2">
+              <select className={inp} value={form.status} onChange={set("status")}>
+                {STATUSES.map((s) => <option key={s} value={s}>Status · {s}</option>)}
+              </select>
+              <select
+                className={inp}
+                value={form.lifecycle_stage || ""}
+                onChange={set("lifecycle_stage")}
+                data-testid="crm-contact-lifecycle"
+              >
+                <option value="">Stage · unset</option>
+                {stagesForType(form.type).map((s) => (
+                  <option key={s.key} value={s.key}>Stage · {s.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Advanced — collapsed by default when creating */}
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowAdvanced((v) => !v)}
+              className="text-xs uppercase tracking-wider font-semibold text-muted-foreground hover:text-black flex items-center gap-1.5 transition-colors"
+              data-testid="crm-contact-advanced-toggle"
+            >
+              <span className={`transition-transform ${showAdvanced ? "rotate-90" : ""}`}>▸</span>
+              More details {showAdvanced ? "" : "· GSTIN, address, tags, owner, notes"}
+            </button>
+            {showAdvanced && (
+              <div className="mt-3 space-y-2 pl-2 border-l-2 border-black/10">
+                <input className={inp} placeholder="GSTIN / Tax ID" value={form.tax_id} onChange={set("tax_id")} />
+                <input className={inp} placeholder="Address" value={form.address} onChange={set("address")} />
+                <input className={inp} placeholder="Tags (comma separated)" value={form.tags} onChange={set("tags")} />
+                {users && users.length > 0 && (
+                  <select className={inp} value={form.assigned_id} onChange={set("assigned_id")}>
+                    <option value="">Owner — unassigned</option>
+                    {users.map((u) => <option key={u.id} value={u.id}>Owner · {u.name}</option>)}
+                  </select>
+                )}
+                <textarea className={inp} rows={2} placeholder="Notes" value={form.notes} onChange={set("notes")} />
+              </div>
+            )}
+          </div>
         </div>
+
         <DialogFooter>
-          <button onClick={save} data-testid="crm-contact-save" className="bg-brand-ink text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="px-4 py-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground hover:text-black transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={save}
+            data-testid="crm-contact-save"
+            className="bg-brand-ink text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all"
+          >
             {initial ? "Save changes" : "Add contact"}
           </button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// U7-07 (2026-08-17): dropdown menu for the "+ Add contact" pill.
+// Was: <details>/<summary> with cramped `label-mono` subtitles that
+// read as jumbled uppercase labels ("BUYER / RETAIL, ACCOUNT / DEALER").
+// Now: proper controlled menu with icons per option, wider (300px),
+// normal-case helper text, subtle hover, and a divider before Import
+// to separate "create new" from "bulk import". Closes via a full-
+// viewport backdrop click, Escape, and after any option is picked.
+// Backdrop pattern (not document.mousedown) avoids a race with React
+// 18 Strict Mode's dev-only double-invocation of effect setup, which
+// was closing the menu on the same click that opened it.
+function AddContactMenu({ canManage, canImport, csvBusy, onImport, customerLabel, vendorLabel }) {
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  const pick = (fn) => () => {
+    setOpen(false);
+    // Give React a tick to unmount the popover before we click the
+    // hidden dialog trigger — avoids the Radix focus-scope colliding
+    // with our closing menu.
+    setTimeout(fn, 0);
+  };
+
+  return (
+    <div className="relative" data-testid="crm-add-menu">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="relative z-40 flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold border border-black hover:shadow-brutal transition-all"
+      >
+        <Plus size={16} weight="bold" /> Add contact
+        <span className={`text-white/70 transition-transform ${open ? "rotate-180" : ""}`}>▾</span>
+      </button>
+      {open && (
+        <>
+          {/* Backdrop — catches any outside click and closes the menu.
+              Fully transparent, sits below the menu (z-30) and below
+              the toggle (z-40) so re-clicking the toggle also closes. */}
+          <div
+            className="fixed inset-0 z-20"
+            onClick={() => setOpen(false)}
+            aria-hidden="true"
+          />
+          <div
+            role="menu"
+            className="absolute left-0 top-full mt-1 z-30 min-w-[300px] border border-black bg-white shadow-brutal"
+          >
+          {canManage && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={pick(() => document.querySelector('[data-testid="crm-add-customer"]')?.click())}
+              className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-brand-yellow/30 border-b border-black/10 transition-colors"
+            >
+              <div className="w-9 h-9 flex items-center justify-center border border-black/20 bg-brand-blue/10 text-brand-blue shrink-0">
+                <AddressBook size={16} weight="bold" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-sm leading-tight">New {customerLabel}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Buyer, retail account, or dealer</p>
+              </div>
+            </button>
+          )}
+          {canManage && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={pick(() => document.querySelector('[data-testid="crm-add-supplier"]')?.click())}
+              className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-brand-yellow/30 transition-colors ${canImport ? "border-b border-black/20" : ""}`}
+            >
+              <div className="w-9 h-9 flex items-center justify-center border border-black/20 bg-black/5 text-black shrink-0">
+                <Truck size={16} weight="bold" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-sm leading-tight">New {vendorLabel}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Supplier, vendor, or raw-material source</p>
+              </div>
+            </button>
+          )}
+          {canImport && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={pick(onImport)}
+              disabled={csvBusy}
+              data-testid="crm-import-csv"
+              className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-brand-yellow/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <div className="w-9 h-9 flex items-center justify-center border border-black/20 bg-black/5 text-black shrink-0">
+                <UploadSimple size={16} weight="bold" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-sm leading-tight">{csvBusy ? "Uploading…" : "Import from spreadsheet"}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Bulk-add via CSV or Excel</p>
+              </div>
+            </button>
+          )}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -458,46 +674,14 @@ export default function CRM() {
                 <button data-testid="crm-add-supplier" className="hidden" aria-hidden="true" />
               }
             />
-            <details className="relative" data-testid="crm-add-menu">
-              <summary className="list-none cursor-pointer flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold border border-black hover:shadow-brutal transition-all">
-                <Plus size={16} weight="bold" /> Add contact
-                <span className="text-white/60">▾</span>
-              </summary>
-              <div className="absolute right-0 top-full mt-1 z-30 min-w-[220px] border border-black bg-white shadow-brutal">
-                {canManage && (
-                  <button
-                    type="button"
-                    onClick={() => document.querySelector('[data-testid="crm-add-customer"]')?.click()}
-                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-brand-yellow border-b border-black/10"
-                  >
-                    <span className="font-semibold">+ {L.customer_singular}</span>
-                    <span className="block label-mono text-muted-foreground">A buyer / retail account / dealer</span>
-                  </button>
-                )}
-                {canManage && (
-                  <button
-                    type="button"
-                    onClick={() => document.querySelector('[data-testid="crm-add-supplier"]')?.click()}
-                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-brand-yellow border-b border-black/10"
-                  >
-                    <span className="font-semibold">+ {L.vendor_singular}</span>
-                    <span className="block label-mono text-muted-foreground">A supplier / vendor / raw-material source</span>
-                  </button>
-                )}
-                {canImport && (
-                  <button
-                    type="button"
-                    onClick={() => csvInputRef.current?.click()}
-                    disabled={csvBusy}
-                    data-testid="crm-import-csv"
-                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-brand-yellow disabled:opacity-50"
-                  >
-                    <span className="font-semibold">{csvBusy ? "Uploading…" : "Import CSV / Excel"}</span>
-                    <span className="block label-mono text-muted-foreground">Bulk-add from a spreadsheet</span>
-                  </button>
-                )}
-              </div>
-            </details>
+            <AddContactMenu
+              canManage={canManage}
+              canImport={canImport}
+              csvBusy={csvBusy}
+              onImport={() => csvInputRef.current?.click()}
+              customerLabel={L.customer_singular}
+              vendorLabel={L.vendor_singular}
+            />
           </div>
         )}
       </PageHeader>

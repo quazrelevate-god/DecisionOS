@@ -169,14 +169,26 @@ export function FloatingDock({ user, onMore, moreOpen = false, moreBadge = 0 }) 
           aria-label={t("nav.dex", "Dex")}
           aria-current={location.pathname.startsWith("/brain") ? "page" : undefined}
           className={cn(
-            "relative -mt-7 grid h-[3.75rem] w-[3.75rem] shrink-0 place-items-center rounded-full",
-            "bg-primary text-primary-foreground ring-4 ring-background",
-            "shadow-brutal-lg transition-transform active:scale-95",
+            "relative -mt-7 grid h-[3.75rem] w-[3.75rem] shrink-0 place-items-center overflow-hidden rounded-full",
+            // Glass, but TINTED. This button is raised over a near-white pill
+            // in the light theme, where clear white glass is invisible; the
+            // brand tint is what keeps it legible on both surfaces while still
+            // being translucent rather than a filled disc.
+            "border border-primary/30 bg-primary/25 text-primary backdrop-blur-xl",
+            "dark:border-white/25 dark:bg-white/[0.14] dark:text-violet-200",
+            "shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_8px_22px_rgba(0,0,0,0.28)]",
+            "ring-4 ring-background transition-transform active:scale-95",
             "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring",
             "max-[359px]:h-14 max-[359px]:w-14"
           )}
         >
-          <Sparkle size={26} weight="fill" aria-hidden="true" />
+          {/* Specular top edge — the cue that reads as "glass" rather than
+              "translucent". */}
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-3 top-0 h-px bg-gradient-to-r from-transparent via-white/70 to-transparent"
+          />
+          <Sparkle size={26} weight="fill" aria-hidden="true" className="relative" />
         </button>
 
         <div className="flex flex-1 items-center justify-around gap-1">

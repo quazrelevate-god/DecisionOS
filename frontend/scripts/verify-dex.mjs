@@ -102,8 +102,13 @@ await page.waitForTimeout(300);
 check('clearing the field restores the mic', (await page.locator('[data-testid="dex-mic-record"]').count()) === 1);
 
 // ───────────────────────────── the empty state
-check('the empty state names what Dex is for',
-  /ask your company anything/i.test(await page.locator('[data-testid="dex-mobile"]').innerText()));
+// "Ask your company anything" became a personal greeting. The name is a
+// hardcoded placeholder pending wiring, so this asserts the SHAPE — a
+// time-of-day greeting addressed to someone — not the placeholder itself,
+// which would have to be edited again the moment it is wired.
+const greeting = await page.locator('[data-testid="dex-greeting"]').innerText();
+check('the empty state opens with a greeting, not a prompt',
+  /^good (morning|afternoon|evening),/i.test(greeting.trim()), greeting.trim());
 const rotator = await page.locator('[data-testid="dex-rotator"]').innerText();
 check('the rotating line offers a verb and the memory promise',
   /(speak|type|ask|search)/i.test(rotator) && /remembers everything/i.test(rotator), rotator.replace(/\n/g, ' '));

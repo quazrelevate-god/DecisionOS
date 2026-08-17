@@ -51,6 +51,12 @@ const reducedMotion = () =>
   typeof window !== "undefined" &&
   window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
+const greetingFor = (h) => (h < 12 ? "Good morning," : h < 17 ? "Good afternoon," : "Good evening,");
+
+// One glass recipe, so the composer, its mic and the dock's Dex button are
+// visibly the same material rather than three near-misses.
+const GLASS_FIELD = "border border-white/15 bg-white/[0.07] backdrop-blur-xl";
+
 /** The rotating verb under the greeting. Stops once there is a conversation. */
 function Rotator() {
   const [i, setI] = useState(0);
@@ -258,6 +264,7 @@ export default function DexMobile() {
   };
 
   const empty = log.length === 0;
+  const greeting = greetingFor(new Date().getHours());
   const status =
     phase === "speaking" ? "Listening to you…"
     : phase === "listening" ? `Listening · ${recordSecs}s`
@@ -280,7 +287,12 @@ export default function DexMobile() {
         }}
       />
 
-      <header className="relative flex items-center gap-3 px-4 pt-[calc(env(safe-area-inset-top,0px)+0.75rem)] pb-2">
+      {/* Back and nothing else. The name and the live status moved out: the orb
+          already says which state it is in, more legibly than a word does, and
+          "Dex / READY" was a label on a screen that is unmistakably Dex. The
+          status string is still computed — it is the aria-live announcement for
+          anyone not watching the orb. */}
+      <header className="relative flex items-center px-4 pt-[calc(env(safe-area-inset-top,0px)+0.75rem)] pb-2">
         <button
           type="button"
           onClick={() => navigate(-1)}
@@ -290,10 +302,7 @@ export default function DexMobile() {
         >
           <ArrowLeft size={18} weight="bold" />
         </button>
-        <div className="min-w-0">
-          <h1 className="font-heading text-lg font-extrabold leading-none tracking-tight">Dex</h1>
-          <p className="label-mono mt-1 text-white/45" data-testid="dex-status">{status}</p>
-        </div>
+        <p className="sr-only" aria-live="polite" data-testid="dex-status">{status}</p>
       </header>
 
       {/* ── the orb ──
@@ -319,7 +328,13 @@ export default function DexMobile() {
       <div className="relative flex-1 overflow-y-auto overscroll-contain scrollbar-none px-4" data-testid="dex-thread">
         {empty ? (
           <div className="dex-enter flex flex-col items-center pb-6 text-center">
-            <p className="font-heading text-xl font-extrabold tracking-tight">Ask your company anything</p>
+            {/* PLACEHOLDER NAME — not wired. The time of day is real because it
+                costs nothing and a greeting that says "morning" at 9pm is worse
+                than no greeting; the name is hardcoded until this reads the
+                signed-in user. */}
+            <p className="font-heading text-xl font-extrabold tracking-tight" data-testid="dex-greeting">
+              {greeting} Mr. Vel Raj
+            </p>
             <p className="mt-2 text-[15px] leading-relaxed"><Rotator /></p>
             <ul className="mt-6 w-full space-y-2">
               {PROMPTS.map((p) => (
@@ -358,9 +373,21 @@ export default function DexMobile() {
           pb clears the dock; the dock stays put and is not this screen's to move. */}
       <div className="relative px-4 pb-[calc(env(safe-area-inset-bottom,0px)+6.5rem)] pt-2">
         <div
-          className="flex items-end gap-2 rounded-[26px] border border-white/12 bg-white/[0.07] p-2 backdrop-blur-xl"
+          className={cn(
+            "relative flex items-end gap-2 overflow-hidden rounded-[26px] p-2",
+            GLASS_FIELD,
+            // The two things that stop a translucent panel reading as flat
+            // grey: a lit top edge, and a shadow that separates it from what
+            // is behind it.
+            "shadow-[0_10px_34px_rgba(0,0,0,0.40)]"
+          )}
           data-testid="dex-composer"
         >
+          {/* Specular highlight along the top edge. */}
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/35 to-transparent"
+          />
           <input type="file" ref={fileRef} hidden onChange={uploadFile}
             accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx" />
 
@@ -400,7 +427,15 @@ export default function DexMobile() {
               disabled={busy}
               data-testid="dex-send"
               aria-label="Send"
-              className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground disabled:opacity-40"
+              // Same slot as the mic, so the same material — a solid button
+              // appearing where a glass one just was reads as a different
+              // control. Carried a step brighter because it commits.
+              className={cn(
+                "grid h-11 w-11 shrink-0 place-items-center rounded-full",
+                "border border-white/30 bg-white/[0.22] text-white backdrop-blur-xl",
+                "shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_4px_14px_rgba(0,0,0,0.35)]",
+                "active:bg-white/[0.30] disabled:opacity-40"
+              )}
             >
               <PaperPlaneTilt size={19} weight="fill" />
             </button>
@@ -422,7 +457,16 @@ export default function DexMobile() {
               disabled={sending}
               data-testid="dex-mic-record"
               aria-label="Record a voice note"
-              className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground disabled:opacity-40"
+              // Glass, not a solid indigo disc: a filled primary button inside
+              // a translucent panel reads as a sticker on a window. The violet
+              // stays in the icon and a faint tint, so it is still the warmest
+              // thing in the composer without being opaque.
+              className={cn(
+                "grid h-11 w-11 shrink-0 place-items-center rounded-full",
+                "border border-white/25 bg-white/[0.14] text-violet-200 backdrop-blur-xl",
+                "shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_4px_14px_rgba(0,0,0,0.35)]",
+                "active:bg-white/[0.22] disabled:opacity-40"
+              )}
             >
               <Microphone size={19} weight="fill" />
             </button>

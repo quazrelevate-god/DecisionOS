@@ -17,7 +17,7 @@ const DEMO = [
 // MPWA-11 (§8): "56px fields and buttons" on mobile. min-h-touch-lg is 56px
 // below lg and unset above it, so desktop keeps its py-3 geometry. text-base
 // also stops iOS Safari zooming the viewport on focus.
-const inputCls = "w-full border border-black bg-white px-4 py-3 text-base lg:text-sm font-mono focus:outline-none focus:shadow-brutal-sm transition-shadow min-h-touch-lg lg:min-h-0";
+const inputCls = "w-full border border-border bg-white px-4 py-3 text-base lg:text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring/30 transition-shadow min-h-touch-lg lg:min-h-0";
 const labelCls = "label-mono text-muted-foreground";
 
 // Masks a phone to show only the last 4 digits, e.g. +91 98765 43210 -> +91 ••••• •3210
@@ -79,7 +79,7 @@ const OtpBoxes = ({ value, onChange, disabled }) => {
           onChange={handleChange(i)}
           onKeyDown={handleKeyDown(i)}
           onFocus={(e) => e.target.select()}
-          className="w-full aspect-square min-w-0 border border-black bg-white text-center text-xl font-heading font-black focus:outline-none focus:shadow-brutal-sm focus:border-brand-600 transition-all disabled:opacity-50"
+          className="w-full aspect-square min-w-0 border border-border bg-white text-center text-xl font-medium focus:outline-none focus:shadow-sm focus:border-brand-600 transition-all disabled:opacity-50"
         />
       ))}
     </div>
@@ -182,18 +182,18 @@ export default function Login() {
         data-testid="login-theme-toggle"
         title={isDark ? "Switch to light mode" : "Switch to dark mode"}
         aria-label="Toggle dark mode"
-        className="fixed top-4 right-4 z-50 w-10 h-10 flex items-center justify-center border border-black bg-white text-brand-ink hover:bg-brand-ink hover:text-white transition-colors"
+        className="fixed top-4 right-4 z-50 w-10 h-10 flex items-center justify-center border border-border bg-white text-brand-ink hover:bg-accent transition-colors"
       >
         {isDark ? <Sun size={18} weight="bold" /> : <MoonStars size={18} weight="bold" />}
       </button>
       {/* Left brand panel */}
-      <div className="hidden lg:flex flex-col justify-between bg-brand-ink text-white p-12 border-r border-black">
+      <div className="hidden lg:flex flex-col justify-between bg-primary text-primary-foreground p-12 border-r border-border">
         {/* The hero panel is dark in both themes, so `dark:` never fires here
             and the plate has to be explicit. */}
         <Wordmark size={24} plate />
         <div>
           <p className="label-mono text-brand-600 mb-4">The operational brain for founder-led SMEs</p>
-          <h1 className="font-heading text-5xl xl:text-6xl font-black uppercase tracking-tighter leading-[0.95]">
+          <h1 className="font-display text-5xl xl:text-6xl leading-[0.95]">
             Speak the decision.<br /><span className="text-brand-600">We run</span> the company.
           </h1>
           <p className="mt-6 text-white/70 text-sm max-w-md leading-relaxed">
@@ -210,16 +210,16 @@ export default function Login() {
             <Wordmark size={20} />
           </div>
 
-          <h2 className="font-heading text-3xl font-black uppercase tracking-tighter mb-1">Sign in</h2>
+          <h2 className="font-display text-3xl mb-1">Sign in</h2>
           <p className="text-sm text-muted-foreground mb-6">Access your company brain.</p>
 
-          <div className="flex border border-black mb-5" data-testid="login-tabs">
+          <div className="flex border border-border mb-5" data-testid="login-tabs">
             <button onClick={() => { setLoginTab("password"); setError(""); }} data-testid="login-tab-password"
-              className={`flex-1 px-3 py-2 text-xs font-semibold uppercase tracking-wider border-r border-black transition-colors ${loginTab === "password" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+              className={`flex-1 px-3 py-2 text-xs font-medium border-r border-border transition-colors ${loginTab === "password" ? "bg-primary text-primary-foreground" : "bg-white hover:bg-accent"}`}>
               Email &amp; Password
             </button>
             <button onClick={() => { setLoginTab("otp"); setError(""); }} data-testid="login-tab-otp"
-              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold uppercase tracking-wider transition-colors ${loginTab === "otp" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors ${loginTab === "otp" ? "bg-primary text-primary-foreground" : "bg-white hover:bg-accent"}`}>
               <DeviceMobile size={14} weight="bold" /> Mobile OTP
             </button>
           </div>
@@ -229,15 +229,15 @@ export default function Login() {
               <input data-testid="login-email-input" type="email" className={inputCls} placeholder="Email" value={form.email} onChange={set("email")} required />
               <input data-testid="login-password-input" type="password" className={inputCls} placeholder="Password" value={form.password} onChange={set("password")} required />
               {error && <p data-testid="auth-error" className="text-sm text-danger-600 font-semibold">{error}</p>}
-              <button type="submit" disabled={busy} data-testid="auth-submit-button" className="w-full bg-brand-600 text-white font-semibold uppercase tracking-wider py-3 border border-black hover:shadow-brutal transition-all disabled:opacity-50">{busy ? "…" : "Sign in"}</button>
+              <button type="submit" disabled={busy} data-testid="auth-submit-button" className="w-full bg-brand-600 text-white font-medium py-3 border border-border transition-all disabled:opacity-50">{busy ? "…" : "Sign in"}</button>
             </form>
           )}
 
           {loginTab === "otp" && (
             <form onSubmit={otpSent ? submitOtp : requestOtp} className="space-y-4" data-testid="otp-form">
               {invite && (
-                <div className="border border-black bg-brand-yellow/40 p-3" data-testid="invite-welcome">
-                  <p className="font-heading font-bold uppercase tracking-tight text-sm">Welcome, {invite.name}</p>
+                <div className="border border-border bg-caution-50/40 p-3" data-testid="invite-welcome">
+                  <p className="font-medium uppercase tracking-tight text-sm">Welcome, {invite.name}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">You've been invited to <strong>{invite.company}</strong>. Enter the code we sent to {invite.phone_masked} to sign in — no password needed.</p>
                 </div>
               )}
@@ -248,13 +248,13 @@ export default function Login() {
                     <input data-testid="otp-phone-input" type="tel" className={`${inputCls} mt-1`} placeholder="Registered mobile number" value={otpPhone} onChange={(e) => setOtpPhone(e.target.value)} required />
                   </div>
                   {error && <p data-testid="auth-error" className="text-sm text-danger-600 font-semibold">{error}</p>}
-                  <button type="submit" disabled={busy} data-testid="otp-submit-button" className="w-full bg-brand-600 text-white font-semibold uppercase tracking-wider py-3 border border-black hover:shadow-brutal transition-all disabled:opacity-50">
+                  <button type="submit" disabled={busy} data-testid="otp-submit-button" className="w-full bg-brand-600 text-white font-medium py-3 border border-border transition-all disabled:opacity-50">
                     {busy ? "Sending…" : "Send OTP"}
                   </button>
                 </>
               ) : (
                 <>
-                  <div className="flex items-center justify-between border border-black bg-white px-3 py-2.5" data-testid="otp-phone-confirm">
+                  <div className="flex items-center justify-between border border-border bg-white px-3 py-2.5" data-testid="otp-phone-confirm">
                     <div className="flex items-center gap-2 min-w-0">
                       <DeviceMobile size={16} weight="bold" className="text-brand-600 shrink-0" />
                       <span className="text-sm font-mono truncate">Code sent to <strong>{invite?.phone_masked || maskPhone(otpPhone)}</strong></span>
@@ -269,7 +269,7 @@ export default function Login() {
                     </div>
                   </div>
                   {error && <p data-testid="auth-error" className="text-sm text-danger-600 font-semibold">{error}</p>}
-                  <button type="submit" disabled={busy || otpCode.length !== 6} data-testid="otp-submit-button" className="w-full bg-brand-600 text-white font-semibold uppercase tracking-wider py-3 border border-black hover:shadow-brutal transition-all disabled:opacity-50">
+                  <button type="submit" disabled={busy || otpCode.length !== 6} data-testid="otp-submit-button" className="w-full bg-brand-600 text-white font-medium py-3 border border-border transition-all disabled:opacity-50">
                     {busy ? "Verifying…" : "Verify & sign in"}
                   </button>
                   <div className="text-center text-sm" data-testid="otp-resend-row">
@@ -285,12 +285,12 @@ export default function Login() {
           )}
 
           <Link to="/signup" data-testid="toggle-auth-mode" className="mt-4 inline-block text-sm text-brand-blue font-semibold hover:underline">Need a workspace? Register →</Link>
-          <div className="mt-8 border-t border-black/20 pt-6">
+          <div className="mt-8 border-t border-border pt-6">
             <p className="label-mono text-muted-foreground mb-3">Try the Sharma demo</p>
             {/* MPWA-11 (§8): demo-role buttons WRAP rather than clip. */}
             <div className="flex flex-wrap gap-touch-gap">
               {DEMO.map((d) => (
-                <button key={d.email} onClick={() => demoLogin(d.email)} data-testid={`demo-login-${d.role.toLowerCase()}`} className="flex-1 min-w-[7rem] min-h-touch lg:min-h-0 border border-black px-3 py-2 text-sm lg:text-xs font-semibold tracking-wider lg:uppercase hover:bg-brand-ink hover:text-white transition-colors">{d.role}</button>
+                <button key={d.email} onClick={() => demoLogin(d.email)} data-testid={`demo-login-${d.role.toLowerCase()}`} className="flex-1 min-w-[7rem] min-h-touch lg:min-h-0 border border-border px-3 py-2 text-sm lg:text-xs font-semibold tracking-wider lg:uppercase hover:bg-accent transition-colors">{d.role}</button>
               ))}
             </div>
           </div>

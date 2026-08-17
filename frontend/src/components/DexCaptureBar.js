@@ -63,7 +63,7 @@ export function DexCaptureBar({
 
   return (
     <div
-      className={lg ? "" : "border border-black bg-white p-3 mb-6"}
+      className={lg ? "" : "border border-border bg-white p-3 mb-6"}
       data-testid="dex-capture-bar"
     >
       {/* At `lg` the row becomes a 2x2 grid: [mic][input] over [attach][Send].
@@ -79,7 +79,7 @@ export function DexCaptureBar({
             disabled={sending}
             title="Record a voice note for Dex"
             aria-label="Record a voice note for Dex"
-            className={`flex items-center justify-center border border-black hover:bg-brand-600 hover:text-white transition-colors disabled:opacity-50 ${lg ? "w-14 h-14 rounded-xl" : "w-11 h-11"}`}
+            className={`flex items-center justify-center border border-border hover:bg-brand-600 hover:text-white transition-colors disabled:opacity-50 ${lg ? "w-14 h-14 rounded-xl" : "w-11 h-11"}`}
           >
             <Microphone size={lg ? 26 : 18} weight="bold" />
           </button>
@@ -89,7 +89,7 @@ export function DexCaptureBar({
             data-testid="dex-mic-stop"
             onClick={stopRecording}
             aria-label={`Stop recording (${recordSecs} seconds)`}
-            className={`px-3 flex items-center justify-center gap-2 bg-brand-600 text-white font-mono border border-black animate-pulse ${lg ? "h-14 rounded-xl text-sm" : "w-11 text-xs"}`}
+            className={`px-3 flex items-center justify-center gap-2 bg-brand-600 text-white font-mono border border-border animate-pulse ${lg ? "h-14 rounded-xl text-sm" : "w-11 text-xs"}`}
           >
             <Stop size={lg ? 22 : 16} weight="fill" />
             <span className="tabular-nums">{recordSecs}s</span>
@@ -102,7 +102,7 @@ export function DexCaptureBar({
           onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendText()}
           disabled={recording || sending}
           placeholder={placeholder}
-          className={`flex-1 min-w-0 border border-black px-3 py-2 focus:outline-none disabled:opacity-50 ${lg ? "h-12 text-base rounded-xl" : "text-sm font-mono"}`}
+          className={`flex-1 min-w-0 border border-border px-3 py-2 focus:outline-none disabled:opacity-50 ${lg ? "h-12 text-base rounded-xl" : "text-sm font-mono"}`}
         />
         <input
           type="file"
@@ -118,7 +118,7 @@ export function DexCaptureBar({
             disabled={sending || recording}
             title="Attach a file"
             aria-label="Attach a file"
-            className={`flex items-center justify-center border border-black hover:bg-brand-ink hover:text-white transition-colors disabled:opacity-50 ${lg ? "w-12 h-12 rounded-xl shrink-0" : "w-11 h-11"}`}
+            className={`flex items-center justify-center border border-border hover:bg-accent transition-colors disabled:opacity-50 ${lg ? "w-12 h-12 rounded-xl shrink-0" : "w-11 h-11"}`}
           >
             <Paperclip size={lg ? 22 : 16} weight="bold" />
           </button>
@@ -126,8 +126,8 @@ export function DexCaptureBar({
             data-testid="dex-send"
             onClick={sendText}
             disabled={!text.trim() || sending || recording}
-            className={`flex items-center justify-center gap-2 bg-brand-ink text-white font-semibold border border-black hover:shadow-brutal-sm disabled:opacity-50 transition-all ${
-              lg ? "flex-1 h-12 rounded-xl text-base" : "px-4 text-sm uppercase tracking-wider"
+            className={`flex items-center justify-center gap-2 bg-primary text-primary-foreground font-semibold border border-border disabled:opacity-50 transition-all ${
+              lg ? "flex-1 h-12 rounded-xl text-base" : "px-4 text-sm "
             }`}
           >
             {sending ? <Spinner size={lg ? 20 : 16} className="animate-spin" /> : <PaperPlaneTilt size={lg ? 20 : 16} weight="bold" />}

@@ -95,7 +95,7 @@ export function BasicsFlow({ form, setForm, onDone }) {
             <span className="tabular-nums text-muted-foreground">{String(idx + 1).padStart(2, "0")}</span>
             {step.eyebrow}
           </p>
-          <h1 className="font-heading text-3xl sm:text-4xl lg:text-5xl font-black uppercase tracking-tighter leading-[1.02] mb-2">
+          <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl leading-[1.02] mb-2">
             {step.q(form)}
           </h1>
           <p className="text-sm text-muted-foreground mb-8">{step.sub(form)}</p>
@@ -107,7 +107,7 @@ export function BasicsFlow({ form, setForm, onDone }) {
                   transition={{ delay: 0.1 + i * 0.06 }}
                   data-testid={`team-size-${s}`}
                   onClick={() => { setVal(s); advance(s); }}
-                  className={`px-6 py-4 border border-black font-heading font-black uppercase tracking-tight text-lg transition-all hover:shadow-brutal hover:-translate-y-0.5 ${value === s ? "bg-brand-ink text-white" : "bg-white"}`}>
+                  className={`px-6 py-4 border border-border font-heading font-black uppercase tracking-tight text-lg transition-all hover:-translate-y-0.5 ${value === s ? "bg-primary text-primary-foreground" : "bg-white"}`}>
                   {s}
                 </motion.button>
               ))}
@@ -122,7 +122,7 @@ export function BasicsFlow({ form, setForm, onDone }) {
                 value={value}
                 onChange={(e) => setVal(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); advance(); } }}
-                className="w-full bg-transparent border-b-2 border-black py-3 pr-12 font-heading text-2xl sm:text-3xl font-bold tracking-tight placeholder:text-black/20 placeholder:font-normal focus:outline-none focus:border-brand-600 transition-colors"
+                className="w-full bg-transparent border-b-2 border-border py-3 pr-12 font-heading text-2xl sm:text-3xl font-bold tracking-tight placeholder:text-black/20 placeholder:font-normal focus:outline-none focus:border-brand-600 transition-colors"
               />
               {step.type === "password" && (
                 <button type="button" onClick={() => setShowPw(!showPw)} data-testid="signup-toggle-password"
@@ -139,11 +139,11 @@ export function BasicsFlow({ form, setForm, onDone }) {
           {step.type !== "chips" && (
             <div className="mt-8 flex items-center gap-4">
               <button onClick={() => advance()} disabled={checking} data-testid="signup-basics-next"
-                className="flex items-center gap-2 bg-brand-ink text-white font-semibold uppercase tracking-wider text-sm px-8 py-3.5 border border-black hover:shadow-brutal hover:-translate-y-0.5 transition-all disabled:opacity-50">
+                className="flex items-center gap-2 bg-primary text-primary-foreground font-medium text-sm px-8 py-3.5 border border-border hover:-translate-y-0.5 transition-all disabled:opacity-50">
                 {checking ? <CircleNotch size={16} className="animate-spin" /> : null}
                 {step.optional && !value.trim() ? "Skip" : "Continue"} <ArrowRight size={16} weight="bold" />
               </button>
-              <span className="hidden sm:block text-xs text-muted-foreground font-mono">press <kbd className="border border-black/30 px-1.5 py-0.5">Enter ↵</kbd></span>
+              <span className="hidden sm:block text-xs text-muted-foreground font-mono">press <kbd className="border border-border px-1.5 py-0.5">Enter ↵</kbd></span>
             </div>
           )}
         </motion.div>
@@ -151,7 +151,7 @@ export function BasicsFlow({ form, setForm, onDone }) {
 
       {idx > 0 && (
         <button onClick={back} data-testid="signup-basics-back"
-          className="mt-10 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-brand-ink transition-colors">
+          className="mt-10 flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-brand-ink transition-colors">
           <ArrowLeft size={14} weight="bold" /> Back
         </button>
       )}

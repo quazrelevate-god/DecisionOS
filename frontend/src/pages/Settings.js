@@ -25,7 +25,7 @@ function LanguageCard() {
     <div className="card-brutal p-5" data-testid="settings-language-card">
       <div className="flex items-center gap-2 mb-1">
         <Translate size={20} weight="bold" className="text-brand-600" />
-        <h2 className="font-heading text-lg font-extrabold uppercase tracking-tight">{t("settings.language_title")}</h2>
+        <h2 className="text-base font-medium">{t("settings.language_title")}</h2>
       </div>
       <p className="text-xs text-muted-foreground mb-4">{t("settings.language_desc")}</p>
       <LanguageSwitcher variant="inline" />
@@ -38,7 +38,7 @@ function ProfileCard() {
     <div className="card-brutal p-5" data-testid="settings-profile-card">
       <div className="flex items-center gap-2 mb-1">
         <UserCircle size={20} weight="bold" className="text-brand-600" />
-        <h2 className="font-heading text-lg font-extrabold uppercase tracking-tight">Your Profile</h2>
+        <h2 className="text-base font-medium">Your Profile</h2>
       </div>
       <p className="text-xs text-muted-foreground mb-4">Your personal details, sign-in and WhatsApp routing.</p>
       <ProfileForm />
@@ -51,7 +51,7 @@ function SecurityCard() {
     <div className="card-brutal p-5" data-testid="settings-security-card">
       <div className="flex items-center gap-2 mb-1">
         <Lock size={20} weight="bold" className="text-brand-600" />
-        <h2 className="font-heading text-lg font-extrabold uppercase tracking-tight">Password & Security</h2>
+        <h2 className="text-base font-medium">Password & Security</h2>
       </div>
       <p className="text-xs text-muted-foreground mb-4">Change the password you use to sign in.</p>
       <ChangePasswordForm />
@@ -92,7 +92,7 @@ function MoneyAndApprovalsCard() {
             header treatment used by every other card in Settings. Was
             lowercase-looking and read as a sub-heading, not a card
             title. */}
-        <h2 className="font-heading text-lg font-extrabold uppercase tracking-tight">Money & Approvals</h2>
+        <h2 className="text-base font-medium">Money & Approvals</h2>
       </div>
       <p className="text-xs text-muted-foreground mb-4">Controls how incoming invoices & payments (WhatsApp / uploads) are flagged and approved.</p>
 
@@ -116,7 +116,7 @@ function MoneyAndApprovalsCard() {
 
         <button type="button" onClick={() => setSignoff(!signoff)} data-testid="settings-signoff-toggle"
           className="flex items-start gap-3 w-full text-left border border-border rounded-lg p-3 hover:bg-accent transition-colors">
-          <span className={`w-5 h-5 shrink-0 mt-0.5 border border-border rounded flex items-center justify-center ${signoff ? "bg-brand-ink text-white" : "bg-card"}`}>
+          <span className={`w-5 h-5 shrink-0 mt-0.5 border border-border rounded flex items-center justify-center ${signoff ? "bg-primary text-primary-foreground" : "bg-card"}`}>
             {signoff && <ShieldCheck size={13} weight="bold" />}
           </span>
           <span>
@@ -127,7 +127,7 @@ function MoneyAndApprovalsCard() {
       </div>
 
       <button onClick={save} disabled={saving} data-testid="settings-save"
-        className="mt-6 flex items-center gap-2 bg-brand-ink text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider rounded-lg hover:shadow-brutal-sm transition-all disabled:opacity-60">
+        className="mt-6 flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2 text-sm font-medium rounded-lg transition-all disabled:opacity-60">
         <FloppyDisk size={16} weight="bold" /> {saving ? "Saving…" : "Save Settings"}
       </button>
     </div>
@@ -227,7 +227,7 @@ export default function Settings() {
                 onClick={() => selectTab(t.key)}
                 data-testid={`settings-tab-${t.key}`}
                 aria-pressed={isActive}
-                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold uppercase tracking-wider whitespace-nowrap transition-all border-b-2 ${
+                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-all border-b-2 ${
                   isActive
                     ? "border-brand-600 text-brand-600"
                     : "border-transparent text-muted-foreground hover:text-foreground"

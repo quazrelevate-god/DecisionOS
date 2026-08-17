@@ -33,7 +33,7 @@ function SearchPanel() {
   return (
     <div>
       <form onSubmit={search} className="flex gap-2 mb-2 max-w-2xl">
-        <div className="flex-1 flex items-center border border-black bg-white px-4">
+        <div className="flex-1 flex items-center border border-border bg-white px-4">
           <MagnifyingGlass size={18} weight="bold" className="text-muted-foreground" />
           <input
             data-testid="brain-search-input"
@@ -44,7 +44,7 @@ function SearchPanel() {
           />
         </div>
         <MicDictateButton className="px-4" title={t("brain.speak_search")} onText={(txt) => setQ((v) => (v ? `${v} ${txt}` : txt))} />
-        <button data-testid="brain-search-button" className="bg-brand-600 text-white px-6 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
+        <button data-testid="brain-search-button" className="bg-brand-600 text-white px-6 text-sm font-medium border border-border transition-all">
           {t("brain.search_btn")}
         </button>
       </form>
@@ -64,15 +64,15 @@ function SearchPanel() {
           <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-6">
             {/* Decisions */}
             <section>
-              <h3 className="font-heading font-extrabold uppercase tracking-tight text-lg mb-3">{t("brain.decisions")} ({res.decisions.length})</h3>
+              <h3 className="font-medium text-lg mb-3">{t("brain.decisions")} ({res.decisions.length})</h3>
               <div className="space-y-3">
                 {res.decisions.map((d) => (
                   <div key={d.id} data-testid={`brain-decision-${d.id}`} className="card-brutal p-4">
-                    <div className="flex items-center justify-between mb-2"><Chip value="decision" className="bg-brand-blue text-white" /><Chip value={d.status} /></div>
+                    <div className="flex items-center justify-between mb-2"><Chip value="decision" className="bg-primary text-primary-foreground" /><Chip value={d.status} /></div>
                     <p className="font-semibold text-sm">{d.title}</p>
                     <p className="text-xs text-muted-foreground mt-1 line-clamp-3">{d.summary}</p>
                     {d.tasks?.length > 0 && (
-                      <div className="mt-3 border-t border-black/10 pt-2">
+                      <div className="mt-3 border-t border-border pt-2">
                         <p className="label-mono text-muted-foreground mb-1">{t("brain.linked_tasks")}</p>
                         {d.tasks.map((tk) => <p key={tk.id} className="text-xs">→ {tk.title}</p>)}
                       </div>
@@ -84,7 +84,7 @@ function SearchPanel() {
             </section>
             {/* Tasks */}
             <section>
-              <h3 className="font-heading font-extrabold uppercase tracking-tight text-lg mb-3">{t("brain.tasks")} ({res.tasks.length})</h3>
+              <h3 className="font-medium text-lg mb-3">{t("brain.tasks")} ({res.tasks.length})</h3>
               <div className="space-y-3">
                 {res.tasks.map((tk) => (
                   <div key={tk.id} data-testid={`brain-task-${tk.id}`} className="card-brutal p-4">
@@ -98,11 +98,11 @@ function SearchPanel() {
             </section>
             {/* Workflows */}
             <section>
-              <h3 className="font-heading font-extrabold uppercase tracking-tight text-lg mb-3">{t("brain.workflows")} ({res.workflows.length})</h3>
+              <h3 className="font-medium text-lg mb-3">{t("brain.workflows")} ({res.workflows.length})</h3>
               <div className="space-y-3">
                 {res.workflows.map((w) => (
                   <div key={w.id} data-testid={`brain-workflow-${w.id}`} className="card-brutal p-4">
-                    <div className="flex items-center justify-between mb-2"><Chip value={w.type} className="bg-brand-yellow text-black" /><Chip value={w.stage} /></div>
+                    <div className="flex items-center justify-between mb-2"><Chip value={w.type} className="bg-caution-50 text-caution-800" /><Chip value={w.stage} /></div>
                     <p className="font-semibold text-sm">{w.title}</p>
                     {w.counterparty && <p className="text-xs text-muted-foreground mt-1">{w.counterparty}</p>}
                   </div>
@@ -112,12 +112,12 @@ function SearchPanel() {
             </section>
             {/* Contacts */}
             <section>
-              <h3 className="font-heading font-extrabold uppercase tracking-tight text-lg mb-3">{t("brain.contacts")} ({res.contacts?.length || 0})</h3>
+              <h3 className="font-medium text-lg mb-3">{t("brain.contacts")} ({res.contacts?.length || 0})</h3>
               <div className="space-y-3">
                 {(res.contacts || []).map((c) => (
                   <div key={c.id} data-testid={`brain-contact-${c.id}`} className="card-brutal p-4">
                     <div className="flex items-center justify-between mb-2">
-                      <Chip value={c.type} className={c.type === "customer" ? "bg-brand-blue text-white" : "bg-brand-yellow text-black"} />
+                      <Chip value={c.type} className={c.type === "customer" ? "bg-primary text-primary-foreground" : "bg-caution-50 text-caution-800"} />
                       <Chip value={c.status} />
                     </div>
                     <p className="font-semibold text-sm">{c.name}</p>
@@ -131,12 +131,12 @@ function SearchPanel() {
           </div>
           {(res.memory || []).length > 0 && (
             <div className="mt-8">
-              <h3 className="font-heading font-extrabold uppercase tracking-tight text-lg mb-3">{t("brain.memory")} ({res.memory.length})</h3>
+              <h3 className="font-medium text-lg mb-3">{t("brain.memory")} ({res.memory.length})</h3>
               <div className="grid md:grid-cols-2 gap-3">
                 {res.memory.map((m) => (
                   <div key={m.id} data-testid={`brain-memory-${m.id}`} className="card-brutal p-4 border-l-4 border-l-brand-600">
                     <p className="text-sm">{m.text}</p>
-                    <Chip value={m.tag} className="mt-2 bg-brand-ink text-white" />
+                    <Chip value={m.tag} className="mt-2 bg-primary text-primary-foreground" />
                   </div>
                 ))}
               </div>
@@ -235,17 +235,17 @@ export default function Brain() {
     <div>
       <PageHeader eyebrow={t("brain.eyebrow")} title={t("brain.title")}>
         <div className="flex flex-col gap-1" data-testid="brain-tabs-wrap">
-          <div className="flex border border-black w-fit" data-testid="brain-tabs">
+          <div className="flex border border-border w-fit" data-testid="brain-tabs">
             <button onClick={() => setTab("ask")} data-testid="brain-tab-ask"
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border-r border-black transition-colors ${tab === "ask" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-r border-border transition-colors ${tab === "ask" ? "bg-primary text-primary-foreground" : "bg-white hover:bg-accent"}`}>
               <ChatCircleText size={16} weight="bold" /> {t("brain.ask")}
             </button>
             <button onClick={() => setTab("search")} data-testid="brain-tab-search"
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border-r border-black transition-colors ${tab === "search" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-r border-border transition-colors ${tab === "search" ? "bg-primary text-primary-foreground" : "bg-white hover:bg-accent"}`}>
               <MagnifyingGlass size={16} weight="bold" /> {t("brain.search")}
             </button>
             <button onClick={() => setTab("documents")} data-testid="brain-tab-documents"
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider transition-colors ${tab === "documents" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${tab === "documents" ? "bg-primary text-primary-foreground" : "bg-white hover:bg-accent"}`}>
               <Books size={16} weight="bold" /> Documents
             </button>
           </div>
@@ -268,11 +268,11 @@ export default function Brain() {
       {inflightN > 0 && (
         <div
           data-testid="dex-inflight-badge"
-          className="mb-4 inline-flex items-center gap-2 border border-black bg-brand-yellow px-3 py-1.5 shadow-brutal-sm"
+          className="mb-4 inline-flex items-center gap-2 border border-border bg-caution-50 px-3 py-1.5 shadow-sm"
         >
           <Spinner size={14} weight="bold" className="animate-spin text-brand-ink" />
           <Sparkle size={12} weight="fill" className="text-brand-600" />
-          <span className="text-xs font-semibold uppercase tracking-wider text-brand-ink">
+          <span className="text-xs font-medium text-brand-ink">
             Dex is structuring {inflightN} capture{inflightN === 1 ? "" : "s"} right now
           </span>
         </div>

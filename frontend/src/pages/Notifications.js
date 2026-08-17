@@ -46,7 +46,7 @@ export default function Notifications() {
     <div>
       <PageHeader eyebrow="Work updates, approvals & reminders" title="Notifications">
         {(data?.unread || 0) > 0 && (
-          <button onClick={markAll} data-testid="mark-all-read" className="flex items-center gap-2 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors">
+          <button onClick={markAll} data-testid="mark-all-read" className="flex items-center gap-2 border border-border px-4 py-2 text-sm font-medium hover:bg-accent transition-colors">
             <Check size={16} weight="bold" /> Mark all read
           </button>
         )}
@@ -71,7 +71,7 @@ export default function Notifications() {
               key={n.id}
               data-testid={`notification-${n.id}`}
               onClick={() => open(n)}
-              className={`p-4 flex items-start justify-between gap-4 transition-colors ${n.read ? "opacity-60" : ""} ${clickable ? "cursor-pointer hover:bg-black/[0.03]" : ""}`}
+              className={`p-4 flex items-start justify-between gap-4 transition-colors ${n.read ? "opacity-60" : ""} ${clickable ? "cursor-pointer hover:bg-muted/40" : ""}`}
             >
               <div className="flex items-start gap-3 min-w-0">
                 {!n.read && <span className="mt-1.5 w-2 h-2 rounded-full bg-brand-600 shrink-0" data-testid={`notif-unread-dot-${n.id}`} />}
@@ -104,7 +104,7 @@ export default function Notifications() {
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 {!n.read && (
-                  <button onClick={(e) => { e.stopPropagation(); markRead(n.id); }} data-testid={`read-${n.id}`} className="text-xs uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-ink hover:text-white transition-colors">
+                  <button onClick={(e) => { e.stopPropagation(); markRead(n.id); }} data-testid={`read-${n.id}`} className="text-xs  border border-border px-2 py-1 hover:bg-accent transition-colors">
                     Read
                   </button>
                 )}

@@ -93,7 +93,7 @@ function TimelineDot({ tone = "muted", check = false }) {
   const bg = {
     green: "bg-green-600 text-white",
     blue: "bg-brand-blue text-white",
-    muted: "bg-white border border-black/30 text-transparent",
+    muted: "bg-white border border-border text-transparent",
   }[tone];
   return (
     <span className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${bg}`}>
@@ -175,7 +175,7 @@ export function DecisionDialog({ decisionId, open, onClose }) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg border border-black rounded-none p-0" data-testid="decision-dialog">
+      <DialogContent className="max-w-lg border border-border rounded-xl p-0" data-testid="decision-dialog">
         {isError ? (
           <div className="p-6" data-testid="decision-access-restricted">
             <DialogHeader>
@@ -195,13 +195,13 @@ export function DecisionDialog({ decisionId, open, onClose }) {
             {/* HEADER: title, amount, workflow chip. Status pill shows
                 the current state (pending / approved / rejected). */}
             <DialogHeader>
-              <DialogTitle className="text-left font-heading font-black text-xl leading-tight">
+              <DialogTitle className="text-left font-medium text-xl leading-tight">
                 {d.title}
               </DialogTitle>
             </DialogHeader>
             {amount && (
               <p
-                className="text-2xl font-heading font-black text-brand-blue mt-1"
+                className="text-2xl font-medium text-brand-blue mt-1"
                 data-testid="decision-amount"
               >
                 {amount}
@@ -210,13 +210,13 @@ export function DecisionDialog({ decisionId, open, onClose }) {
             <div className="flex items-center gap-2 flex-wrap mt-2">
               {wfLabel && (
                 <span
-                  className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold uppercase tracking-wider bg-black/5 text-black border border-black/10"
+                  className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-muted text-black border border-border"
                   data-testid="decision-workflow-chip"
                 >
                   <LinkSimple size={12} weight="bold" /> Part of: {wfLabel}
                 </span>
               )}
-              {d.dtype && <Chip value={d.dtype} className="bg-brand-blue text-white" />}
+              {d.dtype && <Chip value={d.dtype} className="bg-primary text-primary-foreground" />}
               {d.status && d.status !== "pending_approval" && (
                 <Chip
                   value={d.status.replace("_", " ")}
@@ -225,7 +225,7 @@ export function DecisionDialog({ decisionId, open, onClose }) {
                       ? "bg-green-600 text-white"
                       : d.status === "rejected"
                       ? "bg-danger-600 text-white"
-                      : "bg-black/10 text-black"
+                      : "bg-muted text-black"
                   }
                 />
               )}
@@ -243,7 +243,7 @@ export function DecisionDialog({ decisionId, open, onClose }) {
               <button
                 type="button"
                 onClick={() => setShowTimeline(true)}
-                className="mt-3 w-full flex items-center gap-2 border border-black/20 bg-black/[0.02] px-3 py-2 text-xs text-black hover:bg-black/5 transition-colors"
+                className="mt-3 w-full flex items-center gap-2 border border-border bg-muted/40 px-3 py-2 text-xs text-black hover:bg-accent transition-colors"
                 data-testid="decision-unblocks"
               >
                 <LinkSimple size={13} weight="bold" />
@@ -260,7 +260,7 @@ export function DecisionDialog({ decisionId, open, onClose }) {
                   onClick={() => approveM.mutate()}
                   disabled={approveM.isPending || rejectM.isPending}
                   data-testid="decision-approve"
-                  className="flex items-center justify-center gap-2 bg-brand-ink text-white px-4 py-3 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-60"
+                  className="flex items-center justify-center gap-2 bg-primary text-primary-foreground px-4 py-3 text-sm font-medium border border-border transition-all disabled:opacity-60"
                 >
                   <CheckCircle size={16} weight="bold" />
                   {approveM.isPending ? "Approving…" : "Approve"}
@@ -270,10 +270,10 @@ export function DecisionDialog({ decisionId, open, onClose }) {
                   onClick={() => (confirmReject ? rejectM.mutate() : setConfirmReject(true))}
                   disabled={approveM.isPending || rejectM.isPending}
                   data-testid="decision-reject"
-                  className={`flex items-center justify-center gap-2 border-2 px-4 py-3 text-sm font-semibold uppercase tracking-wider transition-all disabled:opacity-60 ${
+                  className={`flex items-center justify-center gap-2 border-2 px-4 py-3 text-sm font-medium transition-all disabled:opacity-60 ${
                     confirmReject
-                      ? "border-danger-600 bg-danger-600 text-white hover:shadow-brutal-sm"
-                      : "border-black bg-white text-black hover:bg-black/5"
+                      ? "border-danger-600 bg-danger-600 text-white"
+                      : "border-border bg-white text-black hover:bg-accent"
                   }`}
                 >
                   {confirmReject ? (
@@ -364,7 +364,7 @@ export function DecisionDialog({ decisionId, open, onClose }) {
                   type="button"
                   title="Voice input"
                   aria-label="Voice input"
-                  className="w-10 h-10 rounded-full bg-brand-blue text-white flex items-center justify-center shrink-0 hover:shadow-brutal-sm transition-all"
+                  className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0 transition-all"
                   data-testid="decision-note-mic"
                   onClick={() => toast("Voice capture is available from the Dex panel", { icon: "🎙" })}
                 >
@@ -379,7 +379,7 @@ export function DecisionDialog({ decisionId, open, onClose }) {
                   data-testid="decision-note-input"
                   placeholder={`Speak or type — this goes back to ${d.created_by_name || "the raiser"}`}
                   rows={3}
-                  className="flex-1 border border-black px-3 py-2 text-sm focus:outline-none focus:shadow-brutal-sm resize-none"
+                  className="flex-1 border border-border px-3 py-2 text-sm focus:outline-none focus:shadow-sm resize-none"
                 />
               </div>
               <div className="flex items-center gap-3 mt-2">
@@ -388,7 +388,7 @@ export function DecisionDialog({ decisionId, open, onClose }) {
                   onClick={sendNote}
                   disabled={sending || !note.trim()}
                   data-testid="decision-note-send"
-                  className="flex items-center gap-1 bg-brand-ink text-white px-3 py-1.5 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-50"
+                  className="flex items-center gap-1 bg-primary text-primary-foreground px-3 py-1.5 text-sm font-medium border border-border transition-all disabled:opacity-50"
                 >
                   <PaperPlaneTilt size={14} weight="bold" /> {sending ? "Sending…" : "Send note"}
                 </button>
@@ -409,7 +409,7 @@ export function DecisionDialog({ decisionId, open, onClose }) {
                   {(d.timeline || []).map((e, i) => (
                     <div
                       key={`${e.ts}-${i}`}
-                      className={`text-sm pl-2 border-l-2 ${e.kind === "comment" ? "border-brand-blue" : "border-black/20"}`}
+                      className={`text-sm pl-2 border-l-2 ${e.kind === "comment" ? "border-brand-blue" : "border-border"}`}
                     >
                       <p className={e.kind === "comment" ? "" : "text-muted-foreground"}>{e.label}</p>
                       <p className="label-mono text-muted-foreground">

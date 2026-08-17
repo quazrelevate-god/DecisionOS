@@ -42,7 +42,7 @@ export function LanguageSwitcher({ variant = "icon" }) {
       <div className="flex flex-wrap gap-2" data-testid="language-inline">
         {LANGUAGES.map((l) => (
           <button key={l.code} onClick={() => choose(l.code)} data-testid={`lang-option-${l.code}`}
-            className={`flex items-center gap-2 px-4 py-2 text-sm rounded-lg border transition-all ${current === l.code ? "bg-brand-ink text-white border-black" : "bg-card border-border hover:bg-black/[0.04]"}`}>
+            className={`flex items-center gap-2 px-4 py-2 text-sm rounded-lg border transition-all ${current === l.code ? "bg-primary text-primary-foreground border-border" : "bg-card border-border hover:bg-black/[0.04]"}`}>
             <Globe size={15} weight="bold" /> {l.label}
             {current === l.code && <Check size={14} weight="bold" />}
           </button>
@@ -55,11 +55,11 @@ export function LanguageSwitcher({ variant = "icon" }) {
     <Popover>
       <PopoverTrigger asChild>
         <button data-testid="language-switcher" title={t("common.language")}
-          className="w-10 h-10 flex items-center justify-center border border-black hover:bg-brand-ink hover:text-white transition-colors">
+          className="w-10 h-10 flex items-center justify-center border border-border hover:bg-accent transition-colors">
           <Globe size={18} weight="bold" />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-44 p-0 border border-black shadow-brutal">
+      <PopoverContent align="end" className="w-44 p-0 border border-border shadow-md">
         <Options />
       </PopoverContent>
     </Popover>

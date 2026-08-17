@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 
 const TYPES = ["customer", "dealer", "vendor"];
 const STATUSES = ["lead", "active", "inactive"];
-const inp = "w-full border border-black px-3 py-2 text-sm font-mono focus:outline-none focus:shadow-brutal-sm";
+const inp = "w-full border border-border px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring/30";
 
 function ComplaintDialog({ contact, onSaved }) {
   const [open, setOpen] = useState(false);
@@ -31,10 +31,10 @@ function ComplaintDialog({ contact, onSaved }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <button data-testid={`log-complaint-${contact.id}`} className="w-8 h-8 flex items-center justify-center border border-black hover:bg-purple-600 hover:text-white transition-colors"><Warning size={14} weight="bold" /></button>
+        <button data-testid={`log-complaint-${contact.id}`} className="w-8 h-8 flex items-center justify-center border border-border hover:bg-purple-600 hover:text-white transition-colors"><Warning size={14} weight="bold" /></button>
       </DialogTrigger>
-      <DialogContent className="border border-black rounded-none">
-        <DialogHeader><DialogTitle className="font-heading uppercase tracking-tight">Log complaint — {contact.name}</DialogTitle></DialogHeader>
+      <DialogContent className="border border-border rounded-xl">
+        <DialogHeader><DialogTitle className="font-display text-xl">Log complaint — {contact.name}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <textarea data-testid="complaint-text-input" className={inp} rows={3} placeholder="What went wrong?" value={text} onChange={(e) => setText(e.target.value)} />
           <select className={inp} value={severity} onChange={(e) => setSeverity(e.target.value)}>
@@ -42,7 +42,7 @@ function ComplaintDialog({ contact, onSaved }) {
           </select>
         </div>
         <DialogFooter>
-          <button data-testid="complaint-save-button" onClick={save} className="bg-purple-600 text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">Log complaint</button>
+          <button data-testid="complaint-save-button" onClick={save} className="bg-purple-600 text-white px-5 py-2 text-sm font-medium border border-border transition-all">Log complaint</button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -86,8 +86,8 @@ function ContactDialog({ trigger, initial, onSaved, users, defaultType }) {
   return (
     <Dialog open={open} onOpenChange={openChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="border border-black rounded-none max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle className="font-heading uppercase tracking-tight">{initial ? "Edit contact" : "New contact"}</DialogTitle></DialogHeader>
+      <DialogContent className="border border-border rounded-xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader><DialogTitle className="font-display text-xl">{initial ? "Edit contact" : "New contact"}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <select data-testid="contact-type-select" className={inp} value={form.type} onChange={set("type")}>
@@ -119,7 +119,7 @@ function ContactDialog({ trigger, initial, onSaved, users, defaultType }) {
           <textarea className={inp} rows={2} placeholder="Notes" value={form.notes} onChange={set("notes")} />
         </div>
         <DialogFooter>
-          <button data-testid="contact-save-button" onClick={save} className="bg-brand-600 text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">
+          <button data-testid="contact-save-button" onClick={save} className="bg-brand-600 text-white px-5 py-2 text-sm font-medium border border-border transition-all">
             {initial ? "Save changes" : "Add contact"}
           </button>
         </DialogFooter>
@@ -160,12 +160,12 @@ export function ContactsPanel({ types, addLabel = "Add Contact", readOnly = fals
     }
   };
 
-  const selectCls = "border border-black bg-white px-3 py-2 text-sm font-mono focus:outline-none";
+  const selectCls = "border border-border bg-white px-3 py-2 text-sm font-mono focus:outline-none";
 
   return (
     <div>
       <div className="flex flex-wrap items-center gap-2 mb-6">
-        <div className="flex items-center border border-black bg-white px-3 flex-1 min-w-[200px]">
+        <div className="flex items-center border border-border bg-white px-3 flex-1 min-w-[200px]">
           <MagnifyingGlass size={16} weight="bold" className="text-muted-foreground" />
           <input data-testid="contact-search-input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, company, phone, email…" className="flex-1 py-2 px-2 text-sm font-mono focus:outline-none" />
         </div>
@@ -179,7 +179,7 @@ export function ContactsPanel({ types, addLabel = "Add Contact", readOnly = fals
             defaultType={types[0]}
             onSaved={refresh}
             trigger={
-              <button data-testid="add-contact-button" className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
+              <button data-testid="add-contact-button" className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 text-sm font-medium border border-border transition-all">
                 <Plus size={16} weight="bold" /> {addLabel}
               </button>
             }
@@ -194,27 +194,27 @@ export function ContactsPanel({ types, addLabel = "Add Contact", readOnly = fals
           <div key={c.id} data-testid={`contact-card-${c.id}`} className="card-brutal p-5 shadow-hover">
             <div className="flex items-start justify-between gap-2 mb-2">
               <div className="flex items-center gap-2">
-                <Chip value={typeLabel(c.type)} className={c.type === "customer" ? "bg-brand-blue text-white" : "bg-brand-yellow text-black"} />
-                <Chip value={c.status} className={c.status === "active" ? "bg-brand-ink text-white" : c.status === "lead" ? "bg-brand-yellow text-black" : "bg-black/10 text-black"} />
+                <Chip value={typeLabel(c.type)} className={c.type === "customer" ? "bg-primary text-primary-foreground" : "bg-caution-50 text-caution-800"} />
+                <Chip value={c.status} className={c.status === "active" ? "bg-primary text-primary-foreground" : c.status === "lead" ? "bg-caution-50 text-caution-800" : "bg-muted text-black"} />
               </div>
               {canManage && (
                 <div className="flex gap-1">
                   {can360 && (
-                    <button data-testid={`view-profile-${c.id}`} onClick={() => navigate(`/contacts/${c.id}`)} title="360° profile" className="w-8 h-8 flex items-center justify-center border border-black hover:bg-brand-blue hover:text-white transition-colors"><Eye size={14} weight="bold" /></button>
+                    <button data-testid={`view-profile-${c.id}`} onClick={() => navigate(`/contacts/${c.id}`)} title="360° profile" className="w-8 h-8 flex items-center justify-center border border-border hover:bg-accent transition-colors"><Eye size={14} weight="bold" /></button>
                   )}
                   {c.type === "customer" && <ComplaintDialog contact={c} onSaved={refresh} />}
                   <ContactDialog
                     users={users} initial={c} onSaved={refresh}
-                    trigger={<button data-testid={`edit-contact-${c.id}`} className="w-8 h-8 flex items-center justify-center border border-black hover:bg-brand-ink hover:text-white transition-colors"><PencilSimple size={14} weight="bold" /></button>}
+                    trigger={<button data-testid={`edit-contact-${c.id}`} className="w-8 h-8 flex items-center justify-center border border-border hover:bg-accent transition-colors"><PencilSimple size={14} weight="bold" /></button>}
                   />
-                  <button data-testid={`delete-contact-${c.id}`} onClick={() => remove(c.id)} className="w-8 h-8 flex items-center justify-center border border-black hover:bg-danger-600 hover:text-white transition-colors"><Trash size={14} weight="bold" /></button>
+                  <button data-testid={`delete-contact-${c.id}`} onClick={() => remove(c.id)} className="w-8 h-8 flex items-center justify-center border border-border hover:bg-danger-600 hover:text-white transition-colors"><Trash size={14} weight="bold" /></button>
                 </div>
               )}
               {!canManage && can360 && (
-                <button data-testid={`view-profile-${c.id}`} onClick={() => navigate(`/contacts/${c.id}`)} title="360° profile" className="w-8 h-8 flex items-center justify-center border border-black hover:bg-brand-blue hover:text-white transition-colors"><Eye size={14} weight="bold" /></button>
+                <button data-testid={`view-profile-${c.id}`} onClick={() => navigate(`/contacts/${c.id}`)} title="360° profile" className="w-8 h-8 flex items-center justify-center border border-border hover:bg-accent transition-colors"><Eye size={14} weight="bold" /></button>
               )}
             </div>
-            <p className="font-heading font-bold text-lg leading-tight">{c.name}</p>
+            <p className="font-medium text-lg leading-tight">{c.name}</p>
             {c.company && <p className="text-sm text-muted-foreground">{c.company}</p>}
             <div className="mt-3 space-y-1 text-sm">
               {c.phone && <p className="flex items-center gap-2"><Phone size={14} weight="bold" className="text-muted-foreground" /> {c.phone}</p>}
@@ -223,10 +223,10 @@ export function ContactsPanel({ types, addLabel = "Add Contact", readOnly = fals
             </div>
             {(c.tags || []).length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-3">
-                {c.tags.map((t) => <span key={t} className="text-[10px] uppercase tracking-wider border border-black/30 px-1.5 py-0.5">{t}</span>)}
+                {c.tags.map((t) => <span key={t} className="text-[10px]  border border-border px-1.5 py-0.5">{t}</span>)}
               </div>
             )}
-            <div className="flex items-center justify-between mt-4 pt-3 border-t border-black/10 text-xs text-muted-foreground">
+            <div className="flex items-center justify-between mt-4 pt-3 border-t border-border text-xs text-muted-foreground">
               <span>{c.assigned_name ? `Owner: ${c.assigned_name}` : "Unassigned"}</span>
               {c.tax_id && <span className="font-mono">{c.tax_id}</span>}
             </div>

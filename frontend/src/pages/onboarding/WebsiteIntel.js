@@ -63,11 +63,11 @@ export function WebsiteIntel({ companyName, onDone }) {
         {stage === "ask" && (
           <motion.div key="ask" {...fade} transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}>
             <p className="label-mono text-brand-600 mb-3">Your world</p>
-            <h1 className="font-heading text-3xl sm:text-4xl lg:text-5xl font-black uppercase tracking-tighter leading-[1.02] mb-2">
+            <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl leading-[1.02] mb-2">
               Does {companyName} live on the web?
             </h1>
             <p className="text-sm text-muted-foreground mb-8">Drop your website — our AI reads it so you don't have to explain yourself twice.</p>
-            <div className="flex items-center gap-3 border-b-2 border-black focus-within:border-brand-600 transition-colors">
+            <div className="flex items-center gap-3 border-b-2 border-border focus-within:border-brand-600 transition-colors">
               <Globe size={26} weight="bold" className="text-muted-foreground shrink-0" />
               <input
                 autoFocus
@@ -81,7 +81,7 @@ export function WebsiteIntel({ companyName, onDone }) {
             </div>
             <div className="mt-8 flex items-center gap-5">
               <button onClick={analyse} disabled={!url.trim()} data-testid="signup-website-analyse"
-                className="flex items-center gap-2 bg-brand-600 text-white font-semibold uppercase tracking-wider text-sm px-8 py-3.5 border border-black hover:shadow-brutal hover:-translate-y-0.5 transition-all disabled:opacity-40">
+                className="flex items-center gap-2 bg-brand-600 text-white font-medium text-sm px-8 py-3.5 border border-border hover:-translate-y-0.5 transition-all disabled:opacity-40">
                 <MagnifyingGlass size={16} weight="bold" /> Read my website
               </button>
               <button onClick={() => setStage("manual")} data-testid="signup-website-skip"
@@ -97,12 +97,12 @@ export function WebsiteIntel({ companyName, onDone }) {
             <div className="relative w-28 h-28 mx-auto mb-10">
               <motion.div className="absolute inset-0 border-2 border-brand-600"
                 animate={{ rotate: 90, scale: [1, 1.15, 1] }} transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }} />
-              <motion.div className="absolute inset-3 border border-black bg-white flex items-center justify-center"
+              <motion.div className="absolute inset-3 border border-border bg-white flex items-center justify-center"
                 animate={{ rotate: -90 }} transition={{ repeat: Infinity, duration: 4, ease: "linear" }}>
                 <Globe size={36} weight="bold" className="text-brand-ink" />
               </motion.div>
             </div>
-            <p className="font-heading text-2xl font-black uppercase tracking-tight mb-3">Reading {url.replace(/^https?:\/\//, "")}</p>
+            <p className="font-display text-2xl mb-3">Reading {url.replace(/^https?:\/\//, "")}</p>
             <AnimatePresence mode="wait">
               <motion.p key={scanLine} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
                 className="text-sm text-muted-foreground font-mono">{SCAN_LINES[scanLine]}</motion.p>
@@ -113,10 +113,10 @@ export function WebsiteIntel({ companyName, onDone }) {
         {stage === "confirm" && intel && (
           <motion.div key="confirm" {...fade} transition={{ duration: 0.35 }}>
             <p className="label-mono text-brand-600 mb-3">We did our homework</p>
-            <h1 className="font-heading text-3xl sm:text-4xl font-black uppercase tracking-tighter leading-[1.02] mb-6">
+            <h1 className="font-display text-3xl sm:text-4xl leading-[1.02] mb-6">
               Here's what we learned.
             </h1>
-            <div className="border border-black bg-white shadow-brutal p-6 space-y-5" data-testid="signup-intel-card">
+            <div className="border border-border bg-white shadow-md p-6 space-y-5" data-testid="signup-intel-card">
               <p className="text-base leading-relaxed">{intel.summary}</p>
               {intel.highlights?.length > 0 && (
                 <div className="space-y-1.5">
@@ -128,11 +128,11 @@ export function WebsiteIntel({ companyName, onDone }) {
                   ))}
                 </div>
               )}
-              <div className="grid sm:grid-cols-2 gap-4 pt-2 border-t border-black/10">
+              <div className="grid sm:grid-cols-2 gap-4 pt-2 border-t border-border">
                 <div>
                   <label className="label-mono text-muted-foreground">Industry</label>
                   <select data-testid="signup-intel-industry" value={industry} onChange={(e) => setIndustry(e.target.value)}
-                    className="w-full mt-1 border border-black bg-white px-3 py-2.5 text-sm font-mono focus:outline-none focus:shadow-brutal-sm">
+                    className="w-full mt-1 border border-border bg-white px-3 py-2.5 text-sm font-mono focus:outline-none focus:shadow-sm">
                     {INDUSTRIES.map((i) => <option key={i} value={i}>{i}</option>)}
                   </select>
                 </div>
@@ -141,7 +141,7 @@ export function WebsiteIntel({ companyName, onDone }) {
                   <div className="flex flex-wrap gap-1.5 mt-1.5">
                     {MODELS.map((m) => (
                       <button key={m} data-testid={`signup-model-${m}`} onClick={() => setModel(m)}
-                        className={`px-3 py-1.5 border border-black text-xs font-semibold uppercase tracking-wider transition-colors ${model === m ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+                        className={`px-3 py-1.5 border border-border text-xs font-medium transition-colors ${model === m ? "bg-primary text-primary-foreground" : "bg-white hover:bg-accent"}`}>
                         {m}
                       </button>
                     ))}
@@ -153,7 +153,7 @@ export function WebsiteIntel({ companyName, onDone }) {
                   <label className="label-mono text-muted-foreground">What you offer</label>
                   <div className="flex flex-wrap gap-1.5 mt-1.5">
                     {intel.products.map((p) => (
-                      <span key={p.name} className="px-2.5 py-1 border border-black/30 bg-brand-yellow/30 text-xs font-mono">{p.name}</span>
+                      <span key={p.name} className="px-2.5 py-1 border border-border bg-caution-50/30 text-xs font-mono">{p.name}</span>
                     ))}
                   </div>
                 </div>
@@ -161,7 +161,7 @@ export function WebsiteIntel({ companyName, onDone }) {
             </div>
             <div className="mt-6 flex items-center gap-5">
               <button onClick={() => finish(true)} data-testid="signup-intel-confirm"
-                className="flex items-center gap-2 bg-brand-ink text-white font-semibold uppercase tracking-wider text-sm px-8 py-3.5 border border-black hover:shadow-brutal hover:-translate-y-0.5 transition-all">
+                className="flex items-center gap-2 bg-primary text-primary-foreground font-medium text-sm px-8 py-3.5 border border-border hover:-translate-y-0.5 transition-all">
                 That's us <ArrowRight size={16} weight="bold" />
               </button>
               <button onClick={() => setStage("manual")} data-testid="signup-intel-edit"
@@ -175,7 +175,7 @@ export function WebsiteIntel({ companyName, onDone }) {
         {stage === "manual" && (
           <motion.div key="manual" {...fade} transition={{ duration: 0.35 }}>
             <p className="label-mono text-brand-600 mb-3">Your world</p>
-            <h1 className="font-heading text-3xl sm:text-4xl font-black uppercase tracking-tighter leading-[1.02] mb-2">
+            <h1 className="font-display text-3xl sm:text-4xl leading-[1.02] mb-2">
               Place {companyName} on the map.
             </h1>
             <p className="text-sm text-muted-foreground mb-8">Just the industry and who you sell to — Dex will ask about your operations in the interview.</p>
@@ -183,7 +183,7 @@ export function WebsiteIntel({ companyName, onDone }) {
               <div>
                 <label className="label-mono text-muted-foreground">Industry</label>
                 <select autoFocus data-testid="signup-manual-industry" value={industry} onChange={(e) => setIndustry(e.target.value)}
-                  className="w-full mt-1 border border-black bg-white px-3 py-3 text-sm font-mono focus:outline-none focus:shadow-brutal-sm">
+                  className="w-full mt-1 border border-border bg-white px-3 py-3 text-sm font-mono focus:outline-none focus:shadow-sm">
                   <option value="">Select industry…</option>
                   {INDUSTRIES.map((i) => <option key={i} value={i}>{i}</option>)}
                 </select>
@@ -193,7 +193,7 @@ export function WebsiteIntel({ companyName, onDone }) {
                 <div className="flex flex-wrap gap-2 mt-1.5">
                   {MODELS.map((m) => (
                     <button key={m} data-testid={`signup-manual-model-${m}`} onClick={() => setModel(m)}
-                      className={`px-4 py-2 border border-black text-xs font-semibold uppercase tracking-wider transition-colors ${model === m ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+                      className={`px-4 py-2 border border-border text-xs font-medium transition-colors ${model === m ? "bg-primary text-primary-foreground" : "bg-white hover:bg-accent"}`}>
                       {m}
                     </button>
                   ))}
@@ -201,7 +201,7 @@ export function WebsiteIntel({ companyName, onDone }) {
               </div>
             </div>
             <button onClick={() => finish(false)} disabled={!industry} data-testid="signup-manual-continue"
-              className="mt-7 flex items-center gap-2 bg-brand-ink text-white font-semibold uppercase tracking-wider text-sm px-8 py-3.5 border border-black hover:shadow-brutal hover:-translate-y-0.5 transition-all disabled:opacity-40">
+              className="mt-7 flex items-center gap-2 bg-primary text-primary-foreground font-medium text-sm px-8 py-3.5 border border-border hover:-translate-y-0.5 transition-all disabled:opacity-40">
               Continue <ArrowRight size={16} weight="bold" />
             </button>
           </motion.div>

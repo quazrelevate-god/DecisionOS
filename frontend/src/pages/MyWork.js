@@ -130,7 +130,7 @@ function TaskTrail({ t, members, roleOptions, onChange }) {
     <div className="mt-4 border-t border-border pt-4" data-testid={`task-trail-${t.id}`}>
       {hasUpdates ? (
         <div className="flex items-center justify-between mb-2">
-          <span className="flex items-center gap-2 font-heading font-extrabold uppercase tracking-tight text-sm">
+          <span className="flex items-center gap-2 font-heading font-medium tracking-tight text-sm">
             <ChatCircleText size={16} weight="bold" className="text-brand-600" /> Activity &amp; Handoffs
           </span>
           {!open && (
@@ -306,12 +306,12 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
   return (
     <div className="mt-4 border-t border-border pt-4" data-testid={`exec-plan-${t.id}`}>
       <div className="flex items-center justify-between mb-2">
-        <span className="flex items-center gap-2 font-heading font-extrabold uppercase tracking-tight text-sm">
+        <span className="flex items-center gap-2 font-heading font-medium tracking-tight text-sm">
           <ListChecks size={16} weight="bold" className="text-brand-600" /> AI Execution Guide
         </span>
         <span className="label-mono" data-testid={`exec-progress-${t.id}`}>{progress}%</span>
       </div>
-      <div className="h-2 bg-black/10 border border-border mb-3">
+      <div className="h-2 bg-muted border border-border mb-3">
         <div className="h-full bg-brand-600 transition-all" style={{ width: `${progress}%` }} />
       </div>
 
@@ -416,9 +416,9 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
       </div>
 
       <Dialog open={!!viewStep} onOpenChange={(o) => !o && setViewStep(null)}>
-        <DialogContent className="border border-border rounded-none">
+        <DialogContent className="border border-border rounded-xl">
           <DialogHeader>
-            <DialogTitle className="font-heading uppercase tracking-tight text-base flex items-center gap-2"><ListChecks size={18} weight="bold" className="text-brand-600" /> Execution Step</DialogTitle>
+            <DialogTitle className="font-heading tracking-tight text-base flex items-center gap-2"><ListChecks size={18} weight="bold" className="text-brand-600" /> Execution Step</DialogTitle>
           </DialogHeader>
           <p className="text-sm leading-relaxed whitespace-pre-wrap break-words" data-testid={`exec-step-detail-${t.id}`}>{viewStep?.text}</p>
           <p className="label-mono text-muted-foreground mt-1">Tap outside to close</p>
@@ -461,7 +461,7 @@ function PriorityScoreBars({ scores }) {
             title={a.tip}
           >
             <span className="label-mono w-16 shrink-0 text-muted-foreground cursor-help">{a.label}</span>
-            <div className="flex-1 h-2 bg-black/10 border border-border">
+            <div className="flex-1 h-2 bg-muted border border-border">
               <div className={`h-full ${a.color}`} style={{ width: `${scores[a.key] || 0}%` }} />
             </div>
             <span className="label-mono w-7 text-right tabular-nums">{scores[a.key] || 0}</span>
@@ -503,9 +503,9 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
   const isAudio = (a) => a.kind === "voice" || (a.content_type || "").startsWith("audio/");
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) { setZoom(null); setConfirmDel(false); } onOpenChange(o); }}>
-      <DialogContent className="border border-border rounded-none max-w-2xl max-h-[90vh] overflow-y-auto" data-testid={`task-detail-${t.id}`}>
+      <DialogContent className="border border-border rounded-xl max-w-2xl max-h-[90vh] overflow-y-auto" data-testid={`task-detail-${t.id}`}>
         <DialogHeader>
-          <DialogTitle className="font-heading uppercase tracking-tight text-base pr-6">{t.title}</DialogTitle>
+          <DialogTitle className="font-heading tracking-tight text-base pr-6">{t.title}</DialogTitle>
         </DialogHeader>
         {zoom ? (
           <div className="space-y-3">
@@ -524,7 +524,7 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
 
             {steps.length > 0 && (
               <div>
-                <p className="flex items-center gap-2 font-heading font-extrabold uppercase tracking-tight text-sm mb-2"><ListChecks size={16} weight="bold" className="text-brand-600" /> What was done</p>
+                <p className="flex items-center gap-2 font-heading font-medium tracking-tight text-sm mb-2"><ListChecks size={16} weight="bold" className="text-brand-600" /> What was done</p>
                 <ul className="space-y-1.5">
                   {steps.map((s) => (
                     <li key={s.id} className="flex items-start gap-2 text-sm" data-testid={`detail-step-${t.id}-${s.id}`}>
@@ -538,7 +538,7 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
 
             {refs.length > 0 && (
               <div data-testid={`detail-reference-${t.id}`}>
-                <p className="flex items-center gap-2 font-heading font-extrabold uppercase tracking-tight text-sm mb-2"><Paperclip size={15} weight="bold" className="text-brand-blue" /> Reference material · {refs.length}</p>
+                <p className="flex items-center gap-2 font-heading font-medium tracking-tight text-sm mb-2"><Paperclip size={15} weight="bold" className="text-brand-blue" /> Reference material · {refs.length}</p>
                 <div className="flex flex-wrap gap-2 items-center">
                   {refs.map((a) => (
                     isImg(a)
@@ -570,7 +570,7 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
             )}
 
             <div>
-              <p className="flex items-center gap-2 font-heading font-extrabold uppercase tracking-tight text-sm mb-2"><Paperclip size={15} weight="bold" className="text-brand-600" /> Proof of work{proof.length > 0 ? ` · ${proof.length}` : ""}</p>
+              <p className="flex items-center gap-2 font-heading font-medium tracking-tight text-sm mb-2"><Paperclip size={15} weight="bold" className="text-brand-600" /> Proof of work{proof.length > 0 ? ` · ${proof.length}` : ""}</p>
               {proof.length === 0 ? (
                 <p className="text-sm text-muted-foreground" data-testid={`detail-no-proof-${t.id}`}>No proof uploaded for this task.</p>
               ) : (
@@ -600,7 +600,7 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
 
             {updates.length > 0 && (
               <div>
-                <p className="flex items-center gap-2 font-heading font-extrabold uppercase tracking-tight text-sm mb-2"><ChatCircleText size={16} weight="bold" className="text-brand-600" /> Activity &amp; Handoffs</p>
+                <p className="flex items-center gap-2 font-heading font-medium tracking-tight text-sm mb-2"><ChatCircleText size={16} weight="bold" className="text-brand-600" /> Activity &amp; Handoffs</p>
                 <ul className="space-y-2">
                   {updates.map((u) => (
                     <li key={u.id} className="flex items-start gap-2 border border-border p-2.5">
@@ -870,7 +870,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
       {/* U7-05.2: SUMMARY ROW -- the only thing shown when card is collapsed.
           Click-target on the whole row toggles expand. Right-side quick actions
           stopPropagation so they don't collapse when clicked. */}
-      <div className={`w-full flex items-stretch group ${selected ? "bg-brand-yellow/30" : "hover:bg-black/[0.02]"} transition-colors`}>
+      <div className={`w-full flex items-stretch group ${selected ? "bg-caution-50/30" : "hover:bg-accent/50"} transition-colors`}>
         {/* U7-05.3: bulk-select checkbox. Sits outside the expand button
             so clicking it doesn't toggle the card. Only rendered when
             onToggleSelect is passed (skip in TaskDetailDialog and other
@@ -945,7 +945,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
                   title={`Open workflow: ${t.workflow_summary.title}`}
                 >
                   <FlowArrow size={11} weight="bold" />
-                  <span className="uppercase tracking-wider text-[10px]">
+                  <span className=" text-[10px]">
                     {(t.workflow_summary.stage || "").replace(/_/g, " ")}
                   </span>
                 </a>
@@ -988,11 +988,11 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
 
       {isOp && (
         <div className="flex flex-wrap items-center gap-2" data-testid={`op-meta-${t.id}`}>
-          {t.op_category && <span className="inline-flex items-center gap-1 border border-border px-2 py-0.5 text-xs font-medium bg-brand-yellow"><Tag size={11} weight="bold" /> {t.op_category}</span>}
+          {t.op_category && <span className="inline-flex items-center gap-1 border border-border px-2 py-0.5 text-xs font-medium bg-caution-50"><Tag size={11} weight="bold" /> {t.op_category}</span>}
           {t.assignee_name && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><UserCircle size={13} weight="bold" /> {t.assignee_name}</span>}
           {t.support_name && <span className="text-xs text-muted-foreground">+ {t.support_name}</span>}
           {t.approval_required && (
-            <span data-testid={`op-approval-${t.id}`} className={`inline-flex items-center gap-1 border border-border px-2 py-0.5 text-xs font-medium ${t.approval_status === "approved" ? "bg-green-600 text-white" : t.approval_status === "pending" ? "bg-brand-yellow" : t.approval_status === "rejected" ? "bg-danger-600 text-white" : "bg-brand-paper"}`}>
+            <span data-testid={`op-approval-${t.id}`} className={`inline-flex items-center gap-1 border border-border px-2 py-0.5 text-xs font-medium ${t.approval_status === "approved" ? "bg-green-600 text-white" : t.approval_status === "pending" ? "bg-caution-50" : t.approval_status === "rejected" ? "bg-danger-600 text-white" : "bg-brand-paper"}`}>
               <ShieldCheck size={11} weight="bold" /> {t.approval_status === "approved" ? "Approved" : t.approval_status === "pending" ? "Pending approval" : t.approval_status === "rejected" ? "Changes requested" : `${t.approver_name || "Approval"} required`}
             </span>
           )}
@@ -1015,7 +1015,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
               {(t.workflow_summary.title || "Workflow").slice(0, 40)}
             </span>
             <span className="text-muted-foreground">·</span>
-            <span className="uppercase tracking-wider text-[10px]">
+            <span className=" text-[10px]">
               {(t.workflow_summary.stage || "").replace(/_/g, " ")}
             </span>
           </a>
@@ -1055,7 +1055,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
           separate "Set progress" dropdown is gone too. */}
       {!terminal && !awaitingApproval && (
         <div className="space-y-2">
-          <div className="h-2 bg-black/10 border border-border" title={`${t.progress || 0}% complete`} aria-label={`Progress: ${t.progress || 0}%`}>
+          <div className="h-2 bg-muted border border-border" title={`${t.progress || 0}% complete`} aria-label={`Progress: ${t.progress || 0}%`}>
             <div className="h-full bg-brand-600 transition-all" style={{ width: `${t.progress || 0}%` }} data-testid={`progress-bar-${t.id}`} />
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -1132,7 +1132,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
       })()}
 
       <Dialog open={!!lightbox} onOpenChange={(o) => !o && setLightbox(null)}>
-        <DialogContent className="border border-border rounded-none max-w-3xl p-2" data-testid={`photo-lightbox-${t.id}`}>
+        <DialogContent className="border border-border rounded-xl max-w-3xl p-2" data-testid={`photo-lightbox-${t.id}`}>
           <DialogHeader>
             <DialogTitle className="sr-only">Proof photo</DialogTitle>
           </DialogHeader>
@@ -1141,7 +1141,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
       </Dialog>
 
       {canApprove && awaitingApproval && (
-        <div className="flex flex-wrap gap-2 mt-4 border border-border bg-brand-yellow/40 p-3" data-testid={`approval-actions-${t.id}`}>
+        <div className="flex flex-wrap gap-2 mt-4 border border-border bg-caution-50/40 p-3" data-testid={`approval-actions-${t.id}`}>
           <span className="w-full label-mono text-muted-foreground">This task needs your approval before {t.assignee_name || "the assignee"} can start work.</span>
           {t.approval_status === "rejected" && t.rejection_reason && <span className="w-full text-xs text-danger-600">Previously requested: {t.rejection_reason}</span>}
           <button onClick={approveTask} data-testid={`approve-${t.id}`} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 text-sm font-medium rounded-lg border border-border transition-all">
@@ -1168,7 +1168,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
       )}
 
       {t.evidence_required && !isTerminal(t) && !awaitingApproval && (
-        <div className={`mt-3 flex items-start gap-2 border border-border p-2.5 ${hasEvidence ? "bg-green-600/10" : "bg-brand-yellow/30"}`} data-testid={`evidence-required-${t.id}`}>
+        <div className={`mt-3 flex items-start gap-2 border border-border p-2.5 ${hasEvidence ? "bg-green-600/10" : "bg-caution-50/30"}`} data-testid={`evidence-required-${t.id}`}>
           {hasEvidence ? <CheckCircle size={16} weight="fill" className="text-green-600 shrink-0 mt-0.5" /> : <Info size={16} weight="bold" className="text-brand-600 shrink-0 mt-0.5" />}
           <p className="text-xs">{hasEvidence
             ? "Proof attached — you can mark this task complete."
@@ -1257,9 +1257,9 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
 
       {/* U7-05 dialog: reject / clarify reason (replaced window.prompt). */}
       <Dialog open={!!reasonDialog} onOpenChange={(o) => !o && !reasonBusy && setReasonDialog(null)}>
-        <DialogContent className="border border-border rounded-none max-w-md" data-testid={`reason-dialog-${t.id}`}>
+        <DialogContent className="border border-border rounded-xl max-w-md" data-testid={`reason-dialog-${t.id}`}>
           <DialogHeader>
-            <DialogTitle className="font-heading uppercase tracking-tight">
+            <DialogTitle className="font-heading tracking-tight">
               {reasonDialog?.kind === "reject" ? "Request changes" : "Ask for clarification"}
             </DialogTitle>
           </DialogHeader>
@@ -1613,9 +1613,9 @@ export default function MyWork() {
 
           {/* U7-05.3 dialog: bulk-reassign target picker. */}
           <Dialog open={bulkReassignOpen} onOpenChange={(o) => !o && !bulkBusy && setBulkReassignOpen(false)}>
-            <DialogContent className="border border-border rounded-none max-w-md" data-testid="bulk-reassign-dialog">
+            <DialogContent className="border border-border rounded-xl max-w-md" data-testid="bulk-reassign-dialog">
               <DialogHeader>
-                <DialogTitle className="font-heading uppercase tracking-tight">
+                <DialogTitle className="font-heading tracking-tight">
                   Reassign {selected.size} {selected.size === 1 ? "task" : "tasks"}
                 </DialogTitle>
               </DialogHeader>

@@ -5,13 +5,13 @@ import { motion } from "framer-motion";
 export const DexMascot = () => (
   <div className="relative w-56 h-44 mx-auto select-none" data-testid="dex-mascot">
     {/* floor */}
-    <div className="absolute bottom-3 left-2 right-2 border-b-2 border-black" />
+    <div className="absolute bottom-3 left-2 right-2 border-b-2 border-border" />
 
     {/* blocks Dex is stacking */}
     {[0, 1, 2].map((i) => (
       <motion.div
         key={`dex-block-${i}`}
-        className={`absolute w-9 h-9 border-2 border-black ${["bg-white", "bg-brand-yellow", "bg-brand-600"][i]}`}
+        className={`absolute w-9 h-9 border border-border ${["bg-white", "bg-caution-50", "bg-brand-600"][i]}`}
         style={{ right: 26, bottom: 12 + i * 34 }}
         animate={{ opacity: [0, 1, 1, 1], y: [-28, 0, 0, 0], scale: [0.5, 1, 1, 1] }}
         transition={{ repeat: Infinity, repeatDelay: 1.4, duration: 4, delay: i * 1.3, times: [0, 0.15, 0.92, 1], ease: "easeOut" }}
@@ -22,7 +22,7 @@ export const DexMascot = () => (
     {[0, 1, 2].map((i) => (
       <motion.span
         key={`dex-spark-${i}`}
-        className="absolute w-1.5 h-1.5 bg-brand-yellow border border-black"
+        className="absolute w-1.5 h-1.5 bg-caution-50 border border-border"
         style={{ left: 128 + i * 11, bottom: 56 + (i % 2) * 14 }}
         animate={{ opacity: [0, 1, 0], scale: [0.5, 1.3, 0.4], y: [0, -9, -16] }}
         transition={{ repeat: Infinity, duration: 1.1, delay: i * 0.35 }}
@@ -38,12 +38,12 @@ export const DexMascot = () => (
       {/* antenna */}
       <div className="absolute left-1/2 -translate-x-1/2 top-0 w-0.5 h-4 bg-black" />
       <motion.div
-        className="absolute left-1/2 -translate-x-1/2 -top-2 w-3 h-3 rounded-full bg-brand-600 border border-black"
+        className="absolute left-1/2 -translate-x-1/2 -top-2 w-3 h-3 rounded-full bg-brand-600 border border-border"
         animate={{ scale: [1, 1.35, 1], opacity: [1, 0.65, 1] }}
         transition={{ repeat: Infinity, duration: 1.2 }}
       />
       {/* head with blinking eyes */}
-      <div className="absolute top-3 left-1/2 -translate-x-1/2 w-16 h-12 bg-white border-2 border-black flex items-center justify-center gap-2.5">
+      <div className="absolute top-3 left-1/2 -translate-x-1/2 w-16 h-12 bg-white border border-border flex items-center justify-center gap-2.5">
         {[0, 1].map((e) => (
           <motion.span
             key={`dex-eye-${e}`}
@@ -54,9 +54,9 @@ export const DexMascot = () => (
         ))}
       </div>
       {/* body with spinning core */}
-      <div className="absolute top-[60px] left-1/2 -translate-x-1/2 w-20 h-14 bg-brand-ink border-2 border-black flex items-center justify-center">
+      <div className="absolute top-[60px] left-1/2 -translate-x-1/2 w-20 h-14 bg-primary border border-border flex items-center justify-center">
         <motion.div
-          className="w-4 h-4 bg-brand-yellow border border-black"
+          className="w-4 h-4 bg-caution-50 border border-border"
           animate={{ rotate: [0, 90, 90, 180, 180, 270, 270, 360] }}
           transition={{ repeat: Infinity, duration: 3.2, ease: "easeInOut" }}
         />
@@ -67,7 +67,7 @@ export const DexMascot = () => (
         animate={{ rotate: [-32, 20, -32] }}
         transition={{ repeat: Infinity, duration: 0.9, ease: "easeInOut" }}
       >
-        <div className="absolute -right-1.5 -top-2.5 w-3.5 h-7 bg-brand-600 border-2 border-black" />
+        <div className="absolute -right-1.5 -top-2.5 w-3.5 h-7 bg-brand-600 border border-border" />
       </motion.div>
       {/* idle arm + legs */}
       <div className="absolute top-[70px] -left-2.5 w-6 h-2 bg-black" />

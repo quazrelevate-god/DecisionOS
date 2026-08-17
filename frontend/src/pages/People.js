@@ -73,18 +73,18 @@ export default function People() {
         eyebrow={t("people.eyebrow", { customers: L.customer_plural.toLowerCase(), vendors: L.vendor_plural.toLowerCase() })}
         title={t("people.title")}
       >
-        <div className="flex border border-black" data-testid="people-tabs">
+        <div className="flex border border-border" data-testid="people-tabs">
           {TABS.map((tb) => (
             <button
               key={tb.key}
               onClick={() => setTab(tb.key)}
               data-testid={`people-tab-${tb.key}`}
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border-r border-black last:border-r-0 transition-colors ${tab === tb.key ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-r border-border last:border-r-0 transition-colors ${tab === tb.key ? "bg-primary text-primary-foreground" : "bg-white hover:bg-accent"}`}
             >
               <tb.icon size={16} weight="bold" />
               {tb.label}
               {counts[tb.key] > 0 && (
-                <span className={`label-mono min-w-5 h-5 px-1 flex items-center justify-center border ${tab === tb.key ? "border-white/40 text-white/80" : "border-black/20 text-muted-foreground"}`}>
+                <span className={`label-mono min-w-5 h-5 px-1 flex items-center justify-center border ${tab === tb.key ? "border-white/40 text-white/80" : "border-border text-muted-foreground"}`}>
                   {counts[tb.key]}
                 </span>
               )}
@@ -105,7 +105,7 @@ export default function People() {
           the user what they're seeing and what the escape hatch is. */}
       {showViewBanner && (
         <div
-          className="mb-4 border border-black/30 bg-black/[0.02] px-4 py-2.5 flex items-center gap-3 flex-wrap"
+          className="mb-4 border border-border bg-muted/40 px-4 py-2.5 flex items-center gap-3 flex-wrap"
           data-testid="people-view-mode-banner"
         >
           <Info size={16} weight="bold" className="text-brand-600 shrink-0" />

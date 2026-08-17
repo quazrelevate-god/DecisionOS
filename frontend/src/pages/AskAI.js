@@ -28,7 +28,7 @@ function KpiGrid({ kpis, currency }) {
         return (
           <div key={`${k.label}-${i}`} className="card-brutal p-4" data-testid={`brain-kpi-${i}`}>
             <p className="label-mono text-muted-foreground text-xs">{k.label}</p>
-            <p className="font-heading text-2xl font-black tracking-tighter mt-1">
+            <p className="font-display text-2xl mt-1">
               {isMoney ? money(k.value, currency) : k.value}
             </p>
             {k.comparison && <p className="text-xs text-muted-foreground mt-0.5">{k.comparison}</p>}
@@ -43,20 +43,20 @@ function DataTable({ table, currency }) {
   if (!table?.rows?.length) return null;
   const cols = table.columns || [];
   return (
-    <div className="border border-black overflow-x-auto mb-3" data-testid="brain-table">
+    <div className="border border-border overflow-x-auto mb-3" data-testid="brain-table">
       <table className="w-full text-sm">
         <thead>
-          <tr className="bg-brand-ink text-white">
+          <tr className="bg-primary text-primary-foreground">
             {cols.map((c) => (
-              <th key={c.key} className="text-left font-semibold uppercase tracking-wider text-xs px-3 py-2 whitespace-nowrap">{c.label}</th>
+              <th key={c.key} className="text-left font-medium text-xs px-3 py-2 whitespace-nowrap">{c.label}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {table.rows.slice(0, 100).map((r, ri) => (
-            <tr key={`${r[cols[0]?.key] ?? ""}-${ri}`} className={ri % 2 ? "bg-black/[0.03]" : ""} data-testid={`brain-row-${ri}`}>
+            <tr key={`${r[cols[0]?.key] ?? ""}-${ri}`} className={ri % 2 ? "bg-muted/40" : ""} data-testid={`brain-row-${ri}`}>
               {cols.map((c) => (
-                <td key={c.key} className="px-3 py-2 align-top border-t border-black/10">
+                <td key={c.key} className="px-3 py-2 align-top border-t border-border">
                   {c.type === "money" ? money(r[c.key], currency)
                     : c.key === "on_time"
                       ? <span className={r[c.key] === "Yes" ? "text-green-600 font-semibold" : "text-brand-600 font-semibold"}>{r[c.key]}</span>
@@ -68,7 +68,7 @@ function DataTable({ table, currency }) {
         </tbody>
       </table>
       {table.total_rows > 100 && (
-        <p className="text-xs text-muted-foreground px-3 py-2 border-t border-black/10">Showing first 100 of {table.total_rows} rows — export for the full set.</p>
+        <p className="text-xs text-muted-foreground px-3 py-2 border-t border-border">Showing first 100 of {table.total_rows} rows — export for the full set.</p>
       )}
     </div>
   );
@@ -83,7 +83,7 @@ function Sources({ sources, onGo }) {
         {sources.map((s, i) => (
           <button key={`${s.id}-${i}`} onClick={() => onGo(s.deep_link)} data-testid={`brain-source-${i}`}
             title={s.confidence ? `${s.confidence}` : ""}
-            className="inline-flex items-center gap-1 border border-black bg-white px-2 py-1 text-xs hover:bg-brand-ink hover:text-white transition-colors">
+            className="inline-flex items-center gap-1 border border-border bg-white px-2 py-1 text-xs hover:bg-accent transition-colors">
             <span className="text-brand-600 uppercase font-semibold">{DEEP_TYPES[s.type] || s.type}</span>
             <span className="truncate max-w-[220px]">{s.title}</span>
           </button>
@@ -117,7 +117,7 @@ function ExportBar({ options, contextId }) {
         const Icon = ICON[o] || FileCsv;
         return (
           <button key={o} onClick={() => run(o)} disabled={!!busy} data-testid={`brain-export-${o}`}
-            className="inline-flex items-center gap-1.5 border border-black bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors disabled:opacity-50">
+            className="inline-flex items-center gap-1.5 border border-border bg-white px-3 py-1.5 text-xs font-medium hover:bg-accent transition-colors disabled:opacity-50">
             <Icon size={15} weight="bold" /> {busy === o ? "…" : o === "excel" ? "Excel" : o.toUpperCase()}
           </button>
         );
@@ -132,7 +132,7 @@ function FollowUps({ items, onAsk }) {
     <div className="mt-3 flex flex-wrap gap-2" data-testid="brain-followups">
       {items.map((s, i) => (
         <button key={`${s}-${i}`} onClick={() => onAsk(s)} data-testid={`brain-followup-${i}`}
-          className="inline-flex items-center gap-1 text-xs border border-black/40 px-2.5 py-1 rounded-full hover:bg-brand-ink hover:text-white transition-colors">
+          className="inline-flex items-center gap-1 text-xs border border-border px-2.5 py-1 rounded-full hover:bg-accent transition-colors">
           {s} <ArrowRight size={12} weight="bold" />
         </button>
       ))}
@@ -226,14 +226,14 @@ export function AskPanel() {
       <div className="flex-1 overflow-y-auto pr-1 space-y-5" data-testid="brain-conversation">
         {log.length === 0 && (
           <div className="card-brutal p-6" data-testid="brain-empty">
-            <p className="flex items-center gap-2 font-heading text-lg font-black uppercase tracking-tight">
+            <p className="flex items-center gap-2 font-heading text-lg font-medium tracking-tight">
               <Sparkle size={20} weight="fill" className="text-brand-600" /> Ask your company anything
             </p>
             <p className="text-sm text-muted-foreground mt-1">Every answer is computed from your authorised workspace data — with clickable sources you can open.</p>
             <div className="flex flex-wrap gap-2 mt-4">
               {SUGGESTIONS.map((s) => (
                 <button key={s} onClick={() => ask(s)} data-testid="ask-suggestion"
-                  className="text-xs border border-black px-3 py-1.5 hover:bg-brand-ink hover:text-white transition-colors">
+                  className="text-xs border border-border px-3 py-1.5 hover:bg-accent transition-colors">
                   {s}
                 </button>
               ))}
@@ -244,7 +244,7 @@ export function AskPanel() {
           <div key={m.id} data-testid={`chat-msg-${m.role}-${i}`}>
             {m.role === "user" ? (
               <div className="flex justify-end">
-                <p className="inline-block bg-brand-ink text-white px-4 py-2 text-sm max-w-[85%]">{m.text}</p>
+                <p className="inline-block bg-primary text-primary-foreground px-4 py-2 text-sm max-w-[85%]">{m.text}</p>
               </div>
             ) : (
               <AiAnswer m={m} onGo={go} onAsk={ask} currency={currency} />
@@ -260,7 +260,7 @@ export function AskPanel() {
       </div>
 
       <form onSubmit={(e) => { e.preventDefault(); ask(); }} className="flex gap-2 mt-3">
-        <div className="flex-1 min-w-0 flex items-center border border-black bg-white px-4">
+        <div className="flex-1 min-w-0 flex items-center border border-border bg-white px-4">
           <span className="text-brand-600 font-bold">{">"}</span>
           <input
             data-testid="ask-input"
@@ -272,12 +272,12 @@ export function AskPanel() {
         </div>
         {log.length > 0 && (
           <button type="button" onClick={clear} data-testid="brain-clear" title="New conversation"
-            className="px-3 border border-black bg-white hover:bg-black/5 transition-colors">
+            className="px-3 border border-border bg-white hover:bg-accent transition-colors">
             <Broom size={16} weight="bold" />
           </button>
         )}
         <MicDictateButton className="px-4" title={t("ask.speak_q")} onText={(txt) => setQ((v) => (v ? `${v} ${txt}` : txt))} />
-        <button data-testid="ask-submit" disabled={busy} className="shrink-0 bg-brand-600 text-white px-6 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all disabled:opacity-50">
+        <button data-testid="ask-submit" disabled={busy} className="shrink-0 bg-brand-600 text-white px-6 flex items-center gap-2 text-sm font-medium border border-border transition-all disabled:opacity-50">
           <PaperPlaneTilt size={16} weight="bold" /> {t("ask.btn")}
         </button>
       </form>

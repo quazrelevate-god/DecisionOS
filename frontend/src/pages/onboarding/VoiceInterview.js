@@ -35,7 +35,7 @@ const LangChip = ({ value, onChange, disabled }) => {
         onClick={() => !disabled && setOpen((o) => !o)}
         disabled={disabled}
         title="Change voice language"
-        className="flex items-center gap-1.5 px-2.5 h-10 border border-black bg-white text-[11px] font-semibold uppercase tracking-wider hover:bg-black/5 disabled:opacity-40"
+        className="flex items-center gap-1.5 px-2.5 h-10 border border-border bg-white text-[11px] font-medium hover:bg-accent disabled:opacity-40"
       >
         <span>{langLabel(value)}</span>
         <CaretDown size={12} weight="bold" />
@@ -44,7 +44,7 @@ const LangChip = ({ value, onChange, disabled }) => {
         {open && (
           <motion.div
             initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
-            className="absolute right-0 mt-1 z-20 min-w-[160px] max-h-72 overflow-y-auto border border-black bg-white shadow-brutal"
+            className="absolute right-0 mt-1 z-20 min-w-[160px] max-h-72 overflow-y-auto border border-border bg-white shadow-md"
             data-testid="interview-lang-menu"
           >
             {SPOKEN_LANGS.map((l) => (
@@ -69,7 +69,7 @@ const LangChip = ({ value, onChange, disabled }) => {
 const LanguagePick = ({ onPick, onSkip }) => (
   <div className="w-full max-w-2xl mx-auto" data-testid="signup-lang-pick">
     <p className="label-mono text-brand-600 mb-3 flex items-center gap-2"><Translate size={14} weight="bold" /> Your interview</p>
-    <h1 className="font-heading text-3xl sm:text-4xl lg:text-5xl font-black uppercase tracking-tighter leading-[1.02] mb-2">
+    <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl leading-[1.02] mb-2">
       Which language should Dex speak?
     </h1>
     <p className="text-sm text-muted-foreground mb-8">Dex will ask every question — voice and text — in the language you pick. You can answer by speaking or typing.</p>
@@ -80,16 +80,16 @@ const LanguagePick = ({ onPick, onSkip }) => (
           data-testid={`lang-pick-${l.code}`}
           initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
           onClick={() => onPick(l.code)}
-          className="group border border-black bg-white p-4 text-left hover:bg-brand-ink hover:text-white hover:shadow-brutal hover:-translate-y-0.5 transition-all"
+          className="group border border-border bg-white p-4 text-left hover:bg-accent hover:-translate-y-0.5 transition-all"
         >
           <p className="font-heading text-2xl font-black leading-none">{l.short}</p>
-          <p className="mt-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground group-hover:text-white/70">{l.label}</p>
+          <p className="mt-2 text-[11px] font-medium text-muted-foreground group-hover:text-white/70">{l.label}</p>
         </motion.button>
       ))}
     </div>
     <div className="mt-8">
       <button onClick={onSkip} data-testid="interview-skip"
-        className="text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-brand-ink underline underline-offset-4 transition-colors">
+        className="text-xs font-medium text-muted-foreground hover:text-brand-ink underline underline-offset-4 transition-colors">
         Skip the interview — build from what you have
       </button>
     </div>
@@ -238,14 +238,14 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
               animate={orbState === "listening" ? { scale: [1, 1.25, 1], opacity: [0.9, 0.25, 0.9] } :
                 orbState === "speaking" ? { scale: [1, 1.12, 1], opacity: [0.7, 0.35, 0.7] } : { scale: 1, opacity: 0.25 }}
               transition={{ repeat: Infinity, duration: orbState === "listening" ? 1.1 : 1.6, ease: "easeInOut" }} />
-            <div className={`absolute inset-1.5 rounded-full flex items-center justify-center border border-black transition-colors ${orbState === "listening" ? "bg-brand-600 text-white" : "bg-brand-ink text-white"}`}>
+            <div className={`absolute inset-1.5 rounded-full flex items-center justify-center border border-border transition-colors ${orbState === "listening" ? "bg-brand-600 text-white" : "bg-primary text-primary-foreground"}`}>
               {orbState === "thinking"
                 ? <CircleNotch size={22} className="animate-spin" />
                 : orbState === "speaking" ? <Waveform size={24} weight="bold" /> : <Microphone size={22} weight="bold" />}
             </div>
           </div>
           <div>
-            <p className="font-heading font-black uppercase tracking-tight leading-none">Dex · your COO interview</p>
+            <p className="font-heading font-medium tracking-tight leading-none">Dex · your COO interview</p>
             <p className="text-xs text-muted-foreground mt-1 font-mono" data-testid="interview-progress">
               {starting ? "warming up…" : `Question ${index} · up to ${max} · ${orbState === "listening" ? "listening" : orbState === "speaking" ? "speaking" : "ready"}`}
             </p>
@@ -255,7 +255,7 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
           <Bars active={speaking} />
           <LangChip value={lang} onChange={pickLang} disabled={starting} />
           <button onClick={toggleMute} data-testid="interview-mute-toggle" title={muted ? "Unmute voice" : "Mute voice"}
-            className={`w-10 h-10 flex items-center justify-center border border-black transition-colors ${muted ? "bg-white text-muted-foreground" : "bg-brand-ink text-white"}`}>
+            className={`w-10 h-10 flex items-center justify-center border border-border transition-colors ${muted ? "bg-white text-muted-foreground" : "bg-primary text-primary-foreground"}`}>
             {muted ? <SpeakerSlash size={18} weight="bold" /> : <SpeakerHigh size={18} weight="bold" />}
           </button>
         </div>
@@ -267,8 +267,8 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
           {starting ? (
             <motion.div key="warm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className="space-y-3">
-              <div className="h-8 w-4/5 bg-black/10 animate-pulse" />
-              <div className="h-8 w-3/5 bg-black/10 animate-pulse" />
+              <div className="h-8 w-4/5 bg-muted animate-pulse" />
+              <div className="h-8 w-3/5 bg-muted animate-pulse" />
             </motion.div>
           ) : (
             <motion.div key={question} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }}
@@ -279,7 +279,7 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
                   animate={speaking ? { scale: [1, 1.6, 1], opacity: [1, 0.5, 1] } : { scale: 1, opacity: 0.5 }}
                   transition={speaking ? { repeat: Infinity, duration: 1 } : { duration: 0.2 }}
                 />
-                <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+                <p className="text-[10px] font-mono  text-muted-foreground">
                   {speaking ? "Speaking · read along" : "Read or listen"}
                 </p>
               </div>
@@ -294,7 +294,7 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
       </div>
 
       {/* Answer area */}
-      <div className="mt-8 border border-black bg-white shadow-brutal p-4" data-testid="interview-answer-box">
+      <div className="mt-8 border border-border bg-white shadow-md p-4" data-testid="interview-answer-box">
         <textarea
           ref={inputRef}
           data-testid="interview-answer-input"
@@ -306,18 +306,18 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
           placeholder={recorder.recording ? "Listening… tap Stop when done — your answer sends itself" : "Tap the mic and speak, or type your answer…"}
           className="w-full bg-transparent text-base focus:outline-none resize-none placeholder:text-black/30"
         />
-        <div className="flex items-center justify-between mt-2 pt-3 border-t border-black/10">
+        <div className="flex items-center justify-between mt-2 pt-3 border-t border-border">
           <button
             data-testid="interview-mic-button"
             onClick={recorder.recording ? recorder.stop : recorder.start}
             disabled={starting || thinking || recorder.transcribing}
-            className={`flex items-center gap-2 px-4 py-2.5 border border-black text-xs font-semibold uppercase tracking-wider transition-all disabled:opacity-50 ${recorder.recording ? "bg-brand-600 text-white animate-pulse" : "bg-white hover:bg-black/5"}`}>
+            className={`flex items-center gap-2 px-4 py-2.5 border border-border text-xs font-medium transition-all disabled:opacity-50 ${recorder.recording ? "bg-brand-600 text-white animate-pulse" : "bg-white hover:bg-accent"}`}>
             {recorder.transcribing ? <CircleNotch size={16} className="animate-spin" />
               : recorder.recording ? <Stop size={16} weight="fill" /> : <Microphone size={16} weight="bold" />}
             {recorder.transcribing ? "Sending…" : recorder.recording ? "Stop — sends answer" : "Speak"}
           </button>
           <button onClick={() => send()} disabled={!answer.trim() || thinking || starting} data-testid="interview-send-button"
-            className="flex items-center gap-2 bg-brand-ink text-white px-6 py-2.5 border border-black text-xs font-semibold uppercase tracking-wider hover:shadow-brutal-sm transition-all disabled:opacity-40">
+            className="flex items-center gap-2 bg-primary text-primary-foreground px-6 py-2.5 border border-border text-xs font-medium transition-all disabled:opacity-40">
             {thinking ? <CircleNotch size={16} className="animate-spin" /> : <PaperPlaneRight size={16} weight="bold" />}
             {thinking ? "Thinking…" : "Answer"}
           </button>
@@ -331,17 +331,17 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
             disabled={index <= 1 || thinking || starting}
             data-testid="interview-back"
             title="Go back to the previous question"
-            className="flex items-center gap-1 px-3 py-1.5 border border-black bg-white text-[11px] font-semibold uppercase tracking-wider hover:bg-black/5 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+            className="flex items-center gap-1 px-3 py-1.5 border border-border bg-white text-[11px] font-medium hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
             <CaretLeft size={12} weight="bold" /> Back
           </button>
           <div className="flex gap-1.5">
             {Array.from({ length: max }).map((_, i) => (
-              <div key={`qdot-${i}`} className={`w-8 h-1.5 border border-black transition-colors ${i + 1 < index ? "bg-brand-ink" : i + 1 === index ? "bg-brand-600" : "bg-white"}`} />
+              <div key={`qdot-${i}`} className={`w-8 h-1.5 border border-border transition-colors ${i + 1 < index ? "bg-primary" : i + 1 === index ? "bg-brand-600" : "bg-white"}`} />
             ))}
           </div>
         </div>
         <button onClick={() => { stopAudio(); onSkip(session, langRef.current); }} data-testid="interview-skip"
-          className="text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-brand-ink underline underline-offset-4 transition-colors">
+          className="text-xs font-medium text-muted-foreground hover:text-brand-ink underline underline-offset-4 transition-colors">
           Skip — build from what you have
         </button>
       </div>

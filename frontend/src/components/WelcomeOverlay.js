@@ -25,12 +25,12 @@ export function WelcomeOverlay() {
         <motion.div
           data-testid="welcome-overlay"
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }}
-          className="fixed inset-0 z-[100] bg-brand-ink text-white flex items-center justify-center p-6">
+          className="fixed inset-0 z-[100] bg-primary text-primary-foreground flex items-center justify-center p-6">
           <div className="w-full max-w-xl">
             <motion.p initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
               className="label-mono text-brand-600 mb-4">Your executive office is ready</motion.p>
             <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
-              className="font-heading text-4xl sm:text-5xl font-black uppercase tracking-tighter leading-[0.98] mb-10">
+              className="font-display text-4xl sm:text-5xl leading-[0.98] mb-10">
               Welcome{name ? `, ${name}` : ""}.<br /><span className="text-brand-600">Run the company</span> from here.
             </motion.h1>
             <div className="space-y-3 mb-10">
@@ -42,7 +42,7 @@ export function WelcomeOverlay() {
                     className="flex items-center gap-4 border border-white/20 bg-white/5 px-5 py-4">
                     <Icon size={22} weight="bold" className="text-brand-600 shrink-0" />
                     <div>
-                      <p className="font-heading font-bold uppercase tracking-tight text-sm">{p.title}</p>
+                      <p className="font-medium uppercase tracking-tight text-sm">{p.title}</p>
                       <p className="text-xs text-white/60 mt-0.5">{p.sub}</p>
                     </div>
                   </motion.div>
@@ -51,7 +51,7 @@ export function WelcomeOverlay() {
             </div>
             <motion.button initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.1 }}
               onClick={dismiss} data-testid="welcome-dismiss"
-              className="flex items-center gap-2 bg-brand-600 text-white font-semibold uppercase tracking-wider px-8 py-4 border border-white/20 hover:-translate-y-0.5 transition-transform">
+              className="flex items-center gap-2 bg-brand-600 text-white font-medium px-8 py-4 border border-white/20 hover:-translate-y-0.5 transition-transform">
               Step inside <ArrowRight size={18} weight="bold" />
             </motion.button>
           </div>

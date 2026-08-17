@@ -70,9 +70,9 @@ function TimelineDialog({ decisionId, open, onClose }) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg rounded-none border-2 border-black" data-testid="timeline-dialog">
+      <DialogContent className="max-w-lg rounded-xl border border-border" data-testid="timeline-dialog">
         <DialogHeader>
-          <DialogTitle className="font-heading text-2xl font-black uppercase tracking-tighter pr-6">
+          <DialogTitle className="font-display text-2xl pr-6">
             {data?.title || "Decision Timeline"}
           </DialogTitle>
           <DialogDescription className="sr-only">Git-style history of this decision</DialogDescription>
@@ -83,13 +83,13 @@ function TimelineDialog({ decisionId, open, onClose }) {
         ) : events.length === 0 ? (
           <p className="text-sm text-muted-foreground py-6">No history recorded yet for this decision.</p>
         ) : (
-          <ol className="mt-4 relative border-l-2 border-black/20 ml-2" data-testid="timeline-events">
+          <ol className="mt-4 relative border-l-2 border-border ml-2" data-testid="timeline-events">
             {events.map((e, i) => {
               const Icon = EVENT_ICON[e.kind] || Circle;
               const color = EVENT_COLOR[e.kind] || "text-muted-foreground";
               return (
                 <li key={`${e.kind}-${e.ts || i}`} className="mb-6 ml-6" data-testid={`timeline-event-${i}`}>
-                  <span className="absolute -left-[13px] flex items-center justify-center w-6 h-6 bg-white border-2 border-black">
+                  <span className="absolute -left-[13px] flex items-center justify-center w-6 h-6 bg-white border border-border">
                     <Icon size={13} weight="bold" className={color} />
                   </span>
                   <p className="text-sm font-medium leading-tight">{e.label}</p>
@@ -162,7 +162,7 @@ export default function Journal() {
         onSubmit={(e) => { e.preventDefault(); setTerm(q); }}
         className="flex gap-2 mb-8 max-w-xl"
       >
-        <div className="flex-1 min-w-0 flex items-center border border-black bg-white">
+        <div className="flex-1 min-w-0 flex items-center border border-border bg-white">
           <MagnifyingGlass size={18} weight="bold" className="ml-3 text-muted-foreground" />
           <input
             value={q}
@@ -175,7 +175,7 @@ export default function Journal() {
         <button
           type="submit"
           data-testid="journal-search-btn"
-          className="shrink-0 px-5 py-2.5 text-sm font-semibold uppercase tracking-wider bg-brand-ink text-white hover:bg-brand-600 transition-colors"
+          className="shrink-0 px-5 py-2.5 text-sm font-medium bg-primary text-primary-foreground hover:bg-brand-600 transition-colors"
         >
           Search
         </button>
@@ -200,7 +200,7 @@ export default function Journal() {
           {visibleDays.map((day) => (
             <section key={day.date} data-testid={`journal-day-${day.date}`}>
               <div className="flex items-center gap-3 mb-4">
-                <h2 className="font-heading text-xl font-black uppercase tracking-tight">{fmtDay(day.date)}</h2>
+                <h2 className="font-heading text-xl font-medium tracking-tight">{fmtDay(day.date)}</h2>
                 <div className="flex-1 h-px bg-black/20" />
                 <span className="label-mono text-muted-foreground">
                   {day.decisions.length} decision{day.decisions.length !== 1 ? "s" : ""}

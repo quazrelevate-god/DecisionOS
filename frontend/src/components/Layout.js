@@ -158,17 +158,17 @@ export default function Layout({ children }) {
         <PopoverTrigger asChild>
           <button data-testid="notif-bell"
             aria-label={count > 0 ? `Notifications, ${count} need you` : "Notifications"}
-            className={`relative flex items-center justify-center border border-black hover:bg-brand-ink hover:text-white transition-colors ${mobile ? "w-12 h-12" : "w-10 h-10"}`}>
+            className={`relative flex items-center justify-center border border-border hover:bg-accent transition-colors ${mobile ? "w-12 h-12" : "w-10 h-10"}`}>
             <Bell size={mobile ? 22 : 18} weight="bold" />
             {count > 0 && (
-              <span data-testid="notif-count" className="absolute -top-2 -right-2 bg-brand-600 text-white text-[10px] min-w-5 h-5 px-1 flex items-center justify-center border border-black font-bold">
+              <span data-testid="notif-count" className="absolute -top-2 -right-2 bg-brand-600 text-white text-[10px] min-w-5 h-5 px-1 flex items-center justify-center border border-border font-bold">
                 {mobile ? Math.min(9, count) : (unread > 99 ? "99+" : unread)}
               </span>
             )}
           </button>
         </PopoverTrigger>
-        <PopoverContent align="end" className="w-80 p-0 border border-black shadow-brutal" data-testid="notif-dropdown">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-black">
+        <PopoverContent align="end" className="w-80 p-0 border border-border shadow-md" data-testid="notif-dropdown">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
             <p className="text-sm font-bold uppercase tracking-tight">{t("header.notifications")}</p>
             {unread > 0 && <span className="label-mono text-brand-600">{unread} {t("header.new")}</span>}
           </div>
@@ -193,7 +193,7 @@ export default function Layout({ children }) {
             })}
           </div>
           <button onClick={() => navigate("/notifications")} data-testid="notif-view-all"
-            className="w-full px-4 py-3 border-t border-black text-sm font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors">
+            className="w-full px-4 py-3 border-t border-border text-sm font-medium hover:bg-accent transition-colors">
             {t("header.view_all")}
           </button>
         </PopoverContent>
@@ -207,7 +207,7 @@ export default function Layout({ children }) {
       data-testid="theme-toggle"
       title={isDark ? "Switch to light mode" : "Switch to dark mode"}
       aria-label="Toggle dark mode"
-      className="w-10 h-10 flex items-center justify-center border border-black hover:bg-brand-ink hover:text-white transition-colors"
+      className="w-10 h-10 flex items-center justify-center border border-border hover:bg-accent transition-colors"
     >
       {isDark ? <Sun size={18} weight="bold" /> : <MoonStars size={18} weight="bold" />}
     </button>
@@ -295,7 +295,7 @@ export default function Layout({ children }) {
                     intercept the click meant for the icon beneath it. */}
                 <span
                   role="tooltip"
-                  className="pointer-events-none absolute left-full ml-2 z-50 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs font-medium text-background opacity-0 shadow-brutal-lg transition-opacity duration-150 group-hover:opacity-100"
+                  className="pointer-events-none absolute left-full ml-2 z-50 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs font-medium text-background opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100"
                 >
                   {label}
                 </span>

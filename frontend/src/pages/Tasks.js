@@ -87,17 +87,17 @@ export function NewTaskDialog({ onCreated, roleOptions, members, defaultType, tr
     finally { setBusy(false); }
   };
 
-  const inp = "w-full border border-black px-3 py-2 text-sm font-mono focus:outline-none focus:shadow-brutal-sm bg-white";
+  const inp = "w-full border border-border px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring/30 bg-white";
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <button data-testid="new-task-button" className={triggerClassName || "flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all"}>
+        <button data-testid="new-task-button" className={triggerClassName || "flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 text-sm font-medium border border-border transition-all"}>
           <Plus size={16} weight="bold" /> New Task
         </button>
       </DialogTrigger>
-      <DialogContent className="border border-black rounded-none max-h-[90vh] overflow-y-auto">
+      <DialogContent className="border border-border rounded-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="font-heading uppercase tracking-tight">New Task</DialogTitle>
+          <DialogTitle className="font-display text-xl">New Task</DialogTitle>
           <DialogDescription className="label-mono text-muted-foreground">Capture any company task — operational or department work.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -162,7 +162,7 @@ export function NewTaskDialog({ onCreated, roleOptions, members, defaultType, tr
           </div>
           <input data-testid="task-expected-output" className={inp} placeholder="Expected output (e.g. Final deck in PDF)" value={form.expected_output} onChange={set("expected_output")} />
           <label className="flex items-center gap-2 text-sm font-mono cursor-pointer">
-            <input data-testid="task-approval-required" type="checkbox" className="w-4 h-4 border border-black" checked={form.approval_required} onChange={(e) => setForm({ ...form, approval_required: e.target.checked })} />
+            <input data-testid="task-approval-required" type="checkbox" className="w-4 h-4 border border-border" checked={form.approval_required} onChange={(e) => setForm({ ...form, approval_required: e.target.checked })} />
             Approval required
           </label>
           {form.approval_required && (
@@ -176,7 +176,7 @@ export function NewTaskDialog({ onCreated, roleOptions, members, defaultType, tr
             </div>
           )}
           <label className="flex items-center gap-2 text-sm font-mono cursor-pointer">
-            <input data-testid="task-evidence-required" type="checkbox" className="w-4 h-4 border border-black" checked={form.evidence_required} onChange={(e) => setForm({ ...form, evidence_required: e.target.checked })} />
+            <input data-testid="task-evidence-required" type="checkbox" className="w-4 h-4 border border-border" checked={form.evidence_required} onChange={(e) => setForm({ ...form, evidence_required: e.target.checked })} />
             Require proof of work before completion
           </label>
           <div>
@@ -186,7 +186,7 @@ export function NewTaskDialog({ onCreated, roleOptions, members, defaultType, tr
             {files.length > 0 && (
               <ul className="mt-2 space-y-1" data-testid="task-attachment-list">
                 {files.map((f, i) => (
-                  <li key={`${f.name}-${f.size}-${f.lastModified}`} className="flex items-center justify-between gap-2 border border-black/20 px-2 py-1 text-xs font-mono">
+                  <li key={`${f.name}-${f.size}-${f.lastModified}`} className="flex items-center justify-between gap-2 border border-border px-2 py-1 text-xs font-mono">
                     <span className="truncate">{f.name}</span>
                     <button type="button" onClick={() => setFiles(files.filter((_, j) => j !== i))} className="text-danger-600 font-bold shrink-0">Remove</button>
                   </li>
@@ -197,7 +197,7 @@ export function NewTaskDialog({ onCreated, roleOptions, members, defaultType, tr
           <p className="label-mono text-muted-foreground">Created by: {user?.name}</p>
         </div>
         <DialogFooter>
-          <button data-testid="task-create-submit" onClick={create} disabled={busy} className="bg-brand-600 text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-50">{busy ? "Creating…" : "Create"}</button>
+          <button data-testid="task-create-submit" onClick={create} disabled={busy} className="bg-brand-600 text-white px-5 py-2 text-sm font-medium border border-border transition-all disabled:opacity-50">{busy ? "Creating…" : "Create"}</button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -242,11 +242,11 @@ export function TaskBoard() {
       <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
         {isOwner ? (
           <button onClick={() => setMine(!mine)} data-testid="toggle-mine"
-            className={`px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black transition-colors ${mine ? "bg-brand-blue text-white" : "bg-white hover:bg-black/5"}`}>
+            className={`px-4 py-2 text-sm font-medium border border-border transition-colors ${mine ? "bg-primary text-primary-foreground" : "bg-white hover:bg-accent"}`}>
             {mine ? "My Tasks" : "All Tasks"}
           </button>
         ) : (
-          <span data-testid="lane-badge" className="px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black bg-brand-blue text-white">
+          <span data-testid="lane-badge" className="px-4 py-2 text-sm font-medium border border-border bg-primary text-primary-foreground">
             {user?.role} lane
           </span>
         )}
@@ -257,15 +257,15 @@ export function TaskBoard() {
         {COLUMNS.map((col) => {
           const cards = (data || []).filter((t) => t.status === col.key);
           return (
-            <div key={col.key} data-testid={`task-column-${col.key}`} className="border border-black bg-white">
-              <div className="px-4 py-3 border-b border-black flex items-center justify-between bg-brand-paper">
+            <div key={col.key} data-testid={`task-column-${col.key}`} className="border border-border bg-white">
+              <div className="px-4 py-3 border-b border-border flex items-center justify-between bg-brand-paper">
                 <p className="label-mono">{col.label}</p>
-                <span className="font-heading font-black">{cards.length}</span>
+                <span className="font-medium">{cards.length}</span>
               </div>
               <div className="p-3 space-y-3 min-h-[200px]">
                 {cards.length === 0 && <p className="text-xs text-muted-foreground p-2">Empty</p>}
                 {cards.map((t) => (
-                  <div key={t.id} data-testid={`task-card-${t.id}`} className="border border-black p-3 shadow-hover">
+                  <div key={t.id} data-testid={`task-card-${t.id}`} className="border border-border p-3 shadow-hover">
                     <div className="flex items-start justify-between gap-2">
                       <p className="font-semibold text-sm leading-tight">{t.title}</p>
                       <Chip value={t.priority} />
@@ -273,7 +273,7 @@ export function TaskBoard() {
                     {t.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{t.description}</p>}
                     <div className="flex items-center gap-1.5 mt-3 flex-wrap">
                       {t.assignee_name ? (
-                        <span data-testid={`task-assignee-${t.id}`} className="inline-flex items-center gap-1 bg-brand-ink text-white px-2 py-0.5 text-xs font-semibold">
+                        <span data-testid={`task-assignee-${t.id}`} className="inline-flex items-center gap-1 bg-primary text-primary-foreground px-2 py-0.5 text-xs font-semibold">
                           <User size={11} weight="bold" /> {t.assignee_name}
                         </span>
                       ) : t.assignee_role ? (
@@ -292,13 +292,13 @@ export function TaskBoard() {
                       data-testid={`reassign-task-${t.id}`}
                       value={t.assignee_id || ""}
                       onChange={(e) => reassign(t, e.target.value)}
-                      className="mt-3 w-full border border-black px-2 py-1.5 text-xs font-mono bg-white focus:outline-none focus:shadow-brutal-sm">
+                      className="mt-3 w-full border border-border px-2 py-1.5 text-xs font-mono bg-white focus:outline-none focus:shadow-sm">
                       <option value="">Reassign to…</option>
                       {members.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
                     </select>
                     {NEXT[t.status] && (
                       <button onClick={() => move(t)} data-testid={`advance-task-${t.id}`}
-                        className="mt-2 w-full border border-black py-1.5 text-xs font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors">
+                        className="mt-2 w-full border border-border py-1.5 text-xs font-medium hover:bg-accent transition-colors">
                         Move to {NEXT[t.status].replace(/_/g, " ")}
                       </button>
                     )}

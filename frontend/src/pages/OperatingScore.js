@@ -34,7 +34,7 @@ const CATS = [
     weight: 25,
     formula: "(paid ÷ billed) × 100  −  overdue invoices × 5",
     plain: "How well cash is coming in vs. how much is stuck." },
-  { key: "sales", label: "Sales", icon: TrendUp, color: "bg-brand-yellow",
+  { key: "sales", label: "Sales", icon: TrendUp, color: "bg-caution-50",
     weight: 20,
     formula: "approved decisions ÷ total decisions × 100",
     plain: "Rate at which raised decisions get a green light." },
@@ -95,7 +95,7 @@ function ViewAsBanner({ target }) {
       </div>
       <Link
         to="/operating-score"
-        className="text-xs font-semibold uppercase tracking-wider text-brand-600 hover:underline flex items-center gap-1 shrink-0"
+        className="text-xs font-medium text-brand-600 hover:underline flex items-center gap-1 shrink-0"
       >
         <ArrowRight size={12} weight="bold" className="rotate-180" />
         Back to company view
@@ -208,7 +208,7 @@ function PersonalSnapshot({ stats, viewerName }) {
     <div className="card-brutal p-6 mb-8" data-testid="operating-personal-snapshot">
       <div className="flex items-center gap-2 mb-1">
         <Sparkle size={16} weight="bold" className="text-brand-600" />
-        <h2 className="font-heading text-lg font-extrabold uppercase tracking-tight">Your personal snapshot</h2>
+        <h2 className="text-base font-medium">Your personal snapshot</h2>
       </div>
       <p className="label-mono text-muted-foreground mb-4">
         You're an operator too — this is your own execution, not the company's.
@@ -252,7 +252,7 @@ function SelfView({ data }) {
       {/* Hero -- personal score */}
       <div className="card-brutal p-8 mb-8 flex flex-col lg:flex-row items-center gap-8" data-testid="operating-self-hero">
         <div className="flex flex-col items-center shrink-0">
-          <div className="w-36 h-36 flex flex-col items-center justify-center border-4 border-black bg-white">
+          <div className="w-36 h-36 flex flex-col items-center justify-center border-4 border-border bg-white">
             {hasActivity ? (
               <>
                 <span className={`font-heading text-6xl font-black leading-none ${scoreColor(scoreOfMe)}`} data-testid="operating-self-score">
@@ -268,12 +268,12 @@ function SelfView({ data }) {
           </div>
           <div className="flex items-center gap-2 mt-3">
             <Gauge size={16} weight="bold" className="text-brand-600" />
-            <span className="font-heading font-extrabold uppercase tracking-tight text-sm">Your Health</span>
+            <span className="font-medium text-sm">Your Health</span>
           </div>
         </div>
 
         <div className="flex-1 w-full">
-          <p className="font-heading font-extrabold uppercase tracking-tight text-lg mb-3">
+          <p className="font-medium text-lg mb-3">
             {hasActivity
               ? _selfHeadline(stats, peer)
               : "Once you close a task or two, your score kicks in."}
@@ -319,9 +319,9 @@ function SelfView({ data }) {
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Lightning size={18} weight="bold" className="text-brand-600" />
-          <h2 className="font-heading text-xl font-extrabold uppercase tracking-tight">Your open work</h2>
+          <h2 className="font-heading text-xl font-medium tracking-tight">Your open work</h2>
         </div>
-        <Link to="/my-work" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-brand-600 flex items-center gap-1">
+        <Link to="/my-work" className="text-xs font-medium text-muted-foreground hover:text-brand-600 flex items-center gap-1">
           See all <ArrowRight size={12} weight="bold" />
         </Link>
       </div>
@@ -342,11 +342,11 @@ function SelfView({ data }) {
                 </p>
               </div>
               {t.is_overdue && (
-                <span className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-danger-600 shrink-0">
+                <span className="flex items-center gap-1 text-xs font-medium text-danger-600 shrink-0">
                   <Warning size={12} weight="bold" /> Overdue
                 </span>
               )}
-              <CaretRight size={16} weight="bold" className="text-black/30 group-hover:text-brand-600 shrink-0" />
+              <CaretRight size={16} weight="bold" className="text-muted-foreground group-hover:text-brand-600 shrink-0" />
             </Link>
           ))}
         </div>
@@ -358,15 +358,15 @@ function SelfView({ data }) {
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <TrendUp size={18} weight="bold" className="text-brand-600" />
-              <h2 className="font-heading text-xl font-extrabold uppercase tracking-tight">Workflows waiting on you</h2>
+              <h2 className="text-base font-medium">Workflows waiting on you</h2>
             </div>
-            <Link to="/workflows" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-brand-600 flex items-center gap-1">
+            <Link to="/workflows" className="text-xs font-medium text-muted-foreground hover:text-brand-600 flex items-center gap-1">
               See board <ArrowRight size={12} weight="bold" />
             </Link>
           </div>
           <div className="card-brutal divide-y divide-black/10 mb-8" data-testid="operating-self-workflows">
             {activeWfs.map((w) => (
-              <Link key={w.id} to="/workflows" className="p-4 flex items-center gap-4 hover:bg-black/[0.03] transition-colors group">
+              <Link key={w.id} to="/workflows" className="p-4 flex items-center gap-4 hover:bg-muted/40 transition-colors group">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold truncate group-hover:text-brand-600">{w.title}</p>
                   <p className="label-mono text-muted-foreground">
@@ -375,7 +375,7 @@ function SelfView({ data }) {
                     {w.amount ? ` · ₹${w.amount}` : ""}
                   </p>
                 </div>
-                <CaretRight size={16} weight="bold" className="text-black/30 group-hover:text-brand-600 shrink-0" />
+                <CaretRight size={16} weight="bold" className="text-muted-foreground group-hover:text-brand-600 shrink-0" />
               </Link>
             ))}
           </div>
@@ -418,7 +418,7 @@ function SelfView({ data }) {
 // -----------------------------------------------------------------------------
 function StatTile({ label, value, accent, hint }) {
   return (
-    <div className="border border-black/30 p-3">
+    <div className="border border-border p-3">
       <p className="label-mono text-muted-foreground">{label}</p>
       <p className={`font-heading text-2xl font-black tracking-tight mt-1 ${accent || ""}`}>{value}</p>
       {hint && <p className="text-xs text-muted-foreground mt-1 leading-tight">{hint}</p>}
@@ -496,7 +496,7 @@ function HeroCard({ overall }) {
 
       <div className="relative flex flex-col lg:flex-row items-start gap-8">
         <div className="flex flex-col items-center shrink-0">
-          <div className="w-36 h-36 flex flex-col items-center justify-center border-4 border-black bg-white">
+          <div className="w-36 h-36 flex flex-col items-center justify-center border-4 border-border bg-white">
             <span
               className={`font-heading text-6xl font-black leading-none ${scoreColor(overall)}`}
               data-testid="operating-overall-score"
@@ -505,7 +505,7 @@ function HeroCard({ overall }) {
           </div>
           <div className="flex items-center gap-2 mt-3">
             <Gauge size={16} weight="bold" className="text-brand-600" />
-            <span className="font-heading font-extrabold uppercase tracking-tight text-sm">Company Health</span>
+            <span className="font-heading font-medium tracking-tight text-sm">Company Health</span>
           </div>
         </div>
 
@@ -514,7 +514,7 @@ function HeroCard({ overall }) {
             <DeltaChip value={demoDelta.value} sign={demoDelta.sign} />
             <span className="label-mono text-muted-foreground">{demoDelta.period}</span>
           </div>
-          <p className="font-heading font-extrabold uppercase tracking-tight text-lg leading-snug mb-3">
+          <p className="font-heading font-medium tracking-tight text-lg leading-snug mb-3">
             {demoDex.headline}
           </p>
           <p className="text-xs text-muted-foreground">
@@ -557,7 +557,7 @@ function DeltaChip({ value, sign }) {
   const abs = Math.abs(value);
   const tone = isUp ? "bg-green-100 text-green-800 border-green-600"
              : isDown ? "bg-red-100 text-red-800 border-red-600"
-             : "bg-black/5 text-muted-foreground border-black/30";
+             : "bg-muted text-muted-foreground border-border";
   const Icon = isUp ? ArrowUp : isDown ? ArrowDown : null;
   return (
     <span
@@ -592,7 +592,7 @@ function DexExplainerCard() {
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
-          <span className="text-xs font-semibold uppercase tracking-wider text-brand-600">Dex says</span>
+          <span className="text-xs font-medium text-brand-600">Dex says</span>
           <button
             type="button"
             onClick={refresh}
@@ -626,7 +626,7 @@ function SuggestedActions() {
             <Link
               key={a.label}
               to={a.to}
-              className="inline-flex items-center gap-2 border-2 border-black bg-white px-3 py-2 text-sm font-semibold hover:bg-brand-600 hover:text-white hover:border-brand-600 transition-colors group"
+              className="inline-flex items-center gap-2 border border-border bg-white px-3 py-2 text-sm font-semibold hover:bg-brand-600 hover:text-white hover:border-brand-600 transition-colors group"
             >
               <Icon size={14} weight="bold" />
               <span>{a.label}</span>
@@ -662,12 +662,12 @@ function CategoryCard({ cat, value, drivers, onDrillIn }) {
       aria-label={`${cat.label} — drill in`}
     >
       <div className="flex items-center justify-between mb-2">
-        <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide">
+        <span className="flex items-center gap-1.5 text-xs font-semibold ">
           <cat.icon size={14} weight="bold" className="text-muted-foreground" /> {cat.label}
         </span>
         <span
           title={`${cat.plain}\n\nFormula: ${cat.formula}\nWeight: ${cat.weight}%`}
-          className="text-black/30 hover:text-brand-600 cursor-help"
+          className="text-muted-foreground hover:text-brand-600 cursor-help"
           aria-label={`How ${cat.label} is calculated`}
         >
           <Info size={12} weight="bold" />
@@ -684,7 +684,7 @@ function CategoryCard({ cat, value, drivers, onDrillIn }) {
         >{has ? value : "—"}</span>
         <span className="label-mono text-muted-foreground">/ 100</span>
       </div>
-      <div className="h-2 bg-black/10 border border-black mb-3" aria-hidden="true">
+      <div className="h-2 bg-muted border border-border mb-3" aria-hidden="true">
         <div className={`h-full ${cat.color}`} style={{ width: `${has ? value : 0}%` }} />
       </div>
       <ul className="space-y-1">
@@ -695,7 +695,7 @@ function CategoryCard({ cat, value, drivers, onDrillIn }) {
           </li>
         ))}
       </ul>
-      <div className="mt-3 pt-3 border-t border-black/10 flex items-center justify-between text-xs font-semibold text-muted-foreground">
+      <div className="mt-3 pt-3 border-t border-border flex items-center justify-between text-xs font-semibold text-muted-foreground">
         <span>See breakdown</span>
         <CaretRight size={12} weight="bold" />
       </div>
@@ -720,7 +720,7 @@ function CategoryDrillModal({ cat, value, drivers, drill, onClose }) {
   const has = value != null;
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 bg-muted0 flex items-center justify-center p-4"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
@@ -729,15 +729,15 @@ function CategoryDrillModal({ cat, value, drivers, drill, onClose }) {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-white border-4 border-black max-w-2xl w-full max-h-[85vh] flex flex-col shadow-xl"
+        className="bg-white border-4 border-border max-w-2xl w-full max-h-[85vh] flex flex-col shadow-xl"
       >
-        <div className={`p-5 border-b-4 border-black flex items-start gap-4 ${cat.color} bg-opacity-20`}>
-          <div className="w-12 h-12 flex items-center justify-center border-2 border-black bg-white shrink-0">
+        <div className={`p-5 border-b-4 border-border flex items-start gap-4 ${cat.color} bg-opacity-20`}>
+          <div className="w-12 h-12 flex items-center justify-center border border-border bg-white shrink-0">
             <cat.icon size={22} weight="bold" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="label-mono text-black/60">Weight {cat.weight}% of overall</p>
-            <h2 id="drill-title" className="font-heading text-2xl font-black uppercase tracking-tight leading-tight">
+            <p className="label-mono text-muted-foreground">Weight {cat.weight}% of overall</p>
+            <h2 id="drill-title" className="font-display text-2xl leading-tight">
               {drill?.title || cat.label}
             </h2>
           </div>
@@ -747,7 +747,7 @@ function CategoryDrillModal({ cat, value, drivers, drill, onClose }) {
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 border-2 border-black bg-white flex items-center justify-center hover:bg-black hover:text-white shrink-0"
+            className="w-8 h-8 border border-border bg-white flex items-center justify-center hover:bg-black hover:text-white shrink-0"
             aria-label="Close drill-down"
           >
             <X size={14} weight="bold" />
@@ -755,16 +755,16 @@ function CategoryDrillModal({ cat, value, drivers, drill, onClose }) {
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          <div className="p-5 border-b border-black/10">
+          <div className="p-5 border-b border-border">
             <p className="text-sm font-semibold mb-1">{drill?.hero}</p>
             <p className="font-mono text-xs text-muted-foreground mt-2">{cat.formula}</p>
           </div>
 
-          <div className="p-5 border-b border-black/10">
-            <p className="text-xs font-semibold uppercase tracking-wider mb-3">Top drivers this period</p>
+          <div className="p-5 border-b border-border">
+            <p className="text-xs font-medium mb-3">Top drivers this period</p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {drivers.map((d, i) => (
-                <div key={i} className="border border-black/30 p-3">
+                <div key={i} className="border border-border p-3">
                   <p className="label-mono text-muted-foreground">{d.label}</p>
                   <p className={`font-heading text-xl font-black tabular-nums ${toneColor[d.tone] || ""}`}>{d.value}</p>
                 </div>
@@ -774,8 +774,8 @@ function CategoryDrillModal({ cat, value, drivers, drill, onClose }) {
 
           {drill?.items && (
             <div className="p-5">
-              <p className="text-xs font-semibold uppercase tracking-wider mb-3">Specifics</p>
-              <ul className="divide-y divide-black/10 border border-black/20">
+              <p className="text-xs font-medium mb-3">Specifics</p>
+              <ul className="divide-y divide-black/10 border border-border">
                 {drill.items.map((item, i) => (
                   <li key={i} className="p-3 flex items-center gap-3">
                     <span className={`w-1.5 h-8 shrink-0 ${
@@ -795,12 +795,12 @@ function CategoryDrillModal({ cat, value, drivers, drill, onClose }) {
         </div>
 
         {drill?.action && (
-          <div className="p-4 border-t-2 border-black flex items-center justify-between gap-3 bg-black/[0.02]">
+          <div className="p-4 border-t border-border flex items-center justify-between gap-3 bg-muted/40">
             <span className="text-xs text-muted-foreground">Ready to act?</span>
             <Link
               to={drill.action.to}
               onClick={onClose}
-              className="inline-flex items-center gap-2 border-2 border-black bg-black text-white px-4 py-2 text-sm font-semibold hover:bg-brand-600 hover:border-brand-600 transition-colors"
+              className="inline-flex items-center gap-2 border border-border bg-black text-white px-4 py-2 text-sm font-semibold hover:bg-brand-600 hover:border-brand-600 transition-colors"
             >
               {drill.action.label}
               <ArrowRight size={14} weight="bold" />
@@ -834,15 +834,15 @@ function Leaderboard({ employees }) {
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <Trophy size={18} weight="bold" className="text-brand-600" />
-          <h2 className="font-heading text-xl font-extrabold uppercase tracking-tight">Team Execution</h2>
+          <h2 className="text-base font-medium">Team Execution</h2>
           <span className="label-mono text-muted-foreground">— last 30 days</span>
         </div>
-        <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
           Sort by
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
-            className="border border-black/40 bg-white px-2 py-1 text-xs font-semibold"
+            className="border border-border bg-white px-2 py-1 text-xs font-semibold"
             aria-label="Sort team by"
             data-testid="operating-leaderboard-sort"
           >
@@ -860,8 +860,8 @@ function Leaderboard({ employees }) {
           const delta = demoEmpDeltas[e.role];
           return (
             <div key={e.id} data-testid={`operating-emp-${e.id}`}
-              className="p-4 flex items-center gap-4 hover:bg-black/[0.03] transition-colors group">
-              <span className="font-heading text-lg font-black text-black/30 w-6">{i + 1}</span>
+              className="p-4 flex items-center gap-4 hover:bg-muted/40 transition-colors group">
+              <span className="font-heading text-lg font-black text-muted-foreground w-6">{i + 1}</span>
               {/* Primary action: full ops view (open tasks + active workflows +
                   peer context). Sprint 1 batch 4 -- was /coach which only had
                   stats + AI review. Founder ask: 'from the owner side if i
@@ -880,13 +880,13 @@ function Leaderboard({ employees }) {
                   owner can jump straight to coaching without going through ops. */}
               <Link
                 to={`/coach?user=${e.id}`}
-                className="hidden sm:flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-brand-600 transition-colors shrink-0"
+                className="hidden sm:flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-brand-600 transition-colors shrink-0"
                 title="Open AI coach for this person"
               >
                 <Sparkle size={13} weight="bold" /> Coach
               </Link>
               <Link to={`/operating-score?user=${e.id}`}
-                className="w-14 h-14 flex flex-col items-center justify-center border-2 border-black bg-white shrink-0 hover:bg-brand-600 hover:text-white hover:border-brand-600 transition-colors">
+                className="w-14 h-14 flex flex-col items-center justify-center border border-border bg-white shrink-0 hover:bg-brand-600 hover:text-white hover:border-brand-600 transition-colors">
                 <span className={`font-heading text-2xl font-black leading-none ${scoreColor(e.score)}`}>
                   {e.score != null ? e.score : "—"}
                 </span>
@@ -920,7 +920,7 @@ function InlineCapture() {
   return (
     <form
       onSubmit={submit}
-      className="mt-5 border-2 border-black bg-black/[0.02] p-3 flex items-center gap-2"
+      className="mt-5 border border-border bg-muted/40 p-3 flex items-center gap-2"
       data-testid="operating-inline-capture"
     >
       <Microphone size={16} weight="bold" className="text-brand-600 shrink-0" />
@@ -935,7 +935,7 @@ function InlineCapture() {
       <button
         type="submit"
         disabled={!text.trim()}
-        className="border-2 border-black bg-black text-white px-3 py-1 text-xs font-semibold hover:bg-brand-600 hover:border-brand-600 transition-colors disabled:opacity-40"
+        className="border border-border bg-black text-white px-3 py-1 text-xs font-semibold hover:bg-brand-600 hover:border-brand-600 transition-colors disabled:opacity-40"
       >
         Capture
       </button>
@@ -957,19 +957,19 @@ function OperatingScoreSkeleton() {
   return (
     <div aria-busy="true" aria-live="polite" data-testid="operating-skeleton">
       <div className="mb-6">
-        <div className="h-3 w-40 bg-black/10 mb-2 animate-pulse" />
-        <div className="h-8 w-64 bg-black/10 animate-pulse" />
+        <div className="h-3 w-40 bg-muted mb-2 animate-pulse" />
+        <div className="h-8 w-64 bg-muted animate-pulse" />
       </div>
       <div className="card-brutal p-8 mb-8 flex flex-col lg:flex-row items-center gap-8">
-        <div className="w-36 h-36 border-4 border-black/20 bg-black/5 shrink-0 animate-pulse" />
+        <div className="w-36 h-36 border-4 border-border bg-muted shrink-0 animate-pulse" />
         <div className="flex-1 w-full space-y-3">
           {[0, 1, 2, 3].map((i) => (
             <div key={i}>
               <div className="flex items-center justify-between mb-1">
-                <div className="h-3 w-32 bg-black/10 animate-pulse" />
-                <div className="h-4 w-8 bg-black/10 animate-pulse" />
+                <div className="h-3 w-32 bg-muted animate-pulse" />
+                <div className="h-4 w-8 bg-muted animate-pulse" />
               </div>
-              <div className="h-3 bg-black/10 border border-black/20" />
+              <div className="h-3 bg-muted border border-border" />
             </div>
           ))}
         </div>
@@ -977,20 +977,20 @@ function OperatingScoreSkeleton() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
         {[0, 1, 2, 3].map((i) => (
           <div key={i} className="card-brutal p-4">
-            <div className="h-3 w-16 bg-black/10 mb-3 animate-pulse" />
-            <div className="h-6 w-10 bg-black/10 animate-pulse" />
+            <div className="h-3 w-16 bg-muted mb-3 animate-pulse" />
+            <div className="h-6 w-10 bg-muted animate-pulse" />
           </div>
         ))}
       </div>
       <div className="card-brutal divide-y divide-black/10">
         {[0, 1, 2].map((i) => (
           <div key={i} className="p-4 flex items-center gap-4">
-            <div className="h-4 w-4 bg-black/10 animate-pulse" />
+            <div className="h-4 w-4 bg-muted animate-pulse" />
             <div className="flex-1 space-y-2">
-              <div className="h-3 w-40 bg-black/10 animate-pulse" />
-              <div className="h-3 w-56 bg-black/10 animate-pulse" />
+              <div className="h-3 w-40 bg-muted animate-pulse" />
+              <div className="h-3 w-56 bg-muted animate-pulse" />
             </div>
-            <div className="w-14 h-14 border-2 border-black/20 bg-black/5 shrink-0 animate-pulse" />
+            <div className="w-14 h-14 border border-border/20 bg-muted shrink-0 animate-pulse" />
           </div>
         ))}
       </div>
@@ -1014,7 +1014,7 @@ function NotEnoughDataEmptyState({ stats }) {
     <div className="card-brutal p-8 mb-8" data-testid="operating-not-ready">
       <div className="flex flex-col lg:flex-row items-start gap-8">
         <div className="flex flex-col items-center shrink-0">
-          <div className="w-36 h-36 flex flex-col items-center justify-center border-4 border-black bg-black/5 text-center px-3">
+          <div className="w-36 h-36 flex flex-col items-center justify-center border-4 border-border bg-muted text-center px-3">
             <Gauge size={30} weight="bold" className="text-muted-foreground mb-1" />
             <span className="label-mono text-muted-foreground leading-tight" data-testid="operating-overall-score">
               Score kicks in soon
@@ -1022,11 +1022,11 @@ function NotEnoughDataEmptyState({ stats }) {
           </div>
           <div className="flex items-center gap-2 mt-3">
             <Gauge size={16} weight="bold" className="text-brand-600" />
-            <span className="font-heading font-extrabold uppercase tracking-tight text-sm">Company Health</span>
+            <span className="font-medium text-sm">Company Health</span>
           </div>
         </div>
         <div className="flex-1 w-full">
-          <p className="font-heading font-extrabold uppercase tracking-tight text-lg mb-2">
+          <p className="font-medium text-lg mb-2">
             Two quick things and your score turns on
           </p>
           <p className="text-sm text-muted-foreground leading-relaxed mb-5">
@@ -1066,8 +1066,8 @@ function NotEnoughDataEmptyState({ stats }) {
 
 function ChecklistItem({ done, label, hint, actionLabel, actionTo, icon: Icon }) {
   return (
-    <div className={`border-2 ${done ? "border-green-600/40 bg-green-50" : "border-black/30"} p-4 flex items-start gap-3`}>
-      <div className={`w-6 h-6 flex items-center justify-center border-2 ${done ? "border-green-600 bg-green-600 text-white" : "border-black/40"} shrink-0 mt-0.5`}>
+    <div className={`border-2 ${done ? "border-green-600/40 bg-green-50" : "border-border"} p-4 flex items-start gap-3`}>
+      <div className={`w-6 h-6 flex items-center justify-center border-2 ${done ? "border-green-600 bg-green-600 text-white" : "border-border"} shrink-0 mt-0.5`}>
         {done && <Check size={14} weight="bold" />}
       </div>
       <div className="flex-1 min-w-0">
@@ -1077,7 +1077,7 @@ function ChecklistItem({ done, label, hint, actionLabel, actionTo, icon: Icon })
       {!done && (
         <Link
           to={actionTo}
-          className="shrink-0 text-xs font-semibold uppercase tracking-wider text-brand-600 hover:underline flex items-center gap-1 mt-0.5"
+          className="shrink-0 text-xs font-medium text-brand-600 hover:underline flex items-center gap-1 mt-0.5"
         >
           <Icon size={12} weight="bold" /> {actionLabel}
         </Link>
@@ -1101,7 +1101,7 @@ function FormulaExplainer({ weights = DEFAULT_WEIGHTS, setWeights }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-brand-600 transition-colors"
+        className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-brand-600 transition-colors"
         aria-expanded={open}
         aria-controls="operating-formula-panel"
         data-testid="operating-formula-toggle"
@@ -1118,9 +1118,9 @@ function FormulaExplainer({ weights = DEFAULT_WEIGHTS, setWeights }) {
 
           {/* U7-01.17 -- weights editor. Presets first, sliders below. */}
           {setWeights && (
-            <div className="border border-black/30 p-4 bg-black/[0.02]">
+            <div className="border border-border p-4 bg-muted/40">
               <div className="flex items-center justify-between mb-3">
-                <p className="text-xs font-semibold uppercase tracking-wider">Customize weights for your business</p>
+                <p className="text-xs font-medium">Customize weights for your business</p>
                 <span className={`label-mono ${total === 100 ? "text-muted-foreground" : "text-danger-600"}`}>
                   total: {total}%
                 </span>
@@ -1131,7 +1131,7 @@ function FormulaExplainer({ weights = DEFAULT_WEIGHTS, setWeights }) {
                     key={k}
                     type="button"
                     onClick={() => applyPreset(k)}
-                    className="border border-black/40 px-3 py-1.5 text-xs font-semibold hover:bg-brand-600 hover:text-white hover:border-brand-600 transition-colors"
+                    className="border border-border px-3 py-1.5 text-xs font-semibold hover:bg-brand-600 hover:text-white hover:border-brand-600 transition-colors"
                   >
                     {p.label}
                   </button>
@@ -1140,7 +1140,7 @@ function FormulaExplainer({ weights = DEFAULT_WEIGHTS, setWeights }) {
               <div className="space-y-3">
                 {CATS.map((c) => (
                   <div key={c.key} className="flex items-center gap-3">
-                    <span className="w-32 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide shrink-0">
+                    <span className="w-32 flex items-center gap-2 text-xs font-semibold  shrink-0">
                       <c.icon size={12} weight="bold" className="text-muted-foreground" /> {c.label}
                     </span>
                     <input
@@ -1166,10 +1166,10 @@ function FormulaExplainer({ weights = DEFAULT_WEIGHTS, setWeights }) {
           )}
 
           {CATS.map((c) => (
-            <div key={c.key} className="border-l-4 pl-4 border-black/20">
+            <div key={c.key} className="border-l-4 pl-4 border-border">
               <div className="flex items-center gap-2 mb-1">
                 <c.icon size={14} weight="bold" className="text-muted-foreground" />
-                <span className="font-semibold uppercase tracking-wide">{c.label}</span>
+                <span className="font-semibold ">{c.label}</span>
                 <span className="label-mono text-muted-foreground">weight {weights[c.key]}%</span>
               </div>
               <p className="text-xs text-muted-foreground mb-1">{c.plain}</p>

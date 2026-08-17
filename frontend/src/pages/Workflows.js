@@ -54,16 +54,16 @@ function NewWorkflowDialog({ type, typeLabel, custLabel, vendLabel, onCreated })
       toast.error(t("workflows.create_failed"));
     }
   };
-  const inp = "w-full border border-black px-3 py-2 text-sm font-mono focus:outline-none focus:shadow-brutal-sm";
+  const inp = "w-full border border-border px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring/30";
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <button data-testid="new-workflow-button" className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
+        <button data-testid="new-workflow-button" className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 text-sm font-medium border border-border transition-all">
           <Plus size={16} weight="bold" /> {t("workflows.new")}
         </button>
       </DialogTrigger>
-      <DialogContent className="border border-black rounded-none">
-        <DialogHeader><DialogTitle className="font-heading uppercase tracking-tight">{t("workflows.dlg_title", { type: typeLabel })}</DialogTitle>
+      <DialogContent className="border border-border rounded-xl">
+        <DialogHeader><DialogTitle className="font-display text-xl">{t("workflows.dlg_title", { type: typeLabel })}</DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">{t("workflows.dlg_desc", { type: typeLabel.toLowerCase() })}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -80,7 +80,7 @@ function NewWorkflowDialog({ type, typeLabel, custLabel, vendLabel, onCreated })
           <textarea className={inp} rows={2} placeholder={t("workflows.detail_ph")} value={form.detail} onChange={set("detail")} />
         </div>
         <DialogFooter>
-          <button data-testid="wf-create-submit" onClick={create} className="bg-brand-600 text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">{t("workflows.create")}</button>
+          <button data-testid="wf-create-submit" onClick={create} className="bg-brand-600 text-white px-5 py-2 text-sm font-medium border border-border transition-all">{t("workflows.create")}</button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -98,9 +98,9 @@ function OverrideReasonDialog({ open, onOpenChange, wfTitle, blockedReason, onCo
   useEffect(() => { if (!open) setReason(""); }, [open]);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="border border-black rounded-none" data-testid="wf-override-dialog">
+      <DialogContent className="border border-border rounded-xl" data-testid="wf-override-dialog">
         <DialogHeader>
-          <DialogTitle className="font-heading uppercase tracking-tight flex items-center gap-2">
+          <DialogTitle className="font-display text-xl flex items-center gap-2">
             <WarningCircle size={18} weight="bold" className="text-brand-600" />
             Stage not ready
           </DialogTitle>
@@ -112,20 +112,20 @@ function OverrideReasonDialog({ open, onOpenChange, wfTitle, blockedReason, onCo
         </DialogHeader>
         <div className="space-y-2">
           <label className="label-mono text-muted-foreground">Reason for override</label>
-          <textarea data-testid="wf-override-reason" className="w-full border border-black px-3 py-2 text-sm font-mono focus:outline-none focus:shadow-brutal-sm"
+          <textarea data-testid="wf-override-reason" className="w-full border border-border px-3 py-2 text-sm font-mono focus:outline-none focus:shadow-sm"
             rows={3}
             placeholder="e.g. Bill is delayed but customer has confirmed by phone, moving on"
             value={reason} onChange={(e) => setReason(e.target.value)} />
         </div>
         <DialogFooter>
           <button data-testid="wf-override-cancel" onClick={() => onOpenChange(false)}
-            className="border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-black/5">
+            className="border border-border px-4 py-2 text-sm font-medium hover:bg-accent">
             Cancel
           </button>
           <button data-testid="wf-override-confirm"
             onClick={() => { if (reason.trim()) onConfirm(reason.trim()); }}
             disabled={!reason.trim()}
-            className="bg-brand-600 text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-50">
+            className="bg-brand-600 text-white px-4 py-2 text-sm font-medium border border-border transition-all disabled:opacity-50">
             Override
           </button>
         </DialogFooter>
@@ -249,15 +249,15 @@ export default function Workflows({ embedded = false }) {
           the tenant think a whole flow was missing. Zero-count chips
           are muted (label-mono muted-foreground) so live pipelines
           still visually dominate. */}
-      <div className="flex flex-wrap border border-black mb-6 w-fit">
+      <div className="flex flex-wrap border border-border mb-6 w-fit">
         {pipelines
           .map((pip) => {
             const count = (data || []).filter((w) => w.type === pip.key).length;
             return (
               <button key={pip.key} onClick={() => setTab(pip.key)} data-testid={`workflow-tab-${pip.key}`}
                 title={pip.sub || undefined}
-                className={`px-4 py-2.5 text-left border-r border-black last:border-r-0 transition-colors flex items-center gap-2 ${activeKey === pip.key ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
-                <span className="text-sm font-semibold uppercase tracking-wider">{pip.label}</span>
+                className={`px-4 py-2.5 text-left border-r border-border last:border-r-0 transition-colors flex items-center gap-2 ${activeKey === pip.key ? "bg-primary text-primary-foreground" : "bg-white hover:bg-accent"}`}>
+                <span className="text-sm font-medium">{pip.label}</span>
                 <span className={`label-mono ${activeKey === pip.key ? "text-white/70" : "text-muted-foreground"}`}>{count}</span>
               </button>
             );
@@ -265,13 +265,13 @@ export default function Workflows({ embedded = false }) {
       </div>
 
       {/* Brutalist kanban */}
-      <div className="border border-black overflow-x-auto">
+      <div className="border border-border overflow-x-auto">
         <div className="flex min-w-max">
           {stages.map((stg) => {
             const cards = (data || []).filter((w) => w.stage === stg.key);
             return (
-              <div key={stg.key} className="w-64 shrink-0 border-r border-black last:border-r-0" data-testid={`stage-column-${stg.key}`}>
-                <div className="px-3 py-2 border-b border-black bg-brand-paper sticky top-0">
+              <div key={stg.key} className="w-64 shrink-0 border-r border-border last:border-r-0" data-testid={`stage-column-${stg.key}`}>
+                <div className="px-3 py-2 border-b border-border bg-brand-paper sticky top-0">
                   <p className="label-mono">{stg.label}</p>
                   <p className="font-heading font-black text-lg">{cards.length}</p>
                 </div>
@@ -287,7 +287,7 @@ export default function Workflows({ embedded = false }) {
                     // ?with_tasks=true.
                     const stageTasks = w.stage_tasks || [];
                     return (
-                      <div key={w.id} id={`workflow-card-${w.id}`} data-testid={`workflow-card-${w.id}`} className={`border border-black p-3 shadow-hover bg-white transition-all ${w.id === focusWf ? "ring-4 ring-brand-600 ring-offset-2" : ""}`}>
+                      <div key={w.id} id={`workflow-card-${w.id}`} data-testid={`workflow-card-${w.id}`} className={`border border-border p-3 shadow-hover bg-white transition-all ${w.id === focusWf ? "ring-4 ring-brand-600 ring-offset-2" : ""}`}>
                         <div className="flex items-start justify-between gap-2">
                           <p className="font-semibold text-sm leading-tight">{w.title}</p>
                           {user?.role === "owner" && (
@@ -311,8 +311,8 @@ export default function Workflows({ embedded = false }) {
                             {stageTasks.slice(0, 4).map((tk) => (
                               <a key={tk.id} href={`/my-work?task=${encodeURIComponent(tk.id)}`}
                                 data-testid={`wf-card-task-${w.id}-${tk.id}`}
-                                className="flex items-center gap-1.5 text-[11px] border border-border/60 bg-brand-paper/40 px-1.5 py-1 hover:bg-brand-yellow transition-colors">
-                                <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-brand-ink text-white text-[9px] font-bold shrink-0"
+                                className="flex items-center gap-1.5 text-[11px] border border-border/60 bg-brand-paper/40 px-1.5 py-1 hover:bg-accent transition-colors">
+                                <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-primary text-primary-foreground text-[9px] font-bold shrink-0"
                                   title={tk.assignee_name || tk.assignee_role || "Unassigned"}>
                                   {_initials(tk.assignee_name) || (tk.assignee_role ? tk.assignee_role.slice(0, 1).toUpperCase() : "?")}
                                 </span>
@@ -342,7 +342,7 @@ export default function Workflows({ embedded = false }) {
                           return (
                             <button onClick={() => advance(w)} data-testid={`advance-workflow-${w.id}`}
                               title={`Move to ${nextLabel}`}
-                              className="mt-3 w-full flex items-center justify-center gap-1 border border-black py-1.5 text-xs font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors">
+                              className="mt-3 w-full flex items-center justify-center gap-1 border border-border py-1.5 text-xs font-medium hover:bg-accent transition-colors">
                               {t("workflows.advance")} to {nextLabel} <ArrowRight size={12} weight="bold" />
                             </button>
                           );

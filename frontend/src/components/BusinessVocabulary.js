@@ -64,7 +64,7 @@ export function BusinessVocabulary() {
     <div className="card-brutal p-5" data-testid="settings-vocabulary-card">
       <div className="flex items-center gap-2 mb-1">
         <Translate size={20} weight="bold" className="text-brand-600" />
-        <h2 className="font-heading text-lg font-extrabold uppercase tracking-tight">Business Vocabulary</h2>
+        <h2 className="text-base font-medium">Business Vocabulary</h2>
       </div>
       <p className="text-xs text-muted-foreground mb-4">
         The words DecisionOS uses across the app, tailored to <span className="font-semibold">{tenant?.industry || "your industry"}</span>. Edit them to match how your team talks, or let AI regenerate from your industry.
@@ -94,11 +94,11 @@ export function BusinessVocabulary() {
 
       <div className="mt-6 flex flex-wrap gap-3">
         <button onClick={save} disabled={saving} data-testid="vocab-save"
-          className="flex items-center gap-2 bg-brand-ink text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider rounded-lg hover:shadow-brutal-sm transition-all disabled:opacity-60">
+          className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2 text-sm font-medium rounded-lg transition-all disabled:opacity-60">
           <FloppyDisk size={16} weight="bold" /> {saving ? "Saving…" : "Save Vocabulary"}
         </button>
         <button onClick={regenerate} disabled={regen} data-testid="vocab-regenerate"
-          className="flex items-center gap-2 border border-black px-5 py-2 text-sm font-semibold uppercase tracking-wider rounded-lg hover:bg-black/5 transition-all disabled:opacity-60">
+          className="flex items-center gap-2 border border-border px-5 py-2 text-sm font-medium rounded-lg hover:bg-accent transition-all disabled:opacity-60">
           <Sparkle size={16} weight="bold" /> {regen ? "Regenerating…" : "Regenerate with AI"}
         </button>
       </div>

@@ -5,7 +5,7 @@ import { hasPerm } from "../lib/perms";
 import { toast } from "sonner";
 import { Buildings, Package, Plus, Trash, UsersThree, Kanban, ListChecks, ShieldCheck, Copy, WhatsappLogo } from "@phosphor-icons/react";
 
-const inp = "w-full border border-black px-3 py-2 text-sm font-mono focus:outline-none focus:shadow-brutal-sm disabled:bg-black/5 disabled:text-muted-foreground";
+const inp = "w-full border border-border px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring/30 disabled:bg-muted disabled:text-muted-foreground";
 const uid = () => Math.random().toString(36).slice(2, 9);
 const FIELDS = [
   { key: "name", label: "Company name" },
@@ -142,7 +142,7 @@ export function CompanyDetails() {
     <div className="card-brutal p-5" data-testid="settings-company-card">
       <div className="flex items-center gap-2 mb-1">
         <Buildings size={20} weight="bold" className="text-brand-600" />
-        <h2 className="font-heading text-lg font-extrabold uppercase tracking-tight">Company Details</h2>
+        <h2 className="text-base font-medium">Company Details</h2>
       </div>
       <p className="text-xs text-muted-foreground mb-4">Update your company profile, products, and team roles.</p>
 
@@ -157,7 +157,7 @@ export function CompanyDetails() {
       </div>
 
       {canManage && tenant?.id && (
-        <div className="mt-4 border border-black/40 bg-brand-paper p-3" data-testid="workspace-id-block">
+        <div className="mt-4 border border-border bg-brand-paper p-3" data-testid="workspace-id-block">
           {/* U7-11.1 (2026-08-17): rewrote the copy around the workspace
               ID. Was leaking dev-facing language ("WA_TENANT_ID env
               variable") into an owner-facing screen. Owners don't set
@@ -171,7 +171,7 @@ export function CompanyDetails() {
             <input data-testid="workspace-id-value" readOnly value={tenant.id} className={`${inp} bg-white cursor-text`} onFocus={(e) => e.target.select()} />
             <button data-testid="workspace-id-copy"
               onClick={() => { navigator.clipboard?.writeText(tenant.id); toast.success("Workspace code copied"); }}
-              className="flex items-center gap-1 border border-black px-3 text-sm font-semibold uppercase hover:bg-brand-ink hover:text-white transition-colors shrink-0">
+              className="flex items-center gap-1 border border-border px-3 text-sm font-semibold uppercase hover:bg-accent transition-colors shrink-0">
               <Copy size={14} weight="bold" /> Copy
             </button>
           </div>
@@ -185,11 +185,11 @@ export function CompanyDetails() {
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <Package size={18} weight="bold" className="text-brand-blue" />
-            <h3 className="font-heading font-extrabold uppercase tracking-tight">Products & Services</h3>
+            <h3 className="font-medium">Products & Services</h3>
           </div>
           {canManage && (
             <button onClick={addProduct} data-testid="company-add-product"
-              className="flex items-center gap-1 text-xs uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-blue hover:text-white transition-colors">
+              className="flex items-center gap-1 text-xs  border border-border px-2 py-1 hover:bg-accent transition-colors">
               <Plus size={12} weight="bold" /> Add
             </button>
           )}
@@ -198,7 +198,7 @@ export function CompanyDetails() {
         {products.length === 0 && <p className="text-sm text-muted-foreground">No products or services yet.</p>}
         <div className="space-y-2">
           {products.map((p, i) => (
-            <div key={p._key || i} data-testid={`company-product-${i}`} className="border border-black/30 p-3 flex items-start gap-2">
+            <div key={p._key || i} data-testid={`company-product-${i}`} className="border border-border p-3 flex items-start gap-2">
               <div className="flex-1 space-y-2">
                 <input data-testid={`company-product-name-${i}`} className={inp} value={p.name} disabled={!canManage}
                   onChange={(e) => setProduct(i, "name", e.target.value)} placeholder="Name" />
@@ -207,7 +207,7 @@ export function CompanyDetails() {
               </div>
               {canManage && (
                 <button onClick={() => removeProduct(i)} data-testid={`company-product-remove-${i}`}
-                  className="border border-black p-2 hover:bg-danger-600 hover:text-white transition-colors" title="Remove">
+                  className="border border-border p-2 hover:bg-danger-600 hover:text-white transition-colors" title="Remove">
                   <Trash size={14} weight="bold" />
                 </button>
               )}
@@ -219,14 +219,14 @@ export function CompanyDetails() {
       <div className="mt-4">
         <div className="flex items-center gap-2 mb-1">
           <UsersThree size={18} weight="bold" className="text-brand-600" />
-          <h3 className="font-heading font-extrabold uppercase tracking-tight">Team Roles</h3>
+          <h3 className="font-medium">Team Roles</h3>
         </div>
         <p className="text-xs text-muted-foreground mb-2">
           Owner is always present. A role can't be deleted while members are still assigned to it — reassign them first.
         </p>
         <div className="space-y-2" data-testid="roles-manage-list">
           {roles.map((r) => (
-            <div key={r.key} data-testid={`role-row-${r.key}`} className="border border-black/30 p-2 flex items-center gap-2">
+            <div key={r.key} data-testid={`role-row-${r.key}`} className="border border-border p-2 flex items-center gap-2">
               <input data-testid={`role-label-${r.key}`} className={inp} value={r.label} disabled={!canManage || roleBusy}
                 onChange={(e) => setRoleLabel(r.key, e.target.value)}
                 onBlur={(e) => canManage && renameRole(r.key, e.target.value)}
@@ -235,7 +235,7 @@ export function CompanyDetails() {
               <span className="label-mono text-muted-foreground shrink-0 hidden sm:inline">{r.key}</span>
               {canManage && (
                 <button onClick={() => deleteRole(r.key)} disabled={roleBusy} data-testid={`role-delete-${r.key}`}
-                  className="border border-black p-2 hover:bg-danger-600 hover:text-white transition-colors shrink-0" title="Delete role">
+                  className="border border-border p-2 hover:bg-danger-600 hover:text-white transition-colors shrink-0" title="Delete role">
                   <Trash size={14} weight="bold" />
                 </button>
               )}
@@ -250,7 +250,7 @@ export function CompanyDetails() {
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addRole(); } }}
               placeholder="Add a role (e.g. Marketing)" />
             <button onClick={addRole} disabled={roleBusy || !roleInput.trim()} data-testid="role-add-button"
-              className="flex items-center gap-1 border border-black px-3 text-sm font-semibold uppercase hover:bg-brand-ink hover:text-white transition-colors disabled:opacity-50">
+              className="flex items-center gap-1 border border-border px-3 text-sm font-semibold uppercase hover:bg-accent transition-colors disabled:opacity-50">
               <Plus size={14} weight="bold" /> Add
             </button>
           </div>
@@ -258,7 +258,7 @@ export function CompanyDetails() {
       </div>
 
       {canManage && (
-        <div className="mt-6 border-t border-black/15 pt-4" data-testid="os-blueprint-section">
+        <div className="mt-6 border-t border-border pt-4" data-testid="os-blueprint-section">
           <div className="flex items-center gap-2 mb-1">
             <Kanban size={18} weight="bold" className="text-brand-600" />
             {/* U7-11.1 (2026-08-17): renamed from "Operating System" to
@@ -269,7 +269,7 @@ export function CompanyDetails() {
                 different things. This section owns free-standing
                 task templates + org-wide approval rules; the new
                 name says that. */}
-            <h3 className="font-heading font-extrabold uppercase tracking-tight">Rules &amp; templates</h3>
+            <h3 className="font-medium">Rules &amp; templates</h3>
           </div>
           <p className="text-xs text-muted-foreground mb-3">Free-standing task templates and org-wide approval rules. Pipelines and per-stage rules live in the Operations tab.</p>
 
@@ -285,10 +285,10 @@ export function CompanyDetails() {
             {opTasks.map((t, i) => (
               <div key={t._key || i} className="flex gap-2" data-testid={`os-optask-${i}`}>
                 <input data-testid={`os-optask-title-${i}`} className={inp} value={t.title} onChange={(e) => setOpTaskField(i, "title", e.target.value)} placeholder="Task title" />
-                <select data-testid={`os-optask-cat-${i}`} className="border border-black px-1 py-2 text-xs font-mono focus:outline-none w-28 shrink-0" value={t.category} onChange={(e) => setOpTaskField(i, "category", e.target.value)}>
+                <select data-testid={`os-optask-cat-${i}`} className="border border-border px-1 py-2 text-xs font-mono focus:outline-none w-28 shrink-0" value={t.category} onChange={(e) => setOpTaskField(i, "category", e.target.value)}>
                   {OP_CATS.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
-                <button onClick={() => removeOpTask(i)} data-testid={`os-optask-remove-${i}`} className="border border-black p-2 hover:bg-danger-600 hover:text-white transition-colors shrink-0"><Trash size={14} weight="bold" /></button>
+                <button onClick={() => removeOpTask(i)} data-testid={`os-optask-remove-${i}`} className="border border-border p-2 hover:bg-danger-600 hover:text-white transition-colors shrink-0"><Trash size={14} weight="bold" /></button>
               </div>
             ))}
           </div>
@@ -297,10 +297,10 @@ export function CompanyDetails() {
           <label className="label-mono text-muted-foreground flex items-center gap-1.5 mt-4"><ShieldCheck size={13} weight="bold" /> Approval rules</label>
           <div className="space-y-2 mt-1.5" data-testid="os-rules-list">
             {approvalRules.map((r, i) => (
-              <div key={r._key || i} className="border border-black/30 p-2" data-testid={`os-rule-${i}`}>
+              <div key={r._key || i} className="border border-border p-2" data-testid={`os-rule-${i}`}>
                 <div className="flex gap-2">
                   <input data-testid={`os-rule-name-${i}`} className={inp} value={r.name} onChange={(e) => setRuleField(i, "name", e.target.value)} placeholder="Rule name" />
-                  <button onClick={() => removeRule(i)} data-testid={`os-rule-remove-${i}`} className="border border-black p-2 hover:bg-danger-600 hover:text-white transition-colors shrink-0"><Trash size={14} weight="bold" /></button>
+                  <button onClick={() => removeRule(i)} data-testid={`os-rule-remove-${i}`} className="border border-border p-2 hover:bg-danger-600 hover:text-white transition-colors shrink-0"><Trash size={14} weight="bold" /></button>
                 </div>
                 <input data-testid={`os-rule-desc-${i}`} className={`${inp} mt-2`} value={r.description} onChange={(e) => setRuleField(i, "description", e.target.value)} placeholder="When does it apply?" />
               </div>
@@ -311,7 +311,7 @@ export function CompanyDetails() {
           {/* U7-11.1: label the two SAVE buttons on this card by scope
               so owners know which changes each one commits. Was
               "Save operating system" + "Save changes" -- both vague. */}
-          <button onClick={saveOs} disabled={osBusy} data-testid="os-save-button" className="mt-4 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors disabled:opacity-50">
+          <button onClick={saveOs} disabled={osBusy} data-testid="os-save-button" className="mt-4 border border-border px-4 py-2 text-sm font-medium hover:bg-accent transition-colors disabled:opacity-50">
             {osBusy ? "Saving…" : "Save rules & templates"}
           </button>
         </div>
@@ -320,7 +320,7 @@ export function CompanyDetails() {
       {canManage && (
         <div className="mt-6 flex justify-end">
           <button data-testid="company-save-button" onClick={save} disabled={saving}
-            className="bg-brand-600 text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-50">
+            className="bg-brand-600 text-white px-5 py-2 text-sm font-medium border border-border transition-all disabled:opacity-50">
             {saving ? "Saving…" : "Save company details"}
           </button>
         </div>

@@ -15,11 +15,11 @@ const NavBar = () => (
       <Logo />
       <div className="flex items-center gap-2 sm:gap-3">
         <Link to="/login" data-testid="landing-login-btn"
-          className="text-white/90 hover:text-white text-sm font-semibold uppercase tracking-wider px-3 sm:px-4 py-2 transition-colors">
+          className="text-white/90 hover:text-white text-sm font-medium px-3 sm:px-4 py-2 transition-colors">
           Log in
         </Link>
         <Link to="/signup" data-testid="landing-signup-btn"
-          className="bg-brand-600 text-white text-sm font-semibold uppercase tracking-wider px-4 sm:px-5 py-2 border border-brand-600 hover:bg-white hover:text-brand-600 transition-colors">
+          className="bg-brand-600 text-white text-sm font-medium px-4 sm:px-5 py-2 border border-brand-600 hover:bg-white hover:text-brand-600 transition-colors">
           Sign up
         </Link>
       </div>
@@ -32,9 +32,9 @@ const Kicker = ({ children, big }) => (
 );
 
 const Dept = ({ icon: Icon, tag, title, children }) => (
-  <div className="border-2 border-black bg-white p-6 hover:shadow-brutal transition-all">
-    <div className="flex items-center gap-2 text-brand-600 mb-2"><Icon size={18} weight="bold" /><span className="font-mono text-[11px] uppercase tracking-widest">{tag}</span></div>
-    <h3 className="font-heading font-extrabold uppercase tracking-tight text-lg">{title}</h3>
+  <div className="border border-border bg-white p-6 transition-all">
+    <div className="flex items-center gap-2 text-brand-600 mb-2"><Icon size={18} weight="bold" /><span className="font-mono text-[11px] ">{tag}</span></div>
+    <h3 className="font-medium text-lg">{title}</h3>
     <p className="text-sm text-muted-foreground mt-1">{children}</p>
   </div>
 );
@@ -48,7 +48,7 @@ export default function Landing() {
       <section className="bg-[#16161a] text-white">
         <div className="max-w-6xl mx-auto px-5 sm:px-8 py-24 sm:py-32">
           <Kicker big>The Operating Brain for Founder-Led Businesses</Kicker>
-          <h1 className="font-heading font-black tracking-tight text-5xl sm:text-6xl lg:text-7xl leading-[1.02]">
+          <h1 className="font-medium text-5xl sm:text-6xl lg:text-7xl leading-[1.02]">
             Speak the decision.<br /><span className="text-brand-600">We run</span> the company.
           </h1>
           <div className="h-1.5 w-20 bg-brand-600 my-8" />
@@ -57,14 +57,14 @@ export default function Landing() {
           </p>
           <div className="flex flex-wrap gap-3 mt-10">
             <Link to="/signup" data-testid="hero-signup-btn"
-              className="flex items-center gap-2 bg-brand-600 text-white text-sm font-semibold uppercase tracking-wider px-6 py-3 border border-brand-600 hover:bg-white hover:text-brand-600 transition-colors">
+              className="flex items-center gap-2 bg-brand-600 text-white text-sm font-medium px-6 py-3 border border-brand-600 hover:bg-white hover:text-brand-600 transition-colors">
               Get started free <ArrowRight size={16} weight="bold" />
             </Link>
-            <a href="#how" className="flex items-center gap-2 border border-white/40 text-white text-sm font-semibold uppercase tracking-wider px-6 py-3 hover:bg-white hover:text-[#16161a] transition-colors">
+            <a href="#how" className="flex items-center gap-2 border border-white/40 text-white text-sm font-medium px-6 py-3 hover:bg-white hover:text-[#16161a] transition-colors">
               See how it works
             </a>
           </div>
-          <p className="font-mono text-[11px] uppercase tracking-widest text-white/40 mt-8">Voice · Text · WhatsApp · Documents — captured once, executed forever</p>
+          <p className="font-mono text-[11px]  text-white/40 mt-8">Voice · Text · WhatsApp · Documents — captured once, executed forever</p>
         </div>
       </section>
 
@@ -72,14 +72,14 @@ export default function Landing() {
       <section className="bg-[#f7f5f2]">
         <div className="max-w-6xl mx-auto px-5 sm:px-8 py-20">
           <Kicker>The Founder Problem</Kicker>
-          <h2 className="font-heading font-black tracking-tight text-3xl sm:text-4xl leading-tight max-w-2xl">Your business lives inside your head. That's the risk.</h2>
+          <h2 className="font-medium text-3xl sm:text-4xl leading-tight max-w-2xl">Your business lives inside your head. That's the risk.</h2>
           <div className="grid sm:grid-cols-2 gap-5 mt-10">
             <div className="border-2 border-[#16161a] bg-[#16161a] text-white p-6">
-              <div className="font-mono text-xs uppercase tracking-widest text-white/50 mb-2">The old way</div>
+              <div className="font-mono text-xs  text-white/50 mb-2">The old way</div>
               <p className="text-white/90">Founder remembers → tells someone → hopes it happens → chases → repeats. Decisions evaporate, work scatters, nothing is provable, and you become the bottleneck.</p>
             </div>
             <div className="border-2 border-[#16161a] bg-white p-6">
-              <div className="font-mono text-xs uppercase tracking-widest text-brand-600 mb-2">The DecisionOS way</div>
+              <div className="font-mono text-xs  text-brand-600 mb-2">The DecisionOS way</div>
               <p>Founder speaks → AI captures, routes, assigns, tracks, chases, and remembers it forever. One place where nothing is lost, ignored, or left undone.</p>
             </div>
           </div>
@@ -90,14 +90,14 @@ export default function Landing() {
       <section className="bg-[#16161a] text-white">
         <div className="max-w-6xl mx-auto px-5 sm:px-8 py-20">
           <Kicker dark>The 10-Second Wow</Kicker>
-          <h2 className="font-heading font-black tracking-tight text-3xl sm:text-4xl leading-tight max-w-3xl">One sentence. A company-wide rule, <span className="text-brand-600">enforced.</span></h2>
+          <h2 className="font-medium text-3xl sm:text-4xl leading-tight max-w-3xl">One sentence. A company-wide rule, <span className="text-brand-600">enforced.</span></h2>
           <div className="mt-10 space-y-4 max-w-3xl">
             <div className="border-l-4 border-brand-600 pl-5 py-2">
-              <div className="font-mono text-[11px] uppercase tracking-widest text-brand-600/90">Second 0 — the owner speaks</div>
-              <p className="font-heading font-black text-xl sm:text-2xl mt-1 leading-snug">"From today, stop any dispatch that doesn't have payment approval."</p>
+              <div className="font-mono text-[11px]  text-brand-600/90">Second 0 — the owner speaks</div>
+              <p className="font-medium text-xl sm:text-2xl mt-1 leading-snug">"From today, stop any dispatch that doesn't have payment approval."</p>
             </div>
             <div className="border-l-4 border-brand-600 pl-5 py-2">
-              <div className="font-mono text-[11px] uppercase tracking-widest text-brand-600/90">Second 3 — the AI understands</div>
+              <div className="font-mono text-[11px]  text-brand-600/90">Second 3 — the AI understands</div>
               <div className="mt-2 flex flex-wrap gap-2">
                 {["Operating Rule", "Trigger: Dispatch", "Condition: Payment approved", "Scope: Company-wide"].map((c, i) => (
                   <span key={c} className={`text-xs font-semibold rounded-full px-3 py-1 ${i === 0 ? "bg-brand-600 text-white" : "bg-white/10 text-white border border-white/20"}`}>{c}</span>
@@ -105,7 +105,7 @@ export default function Landing() {
               </div>
             </div>
             <div className="border-l-4 border-brand-600 pl-5 py-2">
-              <div className="font-mono text-[11px] uppercase tracking-widest text-brand-600/90">Second 10 — the business changes</div>
+              <div className="font-mono text-[11px]  text-brand-600/90">Second 10 — the business changes</div>
               <div className="mt-2 border border-white/15 bg-white/5 p-4 rounded">
                 <p className="text-white/90"><CheckCircle size={16} weight="fill" className="inline text-danger-600 mr-1" /> Rule live across the dispatch workflow · teams notified · exceptions escalate to the owner · filed to the Company Brain.</p>
               </div>
@@ -126,10 +126,10 @@ export default function Landing() {
               { icon: TreeStructure, t: "Execute", d: "AI classifies, extracts and routes to the right department. On approval it creates tasks, invoices, payments, contacts and finance entries — with owners and due dates." },
               { icon: Brain, t: "Remember", d: "Every decision, approval and rupee is filed into the Company Brain — searchable in plain English, forever." },
             ].map((s, i) => (
-              <div key={s.t} className="border-2 border-black p-6 relative">
+              <div key={s.t} className="border border-border p-6 relative">
                 <div className="font-heading font-black text-5xl text-black/10 absolute top-4 right-5">{i + 1}</div>
                 <s.icon size={26} weight="bold" className="text-brand-600" />
-                <h3 className="font-heading font-extrabold uppercase tracking-tight text-xl mt-3">{s.t}</h3>
+                <h3 className="font-heading font-medium tracking-tight text-xl mt-3">{s.t}</h3>
                 <p className="text-sm text-muted-foreground mt-2">{s.d}</p>
               </div>
             ))}
@@ -150,8 +150,8 @@ export default function Landing() {
               { t: "Delayed orders", a: "A dispatch is 2 days past due, no update.", r: "→ Nudge owner & notify customer." },
               { t: "Workload", a: "A teammate has 5 open, 1 overdue.", r: "→ Reassign or extend." },
             ].map((x) => (
-              <div key={x.t} className="border-2 border-black bg-white p-5">
-                <div className="flex items-center gap-2 text-brand-600 mb-2"><WarningCircle size={16} weight="bold" /><span className="font-mono text-[11px] uppercase tracking-widest">{x.t}</span></div>
+              <div key={x.t} className="border border-border bg-white p-5">
+                <div className="flex items-center gap-2 text-brand-600 mb-2"><WarningCircle size={16} weight="bold" /><span className="font-mono text-[11px] ">{x.t}</span></div>
                 <p className="font-semibold text-sm">{x.a}</p>
                 <p className="text-sm text-muted-foreground mt-1">{x.r}</p>
               </div>
@@ -190,7 +190,7 @@ export default function Landing() {
             ].map((x) => (
               <div key={x.t} className="border border-white/15 bg-white/5 p-6">
                 <Lightning size={20} weight="bold" className="text-brand-600" />
-                <h3 className="font-heading font-extrabold uppercase tracking-tight text-base mt-3">{x.t}</h3>
+                <h3 className="font-heading font-medium tracking-tight text-base mt-3">{x.t}</h3>
                 <p className="text-sm text-white/60 mt-1">{x.d}</p>
               </div>
             ))}
@@ -205,11 +205,11 @@ export default function Landing() {
           <h2 className="font-heading font-black tracking-tight text-3xl sm:text-5xl leading-tight max-w-3xl mx-auto">Every business decision — remembered, organized, and executed.</h2>
           <div className="flex flex-wrap gap-3 justify-center mt-10">
             <Link to="/signup" data-testid="cta-signup-btn"
-              className="flex items-center gap-2 bg-white text-brand-600 text-sm font-semibold uppercase tracking-wider px-7 py-3 border border-white hover:bg-transparent hover:text-white transition-colors">
+              className="flex items-center gap-2 bg-white text-brand-600 text-sm font-medium px-7 py-3 border border-white hover:bg-transparent hover:text-white transition-colors">
               Start free <ArrowRight size={16} weight="bold" />
             </Link>
             <Link to="/login" data-testid="cta-login-btn"
-              className="border border-white/60 text-white text-sm font-semibold uppercase tracking-wider px-7 py-3 hover:bg-white hover:text-brand-600 transition-colors">
+              className="border border-white/60 text-white text-sm font-medium px-7 py-3 hover:bg-white hover:text-brand-600 transition-colors">
               Log in
             </Link>
           </div>
@@ -225,7 +225,7 @@ export default function Landing() {
             <Link to="/login" className="hover:text-white transition-colors">Log in</Link>
             <Link to="/signup" className="hover:text-white transition-colors">Sign up</Link>
           </div>
-          <div className="font-mono text-[11px] uppercase tracking-widest">© 2026 DecisionOS</div>
+          <div className="font-mono text-[11px] ">© 2026 DecisionOS</div>
         </div>
       </footer>
     </div>

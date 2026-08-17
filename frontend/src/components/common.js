@@ -120,10 +120,13 @@ export function EmptyState({ title, hint, ctaLabel, onCta, ctaTo, secondary, tes
 }
 
 
-// Epic 2 Sprint 3 (E2-14): brutalist skeleton bars. Keep the visual
-// language of the app (border-black, no rounded corners on the primary
-// shapes) so layouts don't jump when data lands. Three primitives that
-// cover 95% of the surfaces:
+// Epic 2 Sprint 3 (E2-14): skeleton bars that hold the layout so nothing
+// jumps when data lands.
+// RD-5 (2026-08-17): this comment used to say "keep the visual language of
+// the app (border-black, no rounded corners)" — that language was the
+// brutalist system, which the redesign retired. The skeletons now take the
+// muted surface and the same soft radius the real rows use.
+// Three primitives cover ~95% of the surfaces:
 //   * <SkeletonLine> for text rows
 //   * <SkeletonCard> for the KPI-card / grid-card pattern
 //   * <SkeletonRow>  for table rows
@@ -197,7 +200,7 @@ export function DexBadge({ inline = false, className = "" }) {
     return (
       <span
         data-testid="dex-badge-inline"
-        className={`inline-flex items-center gap-1 mr-1.5 text-[10px] font-bold uppercase tracking-wider text-brand-600 ${className}`}
+        className={`inline-flex items-center gap-1 mr-1.5 text-[10px] font-medium text-brand-600 ${className}`}
       >
         <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <path d="M12 2l2.4 5.6L20 10l-5.6 2.4L12 18l-2.4-5.6L4 10l5.6-2.4L12 2z"/>
@@ -212,7 +215,7 @@ export function DexBadge({ inline = false, className = "" }) {
   return (
     <div
       data-testid="dex-badge-block"
-      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wider bg-brand-50 text-brand-700 ${className}`}
+      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-medium bg-brand-50 text-brand-700 ${className}`}
     >
       <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
         <path d="M12 2l2.4 5.6L20 10l-5.6 2.4L12 18l-2.4-5.6L4 10l5.6-2.4L12 2z"/>

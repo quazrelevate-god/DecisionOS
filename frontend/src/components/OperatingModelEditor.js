@@ -234,7 +234,7 @@ export function OperatingModelEditor() {
     <div className="card-brutal p-5" data-testid="settings-operating-model-card">
       <div className="flex items-center gap-2 mb-1">
         <FlowArrow size={20} weight="bold" className="text-brand-600" />
-        <h2 className="font-heading text-lg font-extrabold uppercase tracking-tight">Operating Model</h2>
+        <h2 className="text-base font-medium">Operating Model</h2>
       </div>
       <p className="text-xs text-muted-foreground mb-4">
         The workflow pipelines and task categories that shape your Workflows board and My Work — tailored to <span className="font-semibold">{tenant?.industry || "your industry"}</span>. Each stage owns its task templates + approval gate. Add your own or let AI regenerate.
@@ -270,7 +270,7 @@ export function OperatingModelEditor() {
                   <div className="mt-2.5 pl-1">
                     <div className="flex items-center gap-1.5 mb-1">
                       <ListChecks size={12} weight="bold" className="text-muted-foreground" />
-                      <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Tasks that fire on entry</span>
+                      <span className="text-[11px] font-medium text-muted-foreground">Tasks that fire on entry</span>
                     </div>
                     {(s.tasks || []).length === 0 && (
                       <p className="text-[11px] text-muted-foreground italic pl-4">None. Card just sits at this stage until manually advanced.</p>
@@ -300,7 +300,7 @@ export function OperatingModelEditor() {
                   {/* WE-04: per-stage approval gate */}
                   <div className="mt-2.5 pl-1 flex items-center flex-wrap gap-1.5">
                     <ShieldCheck size={12} weight="bold" className="text-muted-foreground" />
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Approval to leave this stage</span>
+                    <span className="text-[11px] font-medium text-muted-foreground">Approval to leave this stage</span>
                     <select data-testid={`op-stage-approval-role-${pi}-${si}`} className={smInp}
                       value={s.approval?.role || ""}
                       onChange={(e) => setStageApproval(pi, si, { role: e.target.value })}>
@@ -321,7 +321,7 @@ export function OperatingModelEditor() {
                     <div className="mt-2.5 pl-1">
                       <div className="flex items-center gap-1.5 mb-1">
                         <Lightning size={12} weight="bold" className="text-muted-foreground" />
-                        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Fires on entry</span>
+                        <span className="text-[11px] font-medium text-muted-foreground">Fires on entry</span>
                       </div>
                       <div className="flex flex-wrap gap-1.5">
                         {s.side_effects.map((se, ei) => (
@@ -374,11 +374,11 @@ export function OperatingModelEditor() {
 
       <div className="mt-6 flex flex-wrap gap-3">
         <button onClick={save} disabled={saving} data-testid="op-save"
-          className="flex items-center gap-2 bg-brand-ink text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider rounded-lg hover:shadow-brutal-sm transition-all disabled:opacity-60">
+          className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2 text-sm font-medium rounded-lg transition-all disabled:opacity-60">
           <FloppyDisk size={16} weight="bold" /> {saving ? "Saving…" : "Save Model"}
         </button>
         <button onClick={regenerate} disabled={regen} data-testid="op-regenerate"
-          className="flex items-center gap-2 border border-black px-5 py-2 text-sm font-semibold uppercase tracking-wider rounded-lg hover:bg-black/5 transition-all disabled:opacity-60">
+          className="flex items-center gap-2 border border-border px-5 py-2 text-sm font-medium rounded-lg hover:bg-accent transition-all disabled:opacity-60">
           <Sparkle size={16} weight="bold" /> {regen ? "Regenerating…" : "Regenerate with AI"}
         </button>
       </div>

@@ -23,7 +23,7 @@ const VISIBILITIES = [
   { key: "private", label: "Only owner + named roles" },
 ];
 const KIND_TINT = {
-  policy: "bg-brand-yellow/40", filing: "bg-brand-blue/20", contract: "bg-white",
+  policy: "bg-caution-50/40", filing: "bg-brand-blue/20", contract: "bg-white",
   sop: "bg-brand-600/10", report: "bg-brand-paper", note: "bg-white", other: "bg-white",
 };
 
@@ -80,10 +80,10 @@ function UploadDialog({ onClose, onUploaded }) {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center px-4" data-testid="brain-doc-upload-dialog">
-      <div className="w-full max-w-lg bg-brand-paper border-2 border-black shadow-brutal max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between border-b border-black px-5 py-3">
-          <p className="font-heading font-black uppercase tracking-tight">Add a document</p>
-          <button onClick={onClose} data-testid="brain-doc-upload-close" className="w-8 h-8 flex items-center justify-center hover:bg-black/5">
+      <div className="w-full max-w-lg bg-brand-paper border border-border shadow-md max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between border-b border-border px-5 py-3">
+          <p className="font-medium">Add a document</p>
+          <button onClick={onClose} data-testid="brain-doc-upload-close" className="w-8 h-8 flex items-center justify-center hover:bg-accent">
             <X size={16} weight="bold" />
           </button>
         </div>
@@ -93,7 +93,7 @@ function UploadDialog({ onClose, onUploaded }) {
             <input
               type="file" data-testid="brain-doc-upload-file"
               onChange={(e) => setFile(e.target.files?.[0] || null)}
-              className="mt-1 block w-full text-sm border border-black bg-white file:mr-3 file:py-2 file:px-4 file:border-0 file:border-r file:border-black file:bg-brand-ink file:text-white file:font-semibold file:uppercase file:tracking-wider file:text-xs" />
+              className="mt-1 block w-full text-sm border border-border bg-white file:mr-3 file:py-2 file:px-4 file:border-0 file:border-r file:border-border file:bg-primary file:text-white file:font-semibold file:uppercase file:tracking-wider file:text-xs" />
             <span className="text-[11px] text-muted-foreground font-mono mt-1 block">PDF · DOCX · XLSX · TXT · images · 25MB max</span>
           </label>
 
@@ -101,14 +101,14 @@ function UploadDialog({ onClose, onUploaded }) {
             <span className="label-mono text-muted-foreground">Title</span>
             <input value={title} onChange={(e) => setTitle(e.target.value)} data-testid="brain-doc-upload-title"
               placeholder={file?.name || "e.g. Leave Policy 2026"}
-              className="mt-1 w-full px-3 py-2 border border-black bg-white text-sm focus:outline-none" />
+              className="mt-1 w-full px-3 py-2 border border-border bg-white text-sm focus:outline-none" />
           </label>
 
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
               <span className="label-mono text-muted-foreground">Kind</span>
               <select value={kind} onChange={(e) => setKind(e.target.value)} data-testid="brain-doc-upload-kind"
-                className="mt-1 w-full px-3 py-2 border border-black bg-white text-sm focus:outline-none">
+                className="mt-1 w-full px-3 py-2 border border-border bg-white text-sm focus:outline-none">
                 {KINDS.map((k) => <option key={k.key} value={k.key}>{k.label}</option>)}
               </select>
             </label>
@@ -116,14 +116,14 @@ function UploadDialog({ onClose, onUploaded }) {
               <span className="label-mono text-muted-foreground">Tags (comma-separated)</span>
               <input value={tags} onChange={(e) => setTags(e.target.value)} data-testid="brain-doc-upload-tags"
                 placeholder="hr, leave, holiday"
-                className="mt-1 w-full px-3 py-2 border border-black bg-white text-sm focus:outline-none" />
+                className="mt-1 w-full px-3 py-2 border border-border bg-white text-sm focus:outline-none" />
             </label>
           </div>
 
           <label className="block">
             <span className="label-mono text-muted-foreground">Who can see this?</span>
             <select value={visibility} onChange={(e) => setVisibility(e.target.value)} data-testid="brain-doc-upload-visibility"
-              className="mt-1 w-full px-3 py-2 border border-black bg-white text-sm focus:outline-none">
+              className="mt-1 w-full px-3 py-2 border border-border bg-white text-sm focus:outline-none">
               {VISIBILITIES.map((v) => <option key={v.key} value={v.key}>{v.label}</option>)}
             </select>
           </label>
@@ -133,7 +133,7 @@ function UploadDialog({ onClose, onUploaded }) {
               <span className="label-mono text-muted-foreground">Department (role key)</span>
               <input value={department} onChange={(e) => setDepartment(e.target.value)} data-testid="brain-doc-upload-department"
                 placeholder="finance, sales, operations…"
-                className="mt-1 w-full px-3 py-2 border border-black bg-white text-sm focus:outline-none" />
+                className="mt-1 w-full px-3 py-2 border border-border bg-white text-sm focus:outline-none" />
             </label>
           )}
           {visibility !== "public" && (
@@ -141,7 +141,7 @@ function UploadDialog({ onClose, onUploaded }) {
               <span className="label-mono text-muted-foreground">Also allow these roles (optional)</span>
               <input value={rolesAllowed} onChange={(e) => setRolesAllowed(e.target.value)} data-testid="brain-doc-upload-roles"
                 placeholder="finance, hr"
-                className="mt-1 w-full px-3 py-2 border border-black bg-white text-sm focus:outline-none" />
+                className="mt-1 w-full px-3 py-2 border border-border bg-white text-sm focus:outline-none" />
             </label>
           )}
 
@@ -149,13 +149,13 @@ function UploadDialog({ onClose, onUploaded }) {
             <span className="label-mono text-muted-foreground">Short summary (optional)</span>
             <textarea value={summary} onChange={(e) => setSummary(e.target.value)} rows={2} data-testid="brain-doc-upload-summary"
               placeholder="One-line description Dex will use to help match this document to questions."
-              className="mt-1 w-full px-3 py-2 border border-black bg-white text-sm focus:outline-none resize-none" />
+              className="mt-1 w-full px-3 py-2 border border-border bg-white text-sm focus:outline-none resize-none" />
           </label>
         </div>
-        <div className="flex items-center justify-end gap-2 border-t border-black px-5 py-3 bg-white">
-          <button onClick={onClose} className="px-4 py-2 border border-black text-xs font-semibold uppercase tracking-wider hover:bg-black/5">Cancel</button>
+        <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-3 bg-white">
+          <button onClick={onClose} className="px-4 py-2 border border-border text-xs font-medium hover:bg-accent">Cancel</button>
           <button onClick={submit} disabled={busy || !file} data-testid="brain-doc-upload-submit"
-            className="flex items-center gap-2 bg-brand-600 text-white px-5 py-2 border border-black text-xs font-semibold uppercase tracking-wider hover:shadow-brutal-sm transition-all disabled:opacity-40">
+            className="flex items-center gap-2 bg-brand-600 text-white px-5 py-2 border border-border text-xs font-medium transition-all disabled:opacity-40">
             {busy ? <CircleNotch size={14} className="animate-spin" /> : <Upload size={14} weight="bold" />}
             {busy ? "Adding…" : "Add to Brain"}
           </button>
@@ -234,7 +234,7 @@ export function DocumentsPanel() {
     <div data-testid="brain-documents-panel">
       {/* Search + filter + upload */}
       <div className="flex flex-col md:flex-row md:items-center gap-2 mb-2 max-w-3xl">
-        <div className="flex-1 flex items-center border border-black bg-white px-4">
+        <div className="flex-1 flex items-center border border-border bg-white px-4">
           <MagnifyingGlass size={18} weight="bold" className="text-muted-foreground" />
           <input
             data-testid="brain-doc-search"
@@ -245,13 +245,13 @@ export function DocumentsPanel() {
         </div>
         <select value={kind} onChange={(e) => { setKind(e.target.value); load(q, e.target.value); }}
           data-testid="brain-doc-kind-filter"
-          className="px-3 py-2 border border-black bg-white text-sm font-mono focus:outline-none min-w-[140px]">
+          className="px-3 py-2 border border-border bg-white text-sm font-mono focus:outline-none min-w-[140px]">
           <option value="">All kinds</option>
           {KINDS.map((k) => <option key={k.key} value={k.key}>{k.label}</option>)}
         </select>
         {isOwner && (
           <button onClick={() => setShowUpload(true)} data-testid="brain-doc-add-btn"
-            className="flex items-center gap-2 bg-brand-600 text-white px-5 py-3 border border-black text-xs font-semibold uppercase tracking-wider hover:shadow-brutal transition-all">
+            className="flex items-center gap-2 bg-brand-600 text-white px-5 py-3 border border-border text-xs font-medium transition-all">
             <Upload size={14} weight="bold" /> Add document
           </button>
         )}
@@ -273,23 +273,23 @@ export function DocumentsPanel() {
         <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4" data-testid="brain-doc-grid">
           {docs.map((d) => (
             <div key={d.id} data-testid={`brain-doc-card-${d.id}`}
-              className="border border-black bg-white shadow-brutal-sm p-4 flex flex-col gap-3 hover:shadow-brutal transition-shadow">
+              className="border border-border bg-white shadow-sm p-4 flex flex-col gap-3 transition-shadow">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
                   <File size={18} weight="bold" className="shrink-0" />
-                  <p className="font-heading font-black uppercase tracking-tight text-sm leading-tight truncate">{d.title}</p>
+                  <p className="font-medium text-sm leading-tight truncate">{d.title}</p>
                 </div>
-                <span className={`px-2 py-0.5 border border-black text-[10px] font-mono uppercase tracking-wider shrink-0 ${KIND_TINT[d.kind] || "bg-white"}`}>{d.kind}</span>
+                <span className={`px-2 py-0.5 border border-border text-[10px] font-mono  shrink-0 ${KIND_TINT[d.kind] || "bg-white"}`}>{d.kind}</span>
               </div>
               {d.summary && <p className="text-xs text-muted-foreground leading-relaxed">{d.summary}</p>}
               {(d.tags || []).length > 0 && (
                 <div className="flex flex-wrap gap-1">
                   {d.tags.map((t) => (
-                    <span key={t} className="px-1.5 py-0.5 border border-black/30 text-[10px] font-mono bg-brand-paper">#{t}</span>
+                    <span key={t} className="px-1.5 py-0.5 border border-border text-[10px] font-mono bg-brand-paper">#{t}</span>
                   ))}
                 </div>
               )}
-              <div className="flex items-center justify-between text-[11px] font-mono text-muted-foreground pt-2 border-t border-black/10">
+              <div className="flex items-center justify-between text-[11px] font-mono text-muted-foreground pt-2 border-t border-border">
                 <span className="flex items-center gap-1.5">
                   {d.visibility === "public"
                     ? "Everyone"
@@ -301,12 +301,12 @@ export function DocumentsPanel() {
               </div>
               <div className="flex items-center gap-2">
                 <button onClick={() => download(d)} data-testid={`brain-doc-download-${d.id}`}
-                  className="flex-1 flex items-center justify-center gap-1.5 border border-black py-2 text-[11px] font-semibold uppercase tracking-wider bg-white hover:bg-black/5">
+                  className="flex-1 flex items-center justify-center gap-1.5 border border-border py-2 text-[11px] font-medium bg-white hover:bg-accent">
                   <DownloadSimple size={12} weight="bold" /> Download
                 </button>
                 {(isOwner || d.uploaded_by === user?.id) && (
                   <button onClick={() => remove(d)} disabled={deleting === d.id} data-testid={`brain-doc-delete-${d.id}`}
-                    className="flex items-center justify-center gap-1.5 border border-black py-2 px-3 text-[11px] font-semibold uppercase tracking-wider bg-white hover:bg-brand-600 hover:text-white transition-colors disabled:opacity-40">
+                    className="flex items-center justify-center gap-1.5 border border-border py-2 px-3 text-[11px] font-medium bg-white hover:bg-brand-600 hover:text-white transition-colors disabled:opacity-40">
                     {deleting === d.id ? <CircleNotch size={12} className="animate-spin" /> : <Trash size={12} weight="bold" />}
                   </button>
                 )}

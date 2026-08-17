@@ -8,7 +8,7 @@ import {
 } from "@phosphor-icons/react";
 
 const TYPES = {
-  meeting: { label: "Meetings", icon: UsersThree, color: "bg-brand-ink", text: "text-brand-ink" },
+  meeting: { label: "Meetings", icon: UsersThree, color: "bg-primary", text: "text-brand-ink" },
   payment_due: { label: "Payments", icon: CurrencyCircleDollar, color: "bg-orange-500", text: "text-orange-600" },
   task: { label: "Tasks", icon: CheckSquare, color: "bg-brand-blue", text: "text-brand-blue" },
   delivery: { label: "Deliveries", icon: Truck, color: "bg-green-600", text: "text-green-600" },
@@ -48,7 +48,7 @@ export default function Calendar() {
         <button
           onClick={() => setFilter("all")}
           data-testid="cal-filter-all"
-          className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black transition-colors ${filter === "all" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border border-border transition-colors ${filter === "all" ? "bg-primary text-primary-foreground" : "bg-white hover:bg-accent"}`}
         >
           <CalendarBlank size={15} weight="bold" /> All ({data?.total || 0})
         </button>
@@ -57,7 +57,7 @@ export default function Calendar() {
             key={key}
             onClick={() => setFilter(key)}
             data-testid={`cal-filter-${key}`}
-            className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black transition-colors ${filter === key ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border border-border transition-colors ${filter === key ? "bg-primary text-primary-foreground" : "bg-white hover:bg-accent"}`}
           >
             <t.icon size={15} weight="bold" /> {t.label} ({counts[key] || 0})
           </button>
@@ -95,14 +95,14 @@ export default function Calendar() {
                       onClick={() => e.contact_id && navigate(`/contacts/${e.contact_id}`)}
                       className={`card-brutal p-3 flex items-center gap-3 ${e.contact_id ? "cursor-pointer shadow-hover" : ""}`}
                     >
-                      <div className={`w-9 h-9 flex items-center justify-center border border-black text-white shrink-0 ${t.color}`}>
+                      <div className={`w-9 h-9 flex items-center justify-center border border-border text-white shrink-0 ${t.color}`}>
                         <t.icon size={17} weight="bold" />
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold leading-tight truncate">{e.title}</p>
                         {e.subtitle && <p className="label-mono text-muted-foreground truncate">{e.subtitle}</p>}
                       </div>
-                      {e.overdue && <span className="px-2 py-0.5 text-xs uppercase tracking-wider font-semibold border border-black bg-danger-600 text-white shrink-0">Overdue</span>}
+                      {e.overdue && <span className="px-2 py-0.5 text-xs  font-semibold border border-border bg-danger-600 text-white shrink-0">Overdue</span>}
                     </div>
                   );
                 })}

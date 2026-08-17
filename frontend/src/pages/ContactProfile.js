@@ -79,9 +79,9 @@ function Table({ head, rows }) {
   // terminal table. The reference uses muted grey header text on the card
   // ground with a single hairline beneath.
   return (
-    <div className="overflow-x-auto border border-border rounded-xl bg-card">
+    <div className="overflow-x-auto nm-raised">
       <table className="w-full text-sm">
-        <thead className="border-b border-border">
+        <thead className="bg-nm-sunken border-b border-nm-edge/30">
           <tr>
             {head.map((h) => (
               <th key={h} className="text-left px-3 py-2.5 text-xs font-medium text-muted-foreground">{h}</th>
@@ -291,14 +291,19 @@ export default function ContactProfile() {
 
       {/* E2-08: Activity timeline. Small logger + list. Owner + sales
           may log; anyone with finance perm can view. */}
+      {/* NM-5 (§3 Layout): Recent Activity and Workflows share a 2-col grid
+          at ≥ xl, stacked below. items-start so a short Workflows card does
+          not stretch to the activity column's height. Workflows hides itself
+          when empty (U7-07), leaving Activity a single tidy column. */}
+      <div className="xl:grid xl:grid-cols-2 xl:gap-5 xl:items-start">
       <Section icon={ChatCircleDots} title="Recent Activity" count={(activities || []).length}>
         {canWriteActivity && (
-          <div className="border border-border rounded-xl bg-card p-3 mb-3 flex flex-col md:flex-row gap-2" data-testid="crm-activity-logger">
+          <div className="nm-tile p-3 mb-3 flex flex-col md:flex-row gap-2" data-testid="crm-activity-logger">
             <select
               value={actKind}
               onChange={(e) => setActKind(e.target.value)}
               data-testid="crm-activity-kind"
-              className="border border-border rounded-lg bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30"
+              className="nm-inset px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
             >
               {Object.entries(ACTIVITY_META).map(([k, m]) => (
                 <option key={k} value={k}>{m.label}</option>
@@ -310,13 +315,13 @@ export default function ContactProfile() {
               onKeyDown={(e) => { if (e.key === "Enter" && actText.trim()) logActivity.mutate(); }}
               placeholder="What happened? (e.g. 'Rang about Rs 8L invoice, promised payment by Friday')"
               data-testid="crm-activity-text"
-              className="flex-1 border border-border rounded-lg bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30"
+              className="flex-1 nm-inset px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
             />
             <button
               onClick={() => actText.trim() && logActivity.mutate()}
               disabled={!actText.trim() || logActivity.isPending}
               data-testid="crm-activity-save"
-              className="bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm font-medium hover:bg-brand-700 transition-colors disabled:opacity-50"
+              className="bg-primary text-primary-foreground rounded-control shadow-nm-sm px-4 py-2 text-sm font-medium hover:bg-brand-700 transition-colors disabled:opacity-50 disabled:shadow-none"
             >
               {logActivity.isPending ? "Saving…" : "Log"}
             </button>
@@ -330,7 +335,7 @@ export default function ContactProfile() {
               const meta = ACTIVITY_META[a.kind] || ACTIVITY_META.other;
               const Icon = meta.icon;
               return (
-                <div key={a.id} data-testid={`crm-activity-${a.id}`} className="border border-border bg-white p-3">
+                <div key={a.id} data-testid={`crm-activity-${a.id}`} className="nm-inset p-3">
                   <div className="flex items-start gap-2 mb-1">
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium ${meta.cls}`}>
                       <Icon size={12} weight="bold" /> {meta.label}
@@ -358,7 +363,7 @@ export default function ContactProfile() {
       <Section icon={FlowArrow} title="Workflows" count={workflows.length} hideWhenEmpty>
         <div className="space-y-2">
           {workflows.map((w) => (
-            <div key={w.id} data-testid={`crm-workflow-${w.id}`} className="border border-border bg-white p-3 flex items-center justify-between gap-2">
+            <div key={w.id} data-testid={`crm-workflow-${w.id}`} className="nm-inset p-3 flex items-center justify-between gap-2">
               <div>
                 <p className="text-sm font-semibold">{w.title || "(untitled)"}</p>
                 <p className="text-xs text-muted-foreground font-mono">{w.type} · created {timeAgo(w.created_at)}</p>
@@ -368,6 +373,7 @@ export default function ContactProfile() {
           ))}
         </div>
       </Section>
+      </div>
 
       <Section icon={Receipt} title={isVendor ? "Purchase Bills" : "Sales Bills"} count={invoices.length} hideWhenEmpty>
         <Table head={["Number", "Amount", "Date", "Due", "Status"]} rows={invoices.map((inv) => (

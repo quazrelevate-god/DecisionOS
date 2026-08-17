@@ -301,7 +301,8 @@
     .dark .shadow-brutal, .dark .shadow-brutal-sm, .dark .shadow-brutal-lg {
         box-shadow: inset 0 1px 0 0 rgba(255,255,255,0.04), 0 8px 24px -12px rgba(0,0,0,0.7) !important;
     }
-    .dark .shadow-hover:hover { box-shadow: 0 10px 28px -12px rgba(0,0,0,0.75) !important; }
+    .dark .shadow-hover:hover { box-shadow: var(--nm-shadow-lg) !important; }
+    .dark .shadow-hover:active { box-shadow: var(--nm-pressed) !important; }
     .dark ::-webkit-scrollbar-track { background: transparent; }
     .dark ::-webkit-scrollbar-thumb { background: hsl(240 4% 24%); border-color: transparent; }
     .dark input::placeholder, .dark textarea::placeholder { color: hsl(240 5% 50%); }
@@ -630,14 +631,16 @@
     .card-brutal {
         @apply bg-nm border border-nm-edge/40 rounded-cardlg shadow-nm;
     }
-    /* Resting surfaces do not lift. Hover is a border darkening, not a
-       translate — the reference never moves a card under the cursor. */
+    /* NM-4 — pressable surfaces answer the cursor with elevation, not a
+       border shift: rise on hover, press IN on :active. The press-in is the
+       whole point (§3 Interaction). Below lg the tokens have already
+       collapsed nm-lg to nm-md, so this cannot put a large shadow on a
+       phone (§4). Still no translate — depth moves, the card does not. */
     .shadow-hover {
-        @apply transition-colors duration-150 ease-out;
+        @apply transition-shadow duration-150 ease-out;
     }
-    .shadow-hover:hover {
-        border-color: hsl(var(--hairline-strong));
-    }
+    .shadow-hover:hover  { box-shadow: var(--nm-shadow-lg); }
+    .shadow-hover:active { box-shadow: var(--nm-pressed); }
     /* RD-1: the eyebrow label loses the mono face and the wide letter-spacing.
        It was uppercase IBM Plex Mono at 0.12em across the entire app, which is
        what made every screen read as a terminal. The reference sets these in
@@ -655,6 +658,15 @@
         letter-spacing: -0.012em;
         line-height: 1.08;
     }
+}
+
+/* NM-4 — the focus net. §5 demands a visible ring on 100% of interactive
+   elements, and most call sites hand-roll their buttons. :where() keeps the
+   specificity at zero, so every component-level ring or outline still wins;
+   this only catches the elements nothing else styled. Never shadow alone. */
+:where(a, button, [role="button"], input, select, textarea, summary):focus-visible {
+    outline: 2px solid hsl(var(--focus-ring) / 0.55);
+    outline-offset: 2px;
 }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }

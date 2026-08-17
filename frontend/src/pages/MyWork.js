@@ -116,19 +116,39 @@ const UPDATE_ICON = { note: ChatText, handoff: ArrowBendUpRight, escalate: Warni
 function TaskTrail({ t, members, roleOptions, onChange }) {
   const [open, setOpen] = useState(false);
   const updates = t.updates || [];
+  const hasUpdates = updates.length > 0;
+  // U7-05.EXP: when there is no activity, the heavy "ACTIVITY &
+  // HANDOFFS" header + right-aligned button read as an empty section
+  // to fill. Softer treatment when empty: single line with the action
+  // inline. Full section header only when there's actual activity to
+  // frame.
   return (
     <div className="mt-4 border-t border-black/10 pt-4" data-testid={`task-trail-${t.id}`}>
-      <div className="flex items-center justify-between mb-2">
-        <span className="flex items-center gap-2 font-heading font-extrabold uppercase tracking-tight text-sm">
-          <ChatCircleText size={16} weight="bold" className="text-brand-600" /> Activity &amp; Handoffs
-        </span>
-        {!open && (
-          <button onClick={() => setOpen(true)} data-testid={`add-update-${t.id}`}
-            className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-yellow transition-colors">
-            <Plus size={12} weight="bold" /> Update / Escalate
-          </button>
-        )}
-      </div>
+      {hasUpdates ? (
+        <div className="flex items-center justify-between mb-2">
+          <span className="flex items-center gap-2 font-heading font-extrabold uppercase tracking-tight text-sm">
+            <ChatCircleText size={16} weight="bold" className="text-brand-600" /> Activity &amp; Handoffs
+          </span>
+          {!open && (
+            <button onClick={() => setOpen(true)} data-testid={`add-update-${t.id}`}
+              className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-yellow transition-colors">
+              <Plus size={12} weight="bold" /> Update / Escalate
+            </button>
+          )}
+        </div>
+      ) : (
+        !open && (
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <span className="label-mono text-muted-foreground flex items-center gap-1.5">
+              <ChatCircleText size={12} weight="bold" /> No activity yet
+            </span>
+            <button onClick={() => setOpen(true)} data-testid={`add-update-${t.id}`}
+              className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-brand-600 hover:underline">
+              <Plus size={12} weight="bold" /> Log update or hand off
+            </button>
+          </div>
+        )
+      )}
       {updates.length > 0 && (
         <ul className="space-y-2 mb-2" data-testid={`trail-list-${t.id}`}>
           {updates.map((u) => {
@@ -258,15 +278,22 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
   const inp = "flex-1 border border-black px-2 py-1.5 text-sm focus:outline-none";
 
   if (!plan && !steps.length) {
+    // U7-05.EXP polish (2026-08-17): was two big dashed boxes taking
+    // full-width equal weight. When there is no plan yet, most tasks
+    // never need one -- so a whole visual band for the empty state was
+    // noise. Now: single one-line prompt with two small pill buttons
+    // ("Ask Dex" is the primary; manual is the escape hatch). Reads as
+    // an offer, not an unfilled requirement.
     return (
-      <div className="mt-4 flex flex-col sm:flex-row gap-2" data-testid={`exec-plan-empty-${t.id}`}>
+      <div className="mt-4 flex items-center gap-2 flex-wrap" data-testid={`exec-plan-empty-${t.id}`}>
+        <span className="label-mono text-muted-foreground">Break this into steps?</span>
         <button onClick={generate} disabled={busy} data-testid={`generate-plan-${t.id}`}
-          className="flex-1 flex items-center justify-center gap-2 border border-dashed border-brand-600 text-brand-600 py-2.5 text-sm font-semibold uppercase tracking-wider hover:bg-brand-600 hover:text-white transition-colors disabled:opacity-50">
-          <Sparkle size={16} weight="bold" /> {busy ? "Thinking…" : "Generate AI plan"}
+          className="inline-flex items-center gap-1.5 border border-brand-600 text-brand-600 px-3 py-1 text-xs font-semibold uppercase tracking-wider hover:bg-brand-600 hover:text-white transition-colors disabled:opacity-50">
+          <Sparkle size={13} weight="bold" /> {busy ? "Thinking…" : "Ask Dex"}
         </button>
         <button onClick={startManual} disabled={busy} data-testid={`manual-plan-${t.id}`}
-          className="flex-1 flex items-center justify-center gap-2 border border-dashed border-black text-brand-ink py-2.5 text-sm font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors disabled:opacity-50">
-          <PencilSimple size={16} weight="bold" /> Manual execution plan
+          className="inline-flex items-center gap-1.5 border border-black px-3 py-1 text-xs font-semibold uppercase tracking-wider hover:bg-black/5 transition-colors disabled:opacity-50">
+          <PencilSimple size={13} weight="bold" /> Add manually
         </button>
       </div>
     );
@@ -991,42 +1018,59 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
         </div>
       )}
 
-      {t.due_date && (
-        <p className="text-xs text-muted-foreground">
-          Due {new Date(t.due_date).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", ...(t.due_date.includes("T") ? { hour: "2-digit", minute: "2-digit" } : {}) })}
+      {/* U7-05.EXP polish (2026-08-17): one combined meta line
+          replacing separate "Due X" and "Updated Y" rows. Also killed
+          the "Full details" button -- opened a Dialog that duplicated
+          this expanded body (dialog was needed BEFORE the collapse
+          existed; not now). Owner delete moves to a small more-menu
+          in the actions row below. */}
+      {(t.due_date || t.updated_at) && (
+        <p className="label-mono text-muted-foreground flex items-center gap-2 flex-wrap" data-testid={`task-meta-${t.id}`}>
+          {t.due_date && (
+            <span className="flex items-center gap-1">
+              <ClockCounterClockwise size={12} weight="bold" />
+              Due {new Date(t.due_date).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", ...(t.due_date.includes("T") ? { hour: "2-digit", minute: "2-digit" } : {}) })}
+            </span>
+          )}
+          {t.due_date && t.updated_at && <span className="text-black/20">·</span>}
+          {t.updated_at && (
+            <span
+              className="flex items-center gap-1"
+              data-testid={`task-updated-${t.id}`}
+              title={fullTime(t.updated_at)}
+            >
+              {t.last_action || "Updated"} {timeAgo(t.updated_at)}
+            </span>
+          )}
         </p>
       )}
 
-      <div className="flex items-center justify-between">
-        {t.updated_at && (
-          <p className="label-mono text-muted-foreground flex items-center gap-1" data-testid={`task-updated-${t.id}`} title={fullTime(t.updated_at)}>
-            <ClockCounterClockwise size={12} weight="bold" />
-            {t.last_action || "Updated"} · {timeAgo(t.updated_at)}
-          </p>
-        )}
-        <button onClick={() => setDetailOpen(true)} data-testid={`view-details-${t.id}`} className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-black px-2 py-0.5 hover:bg-brand-yellow transition-colors">
-          <Eye size={13} weight="bold" /> Full details
-        </button>
-      </div>
-
-      <div>
-        <div className="flex items-center justify-between mb-1">
-          <span className="label-mono text-muted-foreground">Progress</span>
-          <span className="label-mono" data-testid={`progress-value-${t.id}`}>{t.progress || 0}%</span>
-        </div>
-        <div className="h-2 bg-black/10 border border-black"><div className="h-full bg-brand-blue transition-all" style={{ width: `${t.progress || 0}%` }} /></div>
-      </div>
-
+      {/* U7-05.EXP: progress bar without the redundant "0%" label +
+          "Progress" caption. Bar visually conveys the value; a numeric
+          label was pure noise. Status change drives progress, so the
+          separate "Set progress" dropdown is gone too. */}
       {!terminal && !awaitingApproval && (
-        <div className="flex flex-wrap items-center gap-2">
-          <label className="label-mono text-muted-foreground">Status</label>
-          <select data-testid={`status-select-${t.id}`} value={t.status === "blocked" ? "todo" : t.status} onChange={(e) => setStatus(e.target.value)} className={selCls}>
-            {STATUS_OPTIONS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-          </select>
-          <label className="label-mono text-muted-foreground ml-1">Set progress</label>
-          <select data-testid={`progress-select-${t.id}`} value={PROGRESS_OPTIONS.includes(t.progress) ? t.progress : 0} onChange={(e) => setProgress(e.target.value)} className={selCls}>
-            {PROGRESS_OPTIONS.map((p) => <option key={p} value={p}>{p}%</option>)}
-          </select>
+        <div className="space-y-2">
+          <div className="h-2 bg-black/10 border border-black" title={`${t.progress || 0}% complete`} aria-label={`Progress: ${t.progress || 0}%`}>
+            <div className="h-full bg-brand-blue transition-all" style={{ width: `${t.progress || 0}%` }} data-testid={`progress-bar-${t.id}`} />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="label-mono text-muted-foreground">Status</label>
+            <select data-testid={`status-select-${t.id}`} value={t.status === "blocked" ? "todo" : t.status} onChange={(e) => setStatus(e.target.value)} className={selCls}>
+              {STATUS_OPTIONS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+            </select>
+            {/* U7-05.EXP: "Set progress" tucked behind a small toggle for
+                the rare team that manages progress separately from status.
+                Default hidden -- one less dropdown for the 95% of users. */}
+            <details className="ml-1">
+              <summary className="label-mono text-muted-foreground cursor-pointer hover:text-brand-600">
+                Set % manually
+              </summary>
+              <select data-testid={`progress-select-${t.id}`} value={PROGRESS_OPTIONS.includes(t.progress) ? t.progress : 0} onChange={(e) => setProgress(e.target.value)} className={`${selCls} mt-1`}>
+                {PROGRESS_OPTIONS.map((p) => <option key={p} value={p}>{p}%</option>)}
+              </select>
+            </details>
+          </div>
         </div>
       )}
 
@@ -1129,31 +1173,67 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
       )}
 
       {!isTerminal(t) && !awaitingApproval && (
-        <div className="flex flex-wrap gap-2 mt-4">
-          {/* FUP-49: don't disable — always click-through, handler
-              shows a clear toast if evidence is missing. Silent-
-              disabled buttons were the original bug. */}
+        <div className="flex flex-wrap items-center gap-2 mt-4">
+          {/* FUP-49: don't disable -- always click-through, handler shows
+              a clear toast if evidence is missing. Silent-disabled
+              buttons were the original bug. */}
           <button onClick={complete} data-testid={`complete-${t.id}`}
             title={t.evidence_required && !hasEvidence ? "Add a photo, voice note, or file first" : "Mark as complete"}
             className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all ${t.evidence_required && !hasEvidence ? "bg-black/20 text-black" : "bg-brand-ink text-white"}`}>
             <CheckCircle size={16} weight="bold" /> Complete
           </button>
-          <button onClick={() => fileRef.current?.click()} disabled={uploading} data-testid={`photo-${t.id}`} className="flex items-center gap-2 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-black/5">
-            <Camera size={16} weight="bold" /> Photo
-          </button>
-          <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onPhoto} />
-          <button onClick={() => evidenceRef.current?.click()} disabled={uploading} data-testid={`upload-file-${t.id}`} className="flex items-center gap-2 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-black/5">
-            <FileArrowUp size={16} weight="bold" /> Upload file
-          </button>
-          <input ref={evidenceRef} type="file" className="hidden" onChange={onEvidence} />
-          <button onClick={toggleVoice} data-testid={`voice-${t.id}`} className={`flex items-center gap-2 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider transition-colors ${recording ? "bg-brand-600 text-white" : "hover:bg-black/5"}`}>
-            {recording ? <Stop size={16} weight="fill" /> : <Microphone size={16} weight="bold" />} {recording ? "Stop & send" : "Voice reply"}
-          </button>
-          {recording && (
-            <button onClick={cancelVoice} data-testid={`voice-cancel-${t.id}`} className="flex items-center gap-2 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-black/5">
-              <X size={16} weight="bold" /> Cancel
+
+          {/* U7-05.EXP: attach affordances grouped into one compact strip.
+              Was 3 separate chunky buttons ("PHOTO / UPLOAD FILE / VOICE
+              REPLY") each equal-weight to Complete -- density noise. Now
+              they share a single caption + icon-only compact buttons so
+              Complete stays visually primary and the attach set reads as
+              one concept. */}
+          <div className="flex items-center gap-1 border-l border-black/10 pl-3 ml-1">
+            <span className="label-mono text-muted-foreground mr-1 hidden sm:inline">Attach:</span>
+            <button
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+              data-testid={`photo-${t.id}`}
+              title="Attach a photo"
+              className="w-9 h-9 flex items-center justify-center border border-black hover:bg-black/5 disabled:opacity-40"
+              aria-label="Attach a photo"
+            >
+              <Camera size={16} weight="bold" />
             </button>
-          )}
+            <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onPhoto} />
+            <button
+              onClick={() => evidenceRef.current?.click()}
+              disabled={uploading}
+              data-testid={`upload-file-${t.id}`}
+              title="Upload a file"
+              className="w-9 h-9 flex items-center justify-center border border-black hover:bg-black/5 disabled:opacity-40"
+              aria-label="Upload a file"
+            >
+              <FileArrowUp size={16} weight="bold" />
+            </button>
+            <input ref={evidenceRef} type="file" className="hidden" onChange={onEvidence} />
+            <button
+              onClick={toggleVoice}
+              data-testid={`voice-${t.id}`}
+              title={recording ? "Stop and send voice reply" : "Record a voice reply"}
+              className={`w-9 h-9 flex items-center justify-center border border-black transition-colors ${recording ? "bg-brand-600 text-white" : "hover:bg-black/5"}`}
+              aria-label={recording ? "Stop recording" : "Record voice reply"}
+            >
+              {recording ? <Stop size={16} weight="fill" /> : <Microphone size={16} weight="bold" />}
+            </button>
+            {recording && (
+              <button
+                onClick={cancelVoice}
+                data-testid={`voice-cancel-${t.id}`}
+                title="Discard recording"
+                className="w-9 h-9 flex items-center justify-center border border-black hover:bg-black/5"
+                aria-label="Discard recording"
+              >
+                <X size={16} weight="bold" />
+              </button>
+            )}
+          </div>
         </div>
       )}
 

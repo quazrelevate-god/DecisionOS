@@ -10,13 +10,13 @@ import {
   ShieldWarning, Clock, FilePdf, ChatText,
 } from "@phosphor-icons/react";
 
-const inp = "w-full border border-black px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-600";
+const inp = "w-full border border-border px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-600";
 
 const CLASS_STYLE = {
   invoice: "bg-brand-blue text-white", payment: "bg-brand-blue text-white",
   purchase: "bg-purple-600 text-white", sales: "bg-green-600 text-white",
   hr: "bg-pink-600 text-white", meeting: "bg-amber-500 text-black",
-  decision: "bg-brand-ink text-white", approval: "bg-brand-600 text-white",
+  decision: "bg-primary text-primary-foreground", approval: "bg-brand-600 text-white",
   workflow: "bg-teal-600 text-white", operational_task: "bg-black/10 text-black",
   other: "bg-black/10 text-black",
 };
@@ -59,7 +59,7 @@ export function CaptureReview() {
       <div className="flex flex-wrap gap-2 mb-6">
         {STATUS_TABS.map((t) => (
           <button key={t.key} data-testid={`capture-tab-${t.key}`} onClick={() => setTab(t.key)}
-            className={`px-4 py-2 text-sm font-semibold uppercase tracking-wider border-2 border-black transition-all ${tab === t.key ? "bg-brand-ink text-white shadow-brutal-sm" : "bg-white hover:bg-black/5"}`}>
+            className={`px-4 py-2 text-sm font-medium border border-border transition-all ${tab === t.key ? "bg-primary text-primary-foreground shadow-sm" : "bg-white hover:bg-accent"}`}>
             {t.label}
           </button>
         ))}
@@ -157,14 +157,14 @@ function CaptureCard({ c, user, onChange }) {
   return (
     <div data-testid={`capture-card-${c.id}`} className="card-brutal p-4">
       <div className="flex items-start gap-3 flex-wrap">
-        <div className="w-10 h-10 shrink-0 flex items-center justify-center border-2 border-black bg-green-50">
+        <div className="w-10 h-10 shrink-0 flex items-center justify-center border border-border bg-green-50">
           {c.kind === "pdf" || c.kind === "image" ? <FilePdf size={20} weight="bold" className="text-green-600" /> : <ChatText size={20} weight="bold" className="text-green-600" />}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <Chip value={c.classification.replace("_", " ")} className={CLASS_STYLE[c.classification] || "bg-black/10 text-black"} />
-            <Chip value={`review: ${c.reviewer_role}`} className="bg-white border-black" />
-            <Chip value={c.priority} className={c.priority === "high" ? "bg-danger-600 text-white" : "bg-white border-black"} />
+            <Chip value={`review: ${c.reviewer_role}`} className="bg-white border-border" />
+            <Chip value={c.priority} className={c.priority === "high" ? "bg-danger-600 text-white" : "bg-white border-border"} />
             {c.needs_owner && <span data-testid={`capture-escalated-${c.id}`} className="inline-flex items-center gap-1 text-xs font-bold uppercase text-danger-600"><ShieldWarning size={13} weight="bold" /> Owner approval</span>}
             {c.status === "needs_attention" && <Chip value="needs attention" className="bg-amber-500 text-black" />}
             {c.auto_processed && <Chip value="auto-filed" className="bg-green-600 text-white" />}
@@ -196,7 +196,7 @@ function CaptureCard({ c, user, onChange }) {
               parts.push(pct >= 80 ? `high AI confidence (${pct}%)` : pct >= 50 ? `medium confidence (${pct}%) — worth a check` : `low confidence (${pct}%) — please verify`);
             }
             return (
-              <p data-testid={`capture-why-${c.id}`} className="text-xs text-muted-foreground mt-1 border-l-2 border-black/20 pl-2">
+              <p data-testid={`capture-why-${c.id}`} className="text-xs text-muted-foreground mt-1 border-l-2 border-border pl-2">
                 <span className="font-semibold text-foreground">Why AI routed this:</span> {parts.join(" · ")}.
               </p>
             );
@@ -207,7 +207,7 @@ function CaptureCard({ c, user, onChange }) {
           {c.attention_reason && <p className="text-xs text-amber-700 mt-1">⚠ {c.attention_reason}</p>}
           {c.escalate_reason && <p className="text-xs text-danger-600 mt-1">⚠ {c.escalate_reason}</p>}
           {isPending && purchaseBills.length > 0 && (
-            <div className="mt-3 border-2 border-black bg-brand-paper p-3" data-testid={`capture-buckets-${c.id}`}>
+            <div className="mt-3 border border-border bg-brand-paper p-3" data-testid={`capture-buckets-${c.id}`}>
               <p className="label-mono text-brand-600 mb-2">Classify purchase{purchaseBills.length > 1 ? "s" : ""} before approving</p>
               <div className="space-y-2">
                 {purchaseBills.map(({ inv, i }) => {
@@ -237,12 +237,12 @@ function CaptureCard({ c, user, onChange }) {
             <div className="mt-2">
               <p className="label-mono text-muted-foreground text-[10px] mb-1">Under review — original file</p>
               {c.kind === "image" ? (
-                <a href={`${process.env.REACT_APP_BACKEND_URL}${c.file_url}`} target="_blank" rel="noopener noreferrer" data-testid={`capture-file-${c.id}`} title="Open full image" className="inline-block border-2 border-black hover:shadow-brutal-sm transition-all">
+                <a href={`${process.env.REACT_APP_BACKEND_URL}${c.file_url}`} target="_blank" rel="noopener noreferrer" data-testid={`capture-file-${c.id}`} title="Open full image" className="inline-block border border-border transition-all">
                   <img src={`${process.env.REACT_APP_BACKEND_URL}${c.file_url}`} alt={c.filename || "attachment"} className="h-28 w-auto object-cover" />
                 </a>
               ) : (
                 <a href={`${process.env.REACT_APP_BACKEND_URL}${c.file_url}`} target="_blank" rel="noopener noreferrer" data-testid={`capture-file-${c.id}`}
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider border-2 border-black px-3 py-1.5 hover:bg-brand-yellow transition-colors">
+                  className="inline-flex items-center gap-1.5 text-xs font-medium border border-border px-3 py-1.5 hover:bg-accent transition-colors">
                   <FilePdf size={14} weight="bold" /> Open file{c.filename ? ` · ${c.filename}` : ""}
                 </a>
               )}
@@ -252,7 +252,7 @@ function CaptureCard({ c, user, onChange }) {
       </div>
 
       {edit && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3 border-t border-black/20 pt-3" data-testid={`capture-edit-${c.id}`}>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3 border-t border-border/20 pt-3" data-testid={`capture-edit-${c.id}`}>
           <label className="block"><span className="label-mono text-muted-foreground text-[10px]">Type</span>
             <input className={inp} value={form.classification} onChange={(e) => setForm({ ...form, classification: e.target.value })} /></label>
           <label className="block"><span className="label-mono text-muted-foreground text-[10px]">Reviewer role</span>
@@ -278,23 +278,23 @@ function CaptureCard({ c, user, onChange }) {
       )}
 
       {isPending && (
-        <div className="flex flex-wrap gap-2 mt-3 border-t border-black/20 pt-3">
+        <div className="flex flex-wrap gap-2 mt-3 border-t border-border/20 pt-3">
           {edit ? (
             <>
-              <button data-testid={`capture-save-${c.id}`} disabled={busy} onClick={saveEdit} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border-2 border-black transition-all hover:shadow-brutal-sm disabled:opacity-50 bg-brand-ink text-white flex items-center gap-1"><PencilSimple size={14} weight="bold" /> Save</button>
-              <button onClick={() => setEdit(false)} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border-2 border-black transition-all hover:shadow-brutal-sm disabled:opacity-50 bg-white flex items-center gap-1">Cancel</button>
+              <button data-testid={`capture-save-${c.id}`} disabled={busy} onClick={saveEdit} className="px-3 py-1.5 text-xs font-medium border border-border transition-all disabled:opacity-50 bg-primary text-primary-foreground flex items-center gap-1"><PencilSimple size={14} weight="bold" /> Save</button>
+              <button onClick={() => setEdit(false)} className="px-3 py-1.5 text-xs font-medium border border-border transition-all disabled:opacity-50 bg-white flex items-center gap-1">Cancel</button>
             </>
           ) : (
             <>
               <button data-testid={`capture-approve-${c.id}`} disabled={busy || blockedByEscalation || anyUnclassified}
                 title={blockedByEscalation ? "Requires Owner approval" : anyUnclassified ? "Classify the purchase first" : ""}
-                onClick={approve} className={`px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border-2 border-black transition-all hover:shadow-brutal-sm disabled:opacity-50 flex items-center gap-1 ${blockedByEscalation || anyUnclassified ? "bg-black/20 text-black/50 cursor-not-allowed" : "bg-green-600 text-white"}`}>
+                onClick={approve} className={`px-3 py-1.5 text-xs font-medium border border-border transition-all disabled:opacity-50 flex items-center gap-1 ${blockedByEscalation || anyUnclassified ? "bg-black/20 text-black/50 cursor-not-allowed" : "bg-green-600 text-white"}`}>
                 <CheckCircle size={14} weight="bold" /> Approve
               </button>
-              <button data-testid={`capture-edit-btn-${c.id}`} disabled={busy} onClick={() => setEdit(true)} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border-2 border-black transition-all hover:shadow-brutal-sm disabled:opacity-50 bg-white flex items-center gap-1"><PencilSimple size={14} weight="bold" /> Edit</button>
-              <button data-testid={`capture-reassign-${c.id}`} disabled={busy} onClick={reassign} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border-2 border-black transition-all hover:shadow-brutal-sm disabled:opacity-50 bg-white flex items-center gap-1"><ArrowsClockwise size={14} weight="bold" /> Reassign</button>
-              <button data-testid={`capture-clarify-${c.id}`} disabled={busy} onClick={clarify} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border-2 border-black transition-all hover:shadow-brutal-sm disabled:opacity-50 bg-white flex items-center gap-1"><Question size={14} weight="bold" /> Clarify</button>
-              <button data-testid={`capture-reject-${c.id}`} disabled={busy} onClick={reject} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border-2 border-black transition-all hover:shadow-brutal-sm disabled:opacity-50 bg-white text-danger-600 flex items-center gap-1"><XCircle size={14} weight="bold" /> Reject</button>
+              <button data-testid={`capture-edit-btn-${c.id}`} disabled={busy} onClick={() => setEdit(true)} className="px-3 py-1.5 text-xs font-medium border border-border transition-all disabled:opacity-50 bg-white flex items-center gap-1"><PencilSimple size={14} weight="bold" /> Edit</button>
+              <button data-testid={`capture-reassign-${c.id}`} disabled={busy} onClick={reassign} className="px-3 py-1.5 text-xs font-medium border border-border transition-all disabled:opacity-50 bg-white flex items-center gap-1"><ArrowsClockwise size={14} weight="bold" /> Reassign</button>
+              <button data-testid={`capture-clarify-${c.id}`} disabled={busy} onClick={clarify} className="px-3 py-1.5 text-xs font-medium border border-border transition-all disabled:opacity-50 bg-white flex items-center gap-1"><Question size={14} weight="bold" /> Clarify</button>
+              <button data-testid={`capture-reject-${c.id}`} disabled={busy} onClick={reject} className="px-3 py-1.5 text-xs font-medium border border-border transition-all disabled:opacity-50 bg-white text-danger-600 flex items-center gap-1"><XCircle size={14} weight="bold" /> Reject</button>
             </>
           )}
           {blockedByEscalation && <span className="text-xs text-danger-600 self-center">Waiting for Owner — you can still edit or reassign.</span>}

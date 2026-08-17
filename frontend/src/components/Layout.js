@@ -54,7 +54,10 @@ const NAV = [
   // ops it have to show the individuals person metrics'.
   { to: "/operating-score", label: "Ops", tkey: "ops", icon: Gauge, testid: "nav-ops" },
   { to: "/crm", label: "CRM", tkey: "crm", icon: AddressBook, testid: "nav-crm", perm: "people" },
-  { to: "/team", label: "Team", tkey: "team", icon: UsersThree, testid: "nav-team", perms: ["team_manage"] },
+  // U7-09.TEAM (2026-08-17): Team nav visible to every user. Non-perm
+  // viewers get a read-only roster; owner + team_manage users get the
+  // edit affordances inside the page.
+  { to: "/team", label: "Team", tkey: "team", icon: UsersThree, testid: "nav-team" },
   // Epic 2 Sprint 5 (E2-32): 'Company Brain' -> 'Dex' (single AI persona).
   // Route stays /brain for bookmark safety; /dex is an alias in App.js.
   { to: "/brain", label: "Dex", tkey: "brain", icon: BrainIcon, testid: "nav-brain", perm: "brain" },

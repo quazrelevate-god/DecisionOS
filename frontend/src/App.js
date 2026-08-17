@@ -160,9 +160,21 @@ function App() {
             <Route path="/finance" element={<Protected perms={["ledger", "finance", "data_input"]}><Ledger /></Protected>} />
             <Route path="/ledger" element={<Navigate to="/finance" replace />} />
             <Route path="/ask" element={<Navigate to="/brain" replace />} />
-            {/* Epic 2 Sprint A — E2-01: /team is now a real page (Employees list)
-                gated on team_manage. Owner auto-passes via the all-perms shortcut. */}
-            <Route path="/team" element={<Protected perms={["team_manage"]}><TeamPage /></Protected>} />
+            {/* U7-09.TEAM (2026-08-17): Team is now visible to any authenticated
+                user. Founder ask: 'team section can be show to all the team but
+                as view and owner and given access to people only has the edit
+                section'. Edit affordances inside TeamPanel already gate on
+                hasPerm('team_manage'); non-perm users just see a read-only
+                roster. */}
+            <Route path="/team" element={<Protected><TeamPage /></Protected>} />
+            {/* U7-09.PEOPLE (2026-08-17): unified People page -- open to any
+                authenticated user. Employees / Customers / Vendors all
+                visible; edit affordances gated per-tab inside the page
+                (team_manage for Employees, people for Customers+Vendors).
+                Founder ask: 'people section can be show to all the people
+                but as view and owner and given access to people only has
+                the edit section, other will have the view section'. */}
+            <Route path="/people" element={<Protected><People /></Protected>} />
             {/* MPWA-04: component harness, development only. */}
             {process.env.NODE_ENV !== "production" && (
               <Route path="/__mobile-kit" element={<Protected><MobileKitchenSink /></Protected>} />

@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api, { formatApiError } from "../lib/api";
 import { useIsMobile } from "../hooks/useIsMobile";
 import TeamMobile from "./mobile/TeamMobile";
 import { useAuth } from "../context/AuthContext";
-import { Chip } from "../components/common";import { PERMISSIONS, defaultPermsForRole, hasPerm, userPerms } from "../lib/perms";
+import { Chip } from "../components/common";
+import { PERMISSIONS, defaultPermsForRole, hasPerm, userPerms } from "../lib/perms";
 import { toast } from "sonner";
-import { UserPlus, PencilSimple, ShieldCheck, Check, LinkSimple, Copy, WhatsappLogo } from "@phosphor-icons/react";
+import { UserPlus, PencilSimple, ShieldCheck, Check, LinkSimple, Copy, WhatsappLogo, Eye, MagnifyingGlass, User } from "@phosphor-icons/react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../components/ui/dialog";
 
 const inp = "w-full border border-black px-3 py-2 text-sm font-mono focus:outline-none focus:shadow-brutal-sm";
@@ -220,7 +221,7 @@ export default function TeamPage() {
   );
 }
 
-export function TeamPanel() {
+export function TeamPanel({ readOnly = false } = {}) {
   const { user, tenant } = useAuth();
   const qc = useQueryClient();
   const isOwner = user?.role === "owner";
@@ -228,7 +229,12 @@ export function TeamPanel() {
   const [invite, setInvite] = useState(null);
   const { data } = useQuery({ queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data) });
   const { data: attendance } = useQuery({ queryKey: ["attendance"], queryFn: () => api.get("/attendance").then((r) => r.data) });
-  const canManageTeam = hasPerm(user, "team_manage");
+  // U7-09.PEOPLE (2026-08-17): readOnly prop lets People page render this
+  // as view-only for users without team_manage permission. Founder ask:
+  // 'people section can be show to all the people but as view and owner
+  // and given access to people only has the edit section, other will have
+  // the view section'.
+  const canManageTeam = !readOnly && hasPerm(user, "team_manage");
   const absentIds = new Set((attendance || []).filter((a) => a.status === "absent").map((a) => a.user_id));
   const refresh = () => qc.invalidateQueries({ queryKey: ["users"] });
 
@@ -248,51 +254,171 @@ export function TeamPanel() {
     }
   };
 
+  // U7-09.TEAM: search across name/email/role. Small feature but pays for
+  // itself the moment a team crosses ~15 people.
+  const [query, setQuery] = useState("");
+  const members = data || [];
+
+  // U7-09.TEAM: group members by role -- owner first, then tenant roles in
+  // declared order. A flat list of 30 people mixes owners and ICs; grouping
+  // makes "who's who" scannable in one pass.
+  const grouped = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const filtered = q
+      ? members.filter((u) => (u.name || "").toLowerCase().includes(q)
+          || (u.email || "").toLowerCase().includes(q)
+          || (u.role || "").toLowerCase().includes(q))
+      : members;
+    const groups = new Map();
+    filtered.forEach((u) => {
+      const key = u.role || "unassigned";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(u);
+    });
+    // Order: owner first, then tenant.roles order, then anything else alphabetical.
+    const order = ["owner", ...(tenant?.roles || []).map((r) => r.key)];
+    const seen = new Set();
+    const out = [];
+    order.forEach((k) => {
+      if (groups.has(k) && !seen.has(k)) {
+        out.push([k, groups.get(k)]);
+        seen.add(k);
+      }
+    });
+    [...groups.entries()]
+      .filter(([k]) => !seen.has(k))
+      .sort(([a], [b]) => a.localeCompare(b))
+      .forEach((entry) => out.push(entry));
+    return out;
+  }, [members, query, tenant]);
+
+  const roleLabel = (key) =>
+    key === "owner" ? "Owner"
+    : (tenant?.roles || []).find((r) => r.key === key)?.label || key;
+
   return (
     <div>
       <InviteLinkModal info={invite} onClose={() => setInvite(null)} />
-      {canManageTeam && (
-        <div className="flex justify-end mb-6">
-          <MemberDialog roleOptions={roleOptions} members={data || []} isOwner={isOwner} onSaved={refresh} onInvite={setInvite}
-            trigger={<button data-testid="add-user-button" className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all"><UserPlus size={16} weight="bold" /> Add Member</button>} />
+
+      {/* U7-09.TEAM: view-only banner. Non-perm users see the roster but
+          can't edit; we tell them why + who to ask, so it doesn't look
+          like a broken page. Owner + team_manage users skip this. */}
+      {!canManageTeam && !readOnly && (
+        <div className="border-2 border-black bg-brand-yellow/40 px-4 py-3 mb-6 flex items-start gap-3" data-testid="team-view-only-banner">
+          <Eye size={18} weight="bold" className="text-brand-600 shrink-0 mt-0.5" />
+          <div className="flex-1 text-sm">
+            <p className="font-semibold uppercase tracking-tight">Read-only view</p>
+            <p className="text-muted-foreground mt-0.5">
+              You can see who's on the team and their roles. To add members, edit access, or manage attendance, ask the owner to grant you the <strong>team_manage</strong> permission.
+            </p>
+          </div>
         </div>
       )}
 
-      {/* Company profile & products now live in the top-bar company icon dialog */}
-
-      <h2 className="font-heading text-2xl font-extrabold uppercase tracking-tight mb-4">Members</h2>
-      <div className="card-brutal divide-y divide-black/10">
-        {(data || []).map((u) => (
-          <div key={u.id} data-testid={`team-member-${u.id}`} className="p-4 flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-brand-ink text-white flex items-center justify-center font-heading font-black">{u.name?.[0]?.toUpperCase()}</div>
-              <div>
-                <p className="font-semibold text-sm">{u.name}</p>
-                <p className="text-xs text-muted-foreground font-mono">{u.email}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 flex-wrap justify-end">
-              {u.role !== "owner" && (
-                <span className="label-mono text-muted-foreground" data-testid={`member-access-count-${u.id}`}>{userPerms(u).length} access</span>
-              )}
-              <Chip value={u.role} className={u.role === "owner" ? "bg-brand-600 text-white" : "bg-brand-blue text-white"} />
-              {absentIds.has(u.id) && <Chip value="absent" className="bg-black text-white" data-testid={`absent-badge-${u.id}`} />}
-              {canManageTeam && (u.role !== "owner" || isOwner) && (
-                <MemberDialog roleOptions={roleOptions} initial={u} members={data || []} isOwner={isOwner} onSaved={refresh}
-                  trigger={<button data-testid={`edit-access-${u.id}`} className="flex items-center gap-1 text-xs uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-blue hover:text-white transition-colors"><PencilSimple size={12} weight="bold" /> Access</button>} />
-              )}
-              {canManageTeam && u.role !== "owner" && (
-                <>
-                  {u.phone && (
-                    <button onClick={() => getInviteLink(u)} data-testid={`invite-link-${u.id}`} className="flex items-center gap-1 text-xs uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-600 hover:text-white transition-colors"><LinkSimple size={12} weight="bold" /> Invite</button>
-                  )}
-                  <button onClick={() => toggleAbsent(u)} data-testid={`toggle-absent-${u.id}`} className="text-xs uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-ink hover:text-white transition-colors">
-                    {absentIds.has(u.id) ? "Mark present" : "Mark absent"}
-                  </button>
-                </>
-              )}
-            </div>
+      {/* Actions + search row. Owners/managers see Add Member; everyone
+          sees the search box once the team grows. */}
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-6">
+        {members.length >= 5 ? (
+          <div className="relative flex-1 max-w-sm">
+            <MagnifyingGlass size={14} weight="bold" className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search name, email, role..."
+              data-testid="team-search"
+              className="w-full border border-black pl-9 pr-3 py-2 text-sm focus:outline-none focus:shadow-brutal-sm"
+            />
           </div>
+        ) : <div />}
+        {canManageTeam && (
+          <MemberDialog roleOptions={roleOptions} members={members} isOwner={isOwner} onSaved={refresh} onInvite={setInvite}
+            trigger={<button data-testid="add-user-button" className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all"><UserPlus size={16} weight="bold" /> Add Member</button>} />
+        )}
+      </div>
+
+      <div className="flex items-center gap-3 mb-4">
+        <h2 className="font-heading text-2xl font-extrabold uppercase tracking-tight">Members</h2>
+        <span className="label-mono text-muted-foreground">
+          {query ? `${grouped.reduce((n, [, us]) => n + us.length, 0)} of ${members.length}` : `${members.length} total`}
+        </span>
+      </div>
+
+      {grouped.length === 0 && (
+        <div className="card-brutal p-8 text-center" data-testid="team-empty">
+          <p className="text-sm text-muted-foreground">
+            {query ? `Nobody matches "${query}"` : "No team members yet."}
+          </p>
+        </div>
+      )}
+
+      {/* U7-09.TEAM: grouped-by-role sections. Each section carries the
+          role label + count so an owner scanning "how many sales do I
+          have" answers in a second. */}
+      <div className="space-y-6" data-testid="team-groups">
+        {grouped.map(([roleKey, roleMembers]) => (
+          <section key={roleKey} data-testid={`team-role-${roleKey}`}>
+            <div className="flex items-center gap-2 mb-2">
+              <p className="font-heading font-extrabold uppercase tracking-tight text-sm">
+                {roleLabel(roleKey)}
+              </p>
+              <span className="label-mono text-muted-foreground">{roleMembers.length}</span>
+            </div>
+            <div className="card-brutal divide-y divide-black/10">
+              {roleMembers.map((u) => {
+                const isMe = u.id === user?.id;
+                const accessCount = u.role === "owner" ? PERMISSIONS.length : userPerms(u).length;
+                return (
+                  <div
+                    key={u.id}
+                    data-testid={`team-member-${u.id}`}
+                    className={`p-4 flex items-center justify-between gap-4 flex-wrap ${isMe ? "bg-brand-yellow/20" : ""}`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className={`w-10 h-10 shrink-0 flex items-center justify-center font-heading font-black ${u.role === "owner" ? "bg-brand-600 text-white" : "bg-brand-ink text-white"}`}>
+                        {u.name?.[0]?.toUpperCase() || <User size={16} weight="bold" />}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm flex items-center gap-2 flex-wrap">
+                          <span className="truncate">{u.name}</span>
+                          {isMe && (
+                            <span className="label-mono text-brand-600 font-bold shrink-0" data-testid={`is-you-${u.id}`}>
+                              — you
+                            </span>
+                          )}
+                          {absentIds.has(u.id) && <Chip value="absent" className="bg-black text-white" data-testid={`absent-badge-${u.id}`} />}
+                        </p>
+                        <p className="text-xs text-muted-foreground font-mono truncate">{u.email}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap justify-end">
+                      <span
+                        className="label-mono text-muted-foreground"
+                        data-testid={`member-access-count-${u.id}`}
+                        title={u.role === "owner" ? "Owner has all permissions" : "Number of permissions granted"}
+                      >
+                        {u.role === "owner" ? "full access" : `${accessCount} access`}
+                      </span>
+                      {canManageTeam && (u.role !== "owner" || isOwner) && (
+                        <MemberDialog roleOptions={roleOptions} initial={u} members={members} isOwner={isOwner} onSaved={refresh}
+                          trigger={<button data-testid={`edit-access-${u.id}`} className="flex items-center gap-1 text-xs uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-blue hover:text-white transition-colors"><PencilSimple size={12} weight="bold" /> Access</button>} />
+                      )}
+                      {canManageTeam && u.role !== "owner" && (
+                        <>
+                          {u.phone && (
+                            <button onClick={() => getInviteLink(u)} data-testid={`invite-link-${u.id}`} className="flex items-center gap-1 text-xs uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-600 hover:text-white transition-colors"><LinkSimple size={12} weight="bold" /> Invite</button>
+                          )}
+                          <button onClick={() => toggleAbsent(u)} data-testid={`toggle-absent-${u.id}`} className="text-xs uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-ink hover:text-white transition-colors">
+                            {absentIds.has(u.id) ? "Mark present" : "Mark absent"}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
         ))}
       </div>
     </div>

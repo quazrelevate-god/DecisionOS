@@ -46,16 +46,23 @@ const Stat = ({ label, value, accent, testid }) => (
   </div>
 );
 
-const Section = ({ icon: Icon, title, count, children }) => (
-  <div className="mb-8">
-    <div className="flex items-center gap-2 mb-3">
-      <Icon size={18} weight="bold" className="text-brand-600" />
-      <h2 className="font-heading text-xl font-extrabold uppercase tracking-tight">{title}</h2>
-      {count != null && <span className="label-mono text-muted-foreground">({count})</span>}
+// U7-07 (2026-08-17): Section now supports `hideWhenEmpty` -- if the
+// count is 0 AND this flag is set, render nothing. Killed "No payments
+// recorded" style empty sections that were pure noise on healthy accounts.
+// Sections with an inline logger (Recent Activity) skip this flag.
+const Section = ({ icon: Icon, title, count, children, hideWhenEmpty = false }) => {
+  if (hideWhenEmpty && !count) return null;
+  return (
+    <div className="mb-8">
+      <div className="flex items-center gap-2 mb-3">
+        <Icon size={18} weight="bold" className="text-brand-600" />
+        <h2 className="font-heading text-xl font-extrabold uppercase tracking-tight">{title}</h2>
+        {count != null && <span className="label-mono text-muted-foreground">({count})</span>}
+      </div>
+      {children}
     </div>
-    {children}
-  </div>
-);
+  );
+};
 
 function Table({ head, rows }) {
   return (
@@ -133,8 +140,25 @@ export default function ContactProfile() {
     );
   }
 
-  const { contact: c, summary, invoices, payments, complaints, pending_deliveries, workflows, follow_ups, decisions, price_history, ai_relationship } = data;
+  const { contact: c, summary, invoices: rawInvoices, payments: rawPayments, complaints: rawComplaints, pending_deliveries, workflows: rawWorkflows, follow_ups, decisions, price_history, ai_relationship } = data;
   const isVendor = c.type === "vendor";
+  // U7-07 (2026-08-17): dedupe by id on the frontend. Backend was
+  // returning duplicate complaint rows (visible in the Anand Fabrics
+  // profile -- same "shade mismatch" listed twice). Belt-and-braces
+  // dedupe until the backend fix lands.
+  const dedupe = (arr) => {
+    if (!Array.isArray(arr)) return [];
+    const seen = new Set();
+    return arr.filter((x) => {
+      if (!x?.id || seen.has(x.id)) return false;
+      seen.add(x.id);
+      return true;
+    });
+  };
+  const invoices = dedupe(rawInvoices);
+  const payments = dedupe(rawPayments);
+  const complaints = dedupe(rawComplaints);
+  const workflows = dedupe(rawWorkflows);
   const cur = invoices?.[0]?.currency || "INR";
   const rel = ai_relationship;
 
@@ -157,8 +181,10 @@ export default function ContactProfile() {
 
   return (
     <div>
-      <button onClick={() => navigate("/contacts")} data-testid="profile-back" className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider mb-4 hover:text-brand-600 transition-colors">
-        <ArrowLeft size={16} weight="bold" /> Back to People
+      {/* U7-07: label matches the nav item ("CRM") + route lands on
+          /crm directly instead of hitting the redirect. */}
+      <button onClick={() => navigate("/crm")} data-testid="profile-back" className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider mb-4 hover:text-brand-600 transition-colors">
+        <ArrowLeft size={16} weight="bold" /> Back to CRM
       </button>
 
       {/* Header */}
@@ -185,26 +211,44 @@ export default function ContactProfile() {
         <Stat testid="stat-complaints" label="Open Complaints" value={summary.open_complaints} accent={summary.open_complaints > 0 ? "text-purple-600" : ""} />
       </div>
 
-      {/* AI Relationship Intelligence */}
-      <div className="card-brutal p-6 mb-8" data-testid="relationship-card">
-        <div className="flex items-center justify-between gap-4 flex-wrap mb-4">
-          <div className="flex items-center gap-2">
-            {/* E2-40: consistent persona voice marker on the AI card header. */}
+      {/* U7-07 (2026-08-17): AI Relationship Intelligence -- when
+          NOT scored, was a big card just saying "no assessment yet".
+          Now a subtle inline prompt when empty; expands into the full
+          card only when there's actually a score to show. */}
+      {!rel ? (
+        <div
+          className="border border-black/15 px-4 py-3 mb-8 flex items-center justify-between gap-3 flex-wrap bg-brand-yellow/15"
+          data-testid="relationship-card"
+        >
+          <div className="flex items-center gap-2 text-sm">
             <DexBadge />
-            <h2 className="font-heading text-xl font-extrabold uppercase tracking-tight">Relationship Intelligence</h2>
+            <span>Analyze this relationship's health &amp; risk with AI.</span>
           </div>
           <button
             onClick={() => rescore.mutate()}
             disabled={rescore.isPending}
             data-testid="rescore-contact-btn"
-            className="flex items-center gap-2 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider bg-brand-yellow hover:shadow-brutal-sm transition-all disabled:opacity-50"
+            className="flex items-center gap-1.5 border border-black px-3 py-1.5 text-xs font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors disabled:opacity-50"
           >
-            <Sparkle size={16} weight="bold" /> {rescore.isPending ? "Scoring…" : rel ? "Re-score" : "Score with AI"}
+            <Sparkle size={14} weight="bold" /> {rescore.isPending ? "Scoring…" : "Score with AI"}
           </button>
         </div>
-        {!rel ? (
-          <p className="text-sm text-muted-foreground">No AI assessment yet. Click "Score with AI" to analyze this relationship's health and risk.</p>
-        ) : (
+      ) : (
+        <div className="card-brutal p-6 mb-8" data-testid="relationship-card">
+          <div className="flex items-center justify-between gap-4 flex-wrap mb-4">
+            <div className="flex items-center gap-2">
+              <DexBadge />
+              <h2 className="font-heading text-xl font-extrabold uppercase tracking-tight">Relationship Intelligence</h2>
+            </div>
+            <button
+              onClick={() => rescore.mutate()}
+              disabled={rescore.isPending}
+              data-testid="rescore-contact-btn"
+              className="flex items-center gap-2 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider bg-brand-yellow hover:shadow-brutal-sm transition-all disabled:opacity-50"
+            >
+              <Sparkle size={16} weight="bold" /> {rescore.isPending ? "Scoring…" : "Re-score"}
+            </button>
+          </div>
           <div>
             <div className="flex flex-wrap gap-8">
               <ScoreBox label="Relationship" value={rel.relationship_score} Icon={Heart} good />
@@ -219,8 +263,8 @@ export default function ContactProfile() {
               </div>
             )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* E2-08: Activity timeline. Small logger + list. Owner + sales
           may log; anyone with finance perm can view. */}
@@ -281,64 +325,58 @@ export default function ContactProfile() {
         )}
       </Section>
 
-      {/* E2-07: full workflow feed for this contact. Every workflow --
-          not just pending_deliveries -- so completed/cancelled ones are
-          also visible in context. */}
-      <Section icon={FlowArrow} title="Workflows" count={(workflows || []).length}>
-        {(!workflows || workflows.length === 0) ? (
-          <p className="text-sm text-muted-foreground">No workflows linked yet.</p>
-        ) : (
-          <div className="space-y-2">
-            {workflows.map((w) => (
-              <div key={w.id} data-testid={`crm-workflow-${w.id}`} className="border border-black bg-white p-3 flex items-center justify-between gap-2">
-                <div>
-                  <p className="text-sm font-semibold">{w.title || "(untitled)"}</p>
-                  <p className="text-xs text-muted-foreground font-mono">{w.type} · created {timeAgo(w.created_at)}</p>
-                </div>
-                <Chip value={w.stage || "unknown"} />
+      {/* U7-07: display-only sections use hideWhenEmpty. Was rendering
+          an "empty state" per section (No workflows, No payments, No
+          complaints, No linked decisions, etc.) -- that turned a
+          healthy new contact into 6 stacked "nothing here" bands.
+          Now: hidden when empty. Section header only appears when
+          there's actually data to show. */}
+
+      <Section icon={FlowArrow} title="Workflows" count={workflows.length} hideWhenEmpty>
+        <div className="space-y-2">
+          {workflows.map((w) => (
+            <div key={w.id} data-testid={`crm-workflow-${w.id}`} className="border border-black bg-white p-3 flex items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-semibold">{w.title || "(untitled)"}</p>
+                <p className="text-xs text-muted-foreground font-mono">{w.type} · created {timeAgo(w.created_at)}</p>
               </div>
-            ))}
-          </div>
-        )}
+              <Chip value={w.stage || "unknown"} />
+            </div>
+          ))}
+        </div>
       </Section>
 
-      <Section icon={Receipt} title={isVendor ? "Purchase Bills" : "Sales Bills"} count={invoices.length}>
-        {invoices.length === 0 ? <p className="text-sm text-muted-foreground">No bills recorded.</p> : (
-          <Table head={["Number", "Amount", "Date", "Due", "Status"]} rows={invoices.map((inv) => (
-            <tr key={inv.id} data-testid={`profile-invoice-${inv.id}`} className="border-t border-black/10">
-              <td className="px-3 py-2 font-mono">{inv.number || "—"}</td>
-              <td className="px-3 py-2 font-semibold">{money(inv.amount, inv.currency)}</td>
-              <td className="px-3 py-2 font-mono text-xs">{inv.date || "—"}</td>
-              <td className="px-3 py-2 font-mono text-xs">{inv.due_date || "—"}</td>
-              <td className="px-3 py-2"><Chip value={inv.status} /></td>
-            </tr>
-          ))} />
-        )}
+      <Section icon={Receipt} title={isVendor ? "Purchase Bills" : "Sales Bills"} count={invoices.length} hideWhenEmpty>
+        <Table head={["Number", "Amount", "Date", "Due", "Status"]} rows={invoices.map((inv) => (
+          <tr key={inv.id} data-testid={`profile-invoice-${inv.id}`} className="border-t border-black/10">
+            <td className="px-3 py-2 font-mono">{inv.number || "—"}</td>
+            <td className="px-3 py-2 font-semibold">{money(inv.amount, inv.currency)}</td>
+            <td className="px-3 py-2 font-mono text-xs">{inv.date || "—"}</td>
+            <td className="px-3 py-2 font-mono text-xs">{inv.due_date || "—"}</td>
+            <td className="px-3 py-2"><Chip value={inv.status} /></td>
+          </tr>
+        ))} />
       </Section>
 
-      <Section icon={CurrencyCircleDollar} title="Payments" count={payments.length}>
-        {payments.length === 0 ? <p className="text-sm text-muted-foreground">No payments recorded.</p> : (
-          <Table head={["Direction", "Amount", "Method", "Reference", "Date"]} rows={payments.map((p) => (
-            <tr key={p.id} data-testid={`profile-payment-${p.id}`} className="border-t border-black/10">
-              <td className="px-3 py-2"><Chip value={p.direction === "in" ? "received" : "paid"} className={p.direction === "in" ? "bg-brand-blue text-white" : "bg-brand-yellow text-black"} /></td>
-              <td className="px-3 py-2 font-semibold">{money(p.amount, p.currency)}</td>
-              <td className="px-3 py-2">{p.method || "—"}</td>
-              <td className="px-3 py-2 font-mono text-xs">{p.reference || "—"}</td>
-              <td className="px-3 py-2 font-mono text-xs">{p.date || "—"}</td>
-            </tr>
-          ))} />
-        )}
+      <Section icon={CurrencyCircleDollar} title="Payments" count={payments.length} hideWhenEmpty>
+        <Table head={["Direction", "Amount", "Method", "Reference", "Date"]} rows={payments.map((p) => (
+          <tr key={p.id} data-testid={`profile-payment-${p.id}`} className="border-t border-black/10">
+            <td className="px-3 py-2"><Chip value={p.direction === "in" ? "received" : "paid"} className={p.direction === "in" ? "bg-brand-blue text-white" : "bg-brand-yellow text-black"} /></td>
+            <td className="px-3 py-2 font-semibold">{money(p.amount, p.currency)}</td>
+            <td className="px-3 py-2">{p.method || "—"}</td>
+            <td className="px-3 py-2 font-mono text-xs">{p.reference || "—"}</td>
+            <td className="px-3 py-2 font-mono text-xs">{p.date || "—"}</td>
+          </tr>
+        ))} />
       </Section>
 
       {isVendor && (
-        <Section icon={Truck} title="Pending Deliveries" count={pending_deliveries.length}>
-          {pending_deliveries.length === 0 ? <p className="text-sm text-muted-foreground">Nothing pending.</p> : (
-            <div className="space-y-2">{pending_deliveries.map((w) => (
-              <div key={w.id} className="border border-black bg-white p-3 flex items-center justify-between gap-2">
-                <span className="text-sm font-semibold">{w.title}</span><Chip value={w.stage} />
-              </div>
-            ))}</div>
-          )}
+        <Section icon={Truck} title="Pending Deliveries" count={pending_deliveries.length} hideWhenEmpty>
+          <div className="space-y-2">{pending_deliveries.map((w) => (
+            <div key={w.id} className="border border-black bg-white p-3 flex items-center justify-between gap-2">
+              <span className="text-sm font-semibold">{w.title}</span><Chip value={w.stage} />
+            </div>
+          ))}</div>
         </Section>
       )}
 
@@ -354,38 +392,32 @@ export default function ContactProfile() {
         </Section>
       )}
 
-      <Section icon={CheckSquare} title="Follow-ups & Tasks" count={follow_ups.length}>
-        {follow_ups.length === 0 ? <p className="text-sm text-muted-foreground">No follow-ups.</p> : (
-          <div className="space-y-2">{follow_ups.map((t) => (
-            <div key={t.id} className="border border-black bg-white p-3 flex items-center justify-between gap-2">
-              <span className="text-sm">{t.title}</span>
-              <div className="flex gap-1.5">{t.assignee_role && <Chip value={t.assignee_role} className="bg-white" />}<Chip value={t.status} /></div>
-            </div>
-          ))}</div>
-        )}
+      <Section icon={CheckSquare} title="Follow-ups & Tasks" count={follow_ups.length} hideWhenEmpty>
+        <div className="space-y-2">{follow_ups.map((t) => (
+          <div key={t.id} className="border border-black bg-white p-3 flex items-center justify-between gap-2">
+            <span className="text-sm">{t.title}</span>
+            <div className="flex gap-1.5">{t.assignee_role && <Chip value={t.assignee_role} className="bg-white" />}<Chip value={t.status} /></div>
+          </div>
+        ))}</div>
       </Section>
 
-      <Section icon={Warning} title="Complaints" count={complaints.length}>
-        {complaints.length === 0 ? <p className="text-sm text-muted-foreground">No complaints logged.</p> : (
-          <div className="space-y-2">{complaints.map((cp) => (
-            <div key={cp.id} data-testid={`profile-complaint-${cp.id}`} className="border border-black bg-white p-3">
-              <div className="flex items-center gap-2 mb-1"><Chip value={cp.severity} /><Chip value={cp.status} /></div>
-              <p className="text-sm">{cp.text}</p>
-            </div>
-          ))}</div>
-        )}
+      <Section icon={Warning} title="Complaints" count={complaints.length} hideWhenEmpty>
+        <div className="space-y-2">{complaints.map((cp) => (
+          <div key={cp.id} data-testid={`profile-complaint-${cp.id}`} className="border border-black bg-white p-3">
+            <div className="flex items-center gap-2 mb-1"><Chip value={cp.severity} /><Chip value={cp.status} /></div>
+            <p className="text-sm">{cp.text}</p>
+          </div>
+        ))}</div>
       </Section>
 
-      <Section icon={Brain} title="Linked Decisions" count={decisions.length}>
-        {decisions.length === 0 ? <p className="text-sm text-muted-foreground">No linked decisions.</p> : (
-          <div className="space-y-2">{decisions.map((d) => (
-            <div key={d.id} className="border border-black bg-white p-3">
-              <div className="flex items-center gap-2 mb-1"><Chip value={d.status} />{d.dtype && <Chip value={d.dtype} className="bg-brand-blue text-white" />}</div>
-              <p className="text-sm font-semibold">{d.title}</p>
-              {d.summary && <p className="text-xs text-muted-foreground">{d.summary}</p>}
-            </div>
-          ))}</div>
-        )}
+      <Section icon={Brain} title="Linked Decisions" count={decisions.length} hideWhenEmpty>
+        <div className="space-y-2">{decisions.map((d) => (
+          <div key={d.id} className="border border-black bg-white p-3">
+            <div className="flex items-center gap-2 mb-1"><Chip value={d.status} />{d.dtype && <Chip value={d.dtype} className="bg-brand-blue text-white" />}</div>
+            <p className="text-sm font-semibold">{d.title}</p>
+            {d.summary && <p className="text-xs text-muted-foreground">{d.summary}</p>}
+          </div>
+        ))}</div>
       </Section>
     </div>
   );

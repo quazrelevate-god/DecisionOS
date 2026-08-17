@@ -398,10 +398,14 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
 }
 
 const PRIORITY_AXES = [
-  { key: "business_impact", label: "Impact", color: "bg-brand-blue" },
-  { key: "revenue", label: "Revenue", color: "bg-green-600" },
-  { key: "risk", label: "Risk", color: "bg-brand-600" },
-  { key: "urgency", label: "Urgency", color: "bg-orange-500" },
+  { key: "business_impact", label: "Impact", color: "bg-brand-blue",
+    tip: "How much this moves the business -- customer relationship weight, workflow blockage, cross-team dependencies." },
+  { key: "revenue", label: "Revenue", color: "bg-green-600",
+    tip: "Amount tied to this task -- unpaid invoices, overdue collections, deal value." },
+  { key: "risk", label: "Risk", color: "bg-brand-600",
+    tip: "Downside if this slips -- customer complaints, compliance dates, financial penalties." },
+  { key: "urgency", label: "Urgency", color: "bg-orange-500",
+    tip: "Time pressure -- days overdue, hours to due-date, escalation history." },
 ];
 
 function PriorityScoreBars({ scores }) {
@@ -410,17 +414,26 @@ function PriorityScoreBars({ scores }) {
       <div className="flex items-center justify-between mb-2">
         <span className="label-mono text-muted-foreground flex items-center gap-1"><Sparkle size={12} weight="bold" className="text-brand-600" /> AI Priority</span>
         {scores.priority_score != null && (
-          <span className="font-heading font-black text-lg leading-none" data-testid="priority-score-value">{scores.priority_score}</span>
+          <span
+            className="font-heading font-black text-lg leading-none"
+            data-testid="priority-score-value"
+            title="Overall ranking. Weighted mix of the four signals below."
+          >{scores.priority_score}</span>
         )}
       </div>
       <div className="space-y-1.5">
         {PRIORITY_AXES.map((a) => (
-          <div key={a.key} className="flex items-center gap-2" data-testid={`axis-${a.key}`}>
-            <span className="label-mono w-16 shrink-0 text-muted-foreground">{a.label}</span>
+          <div
+            key={a.key}
+            className="flex items-center gap-2"
+            data-testid={`axis-${a.key}`}
+            title={a.tip}
+          >
+            <span className="label-mono w-16 shrink-0 text-muted-foreground cursor-help">{a.label}</span>
             <div className="flex-1 h-2 bg-black/10 border border-black/20">
               <div className={`h-full ${a.color}`} style={{ width: `${scores[a.key] || 0}%` }} />
             </div>
-            <span className="label-mono w-7 text-right">{scores[a.key] || 0}</span>
+            <span className="label-mono w-7 text-right tabular-nums">{scores[a.key] || 0}</span>
           </div>
         ))}
       </div>
@@ -601,7 +614,62 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
   );
 }
 
-function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAssignee = false, highlight = false }) {
+// U7-05.3: BulkActionBar -- sticky bar shown above the list when 1+
+// tasks are selected. Actions apply client-side one PATCH per task
+// (real bulk endpoint tracked as backend backlog item).
+function BulkActionBar({ selectedIds, tasks = [], busy, onClear, onComplete, openReassign }) {
+  const openCount = tasks.filter((t) => !isTerminal(t)).length;
+  const doneCount = tasks.filter(isTerminal).length;
+  return (
+    <div
+      className="sticky top-0 z-20 -mx-4 mb-4 border-2 border-black bg-brand-yellow px-4 py-3 flex items-center gap-3 flex-wrap"
+      data-testid="bulk-action-bar"
+    >
+      <div className="flex items-center gap-2 min-w-0 flex-1">
+        <ListChecks size={16} weight="bold" className="shrink-0" />
+        <p className="text-sm font-semibold">
+          {selectedIds.length} selected
+          {openCount > 0 && doneCount > 0 && (
+            <span className="label-mono text-black/60 ml-2">
+              · {openCount} open · {doneCount} done
+            </span>
+          )}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onComplete}
+        disabled={busy || openCount === 0}
+        className="inline-flex items-center gap-1.5 bg-brand-ink text-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm disabled:opacity-40"
+        data-testid="bulk-complete"
+      >
+        <CheckCircle size={13} weight="bold" />
+        Complete{openCount ? ` ${openCount}` : ""}
+      </button>
+      <button
+        type="button"
+        onClick={openReassign}
+        disabled={busy}
+        className="inline-flex items-center gap-1.5 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-black hover:bg-brand-ink hover:text-white disabled:opacity-40"
+        data-testid="bulk-reassign"
+      >
+        <ArrowBendUpRight size={13} weight="bold" />
+        Reassign
+      </button>
+      <button
+        type="button"
+        onClick={onClear}
+        disabled={busy}
+        className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-black/70 hover:text-black disabled:opacity-40"
+        data-testid="bulk-clear"
+      >
+        <X size={12} weight="bold" /> Clear
+      </button>
+    </div>
+  );
+}
+
+function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAssignee = false, highlight = false, selected = false, onToggleSelect }) {
   const { user } = useAuth();
   const [uploading, setUploading] = useState(false);
   const [recording, setRecording] = useState(false);
@@ -771,10 +839,31 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
       {/* U7-05.2: SUMMARY ROW -- the only thing shown when card is collapsed.
           Click-target on the whole row toggles expand. Right-side quick actions
           stopPropagation so they don't collapse when clicked. */}
+      <div className={`w-full flex items-stretch group ${selected ? "bg-brand-yellow/30" : "hover:bg-black/[0.02]"} transition-colors`}>
+        {/* U7-05.3: bulk-select checkbox. Sits outside the expand button
+            so clicking it doesn't toggle the card. Only rendered when
+            onToggleSelect is passed (skip in TaskDetailDialog and other
+            contexts where bulk doesn't apply). */}
+        {onToggleSelect && (
+          <label
+            className="flex items-center px-3 pl-4 cursor-pointer shrink-0"
+            onClick={(e) => e.stopPropagation()}
+            title={selected ? "Deselect" : "Select for bulk action"}
+          >
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={onToggleSelect}
+              data-testid={`bulk-select-${t.id}`}
+              className="w-4 h-4 border-2 border-black accent-brand-ink cursor-pointer"
+              aria-label={`Select task ${t.title}`}
+            />
+          </label>
+        )}
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="w-full text-left p-4 hover:bg-black/[0.02] transition-colors group"
+        className="w-full text-left p-4 flex-1 min-w-0"
         aria-expanded={expanded}
         aria-controls={`task-card-body-${t.id}`}
         data-testid={`task-summary-${t.id}`}
@@ -846,6 +935,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
           </div>
         </div>
       </button>
+      </div>
 
       {/* EXPANDED BODY -- everything else lives here. Rendered only when open. */}
       {expanded && (
@@ -1154,9 +1244,44 @@ export default function MyWork() {
   // rawView so eslint's no-unused-vars doesn't fire on line above.
   void rawView;
   const canSeeWorkflows = isOwner || userPerms(user).includes("workflows");
-  const [scope, setScope] = useState("mine");
-  const [tab, setTab] = useState("all");
-  const [aiPriority, setAiPriority] = useState(false);
+  // U7-05.5: filter chips persist per-user in localStorage. Reload the page
+  // and the scope + tab + aiPriority toggle come back where you left them.
+  // Founder ask 2026-08-17: 'remove the uneasy UX' -- resetting to All every
+  // navigation was frustrating for anyone who works in a single category.
+  const prefsKey = tenant?.id && user?.id ? `mywork-prefs-${tenant.id}-${user.id}` : null;
+  const loadedPrefs = (() => {
+    if (!prefsKey) return {};
+    try { return JSON.parse(localStorage.getItem(prefsKey) || "{}"); }
+    catch { return {}; }
+  })();
+  const [scope, setScope] = useState(loadedPrefs.scope || "mine");
+  const [tab, setTab] = useState(loadedPrefs.tab || "all");
+  const [aiPriority, setAiPriority] = useState(Boolean(loadedPrefs.aiPriority));
+
+  // Persist on any change. Guard on prefsKey so pre-login / test envs stay
+  // no-op.
+  useEffect(() => {
+    if (!prefsKey) return;
+    try {
+      localStorage.setItem(prefsKey, JSON.stringify({ scope, tab, aiPriority }));
+    } catch { /* quota; ignore */ }
+  }, [prefsKey, scope, tab, aiPriority]);
+
+  // U7-05.3: bulk selection. Set of task ids across the currently-visible
+  // list. Cleared when the tab / scope / view changes so a stale selection
+  // can't apply to a different filter's tasks.
+  const [selected, setSelected] = useState(() => new Set());
+  useEffect(() => { setSelected(new Set()); }, [scope, tab, view]);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkReassignOpen, setBulkReassignOpen] = useState(false);
+  const [bulkAssigneeId, setBulkAssigneeId] = useState("");
+  const [bulkAssigneeRole, setBulkAssigneeRole] = useState("");
+  const toggleSelected = (id) => setSelected((s) => {
+    const next = new Set(s);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const clearSelection = () => setSelected(new Set());
   const mine = !(isOwner && scope === "all");
   const showAssignee = isOwner && scope === "all";
   const tasksQ = useQuery({ queryKey: ["tasks", mine], queryFn: () => api.get(`/tasks?mine=${mine}`).then((r) => r.data) });
@@ -1331,9 +1456,100 @@ export default function MyWork() {
               secondary={tab === "completed" ? null : "Tasks appear here once decisions are approved"}
             />
           )}
+          {/* U7-05.3: bulk-action bar. Sticky at top of the list so it
+              stays visible when scrolling long task lists. Appears only
+              when >=1 task is selected. Actions apply client-side one
+              PATCH per task -- backend batch endpoint tracked as
+              U7-05.SS (bulk endpoint) in the backend backlog wave. */}
+          {selected.size > 0 && (
+            <BulkActionBar
+              selectedIds={Array.from(selected)}
+              tasks={list.filter((tk) => selected.has(tk.id))}
+              members={members}
+              roleOptions={roleOptions}
+              busy={bulkBusy}
+              onClear={clearSelection}
+              onComplete={async () => {
+                setBulkBusy(true);
+                try {
+                  const targets = list.filter((tk) => selected.has(tk.id) && !isTerminal(tk));
+                  await Promise.all(targets.map((tk) => api.patch(`/tasks/${tk.id}`, { status: "done" })));
+                  toast.success(`Completed ${targets.length} ${targets.length === 1 ? "task" : "tasks"}`);
+                  clearSelection();
+                  refresh();
+                } catch (e) {
+                  toast.error(e.response?.data?.detail || "Bulk complete failed");
+                } finally { setBulkBusy(false); }
+              }}
+              openReassign={() => { setBulkAssigneeId(""); setBulkAssigneeRole(""); setBulkReassignOpen(true); }}
+            />
+          )}
           <div className="space-y-4">
-            {list.map((t) => <TaskCard key={t.id} t={t} onChange={refresh} members={members} roleOptions={roleOptions} showAssignee={showAssignee} highlight={t.id === focusTaskId} scores={aiPriority && tab !== "completed" ? scoreMap[t.id] : undefined} />)}
+            {list.map((t) => <TaskCard key={t.id} t={t} onChange={refresh} members={members} roleOptions={roleOptions} showAssignee={showAssignee} highlight={t.id === focusTaskId} scores={aiPriority && tab !== "completed" ? scoreMap[t.id] : undefined} selected={selected.has(t.id)} onToggleSelect={() => toggleSelected(t.id)} />)}
           </div>
+
+          {/* U7-05.3 dialog: bulk-reassign target picker. */}
+          <Dialog open={bulkReassignOpen} onOpenChange={(o) => !o && !bulkBusy && setBulkReassignOpen(false)}>
+            <DialogContent className="border border-black rounded-none max-w-md" data-testid="bulk-reassign-dialog">
+              <DialogHeader>
+                <DialogTitle className="font-heading uppercase tracking-tight">
+                  Reassign {selected.size} {selected.size === 1 ? "task" : "tasks"}
+                </DialogTitle>
+              </DialogHeader>
+              <p className="text-sm text-muted-foreground -mt-2">
+                Pick a specific team member OR hand off to a whole team.
+              </p>
+              <select
+                value={bulkAssigneeId}
+                onChange={(e) => setBulkAssigneeId(e.target.value)}
+                className="w-full border border-black px-3 py-2 text-sm focus:outline-none"
+              >
+                <option value="">— Reassign to a team member —</option>
+                {members.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
+              </select>
+              <select
+                value={bulkAssigneeRole}
+                onChange={(e) => setBulkAssigneeRole(e.target.value)}
+                disabled={!!bulkAssigneeId}
+                className="w-full border border-black px-3 py-2 text-sm focus:outline-none disabled:opacity-40"
+              >
+                <option value="">...or to a whole team {bulkAssigneeId ? "(member selected)" : ""}</option>
+                {roleOptions.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+              </select>
+              <div className="flex gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => setBulkReassignOpen(false)}
+                  disabled={bulkBusy}
+                  className="border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-black/5 disabled:opacity-40"
+                >Cancel</button>
+                <button
+                  type="button"
+                  disabled={bulkBusy || (!bulkAssigneeId && !bulkAssigneeRole)}
+                  onClick={async () => {
+                    setBulkBusy(true);
+                    try {
+                      const patch = bulkAssigneeId
+                        ? { assignee_id: bulkAssigneeId, assignee_role: null }
+                        : { assignee_id: null, assignee_role: bulkAssigneeRole };
+                      const ids = Array.from(selected);
+                      await Promise.all(ids.map((id) => api.patch(`/tasks/${id}`, patch)));
+                      const label = bulkAssigneeId
+                        ? (members.find((m) => m.id === bulkAssigneeId)?.name || "member")
+                        : `${bulkAssigneeRole} team`;
+                      toast.success(`Reassigned ${ids.length} ${ids.length === 1 ? "task" : "tasks"} to ${label}`);
+                      clearSelection();
+                      setBulkReassignOpen(false);
+                      refresh();
+                    } catch (e) {
+                      toast.error(e.response?.data?.detail || "Bulk reassign failed");
+                    } finally { setBulkBusy(false); }
+                  }}
+                  className="bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm disabled:opacity-40"
+                >{bulkBusy ? "Reassigning..." : "Reassign"}</button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
       )}

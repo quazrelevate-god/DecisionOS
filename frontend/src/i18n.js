@@ -30,7 +30,7 @@ const resources = {
       mywork: {
         eyebrow: "Your day, simplified", title: "My Work", my_tasks: "My Tasks", all_tasks: "All Tasks",
         ai_priority: "AI Priority", ai_priority_on: "AI Priority: On", scoring: "Scoring…",
-        view_mywork: "My Work", view_board: "Board", view_workflows: "Workflows", view_leave: "Leave",
+        view_mywork: "Tasks", view_board: "Board", view_workflows: "Workflows", view_leave: "Leave",
         wf_pipelines: "Pipelines", wf_task_board: "Task Board",
         access_restricted: "Access restricted",
         access_restricted_desc: "You don't have access to open this work item. Ask an owner if you think this is a mistake.",
@@ -157,7 +157,7 @@ const resources = {
       mywork: {
         eyebrow: "आपका दिन, सरल बनाया गया", title: "मेरा काम", my_tasks: "मेरे कार्य", all_tasks: "सभी कार्य",
         ai_priority: "एआई प्राथमिकता", ai_priority_on: "एआई प्राथमिकता: चालू", scoring: "स्कोरिंग…",
-        view_mywork: "मेरा काम", view_board: "बोर्ड", view_workflows: "वर्कफ़्लो", view_leave: "अवकाश",
+        view_mywork: "कार्य", view_board: "बोर्ड", view_workflows: "वर्कफ़्लो", view_leave: "अवकाश",
         access_restricted: "पहुँच प्रतिबंधित",
         access_restricted_desc: "आपके पास इस कार्य को खोलने की अनुमति नहीं है। यदि आपको लगता है कि यह गलती है तो किसी मालिक से पूछें।",
         empty_completed_title: "अभी तक कुछ पूरा नहीं हुआ", empty_title: "यहाँ कुछ नहीं है",
@@ -272,7 +272,7 @@ const resources = {
       mywork: {
         eyebrow: "உங்கள் நாள், எளிமையாக்கப்பட்டது", title: "எனது வேலை", my_tasks: "எனது பணிகள்", all_tasks: "அனைத்து பணிகள்",
         ai_priority: "AI முன்னுரிமை", ai_priority_on: "AI முன்னுரிமை: இயக்கத்தில்", scoring: "மதிப்பிடுகிறது…",
-        view_mywork: "எனது வேலை", view_board: "போர்டு", view_workflows: "பணிப்பாய்வுகள்", view_leave: "விடுப்பு",
+        view_mywork: "பணிகள்", view_board: "போர்டு", view_workflows: "பணிப்பாய்வுகள்", view_leave: "விடுப்பு",
         wf_pipelines: "பைப்லைன்கள்", wf_task_board: "பணி போர்டு",
         access_restricted: "அணுகல் தடைசெய்யப்பட்டது",
         access_restricted_desc: "இந்த வேலைப் பொருளைத் திறக்க உங்களுக்கு அனுமதி இல்லை. இது தவறு என நினைத்தால் உரிமையாளரிடம் கேளுங்கள்.",

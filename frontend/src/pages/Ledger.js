@@ -608,21 +608,100 @@ function NeedsMatchingPanel({ title, hint, unmatched, open, cur, endpoint, stand
   );
 }
 
+// U7-08.1 (2026-08-17): overdue = awaiting invoice past this many days.
+// MSME payment terms in India are commonly Net 30; we treat "awaiting >
+// 30d" as the first visual flag. A stricter tenant can override later
+// by pushing terms into the invoice model, but the flat 30d rule catches
+// the common case without needing per-invoice due dates.
+const REVENUE_OVERDUE_DAYS = 30;
+
+function daysSinceIso(iso) {
+  if (!iso) return null;
+  const t = new Date(iso).getTime();
+  if (!t || Number.isNaN(t)) return null;
+  const d = Math.floor((Date.now() - t) / 86400000);
+  return d < 0 ? null : d;
+}
+
 function RevenueTab({ data, cur, onDelete, onChange }) {
   const f = fmt(cur);
   const tt = data?.totals || {};
   const invoices = data?.invoices || [];
   const payments = data?.payments || [];
+
+  // U7-08.1: status filter + sort control. Founder ask: fix the Revenue
+  // invoices UI/UX. A 5-invoice tenant is fine flat, but the moment
+  // they cross ~20 open invoices the flat table loses. Filters land now
+  // so the pattern scales with the tenant, not later.
+  const [statusFilter, setStatusFilter] = useState("all");  // all | awaiting | partial | paid | overdue
+  const [sortKey, setSortKey] = useState("date-desc");       // date-desc | date-asc | amount-desc | overdue
+
   const invStatus = (s) => s.status === "paid" ? { label: "received", cls: "bg-green-600 text-white" }
     : s.status === "partial" ? { label: "partial", cls: "bg-brand-blue text-white" }
     : { label: "awaiting", cls: "bg-brand-yellow text-black" };
+
+  const isOverdue = (s) => s.status !== "paid" && (daysSinceIso(s.date) || 0) > REVENUE_OVERDUE_DAYS;
+  const overdueCount = invoices.filter(isOverdue).length;
+
+  // Bucket counts for the filter strip -- shown even when 0 so the tenant
+  // sees "Overdue: 0" as reassurance, not a hidden control.
+  const counts = {
+    all: invoices.length,
+    awaiting: invoices.filter((s) => s.status !== "paid" && s.status !== "partial").length,
+    partial: invoices.filter((s) => s.status === "partial").length,
+    paid: invoices.filter((s) => s.status === "paid").length,
+    overdue: overdueCount,
+  };
+
+  const filtered = useMemo(() => {
+    let list = invoices;
+    if (statusFilter === "overdue") list = list.filter(isOverdue);
+    else if (statusFilter === "awaiting") list = list.filter((s) => s.status !== "paid" && s.status !== "partial");
+    else if (statusFilter === "partial") list = list.filter((s) => s.status === "partial");
+    else if (statusFilter === "paid") list = list.filter((s) => s.status === "paid");
+    const sorted = [...list];
+    if (sortKey === "date-desc") sorted.sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+    else if (sortKey === "date-asc") sorted.sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
+    else if (sortKey === "amount-desc") sorted.sort((a, b) => (b.amount || 0) - (a.amount || 0));
+    else if (sortKey === "overdue") sorted.sort((a, b) => (daysSinceIso(b.date) || 0) - (daysSinceIso(a.date) || 0));
+    return sorted;
+
+  }, [invoices, statusFilter, sortKey]);
+
+  const filteredTotal = filtered.reduce((sum, s) => sum + (s.amount || 0), 0);
+
+  const FILTERS = [
+    { key: "all", label: "All", count: counts.all },
+    { key: "awaiting", label: "Awaiting", count: counts.awaiting },
+    { key: "partial", label: "Partial", count: counts.partial },
+    { key: "paid", label: "Received", count: counts.paid },
+    { key: "overdue", label: "Overdue", count: counts.overdue, danger: true },
+  ];
+
   return (
     <div className="space-y-6" data-testid="ledger-revenue">
+      {/* U7-08.1: Received is money-in -- give it the green accent to
+          match Billed. Outstanding stays brand-600 (attention). If any
+          invoice is overdue, add a callout under Outstanding so the
+          summary strip itself carries the alarm, not just the table. */}
       <div className="grid grid-cols-3 gap-3">
         <KPI icon={CurrencyDollar} label="Billed" value={f(tt.billed || 0)} accent="text-green-600" />
-        <KPI icon={Receipt} label="Received" value={f(tt.received || 0)} />
+        <KPI icon={Receipt} label="Received" value={f(tt.received || 0)} accent="text-green-600" />
         <KPI icon={WarningCircle} label="Outstanding" value={f(tt.outstanding || 0)} accent="text-brand-600" />
       </div>
+
+      {overdueCount > 0 && (
+        <button
+          type="button"
+          onClick={() => setStatusFilter("overdue")}
+          data-testid="revenue-overdue-callout"
+          className="w-full flex items-center gap-2 border-2 border-danger-600 bg-danger-600/5 text-danger-600 px-4 py-2.5 text-sm font-semibold uppercase tracking-wider hover:bg-danger-600/10 transition-colors"
+        >
+          <WarningCircle size={16} weight="bold" />
+          {overdueCount} invoice{overdueCount === 1 ? "" : "s"} overdue &gt; {REVENUE_OVERDUE_DAYS} days
+          <span className="ml-auto text-xs font-mono normal-case tracking-normal">Show only overdue →</span>
+        </button>
+      )}
 
       <NeedsMatchingPanel title="Needs matching" testid="revenue-needs-matching"
         hint="These received payments couldn’t be auto-linked to an invoice. Pick the right one, or mark it as standalone income."
@@ -633,29 +712,118 @@ function RevenueTab({ data, cur, onDelete, onChange }) {
       <AiPanel scope="revenue" />
 
       <div>
-        <h3 className="font-heading font-extrabold uppercase tracking-tight text-sm mb-3">Sales & Service Invoices ({invoices.length})</h3>
+        <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+          <h3 className="font-heading font-extrabold uppercase tracking-tight text-sm">
+            Sales &amp; Service Invoices ({invoices.length})
+          </h3>
+          {invoices.length > 0 && (
+            <div className="flex items-center gap-2 text-xs">
+              <span className="label-mono text-muted-foreground">Sort</span>
+              <select
+                value={sortKey}
+                onChange={(e) => setSortKey(e.target.value)}
+                data-testid="revenue-sort"
+                className="border border-black bg-white px-2 py-1 focus:outline-none focus:shadow-brutal-sm text-xs"
+              >
+                <option value="date-desc">Newest first</option>
+                <option value="date-asc">Oldest first</option>
+                <option value="amount-desc">Amount (highest)</option>
+                <option value="overdue">Oldest awaiting</option>
+              </select>
+            </div>
+          )}
+        </div>
+
+        {invoices.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 mb-3" data-testid="revenue-status-filter">
+            {FILTERS.map((f) => {
+              const active = statusFilter === f.key;
+              const zero = f.count === 0;
+              const dangerActive = f.danger && f.count > 0;
+              return (
+                <button
+                  key={f.key}
+                  type="button"
+                  onClick={() => setStatusFilter(f.key)}
+                  data-testid={`revenue-filter-${f.key}`}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold uppercase tracking-wider border transition-colors ${
+                    active
+                      ? (dangerActive ? "border-danger-600 bg-danger-600 text-white" : "border-black bg-brand-ink text-white")
+                      : (dangerActive ? "border-danger-600 text-danger-600 hover:bg-danger-600/5" : "border-black/30 text-muted-foreground hover:border-black hover:text-black")
+                  } ${zero && !active ? "opacity-50" : ""}`}
+                >
+                  {f.label}
+                  <span className={`label-mono px-1 py-px ${active ? "bg-white/20" : "bg-black/5"}`}>{f.count}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {invoices.length === 0 ? (
-          <EmptyState title="No income yet" hint="Record a sale/service with “Add income”, or send a sales invoice via WhatsApp/upload — it lands here." />
+          <EmptyState title="No invoices yet" hint="Record a sale/service with “Add income”, or send a sales invoice via WhatsApp/upload — it lands here." />
+        ) : filtered.length === 0 ? (
+          <EmptyState title={`No ${statusFilter} invoices`} hint="Try a different filter, or clear it to see all." />
         ) : (
           <div className="card-brutal overflow-x-auto" data-testid="revenue-invoices-table">
             <table className="w-full text-sm">
               <thead><tr className="border-b border-border text-left label-mono text-xs text-muted-foreground">
-                <th className="p-3">For / Invoice</th><th className="p-3">Customer</th><th className="p-3">Date</th><th className="p-3">Status</th><th className="p-3 text-right">Amount</th><th className="p-3"></th>
+                <th className="p-3">Invoice</th><th className="p-3">Customer</th><th className="p-3">Date</th><th className="p-3">Status</th><th className="p-3 text-right">Amount</th><th className="p-3"></th>
               </tr></thead>
               <tbody>
-                {invoices.map((s) => {
+                {filtered.map((s) => {
                   const st = invStatus(s);
+                  const overdue = isOverdue(s);
+                  const days = overdue ? daysSinceIso(s.date) : null;
                   return (
-                  <tr key={s.id} className="border-b border-border/60 hover:bg-black/[0.02]" data-testid={`revenue-invoice-row-${s.id}`}>
-                    <td className="p-3 font-medium">{s.title || (s.number ? `#${s.number}` : "Sale")}{s.source && s.source !== "manual" && <Chip value={s.source} className={`ml-2 ${SOURCE_CHIP[s.source] || "bg-black/5"}`} />}<AttachmentLink att={s.attachment} /></td>
+                  <tr
+                    key={s.id}
+                    className={`border-b border-border/60 hover:bg-black/[0.02] ${overdue ? "bg-danger-600/[0.03]" : ""}`}
+                    data-testid={`revenue-invoice-row-${s.id}`}
+                  >
+                    <td className="p-3 font-medium">
+                      {/* Show invoice # AND title when both exist -- title
+                          alone hides the reference customers quote back
+                          on WhatsApp / phone when asking about payment. */}
+                      {s.number && (
+                        <span className="label-mono text-muted-foreground mr-1.5">#{s.number}</span>
+                      )}
+                      <span>{s.title || (s.number ? "" : "Sale")}</span>
+                      {s.source && s.source !== "manual" && <Chip value={s.source} className={`ml-2 ${SOURCE_CHIP[s.source] || "bg-black/5"}`} />}
+                      <AttachmentLink att={s.attachment} />
+                    </td>
                     <td className="p-3 text-muted-foreground">{s.contact_name || "—"}</td>
                     <td className="p-3 text-muted-foreground">{s.date || "—"}</td>
-                    <td className="p-3"><Chip value={st.label} className={st.cls} />{s.status === "partial" && <span className="ml-2 text-xs text-muted-foreground">bal {f(s.balance)}</span>}</td>
+                    <td className="p-3">
+                      <Chip value={st.label} className={st.cls} />
+                      {s.status === "partial" && <span className="ml-2 text-xs text-muted-foreground">bal {f(s.balance)}</span>}
+                      {overdue && (
+                        <span
+                          className="ml-2 inline-flex items-center gap-1 label-mono px-1.5 py-0.5 bg-danger-600 text-white"
+                          data-testid={`revenue-overdue-${s.id}`}
+                        >
+                          <WarningCircle size={11} weight="bold" /> {days}d overdue
+                        </span>
+                      )}
+                    </td>
                     <td className="p-3 text-right font-mono font-semibold">{f(s.amount)}</td>
                     <td className="p-3 text-right"><button onClick={() => onDelete("invoice", s.id)} data-testid={`revenue-invoice-delete-${s.id}`} className="text-muted-foreground hover:text-danger-600"><Trash size={15} /></button></td>
                   </tr>
                 );})}
               </tbody>
+              {filtered.length > 1 && (
+                <tfoot>
+                  <tr className="border-t-2 border-black bg-black/[0.02]">
+                    <td colSpan={4} className="p-3 label-mono text-xs text-muted-foreground">
+                      Showing {filtered.length} of {invoices.length}
+                    </td>
+                    <td className="p-3 text-right font-mono font-bold" data-testid="revenue-filtered-total">
+                      {f(filteredTotal)}
+                    </td>
+                    <td />
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         )}
@@ -961,21 +1129,14 @@ export default function Ledger() {
   const [searchParams] = useSearchParams();
   const initialTab = TABS.some((tb) => tb.key === searchParams.get("tab")) ? searchParams.get("tab") : "overview";
   const [tab, setTab] = useState(initialTab);
-  const [reclassifying, setReclassifying] = useState(false);
   const qc = useQueryClient();
   const invalidate = () => ["ledger-summary", "expenses", "assets", "inventory", "revenue", "payables"].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
-
-  const reclassify = async () => {
-    if (!window.confirm("Re-run AI on all filed purchase bills and move any mis-booked ones into the correct bucket (Expense / Asset / Inventory)? This updates your ledger.")) return;
-    setReclassifying(true);
-    try {
-      const { data: s } = await api.post("/ledger/reclassify-purchases");
-      invalidate();
-      qc.invalidateQueries({ queryKey: ["ledger-ai"] });
-      toast.success(`Reviewed ${s.reviewed} bills — ${s.to_asset} → assets, ${s.to_inventory} → inventory${s.unknown ? `, ${s.unknown} need manual review` : ""}.`);
-    } catch (e) { toast.error(e?.response?.data?.detail || "Re-classification failed"); }
-    finally { setReclassifying(false); }
-  };
+  // U7-08.2 (2026-08-17): "Fix old purchases" button removed from the
+  // desktop Finance header per founder ask. The AI classifier already
+  // runs on every new capture; a manual re-run belongs in admin tooling
+  // if we need it again, not in the owner's day-to-day toolbar. Mobile
+  // still exposes it as "Recheck earlier bills" (FinanceMobile.jsx §8);
+  // the backend endpoint /ledger/reclassify-purchases stays live.
 
   const summaryQ = useQuery({ queryKey: ["ledger-summary"], queryFn: () => api.get("/ledger/summary").then((r) => r.data) });
   const expensesQ = useQuery({ queryKey: ["expenses"], queryFn: () => api.get("/expenses").then((r) => r.data) });
@@ -1028,14 +1189,6 @@ export default function Ledger() {
             ))}
           </div>
           {addBtn}
-          {user?.role === "owner" && (
-            <button onClick={reclassify} disabled={reclassifying} data-testid="ledger-reclassify-btn"
-              title="Re-run AI classification on historical purchase bills"
-              className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-semibold uppercase tracking-wider border border-black bg-white hover:bg-black/5 transition-colors disabled:opacity-50 w-full sm:w-auto">
-              <ArrowClockwise size={15} weight="bold" className={reclassifying ? "animate-spin" : ""} />
-              {reclassifying ? "Re-classifying…" : "Fix old purchases"}
-            </button>
-          )}
         </div>
       </PageHeader>
 

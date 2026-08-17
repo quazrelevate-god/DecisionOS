@@ -266,22 +266,33 @@ function DeskBriefHeader() {
 // -----------------------------------------------------------------------------
 // One card in the chip's list
 // -----------------------------------------------------------------------------
-function DeskCard({ card, onAction }) {
+function DeskCard({ card, onAction, currentUserId }) {
   const [busy, setBusy] = useState(false);
+
+  // U7-02.1 (2026-08-17): CTA label reflects who owes the reply.
+  // Founder wireframe: On-Fire items on the top of the list read
+  // "Respond" (this is on ME to reply -- escalation, handoff, task
+  // where I am the assignee) and the ones below read "Chase" (someone
+  // else owes ME the reply -- I nudge them). Same backend CTA "chase"
+  // in both cases; we split on whether the target owner is the viewer.
+  const effectiveCta =
+    card.cta === "chase" && card.target_owner_id === currentUserId
+      ? "respond"
+      : card.cta;
 
   const ctaLabel = {
     review: "Review →",
     respond: "Respond",
     chase: "Chase",
     nudge: "Nudge",
-  }[card.cta] || "Open";
+  }[effectiveCta] || "Open";
 
   const ctaStyle = {
     review: "bg-brand-ink text-white hover:shadow-brutal-sm",
-    respond: "border border-black bg-white hover:bg-brand-600 hover:text-white",
+    respond: "bg-brand-ink text-white hover:shadow-brutal-sm",
     chase: "border border-black bg-white hover:bg-brand-600 hover:text-white",
     nudge: "border border-black bg-white hover:bg-brand-yellow",
-  }[card.cta] || "border border-black bg-white";
+  }[effectiveCta] || "border border-black bg-white";
 
   const doAction = async (e) => {
     e.stopPropagation();
@@ -356,30 +367,39 @@ export default function Desk() {
     }
   }, [focusDecisionId]);
   useEffect(() => {
-    if (!focusDecisionId || !data?.cards) return;
-    const match = data.cards.find(
-      (c) => c.target_id === focusDecisionId && c.target_kind === "decision");
-    if (match) setOpenDecision(focusDecisionId);
-  }, [focusDecisionId, data?.cards]);
+    // U7-02.2 (2026-08-17): open the dialog on deep-link even when the
+    // decision has already been resolved and no longer appears in the
+    // Desk cards list. Bookmark to /inbox?decision=<id> should always
+    // render the dialog (which itself handles access-restricted).
+    if (focusDecisionId) setOpenDecision(focusDecisionId);
+  }, [focusDecisionId]);
 
   const counters = data?.counters || { needs_decision: 0, on_fire: 0, due_today: 0, important: 0 };
   const cards = data?.cards || [];
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["desk"] });
 
+  const { user } = useAuth();
+
   const onCardAction = async (card) => {
-    if (card.cta === "review" && card.target_kind === "decision") {
+    // U7-02.1: match the effective-CTA logic in DeskCard -- if this card
+    // is really "on me" (I own the target), treat "chase" as "respond".
+    const effectiveCta =
+      card.cta === "chase" && card.target_owner_id === user?.id
+        ? "respond"
+        : card.cta;
+    if (effectiveCta === "review" && card.target_kind === "decision") {
       setOpenDecision(card.target_id);
       return;
     }
-    if (card.cta === "respond") {
+    if (effectiveCta === "respond") {
       // Task-level respond: jump to MyWork with the task focused so the
       // founder can reply from the full task detail (which has the trail
       // + attachments + full context).
       navigate(`/my-work?task=${card.target_id}`);
       return;
     }
-    if (card.cta === "chase" || card.cta === "nudge") {
+    if (effectiveCta === "chase" || effectiveCta === "nudge") {
       try {
         const res = await api.post(`/desk/nudge/${card.target_id}`, {});
         const to = res.data?.target_name || "them";
@@ -468,7 +488,7 @@ export default function Desk() {
       )}
       <div className="space-y-3" data-testid="desk-card-list">
         {cards.map((c) => (
-          <DeskCard key={c.id} card={c} onAction={onCardAction} />
+          <DeskCard key={c.id} card={c} onAction={onCardAction} currentUserId={user?.id} />
         ))}
       </div>
 

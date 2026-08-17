@@ -158,16 +158,26 @@ export function CompanyDetails() {
 
       {canManage && tenant?.id && (
         <div className="mt-4 border border-black/40 bg-brand-paper p-3" data-testid="workspace-id-block">
-          <label className="label-mono text-muted-foreground flex items-center gap-1.5"><WhatsappLogo size={13} weight="bold" className="text-green-600" /> Workspace ID <span className="normal-case">(WhatsApp routing fallback — set as WA_TENANT_ID)</span></label>
+          {/* U7-11.1 (2026-08-17): rewrote the copy around the workspace
+              ID. Was leaking dev-facing language ("WA_TENANT_ID env
+              variable") into an owner-facing screen. Owners don't set
+              env vars; they hand this code to their WhatsApp integrator
+              or support. New copy: what it is, when to share it, who
+              needs it. */}
+          <label className="label-mono text-muted-foreground flex items-center gap-1.5">
+            <WhatsappLogo size={13} weight="bold" className="text-green-600" /> WhatsApp workspace code
+          </label>
           <div className="flex gap-2 mt-1.5">
             <input data-testid="workspace-id-value" readOnly value={tenant.id} className={`${inp} bg-white cursor-text`} onFocus={(e) => e.target.select()} />
             <button data-testid="workspace-id-copy"
-              onClick={() => { navigator.clipboard?.writeText(tenant.id); toast.success("Workspace ID copied"); }}
+              onClick={() => { navigator.clipboard?.writeText(tenant.id); toast.success("Workspace code copied"); }}
               className="flex items-center gap-1 border border-black px-3 text-sm font-semibold uppercase hover:bg-brand-ink hover:text-white transition-colors shrink-0">
               <Copy size={14} weight="bold" /> Copy
             </button>
           </div>
-          <p className="text-xs text-muted-foreground mt-1.5">Messages from unregistered numbers fall back to this workspace. Paste this into your production <span className="font-mono">WA_TENANT_ID</span> env variable.</p>
+          <p className="text-xs text-muted-foreground mt-1.5">
+            Share this with your WhatsApp integrator or support so messages from unknown numbers land in this workspace. You don&rsquo;t need to touch it day-to-day.
+          </p>
         </div>
       )}
 
@@ -251,9 +261,17 @@ export function CompanyDetails() {
         <div className="mt-6 border-t border-black/15 pt-4" data-testid="os-blueprint-section">
           <div className="flex items-center gap-2 mb-1">
             <Kanban size={18} weight="bold" className="text-brand-600" />
-            <h3 className="font-heading font-extrabold uppercase tracking-tight">Operating System</h3>
+            {/* U7-11.1 (2026-08-17): renamed from "Operating System" to
+                "Rules & templates". The old name collided with the
+                OPERATIONS tab (which owns the real Operating Model
+                editor -- pipelines / stages / per-stage approvals),
+                so owners had two things called "Operating..." doing
+                different things. This section owns free-standing
+                task templates + org-wide approval rules; the new
+                name says that. */}
+            <h3 className="font-heading font-extrabold uppercase tracking-tight">Rules &amp; templates</h3>
           </div>
-          <p className="text-xs text-muted-foreground mb-3">Operational tasks and approval rules. Edit anytime. Pipelines are configured in the Operating Model editor below.</p>
+          <p className="text-xs text-muted-foreground mb-3">Free-standing task templates and org-wide approval rules. Pipelines and per-stage rules live in the Operations tab.</p>
 
           {/* WE-02 (2026-08-16): "Workflows" list removed from this
               card. It was a free-text brainstorm list that never drove
@@ -290,8 +308,11 @@ export function CompanyDetails() {
           </div>
           <button onClick={addRule} data-testid="os-rule-add" className="mt-1.5 flex items-center gap-1 text-sm text-brand-blue font-semibold hover:underline"><Plus size={14} weight="bold" /> Add approval rule</button>
 
+          {/* U7-11.1: label the two SAVE buttons on this card by scope
+              so owners know which changes each one commits. Was
+              "Save operating system" + "Save changes" -- both vague. */}
           <button onClick={saveOs} disabled={osBusy} data-testid="os-save-button" className="mt-4 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors disabled:opacity-50">
-            {osBusy ? "Saving…" : "Save operating system"}
+            {osBusy ? "Saving…" : "Save rules & templates"}
           </button>
         </div>
       )}
@@ -300,7 +321,7 @@ export function CompanyDetails() {
         <div className="mt-6 flex justify-end">
           <button data-testid="company-save-button" onClick={save} disabled={saving}
             className="bg-brand-600 text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-50">
-            {saving ? "Saving…" : "Save changes"}
+            {saving ? "Saving…" : "Save company details"}
           </button>
         </div>
       )}

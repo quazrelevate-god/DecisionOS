@@ -226,10 +226,12 @@ await page.waitForSelector('[data-testid="dock-more"]', { timeout: 8000 });
 await page.waitForTimeout(300);
 await page.locator('[data-testid="dock-more"]').click();
 await page.waitForTimeout(500);
+// Team went back to being its own page (U7-09: card grid + click-through
+// profile), so the tile is back in More and the roster is reachable from it
+// again. It had been folded into Ops for a while; this asserts the reversal.
 check(
-  'Team has no tile below lg — one door to the roster, not two',
-  (await page.locator('[data-testid="allapps-tile-team"]').count()) === 0,
-  `${await page.locator('[data-testid="allapps-tile-team"]').count()} tile(s)`
+  'Team has its own tile again',
+  (await page.locator('[data-testid="allapps-tile-team"]').count()) === 1
 );
 await page.keyboard.press('Escape');
 
@@ -242,12 +244,12 @@ if (tiles > 0) {
   await page.locator('[data-testid^="ops-emp-"]').first().click();
   await page.waitForSelector('[data-testid="member-card"]', { timeout: 8000 });
   check('a member box opens the expanded card', true, 'member-card visible');
-  for (const [pill, label] of [['access', 'Access'], ['invite', 'Invite'], ['absent', 'Mark absent']]) {
-    check(
-      `the card carries the ${label} pill`,
-      (await page.locator(`[data-testid="member-pill-${pill}"]`).count()) === 1
-    );
-  }
+  // The three management pills moved back to the Team page with the rest of
+  // team management. The card is a read now — no writes hanging off it.
+  check(
+    'the member card carries no management pills',
+    (await page.locator('[data-testid^="member-pill-"]').count()) === 0
+  );
   // The four tiles that were asked to be dropped must not come back.
   const cardText = (await page.locator('[data-testid="member-card"]').innerText()).toLowerCase();
   for (const gone of ['proof', 'plans used', 'photos', 'voice']) {

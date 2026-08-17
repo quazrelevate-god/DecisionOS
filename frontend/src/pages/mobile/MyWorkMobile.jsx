@@ -19,6 +19,7 @@ import {
   ChatText, WarningCircle, ArrowBendUpRight, Clock, CaretRight, Spinner, Alarm,
 } from "@phosphor-icons/react";
 import api from "../../lib/api";
+import { cn } from "@/lib/utils";
 import { useAuth } from "../../context/AuthContext";
 import { userPerms } from "../../lib/perms";
 import { opModel } from "../../lib/operatingModel";
@@ -383,6 +384,56 @@ function TaskSheet({ task, open, onClose, onChanged, members, roleOptions }) {
 // Swipeable row. §5.5: swipe-left must NOT destroy — left snoozes to tomorrow,
 // right opens. Dismiss lives inside the sheet.
 // ---------------------------------------------------------------------------
+/* ───────────────────────── the split-screen hero ─────────────────────────
+   The same two-strata shape as Ops, and deliberately the same palette: a dark
+   static top carrying the numbers you act on, and a light sheet pinned over it
+   holding the detail. Shared with Ops rather than re-invented — see the note in
+   OpsMobile for why the sheet scrolls internally instead of sliding up.
+
+   The four numbers are the ones that decide what to open next: what is late,
+   what is due today, what is still open, and what got closed. They are computed
+   from the same task list the sheet renders, so the header can never disagree
+   with the rows under it. */
+const MW_GLASS = "bg-white/[0.07] border border-white/[0.12] backdrop-blur-md";
+
+function HeroStat({ label, value, active, onClick, testid }) {
+  const Tag = onClick ? "button" : "div";
+  return (
+    <Tag
+      {...(onClick ? { type: "button", onClick, "aria-pressed": active } : {})}
+      data-testid={testid}
+      className={cn(
+        "rounded-xl px-1 py-2 text-center transition-colors",
+        MW_GLASS,
+        active && "!bg-white/[0.20] !border-white/40",
+        onClick && "active:bg-white/[0.16]"
+      )}
+    >
+      <p className="font-heading text-lg font-black leading-none tabular-nums text-white/90">{value}</p>
+      <p className="label-mono mt-1 text-[9px] tracking-normal text-white/45">{label}</p>
+    </Tag>
+  );
+}
+
+/** A thin share-of-total bar. Monochrome, like the Ops hero. */
+function HeroBar({ label, value, total, armed, index }) {
+  const pct = total > 0 ? Math.round((value / total) * 100) : 0;
+  return (
+    <div data-testid={`mywork-bar-${label.toLowerCase().replace(/\s/g, "-")}`}>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-white/60">{label}</span>
+        <span className="font-heading text-sm font-black tabular-nums text-white/90">{value}</span>
+      </div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.10]">
+        <div
+          className="h-full rounded-full bg-white/70 transition-[width] duration-700 ease-out motion-reduce:transition-none"
+          style={{ width: armed ? `${pct}%` : "0%", transitionDelay: `${120 + index * 70}ms` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 function SwipeRow({ onSnooze, onOpen, children, testid }) {
   const start = useRef(null);
   const [dx, setDx] = useState(0);
@@ -437,12 +488,29 @@ export default function MyWorkMobile() {
   const [view, setView] = useState(
     focusTaskId ? "mywork" : rawView === "leave" ? "leave" : rawView === "workflows" ? "workflows" : "mywork"
   );
-  const [scope, setScope] = useState("mine");
-  const [tab, setTab] = useState("all");
-  const [aiPriority, setAiPriority] = useState(false);
+  // U7-05.5: the desktop persists scope + tab + aiPriority per user so a
+  // reload comes back where you left it. Same key, so a founder who filters on
+  // a laptop finds the same filter on the phone.
+  const prefsKey = tenant?.id && user?.id ? `mywork-prefs-${tenant.id}-${user.id}` : null;
+  const loadedPrefs = (() => {
+    if (!prefsKey) return {};
+    try { return JSON.parse(localStorage.getItem(prefsKey) || "{}"); } catch { return {}; }
+  })();
+  const [scope, setScope] = useState(loadedPrefs.scope || "mine");
+  const [tab, setTab] = useState(loadedPrefs.tab || "all");
+  const [aiPriority, setAiPriority] = useState(Boolean(loadedPrefs.aiPriority));
+  // Which hero stat is filtering the sheet. null = everything.
+  const [lens, setLens] = useState(null);
+  const [armed, setArmed] = useState(false);
   const [openTask, setOpenTask] = useState(null);
   // Per-bucket "See all", so expanding Today does not also expand Later.
   const [showAll, setShowAll] = useState({});
+
+  useEffect(() => {
+    if (!prefsKey) return;
+    try { localStorage.setItem(prefsKey, JSON.stringify({ scope, tab, aiPriority })); }
+    catch { /* quota; ignore */ }
+  }, [prefsKey, scope, tab, aiPriority]);
 
   const canSeeWorkflows = isOwner || userPerms(user).includes("workflows");
   const views = VIEWS.filter((v) => !v.perm || v.key !== "workflows" || canSeeWorkflows);
@@ -465,6 +533,34 @@ export default function MyWorkMobile() {
     [tenant]
   );
   const all = tasksQ.data || [];
+
+  // The hero's numbers, from the SAME list the sheet renders — so the header
+  // can never disagree with the rows beneath it.
+  const kpis = useMemo(() => {
+    const today = ymd(new Date());
+    const live = all.filter((t) => !isTerminal(t));
+    const overdue = live.filter((t) => t.due_date && String(t.due_date).slice(0, 10) < today);
+    const dueToday = live.filter((t) => t.due_date && String(t.due_date).slice(0, 10) === today);
+    const waiting = live.filter((t) => t.status === "waiting" || t.status === "blocked");
+    return {
+      open: live.length,
+      overdue: overdue.length,
+      dueToday: dueToday.length,
+      waiting: waiting.length,
+      done: all.filter((t) => t.status === "done").length,
+      ids: {
+        overdue: new Set(overdue.map((t) => t.id)),
+        dueToday: new Set(dueToday.map((t) => t.id)),
+        waiting: new Set(waiting.map((t) => t.id)),
+      },
+    };
+  }, [all]);
+
+  useEffect(() => {
+    if (tasksQ.isLoading) return undefined;
+    const id = requestAnimationFrame(() => setArmed(true));
+    return () => cancelAnimationFrame(id);
+  }, [tasksQ.isLoading]);
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["tasks"] });
@@ -511,6 +607,9 @@ export default function MyWorkMobile() {
     : tab === "all"
       ? all.filter((x) => !isTerminal(x))
       : all.filter((x) => !isTerminal(x) && x.task_type === tab);
+  // The hero lens narrows whatever the tab already chose. Applied here rather
+  // than as a fourth tab so the two compose: "Sales, and only the late ones".
+  if (lens && kpis.ids[lens]) list = list.filter((x) => kpis.ids[lens].has(x.id));
   if (aiPriority && tab !== "completed") {
     list = [...list].sort(
       (a, b) => (scoreMap[b.id]?.priority_score || 0) - (scoreMap[a.id]?.priority_score || 0)
@@ -549,8 +648,63 @@ export default function MyWorkMobile() {
   };
 
   return (
-    <div data-testid="mywork-mobile">
-      <h1 className="font-heading text-2xl font-bold tracking-tight">{t("mywork.title", "My Work")}</h1>
+    // Split screen, the same shape and palette as Ops: a dark static top with
+    // the numbers you act on, and a light sheet pinned over it holding the
+    // detail. One fixed layer, so the document never scrolls and the only
+    // scroller is the sheet — which is what keeps the top genuinely static
+    // rather than merely slow to leave.
+    <div className="lg:hidden fixed inset-0 z-0 overflow-hidden" data-block="mywork" data-testid="mywork-mobile">
+      {/* ───────── static hero ───────── */}
+      <div className="absolute inset-x-0 top-0 h-[40svh] overflow-hidden bg-neutral-950" data-testid="mywork-hero">
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{ background: "radial-gradient(120% 80% at 78% 4%, hsl(var(--brand-600) / 0.30), transparent 62%)" }}
+        />
+        <div className="relative flex h-[36svh] flex-col justify-center gap-3 px-5 pb-4 pt-[calc(env(safe-area-inset-top,0px)+3.5rem)]">
+          <div>
+            <p className="label-mono text-white/45">{t("mywork.title", "My Work")}</p>
+            <p className="mt-1 font-heading text-2xl font-extrabold leading-none tracking-tight text-white">
+              {kpis.overdue > 0
+                ? `${kpis.overdue} ${kpis.overdue === 1 ? "task is" : "tasks are"} late`
+                : kpis.dueToday > 0
+                  ? `${kpis.dueToday} due today`
+                  : kpis.open > 0 ? "Nothing late" : "You're clear"}
+            </p>
+          </div>
+
+          {/* Composition of the live queue — where the open work actually sits.
+              Share-of-total bars rather than four more counters: the counters
+              below already say how many, these say how it is distributed. */}
+          <div className={cn("space-y-1.5 rounded-2xl px-3.5 py-2", MW_GLASS)}>
+            <HeroBar label="Late" value={kpis.overdue} total={kpis.open} armed={armed} index={0} />
+            <HeroBar label="Due today" value={kpis.dueToday} total={kpis.open} armed={armed} index={1} />
+            <HeroBar label="Waiting" value={kpis.waiting} total={kpis.open} armed={armed} index={2} />
+          </div>
+
+          {/* Tapping a stat filters the sheet to it. The numbers are the
+              navigation — that is the point of putting them up here. */}
+          <div className="grid grid-cols-4 gap-2" data-testid="mywork-kpis">
+            <HeroStat label="Open" value={kpis.open} testid="mywork-kpi-open"
+              active={lens === null} onClick={() => setLens(null)} />
+            <HeroStat label="Late" value={kpis.overdue} testid="mywork-kpi-overdue"
+              active={lens === "overdue"} onClick={() => setLens(lens === "overdue" ? null : "overdue")} />
+            <HeroStat label="Today" value={kpis.dueToday} testid="mywork-kpi-today"
+              active={lens === "dueToday"} onClick={() => setLens(lens === "dueToday" ? null : "dueToday")} />
+            <HeroStat label="Done" value={kpis.done} testid="mywork-kpi-done" />
+          </div>
+        </div>
+      </div>
+
+      {/* ───────── sheet, laid over it ───────── */}
+      <div
+        className="absolute inset-x-0 top-[36svh] bottom-0 z-10 overflow-y-auto overscroll-contain scrollbar-none rounded-t-[28px] border-t border-hairline bg-background shadow-[0_-10px_34px_rgba(0,0,0,0.20)]"
+        data-testid="mywork-sheet"
+      >
+        <div className="pb-dock">
+          <div className="sticky top-0 z-10 flex justify-center rounded-t-[28px] bg-background pb-1.5 pt-2.5" aria-hidden="true">
+            <div className="h-1 w-9 rounded-full bg-foreground/15" />
+          </div>
+          <div className="px-4">
 
       {/* §8: the three stacked filter rows collapse into ONE. Scope and view
           live together; categories are the wrapping row below. */}
@@ -760,6 +914,10 @@ export default function MyWorkMobile() {
           </div>
         </>
       )}
+
+          </div>
+        </div>
+      </div>
 
       <TaskSheet
         task={openTask}

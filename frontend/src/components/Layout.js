@@ -110,7 +110,7 @@ const Logo = ({ markOnly = false, tone }) => (
 //
 // The dock and the Dex FAB are untouched: they are `fixed` at z-[10000] and
 // were never part of this flow.
-const IMMERSIVE_MOBILE_ROUTES = new Set(["/operating-score"]);
+const IMMERSIVE_MOBILE_ROUTES = new Set(["/operating-score", "/my-work"]);
 
 export default function Layout({ children }) {
   const { user, tenant, logout } = useAuth();

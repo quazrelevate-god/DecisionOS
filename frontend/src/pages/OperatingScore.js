@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import api from "../lib/api";
@@ -6,8 +6,13 @@ import { PageHeader } from "../components/common";
 import {
   Gauge, Lightning, CurrencyCircleDollar, TrendUp, ChatCenteredDots, Trophy,
   Sparkle, CaretRight, Camera, ClipboardText, Check, Warning, ArrowRight,
-  Info, CaretDown, CaretUp, Microphone, Receipt,
+  Info, CaretDown, CaretUp, Microphone, Receipt, X, ArrowUp, ArrowDown,
+  ArrowsClockwise, Flame, Coins, CheckCircle,
 } from "@phosphor-icons/react";
+import {
+  demoTrend, demoDelta, demoDrivers, demoDrilldowns, demoDex,
+  demoActions, demoEmpDeltas, DEFAULT_WEIGHTS, WEIGHT_PRESETS,
+} from "./_operatingScoreDemo";
 
 // Epic 7 Sprint 1 Phase A -- role-aware dispatcher.
 // Owner keeps the company dashboard (with a new personal snapshot mini-widget).
@@ -76,6 +81,11 @@ function OwnerView({ data }) {
   const overall = company.overall;
   const enough = company.enough_data !== false;
 
+  // U7-01.4: which category is drilled open. null = no drill.
+  const [drillCat, setDrillCat] = useState(null);
+  // U7-01.17: local weights override (backend persistence lands in Phase B).
+  const [weights, setWeights] = useState(DEFAULT_WEIGHTS);
+
   return (
     <div>
       <PageHeader eyebrow="How well the business is running" title="Operating Score" />
@@ -83,63 +93,38 @@ function OwnerView({ data }) {
       {!enough ? (
         <NotEnoughDataEmptyState stats={stats} />
       ) : (
-      /* Company overall */
-      <div className="card-brutal p-8 mb-8 flex flex-col lg:flex-row items-center gap-8" data-testid="operating-overall">
-        <div className="flex flex-col items-center shrink-0">
-          <div className="w-36 h-36 flex flex-col items-center justify-center border-4 border-black bg-white">
-            <span className={`font-heading text-6xl font-black leading-none ${scoreColor(overall)}`} data-testid="operating-overall-score">{overall}</span>
-            <span className="label-mono text-muted-foreground mt-1">/ 100</span>
+        <>
+          {/* U7-01.1 + U7-01.3 + U7-01.9 -- upgraded hero: score circle,
+              delta chip vs last week, 30-day sparkline, one-sentence Dex
+              narrative. This is the panel a founder reads first. */}
+          <HeroCard overall={overall} />
+
+          {/* U7-01.9 -- Dex explainer card. Longer diagnosis with a refresh
+              button (mock refresh for now; wires to /api/ai/... later). */}
+          <DexExplainerCard />
+
+          {/* U7-01.10 -- suggested action chips derived from stats (demo).
+              One tap from score to fix. */}
+          <SuggestedActions />
+
+          {/* U7-01.4 -- category CARDS with drivers + drill-in, replacing
+              the old thin category bars. Grid of 4, click to open drill. */}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 mb-4">
+            {CATS.map((c) => (
+              <CategoryCard
+                key={c.key}
+                cat={c}
+                value={company.categories[c.key]}
+                drivers={demoDrivers[c.key] || []}
+                onDrillIn={() => setDrillCat(c.key)}
+              />
+            ))}
           </div>
-          <div className="flex items-center gap-2 mt-3">
-            <Gauge size={16} weight="bold" className="text-brand-600" />
-            <span className="font-heading font-extrabold uppercase tracking-tight text-sm">Company Health</span>
-          </div>
-        </div>
-        <div className="flex-1 w-full space-y-4">
-          {CATS.map((c) => {
-            const v = company.categories[c.key];
-            const has = v != null;
-            return (
-              <div key={c.key} data-testid={`operating-cat-${c.key}`}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide">
-                    <c.icon size={15} weight="bold" className="text-muted-foreground" /> {c.label}
-                    {/* U7-01.16: per-category (i) tooltip explains what the
-                        number measures in plain English before diving into
-                        the formula. Native title attribute keeps zero JS. */}
-                    <span
-                      title={`${c.plain}\n\nFormula: ${c.formula}\nWeight: ${c.weight}% of overall`}
-                      className="text-black/30 hover:text-brand-600 cursor-help"
-                      aria-label={`How ${c.label} is calculated`}
-                    >
-                      <Info size={13} weight="bold" />
-                    </span>
-                  </span>
-                  <span
-                    className={`font-heading font-black ${scoreColor(v)}`}
-                    role="progressbar"
-                    aria-label={`${c.label}: ${has ? v : "no data"} out of 100`}
-                    aria-valuenow={has ? v : undefined}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                  >
-                    {has ? v : "—"}
-                  </span>
-                </div>
-                <div className="h-3 bg-black/10 border border-black" aria-hidden="true">
-                  <div className={`h-full ${c.color}`} style={{ width: `${has ? v : 0}%` }} />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+        </>
       )}
 
-      {/* U7-01.16: full formula panel, collapsed by default. Opens the
-          weights + formulas for all four categories so a founder can
-          reason about their score instead of trusting a black box. */}
-      {enough && <FormulaExplainer />}
+      {/* U7-01.16 + U7-01.17: formula panel + weights editor, collapsed by default. */}
+      {enough && <FormulaExplainer weights={weights} setWeights={setWeights} />}
 
       {/* Quick stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
@@ -161,31 +146,20 @@ function OwnerView({ data }) {
           "here's how you're doing personally" without hijacking the page. */}
       {mySnapshot && <PersonalSnapshot stats={mySnapshot} viewerName={data.self?.name} />}
 
-      {/* Employee leaderboard */}
-      <div className="flex items-center gap-2 mb-4">
-        <Trophy size={18} weight="bold" className="text-brand-600" />
-        <h2 className="font-heading text-xl font-extrabold uppercase tracking-tight">Team Execution</h2>
-      </div>
-      <p className="label-mono text-muted-foreground mb-3">Tap any member to see their full activity &amp; AI coaching.</p>
-      <div className="card-brutal divide-y divide-black/10" data-testid="operating-employees">
-        {rankedEmployees.map((e, i) => (
-          <Link key={e.id} to={`/coach?user=${e.id}`} data-testid={`operating-emp-${e.id}`}
-            className="p-4 flex items-center gap-4 hover:bg-black/[0.03] transition-colors group cursor-pointer">
-            <span className="font-heading text-lg font-black text-black/30 w-6">{i + 1}</span>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold truncate group-hover:text-brand-600 transition-colors">{e.name}</p>
-              <p className="label-mono text-muted-foreground">{e.role} · {e.done} done · {e.open} open{e.overdue > 0 ? ` · ${e.overdue} overdue` : ""}</p>
-            </div>
-            <span className="hidden sm:flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground group-hover:text-brand-600 transition-colors shrink-0">
-              <Sparkle size={13} weight="bold" /> Details
-            </span>
-            <div className="w-14 h-14 flex flex-col items-center justify-center border-2 border-black bg-white shrink-0">
-              <span className={`font-heading text-2xl font-black leading-none ${scoreColor(e.score)}`}>{e.score != null ? e.score : "—"}</span>
-            </div>
-            <CaretRight size={16} weight="bold" className="text-black/30 group-hover:text-brand-600 transition-colors shrink-0" />
-          </Link>
-        ))}
-      </div>
+      {/* U7-01.11 + U7-01.13 -- leaderboard with period label + sort. */}
+      <Leaderboard employees={rankedEmployees} />
+
+      {/* U7-01.5..8 -- category drill-down modal. One component with
+          per-category demo payloads keeps the surface small. */}
+      {drillCat && (
+        <CategoryDrillModal
+          cat={CATS.find((c) => c.key === drillCat)}
+          value={company.categories[drillCat]}
+          drivers={demoDrivers[drillCat] || []}
+          drill={demoDrilldowns[drillCat]}
+          onClose={() => setDrillCat(null)}
+        />
+      )}
     </div>
   );
 }
@@ -450,6 +424,459 @@ function _formatDate(iso) {
 }
 
 // -----------------------------------------------------------------------------
+// U7-01.1 -- Hero card: score circle + delta chip + one-sentence Dex
+// narrative + 30-day sparkline behind. This is the panel a founder reads
+// first, so it carries the whole "what's my number and what changed" story.
+// -----------------------------------------------------------------------------
+function HeroCard({ overall }) {
+  return (
+    <div className="card-brutal p-8 mb-4 relative overflow-hidden" data-testid="operating-overall">
+      {/* U7-01.3 sparkline sits behind, low-opacity, doesn't fight the score. */}
+      <div className="absolute inset-x-0 bottom-0 h-24 opacity-25 pointer-events-none" aria-hidden="true">
+        <Sparkline values={demoTrend} />
+      </div>
+
+      <div className="relative flex flex-col lg:flex-row items-start gap-8">
+        <div className="flex flex-col items-center shrink-0">
+          <div className="w-36 h-36 flex flex-col items-center justify-center border-4 border-black bg-white">
+            <span
+              className={`font-heading text-6xl font-black leading-none ${scoreColor(overall)}`}
+              data-testid="operating-overall-score"
+            >{overall}</span>
+            <span className="label-mono text-muted-foreground mt-1">/ 100</span>
+          </div>
+          <div className="flex items-center gap-2 mt-3">
+            <Gauge size={16} weight="bold" className="text-brand-600" />
+            <span className="font-heading font-extrabold uppercase tracking-tight text-sm">Company Health</span>
+          </div>
+        </div>
+
+        <div className="flex-1">
+          <div className="flex items-center gap-3 mb-3">
+            <DeltaChip value={demoDelta.value} sign={demoDelta.sign} />
+            <span className="label-mono text-muted-foreground">{demoDelta.period}</span>
+          </div>
+          <p className="font-heading font-extrabold uppercase tracking-tight text-lg leading-snug mb-3">
+            {demoDex.headline}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            30-day trend behind — hover the score for the exact day.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// U7-01.3 -- SVG line chart. Pure inline SVG; no chart library.
+function Sparkline({ values }) {
+  if (!values || values.length < 2) return null;
+  const w = 800, h = 96;
+  const min = Math.min(...values), max = Math.max(...values);
+  const span = max - min || 1;
+  const step = w / (values.length - 1);
+  const points = values
+    .map((v, i) => `${(i * step).toFixed(1)},${(h - ((v - min) / span) * h).toFixed(1)}`)
+    .join(" ");
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" width="100%" height="100%">
+      <polyline
+        points={points}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        className="text-brand-600"
+      />
+    </svg>
+  );
+}
+
+// U7-01.1 -- delta chip. Green when up, red when down, neutral when 0.
+function DeltaChip({ value, sign }) {
+  if (value == null) return null;
+  const isUp = sign === "up" || value > 0;
+  const isDown = sign === "down" || value < 0;
+  const abs = Math.abs(value);
+  const tone = isUp ? "bg-green-100 text-green-800 border-green-600"
+             : isDown ? "bg-red-100 text-red-800 border-red-600"
+             : "bg-black/5 text-muted-foreground border-black/30";
+  const Icon = isUp ? ArrowUp : isDown ? ArrowDown : null;
+  return (
+    <span
+      className={`inline-flex items-center gap-1 border-2 px-2 py-0.5 text-sm font-heading font-black ${tone}`}
+      data-testid="operating-delta-chip"
+    >
+      {Icon && <Icon size={12} weight="bold" />}
+      {isUp ? "+" : isDown ? "−" : ""}{abs}
+    </span>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// U7-01.9 -- Dex explainer card. Longer diagnosis + refresh button.
+// Refresh is mocked; wires to /api/ai/operating-score-explain later.
+// -----------------------------------------------------------------------------
+function DexExplainerCard() {
+  const [refreshing, setRefreshing] = useState(false);
+  const [text, setText] = useState(demoDex.explainer);
+  const refresh = () => {
+    setRefreshing(true);
+    // fake latency; in production this is an AI call under DPDP consent gate.
+    setTimeout(() => {
+      setText(demoDex.explainer);
+      setRefreshing(false);
+    }, 900);
+  };
+  return (
+    <div className="card-brutal p-5 mb-4 flex items-start gap-4 bg-brand-600/5" data-testid="operating-dex-explainer">
+      <div className="w-10 h-10 border-2 border-brand-600 bg-white flex items-center justify-center shrink-0" aria-hidden="true">
+        <Sparkle size={18} weight="bold" className="text-brand-600" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-xs font-semibold uppercase tracking-wider text-brand-600">Dex says</span>
+          <button
+            type="button"
+            onClick={refresh}
+            disabled={refreshing}
+            className="text-xs text-muted-foreground hover:text-brand-600 inline-flex items-center gap-1"
+            aria-label="Ask Dex to re-explain"
+          >
+            <ArrowsClockwise size={11} weight="bold" className={refreshing ? "animate-spin" : ""} />
+            {refreshing ? "thinking..." : "refresh"}
+          </button>
+        </div>
+        <p className="text-sm leading-relaxed">{text}</p>
+      </div>
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// U7-01.10 -- Suggested-action chip row. Turns "here are the numbers" into
+// "here's what to do first". Each chip carries an estimated point-lift.
+// -----------------------------------------------------------------------------
+function SuggestedActions() {
+  const iconMap = { flame: Flame, money: Coins, check: CheckCircle };
+  return (
+    <div className="mb-6" data-testid="operating-suggested-actions">
+      <p className="label-mono text-muted-foreground mb-2">Do these first — expected lift shown</p>
+      <div className="flex flex-wrap gap-2">
+        {demoActions.map((a) => {
+          const Icon = iconMap[a.icon] || Sparkle;
+          return (
+            <Link
+              key={a.label}
+              to={a.to}
+              className="inline-flex items-center gap-2 border-2 border-black bg-white px-3 py-2 text-sm font-semibold hover:bg-brand-600 hover:text-white hover:border-brand-600 transition-colors group"
+            >
+              <Icon size={14} weight="bold" />
+              <span>{a.label}</span>
+              <span className="label-mono opacity-70 group-hover:opacity-100">{a.lift}</span>
+              <ArrowRight size={12} weight="bold" className="opacity-40 group-hover:opacity-100" />
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// U7-01.4 -- Category card. Replaces the old thin bars. Shows value + bar +
+// top 3 drivers + "drill in" affordance. Clickable to open the modal.
+// -----------------------------------------------------------------------------
+function CategoryCard({ cat, value, drivers, onDrillIn }) {
+  const has = value != null;
+  const toneColor = {
+    good: "text-green-600",
+    warn: "text-amber-600",
+    bad: "text-danger-600",
+    neutral: "text-muted-foreground",
+  };
+  return (
+    <button
+      type="button"
+      onClick={onDrillIn}
+      disabled={!has}
+      className="card-brutal p-4 text-left hover:border-brand-600 hover:shadow-md transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+      data-testid={`operating-cat-${cat.key}`}
+      aria-label={`${cat.label} — drill in`}
+    >
+      <div className="flex items-center justify-between mb-2">
+        <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide">
+          <cat.icon size={14} weight="bold" className="text-muted-foreground" /> {cat.label}
+        </span>
+        <span
+          title={`${cat.plain}\n\nFormula: ${cat.formula}\nWeight: ${cat.weight}%`}
+          className="text-black/30 hover:text-brand-600 cursor-help"
+          aria-label={`How ${cat.label} is calculated`}
+        >
+          <Info size={12} weight="bold" />
+        </span>
+      </div>
+      <div className="flex items-baseline gap-2 mb-3">
+        <span
+          className={`font-heading text-4xl font-black leading-none ${scoreColor(value)}`}
+          role="progressbar"
+          aria-valuenow={has ? value : undefined}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={`${cat.label}: ${has ? value : "no data"} out of 100`}
+        >{has ? value : "—"}</span>
+        <span className="label-mono text-muted-foreground">/ 100</span>
+      </div>
+      <div className="h-2 bg-black/10 border border-black mb-3" aria-hidden="true">
+        <div className={`h-full ${cat.color}`} style={{ width: `${has ? value : 0}%` }} />
+      </div>
+      <ul className="space-y-1">
+        {drivers.slice(0, 3).map((d, i) => (
+          <li key={i} className="flex items-center justify-between text-xs">
+            <span className="text-muted-foreground truncate pr-2">{d.label}</span>
+            <span className={`label-mono tabular-nums ${toneColor[d.tone] || "text-muted-foreground"}`}>{d.value}</span>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-3 pt-3 border-t border-black/10 flex items-center justify-between text-xs font-semibold text-muted-foreground">
+        <span>See breakdown</span>
+        <CaretRight size={12} weight="bold" />
+      </div>
+    </button>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// U7-01.5..8 -- Category drill-down modal. One component; per-category
+// payload keeps the surface small. Closes on backdrop click, Esc, or X.
+// -----------------------------------------------------------------------------
+function CategoryDrillModal({ cat, value, drivers, drill, onClose }) {
+  useEffect(() => {
+    const onKey = (e) => e.key === "Escape" && onClose();
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  const toneColor = {
+    good: "text-green-600", warn: "text-amber-600",
+    bad: "text-danger-600", neutral: "text-muted-foreground",
+  };
+  const has = value != null;
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="drill-title"
+      data-testid={`operating-drill-${cat.key}`}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white border-4 border-black max-w-2xl w-full max-h-[85vh] flex flex-col shadow-xl"
+      >
+        <div className={`p-5 border-b-4 border-black flex items-start gap-4 ${cat.color} bg-opacity-20`}>
+          <div className="w-12 h-12 flex items-center justify-center border-2 border-black bg-white shrink-0">
+            <cat.icon size={22} weight="bold" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="label-mono text-black/60">Weight {cat.weight}% of overall</p>
+            <h2 id="drill-title" className="font-heading text-2xl font-black uppercase tracking-tight leading-tight">
+              {drill?.title || cat.label}
+            </h2>
+          </div>
+          <span className={`font-heading text-5xl font-black ${scoreColor(value)} shrink-0`}>
+            {has ? value : "—"}
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-8 h-8 border-2 border-black bg-white flex items-center justify-center hover:bg-black hover:text-white shrink-0"
+            aria-label="Close drill-down"
+          >
+            <X size={14} weight="bold" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          <div className="p-5 border-b border-black/10">
+            <p className="text-sm font-semibold mb-1">{drill?.hero}</p>
+            <p className="font-mono text-xs text-muted-foreground mt-2">{cat.formula}</p>
+          </div>
+
+          <div className="p-5 border-b border-black/10">
+            <p className="text-xs font-semibold uppercase tracking-wider mb-3">Top drivers this period</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {drivers.map((d, i) => (
+                <div key={i} className="border border-black/30 p-3">
+                  <p className="label-mono text-muted-foreground">{d.label}</p>
+                  <p className={`font-heading text-xl font-black tabular-nums ${toneColor[d.tone] || ""}`}>{d.value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {drill?.items && (
+            <div className="p-5">
+              <p className="text-xs font-semibold uppercase tracking-wider mb-3">Specifics</p>
+              <ul className="divide-y divide-black/10 border border-black/20">
+                {drill.items.map((item, i) => (
+                  <li key={i} className="p-3 flex items-center gap-3">
+                    <span className={`w-1.5 h-8 shrink-0 ${
+                      item.tone === "bad" ? "bg-danger-600" :
+                      item.tone === "warn" ? "bg-amber-500" :
+                      item.tone === "good" ? "bg-green-600" : "bg-black/20"
+                    }`} aria-hidden="true" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold truncate">{item.title}</p>
+                      <p className="label-mono text-muted-foreground">{item.meta}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+
+        {drill?.action && (
+          <div className="p-4 border-t-2 border-black flex items-center justify-between gap-3 bg-black/[0.02]">
+            <span className="text-xs text-muted-foreground">Ready to act?</span>
+            <Link
+              to={drill.action.to}
+              onClick={onClose}
+              className="inline-flex items-center gap-2 border-2 border-black bg-black text-white px-4 py-2 text-sm font-semibold hover:bg-brand-600 hover:border-brand-600 transition-colors"
+            >
+              {drill.action.label}
+              <ArrowRight size={14} weight="bold" />
+            </Link>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// U7-01.11 + U7-01.13 -- Leaderboard: period label, per-person delta chips,
+// sort dropdown (score / name / activity).
+// -----------------------------------------------------------------------------
+function Leaderboard({ employees }) {
+  const [sortBy, setSortBy] = useState("score");
+  const sorted = useMemo(() => {
+    const copy = [...(employees || [])];
+    copy.sort((a, b) => {
+      if (sortBy === "name") return (a.name || "").localeCompare(b.name || "");
+      if (sortBy === "activity") return (b.done + b.open) - (a.done + a.open);
+      // default: score desc, null last
+      return (b.score ?? -1) - (a.score ?? -1);
+    });
+    return copy;
+  }, [employees, sortBy]);
+
+  return (
+    <>
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <Trophy size={18} weight="bold" className="text-brand-600" />
+          <h2 className="font-heading text-xl font-extrabold uppercase tracking-tight">Team Execution</h2>
+          <span className="label-mono text-muted-foreground">— last 30 days</span>
+        </div>
+        <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Sort by
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="border border-black/40 bg-white px-2 py-1 text-xs font-semibold"
+            aria-label="Sort team by"
+            data-testid="operating-leaderboard-sort"
+          >
+            <option value="score">Score</option>
+            <option value="activity">Activity</option>
+            <option value="name">Name</option>
+          </select>
+        </label>
+      </div>
+      <p className="label-mono text-muted-foreground mb-3">
+        Tap any member to see their full activity &amp; AI coaching.
+      </p>
+      <div className="card-brutal divide-y divide-black/10" data-testid="operating-employees">
+        {sorted.map((e, i) => {
+          const delta = demoEmpDeltas[e.role];
+          return (
+            <Link key={e.id} to={`/coach?user=${e.id}`} data-testid={`operating-emp-${e.id}`}
+              className="p-4 flex items-center gap-4 hover:bg-black/[0.03] transition-colors group cursor-pointer">
+              <span className="font-heading text-lg font-black text-black/30 w-6">{i + 1}</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold truncate group-hover:text-brand-600 transition-colors">{e.name}</p>
+                <p className="label-mono text-muted-foreground">
+                  {e.role} · {e.done} done · {e.open} open{e.overdue > 0 ? ` · ${e.overdue} overdue` : ""}
+                </p>
+              </div>
+              {delta !== undefined && delta !== 0 && (
+                <DeltaChip value={delta} sign={delta > 0 ? "up" : "down"} />
+              )}
+              <span className="hidden sm:flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground group-hover:text-brand-600 transition-colors shrink-0">
+                <Sparkle size={13} weight="bold" /> Details
+              </span>
+              <div className="w-14 h-14 flex flex-col items-center justify-center border-2 border-black bg-white shrink-0">
+                <span className={`font-heading text-2xl font-black leading-none ${scoreColor(e.score)}`}>
+                  {e.score != null ? e.score : "—"}
+                </span>
+              </div>
+              <CaretRight size={16} weight="bold" className="text-black/30 group-hover:text-brand-600 transition-colors shrink-0" />
+            </Link>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// U7-01.15 -- Inline capture on the empty state. Small mic + text input so
+// a first-time tenant doesn't need to bounce to Desk to make progress.
+// -----------------------------------------------------------------------------
+function InlineCapture() {
+  const [text, setText] = useState("");
+  const [sent, setSent] = useState(false);
+  const submit = (e) => {
+    e.preventDefault();
+    if (!text.trim()) return;
+    // Real wiring: POST /api/voice-notes with kind='text', source='ops-empty'.
+    setSent(true);
+    setText("");
+    setTimeout(() => setSent(false), 2400);
+  };
+  return (
+    <form
+      onSubmit={submit}
+      className="mt-5 border-2 border-black bg-black/[0.02] p-3 flex items-center gap-2"
+      data-testid="operating-inline-capture"
+    >
+      <Microphone size={16} weight="bold" className="text-brand-600 shrink-0" />
+      <input
+        type="text"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="Or capture a decision right here — 'Ship 200 units to Delhi Retail by Friday'"
+        className="flex-1 bg-transparent text-sm placeholder:text-muted-foreground focus:outline-none"
+        aria-label="Capture a decision"
+      />
+      <button
+        type="submit"
+        disabled={!text.trim()}
+        className="border-2 border-black bg-black text-white px-3 py-1 text-xs font-semibold hover:bg-brand-600 hover:border-brand-600 transition-colors disabled:opacity-40"
+      >
+        Capture
+      </button>
+      {sent && (
+        <span className="label-mono text-green-600 flex items-center gap-1" role="status">
+          <Check size={12} weight="bold" /> sent
+        </span>
+      )}
+    </form>
+  );
+}
+
+// -----------------------------------------------------------------------------
 // U7-01.20 -- skeleton matches final page shape so layout doesn't jump.
 // Same skeleton for owner + self because the role isn't known until data
 // arrives. Uses tokenized muted-foreground colors so both themes read.
@@ -554,6 +981,11 @@ function NotEnoughDataEmptyState({ stats }) {
               icon={Receipt}
             />
           </div>
+
+          {/* U7-01.15 -- inline capture: skip the round trip to Desk for
+              first-time users. Prefills a quick text-decision box right here
+              so they can act without bouncing pages. */}
+          <InlineCapture />
         </div>
       </div>
     </div>
@@ -586,8 +1018,12 @@ function ChecklistItem({ done, label, hint, actionLabel, actionTo, icon: Icon })
 // U7-01.16 -- collapsible formula panel. Every category's formula + weight in
 // one place; opens on click, closed by default so it doesn't clutter the hero.
 // -----------------------------------------------------------------------------
-function FormulaExplainer() {
+function FormulaExplainer({ weights = DEFAULT_WEIGHTS, setWeights }) {
   const [open, setOpen] = useState(false);
+  const total = Object.values(weights).reduce((a, b) => a + b, 0);
+  const applyPreset = (key) => setWeights && setWeights(WEIGHT_PRESETS[key].weights);
+  const setOne = (key, val) => setWeights && setWeights({ ...weights, [key]: Math.max(0, Math.min(100, val)) });
+
   return (
     <div className="mb-8 -mt-4">
       <button
@@ -603,16 +1039,66 @@ function FormulaExplainer() {
         {open ? <CaretUp size={12} weight="bold" /> : <CaretDown size={12} weight="bold" />}
       </button>
       {open && (
-        <div id="operating-formula-panel" className="mt-3 card-brutal p-5 space-y-4 text-sm" data-testid="operating-formula-panel">
+        <div id="operating-formula-panel" className="mt-3 card-brutal p-5 space-y-5 text-sm" data-testid="operating-formula-panel">
           <p className="text-xs text-muted-foreground leading-relaxed">
             Overall = weighted average across the four categories below. Categories with no data yet are skipped and remaining weights renormalize.
           </p>
+
+          {/* U7-01.17 -- weights editor. Presets first, sliders below. */}
+          {setWeights && (
+            <div className="border border-black/30 p-4 bg-black/[0.02]">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-semibold uppercase tracking-wider">Customize weights for your business</p>
+                <span className={`label-mono ${total === 100 ? "text-muted-foreground" : "text-danger-600"}`}>
+                  total: {total}%
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2 mb-4">
+                {Object.entries(WEIGHT_PRESETS).map(([k, p]) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => applyPreset(k)}
+                    className="border border-black/40 px-3 py-1.5 text-xs font-semibold hover:bg-brand-600 hover:text-white hover:border-brand-600 transition-colors"
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              <div className="space-y-3">
+                {CATS.map((c) => (
+                  <div key={c.key} className="flex items-center gap-3">
+                    <span className="w-32 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide shrink-0">
+                      <c.icon size={12} weight="bold" className="text-muted-foreground" /> {c.label}
+                    </span>
+                    <input
+                      type="range"
+                      min="0"
+                      max="60"
+                      step="5"
+                      value={weights[c.key]}
+                      onChange={(e) => setOne(c.key, Number(e.target.value))}
+                      className="flex-1"
+                      aria-label={`${c.label} weight`}
+                    />
+                    <span className="w-14 text-right label-mono tabular-nums">{weights[c.key]}%</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground mt-3">
+                {total !== 100
+                  ? "Weights should add up to 100%. Pick a preset or adjust the sliders."
+                  : "Local preview only -- backend persistence lands next."}
+              </p>
+            </div>
+          )}
+
           {CATS.map((c) => (
             <div key={c.key} className="border-l-4 pl-4 border-black/20">
               <div className="flex items-center gap-2 mb-1">
                 <c.icon size={14} weight="bold" className="text-muted-foreground" />
                 <span className="font-semibold uppercase tracking-wide">{c.label}</span>
-                <span className="label-mono text-muted-foreground">weight {c.weight}%</span>
+                <span className="label-mono text-muted-foreground">weight {weights[c.key]}%</span>
               </div>
               <p className="text-xs text-muted-foreground mb-1">{c.plain}</p>
               <p className="font-mono text-xs">{c.formula}</p>

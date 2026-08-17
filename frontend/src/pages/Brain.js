@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { formatPhone } from "../lib/format";
 import { useTranslation } from "react-i18next";
 import api from "../lib/api";
 import { PageHeader, Chip, EmptyState } from "../components/common";
@@ -122,7 +123,7 @@ function SearchPanel() {
                     </div>
                     <p className="font-semibold text-sm">{c.name}</p>
                     {c.company && <p className="text-xs text-muted-foreground mt-1">{c.company}</p>}
-                    {c.phone && <p className="text-xs text-muted-foreground">{c.phone}</p>}
+                    {c.phone && <p className="text-xs text-muted-foreground">{formatPhone(c.phone)}</p>}
                   </div>
                 ))}
                 {(res.contacts || []).length === 0 && <p className="text-xs text-muted-foreground">{t("brain.no_matches")}</p>}

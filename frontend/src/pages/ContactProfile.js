@@ -7,7 +7,7 @@ import ContactProfileMobile from "./mobile/ContactProfileMobile";
 import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
 import { Chip, EmptyState, DexBadge } from "../components/common";
-import { money, typeLabel } from "../lib/format";
+import { money, typeLabel, formatPhone } from "../lib/format";
 import { toast } from "sonner";
 import {
   ArrowLeft, Phone, EnvelopeSimple, MapPin, Receipt, CurrencyCircleDollar,
@@ -215,7 +215,7 @@ export default function ContactProfile() {
         <h1 className="font-display text-3xl">{c.name}</h1>
         {c.company && <p className="text-muted-foreground flex items-center gap-2 mt-1"><Buildings size={14} weight="bold" /> {c.company}</p>}
         <div className="flex flex-wrap gap-4 mt-3 text-sm">
-          {c.phone && <span className="flex items-center gap-1.5"><Phone size={14} weight="bold" className="text-muted-foreground" /> {c.phone}</span>}
+          {c.phone && <span className="flex items-center gap-1.5"><Phone size={14} weight="bold" className="text-muted-foreground" /> {formatPhone(c.phone)}</span>}
           {c.email && <span className="flex items-center gap-1.5"><EnvelopeSimple size={14} weight="bold" className="text-muted-foreground" /> {c.email}</span>}
           {c.address && <span className="flex items-center gap-1.5"><MapPin size={14} weight="bold" className="text-muted-foreground" /> {c.address}</span>}
           {c.tax_id && <span className="font-mono text-muted-foreground">{c.tax_id}</span>}

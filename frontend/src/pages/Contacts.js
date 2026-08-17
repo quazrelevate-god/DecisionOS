@@ -5,7 +5,7 @@ import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
 import { Chip, EmptyState } from "../components/common";
-import { typeLabel } from "../lib/format";
+import { typeLabel, formatPhone } from "../lib/format";
 import { toast } from "sonner";
 import { Plus, MagnifyingGlass, PencilSimple, Trash, Phone, EnvelopeSimple, MapPin, Warning, Eye } from "@phosphor-icons/react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../components/ui/dialog";
@@ -217,7 +217,7 @@ export function ContactsPanel({ types, addLabel = "Add Contact", readOnly = fals
             <p className="font-medium text-lg leading-tight">{c.name}</p>
             {c.company && <p className="text-sm text-muted-foreground">{c.company}</p>}
             <div className="mt-3 space-y-1 text-sm">
-              {c.phone && <p className="flex items-center gap-2"><Phone size={14} weight="bold" className="text-muted-foreground" /> {c.phone}</p>}
+              {c.phone && <p className="flex items-center gap-2"><Phone size={14} weight="bold" className="text-muted-foreground" /> {formatPhone(c.phone)}</p>}
               {c.email && <p className="flex items-center gap-2 break-all"><EnvelopeSimple size={14} weight="bold" className="text-muted-foreground" /> {c.email}</p>}
               {c.address && <p className="flex items-center gap-2"><MapPin size={14} weight="bold" className="text-muted-foreground" /> {c.address}</p>}
             </div>

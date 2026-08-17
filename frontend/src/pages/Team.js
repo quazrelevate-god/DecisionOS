@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { formatPhone } from "../lib/format";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api, { formatApiError } from "../lib/api";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -504,7 +505,7 @@ function MemberProfileDialog({
         {/* Contact block */}
         <div className="px-6 py-4 border-b border-border space-y-2 text-sm">
           <ContactRow icon={EnvelopeSimple} label="Email" value={u.email} />
-          {u.phone && <ContactRow icon={Phone} label="Phone" value={u.phone} />}
+          {u.phone && <ContactRow icon={Phone} label="Phone" value={formatPhone(u.phone)} />}
           {manager && <ContactRow icon={User} label="Reports to" value={manager.name} />}
         </div>
 

@@ -106,3 +106,21 @@ export const INDUSTRIES = [
 
 export const COMPANY_SIZES = ["1-10", "11-50", "51-200", "201-500", "500+"];
 export const CURRENCIES = ["INR", "USD", "EUR", "GBP", "AED", "SGD", "AUD", "CAD"];
+
+/**
+ * NM-7 (NEUMORPHIC-REVAMP §1) — phone numbers get grouped for reading, the
+ * same principle as the Indian digit grouping money() already applies:
+ * +919820044558 -> +91 98200 44558.
+ *
+ * Deliberately narrow: only a +91 followed by exactly 10 digits is regrouped,
+ * because that is the one shape we can format without guessing. Anything
+ * else — landlines with STD codes, foreign numbers, extensions, or text —
+ * comes back untouched, since a wrong grouping is worse than none.
+ */
+export function formatPhone(raw) {
+  if (!raw) return raw;
+  const s = String(raw).trim();
+  const m = s.replace(/[\s-]/g, "").match(/^\+91(\d{10})$/);
+  if (!m) return s;
+  return `+91 ${m[1].slice(0, 5)} ${m[1].slice(5)}`;
+}

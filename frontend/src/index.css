@@ -1,4 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Chivo:wght@700;800;900&family=Inter:wght@100..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+/* RD-1 (2026-08-17) — Instrument Serif joins the stack as the display face.
+   The reference system leads every page with a large editorial serif greeting
+   ("Good afternoon, Sam") against an otherwise neutral grotesque UI. Inter
+   alone made those moments read as "big bold sans" rather than editorial.
+   Instrument Serif ships one weight + italic, which is all a display face
+   needs — it is never used below 24px. */
+@import url('https://fonts.googleapis.com/css2?family=Chivo:wght@700;800;900&family=Instrument+Serif:ital@0;1&family=Inter:wght@100..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -52,13 +58,26 @@
         --success-600: 142 76% 36%;--success-700: 142 72% 29%; --success-800: 142 61% 24%;
         --success-900: 144 61% 20%;
 
-        --neutral-50: 210 20% 98%; --neutral-100: 228 20% 95%; --neutral-200: 220 18% 90%;
-        --neutral-300: 217 13% 81%;--neutral-400: 219 11% 65%; --neutral-500: 221 10% 43%;
-        --neutral-600: 215 14% 34%;--neutral-700: 222 13% 26%; --neutral-800: 222 18% 11%;
-        --neutral-900: 223 17% 8%;
+        /* RD-1 (2026-08-17) — neutrals retuned for the reference language.
+           Was a blue-tinted ramp (hue 210-228) at fairly high saturation, which
+           read as "product chrome". The reference canvas is near-monochrome, so
+           saturation drops to 4-12% and the hue moves onto 240 — the same
+           family as the brand indigo, so the greys read as chosen rather than
+           inherited. Hairlines get materially lighter (200 was 90% L, now 92%)
+           because depth in this system comes from the hairline alone, and a
+           dark hairline reads as a border-heavy grid instead of a quiet frame. */
+        --neutral-50: 240 20% 99%; --neutral-100: 240 14% 96%; --neutral-200: 240 11% 92%;
+        --neutral-300: 240 9% 85%; --neutral-400: 240 6% 64%;  --neutral-500: 240 5% 46%;
+        --neutral-600: 240 6% 34%; --neutral-700: 240 7% 22%;  --neutral-800: 240 9% 11%;
+        --neutral-900: 240 12% 5%;
 
         /* ---- semantic · light ---- */
-        --background:       var(--neutral-50);
+        /* RD-1: page ground is pure white, not neutral-50. In the reference the
+           canvas and the cards share one ground and the hairline is the ONLY
+           thing separating them — a grey page behind white cards reintroduces
+           the "floating panel" look the redesign is removing. --surface-sunken
+           stays grey; it is what selected rows and inset wells use. */
+        --background:       0 0% 100%;
         --surface:          0 0% 100%;
         --surface-raised:   0 0% 100%;
         --surface-sunken:   var(--neutral-100);
@@ -109,11 +128,17 @@
            and the FAB all line up to one edge. */
         --app-shell: 28rem;
 
-        /* ---- shadow (flat by default — depth comes from the hairline) ---- */
-        --shadow-xs: 0 1px 2px rgba(17,19,24,.04);
-        --shadow-sm: 0 1px 2px rgba(17,19,24,.05), 0 1px 3px rgba(17,19,24,.04);
-        --shadow-md: 0 2px 4px rgba(17,19,24,.04), 0 8px 20px -8px rgba(17,19,24,.10);
-        --shadow-lg: 0 12px 32px -12px rgba(17,19,24,.16);
+        /* ---- shadow ----
+           RD-1: the reference uses NO shadow on resting surfaces — cards,
+           tables and stat tiles are hairline-only. Shadow survives solely for
+           things that genuinely float above the page and must be read as
+           detached: popovers, dropdowns, dialogs, drawers. xs/sm are therefore
+           now `none`; anything still asking for them gets a flat surface,
+           which is the intended result. */
+        --shadow-xs: none;
+        --shadow-sm: none;
+        --shadow-md: 0 4px 12px -2px rgba(12,12,20,.08), 0 2px 4px -2px rgba(12,12,20,.05);
+        --shadow-lg: 0 16px 40px -12px rgba(12,12,20,.16), 0 4px 12px -4px rgba(12,12,20,.06);
 
         /* ---- shadcn aliases — every existing component keeps working ---- */
         --foreground:            var(--text-primary);
@@ -182,17 +207,20 @@
     .dark {
         color-scheme: dark;
 
-        --background:       223 17% 8%;
-        --surface:          222 18% 11%;
-        --surface-raised:   225 15% 14%;
-        --surface-sunken:   228 16% 6%;
-        --surface-hover:    224 15% 14%;
-        --text-primary:     210 20% 98%;
-        --text-secondary:   217 13% 81%;
-        --text-tertiary:    219 11% 65%;
-        --text-disabled:    221 10% 43%;
-        --hairline:         223 14% 20%;
-        --hairline-strong:  221 13% 28%;
+        /* RD-1: dark mirrors the light retune — hue moves onto 240 to match the
+           brand family, saturation drops, and surface/background collapse to a
+           near-single ground so the hairline stays the separator here too. */
+        --background:       240 12% 5%;
+        --surface:          240 10% 7%;
+        --surface-raised:   240 9% 11%;
+        --surface-sunken:   240 13% 4%;
+        --surface-hover:    240 8% 13%;
+        --text-primary:     240 20% 99%;
+        --text-secondary:   240 9% 72%;
+        --text-tertiary:    240 6% 56%;
+        --text-disabled:    240 5% 40%;
+        --hairline:         240 8% 16%;
+        --hairline-strong:  240 8% 24%;
         --primary-action:        var(--brand-500);
         --primary-action-hover:  var(--brand-600);
         --primary-action-active: var(--brand-700);
@@ -587,20 +615,39 @@
     }
 
 @layer components {
-    /* Modern card: hairline border + soft layered depth (was hard brutalist box) */
+    /* RD-1 (2026-08-17) — the card is now genuinely flat.
+       It kept a two-layer shadow from the previous pass; in the reference a
+       card is a hairline rectangle on the same ground as the page and nothing
+       else. `card-brutal` is named for the retired brutalist system but is
+       referenced in 52 files, so it is redefined rather than renamed — the
+       rename is mechanical churn that would bury the real diff. */
     .card-brutal {
         @apply bg-card border border-border rounded-xl;
-        box-shadow: 0 1px 2px rgba(10,10,11,0.04), 0 4px 16px -6px rgba(10,10,11,0.06);
     }
+    /* Resting surfaces do not lift. Hover is a border darkening, not a
+       translate — the reference never moves a card under the cursor. */
     .shadow-hover {
-        @apply transition-[transform,box-shadow] duration-200 ease-out;
+        @apply transition-colors duration-150 ease-out;
     }
     .shadow-hover:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 28px -12px rgba(10,10,11,0.18);
+        border-color: hsl(var(--hairline-strong));
     }
+    /* RD-1: the eyebrow label loses the mono face and the wide letter-spacing.
+       It was uppercase IBM Plex Mono at 0.12em across the entire app, which is
+       what made every screen read as a terminal. The reference sets these in
+       the UI grotesque at normal case, small and muted — the label is a quiet
+       caption, not a system readout. Mono survives on its own merits for
+       genuine data (amounts, IDs, receipts) via .text-code / font-mono. */
     .label-mono {
-        @apply font-mono text-xs uppercase tracking-[0.12em] font-medium;
+        @apply text-xs font-medium tracking-normal normal-case text-muted-foreground;
+    }
+    /* The editorial display face. Used for page-leading headings and greetings
+       only — never below 24px, never for UI chrome. */
+    .text-display {
+        font-family: 'Instrument Serif', ui-serif, Georgia, serif;
+        font-weight: 400;
+        letter-spacing: -0.012em;
+        line-height: 1.08;
     }
 }
 
@@ -625,14 +672,13 @@
 .thinking-text { animation: thinking-glow 2.2s ease-in-out infinite; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-/* Futuristic ambient canvas: soft red glow + faint dot-grid, theme-aware */
+/* RD-1 (2026-08-17): the ambient canvas is now plain ground.
+   It carried an indigo top-glow plus a 24px dot-grid — the two things that
+   most made the app read as "futuristic OS". The reference page is an
+   undecorated surface; every bit of visual interest comes from the content
+   and the hairlines. */
 .app-canvas {
     background-color: hsl(var(--background));
-    background-image:
-        radial-gradient(70% 45% at 50% -6%, rgba(55,58,205,0.06), transparent 62%),
-        radial-gradient(hsl(var(--border)) 0.6px, transparent 0.6px);
-    background-size: 100% 100%, 24px 24px;
-    background-position: 0 0, 0 0;
 }
 
 @media (prefers-reduced-motion: reduce) {

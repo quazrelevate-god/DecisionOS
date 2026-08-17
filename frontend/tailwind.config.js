@@ -7,6 +7,11 @@ module.exports = {
             fontFamily: {
                 sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
                 heading: ['Inter', 'system-ui', 'sans-serif'],
+                // RD-1 (2026-08-17): the editorial display face. `font-display`
+                // is for page-leading headings and greetings only — never UI
+                // chrome, never below 24px. `font-heading` stays Inter so the
+                // ~200 existing font-heading call sites keep their grotesque.
+                display: ['Instrument Serif', 'ui-serif', 'Georgia', 'serif'],
                 logo: ['Chivo', 'sans-serif'],
                 mono: ['IBM Plex Mono', 'ui-monospace', 'monospace'],
             },
@@ -141,9 +146,16 @@ module.exports = {
                 },
             },
             boxShadow: {
-                brutal: '0 1px 2px rgba(10,10,11,0.04), 0 4px 16px -6px rgba(10,10,11,0.08)',
-                'brutal-sm': '0 1px 2px rgba(10,10,11,0.06)',
-                'brutal-lg': '0 12px 32px -12px rgba(10,10,11,0.16)',
+                /* RD-1 (2026-08-17): resting surfaces carry no shadow in the new
+                   system — depth is the hairline. `brutal` and `brutal-sm` are
+                   used as hover affordances across ~52 files, so rather than
+                   touch every call site they are neutralised to `none` here and
+                   removed opportunistically as each page is rebuilt. Only
+                   `brutal-lg` keeps a shadow: it is on genuinely floating
+                   surfaces (popovers, drawers) which must read as detached. */
+                brutal: 'none',
+                'brutal-sm': 'none',
+                'brutal-lg': '0 16px 40px -12px rgba(12,12,20,.16), 0 4px 12px -4px rgba(12,12,20,.06)',
             },
             keyframes: {
                 'accordion-down': { from: { height: '0' }, to: { height: 'var(--radix-accordion-content-height)' } },

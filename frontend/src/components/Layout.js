@@ -25,6 +25,7 @@ import {
   Wallet,
   Gauge, // Epic 2 E2-15: Ops nav entry (Operating Score)
   UsersThree, // Epic 2 E2-01: Team nav entry (Employees list)
+  MagnifyingGlass, // RD-1: global search in the desktop top bar
 } from "@phosphor-icons/react";
 import { ProfileDialog } from "./ProfileDialog";
 import { LanguageSwitcher } from "./LanguageSwitcher";
@@ -121,6 +122,8 @@ export default function Layout({ children }) {
   }, []);
   const [dexRecording, setDexRecording] = useState({ on: false, secs: 0 });
   const [langOpen, setLangOpen] = useState(false);
+  // RD-1: global search field in the desktop top bar.
+  const [globalQuery, setGlobalQuery] = useState("");
   const { data: notif } = useQuery({ queryKey: ["notifications"], queryFn: () => api.get("/notifications").then((r) => r.data), refetchInterval: 30000 });
   const unread = notif?.unread || 0;
   // MPWA-03 (§8): the bell counts only what actually needs *him* — approvals,
@@ -219,6 +222,11 @@ export default function Layout({ children }) {
   // brief now (Sprint 6 merged CEOBrief into Desk header) so this
   // email-a-snapshot flow duplicated live data behind an SMTP gate.
 
+  // RD-1 (2026-08-17): the desktop nav is now an icon-only rail.
+  // Labels moved to hover tooltips, which buys back ~180px of content width
+  // and matches the reference shell. `NavItems` keeps its original signature
+  // and full-width row layout because the mobile AllAppsPanel still renders
+  // it — only the new `RailItems` below is icon-only.
   const NavItems = ({ onNavigate }) => (
     <>
       {navMain.map(({ to, label, tkey, icon: Icon, testid }) => (
@@ -229,27 +237,18 @@ export default function Layout({ children }) {
           data-testid={testid}
           onClick={onNavigate}
           className={({ isActive }) =>
-            `flex items-center gap-3 mx-3 px-3 py-2.5 text-sm rounded-lg border-l-2 transition-[background-color,color,border-color] duration-200 ${
+            `flex items-center gap-3 mx-3 px-3 py-2.5 text-sm rounded-lg transition-colors duration-150 ${
               isActive
-                ? "border-brand-600 bg-brand-600/[0.08] text-brand-600 font-semibold"
-                : "border-transparent text-foreground/70 hover:bg-accent hover:text-foreground"
+                ? "bg-brand-600/[0.08] text-brand-600 font-semibold"
+                : "text-foreground/70 hover:bg-accent hover:text-foreground"
             }`
           }
         >
           <Icon size={18} weight="bold" />
           {t(`nav.${tkey}`)}
-          {to === "/brief" && fires > 0 && (
-            <span data-testid="nav-fires-badge" title={`${fires} fire(s) to put out`}
-              className="ml-auto bg-brand-600 text-white text-[10px] min-w-5 h-5 px-1 flex items-center justify-center border border-black font-bold rounded-full animate-pulse">
-              {fires}
-            </span>
-          )}
-          {/* E2-30 (2026-08-15): review badge follows the Inbox tab into
-              /finance now that /ingest is retired. Same testid so any
-              existing E2E tests still find it. */}
           {to === "/finance" && captureCount > 0 && (
             <span data-testid="nav-review-badge" title={`${captureCount} item(s) to review`}
-              className="ml-auto bg-brand-600 text-white text-[10px] min-w-5 h-5 px-1 flex items-center justify-center border border-black font-bold rounded-full">
+              className="ml-auto bg-brand-600 text-white text-[10px] min-w-5 h-5 px-1 flex items-center justify-center font-bold rounded-full">
               {captureCount}
             </span>
           )}
@@ -258,33 +257,148 @@ export default function Layout({ children }) {
     </>
   );
 
-  return (
-    <div className="min-h-screen flex bg-brand-paper text-brand-ink">
-      <WelcomeOverlay />
-      {/* Desktop sidebar */}
-      <aside className="hidden lg:flex w-64 shrink-0 border-r border-black bg-white flex-col sticky top-0 h-screen">
-        <div className="px-6 py-6 border-b border-black">
-          <Logo />
-          <p data-testid="tenant-name" className="mt-3 label-mono text-muted-foreground truncate">
-            {tenant?.name}
-          </p>
-          {tenant?.industry && <p className="label-mono text-brand-600 truncate mt-1">{tenant.industry}</p>}
-        </div>
-        <nav className="flex-1 min-h-0 overflow-y-auto py-4">
-          <NavItems />
-        </nav>
-        <div className="border-t border-black p-4 pb-6 shrink-0">
-          <div className="mb-2 leading-tight" data-testid="current-user">
-            <p className="text-sm font-semibold truncate">{user?.name}</p>
-            <p className="label-mono text-muted-foreground truncate">{user?.email}</p>
-          </div>
-          <button
-            onClick={doLogout}
-            data-testid="logout-button"
-            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold uppercase tracking-wider bg-white text-brand-600 border-2 border-brand-600 hover:bg-brand-600 hover:text-white transition-colors"
+  // The desktop rail. One 36px square per destination, centred in a 58px
+  // column. Active state is a tinted square + indigo glyph — no left border,
+  // no fill sweep. The label rides out on hover as a dark chip.
+  const RailItems = () => (
+    <>
+      {navMain.map(({ to, tkey, icon: Icon, testid }) => {
+        const label = t(`nav.${tkey}`);
+        const badge = to === "/finance" ? captureCount : 0;
+        return (
+          <NavLink
+            key={to}
+            to={to}
+            end={to === "/"}
+            data-testid={testid}
+            aria-label={label}
+            className={({ isActive }) =>
+              `group relative flex items-center justify-center w-9 h-9 rounded-lg transition-colors duration-150 ${
+                isActive
+                  ? "bg-brand-600/[0.10] text-brand-600"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
+              }`
+            }
           >
-            <SignOut size={16} weight="bold" /> {t("header.sign_out")}
-          </button>
+            {({ isActive }) => (
+              <>
+                <Icon size={18} weight={isActive ? "fill" : "regular"} />
+                {badge > 0 && (
+                  <span
+                    data-testid="nav-review-badge"
+                    className="absolute -top-0.5 -right-0.5 min-w-[15px] h-[15px] px-1 flex items-center justify-center rounded-full bg-brand-600 text-white text-[9px] font-bold leading-none"
+                  >
+                    {badge}
+                  </span>
+                )}
+                {/* Hover label. `pointer-events-none` so it can never
+                    intercept the click meant for the icon beneath it. */}
+                <span
+                  role="tooltip"
+                  className="pointer-events-none absolute left-full ml-2 z-50 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs font-medium text-background opacity-0 shadow-brutal-lg transition-opacity duration-150 group-hover:opacity-100"
+                >
+                  {label}
+                </span>
+              </>
+            )}
+          </NavLink>
+        );
+      })}
+    </>
+  );
+
+  return (
+    <div className="min-h-screen flex flex-col bg-background text-foreground">
+      <WelcomeOverlay />
+      {/* RD-1 (2026-08-17) — desktop top bar, full width.
+          The reference puts its mark in the rail's top cell, but that only
+          works with an icon mark and our artwork has none — the supplied
+          lockup is horizontal and renders 108px wide at its smallest legible
+          size, which overflowed a 58px rail. Wordmark.jsx is explicit that a
+          redrawn approximation is a different logo, so rather than invent a
+          glyph the bar spans the full width and carries the lockup at its
+          left, pixel-exact. The rail then starts below it and is pure nav.
+          Everything else about the bar follows the reference: one global
+          search occupying the width, controls right. */}
+      <header className="hidden lg:flex h-16 shrink-0 border-b border-border bg-background items-center gap-4 pl-5 pr-6 sticky top-0 z-20">
+        <div className="shrink-0">
+          <Logo markOnly />
+        </div>
+        <form
+          className="flex-1 flex items-center gap-2.5 min-w-0 border-l border-border pl-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const q = globalQuery.trim();
+            if (!q) return;
+            navigate(`/brain?q=${encodeURIComponent(q)}`);
+            setGlobalQuery("");
+          }}
+        >
+          <MagnifyingGlass size={16} className="text-muted-foreground shrink-0" />
+          <input
+            data-testid="global-search"
+            value={globalQuery}
+            onChange={(e) => setGlobalQuery(e.target.value)}
+            placeholder={t("header.search_ph", "Find anything…")}
+            aria-label={t("header.search_ph", "Find anything…")}
+            className="flex-1 min-w-0 bg-transparent text-sm placeholder:text-muted-foreground focus:outline-none"
+          />
+        </form>
+        <div className="flex items-center gap-1 shrink-0">
+          <LanguageSwitcher />
+          <ThemeToggle />
+          <Bellicon />
+        </div>
+      </header>
+
+      <div className="flex flex-1 min-h-0">
+      {/* RD-1 — desktop rail.
+          Was a 256px labelled sidebar carrying the wordmark, tenant name,
+          industry, the nav, the user block and a Sign-out button. That whole
+          column is now 58px of nav icons. Tenant name + user identity +
+          sign-out moved into the avatar popover at its foot, which is where
+          the reference keeps them. */}
+      <aside
+        data-testid="desktop-rail"
+        className="hidden lg:flex w-[58px] shrink-0 border-r border-border bg-background flex-col sticky top-16 h-[calc(100vh-4rem)]"
+      >
+        <nav className="flex-1 min-h-0 overflow-y-auto py-3 flex flex-col items-center gap-1">
+          <RailItems />
+        </nav>
+        <div className="shrink-0 py-3 flex justify-center">
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                data-testid="rail-user-menu"
+                aria-label={user?.name || "Account"}
+                className="w-8 h-8 rounded-lg bg-brand-600/[0.10] text-brand-600 text-xs font-semibold flex items-center justify-center hover:bg-brand-600/[0.16] transition-colors"
+              >
+                {(user?.name || "?").trim().charAt(0).toUpperCase()}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent side="right" align="end" className="w-64 p-0">
+              <div className="px-3 py-3 border-b border-border" data-testid="current-user">
+                <p className="text-sm font-semibold truncate">{user?.name}</p>
+                <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+              </div>
+              <div className="px-3 py-2.5 border-b border-border">
+                <p className="text-xs text-muted-foreground">Workspace</p>
+                <p data-testid="tenant-name" className="text-sm font-medium truncate">{tenant?.name}</p>
+                {tenant?.industry && (
+                  <p className="text-xs text-muted-foreground truncate">{tenant.industry}</p>
+                )}
+              </div>
+              <div className="p-1.5">
+                <button
+                  onClick={doLogout}
+                  data-testid="logout-button"
+                  className="w-full flex items-center gap-2 px-2.5 py-2 text-sm rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                >
+                  <SignOut size={15} /> {t("header.sign_out")}
+                </button>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
       </aside>
 
@@ -293,24 +407,6 @@ export default function Layout({ children }) {
           the app reads as one phone-width surface on any display; on lg it
           resets to fill the space beside the sidebar. */}
       <div className="flex flex-col min-w-0 app-shell lg:max-w-none lg:mx-0 lg:flex-1">
-        {/* Desktop top bar */}
-        <header className="hidden lg:flex h-16 border-b border-border bg-background/70 backdrop-blur-xl items-center justify-between px-8 sticky top-0 z-10">
-          <div className="flex items-center gap-3">
-            <span className="label-mono text-muted-foreground">{t("header.signed_in_as")}</span>
-            <span className="font-semibold text-sm" data-testid="current-user-name">{user?.name}</span>
-            <span className="px-2 py-0.5 text-[11px] rounded-md uppercase tracking-wider bg-brand-600/10 text-brand-600 border border-brand-600/20 font-semibold" data-testid="current-user-role">
-              {user?.role}
-            </span>
-          </div>
-          {/* E2-63: send-digest button retired. Same set of controls
-              for owner + non-owner now that the digest is gone. */}
-          <div className="flex items-center gap-3">
-            <LanguageSwitcher />
-            <ThemeToggle />
-            <Bellicon />
-          </div>
-        </header>
-
         {/* Mobile top app bar — MPWA-03.
             Two controls, not four. The theme toggle moved to an All Apps tile
             (he switches theme roughly never and it was occupying prime
@@ -336,6 +432,7 @@ export default function Layout({ children }) {
             dock) plus the home indicator, so the last row is never trapped. */}
         <main className="flex-1 p-4 lg:p-8 pb-dock lg:pb-8 px-gutter-safe overflow-x-hidden app-canvas">{children}</main>
       </div>
+      </div>{/* /RD-1 rail+content row */}
 
       {/* MPWA-03 — mobile navigation.
           A floating pill detached from the edges (lists scroll *under* it,

@@ -2890,22 +2890,57 @@ async def _self_operating_view(tid: str, viewer: dict, now: str) -> dict:
 
 
 @api.get("/operating-score")
-async def operating_score(user: dict = Depends(get_current_user)):
+async def operating_score(
+    user_id: Optional[str] = None,
+    user: dict = Depends(get_current_user),
+):
     """Viewer-aware operating dashboard.
 
     Epic 7 Sprint 1 Phase A (2026-08-17): opened this endpoint from
     owner-only to any authenticated user. Owner keeps the company view;
-    every other role gets a personal contributor view. Founder ask:
-    'right now they can see about the company operations alone, what
-    if the team person login and go the ops it have to show the
-    individuals person metrics'.
+    every other role gets a personal contributor view.
+
+    Epic 7 Sprint 1 batch 4 (2026-08-17): added owner-only view-as.
+    Founder ask: 'from the owner side if i click the team member is it
+    working better or not will show their tasks all the things the
+    individual ops has right'. Answer was no -- clicks went to WorkCoach
+    which shows only stats + AI review, not the person's open work or
+    active workflows. Now: /api/operating-score?user_id=X returns X's
+    full self-view (open work, active workflows, peer context, rich
+    stats) so the owner sees exactly what the teammate sees. Non-owners
+    passing user_id get 403 -- privacy holds.
 
     Payloads carry a `view` discriminator so the frontend dispatcher
     can render OwnerView vs SelfView cleanly without probing shape.
+    Owner viewing someone else's payload has view='self' plus
+    view_as: {id, name, role} so the frontend can show a breadcrumb.
     """
     tid = user["tenant_id"]
     now = datetime.now(timezone.utc).isoformat()
     is_owner = user.get("role") == "owner"
+
+    # Owner-only view-as: return target's self-view instead of the
+    # owner's company view.
+    if user_id and user_id != user["id"]:
+        if not is_owner:
+            raise HTTPException(
+                status_code=403,
+                detail="Only the owner can view another user's operating page",
+            )
+        target = await db.users.find_one(
+            {"id": user_id, "tenant_id": tid},
+            {"_id": 0, "id": 1, "name": 1, "role": 1, "email": 1},
+        )
+        if not target:
+            raise HTTPException(status_code=404, detail="Team member not found")
+        payload = await _self_operating_view(tid, target, now)
+        payload["view"] = "self"
+        payload["view_as"] = {
+            "id": target["id"],
+            "name": target.get("name"),
+            "role": target.get("role"),
+        }
+        return payload
 
     if is_owner:
         payload = await _company_operating_view(tid, user, now)

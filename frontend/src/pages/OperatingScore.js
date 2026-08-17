@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import api from "../lib/api";
 import { PageHeader } from "../components/common";
 import {
@@ -51,9 +51,17 @@ const scoreColor = (v) =>
   : "text-brand-600";
 
 export default function OperatingScore() {
+  // Sprint 1 batch 4 (2026-08-17): owner can view any team member's ops via
+  // ?user=X. Backend returns that user's self-view payload plus view_as
+  // metadata; frontend renders SelfView with a "viewing as X" breadcrumb.
+  const [searchParams] = useSearchParams();
+  const userIdParam = searchParams.get("user") || null;
+
   const { data, isLoading } = useQuery({
-    queryKey: ["operating-score"],
-    queryFn: () => api.get("/operating-score").then((r) => r.data),
+    queryKey: ["operating-score", userIdParam],
+    queryFn: () => api
+      .get("/operating-score", { params: userIdParam ? { user_id: userIdParam } : {} })
+      .then((r) => r.data),
   });
 
   // U7-01.20: skeleton matches the actual page shape (score circle +
@@ -66,6 +74,34 @@ export default function OperatingScore() {
   // We defensively fall back on the presence of `company` for older payloads.
   const isOwnerView = data.view === "owner" || Boolean(data.company);
   return isOwnerView ? <OwnerView data={data} /> : <SelfView data={data} />;
+}
+
+// -----------------------------------------------------------------------------
+// ViewAsBanner -- shown when the owner is drilled into a teammate's ops.
+// -----------------------------------------------------------------------------
+function ViewAsBanner({ target }) {
+  if (!target) return null;
+  return (
+    <div
+      className="mb-4 border-2 border-brand-600 bg-brand-600/10 px-4 py-3 flex items-center justify-between gap-3"
+      data-testid="operating-view-as-banner"
+    >
+      <div className="flex items-center gap-2 min-w-0">
+        <Sparkle size={16} weight="bold" className="text-brand-600 shrink-0" />
+        <p className="text-sm truncate">
+          Viewing <strong>{target.name}</strong>
+          <span className="label-mono text-muted-foreground ml-2">{target.role}</span>
+        </p>
+      </div>
+      <Link
+        to="/operating-score"
+        className="text-xs font-semibold uppercase tracking-wider text-brand-600 hover:underline flex items-center gap-1 shrink-0"
+      >
+        <ArrowRight size={12} weight="bold" className="rotate-180" />
+        Back to company view
+      </Link>
+    </div>
+  );
 }
 
 // -----------------------------------------------------------------------------
@@ -192,13 +228,26 @@ function PersonalSnapshot({ stats, viewerName }) {
 // SelfView -- the new per-contributor dashboard for any non-owner role.
 // -----------------------------------------------------------------------------
 function SelfView({ data }) {
-  const { self, stats, my_open_work: openWork = [], my_active_workflows: activeWfs = [], peer_context: peer } = data;
+  const {
+    self, stats, my_open_work: openWork = [], my_active_workflows: activeWfs = [],
+    peer_context: peer, view_as: viewAs,
+  } = data;
   const scoreOfMe = _selfScore(stats);
   const hasActivity = stats.actionable > 0;
 
+  // When the owner is drilled in as this user, the framing shifts from
+  // "your view" to "their view" -- no need to say "Hi Sunita" back to Meera.
+  const isViewAs = Boolean(viewAs);
+  const firstName = self.name?.split(" ")[0] || "there";
+  const title = isViewAs
+    ? `${self.name}'s operating view`
+    : `Hi ${firstName} — here's how you're doing`;
+  const eyebrow = isViewAs ? "Team member ops (owner view)" : "Your operating view";
+
   return (
     <div>
-      <PageHeader eyebrow="Your operating view" title={`Hi ${self.name?.split(" ")[0] || "there"} — here's how you're doing`} />
+      <ViewAsBanner target={viewAs} />
+      <PageHeader eyebrow={eyebrow} title={title} />
 
       {/* Hero -- personal score */}
       <div className="card-brutal p-8 mb-8 flex flex-col lg:flex-row items-center gap-8" data-testid="operating-self-hero">
@@ -348,8 +397,17 @@ function SelfView({ data }) {
       )}
 
       <p className="label-mono text-muted-foreground mt-6">
-        Want AI coaching on this?{" "}
-        <Link to="/coach" className="text-brand-600 font-semibold hover:underline">Open your Work Coach →</Link>
+        {isViewAs ? (
+          <>
+            Want to see the AI coaching for {self.name?.split(" ")[0]}?{" "}
+            <Link to={`/coach?user=${self.id}`} className="text-brand-600 font-semibold hover:underline">Open their Work Coach →</Link>
+          </>
+        ) : (
+          <>
+            Want AI coaching on this?{" "}
+            <Link to="/coach" className="text-brand-600 font-semibold hover:underline">Open your Work Coach →</Link>
+          </>
+        )}
       </p>
     </div>
   );
@@ -795,34 +853,48 @@ function Leaderboard({ employees }) {
         </label>
       </div>
       <p className="label-mono text-muted-foreground mb-3">
-        Tap any member to see their full activity &amp; AI coaching.
+        Tap any member to see their full ops — open tasks, active workflows, and AI coaching.
       </p>
       <div className="card-brutal divide-y divide-black/10" data-testid="operating-employees">
         {sorted.map((e, i) => {
           const delta = demoEmpDeltas[e.role];
           return (
-            <Link key={e.id} to={`/coach?user=${e.id}`} data-testid={`operating-emp-${e.id}`}
-              className="p-4 flex items-center gap-4 hover:bg-black/[0.03] transition-colors group cursor-pointer">
+            <div key={e.id} data-testid={`operating-emp-${e.id}`}
+              className="p-4 flex items-center gap-4 hover:bg-black/[0.03] transition-colors group">
               <span className="font-heading text-lg font-black text-black/30 w-6">{i + 1}</span>
-              <div className="flex-1 min-w-0">
+              {/* Primary action: full ops view (open tasks + active workflows +
+                  peer context). Sprint 1 batch 4 -- was /coach which only had
+                  stats + AI review. Founder ask: 'from the owner side if i
+                  click the team member is it working better or not will show
+                  their tasks all the things the individual ops has right'. */}
+              <Link to={`/operating-score?user=${e.id}`} className="flex-1 min-w-0">
                 <p className="text-sm font-semibold truncate group-hover:text-brand-600 transition-colors">{e.name}</p>
                 <p className="label-mono text-muted-foreground">
                   {e.role} · {e.done} done · {e.open} open{e.overdue > 0 ? ` · ${e.overdue} overdue` : ""}
                 </p>
-              </div>
+              </Link>
               {delta !== undefined && delta !== 0 && (
                 <DeltaChip value={delta} sign={delta > 0 ? "up" : "down"} />
               )}
-              <span className="hidden sm:flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground group-hover:text-brand-600 transition-colors shrink-0">
-                <Sparkle size={13} weight="bold" /> Details
-              </span>
-              <div className="w-14 h-14 flex flex-col items-center justify-center border-2 border-black bg-white shrink-0">
+              {/* Secondary: AI coach (WorkCoach). Kept as its own affordance so
+                  owner can jump straight to coaching without going through ops. */}
+              <Link
+                to={`/coach?user=${e.id}`}
+                className="hidden sm:flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-brand-600 transition-colors shrink-0"
+                title="Open AI coach for this person"
+              >
+                <Sparkle size={13} weight="bold" /> Coach
+              </Link>
+              <Link to={`/operating-score?user=${e.id}`}
+                className="w-14 h-14 flex flex-col items-center justify-center border-2 border-black bg-white shrink-0 hover:bg-brand-600 hover:text-white hover:border-brand-600 transition-colors">
                 <span className={`font-heading text-2xl font-black leading-none ${scoreColor(e.score)}`}>
                   {e.score != null ? e.score : "—"}
                 </span>
-              </div>
-              <CaretRight size={16} weight="bold" className="text-black/30 group-hover:text-brand-600 transition-colors shrink-0" />
-            </Link>
+              </Link>
+              <Link to={`/operating-score?user=${e.id}`}>
+                <CaretRight size={16} weight="bold" className="text-black/30 hover:text-brand-600 transition-colors shrink-0" />
+              </Link>
+            </div>
           );
         })}
       </div>

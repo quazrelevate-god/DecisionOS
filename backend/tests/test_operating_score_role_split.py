@@ -106,3 +106,53 @@ def test_self_view_reuses_compute_employee_stats():
     assert "compute_employee_stats" in body, (
         "REGRESSION: _self_operating_view isn't calling compute_employee_stats. "
         "Don't reimplement the richer signals; reuse the WorkCoach path.")
+
+
+def test_operating_score_accepts_user_id_for_owner_view_as():
+    """Sprint 1 batch 4 (2026-08-17): owner can view any teammate's ops via
+    ?user_id=X. Founder ask: 'from the owner side if i click the team member
+    is it working better or not will show their tasks all the things the
+    individual ops has right'. Before this ship the leaderboard click went
+    to /coach (WorkCoach) which only shows stats + AI review, no open work
+    or active workflows. Now it goes to /operating-score?user=X which
+    returns the target's full self-view."""
+    src = _read_server()
+    m = re.search(
+        r'@api\.get\("/operating-score"\)\s*\nasync def operating_score\(([\s\S]*?)\):',
+        src,
+    )
+    assert m, "operating_score signature not found -- update this test"
+    sig = m.group(1)
+    assert "user_id" in sig, (
+        "REGRESSION: /operating-score no longer accepts user_id query param. "
+        "Owner drill-down into a teammate's ops view is broken. "
+        "Founder ask 2026-08-17.")
+
+
+def test_operating_score_view_as_is_owner_only():
+    """Non-owners passing user_id must get 403 -- otherwise anyone can
+    read anyone else's stats. Privacy holds."""
+    src = _read_server()
+    m = re.search(
+        r'async def operating_score\(.*?\n(.*?)(?=\n\nasync def |\ndef |\n@api\.|\Z)',
+        src, re.DOTALL,
+    )
+    body = m.group(1)
+    assert "is_owner" in body and "403" in body, (
+        "REGRESSION: view-as is not gated on is_owner. Non-owners could pass "
+        "user_id and read any teammate's private stats.")
+
+
+def test_operating_score_view_as_returns_view_as_metadata():
+    """Frontend needs to know when the owner is drilled-in vs viewing their
+    own page so it can render the 'viewing as X' breadcrumb. Backend must
+    return view_as: {id, name, role} on drilled-in payloads."""
+    src = _read_server()
+    m = re.search(
+        r'async def operating_score\(.*?\n(.*?)(?=\n\nasync def |\ndef |\n@api\.|\Z)',
+        src, re.DOTALL,
+    )
+    body = m.group(1)
+    assert 'payload["view_as"]' in body, (
+        "REGRESSION: view-as payload is missing view_as metadata. "
+        "Frontend breadcrumb depends on this.")

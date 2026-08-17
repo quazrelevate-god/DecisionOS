@@ -69,7 +69,12 @@ const ymd = (d) => d.toISOString().slice(0, 10);
 function useLiveLines() {
   const qc = useQueryClient();
 
-  const contacts = cached(qc, ["contacts"]);
+  // The tile's live number came from the mobile CRM screen, which cached under
+  // ["contacts"]. That screen is deleted and the desktop CRM caches under
+  // ["crm-contacts", status, q] — a different first key, so prefix matching
+  // missed it and the tile went blank. Read the desktop key first and keep the
+  // old one as a fallback for any other writer.
+  const contacts = cached(qc, ["crm-contacts"]) ?? cached(qc, ["contacts"]);
   const crm = React.useMemo(() => {
     if (contacts === undefined) return undefined;
     const list = Array.isArray(contacts) ? contacts : contacts.contacts || [];

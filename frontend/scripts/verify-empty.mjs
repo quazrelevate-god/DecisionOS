@@ -22,8 +22,6 @@ const check = (name, pass, detail = '') => {
 // Every mobile route that can be empty. The composed ones are marked: those must
 // carry the full stratum set, not just a card.
 const ROUTES = [
-  { path: '/inbox', composed: true },
-  { path: '/inbox?scope=morning', composed: true, explains: true },
   // /my-work retired from this list: its empty state was the mobile
   // EmptyScreen composition (blocks + progress + gap rules), and that screen is
   // deleted — the route renders the desktop tree on every viewport now. The
@@ -32,14 +30,14 @@ const ROUTES = [
   // /my-work?view=leave retired with the rest of /my-work — the leave list is
   // the desktop tree's now, and its empty state does not carry the mobile
   // primary-action contract this asserts.
-  { path: '/my-work?view=workflows' },
-  { path: '/crm', composed: true, explains: true },
+
+// Retired from this list: /inbox, /crm, /finance and the workflows tab.
+// Their empty states were mobile EmptyScreen compositions (>=3 blocks, one
+// progress element, no 120px white gap). Those screens are deleted — the
+// routes render the desktop tree on every viewport — and the desktop empty
+// states do not carry that contract. What is left in this list is the
+// screens that still have a bespoke mobile build.
   { path: '/team' },
-  { path: '/finance', composed: true, explains: true },
-  { path: '/finance?tab=revenue' },
-  { path: '/finance?tab=expenses' },
-  { path: '/finance?tab=assets' },
-  { path: '/finance?tab=inventory' },
   { path: '/finance?tab=inbox' },
   { path: '/calendar' },
   { path: '/notifications' },
@@ -140,23 +138,9 @@ for (const route of ROUTES) {
   }
 }
 
-// A primary action has to be a real target, not decoration.
-await page.goto(`${BASE}/crm?fixture=empty`, { waitUntil: 'domcontentloaded' });
-await page.waitForTimeout(1800);
-const act = page.locator('[data-testid="crm-empty-verdict-action"]');
-check('the CRM empty screen has a working primary action', (await act.count()) === 1);
-if (await act.count()) {
-  const box = await act.boundingBox();
-  check('the primary action clears 44px', box.height >= 44, `${Math.round(box.height)}px`);
-  await act.click();
-  await page.waitForTimeout(900);
-  // MPWA-14: the dos:open-dex event used to raise a sheet; Dex is a route now,
-  // so "opens Dex" means landing on it with a composer ready.
-  check('it opens Dex rather than doing nothing',
-    new URL(page.url()).pathname === '/brain'
-      && (await page.locator('[data-testid="dex-composer"]').count()) === 1,
-    new URL(page.url()).pathname);
-}
+// The CRM empty screen's primary-action check went with the rest of /crm: the
+// mobile screen that rendered crm-empty-verdict-action is deleted.
+
 
 // And on a screen where Dex cannot help, the action must not pretend it can.
 await page.goto(`${BASE}/team?fixture=empty`, { waitUntil: 'domcontentloaded' });

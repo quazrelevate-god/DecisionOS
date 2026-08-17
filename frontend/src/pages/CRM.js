@@ -27,8 +27,6 @@ import { lex } from "../lib/lexicon";
 import { PageHeader, Chip, EmptyState, SkeletonGrid } from "../components/common";
 import { typeLabel } from "../lib/format";
 import api from "../lib/api";
-import { useIsMobile } from "../hooks/useIsMobile";
-import CRMMobile from "./mobile/CRMMobile";
 import { toast } from "sonner";
 import {
   Plus, MagnifyingGlass, PencilSimple, Trash, Phone, EnvelopeSimple,
@@ -471,8 +469,6 @@ function AddContactMenu({ canManage, canImport, csvBusy, onImport, customerLabel
 // Main CRM page
 // -----------------------------------------------------------------------------
 export default function CRM() {
-  // MPWA-10: rebuilt below lg (§8); desktop tree untouched.
-  const isMobile = useIsMobile();
   const { user, tenant } = useAuth();
   const { t } = useTranslation();
   const L = lex(tenant);
@@ -632,7 +628,6 @@ export default function CRM() {
     { key: "suppliers", label: L.vendor_plural, icon: Truck, count: scopeCounts.suppliers },
   ];
 
-  if (isMobile) return <CRMMobile />;
 
   return (
     <div>

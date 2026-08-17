@@ -1,15 +1,19 @@
 #!/usr/bin/env node
 /**
- * MPWA-06 + MPWA-12c/d verification — the Desk in `now` scope.
+ * RETIRED 2026-08-17 — do not run.
  *
- * MPWA-06's done-when still applies verbatim (cold open -> top item readable
- * without scrolling; six decisions clearable without leaving the overlay; page
- * under 2,500px), but 12c re-composed the screen from the §3 block system and
- * 12d replaced the decision sheet with the routed Focus View, so the selectors
- * and the strata are new.
+ * Every check here targets a bespoke mobile screen that no longer exists.
+ * /inbox, /crm, /finance, /my-work and /operating-score render the DESKTOP tree
+ * on every viewport by explicit decision: a second mobile implementation is how
+ * the desktop/mobile feature gap opened, so there is now one implementation.
  *
- * Runs against the `busy` fixture: the counts have to be deterministic to assert
- * "capped at 5, rest behind See all", and real-tenant data is not.
+ * Kept rather than deleted because the phone-layout rules encoded here (touch
+ * floors, density ceilings, block composition, empty-state contracts) are the
+ * best written record of what "good on a phone" meant for this product, and the
+ * design-system pass will want to re-read them.
+ *
+ * Nothing imports this and no runner globs it — the leading underscore keeps it
+ * out of scripts/verify-*.mjs.
  */
 import fs from 'node:fs';
 import { chromium } from 'playwright';

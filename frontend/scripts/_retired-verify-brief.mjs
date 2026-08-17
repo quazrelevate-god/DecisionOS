@@ -1,13 +1,19 @@
 #!/usr/bin/env node
 /**
- * MPWA-07 + MPWA-12c verification — the Brief, now a *mode* of the Desk.
+ * RETIRED 2026-08-17 — do not run.
  *
- * MPWA-12c §2.1 merged /brief into /inbox?scope=morning, so this suite proves
- * three things at once:
- *   1. the permanent redirect works and lands on the narrative scope,
- *   2. MPWA-07's original done-when still holds there (verdict sentence above
- *      the fold, no zero tiles, under 2,500px),
- *   3. switching scope is a param change, not a page load.
+ * Every check here targets a bespoke mobile screen that no longer exists.
+ * /inbox, /crm, /finance, /my-work and /operating-score render the DESKTOP tree
+ * on every viewport by explicit decision: a second mobile implementation is how
+ * the desktop/mobile feature gap opened, so there is now one implementation.
+ *
+ * Kept rather than deleted because the phone-layout rules encoded here (touch
+ * floors, density ceilings, block composition, empty-state contracts) are the
+ * best written record of what "good on a phone" meant for this product, and the
+ * design-system pass will want to re-read them.
+ *
+ * Nothing imports this and no runner globs it — the leading underscore keeps it
+ * out of scripts/verify-*.mjs.
  */
 import { chromium } from 'playwright';
 import { signIn } from './lib/auth.mjs';

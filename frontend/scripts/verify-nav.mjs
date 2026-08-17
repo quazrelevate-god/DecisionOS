@@ -8,6 +8,9 @@
  */
 import { chromium } from 'playwright';
 import { signIn } from './lib/auth.mjs';
+// The bespoke mobile roots (desk-mobile / crm-mobile / finance-mobile / …)
+// are gone: these routes render the DESKTOP tree on every viewport now.
+// Waiting on `main` is the honest 'the route rendered' signal.
 
 const BASE = process.env.AUDIT_BASE || 'http://localhost:3000';
 const results = [];
@@ -266,7 +269,7 @@ check('/my-work is 1 tap from the dock', new URL(page.url()).pathname === '/my-w
 
 // §2.1: /brief is a permanent redirect, and it must not resurrect a dock slot.
 await page.goto(`${BASE}/brief`, { waitUntil: 'domcontentloaded' });
-await page.waitForSelector('[data-testid="desk-mobile"]', { timeout: 10000 });
+await page.waitForSelector('main', { timeout: 10000 });
 await page.waitForTimeout(600);
 const briefLanding = new URL(page.url());
 check('/brief lands on the Desk\'s morning scope',

@@ -9,6 +9,9 @@
  */
 import { chromium } from 'playwright';
 import { signIn } from './lib/auth.mjs';
+// The bespoke mobile roots (desk-mobile / crm-mobile / finance-mobile / …)
+// are gone: these routes render the DESKTOP tree on every viewport now.
+// Waiting on `main` is the honest 'the route rendered' signal.
 
 const BASE = process.env.AUDIT_BASE || 'http://localhost:3000';
 const results = [];
@@ -46,7 +49,7 @@ await page.goto(`${BASE}/inbox?fixture=busy`, { waitUntil: 'domcontentloaded' })
 await page.waitForSelector('[data-testid="dock-more"]', { timeout: 15000 });
 await page.waitForTimeout(1200);
 for (const [tile, marker] of [
-  ['crm', '[data-testid="crm-mobile"]'],
+  ['crm', 'main'],
   ['operating-score', 'main'],
   ['calendar', 'main'],
 ]) {

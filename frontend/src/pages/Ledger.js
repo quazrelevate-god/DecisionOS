@@ -3,8 +3,6 @@ import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "../lib/api";
-import { useIsMobile } from "../hooks/useIsMobile";
-import FinanceMobile from "./mobile/FinanceMobile";
 import { lex } from "../lib/lexicon";
 import { useAuth } from "../context/AuthContext";
 import { PageHeader, Chip, EmptyState } from "../components/common";
@@ -958,8 +956,6 @@ function CaptureHero({ pendingCount, onIngested, onOpenInbox }) {
 }
 
 export default function Ledger() {
-  // MPWA-09: rebuilt below lg (§8). Above lg the original tree is untouched.
-  const isMobile = useIsMobile();
   const { t } = useTranslation();
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
@@ -1018,7 +1014,6 @@ export default function Ledger() {
     return null;
   }, [tab, categories, assetCategories]);
 
-  if (isMobile) return <FinanceMobile />;
 
   return (
     <div>

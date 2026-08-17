@@ -156,9 +156,15 @@ export default function Layout({ children }) {
     return (
       <Popover>
         <PopoverTrigger asChild>
+          {/* NM-2: desktop becomes a 44px raised tile. The MOBILE variant is
+              deliberately untouched — §4: everything already shipped on the
+              phone chrome outranks this document. The badge inside stays a
+              solid indigo pill in both: it is a message, not furniture. */}
           <button data-testid="notif-bell"
             aria-label={count > 0 ? `Notifications, ${count} need you` : "Notifications"}
-            className={`relative flex items-center justify-center border border-border hover:bg-accent transition-colors ${mobile ? "w-12 h-12" : "w-10 h-10"}`}>
+            className={mobile
+              ? "relative flex items-center justify-center border border-border hover:bg-accent transition-colors w-12 h-12"
+              : "relative w-11 h-11 nm-tile rounded-control flex items-center justify-center text-foreground/80 transition-shadow hover:shadow-nm active:shadow-nm-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"}>
             <Bell size={mobile ? 22 : 18} weight="bold" />
             {count > 0 && (
               <span data-testid="notif-count" className="absolute -top-2 -right-2 bg-brand-600 text-white text-[10px] min-w-5 h-5 px-1 flex items-center justify-center border border-border font-bold">
@@ -201,13 +207,16 @@ export default function Layout({ children }) {
     );
   };
 
+  // NM-2 — a 44px raised squircle, individually contained (§3 Shell). The
+  // focus ring is separate from any shadow change and lands now rather than
+  // waiting for NM-4: this button is being touched anyway.
   const ThemeToggle = () => (
     <button
       onClick={toggleTheme}
       data-testid="theme-toggle"
       title={isDark ? "Switch to light mode" : "Switch to dark mode"}
       aria-label="Toggle dark mode"
-      className="w-10 h-10 flex items-center justify-center border border-border hover:bg-accent transition-colors"
+      className="w-11 h-11 nm-tile rounded-control flex items-center justify-center text-foreground/80 transition-shadow hover:shadow-nm active:shadow-nm-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
     >
       {isDark ? <Sun size={18} weight="bold" /> : <MoonStars size={18} weight="bold" />}
     </button>
@@ -273,16 +282,19 @@ export default function Layout({ children }) {
             data-testid={testid}
             aria-label={label}
             className={({ isActive }) =>
-              `group relative flex items-center justify-center w-9 h-9 rounded-lg transition-colors duration-150 ${
+              // NM-2 (§3 Shell): active = a 44px pressed tile — indigo tint,
+              // inset shadow, indigo glyph. Inactive carries no container at
+              // all until hover. Focus ring separate from any shadow state.
+              `group relative flex items-center justify-center w-11 h-11 rounded-control transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
                 isActive
-                  ? "bg-brand-600/[0.10] text-brand-600"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                  ? "bg-primary/10 text-primary shadow-nm-press"
+                  : "text-muted-foreground hover:bg-nm-sunken hover:text-foreground"
               }`
             }
           >
             {({ isActive }) => (
               <>
-                <Icon size={18} weight={isActive ? "fill" : "regular"} />
+                <Icon size={22} weight={isActive ? "fill" : "regular"} />
                 {badge > 0 && (
                   <span
                     data-testid="nav-review-badge"
@@ -307,8 +319,12 @@ export default function Layout({ children }) {
     </>
   );
 
+  // NM-2 — the page ground moves onto the soft-depth surface. Depth needs a
+  // mid-tone to cast onto: cards sit at the SAME value and are separated by
+  // shadow + hairline, not by fill. bg-background stays untouched for
+  // surfaces that opt out (sheets, popovers).
   return (
-    <div className="min-h-screen flex flex-col bg-background text-foreground">
+    <div className="min-h-screen flex flex-col bg-nm text-foreground">
       <WelcomeOverlay />
       {/* RD-1 (2026-08-17) — desktop top bar, full width.
           The reference puts its mark in the rail's top cell, but that only
@@ -320,12 +336,18 @@ export default function Layout({ children }) {
           left, pixel-exact. The rail then starts below it and is pure nav.
           Everything else about the bar follows the reference: one global
           search occupying the width, controls right. */}
-      <header className="hidden lg:flex h-16 shrink-0 border-b border-border bg-background items-center gap-4 pl-5 pr-6 sticky top-0 z-20">
-        <div className="shrink-0">
+      {/* NM-2 — the bar itself dissolves: no border, no distinct fill, just the
+          page surface (opaque, so content scrolling beneath the sticky strip is
+          masked). What structures it now is its contents — the lockup on its
+          own raised pill, the search as the one genuinely intuitive inset (a
+          field you type INTO), and the three controls as individually raised
+          44px tiles. */}
+      <header className="hidden lg:flex h-[72px] shrink-0 bg-nm items-center gap-4 pl-3 pr-3 sticky top-0 z-20">
+        <div className="shrink-0 nm-raised rounded-pill h-11 px-4 flex items-center">
           <Logo markOnly />
         </div>
         <form
-          className="flex-1 flex items-center gap-2.5 min-w-0 border-l border-border pl-4"
+          className="flex-1 flex items-center gap-2.5 min-w-0 nm-inset rounded-pill h-11 px-4 transition-shadow focus-within:ring-2 focus-within:ring-primary/40"
           onSubmit={(e) => {
             e.preventDefault();
             const q = globalQuery.trim();
@@ -334,7 +356,7 @@ export default function Layout({ children }) {
             setGlobalQuery("");
           }}
         >
-          <MagnifyingGlass size={16} className="text-muted-foreground shrink-0" />
+          <MagnifyingGlass size={18} className="text-muted-foreground shrink-0" />
           <input
             data-testid="global-search"
             value={globalQuery}
@@ -344,7 +366,7 @@ export default function Layout({ children }) {
             className="flex-1 min-w-0 bg-transparent text-sm placeholder:text-muted-foreground focus:outline-none"
           />
         </form>
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           <LanguageSwitcher />
           <ThemeToggle />
           <Bellicon />
@@ -358,9 +380,13 @@ export default function Layout({ children }) {
           column is now 58px of nav icons. Tenant name + user identity +
           sign-out moved into the avatar popover at its foot, which is where
           the reference keeps them. */}
+      {/* NM-2 — the rail detaches from the viewport edge: a floating raised
+          panel inset 12px, 72px wide so a 44px active tile sits centred with
+          air. Sticky offset = header 72 + margin 12; height = viewport minus
+          header minus both margins, so the bottom margin matches the left. */}
       <aside
         data-testid="desktop-rail"
-        className="hidden lg:flex w-[58px] shrink-0 border-r border-border bg-background flex-col sticky top-16 h-[calc(100vh-4rem)]"
+        className="hidden lg:flex w-[72px] shrink-0 flex-col sticky top-[84px] ml-3 my-3 h-[calc(100vh-72px-1.5rem)] nm-raised"
       >
         <nav className="flex-1 min-h-0 overflow-y-auto py-3 flex flex-col items-center gap-1">
           <RailItems />
@@ -368,10 +394,13 @@ export default function Layout({ children }) {
         <div className="shrink-0 py-3 flex justify-center">
           <Popover>
             <PopoverTrigger asChild>
+              {/* NM-2 — the avatar is furniture (§0's table lists it), so it
+                  joins the tile system at the 44px floor. The indigo initial
+                  keeps it recognisably an identity, not just another button. */}
               <button
                 data-testid="rail-user-menu"
                 aria-label={user?.name || "Account"}
-                className="w-8 h-8 rounded-lg bg-brand-600/[0.10] text-brand-600 text-xs font-semibold flex items-center justify-center hover:bg-brand-600/[0.16] transition-colors"
+                className="w-11 h-11 nm-tile rounded-control text-brand-600 text-sm font-semibold flex items-center justify-center transition-shadow hover:shadow-nm active:shadow-nm-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               >
                 {(user?.name || "?").trim().charAt(0).toUpperCase()}
               </button>

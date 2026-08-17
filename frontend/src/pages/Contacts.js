@@ -128,13 +128,17 @@ function ContactDialog({ trigger, initial, onSaved, users, defaultType }) {
   );
 }
 
-export function ContactsPanel({ types, addLabel = "Add Contact" }) {
+export function ContactsPanel({ types, addLabel = "Add Contact", readOnly = false }) {
   const { user } = useAuth();
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [status, setStatus] = useState("");
   const [q, setQ] = useState("");
-  const canManage = user?.role === "owner" || user?.role === "sales";
+  // U7-09.PEOPLE (2026-08-17): moved off hardcoded role check to perm-based
+  // gate. Owner + anyone granted 'people' perm can edit; readOnly prop
+  // overrides for the People page's view-mode context. Founder ask:
+  // 'given access to people only has the edit section'.
+  const canManage = !readOnly && (user?.role === "owner" || hasPerm(user, "people"));
   const can360 = hasPerm(user, "finance");
 
   const { data } = useQuery({

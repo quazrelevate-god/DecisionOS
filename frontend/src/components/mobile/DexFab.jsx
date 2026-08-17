@@ -33,7 +33,10 @@ export function DexFab({ onOpen, recording = false, seconds = 0, onStop }) {
       onClick={recording ? onStop : onOpen}
       className={cn(
         // 12px gap from the pill, same baseline, safe-area aware.
-        "lg:hidden fixed right-4 z-[10000] bottom-safe-4",
+        // MPWA-14: `app-fab-right` anchors to the centred shell's right edge so
+        // it stays paired with the dock on a wide display; collapses to the
+        // original 1rem on a phone.
+        "lg:hidden fixed app-fab-right z-[10000] bottom-safe-4",
         "grid place-items-center rounded-pill shadow-brutal-lg transition-colors",
         "h-16 w-16 max-[359px]:h-[3.75rem] max-[359px]:w-[3.75rem]",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",

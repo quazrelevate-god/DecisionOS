@@ -58,7 +58,11 @@ function RequestLeaveDialog({ onDone }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <button data-testid="request-leave-button" className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
+        <button
+          data-testid="request-leave-button"
+          title="Plan time off in advance -- needs approval"
+          className="flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all"
+        >
           <Plus size={16} weight="bold" /> Request Leave
         </button>
       </DialogTrigger>
@@ -115,7 +119,11 @@ function AbsenceDialog({ onDone }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <button data-testid="report-absence-button" className="flex items-center gap-2 bg-brand-600 text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all">
+        <button
+          data-testid="report-absence-button"
+          title="Same-day unplanned absence -- no approval needed"
+          className="flex items-center gap-2 bg-brand-600 text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal transition-all"
+        >
           <WarningOctagon size={16} weight="bold" /> Report Absence Today
         </button>
       </DialogTrigger>

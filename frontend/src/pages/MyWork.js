@@ -116,19 +116,39 @@ const UPDATE_ICON = { note: ChatText, handoff: ArrowBendUpRight, escalate: Warni
 function TaskTrail({ t, members, roleOptions, onChange }) {
   const [open, setOpen] = useState(false);
   const updates = t.updates || [];
+  const hasUpdates = updates.length > 0;
+  // U7-05.EXP: when there is no activity, the heavy "ACTIVITY &
+  // HANDOFFS" header + right-aligned button read as an empty section
+  // to fill. Softer treatment when empty: single line with the action
+  // inline. Full section header only when there's actual activity to
+  // frame.
   return (
     <div className="mt-4 border-t border-black/10 pt-4" data-testid={`task-trail-${t.id}`}>
-      <div className="flex items-center justify-between mb-2">
-        <span className="flex items-center gap-2 font-heading font-extrabold uppercase tracking-tight text-sm">
-          <ChatCircleText size={16} weight="bold" className="text-brand-600" /> Activity &amp; Handoffs
-        </span>
-        {!open && (
-          <button onClick={() => setOpen(true)} data-testid={`add-update-${t.id}`}
-            className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-yellow transition-colors">
-            <Plus size={12} weight="bold" /> Update / Escalate
-          </button>
-        )}
-      </div>
+      {hasUpdates ? (
+        <div className="flex items-center justify-between mb-2">
+          <span className="flex items-center gap-2 font-heading font-extrabold uppercase tracking-tight text-sm">
+            <ChatCircleText size={16} weight="bold" className="text-brand-600" /> Activity &amp; Handoffs
+          </span>
+          {!open && (
+            <button onClick={() => setOpen(true)} data-testid={`add-update-${t.id}`}
+              className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-black px-2 py-1 hover:bg-brand-yellow transition-colors">
+              <Plus size={12} weight="bold" /> Update / Escalate
+            </button>
+          )}
+        </div>
+      ) : (
+        !open && (
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <span className="label-mono text-muted-foreground flex items-center gap-1.5">
+              <ChatCircleText size={12} weight="bold" /> No activity yet
+            </span>
+            <button onClick={() => setOpen(true)} data-testid={`add-update-${t.id}`}
+              className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-brand-600 hover:underline">
+              <Plus size={12} weight="bold" /> Log update or hand off
+            </button>
+          </div>
+        )
+      )}
       {updates.length > 0 && (
         <ul className="space-y-2 mb-2" data-testid={`trail-list-${t.id}`}>
           {updates.map((u) => {
@@ -258,15 +278,22 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
   const inp = "flex-1 border border-black px-2 py-1.5 text-sm focus:outline-none";
 
   if (!plan && !steps.length) {
+    // U7-05.EXP polish (2026-08-17): was two big dashed boxes taking
+    // full-width equal weight. When there is no plan yet, most tasks
+    // never need one -- so a whole visual band for the empty state was
+    // noise. Now: single one-line prompt with two small pill buttons
+    // ("Ask Dex" is the primary; manual is the escape hatch). Reads as
+    // an offer, not an unfilled requirement.
     return (
-      <div className="mt-4 flex flex-col sm:flex-row gap-2" data-testid={`exec-plan-empty-${t.id}`}>
+      <div className="mt-4 flex items-center gap-2 flex-wrap" data-testid={`exec-plan-empty-${t.id}`}>
+        <span className="label-mono text-muted-foreground">Break this into steps?</span>
         <button onClick={generate} disabled={busy} data-testid={`generate-plan-${t.id}`}
-          className="flex-1 flex items-center justify-center gap-2 border border-dashed border-brand-600 text-brand-600 py-2.5 text-sm font-semibold uppercase tracking-wider hover:bg-brand-600 hover:text-white transition-colors disabled:opacity-50">
-          <Sparkle size={16} weight="bold" /> {busy ? "Thinking…" : "Generate AI plan"}
+          className="inline-flex items-center gap-1.5 border border-brand-600 text-brand-600 px-3 py-1 text-xs font-semibold uppercase tracking-wider hover:bg-brand-600 hover:text-white transition-colors disabled:opacity-50">
+          <Sparkle size={13} weight="bold" /> {busy ? "Thinking…" : "Ask Dex"}
         </button>
         <button onClick={startManual} disabled={busy} data-testid={`manual-plan-${t.id}`}
-          className="flex-1 flex items-center justify-center gap-2 border border-dashed border-black text-brand-ink py-2.5 text-sm font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors disabled:opacity-50">
-          <PencilSimple size={16} weight="bold" /> Manual execution plan
+          className="inline-flex items-center gap-1.5 border border-black px-3 py-1 text-xs font-semibold uppercase tracking-wider hover:bg-black/5 transition-colors disabled:opacity-50">
+          <PencilSimple size={13} weight="bold" /> Add manually
         </button>
       </div>
     );
@@ -398,10 +425,14 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
 }
 
 const PRIORITY_AXES = [
-  { key: "business_impact", label: "Impact", color: "bg-brand-blue" },
-  { key: "revenue", label: "Revenue", color: "bg-green-600" },
-  { key: "risk", label: "Risk", color: "bg-brand-600" },
-  { key: "urgency", label: "Urgency", color: "bg-orange-500" },
+  { key: "business_impact", label: "Impact", color: "bg-brand-blue",
+    tip: "How much this moves the business -- customer relationship weight, workflow blockage, cross-team dependencies." },
+  { key: "revenue", label: "Revenue", color: "bg-green-600",
+    tip: "Amount tied to this task -- unpaid invoices, overdue collections, deal value." },
+  { key: "risk", label: "Risk", color: "bg-brand-600",
+    tip: "Downside if this slips -- customer complaints, compliance dates, financial penalties." },
+  { key: "urgency", label: "Urgency", color: "bg-orange-500",
+    tip: "Time pressure -- days overdue, hours to due-date, escalation history." },
 ];
 
 function PriorityScoreBars({ scores }) {
@@ -410,17 +441,26 @@ function PriorityScoreBars({ scores }) {
       <div className="flex items-center justify-between mb-2">
         <span className="label-mono text-muted-foreground flex items-center gap-1"><Sparkle size={12} weight="bold" className="text-brand-600" /> AI Priority</span>
         {scores.priority_score != null && (
-          <span className="font-heading font-black text-lg leading-none" data-testid="priority-score-value">{scores.priority_score}</span>
+          <span
+            className="font-heading font-black text-lg leading-none"
+            data-testid="priority-score-value"
+            title="Overall ranking. Weighted mix of the four signals below."
+          >{scores.priority_score}</span>
         )}
       </div>
       <div className="space-y-1.5">
         {PRIORITY_AXES.map((a) => (
-          <div key={a.key} className="flex items-center gap-2" data-testid={`axis-${a.key}`}>
-            <span className="label-mono w-16 shrink-0 text-muted-foreground">{a.label}</span>
+          <div
+            key={a.key}
+            className="flex items-center gap-2"
+            data-testid={`axis-${a.key}`}
+            title={a.tip}
+          >
+            <span className="label-mono w-16 shrink-0 text-muted-foreground cursor-help">{a.label}</span>
             <div className="flex-1 h-2 bg-black/10 border border-black/20">
               <div className={`h-full ${a.color}`} style={{ width: `${scores[a.key] || 0}%` }} />
             </div>
-            <span className="label-mono w-7 text-right">{scores[a.key] || 0}</span>
+            <span className="label-mono w-7 text-right tabular-nums">{scores[a.key] || 0}</span>
           </div>
         ))}
       </div>
@@ -601,12 +641,79 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
   );
 }
 
-function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAssignee = false, highlight = false }) {
+// U7-05.3: BulkActionBar -- sticky bar shown above the list when 1+
+// tasks are selected. Actions apply client-side one PATCH per task
+// (real bulk endpoint tracked as backend backlog item).
+function BulkActionBar({ selectedIds, tasks = [], busy, onClear, onComplete, openReassign }) {
+  const openCount = tasks.filter((t) => !isTerminal(t)).length;
+  const doneCount = tasks.filter(isTerminal).length;
+  return (
+    <div
+      className="sticky top-0 z-20 -mx-4 mb-4 border-2 border-black bg-brand-yellow px-4 py-3 flex items-center gap-3 flex-wrap"
+      data-testid="bulk-action-bar"
+    >
+      <div className="flex items-center gap-2 min-w-0 flex-1">
+        <ListChecks size={16} weight="bold" className="shrink-0" />
+        <p className="text-sm font-semibold">
+          {selectedIds.length} selected
+          {openCount > 0 && doneCount > 0 && (
+            <span className="label-mono text-black/60 ml-2">
+              · {openCount} open · {doneCount} done
+            </span>
+          )}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onComplete}
+        disabled={busy || openCount === 0}
+        className="inline-flex items-center gap-1.5 bg-brand-ink text-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm disabled:opacity-40"
+        data-testid="bulk-complete"
+      >
+        <CheckCircle size={13} weight="bold" />
+        Complete{openCount ? ` ${openCount}` : ""}
+      </button>
+      <button
+        type="button"
+        onClick={openReassign}
+        disabled={busy}
+        className="inline-flex items-center gap-1.5 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-black hover:bg-brand-ink hover:text-white disabled:opacity-40"
+        data-testid="bulk-reassign"
+      >
+        <ArrowBendUpRight size={13} weight="bold" />
+        Reassign
+      </button>
+      <button
+        type="button"
+        onClick={onClear}
+        disabled={busy}
+        className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-black/70 hover:text-black disabled:opacity-40"
+        data-testid="bulk-clear"
+      >
+        <X size={12} weight="bold" /> Clear
+      </button>
+    </div>
+  );
+}
+
+function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAssignee = false, highlight = false, selected = false, onToggleSelect }) {
   const { user } = useAuth();
   const [uploading, setUploading] = useState(false);
   const [recording, setRecording] = useState(false);
   const [lightbox, setLightbox] = useState(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  // U7-05.2 (2026-08-17): density fix. Card collapses to a summary row by
+  // default (title + priority + status + due + assignee-if-owner + quick
+  // actions). Expand-on-click reveals description, op-meta, stage chip,
+  // status band, progress, attachments, updates, action buttons, plan,
+  // trail. Highlighted cards (deep-link focus) auto-expand.
+  const [expanded, setExpanded] = useState(highlight);
+  // U7-05 polish: replaced window.prompt() for reject + clarify with real
+  // dialogs -- prompt is anti-pattern that blocks browser thread and
+  // returns null in embed contexts (FUP-49 hit this pattern for confirm).
+  const [reasonDialog, setReasonDialog] = useState(null); // {kind: 'reject'|'clarify'}
+  const [reasonText, setReasonText] = useState("");
+  const [reasonBusy, setReasonBusy] = useState(false);
   const fileRef = useRef(null);
   const evidenceRef = useRef(null);
   const mediaRef = useRef(null);
@@ -617,22 +724,36 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
   const canApprove = t.approval_required && (user?.role === "owner" || user?.id === t.approver_id || (!t.approver_id && userPerms(user).includes("approvals")));
   const awaitingApproval = t.approval_required && t.approval_status !== "approved";
   const lockedForAssignee = awaitingApproval && !canApprove;
+  const overdue = isOverdue(t);
+  const terminal = isTerminal(t);
 
   const approveTask = async () => {
     try { await api.post(`/tasks/${t.id}/approve`); toast.success("Task approved"); onChange(); }
     catch (e) { toast.error(e.response?.data?.detail || "Could not approve"); }
   };
-  const rejectTask = async () => {
-    const reason = window.prompt("What changes are needed? (optional)") ?? "";
-    try { await api.post(`/tasks/${t.id}/reject`, { reason }); toast.success("Changes requested"); onChange(); }
-    catch (e) { toast.error(e.response?.data?.detail || "Could not reject"); }
+
+  const openReasonDialog = (kind) => { setReasonText(""); setReasonDialog({ kind }); };
+  const submitReason = async () => {
+    if (!reasonDialog) return;
+    const { kind } = reasonDialog;
+    if (kind === "clarify" && !reasonText.trim()) {
+      return toast.error("Say what you need clarified");
+    }
+    setReasonBusy(true);
+    try {
+      const endpoint = kind === "reject" ? "reject" : "clarify";
+      await api.post(`/tasks/${t.id}/${endpoint}`, { reason: reasonText });
+      toast.success(kind === "reject" ? "Changes requested" : "Clarification requested");
+      setReasonDialog(null);
+      onChange();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || `Could not ${kind === "reject" ? "reject" : "request clarification"}`);
+    } finally {
+      setReasonBusy(false);
+    }
   };
-  const clarifyTask = async () => {
-    const reason = window.prompt("What do you need clarified?") ?? "";
-    if (!reason.trim()) return;
-    try { await api.post(`/tasks/${t.id}/clarify`, { reason }); toast.success("Clarification requested"); onChange(); }
-    catch (e) { toast.error(e.response?.data?.detail || "Could not request clarification"); }
-  };
+  const rejectTask = () => openReasonDialog("reject");
+  const clarifyTask = () => openReasonDialog("clarify");
 
   const upload = async (file, kind) => {
     setUploading(true);
@@ -732,22 +853,137 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
   const selCls = "border border-black px-2 py-1 text-xs font-mono bg-white focus:outline-none";
 
   return (
-    <div id={`task-card-${t.id}`} data-testid={`mywork-task-${t.id}`} className={`card-brutal p-5 transition-all ${highlight ? "ring-4 ring-brand-600 ring-offset-2 ring-offset-brand-paper" : ""}`}>
-      <div className="flex items-start justify-between gap-2">
-        <p className="font-heading font-bold text-lg leading-tight">{t.title}</p>
-        <Chip value={t.priority} />
+    <div id={`task-card-${t.id}`} data-testid={`mywork-task-${t.id}`}
+      className={`card-brutal transition-all overflow-hidden ${highlight ? "ring-4 ring-brand-600 ring-offset-2 ring-offset-brand-paper" : ""}`}>
+      {/* U7-05.10: overdue severity spike -- red left stripe on the whole
+          card, immediately readable as "urgent" without reading a chip. */}
+      <div className="flex">
+        {overdue && !terminal && (
+          <div className="w-1.5 bg-danger-600 shrink-0" aria-hidden="true" />
+        )}
+        <div className="flex-1 min-w-0">
+
+      {/* U7-05.2: SUMMARY ROW -- the only thing shown when card is collapsed.
+          Click-target on the whole row toggles expand. Right-side quick actions
+          stopPropagation so they don't collapse when clicked. */}
+      <div className={`w-full flex items-stretch group ${selected ? "bg-brand-yellow/30" : "hover:bg-black/[0.02]"} transition-colors`}>
+        {/* U7-05.3: bulk-select checkbox. Sits outside the expand button
+            so clicking it doesn't toggle the card. Only rendered when
+            onToggleSelect is passed (skip in TaskDetailDialog and other
+            contexts where bulk doesn't apply). */}
+        {onToggleSelect && (
+          <label
+            className="flex items-center px-3 pl-4 cursor-pointer shrink-0"
+            onClick={(e) => e.stopPropagation()}
+            title={selected ? "Deselect" : "Select for bulk action"}
+          >
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={onToggleSelect}
+              data-testid={`bulk-select-${t.id}`}
+              className="w-4 h-4 border-2 border-black accent-brand-ink cursor-pointer"
+              aria-label={`Select task ${t.title}`}
+            />
+          </label>
+        )}
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full text-left p-4 flex-1 min-w-0"
+        aria-expanded={expanded}
+        aria-controls={`task-card-body-${t.id}`}
+        data-testid={`task-summary-${t.id}`}
+      >
+        <div className="flex items-start gap-3">
+          <CaretDown
+            size={14}
+            weight="bold"
+            className={`text-muted-foreground shrink-0 mt-1 transition-transform ${expanded ? "" : "-rotate-90"}`}
+            aria-hidden="true"
+          />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start gap-2 flex-wrap">
+              <p className="font-heading font-bold text-base leading-tight flex-1 min-w-[200px]">
+                {t.title}
+              </p>
+              <div className="flex items-center gap-1.5 shrink-0" aria-hidden="true">
+                <Chip value={t.priority} />
+              </div>
+            </div>
+            <div className="flex items-center flex-wrap gap-2 mt-1.5 text-xs">
+              {/* Status pill -- muted when normal, red when overdue/rejected */}
+              <span data-testid={`status-chip-${t.id}`}
+                className={`px-2 py-0.5 font-semibold uppercase tracking-wider border ${
+                  terminal ? "bg-green-600/10 text-green-800 border-green-600/40"
+                  : awaitingApproval ? "bg-brand-yellow border-black"
+                  : "bg-black/[0.03] border-black/30"
+                }`}>{STATUS_LABEL[t.status] || t.status}</span>
+              {overdue && !terminal && (
+                <span data-testid={`overdue-${t.id}`}
+                  className="px-2 py-0.5 font-semibold uppercase tracking-wider bg-danger-600 text-white border border-danger-600">
+                  Overdue
+                </span>
+              )}
+              {t.due_date && !overdue && (
+                <span className="text-muted-foreground">
+                  due {new Date(t.due_date).toLocaleString(undefined, { day: "numeric", month: "short" })}
+                </span>
+              )}
+              {/* U7-05.1: stage chip becomes tiny inline pill in summary row.
+                  Icon-first, no bg fight with the title. Click still works. */}
+              {t.workflow_summary?.id && (
+                <a
+                  href={`/my-work?view=workflows&type=${encodeURIComponent(t.workflow_summary.type || "")}&focus=${encodeURIComponent(t.workflow_summary.id)}`}
+                  onClick={(e) => e.stopPropagation()}
+                  data-testid={`wf-chip-${t.id}`}
+                  className="inline-flex items-center gap-1 text-brand-600 hover:underline"
+                  title={`Open workflow: ${t.workflow_summary.title}`}
+                >
+                  <FlowArrow size={11} weight="bold" />
+                  <span className="uppercase tracking-wider text-[10px]">
+                    {(t.workflow_summary.stage || "").replace(/_/g, " ")}
+                  </span>
+                </a>
+              )}
+              {showAssignee && t.assignee_name && (
+                <span className="inline-flex items-center gap-1 text-muted-foreground">
+                  <UserCircle size={11} weight="bold" /> {t.assignee_name}
+                </span>
+              )}
+              {(t.attachment_count || 0) > 0 && (
+                <span className="inline-flex items-center gap-1 text-muted-foreground">
+                  <Paperclip size={11} weight="bold" /> {t.attachment_count}
+                </span>
+              )}
+              {t.source === "escalation" && <span className="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-danger-600 text-white">Escalation</span>}
+              {t.source === "handoff" && <span className="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-brand-blue text-white">Handoff</span>}
+            </div>
+          </div>
+        </div>
+      </button>
       </div>
-      {t.description && <p className="text-sm text-muted-foreground mt-1">{t.description}</p>}
+
+      {/* EXPANDED BODY -- everything else lives here. Rendered only when open. */}
+      {expanded && (
+      <div id={`task-card-body-${t.id}`} className="px-4 pb-4 space-y-3 border-t border-black/10 pt-3">
+      {t.description && <p className="text-sm text-muted-foreground">{t.description}</p>}
       {showAssignee && !isOp && (
-        <p className="label-mono text-muted-foreground mt-2 flex items-center gap-1" data-testid={`assignee-line-${t.id}`}>
+        <p className="label-mono text-muted-foreground flex items-center gap-1" data-testid={`assignee-line-${t.id}`}>
           <UserCircle size={13} weight="bold" />
           {t.assignee_name ? t.assignee_name : (t.assignee_role ? `${t.assignee_role} team` : "Unassigned")}
         </p>
       )}
-      {scores && <PriorityScoreBars scores={scores} />}
+      {/* U7-05.4: AI-priority bars get a "why?" tooltip on the container
+          so users understand what drove the ranking. */}
+      {scores && (
+        <div title="AI ranker: higher score = more urgent to open next. Bars show what drove it -- priority signal, overdue, workflow blockage, complaints touched." data-testid={`ai-scores-${t.id}`}>
+          <PriorityScoreBars scores={scores} />
+        </div>
+      )}
 
       {isOp && (
-        <div className="mt-3 flex flex-wrap items-center gap-2" data-testid={`op-meta-${t.id}`}>
+        <div className="flex flex-wrap items-center gap-2" data-testid={`op-meta-${t.id}`}>
           {t.op_category && <span className="inline-flex items-center gap-1 border border-black px-2 py-0.5 text-xs font-semibold uppercase tracking-wider bg-brand-yellow"><Tag size={11} weight="bold" /> {t.op_category}</span>}
           {t.assignee_name && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><UserCircle size={13} weight="bold" /> {t.assignee_name}</span>}
           {t.support_name && <span className="text-xs text-muted-foreground">+ {t.support_name}</span>}
@@ -759,23 +995,20 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
         </div>
       )}
 
-      {/* WE-11 (2026-08-16): stage chip. When the task is linked to a
-          workflow, show a click-through "Order #4821 - Confirmed" chip
-          just above the status band. Clicking navigates to the parent
-          workflow tab (my-work?view=workflows&focus=<id>) so the user
-          can see the whole card. Ad-hoc tasks (no workflow_summary)
-          render nothing here -- behaviour unchanged. */}
+      {/* Full workflow chip in the expanded body -- carries the full title
+          alongside the stage, since we only show the stage snippet in
+          the summary row. */}
       {t.workflow_summary && t.workflow_summary.id && (
-        <div className="mt-3">
+        <div>
           <a
             href={`/my-work?view=workflows&type=${encodeURIComponent(t.workflow_summary.type || "")}&focus=${encodeURIComponent(t.workflow_summary.id)}`}
-            data-testid={`wf-chip-${t.id}`}
+            data-testid={`wf-chip-full-${t.id}`}
             className="inline-flex items-center gap-1.5 border border-black px-2.5 py-1 text-xs font-mono bg-brand-paper hover:bg-brand-yellow transition-colors"
             title={`Open workflow: ${t.workflow_summary.title}`}
           >
             <FlowArrow size={12} weight="bold" className="text-brand-600" />
             <span className="font-semibold uppercase tracking-wider text-[10px]">
-              {(t.workflow_summary.title || "Workflow").slice(0, 32)}
+              {(t.workflow_summary.title || "Workflow").slice(0, 40)}
             </span>
             <span className="text-muted-foreground">·</span>
             <span className="uppercase tracking-wider text-[10px]">
@@ -785,43 +1018,59 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
         </div>
       )}
 
-      <div className="flex items-center flex-wrap gap-1.5 mt-3">
-        <span data-testid={`status-chip-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-black bg-white">{STATUS_LABEL[t.status] || t.status}</span>
-        {isOverdue(t) && <span data-testid={`overdue-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-black bg-danger-600 text-white">Overdue</span>}
-        {t.source === "escalation" && <span data-testid={`badge-escalation-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-black bg-danger-600 text-white">Escalation</span>}
-        {t.source === "handoff" && <span data-testid={`badge-handoff-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-black bg-brand-blue text-white">Handoff</span>}
-        {(t.attachment_count || 0) > 0 && <span data-testid={`att-count-${t.id}`} className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Paperclip size={12} weight="bold" /> {t.attachment_count}</span>}
-        {t.due_date && <span className="text-xs text-muted-foreground">due {new Date(t.due_date).toLocaleString(undefined, { day: "numeric", month: "short", ...(t.due_date.includes("T") ? { hour: "2-digit", minute: "2-digit" } : {}) })}</span>}
-        <button onClick={() => setDetailOpen(true)} data-testid={`view-details-${t.id}`} className="ml-auto inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-black px-2 py-0.5 hover:bg-brand-yellow transition-colors">
-          <Eye size={13} weight="bold" /> View details
-        </button>
-      </div>
-
-      {t.updated_at && (
-        <p className="label-mono text-muted-foreground mt-2 flex items-center gap-1" data-testid={`task-updated-${t.id}`} title={fullTime(t.updated_at)}>
-          <ClockCounterClockwise size={12} weight="bold" />
-          {t.last_action || "Updated"} · {timeAgo(t.updated_at)}
+      {/* U7-05.EXP polish (2026-08-17): one combined meta line
+          replacing separate "Due X" and "Updated Y" rows. Also killed
+          the "Full details" button -- opened a Dialog that duplicated
+          this expanded body (dialog was needed BEFORE the collapse
+          existed; not now). Owner delete moves to a small more-menu
+          in the actions row below. */}
+      {(t.due_date || t.updated_at) && (
+        <p className="label-mono text-muted-foreground flex items-center gap-2 flex-wrap" data-testid={`task-meta-${t.id}`}>
+          {t.due_date && (
+            <span className="flex items-center gap-1">
+              <ClockCounterClockwise size={12} weight="bold" />
+              Due {new Date(t.due_date).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", ...(t.due_date.includes("T") ? { hour: "2-digit", minute: "2-digit" } : {}) })}
+            </span>
+          )}
+          {t.due_date && t.updated_at && <span className="text-black/20">·</span>}
+          {t.updated_at && (
+            <span
+              className="flex items-center gap-1"
+              data-testid={`task-updated-${t.id}`}
+              title={fullTime(t.updated_at)}
+            >
+              {t.last_action || "Updated"} {timeAgo(t.updated_at)}
+            </span>
+          )}
         </p>
       )}
 
-      <div className="mt-3">
-        <div className="flex items-center justify-between mb-1">
-          <span className="label-mono text-muted-foreground">Progress</span>
-          <span className="label-mono" data-testid={`progress-value-${t.id}`}>{t.progress || 0}%</span>
-        </div>
-        <div className="h-2 bg-black/10 border border-black"><div className="h-full bg-brand-blue transition-all" style={{ width: `${t.progress || 0}%` }} /></div>
-      </div>
-
-      {!isTerminal(t) && !awaitingApproval && (
-        <div className="flex flex-wrap items-center gap-2 mt-3">
-          <label className="label-mono text-muted-foreground">Status</label>
-          <select data-testid={`status-select-${t.id}`} value={t.status === "blocked" ? "todo" : t.status} onChange={(e) => setStatus(e.target.value)} className={selCls}>
-            {STATUS_OPTIONS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-          </select>
-          <label className="label-mono text-muted-foreground ml-1">Set progress</label>
-          <select data-testid={`progress-select-${t.id}`} value={PROGRESS_OPTIONS.includes(t.progress) ? t.progress : 0} onChange={(e) => setProgress(e.target.value)} className={selCls}>
-            {PROGRESS_OPTIONS.map((p) => <option key={p} value={p}>{p}%</option>)}
-          </select>
+      {/* U7-05.EXP: progress bar without the redundant "0%" label +
+          "Progress" caption. Bar visually conveys the value; a numeric
+          label was pure noise. Status change drives progress, so the
+          separate "Set progress" dropdown is gone too. */}
+      {!terminal && !awaitingApproval && (
+        <div className="space-y-2">
+          <div className="h-2 bg-black/10 border border-black" title={`${t.progress || 0}% complete`} aria-label={`Progress: ${t.progress || 0}%`}>
+            <div className="h-full bg-brand-blue transition-all" style={{ width: `${t.progress || 0}%` }} data-testid={`progress-bar-${t.id}`} />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="label-mono text-muted-foreground">Status</label>
+            <select data-testid={`status-select-${t.id}`} value={t.status === "blocked" ? "todo" : t.status} onChange={(e) => setStatus(e.target.value)} className={selCls}>
+              {STATUS_OPTIONS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+            </select>
+            {/* U7-05.EXP: "Set progress" tucked behind a small toggle for
+                the rare team that manages progress separately from status.
+                Default hidden -- one less dropdown for the 95% of users. */}
+            <details className="ml-1">
+              <summary className="label-mono text-muted-foreground cursor-pointer hover:text-brand-600">
+                Set % manually
+              </summary>
+              <select data-testid={`progress-select-${t.id}`} value={PROGRESS_OPTIONS.includes(t.progress) ? t.progress : 0} onChange={(e) => setProgress(e.target.value)} className={`${selCls} mt-1`}>
+                {PROGRESS_OPTIONS.map((p) => <option key={p} value={p}>{p}%</option>)}
+              </select>
+            </details>
+          </div>
         </div>
       )}
 
@@ -924,31 +1173,67 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
       )}
 
       {!isTerminal(t) && !awaitingApproval && (
-        <div className="flex flex-wrap gap-2 mt-4">
-          {/* FUP-49: don't disable — always click-through, handler
-              shows a clear toast if evidence is missing. Silent-
-              disabled buttons were the original bug. */}
+        <div className="flex flex-wrap items-center gap-2 mt-4">
+          {/* FUP-49: don't disable -- always click-through, handler shows
+              a clear toast if evidence is missing. Silent-disabled
+              buttons were the original bug. */}
           <button onClick={complete} data-testid={`complete-${t.id}`}
             title={t.evidence_required && !hasEvidence ? "Add a photo, voice note, or file first" : "Mark as complete"}
             className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all ${t.evidence_required && !hasEvidence ? "bg-black/20 text-black" : "bg-brand-ink text-white"}`}>
             <CheckCircle size={16} weight="bold" /> Complete
           </button>
-          <button onClick={() => fileRef.current?.click()} disabled={uploading} data-testid={`photo-${t.id}`} className="flex items-center gap-2 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-black/5">
-            <Camera size={16} weight="bold" /> Photo
-          </button>
-          <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onPhoto} />
-          <button onClick={() => evidenceRef.current?.click()} disabled={uploading} data-testid={`upload-file-${t.id}`} className="flex items-center gap-2 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-black/5">
-            <FileArrowUp size={16} weight="bold" /> Upload file
-          </button>
-          <input ref={evidenceRef} type="file" className="hidden" onChange={onEvidence} />
-          <button onClick={toggleVoice} data-testid={`voice-${t.id}`} className={`flex items-center gap-2 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider transition-colors ${recording ? "bg-brand-600 text-white" : "hover:bg-black/5"}`}>
-            {recording ? <Stop size={16} weight="fill" /> : <Microphone size={16} weight="bold" />} {recording ? "Stop & send" : "Voice reply"}
-          </button>
-          {recording && (
-            <button onClick={cancelVoice} data-testid={`voice-cancel-${t.id}`} className="flex items-center gap-2 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-black/5">
-              <X size={16} weight="bold" /> Cancel
+
+          {/* U7-05.EXP: attach affordances grouped into one compact strip.
+              Was 3 separate chunky buttons ("PHOTO / UPLOAD FILE / VOICE
+              REPLY") each equal-weight to Complete -- density noise. Now
+              they share a single caption + icon-only compact buttons so
+              Complete stays visually primary and the attach set reads as
+              one concept. */}
+          <div className="flex items-center gap-1 border-l border-black/10 pl-3 ml-1">
+            <span className="label-mono text-muted-foreground mr-1 hidden sm:inline">Attach:</span>
+            <button
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+              data-testid={`photo-${t.id}`}
+              title="Attach a photo"
+              className="w-9 h-9 flex items-center justify-center border border-black hover:bg-black/5 disabled:opacity-40"
+              aria-label="Attach a photo"
+            >
+              <Camera size={16} weight="bold" />
             </button>
-          )}
+            <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onPhoto} />
+            <button
+              onClick={() => evidenceRef.current?.click()}
+              disabled={uploading}
+              data-testid={`upload-file-${t.id}`}
+              title="Upload a file"
+              className="w-9 h-9 flex items-center justify-center border border-black hover:bg-black/5 disabled:opacity-40"
+              aria-label="Upload a file"
+            >
+              <FileArrowUp size={16} weight="bold" />
+            </button>
+            <input ref={evidenceRef} type="file" className="hidden" onChange={onEvidence} />
+            <button
+              onClick={toggleVoice}
+              data-testid={`voice-${t.id}`}
+              title={recording ? "Stop and send voice reply" : "Record a voice reply"}
+              className={`w-9 h-9 flex items-center justify-center border border-black transition-colors ${recording ? "bg-brand-600 text-white" : "hover:bg-black/5"}`}
+              aria-label={recording ? "Stop recording" : "Record voice reply"}
+            >
+              {recording ? <Stop size={16} weight="fill" /> : <Microphone size={16} weight="bold" />}
+            </button>
+            {recording && (
+              <button
+                onClick={cancelVoice}
+                data-testid={`voice-cancel-${t.id}`}
+                title="Discard recording"
+                className="w-9 h-9 flex items-center justify-center border border-black hover:bg-black/5"
+                aria-label="Discard recording"
+              >
+                <X size={16} weight="bold" />
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -963,7 +1248,52 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
 
       {!awaitingApproval && <ExecutionPlan t={t} onChange={onChange} members={members} roleOptions={roleOptions} />}
       <TaskTrail t={t} onChange={onChange} members={members} roleOptions={roleOptions} />
+      </div>
+      )}
+
+      {/* U7-05 dialog: reject / clarify reason (replaced window.prompt). */}
+      <Dialog open={!!reasonDialog} onOpenChange={(o) => !o && !reasonBusy && setReasonDialog(null)}>
+        <DialogContent className="border border-black rounded-none max-w-md" data-testid={`reason-dialog-${t.id}`}>
+          <DialogHeader>
+            <DialogTitle className="font-heading uppercase tracking-tight">
+              {reasonDialog?.kind === "reject" ? "Request changes" : "Ask for clarification"}
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground -mt-2">
+            {reasonDialog?.kind === "reject"
+              ? "Tell the assignee what needs to change before you can approve (optional)."
+              : "What do you need clarified before starting?"}
+          </p>
+          <textarea
+            rows={4}
+            value={reasonText}
+            onChange={(e) => setReasonText(e.target.value)}
+            placeholder={reasonDialog?.kind === "reject" ? "e.g. Please add unit prices per line item." : "e.g. Which supplier's rate card do I use?"}
+            className="w-full border border-black px-3 py-2 text-sm focus:outline-none"
+            autoFocus
+          />
+          <div className="flex gap-2 justify-end">
+            <button
+              type="button"
+              onClick={() => setReasonDialog(null)}
+              disabled={reasonBusy}
+              className="border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-black/5 disabled:opacity-40"
+            >Cancel</button>
+            <button
+              type="button"
+              onClick={submitReason}
+              disabled={reasonBusy || (reasonDialog?.kind === "clarify" && !reasonText.trim())}
+              className="bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm disabled:opacity-40"
+            >
+              {reasonBusy ? "Sending..." : reasonDialog?.kind === "reject" ? "Request changes" : "Send question"}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <TaskDetailDialog t={t} open={detailOpen} onOpenChange={setDetailOpen} onChange={onChange} />
+        </div>
+      </div>
     </div>
   );
 }
@@ -994,9 +1324,44 @@ export default function MyWork() {
   // rawView so eslint's no-unused-vars doesn't fire on line above.
   void rawView;
   const canSeeWorkflows = isOwner || userPerms(user).includes("workflows");
-  const [scope, setScope] = useState("mine");
-  const [tab, setTab] = useState("all");
-  const [aiPriority, setAiPriority] = useState(false);
+  // U7-05.5: filter chips persist per-user in localStorage. Reload the page
+  // and the scope + tab + aiPriority toggle come back where you left them.
+  // Founder ask 2026-08-17: 'remove the uneasy UX' -- resetting to All every
+  // navigation was frustrating for anyone who works in a single category.
+  const prefsKey = tenant?.id && user?.id ? `mywork-prefs-${tenant.id}-${user.id}` : null;
+  const loadedPrefs = (() => {
+    if (!prefsKey) return {};
+    try { return JSON.parse(localStorage.getItem(prefsKey) || "{}"); }
+    catch { return {}; }
+  })();
+  const [scope, setScope] = useState(loadedPrefs.scope || "mine");
+  const [tab, setTab] = useState(loadedPrefs.tab || "all");
+  const [aiPriority, setAiPriority] = useState(Boolean(loadedPrefs.aiPriority));
+
+  // Persist on any change. Guard on prefsKey so pre-login / test envs stay
+  // no-op.
+  useEffect(() => {
+    if (!prefsKey) return;
+    try {
+      localStorage.setItem(prefsKey, JSON.stringify({ scope, tab, aiPriority }));
+    } catch { /* quota; ignore */ }
+  }, [prefsKey, scope, tab, aiPriority]);
+
+  // U7-05.3: bulk selection. Set of task ids across the currently-visible
+  // list. Cleared when the tab / scope / view changes so a stale selection
+  // can't apply to a different filter's tasks.
+  const [selected, setSelected] = useState(() => new Set());
+  useEffect(() => { setSelected(new Set()); }, [scope, tab, view]);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkReassignOpen, setBulkReassignOpen] = useState(false);
+  const [bulkAssigneeId, setBulkAssigneeId] = useState("");
+  const [bulkAssigneeRole, setBulkAssigneeRole] = useState("");
+  const toggleSelected = (id) => setSelected((s) => {
+    const next = new Set(s);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const clearSelection = () => setSelected(new Set());
   const mine = !(isOwner && scope === "all");
   const showAssignee = isOwner && scope === "all";
   const tasksQ = useQuery({ queryKey: ["tasks", mine], queryFn: () => api.get(`/tasks?mine=${mine}`).then((r) => r.data) });
@@ -1037,6 +1402,18 @@ export default function MyWork() {
     if (f && isOwner && scope !== "all") setScope("all");
     if (f === "completed") setTab("completed");
   }, [params, isOwner]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // U7-05.9: if the currently-selected tab has no items, snap back to
+  // 'all' so the user doesn't see a "tab selected but no chip visible"
+  // dead state after tasks are cleared.
+  useEffect(() => {
+    if (tab === "all" || !tasksQ.data) return;
+    const all = tasksQ.data || [];
+    const count = tab === "completed"
+      ? all.filter(isTerminal).length
+      : all.filter((t) => !isTerminal(t) && t.task_type === tab).length;
+    if (count === 0) setTab("all");
+  }, [tab, tasksQ.data]);
 
   const scoreMap = {};
   (prioritiesQ.data?.tasks || []).forEach((pt) => { if (pt.ai_scores) scoreMap[pt.id] = pt.ai_scores; });
@@ -1085,10 +1462,17 @@ export default function MyWork() {
                   className={`${CTRL} ${view === "mywork" && scope === "all" ? "bg-brand-blue text-white" : "bg-white hover:bg-black/5"}`}>{t("mywork.all_tasks")}</button>
               </>
             )}
-            <button onClick={() => { setAiPriority((v) => !v); setView("mywork"); }} data-testid="ai-priority-toggle"
-              className={`${CTRL} ${view === "mywork" && aiPriority ? "bg-brand-600 text-white shadow-brutal-sm" : "bg-brand-yellow hover:shadow-brutal-sm"}`}>
-              <Sparkle size={15} weight="bold" /> {scoring ? t("mywork.scoring") : aiPriority ? t("mywork.ai_priority_on") : t("mywork.ai_priority")}
-            </button>
+            {/* U7-05: AI Priority is owner-only. Founder ask 2026-08-17:
+                'ai priority also right only for owner got it'. The ranker
+                is a whole-team judgment tool, not something an IC needs
+                over their own list -- it hides which of my tasks I picked
+                to work on based on someone else's AI score. */}
+            {isOwner && (
+              <button onClick={() => { setAiPriority((v) => !v); setView("mywork"); }} data-testid="ai-priority-toggle"
+                className={`${CTRL} ${view === "mywork" && aiPriority ? "bg-brand-600 text-white shadow-brutal-sm" : "bg-brand-yellow hover:shadow-brutal-sm"}`}>
+                <Sparkle size={15} weight="bold" /> {scoring ? t("mywork.scoring") : aiPriority ? t("mywork.ai_priority_on") : t("mywork.ai_priority")}
+              </button>
+            )}
           </div>
           <div className="order-1 lg:order-2 grid grid-cols-4 gap-2 lg:flex lg:items-center" data-testid="work-view-toggle">
             <button onClick={() => setView("mywork")} data-testid="work-view-mywork"
@@ -1134,14 +1518,26 @@ export default function MyWork() {
       ) : (
       <div data-testid="mywork-list">
         <div>
+          {/* U7-05.9 (2026-08-17): only render tabs with something in them.
+              Founder ask: 'why are we showing all the chips here, only
+              open we can show that right'. Rule: 'All' always visible
+              (baseline nav + destination for currently-selected empty
+              tab); category tabs shown only when count > 0; Completed
+              only when there is at least one completed task. If the
+              currently-active tab is now empty (user finished the last
+              task in that category), snap back to 'all' so users don't
+              see a "selected but hidden" state. New categories can still
+              be reached via the New Task dialog. */}
           <div className="flex flex-wrap gap-1.5 mb-5 border-b border-black/10 pb-3" data-testid="work-tabs">
-            {WORK_TABS.map((tb) => (
-              <button key={tb.key} onClick={() => setTab(tb.key)} data-testid={`work-tab-${tb.key}`}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-black transition-colors ${tab === tb.key ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
-                {tb.label}
-                <span className={`px-1.5 py-0.5 text-[10px] leading-none border ${tab === tb.key ? "border-white/40" : "border-black/20 text-muted-foreground"}`}>{countFor(tb.key)}</span>
-              </button>
-            ))}
+            {WORK_TABS
+              .filter((tb) => tb.key === "all" || countFor(tb.key) > 0)
+              .map((tb) => (
+                <button key={tb.key} onClick={() => setTab(tb.key)} data-testid={`work-tab-${tb.key}`}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-black transition-colors ${tab === tb.key ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+                  {tb.label}
+                  <span className={`px-1.5 py-0.5 text-[10px] leading-none border ${tab === tb.key ? "border-white/40" : "border-black/20 text-muted-foreground"}`}>{countFor(tb.key)}</span>
+                </button>
+              ))}
           </div>
           {/* E2-14: skeleton on first load so the tab strip doesn't
               jump when tasks land. */}
@@ -1164,9 +1560,100 @@ export default function MyWork() {
               secondary={tab === "completed" ? null : "Tasks appear here once decisions are approved"}
             />
           )}
+          {/* U7-05.3: bulk-action bar. Sticky at top of the list so it
+              stays visible when scrolling long task lists. Appears only
+              when >=1 task is selected. Actions apply client-side one
+              PATCH per task -- backend batch endpoint tracked as
+              U7-05.SS (bulk endpoint) in the backend backlog wave. */}
+          {selected.size > 0 && (
+            <BulkActionBar
+              selectedIds={Array.from(selected)}
+              tasks={list.filter((tk) => selected.has(tk.id))}
+              members={members}
+              roleOptions={roleOptions}
+              busy={bulkBusy}
+              onClear={clearSelection}
+              onComplete={async () => {
+                setBulkBusy(true);
+                try {
+                  const targets = list.filter((tk) => selected.has(tk.id) && !isTerminal(tk));
+                  await Promise.all(targets.map((tk) => api.patch(`/tasks/${tk.id}`, { status: "done" })));
+                  toast.success(`Completed ${targets.length} ${targets.length === 1 ? "task" : "tasks"}`);
+                  clearSelection();
+                  refresh();
+                } catch (e) {
+                  toast.error(e.response?.data?.detail || "Bulk complete failed");
+                } finally { setBulkBusy(false); }
+              }}
+              openReassign={() => { setBulkAssigneeId(""); setBulkAssigneeRole(""); setBulkReassignOpen(true); }}
+            />
+          )}
           <div className="space-y-4">
-            {list.map((t) => <TaskCard key={t.id} t={t} onChange={refresh} members={members} roleOptions={roleOptions} showAssignee={showAssignee} highlight={t.id === focusTaskId} scores={aiPriority && tab !== "completed" ? scoreMap[t.id] : undefined} />)}
+            {list.map((t) => <TaskCard key={t.id} t={t} onChange={refresh} members={members} roleOptions={roleOptions} showAssignee={showAssignee} highlight={t.id === focusTaskId} scores={aiPriority && tab !== "completed" ? scoreMap[t.id] : undefined} selected={selected.has(t.id)} onToggleSelect={() => toggleSelected(t.id)} />)}
           </div>
+
+          {/* U7-05.3 dialog: bulk-reassign target picker. */}
+          <Dialog open={bulkReassignOpen} onOpenChange={(o) => !o && !bulkBusy && setBulkReassignOpen(false)}>
+            <DialogContent className="border border-black rounded-none max-w-md" data-testid="bulk-reassign-dialog">
+              <DialogHeader>
+                <DialogTitle className="font-heading uppercase tracking-tight">
+                  Reassign {selected.size} {selected.size === 1 ? "task" : "tasks"}
+                </DialogTitle>
+              </DialogHeader>
+              <p className="text-sm text-muted-foreground -mt-2">
+                Pick a specific team member OR hand off to a whole team.
+              </p>
+              <select
+                value={bulkAssigneeId}
+                onChange={(e) => setBulkAssigneeId(e.target.value)}
+                className="w-full border border-black px-3 py-2 text-sm focus:outline-none"
+              >
+                <option value="">— Reassign to a team member —</option>
+                {members.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
+              </select>
+              <select
+                value={bulkAssigneeRole}
+                onChange={(e) => setBulkAssigneeRole(e.target.value)}
+                disabled={!!bulkAssigneeId}
+                className="w-full border border-black px-3 py-2 text-sm focus:outline-none disabled:opacity-40"
+              >
+                <option value="">...or to a whole team {bulkAssigneeId ? "(member selected)" : ""}</option>
+                {roleOptions.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+              </select>
+              <div className="flex gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => setBulkReassignOpen(false)}
+                  disabled={bulkBusy}
+                  className="border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-black/5 disabled:opacity-40"
+                >Cancel</button>
+                <button
+                  type="button"
+                  disabled={bulkBusy || (!bulkAssigneeId && !bulkAssigneeRole)}
+                  onClick={async () => {
+                    setBulkBusy(true);
+                    try {
+                      const patch = bulkAssigneeId
+                        ? { assignee_id: bulkAssigneeId, assignee_role: null }
+                        : { assignee_id: null, assignee_role: bulkAssigneeRole };
+                      const ids = Array.from(selected);
+                      await Promise.all(ids.map((id) => api.patch(`/tasks/${id}`, patch)));
+                      const label = bulkAssigneeId
+                        ? (members.find((m) => m.id === bulkAssigneeId)?.name || "member")
+                        : `${bulkAssigneeRole} team`;
+                      toast.success(`Reassigned ${ids.length} ${ids.length === 1 ? "task" : "tasks"} to ${label}`);
+                      clearSelection();
+                      setBulkReassignOpen(false);
+                      refresh();
+                    } catch (e) {
+                      toast.error(e.response?.data?.detail || "Bulk reassign failed");
+                    } finally { setBulkBusy(false); }
+                  }}
+                  className="bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm disabled:opacity-40"
+                >{bulkBusy ? "Reassigning..." : "Reassign"}</button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
       )}

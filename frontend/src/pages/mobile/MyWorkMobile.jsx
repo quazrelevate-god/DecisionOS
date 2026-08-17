@@ -584,7 +584,10 @@ export default function MyWorkMobile() {
             {scope === "mine" ? "Mine" : "Everyone's"}
           </button>
         )}
-        {view === "mywork" && (
+        {/* U7-05.6/U7-05.7 (2026-08-17): AI Priority is owner-only on
+            mobile too. Founder ask: 'ai priority also right only for
+            owner got it'. Matches the desktop MyWork.js gate. */}
+        {view === "mywork" && isOwner && (
           <button
             type="button"
             onClick={() => setAiPriority((v) => !v)}

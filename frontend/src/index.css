@@ -101,6 +101,14 @@
         --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px; --radius-xl: 16px; --radius-pill: 999px;
         --radius: 12px;
 
+        /* MPWA-14 — the mobile app shell width. Below lg the whole app is a
+           single centred column of this width (Instagram-style): on a phone it
+           fills the screen, on anything wider it sits centred with the surface
+           showing on either side. 28rem matches the max-w-md the AllApps panel
+           and Install prompt already use, so the content, the sheets, the dock
+           and the FAB all line up to one edge. */
+        --app-shell: 28rem;
+
         /* ---- shadow (flat by default — depth comes from the hairline) ---- */
         --shadow-xs: 0 1px 2px rgba(17,19,24,.04);
         --shadow-sm: 0 1px 2px rgba(17,19,24,.05), 0 1px 3px rgba(17,19,24,.04);
@@ -403,6 +411,39 @@
 
 /* The dock in MPWA-03 floats this far above the home indicator. */
 .bottom-safe-4 { bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); }
+
+/* ---------------------------------------------------------------------------
+   MPWA-14 — the centred app shell (Instagram-style column).
+
+   `.app-shell` caps the main column at --app-shell and centres it. On a phone
+   the column fills the screen; on any wider display (large phones, foldables,
+   tablets in portrait, the PWA in a desktop window below lg) it sits centred
+   with the page surface showing on either side.
+
+   The fixed dock and FAB live outside the column in the flow, so they can't be
+   centred by a parent. `.app-dock-left` / `.app-fab-right` recompute their
+   horizontal anchor from the same shell width: on a phone the shell is the full
+   width so the offset collapses to the original 1rem, and on a wider screen
+   they hug the centred column's left and right edges instead of the viewport's.
+--------------------------------------------------------------------------- */
+@media (max-width: 1023.98px) {
+    .app-shell {
+        width: 100%;
+        max-width: var(--app-shell);
+        margin-inline: auto;
+    }
+    .app-dock-left {
+        left: calc(max(0px, (100vw - var(--app-shell)) / 2) + 1rem);
+    }
+    .app-fab-right {
+        right: calc(max(0px, (100vw - var(--app-shell)) / 2) + 1rem);
+    }
+}
+@media (min-width: 481px) and (max-width: 1023.98px) {
+    .app-shell {
+        border-inline: 1px solid hsl(var(--border));
+    }
+}
 /* Scroll containers must clear the floating dock (§8 MPWA-03: 96px) plus the
    home indicator, or the last row is trapped underneath it. */
 .pb-dock { padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px)); }

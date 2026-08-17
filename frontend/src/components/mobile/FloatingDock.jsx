@@ -138,9 +138,12 @@ export function FloatingDock({ user, onMore, moreOpen = false, moreBadge = 0 }) 
   return (
     <nav
       // lg:hidden — desktop keeps its sidebar, untouched (§8).
-      // inset-x-4 (was left-4): the pill now spans the width because Dex sits
-      // in the middle of it, where the separate FAB used to sit off to the right.
-      className="lg:hidden fixed inset-x-4 z-[10000] bottom-safe-4 flex justify-center"
+      // The pill spans the width because Dex sits in the middle of it, where
+      // the separate FAB used to sit off to the right — so it takes BOTH shell
+      // anchors. app-dock-left and app-fab-right compute the same inset from
+      // the centred column, which on a phone collapses to the original 1rem and
+      // on a wide display hugs the column's edges rather than the viewport's.
+      className="lg:hidden fixed app-dock-left app-fab-right z-[10000] bottom-safe-4 flex justify-center"
       data-testid="floating-dock"
       aria-label={t("nav.primary", "Primary")}
     >

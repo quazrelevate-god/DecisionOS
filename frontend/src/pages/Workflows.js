@@ -238,14 +238,28 @@ export default function Workflows({ embedded = false }) {
         </PageHeader>
       )}
 
+      {/* U7-06.1 (2026-08-17): shorter pipeline chips + hide pipelines
+          with zero workflows in them (same rule we applied to the
+          MyWork tab strip). The full stage-flow ("Ready to dispatch ->
+          Delivered") moves to a hover tooltip -- was chewing serious
+          horizontal space and duplicating what the kanban column headers
+          already show below. Always keep the currently-active tab
+          visible even when its count is 0 so users don't see a
+          "selected but hidden" state. */}
       <div className="flex flex-wrap border border-black mb-6 w-fit">
-        {pipelines.map((t) => (
-          <button key={t.key} onClick={() => setTab(t.key)} data-testid={`workflow-tab-${t.key}`}
-            className={`px-5 py-2.5 text-left border-r border-black last:border-r-0 transition-colors ${activeKey === t.key ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
-            <span className="block text-sm font-semibold uppercase tracking-wider">{t.label}</span>
-            <span className={`block text-[10px] uppercase tracking-widest ${activeKey === t.key ? "text-white/60" : "text-muted-foreground"}`}>{t.sub}</span>
-          </button>
-        ))}
+        {pipelines
+          .filter((pip) => pip.key === activeKey || (data || []).some((w) => w.type === pip.key))
+          .map((pip) => {
+            const count = (data || []).filter((w) => w.type === pip.key).length;
+            return (
+              <button key={pip.key} onClick={() => setTab(pip.key)} data-testid={`workflow-tab-${pip.key}`}
+                title={pip.sub || undefined}
+                className={`px-4 py-2.5 text-left border-r border-black last:border-r-0 transition-colors flex items-center gap-2 ${activeKey === pip.key ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+                <span className="text-sm font-semibold uppercase tracking-wider">{pip.label}</span>
+                <span className={`label-mono ${activeKey === pip.key ? "text-white/70" : "text-muted-foreground"}`}>{count}</span>
+              </button>
+            );
+          })}
       </div>
 
       {/* Brutalist kanban */}
@@ -316,12 +330,21 @@ export default function Workflows({ embedded = false }) {
                             <ClockCounterClockwise size={11} weight="bold" /> {updLabel} · {timeAgo(updAt)}
                           </p>
                         )}
-                        {!isLast && (
-                          <button onClick={() => advance(w)} data-testid={`advance-workflow-${w.id}`}
-                            className="mt-3 w-full flex items-center justify-center gap-1 border border-black py-1.5 text-xs font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors">
-                            {t("workflows.advance")} <ArrowRight size={12} weight="bold" />
-                          </button>
-                        )}
+                        {!isLast && (() => {
+                          // U7-06.2 (2026-08-17): show the next stage name
+                          // on the Advance button so users know where the
+                          // card is heading before they click. Was just
+                          // "Advance ->" with no context.
+                          const nextKey = w.stages[w.stages.indexOf(w.stage) + 1];
+                          const nextLabel = labelOf(nextKey) || nextKey || "next";
+                          return (
+                            <button onClick={() => advance(w)} data-testid={`advance-workflow-${w.id}`}
+                              title={`Move to ${nextLabel}`}
+                              className="mt-3 w-full flex items-center justify-center gap-1 border border-black py-1.5 text-xs font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors">
+                              {t("workflows.advance")} to {nextLabel} <ArrowRight size={12} weight="bold" />
+                            </button>
+                          );
+                        })()}
                         {isLast && <Chip value={labelOf(w.stage)} className="mt-3" />}
                       </div>
                     );

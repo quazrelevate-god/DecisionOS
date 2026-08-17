@@ -2758,11 +2758,10 @@ def _score_employees(tasks, members, now):
     return employees
 
 
-@api.get("/operating-score")
-async def operating_score(user: dict = Depends(require_role("owner"))):
-    tid = user["tenant_id"]
-    now = datetime.now(timezone.utc).isoformat()
-    can_finance = user.get("role") == "owner" or "finance" in user_perms(user)
+async def _company_operating_view(tid: str, viewer: dict, now: str) -> dict:
+    """Compute the owner-facing company payload. Extracted so /operating-score
+    can dispatch by role (Epic 7 Sprint 1 Phase A -- role split)."""
+    can_finance = viewer.get("role") == "owner" or "finance" in user_perms(viewer)
 
     tasks = await db.tasks.find({"tenant_id": tid}, {"_id": 0}).to_list(2000)
     decisions = await db.decisions.find({"tenant_id": tid}, {"_id": 0, "status": 1}).to_list(2000)
@@ -2794,7 +2793,6 @@ async def operating_score(user: dict = Depends(require_role("owner"))):
     wsum = sum(weights[k] for k in avail) or 1
     overall = _clamp100(sum(avail[k] * weights[k] for k in avail) / wsum)
 
-    # Gate: don't show a (misleading) score until there's meaningful activity.
     enough_data = actionable >= 3 or inv_count > 0
 
     members = await db.users.find({"tenant_id": tid}, {"_id": 0, "id": 1, "name": 1, "role": 1}).to_list(200)
@@ -2808,6 +2806,153 @@ async def operating_score(user: dict = Depends(require_role("owner"))):
         "employees": employees,
         "can_finance": can_finance,
     }
+
+
+async def _self_operating_view(tid: str, viewer: dict, now: str) -> dict:
+    """Compute a personal, contributor-facing operating view for any
+    non-owner team member (Epic 7 Sprint 1 Phase A -- founder ask 2026-08-17:
+    'if the team person login and go the ops it have to show the individuals
+    person metrics').
+
+    Reuses compute_employee_stats for the richer signals (proof upload rate,
+    plan adoption, streak-friendly counts) that the company view discards.
+    Adds two purely-viewer surfaces the owner leaderboard never carried:
+    my open work (top 5 by due date) and my active workflows (current-stage
+    owner). Peer context is computed but the frontend keeps it behind an
+    opt-in per privacy default (open decision #1 in the analysis doc).
+    """
+    uid = viewer["id"]
+    urole = viewer.get("role") or ""
+    stats = await compute_employee_stats(tid, viewer)
+
+    # Top 5 open tasks by due date -- the surface a contributor actually acts on.
+    my_open = await db.tasks.find(
+        {"tenant_id": tid,
+         "$or": [{"assignee_id": uid},
+                 {"assignee_id": None, "assignee_role": urole}],
+         "status": {"$in": ["todo", "in_progress", "blocked"]}},
+        {"_id": 0, "id": 1, "title": 1, "due_date": 1, "priority": 1,
+         "status": 1, "workflow_id": 1, "stage_key": 1, "category": 1}
+    ).sort([("due_date", 1)]).to_list(5)
+    for t in my_open:
+        due = t.get("due_date")
+        t["is_overdue"] = bool(due and due < now)
+
+    # Active workflows where the viewer owns the CURRENT stage -- pull via
+    # tasks (workflow_id + stage_key == wf.current_stage). Cheap dedupe.
+    wf_ids_seen = set()
+    for t in my_open:
+        wid = t.get("workflow_id")
+        if wid:
+            wf_ids_seen.add(wid)
+    my_workflows = []
+    if wf_ids_seen:
+        wfs = await db.workflows.find(
+            {"id": {"$in": list(wf_ids_seen)}, "tenant_id": tid},
+            {"_id": 0, "id": 1, "title": 1, "type": 1, "stage": 1,
+             "counterparty": 1, "amount": 1}
+        ).to_list(len(wf_ids_seen))
+        my_workflows = wfs
+
+    # Peer context: rank in role. Frontend hides behind an opt-in toggle
+    # until we ship the per-user privacy preference (Phase B follow-up).
+    peer_context = None
+    if urole and urole != "owner":
+        role_members = await db.users.find(
+            {"tenant_id": tid, "role": urole},
+            {"_id": 0, "id": 1, "name": 1, "role": 1}
+        ).to_list(200)
+        if len(role_members) > 1:
+            all_tasks = await db.tasks.find(
+                {"tenant_id": tid}, {"_id": 0}).to_list(2000)
+            ranked = _score_employees(all_tasks, role_members, now)
+            ranked = [r for r in ranked if r["score"] is not None]
+            if ranked:
+                # rank of viewer within their role
+                try:
+                    my_rank = next(i for i, r in enumerate(ranked) if r["id"] == uid) + 1
+                except StopIteration:
+                    my_rank = None
+                peer_context = {
+                    "role": urole,
+                    "role_peer_count": len(role_members),
+                    "my_rank_in_role": my_rank,
+                    "role_ranked_size": len(ranked),
+                }
+
+    return {
+        "self": {"id": uid, "name": viewer.get("name"), "role": urole},
+        "stats": stats,
+        "my_open_work": my_open,
+        "my_active_workflows": my_workflows,
+        "peer_context": peer_context,
+    }
+
+
+@api.get("/operating-score")
+async def operating_score(
+    user_id: Optional[str] = None,
+    user: dict = Depends(get_current_user),
+):
+    """Viewer-aware operating dashboard.
+
+    Epic 7 Sprint 1 Phase A (2026-08-17): opened this endpoint from
+    owner-only to any authenticated user. Owner keeps the company view;
+    every other role gets a personal contributor view.
+
+    Epic 7 Sprint 1 batch 4 (2026-08-17): added owner-only view-as.
+    Founder ask: 'from the owner side if i click the team member is it
+    working better or not will show their tasks all the things the
+    individual ops has right'. Answer was no -- clicks went to WorkCoach
+    which shows only stats + AI review, not the person's open work or
+    active workflows. Now: /api/operating-score?user_id=X returns X's
+    full self-view (open work, active workflows, peer context, rich
+    stats) so the owner sees exactly what the teammate sees. Non-owners
+    passing user_id get 403 -- privacy holds.
+
+    Payloads carry a `view` discriminator so the frontend dispatcher
+    can render OwnerView vs SelfView cleanly without probing shape.
+    Owner viewing someone else's payload has view='self' plus
+    view_as: {id, name, role} so the frontend can show a breadcrumb.
+    """
+    tid = user["tenant_id"]
+    now = datetime.now(timezone.utc).isoformat()
+    is_owner = user.get("role") == "owner"
+
+    # Owner-only view-as: return target's self-view instead of the
+    # owner's company view.
+    if user_id and user_id != user["id"]:
+        if not is_owner:
+            raise HTTPException(
+                status_code=403,
+                detail="Only the owner can view another user's operating page",
+            )
+        target = await db.users.find_one(
+            {"id": user_id, "tenant_id": tid},
+            {"_id": 0, "id": 1, "name": 1, "role": 1, "email": 1},
+        )
+        if not target:
+            raise HTTPException(status_code=404, detail="Team member not found")
+        payload = await _self_operating_view(tid, target, now)
+        payload["view"] = "self"
+        payload["view_as"] = {
+            "id": target["id"],
+            "name": target.get("name"),
+            "role": target.get("role"),
+        }
+        return payload
+
+    if is_owner:
+        payload = await _company_operating_view(tid, user, now)
+        # Owner is also an IC -- give them their own snapshot so they can
+        # see how their personal work stacks up without switching views.
+        payload["my_snapshot"] = await compute_employee_stats(tid, user)
+        payload["view"] = "owner"
+        return payload
+
+    payload = await _self_operating_view(tid, user, now)
+    payload["view"] = "self"
+    return payload
 
 
 # ---------------------------------------------------------------------------

@@ -83,7 +83,7 @@ const resources = {
         s3: "Summarise open sales orders", s4: "What did I decide about festive stock?",
       },
       workflows: {
-        eyebrow: "Flagship operational flows", title: "Workflows", new: "New",
+        eyebrow: "Flagship operational flows", title: "Workflows", new: "New workflow",
         dlg_title: "New {{type}}", dlg_desc: "Add a card to track this {{type}} process.",
         title_ph: "Title (e.g. Order #4823)", select_contact: "Select {{label}}… (or type below)",
         counterparty_ph: "Counterparty name", amount_ph: "Amount", detail_ph: "Detail",

@@ -46,9 +46,17 @@ const NAV = [
   // entry retired; /brief URL redirects to /inbox in App.js.
   // { to: "/brief", label: "CEO Brief", tkey: "brief", icon: Sun, testid: "nav-ceo-brief" },
   { to: "/my-work", label: "My Work", tkey: "mywork", icon: Briefcase, testid: "nav-my-work" },
-  { to: "/operating-score", label: "Ops", tkey: "ops", icon: Gauge, testid: "nav-ops", ownerOnly: true },
+  // Epic 7 Sprint 1 Phase A (2026-08-17): Ops nav item is now visible to
+  // every authenticated user. Owner sees the company dashboard; every other
+  // role sees their personal operating view (self stats + open work +
+  // active workflows). Founder ask: 'if the team person login and go the
+  // ops it have to show the individuals person metrics'.
+  { to: "/operating-score", label: "Ops", tkey: "ops", icon: Gauge, testid: "nav-ops" },
   { to: "/crm", label: "CRM", tkey: "crm", icon: AddressBook, testid: "nav-crm", perm: "people" },
-  { to: "/team", label: "Team", tkey: "team", icon: UsersThree, testid: "nav-team", perms: ["team_manage"] },
+  // U7-09.TEAM (2026-08-17): Team nav visible to every user. Non-perm
+  // viewers get a read-only roster; owner + team_manage users get the
+  // edit affordances inside the page.
+  { to: "/team", label: "Team", tkey: "team", icon: UsersThree, testid: "nav-team" },
   // Epic 2 Sprint 5 (E2-32): 'Company Brain' -> 'Dex' (single AI persona).
   // Route stays /brain for bookmark safety; /dex is an alias in App.js.
   { to: "/brain", label: "Dex", tkey: "brain", icon: BrainIcon, testid: "nav-brain", perm: "brain" },
@@ -311,9 +319,14 @@ export default function Layout({ children }) {
         </div>
       </aside>
 
-      {/* Main — `relative` so an immersive screen's overlaid header has a
-          positioning context that is this column, not the page. */}
-      <div className="flex-1 flex flex-col min-w-0 relative">
+      {/* Main.
+          Below lg the column is capped and centred (`app-shell`) so the app
+          reads as one phone-width surface on any display; on lg it resets to
+          fill the space beside the sidebar.
+          `relative` so an immersive screen's overlaid header has a positioning
+          context that is this column, not the page — which is also what keeps
+          the overlay inside the centred shell rather than spanning the viewport. */}
+      <div className="relative flex flex-col min-w-0 app-shell lg:max-w-none lg:mx-0 lg:flex-1">
         {/* Desktop top bar */}
         <header className="hidden lg:flex h-16 border-b border-border bg-background/70 backdrop-blur-xl items-center justify-between px-8 sticky top-0 z-10">
           <div className="flex items-center gap-3">
@@ -339,18 +352,24 @@ export default function Layout({ children }) {
             entirely — nothing should be reachable from two places (§8).
             MPWA-02: min-h + top inset so nothing sits under the status bar in
             iOS standalone, where there is no browser chrome above us. */}
+        {/* The wordmark is centred. A three-track grid (1fr · auto · 1fr) pins
+            the logo to the header's true centre independent of the bell's
+            width — the equal side tracks guarantee it, where a flex spacer only
+            approximated it. `px-gutter-safe` is symmetric (16/16) so the centre
+            is the screen's centre, not the content box's; the bell rides the
+            right track, pushed to its end.
+            The centring survives the immersive variant: only the CHROME changes
+            there — no border, no blur, no background, laid over the hero rather
+            than above it, with the lockup reversed so it reads on the dark. */}
         <header className={cn(
-          "lg:hidden min-h-14 flex items-center justify-between gap-2 px-chrome-safe pt-safe",
+          "lg:hidden min-h-14 grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-gutter-safe pt-safe",
           immersive
-            // Over the hero, not above it: no border, no blur, no background —
-            // the seam is the thing being removed. Absolute rather than fixed so
-            // it scrolls away with the hero it belongs to, and z-30 keeps it
-            // under the dock's z-[10000].
             ? "absolute inset-x-0 top-0 z-30 text-white"
             : "border-b border-border bg-background/80 backdrop-blur-xl sticky top-0 z-20"
         )}>
-          <Logo markOnly tone={immersive ? "reversed" : undefined} />
-          <div className="flex items-center gap-touch-gap shrink-0">
+          <span aria-hidden="true" />
+          <Logo tone={immersive ? "reversed" : undefined} />
+          <div className="flex items-center justify-self-end gap-touch-gap">
             <Bellicon mobile />
           </div>
         </header>

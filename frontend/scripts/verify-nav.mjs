@@ -235,29 +235,16 @@ check(
 );
 await page.keyboard.press('Escape');
 
+// The Ops member grid and its expanded card were part of the bespoke mobile
+// Ops screen. That screen is deleted: /operating-score renders the DESKTOP tree
+// on every viewport now, so the roster there is the desktop leaderboard and its
+// own suite covers it. What still matters here is only that the route resolves.
 await page.goto(`${BASE}/operating-score`, { waitUntil: 'domcontentloaded' });
-await page.waitForSelector('[data-testid="ops-employees"]', { timeout: 12000 }).catch(() => {});
-const tiles = await page.locator('[data-testid^="ops-emp-"]').count();
-check('Ops carries the roster as a grid', tiles > 0, `${tiles} member box(es)`);
-
-if (tiles > 0) {
-  await page.locator('[data-testid^="ops-emp-"]').first().click();
-  await page.waitForSelector('[data-testid="member-card"]', { timeout: 8000 });
-  check('a member box opens the expanded card', true, 'member-card visible');
-  // The three management pills moved back to the Team page with the rest of
-  // team management. The card is a read now — no writes hanging off it.
-  check(
-    'the member card carries no management pills',
-    (await page.locator('[data-testid^="member-pill-"]').count()) === 0
-  );
-  // The four tiles that were asked to be dropped must not come back.
-  const cardText = (await page.locator('[data-testid="member-card"]').innerText()).toLowerCase();
-  for (const gone of ['proof', 'plans used', 'photos', 'voice']) {
-    check(`the card omits "${gone}"`, !cardText.includes(gone));
-  }
-  await page.locator('[data-testid="member-card-close"]').click();
-  await page.waitForTimeout(300);
-}
+await page.waitForTimeout(2500);
+check('Ops resolves on a phone', new URL(page.url()).pathname === '/operating-score',
+  new URL(page.url()).pathname);
+check('Ops renders the desktop tree, not a stub',
+  (await page.locator('[data-testid="operating-overall"], [data-testid="operating-self-hero"], [data-testid="operating-skeleton"]').count()) >= 1);
 
 // --------------------------------------------- MPWA-12c · the promoted slot
 // §2.1 as amended by MPWA-14: Desk · Work · [Dex] · Money · More, with Dex

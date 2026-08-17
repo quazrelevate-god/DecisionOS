@@ -110,7 +110,12 @@ const Logo = ({ markOnly = false, tone }) => (
 //
 // The dock and the Dex FAB are untouched: they are `fixed` at z-[10000] and
 // were never part of this flow.
-const IMMERSIVE_MOBILE_ROUTES = new Set(["/operating-score", "/my-work"]);
+// Empty for now. /operating-score and /my-work were immersive while they had
+// bespoke mobile screens with their own full-bleed dark heroes; both now render
+// the DESKTOP tree on a phone, which expects the ordinary app bar above it
+// rather than laid over it. The mechanism stays because Dex-style screens will
+// want it again after the design-system pass.
+const IMMERSIVE_MOBILE_ROUTES = new Set([]);
 
 export default function Layout({ children }) {
   const { user, tenant, logout } = useAuth();

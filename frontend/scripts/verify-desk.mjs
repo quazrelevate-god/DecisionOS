@@ -253,18 +253,31 @@ if (await fire.count()) {
 // §2.2: the Desk's number drill-down links to /my-work?focus=task:<id>. That
 // param has to resolve on arrival, not land on a page that ignores it.
 await page.goto(`${BASE}/my-work?fixture=busy`, { waitUntil: 'domcontentloaded' });
-await page.waitForSelector('[data-testid="mywork-mobile"]', { timeout: 12000 });
+// /my-work renders the desktop tree on every viewport now — the mobile screen
+// that carried data-testid="mywork-mobile" is deleted. Wait on the task list
+// the desktop page renders instead.
+await page.waitForSelector('[data-testid="task-card-"], .card-brutal, [data-testid="mywork-empty"]', { timeout: 12000 }).catch(() => {});
 await page.waitForTimeout(1200);
-// 12f moved the task rows onto the Queue block, so the row id lives in the
-// group's testid: work-group-<bucket>-row-<taskId>.
-const taskId = await page.locator('[data-testid^="work-group-"][data-testid*="-row-"]').first()
-  .getAttribute('data-testid').catch(() => null);
+await page.waitForTimeout(1200);
+// The mobile Queue block that carried work-group-<bucket>-row-<id> is gone —
+// /my-work renders the desktop tree on every viewport now, where a task row is
+// a .card-brutal carrying id="task-card-<id>". What this check exists for is
+// unchanged: that the Desk has somewhere real to deep-link into.
+const taskId = await page.locator('[id^="task-card-"]').first()
+  .getAttribute('id').then((v) => (v ? v.replace(/^task-card-/, '') : null))
+  .catch(() => null);
 check('My Work has tasks to deep-link into', !!taskId, taskId || 'none found');
 if (taskId) {
   const id = taskId.replace(/^work-group-[a-z]+-row-/, '');
   await page.goto(`${BASE}/my-work?fixture=busy&focus=task:${id}`, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(1800);
-  check('/my-work resolves a focus deep link', (await page.locator('[data-testid="focus-view"]').count()) === 1,
+  // The desktop tree has no FocusView overlay — it resolves a deep link by
+  // selecting the right tab/scope and scrolling the card into view. So assert
+  // the thing that actually has to be true: the linked task is on screen.
+  // (MyWork now accepts BOTH ?task=<id> and ?focus=task:<id>; the latter is
+  // what the Desk emits and it resolved to nothing once the mobile screen went.)
+  check('/my-work resolves a focus deep link',
+    (await page.locator(`#task-card-${id}`).count()) === 1,
     `focus=task:${id}`);
 }
 

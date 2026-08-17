@@ -17,7 +17,6 @@ import {
 import api from "../../lib/api";
 import { inr } from "../../lib/format";
 import { EmptyState, ListSkeleton, MoneySkeleton, StatusChip, dueLabel } from "../../components/mobile";
-import { humanStage } from "./MyWorkMobile";
 
 // §5.4: relative inside 7 days, absolute beyond, and never a raw ISO string —
 // "due 2026-07-14" is a database value wearing a date's clothes.
@@ -62,6 +61,14 @@ const Row = ({ label, value }) => (
     <span className="text-right font-semibold tabular-nums">{value}</span>
   </p>
 );
+
+// Was imported from the mobile My Work page, which is gone — /my-work renders
+// the desktop tree on every viewport now. Three pure lines; re-homed rather
+// than kept alive in a deleted module.
+function humanStage(s) {
+  if (!s) return "";
+  return String(s).replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+}
 
 export default function ContactProfileMobile() {
   const { id } = useParams();

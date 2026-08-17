@@ -8,8 +8,6 @@ import { PageHeader, Chip, EmptyState, SkeletonCard } from "../components/common
 import { useAuth } from "../context/AuthContext";
 import { userPerms } from "../lib/perms";
 import { opModel } from "../lib/operatingModel";
-import { useIsMobile } from "../hooks/useIsMobile";
-import MyWorkMobile from "./mobile/MyWorkMobile";
 import { toast } from "sonner";
 // WE-14 (2026-08-16): TaskBoard import retired -- the Board sub-tab
 // under Workflows is gone. NewTaskDialog stays -- it is used by the
@@ -1299,9 +1297,6 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
 }
 
 export default function MyWork() {
-  // MPWA-08: rebuilt below lg (§8). Above lg the original tree renders
-  // unchanged, keeping §9.2's desktop diff empty by construction.
-  const isMobile = useIsMobile();
   const qc = useQueryClient();
   const { t } = useTranslation();
   const { tenant, user } = useAuth();
@@ -1313,7 +1308,14 @@ export default function MyWork() {
   ];
   const [params] = useSearchParams();
   const isOwner = user?.role === "owner";
-  const focusTaskId = params.get("task");
+  // Two spellings, because two callers exist. Desktop links here with
+  // ?task=<id>; the Desk and notifications link with ?focus=task:<id>, which
+  // the deleted mobile screen's FocusView used to resolve. With that screen
+  // gone those links landed on the page and silently focused nothing — a real
+  // regression, caught by verify-desk. Accept both rather than rewrite every
+  // caller and leave old notification links dead.
+  const focusTaskId =
+    params.get("task") || (params.get("focus") || "").replace(/^task:/, "") || null;
   const rawView = params.get("view");
   // "board" is no longer a top-level view — it now lives as a sub-tab inside Workflows.
   const initialView = rawView === "board" ? "workflows"
@@ -1445,7 +1447,6 @@ export default function MyWork() {
     list = [...list].sort((a, b) => (scoreMap[b.id]?.priority_score || 0) - (scoreMap[a.id]?.priority_score || 0));
   }
 
-  if (isMobile) return <MyWorkMobile />;
 
   return (
     <div>

@@ -24,8 +24,14 @@ const check = (name, pass, detail = '') => {
 const ROUTES = [
   { path: '/inbox', composed: true },
   { path: '/inbox?scope=morning', composed: true, explains: true },
-  { path: '/my-work', composed: true, explains: true },
-  { path: '/my-work?view=leave' },
+  // /my-work retired from this list: its empty state was the mobile
+  // EmptyScreen composition (blocks + progress + gap rules), and that screen is
+  // deleted — the route renders the desktop tree on every viewport now. The
+  // desktop empty state is covered by its own page, and the phone-layout rules
+  // here would be asserting a design that no longer exists.
+  // /my-work?view=leave retired with the rest of /my-work — the leave list is
+  // the desktop tree's now, and its empty state does not carry the mobile
+  // primary-action contract this asserts.
   { path: '/my-work?view=workflows' },
   { path: '/crm', composed: true, explains: true },
   { path: '/team' },

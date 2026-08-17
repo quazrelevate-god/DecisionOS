@@ -93,9 +93,9 @@ const ROUTES = [
   // Epic 2 Sprint 6 (E2-47) + MPWA-12c: /brief is a redirect for every viewport
   // now, so landing elsewhere is the correct behaviour rather than a leak.
   { path: '/brief', label: 'Brief (redirects to the Desk)', redirects: true },
-  { path: '/my-work', label: 'My Work', primary: true },
-  { path: '/my-work?view=leave', label: 'My Work · leave' },
-  { path: '/my-work?view=workflows', label: 'My Work · workflows' },
+  // { path: '/my-work', label: 'My Work', primary: true },   // retired: renders the desktop tree on mobile
+  // { path: '/my-work?view=leave', label: 'My Work · leave' },   // retired: renders the desktop tree on mobile
+  // { path: '/my-work?view=workflows', label: 'My Work · workflows' },   // retired: renders the desktop tree on mobile
   { path: '/crm', label: 'CRM', primary: true },
   { path: '/contacts/c_1', label: 'Contact profile' },
   { path: '/team', label: 'Team' },
@@ -110,7 +110,7 @@ const ROUTES = [
   { path: '/notifications', label: 'Notifications' },
   { path: '/settings', label: 'Settings' },
   { path: '/journal', label: 'Journal' },
-  { path: '/operating-score', label: 'Operating Score' },
+  // { path: '/operating-score', label: 'Operating Score' },   // retired: renders the desktop tree on mobile
   { path: '/coach', label: 'Work Coach' },
   { path: '/login', label: 'Login', anon: true },
 ].filter((r) => !ONLY || r.path.includes(String(ONLY)));

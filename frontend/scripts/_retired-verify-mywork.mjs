@@ -1,13 +1,17 @@
 #!/usr/bin/env node
 /**
- * MPWA-12f verification — My Work as a flow (§5.4).
+ * RETIRED 2026-08-17 — do not run.
  *
- * "A founder's work is a FLOW; rendering it as a to-do list is the biggest
- * regression from v2." So: the Workflows view is a snap stage board moved by
- * long-press, and the Tasks view is three grouped Queues with a ring per card.
+ * Every check in this file targets the bespoke mobile My Work screen
+ * (mywork-list, workflow-board, workflow-sheet, task-sheet). That screen is
+ * deleted: /my-work renders the DESKTOP tree on every viewport now, by explicit
+ * decision — a second mobile implementation is exactly how the feature gap this
+ * replaced opened in the first place.
  *
- * Runs against the fixtures — the board's geometry and the bucket counts have to
- * be deterministic.
+ * Kept rather than deleted because the phone-layout rules it encodes (touch
+ * floors, group caps, the 2,553px density ceiling) are worth re-reading when the
+ * design-system pass reaches this page. Nothing imports it and no runner calls
+ * it; the leading underscore keeps it out of scripts/verify-*.mjs globs.
  */
 import { chromium } from 'playwright';
 import { signIn } from './lib/auth.mjs';

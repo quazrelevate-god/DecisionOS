@@ -2,8 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import api from "../lib/api";
-import { useIsMobile } from "../hooks/useIsMobile";
-import OpsMobile from "./mobile/OpsMobile";
 import { PageHeader } from "../components/common";
 import {
   Gauge, Lightning, CurrencyCircleDollar, TrendUp, ChatCenteredDots, Trophy,
@@ -58,9 +56,6 @@ export default function OperatingScore() {
   // metadata; frontend renders SelfView with a "viewing as X" breadcrumb.
   const [searchParams] = useSearchParams();
   const userIdParam = searchParams.get("user") || null;
-  // Rebuilt below lg as a fixed hero + overlay sheet; the desktop tree below is
-  // untouched. Declared with the other hooks so the branch cannot reorder them.
-  const isMobile = useIsMobile();
 
   const { data, isLoading } = useQuery({
     queryKey: ["operating-score", userIdParam],
@@ -68,10 +63,6 @@ export default function OperatingScore() {
       .get("/operating-score", { params: userIdParam ? { user_id: userIdParam } : {} })
       .then((r) => r.data),
   });
-
-  // OpsMobile re-reads the same query key, which TanStack dedupes to one
-  // request. It handles the owner/self split itself.
-  if (isMobile) return <OpsMobile />;
 
   // U7-01.20: skeleton matches the actual page shape (score circle +
   // stat tiles + a wide content strip) so the layout doesn't jump when

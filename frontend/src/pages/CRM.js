@@ -263,13 +263,15 @@ export default function CRM() {
   const qc = useQueryClient();
   const navigate = useNavigate();
 
-  // Epic 2 Sprint 6.5 (E2-52): `?complaint=open` deep-link from the
-  // Desk Trends card 'Complaints' row lands here with the complaints
-  // filter chip pre-selected.
+  // U7-07 (2026-08-17): scope simplified to Buyers | Suppliers only.
+  // Founder ask: 'remove all section, just Buyer / suppliers enough'.
+  // Killed 'all', 'mine', 'complaints' scopes. Complaints visible via
+  // the red pill on each card (already shipped in Batch 1) so users
+  // still spot them without a dedicated tab. Default scope = customers
+  // (buyers) since that's the primary business focus for most tenants.
   const [searchParams] = useSearchParams();
-  const complaintParam = searchParams.get("complaint");
 
-  const [scope, setScope] = useState(complaintParam === "open" ? "complaints" : "all"); // all | customers | suppliers | mine | complaints
+  const [scope, setScope] = useState("customers"); // customers | suppliers
   const [status, setStatus] = useState("");
   const [q, setQ] = useState("");
   // Epic 2 Sprint 8 (E2-70): sort state persists via URL param so a
@@ -309,9 +311,11 @@ export default function CRM() {
     return map;
   }, [openComplaints]);
 
-  useEffect(() => {
-    if (complaintParam === "open") setScope("complaints");
-  }, [complaintParam]);
+  // U7-07: was a useEffect that force-flipped scope to 'complaints' when
+  // Desk Trends deep-linked here with ?complaint=open. Complaints scope
+  // no longer exists; the red pill on each card is the visual signal
+  // (already shipped in Batch 1). Deep-link kept working -- lands on
+  // Buyers with all cards visible; users spot the red pills.
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["crm-contacts"] });
 
@@ -365,13 +369,9 @@ export default function CRM() {
 
   const contacts = useMemo(() => {
     let list = data || [];
+    // U7-07: only customers/suppliers scopes now. Others removed.
     if (scope === "customers") list = list.filter((c) => CUSTOMER_TYPES.includes(c.type));
     else if (scope === "suppliers") list = list.filter((c) => VENDOR_TYPES.includes(c.type));
-    else if (scope === "mine") list = list.filter((c) => c.assigned_id === user?.id);
-    else if (scope === "complaints") {
-      const cids = new Set((openComplaints || []).map((c) => c.customer_id).filter(Boolean));
-      list = list.filter((c) => cids.has(c.id));
-    }
     // Epic 2 Sprint 8 (E2-70): sort AFTER filter so the user sees
     // the biggest debtor (say) inside the current scope.
     const outMap = outstandingMap || {};
@@ -407,15 +407,13 @@ export default function CRM() {
     }
   };
 
-  // Epic 2 Sprint 8 (E2-68): every chip label carries its live count so
-  // the founder scans "Customers 12 / Suppliers 8 / With Complaints 3"
-  // without opening each chip to check.
+  // U7-07 (2026-08-17): only 2 scopes -- Buyers, Suppliers. Founder ask:
+  // 'remove all section, just Buyer / suppliers enough'. Counts still
+  // shown next to labels for one-glance scan. Complaints visible via
+  // the red pill on each card (Batch 1); no dedicated scope for it.
   const SCOPES = [
-    { key: "all", label: t("crm.all"), icon: UsersFour, count: scopeCounts.all },
     { key: "customers", label: L.customer_plural, icon: AddressBook, count: scopeCounts.customers },
     { key: "suppliers", label: L.vendor_plural, icon: Truck, count: scopeCounts.suppliers },
-    { key: "mine", label: t("crm.mine"), icon: null, count: scopeCounts.mine },
-    { key: "complaints", label: "With Complaints", icon: WarningIcon, count: scopeCounts.complaints },
   ];
 
   if (isMobile) return <CRMMobile />;
@@ -504,57 +502,66 @@ export default function CRM() {
         )}
       </PageHeader>
 
-      {/* Filter chips + search + sort */}
-      <div className="flex flex-col lg:flex-row lg:items-center gap-3 mb-6">
-        <div className="flex border border-black overflow-x-auto" data-testid="crm-scope-chips">
-          {SCOPES.map((s) => (
-            <button
-              key={s.key}
-              onClick={() => setScope(s.key)}
-              data-testid={`crm-scope-${s.key}`}
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold uppercase tracking-wider border-r border-black last:border-r-0 transition-colors ${scope === s.key ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}
-            >
-              {s.icon && <s.icon size={16} weight="bold" />}
-              <span>{s.label}</span>
-              {/* E2-68: live count per chip -- always render (0 is signal too) */}
-              <span
-                className={`text-[11px] font-mono px-1.5 py-0.5 rounded ${
-                  scope === s.key ? "bg-white/20 text-white" : "bg-black/10 text-black"
-                }`}
-                data-testid={`crm-scope-count-${s.key}`}
+      {/* U7-07 (2026-08-17): HRM-style segmented tabs -- Buyers | Suppliers.
+          Two big equal-width tabs with a shared underline that slides
+          under the active one. Filters moved to a subtle strip below,
+          not inline with the type toggle. Founder ask: 'make it better
+          ui as actual CRM. remove all section, just Buyer / suppliers
+          enough'. */}
+      <div className="mb-6" data-testid="crm-scope-chips">
+        <div className="flex border-b border-black/15">
+          {SCOPES.map((s) => {
+            const active = scope === s.key;
+            return (
+              <button
+                key={s.key}
+                onClick={() => setScope(s.key)}
+                data-testid={`crm-scope-${s.key}`}
+                className={`flex items-center gap-2 px-6 py-3 text-sm font-semibold tracking-wide transition-colors relative -mb-px border-b-2 ${active ? "border-brand-ink text-brand-ink" : "border-transparent text-muted-foreground hover:text-black"}`}
               >
-                {s.count}
-              </span>
-            </button>
-          ))}
+                {s.icon && <s.icon size={16} weight="bold" />}
+                <span className="uppercase tracking-wider">{s.label}</span>
+                <span
+                  className={`label-mono px-1.5 py-0.5 ${active ? "bg-brand-ink text-white" : "bg-black/5 text-muted-foreground"}`}
+                  data-testid={`crm-scope-count-${s.key}`}
+                >
+                  {s.count}
+                </span>
+              </button>
+            );
+          })}
         </div>
-        <div className="flex items-center border border-black bg-white px-3 flex-1 min-w-[200px]">
-          <MagnifyingGlass size={16} weight="bold" className="text-muted-foreground" />
+      </div>
+
+      {/* Filter strip -- search + status + sort, below the type toggle
+          and visually secondary. Wraps on narrow viewports. */}
+      <div className="flex flex-wrap items-center gap-2 mb-6">
+        <div className="relative flex-1 min-w-[200px] max-w-md">
+          <MagnifyingGlass size={14} weight="bold" className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
           <input
             data-testid="crm-search"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder={t("crm.search_ph")}
-            className="flex-1 py-2 px-2 text-sm font-mono focus:outline-none bg-transparent"
+            className="w-full border border-black/30 pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-black"
           />
         </div>
         <select
           data-testid="crm-status-filter"
           value={status}
           onChange={(e) => setStatus(e.target.value)}
-          className="border border-black bg-white px-3 py-2 text-sm font-mono focus:outline-none"
+          className="border border-black/30 bg-white px-3 py-2 text-sm focus:outline-none focus:border-black"
         >
           <option value="">{t("crm.all_statuses")}</option>
           {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
-        {/* E2-70: sort dropdown. Default = name A-Z. */}
-        <div className="flex items-center border border-black bg-white px-3">
-          <ArrowsDownUp size={16} weight="bold" className="text-muted-foreground" />
+        <div className="flex items-center border border-black/30 bg-white pl-3 focus-within:border-black">
+          <ArrowsDownUp size={14} weight="bold" className="text-muted-foreground" />
           <select
             data-testid="crm-sort"
             value={sort}
             onChange={(e) => setSort(e.target.value)}
-            className="py-2 px-2 text-sm font-mono focus:outline-none bg-transparent"
+            className="py-2 pl-2 pr-3 text-sm focus:outline-none bg-transparent"
           >
             {SORT_OPTIONS.map((o) => (
               <option key={o.key} value={o.key}>{o.label}</option>

@@ -340,12 +340,15 @@ export default function ContactProfile() {
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium ${meta.cls}`}>
                       <Icon size={12} weight="bold" /> {meta.label}
                     </span>
-                    <span className="text-xs text-muted-foreground font-mono ml-auto flex items-center gap-1">
+                    {/* neutral-600, not muted-foreground: muted measures
+                        4.02:1 on the sunken well — under §5's 4.5 floor.
+                        neutral-600 is ~6.5:1 there. Only in-well text steps up. */}
+                    <span className="text-xs text-neutral-600 font-mono ml-auto flex items-center gap-1">
                       <Clock size={11} weight="bold" /> {timeAgo(a.created_at)}
                     </span>
                   </div>
                   <p className="text-sm">{a.text}</p>
-                  {a.actor_name && <p className="text-[11px] text-muted-foreground mt-1 font-mono">— {a.actor_name}</p>}
+                  {a.actor_name && <p className="text-[11px] text-neutral-600 mt-1 font-mono">— {a.actor_name}</p>}
                 </div>
               );
             })}
@@ -366,7 +369,7 @@ export default function ContactProfile() {
             <div key={w.id} data-testid={`crm-workflow-${w.id}`} className="nm-inset p-3 flex items-center justify-between gap-2">
               <div>
                 <p className="text-sm font-semibold">{w.title || "(untitled)"}</p>
-                <p className="text-xs text-muted-foreground font-mono">{w.type} · created {timeAgo(w.created_at)}</p>
+                <p className="text-xs text-neutral-600 font-mono">{w.type} · created {timeAgo(w.created_at)}</p>
               </div>
               <Chip value={w.stage || "unknown"} />
             </div>

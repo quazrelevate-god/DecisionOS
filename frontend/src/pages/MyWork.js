@@ -607,6 +607,18 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
   const [recording, setRecording] = useState(false);
   const [lightbox, setLightbox] = useState(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  // U7-05.2 (2026-08-17): density fix. Card collapses to a summary row by
+  // default (title + priority + status + due + assignee-if-owner + quick
+  // actions). Expand-on-click reveals description, op-meta, stage chip,
+  // status band, progress, attachments, updates, action buttons, plan,
+  // trail. Highlighted cards (deep-link focus) auto-expand.
+  const [expanded, setExpanded] = useState(highlight);
+  // U7-05 polish: replaced window.prompt() for reject + clarify with real
+  // dialogs -- prompt is anti-pattern that blocks browser thread and
+  // returns null in embed contexts (FUP-49 hit this pattern for confirm).
+  const [reasonDialog, setReasonDialog] = useState(null); // {kind: 'reject'|'clarify'}
+  const [reasonText, setReasonText] = useState("");
+  const [reasonBusy, setReasonBusy] = useState(false);
   const fileRef = useRef(null);
   const evidenceRef = useRef(null);
   const mediaRef = useRef(null);
@@ -617,22 +629,36 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
   const canApprove = t.approval_required && (user?.role === "owner" || user?.id === t.approver_id || (!t.approver_id && userPerms(user).includes("approvals")));
   const awaitingApproval = t.approval_required && t.approval_status !== "approved";
   const lockedForAssignee = awaitingApproval && !canApprove;
+  const overdue = isOverdue(t);
+  const terminal = isTerminal(t);
 
   const approveTask = async () => {
     try { await api.post(`/tasks/${t.id}/approve`); toast.success("Task approved"); onChange(); }
     catch (e) { toast.error(e.response?.data?.detail || "Could not approve"); }
   };
-  const rejectTask = async () => {
-    const reason = window.prompt("What changes are needed? (optional)") ?? "";
-    try { await api.post(`/tasks/${t.id}/reject`, { reason }); toast.success("Changes requested"); onChange(); }
-    catch (e) { toast.error(e.response?.data?.detail || "Could not reject"); }
+
+  const openReasonDialog = (kind) => { setReasonText(""); setReasonDialog({ kind }); };
+  const submitReason = async () => {
+    if (!reasonDialog) return;
+    const { kind } = reasonDialog;
+    if (kind === "clarify" && !reasonText.trim()) {
+      return toast.error("Say what you need clarified");
+    }
+    setReasonBusy(true);
+    try {
+      const endpoint = kind === "reject" ? "reject" : "clarify";
+      await api.post(`/tasks/${t.id}/${endpoint}`, { reason: reasonText });
+      toast.success(kind === "reject" ? "Changes requested" : "Clarification requested");
+      setReasonDialog(null);
+      onChange();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || `Could not ${kind === "reject" ? "reject" : "request clarification"}`);
+    } finally {
+      setReasonBusy(false);
+    }
   };
-  const clarifyTask = async () => {
-    const reason = window.prompt("What do you need clarified?") ?? "";
-    if (!reason.trim()) return;
-    try { await api.post(`/tasks/${t.id}/clarify`, { reason }); toast.success("Clarification requested"); onChange(); }
-    catch (e) { toast.error(e.response?.data?.detail || "Could not request clarification"); }
-  };
+  const rejectTask = () => openReasonDialog("reject");
+  const clarifyTask = () => openReasonDialog("clarify");
 
   const upload = async (file, kind) => {
     setUploading(true);
@@ -732,22 +758,115 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
   const selCls = "border border-black px-2 py-1 text-xs font-mono bg-white focus:outline-none";
 
   return (
-    <div id={`task-card-${t.id}`} data-testid={`mywork-task-${t.id}`} className={`card-brutal p-5 transition-all ${highlight ? "ring-4 ring-brand-600 ring-offset-2 ring-offset-brand-paper" : ""}`}>
-      <div className="flex items-start justify-between gap-2">
-        <p className="font-heading font-bold text-lg leading-tight">{t.title}</p>
-        <Chip value={t.priority} />
-      </div>
-      {t.description && <p className="text-sm text-muted-foreground mt-1">{t.description}</p>}
+    <div id={`task-card-${t.id}`} data-testid={`mywork-task-${t.id}`}
+      className={`card-brutal transition-all overflow-hidden ${highlight ? "ring-4 ring-brand-600 ring-offset-2 ring-offset-brand-paper" : ""}`}>
+      {/* U7-05.10: overdue severity spike -- red left stripe on the whole
+          card, immediately readable as "urgent" without reading a chip. */}
+      <div className="flex">
+        {overdue && !terminal && (
+          <div className="w-1.5 bg-danger-600 shrink-0" aria-hidden="true" />
+        )}
+        <div className="flex-1 min-w-0">
+
+      {/* U7-05.2: SUMMARY ROW -- the only thing shown when card is collapsed.
+          Click-target on the whole row toggles expand. Right-side quick actions
+          stopPropagation so they don't collapse when clicked. */}
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full text-left p-4 hover:bg-black/[0.02] transition-colors group"
+        aria-expanded={expanded}
+        aria-controls={`task-card-body-${t.id}`}
+        data-testid={`task-summary-${t.id}`}
+      >
+        <div className="flex items-start gap-3">
+          <CaretDown
+            size={14}
+            weight="bold"
+            className={`text-muted-foreground shrink-0 mt-1 transition-transform ${expanded ? "" : "-rotate-90"}`}
+            aria-hidden="true"
+          />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start gap-2 flex-wrap">
+              <p className="font-heading font-bold text-base leading-tight flex-1 min-w-[200px]">
+                {t.title}
+              </p>
+              <div className="flex items-center gap-1.5 shrink-0" aria-hidden="true">
+                <Chip value={t.priority} />
+              </div>
+            </div>
+            <div className="flex items-center flex-wrap gap-2 mt-1.5 text-xs">
+              {/* Status pill -- muted when normal, red when overdue/rejected */}
+              <span data-testid={`status-chip-${t.id}`}
+                className={`px-2 py-0.5 font-semibold uppercase tracking-wider border ${
+                  terminal ? "bg-green-600/10 text-green-800 border-green-600/40"
+                  : awaitingApproval ? "bg-brand-yellow border-black"
+                  : "bg-black/[0.03] border-black/30"
+                }`}>{STATUS_LABEL[t.status] || t.status}</span>
+              {overdue && !terminal && (
+                <span data-testid={`overdue-${t.id}`}
+                  className="px-2 py-0.5 font-semibold uppercase tracking-wider bg-danger-600 text-white border border-danger-600">
+                  Overdue
+                </span>
+              )}
+              {t.due_date && !overdue && (
+                <span className="text-muted-foreground">
+                  due {new Date(t.due_date).toLocaleString(undefined, { day: "numeric", month: "short" })}
+                </span>
+              )}
+              {/* U7-05.1: stage chip becomes tiny inline pill in summary row.
+                  Icon-first, no bg fight with the title. Click still works. */}
+              {t.workflow_summary?.id && (
+                <a
+                  href={`/my-work?view=workflows&type=${encodeURIComponent(t.workflow_summary.type || "")}&focus=${encodeURIComponent(t.workflow_summary.id)}`}
+                  onClick={(e) => e.stopPropagation()}
+                  data-testid={`wf-chip-${t.id}`}
+                  className="inline-flex items-center gap-1 text-brand-600 hover:underline"
+                  title={`Open workflow: ${t.workflow_summary.title}`}
+                >
+                  <FlowArrow size={11} weight="bold" />
+                  <span className="uppercase tracking-wider text-[10px]">
+                    {(t.workflow_summary.stage || "").replace(/_/g, " ")}
+                  </span>
+                </a>
+              )}
+              {showAssignee && t.assignee_name && (
+                <span className="inline-flex items-center gap-1 text-muted-foreground">
+                  <UserCircle size={11} weight="bold" /> {t.assignee_name}
+                </span>
+              )}
+              {(t.attachment_count || 0) > 0 && (
+                <span className="inline-flex items-center gap-1 text-muted-foreground">
+                  <Paperclip size={11} weight="bold" /> {t.attachment_count}
+                </span>
+              )}
+              {t.source === "escalation" && <span className="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-danger-600 text-white">Escalation</span>}
+              {t.source === "handoff" && <span className="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-brand-blue text-white">Handoff</span>}
+            </div>
+          </div>
+        </div>
+      </button>
+
+      {/* EXPANDED BODY -- everything else lives here. Rendered only when open. */}
+      {expanded && (
+      <div id={`task-card-body-${t.id}`} className="px-4 pb-4 space-y-3 border-t border-black/10 pt-3">
+      {t.description && <p className="text-sm text-muted-foreground">{t.description}</p>}
       {showAssignee && !isOp && (
-        <p className="label-mono text-muted-foreground mt-2 flex items-center gap-1" data-testid={`assignee-line-${t.id}`}>
+        <p className="label-mono text-muted-foreground flex items-center gap-1" data-testid={`assignee-line-${t.id}`}>
           <UserCircle size={13} weight="bold" />
           {t.assignee_name ? t.assignee_name : (t.assignee_role ? `${t.assignee_role} team` : "Unassigned")}
         </p>
       )}
-      {scores && <PriorityScoreBars scores={scores} />}
+      {/* U7-05.4: AI-priority bars get a "why?" tooltip on the container
+          so users understand what drove the ranking. */}
+      {scores && (
+        <div title="AI ranker: higher score = more urgent to open next. Bars show what drove it -- priority signal, overdue, workflow blockage, complaints touched." data-testid={`ai-scores-${t.id}`}>
+          <PriorityScoreBars scores={scores} />
+        </div>
+      )}
 
       {isOp && (
-        <div className="mt-3 flex flex-wrap items-center gap-2" data-testid={`op-meta-${t.id}`}>
+        <div className="flex flex-wrap items-center gap-2" data-testid={`op-meta-${t.id}`}>
           {t.op_category && <span className="inline-flex items-center gap-1 border border-black px-2 py-0.5 text-xs font-semibold uppercase tracking-wider bg-brand-yellow"><Tag size={11} weight="bold" /> {t.op_category}</span>}
           {t.assignee_name && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><UserCircle size={13} weight="bold" /> {t.assignee_name}</span>}
           {t.support_name && <span className="text-xs text-muted-foreground">+ {t.support_name}</span>}
@@ -759,23 +878,20 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
         </div>
       )}
 
-      {/* WE-11 (2026-08-16): stage chip. When the task is linked to a
-          workflow, show a click-through "Order #4821 - Confirmed" chip
-          just above the status band. Clicking navigates to the parent
-          workflow tab (my-work?view=workflows&focus=<id>) so the user
-          can see the whole card. Ad-hoc tasks (no workflow_summary)
-          render nothing here -- behaviour unchanged. */}
+      {/* Full workflow chip in the expanded body -- carries the full title
+          alongside the stage, since we only show the stage snippet in
+          the summary row. */}
       {t.workflow_summary && t.workflow_summary.id && (
-        <div className="mt-3">
+        <div>
           <a
             href={`/my-work?view=workflows&type=${encodeURIComponent(t.workflow_summary.type || "")}&focus=${encodeURIComponent(t.workflow_summary.id)}`}
-            data-testid={`wf-chip-${t.id}`}
+            data-testid={`wf-chip-full-${t.id}`}
             className="inline-flex items-center gap-1.5 border border-black px-2.5 py-1 text-xs font-mono bg-brand-paper hover:bg-brand-yellow transition-colors"
             title={`Open workflow: ${t.workflow_summary.title}`}
           >
             <FlowArrow size={12} weight="bold" className="text-brand-600" />
             <span className="font-semibold uppercase tracking-wider text-[10px]">
-              {(t.workflow_summary.title || "Workflow").slice(0, 32)}
+              {(t.workflow_summary.title || "Workflow").slice(0, 40)}
             </span>
             <span className="text-muted-foreground">·</span>
             <span className="uppercase tracking-wider text-[10px]">
@@ -785,26 +901,25 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
         </div>
       )}
 
-      <div className="flex items-center flex-wrap gap-1.5 mt-3">
-        <span data-testid={`status-chip-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-black bg-white">{STATUS_LABEL[t.status] || t.status}</span>
-        {isOverdue(t) && <span data-testid={`overdue-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-black bg-danger-600 text-white">Overdue</span>}
-        {t.source === "escalation" && <span data-testid={`badge-escalation-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-black bg-danger-600 text-white">Escalation</span>}
-        {t.source === "handoff" && <span data-testid={`badge-handoff-${t.id}`} className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider border border-black bg-brand-blue text-white">Handoff</span>}
-        {(t.attachment_count || 0) > 0 && <span data-testid={`att-count-${t.id}`} className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Paperclip size={12} weight="bold" /> {t.attachment_count}</span>}
-        {t.due_date && <span className="text-xs text-muted-foreground">due {new Date(t.due_date).toLocaleString(undefined, { day: "numeric", month: "short", ...(t.due_date.includes("T") ? { hour: "2-digit", minute: "2-digit" } : {}) })}</span>}
-        <button onClick={() => setDetailOpen(true)} data-testid={`view-details-${t.id}`} className="ml-auto inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-black px-2 py-0.5 hover:bg-brand-yellow transition-colors">
-          <Eye size={13} weight="bold" /> View details
-        </button>
-      </div>
-
-      {t.updated_at && (
-        <p className="label-mono text-muted-foreground mt-2 flex items-center gap-1" data-testid={`task-updated-${t.id}`} title={fullTime(t.updated_at)}>
-          <ClockCounterClockwise size={12} weight="bold" />
-          {t.last_action || "Updated"} · {timeAgo(t.updated_at)}
+      {t.due_date && (
+        <p className="text-xs text-muted-foreground">
+          Due {new Date(t.due_date).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", ...(t.due_date.includes("T") ? { hour: "2-digit", minute: "2-digit" } : {}) })}
         </p>
       )}
 
-      <div className="mt-3">
+      <div className="flex items-center justify-between">
+        {t.updated_at && (
+          <p className="label-mono text-muted-foreground flex items-center gap-1" data-testid={`task-updated-${t.id}`} title={fullTime(t.updated_at)}>
+            <ClockCounterClockwise size={12} weight="bold" />
+            {t.last_action || "Updated"} · {timeAgo(t.updated_at)}
+          </p>
+        )}
+        <button onClick={() => setDetailOpen(true)} data-testid={`view-details-${t.id}`} className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider border border-black px-2 py-0.5 hover:bg-brand-yellow transition-colors">
+          <Eye size={13} weight="bold" /> Full details
+        </button>
+      </div>
+
+      <div>
         <div className="flex items-center justify-between mb-1">
           <span className="label-mono text-muted-foreground">Progress</span>
           <span className="label-mono" data-testid={`progress-value-${t.id}`}>{t.progress || 0}%</span>
@@ -812,8 +927,8 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
         <div className="h-2 bg-black/10 border border-black"><div className="h-full bg-brand-blue transition-all" style={{ width: `${t.progress || 0}%` }} /></div>
       </div>
 
-      {!isTerminal(t) && !awaitingApproval && (
-        <div className="flex flex-wrap items-center gap-2 mt-3">
+      {!terminal && !awaitingApproval && (
+        <div className="flex flex-wrap items-center gap-2">
           <label className="label-mono text-muted-foreground">Status</label>
           <select data-testid={`status-select-${t.id}`} value={t.status === "blocked" ? "todo" : t.status} onChange={(e) => setStatus(e.target.value)} className={selCls}>
             {STATUS_OPTIONS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
@@ -963,7 +1078,52 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
 
       {!awaitingApproval && <ExecutionPlan t={t} onChange={onChange} members={members} roleOptions={roleOptions} />}
       <TaskTrail t={t} onChange={onChange} members={members} roleOptions={roleOptions} />
+      </div>
+      )}
+
+      {/* U7-05 dialog: reject / clarify reason (replaced window.prompt). */}
+      <Dialog open={!!reasonDialog} onOpenChange={(o) => !o && !reasonBusy && setReasonDialog(null)}>
+        <DialogContent className="border border-black rounded-none max-w-md" data-testid={`reason-dialog-${t.id}`}>
+          <DialogHeader>
+            <DialogTitle className="font-heading uppercase tracking-tight">
+              {reasonDialog?.kind === "reject" ? "Request changes" : "Ask for clarification"}
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground -mt-2">
+            {reasonDialog?.kind === "reject"
+              ? "Tell the assignee what needs to change before you can approve (optional)."
+              : "What do you need clarified before starting?"}
+          </p>
+          <textarea
+            rows={4}
+            value={reasonText}
+            onChange={(e) => setReasonText(e.target.value)}
+            placeholder={reasonDialog?.kind === "reject" ? "e.g. Please add unit prices per line item." : "e.g. Which supplier's rate card do I use?"}
+            className="w-full border border-black px-3 py-2 text-sm focus:outline-none"
+            autoFocus
+          />
+          <div className="flex gap-2 justify-end">
+            <button
+              type="button"
+              onClick={() => setReasonDialog(null)}
+              disabled={reasonBusy}
+              className="border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-black/5 disabled:opacity-40"
+            >Cancel</button>
+            <button
+              type="button"
+              onClick={submitReason}
+              disabled={reasonBusy || (reasonDialog?.kind === "clarify" && !reasonText.trim())}
+              className="bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm disabled:opacity-40"
+            >
+              {reasonBusy ? "Sending..." : reasonDialog?.kind === "reject" ? "Request changes" : "Send question"}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <TaskDetailDialog t={t} open={detailOpen} onOpenChange={setDetailOpen} onChange={onChange} />
+        </div>
+      </div>
     </div>
   );
 }
@@ -1085,10 +1245,17 @@ export default function MyWork() {
                   className={`${CTRL} ${view === "mywork" && scope === "all" ? "bg-brand-blue text-white" : "bg-white hover:bg-black/5"}`}>{t("mywork.all_tasks")}</button>
               </>
             )}
-            <button onClick={() => { setAiPriority((v) => !v); setView("mywork"); }} data-testid="ai-priority-toggle"
-              className={`${CTRL} ${view === "mywork" && aiPriority ? "bg-brand-600 text-white shadow-brutal-sm" : "bg-brand-yellow hover:shadow-brutal-sm"}`}>
-              <Sparkle size={15} weight="bold" /> {scoring ? t("mywork.scoring") : aiPriority ? t("mywork.ai_priority_on") : t("mywork.ai_priority")}
-            </button>
+            {/* U7-05: AI Priority is owner-only. Founder ask 2026-08-17:
+                'ai priority also right only for owner got it'. The ranker
+                is a whole-team judgment tool, not something an IC needs
+                over their own list -- it hides which of my tasks I picked
+                to work on based on someone else's AI score. */}
+            {isOwner && (
+              <button onClick={() => { setAiPriority((v) => !v); setView("mywork"); }} data-testid="ai-priority-toggle"
+                className={`${CTRL} ${view === "mywork" && aiPriority ? "bg-brand-600 text-white shadow-brutal-sm" : "bg-brand-yellow hover:shadow-brutal-sm"}`}>
+                <Sparkle size={15} weight="bold" /> {scoring ? t("mywork.scoring") : aiPriority ? t("mywork.ai_priority_on") : t("mywork.ai_priority")}
+              </button>
+            )}
           </div>
           <div className="order-1 lg:order-2 grid grid-cols-4 gap-2 lg:flex lg:items-center" data-testid="work-view-toggle">
             <button onClick={() => setView("mywork")} data-testid="work-view-mywork"

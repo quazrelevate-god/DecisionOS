@@ -1475,10 +1475,21 @@ export default function MyWork() {
             )}
           </div>
           <div className="order-1 lg:order-2 grid grid-cols-4 gap-2 lg:flex lg:items-center" data-testid="work-view-toggle">
-            <button onClick={() => setView("mywork")} data-testid="work-view-mywork"
-              className={`${CTRL} ${view === "mywork" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
-              <ListIcon size={15} weight="bold" /> {t("mywork.view_mywork")}
-            </button>
+            {/* U7-05.11 (2026-08-17): 'Tasks' view toggle removed for
+                owner. The MY TASKS / ALL TASKS / AI PRIORITY buttons
+                already route back to view=mywork on click, so Tasks
+                sat unused next to Workflows and Leave. Non-owners keep
+                it because they don't have MY TASKS / ALL TASKS -- it's
+                their only path back to the task list from Workflows
+                or Leave. Founder ask: 'remove the Tasks got it .. lets
+                have only the my tasks, all tasks, ai priority,
+                workflow and leave'. */}
+            {!isOwner && (
+              <button onClick={() => setView("mywork")} data-testid="work-view-mywork"
+                className={`${CTRL} ${view === "mywork" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+                <ListIcon size={15} weight="bold" /> {t("mywork.view_mywork")}
+              </button>
+            )}
             {canSeeWorkflows && (
               <button onClick={() => setView("workflows")} data-testid="work-view-workflows"
                 className={`${CTRL} ${view === "workflows" ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>

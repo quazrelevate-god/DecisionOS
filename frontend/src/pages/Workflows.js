@@ -238,17 +238,19 @@ export default function Workflows({ embedded = false }) {
         </PageHeader>
       )}
 
-      {/* U7-06.1 (2026-08-17): shorter pipeline chips + hide pipelines
-          with zero workflows in them (same rule we applied to the
-          MyWork tab strip). The full stage-flow ("Ready to dispatch ->
-          Delivered") moves to a hover tooltip -- was chewing serious
-          horizontal space and duplicating what the kanban column headers
-          already show below. Always keep the currently-active tab
-          visible even when its count is 0 so users don't see a
-          "selected but hidden" state. */}
+      {/* U7-06.1 (2026-08-17): shorter pipeline chips -- full stage flow
+          moved to hover tooltip so this row stops chewing horizontal
+          space.
+          U7-06.4 (2026-08-17): the earlier hide-empty rule (only render
+          a pipeline chip when it had at least one workflow) is reverted.
+          Founder ask: 'show the complete operational, not only data
+          workflow which has the data'. The pipelines represent every
+          operational flow this business runs; hiding an empty one made
+          the tenant think a whole flow was missing. Zero-count chips
+          are muted (label-mono muted-foreground) so live pipelines
+          still visually dominate. */}
       <div className="flex flex-wrap border border-black mb-6 w-fit">
         {pipelines
-          .filter((pip) => pip.key === activeKey || (data || []).some((w) => w.type === pip.key))
           .map((pip) => {
             const count = (data || []).filter((w) => w.type === pip.key).length;
             return (

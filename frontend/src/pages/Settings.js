@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import api from "../lib/api";
 import { hasPerm } from "../lib/perms";
@@ -87,7 +88,11 @@ function MoneyAndApprovalsCard() {
     <div className="card-brutal p-5" data-testid="settings-money-card">
       <div className="flex items-center gap-2 mb-1">
         <CurrencyCircleDollar size={20} weight="bold" className="text-brand-600" />
-        <h2 className="font-heading text-lg font-extrabold tracking-tight">Money & Approvals</h2>
+        {/* U7-11.1 (2026-08-17): match the uppercase / extrabold
+            header treatment used by every other card in Settings. Was
+            lowercase-looking and read as a sub-heading, not a card
+            title. */}
+        <h2 className="font-heading text-lg font-extrabold uppercase tracking-tight">Money & Approvals</h2>
       </div>
       <p className="text-xs text-muted-foreground mb-4">Controls how incoming invoices & payments (WhatsApp / uploads) are flagged and approved.</p>
 
@@ -134,16 +139,26 @@ function MoneyAndApprovalsCard() {
 // so the user can stay put while completing a task. "Operations" is
 // the one place workflow config lives (WE-02 killed the two ghost
 // surfaces that used to share the concept).
+// U7-11.1 (2026-08-17): tab descriptions rewritten to match what each
+// tab actually contains.
+//   - Business: removed the "operational tasks" bullet -- that section
+//     was renamed "Rules & templates" in CompanyDetails to stop
+//     colliding with the OPERATIONS tab. Vocabulary stays.
+//   - Account: dropped "sessions" -- there is no sessions surface yet.
+//     Owner ask this pass: "check which are things missing out and
+//     which things can be optimized" -- a promised control that
+//     doesn't exist is worse than not mentioning it.
 const TABS = [
   { key: "business", label: "Business", icon: Buildings,
-    desc: "Company profile, products, roles, operational tasks, vocabulary." },
+    desc: "Company profile, products, roles, and the words your team uses." },
   { key: "operations", label: "Operations", icon: FlowArrow,
     desc: "Pipelines, stages, task templates and approval gates. The single source of truth for how work moves." },
   { key: "money", label: "Money", icon: CurrencyCircleDollar,
-    desc: "Finance categories, currency, and the high-value approval threshold." },
+    desc: "High-value approval threshold, currency, and finance categories." },
   { key: "account", label: "Account", icon: User,
-    desc: "Language, your profile, password and sessions." },
+    desc: "Your language, profile and sign-in password." },
 ];
+const VALID_TAB_KEYS = new Set(TABS.map((t) => t.key));
 
 export default function Settings() {
   // MPWA-11 (§8): rebuilt below lg as a row-list; desktop untouched. WE-04's
@@ -152,7 +167,27 @@ export default function Settings() {
   const isMobile = useIsMobile();
   const { user } = useAuth();
   const isOwner = user?.role === "owner" || hasPerm(user, "team_manage");
-  const [tab, setTab] = useState("business");
+  // U7-11.1 (2026-08-17): persist active tab in URL. Was useState-only,
+  // so reload / back-forward / deep-link all landed on Business. Owner
+  // ask: fix the missing / optimizable bits -- deep-linking Settings
+  // is a small one worth having (matches the Finance tab pattern).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlTab = searchParams.get("tab");
+  const initialTab = urlTab && VALID_TAB_KEYS.has(urlTab) ? urlTab : "business";
+  const [tab, setTab] = useState(initialTab);
+  const selectTab = (key) => {
+    setTab(key);
+    const next = new URLSearchParams(searchParams);
+    next.set("tab", key);
+    setSearchParams(next, { replace: true });
+  };
+  // Keep local state in sync when the URL changes from outside (back /
+  // forward buttons, external deep-link).
+  useEffect(() => {
+    if (urlTab && VALID_TAB_KEYS.has(urlTab) && urlTab !== tab) {
+      setTab(urlTab);
+    }
+  }, [urlTab, tab]);
 
   if (isMobile) return <SettingsMobile />;
 
@@ -189,7 +224,7 @@ export default function Settings() {
               <button
                 key={t.key}
                 type="button"
-                onClick={() => setTab(t.key)}
+                onClick={() => selectTab(t.key)}
                 data-testid={`settings-tab-${t.key}`}
                 aria-pressed={isActive}
                 className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold uppercase tracking-wider whitespace-nowrap transition-all border-b-2 ${
@@ -222,8 +257,13 @@ export default function Settings() {
 
         {tab === "money" && (
           <>
-            <FinanceCategoriesEditor />
+            {/* U7-11.1 (2026-08-17): approvals card promoted to top.
+                Currency + high-value threshold are the controls the
+                owner actually touches; the category editor is a long
+                list they rarely re-order. Putting categories first
+                buried the two decisions that matter for approvals. */}
             <MoneyAndApprovalsCard />
+            <FinanceCategoriesEditor />
           </>
         )}
 

@@ -47,7 +47,12 @@ const NAV = [
   // entry retired; /brief URL redirects to /inbox in App.js.
   // { to: "/brief", label: "CEO Brief", tkey: "brief", icon: Sun, testid: "nav-ceo-brief" },
   { to: "/my-work", label: "My Work", tkey: "mywork", icon: Briefcase, testid: "nav-my-work" },
-  { to: "/operating-score", label: "Ops", tkey: "ops", icon: Gauge, testid: "nav-ops", ownerOnly: true },
+  // Epic 7 Sprint 1 Phase A (2026-08-17): Ops nav item is now visible to
+  // every authenticated user. Owner sees the company dashboard; every other
+  // role sees their personal operating view (self stats + open work +
+  // active workflows). Founder ask: 'if the team person login and go the
+  // ops it have to show the individuals person metrics'.
+  { to: "/operating-score", label: "Ops", tkey: "ops", icon: Gauge, testid: "nav-ops" },
   { to: "/crm", label: "CRM", tkey: "crm", icon: AddressBook, testid: "nav-crm", perm: "people" },
   { to: "/team", label: "Team", tkey: "team", icon: UsersThree, testid: "nav-team", perms: ["team_manage"] },
   // Epic 2 Sprint 5 (E2-32): 'Company Brain' -> 'Dex' (single AI persona).

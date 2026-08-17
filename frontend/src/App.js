@@ -142,7 +142,12 @@ function App() {
                 Route redirects to home. Meetings.js + backend endpoints
                 stay alive so re-enabling is a single-line revert. */}
             <Route path="/meetings" element={<Navigate to="/" replace />} />
-            <Route path="/operating-score" element={<Protected ownerOnly><OperatingScore /></Protected>} />
+            {/* Epic 7 Sprint 1 Phase A (2026-08-17): dropped ownerOnly.
+                Endpoint dispatches by role: owner keeps company view,
+                every other role gets a self-focused view. Founder ask:
+                'if the team person login and go the ops it have to show
+                the individuals person metrics'. */}
+            <Route path="/operating-score" element={<Protected><OperatingScore /></Protected>} />
             <Route path="/coach" element={<Protected><WorkCoach /></Protected>} />
             {/* Epic 2 Sprint 5 (E2-32): /dex is the new-name alias for the
                 Brain page. Route /brain is preserved for bookmark safety. */}

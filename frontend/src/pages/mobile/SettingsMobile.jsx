@@ -17,12 +17,14 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import {
   Buildings, BookOpen, Sliders, Receipt, Translate, UserCircle, Lock,
-  CurrencyCircleDollar, CaretRight, FloppyDisk, Info, ShieldCheck,
+  CurrencyCircleDollar, CaretRight, FloppyDisk, Info, ShieldCheck, UserPlus,
 } from "@phosphor-icons/react";
 import api from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
 import { inr } from "../../lib/format";
-import { BottomSheet, SheetSelect } from "../../components/mobile";
+import {
+  AccessSheet, BottomSheet, InviteSheet, SheetSelect, useTeamData,
+} from "../../components/mobile";
 import { CompanyDetails } from "../../components/CompanyDetails";
 import { BusinessVocabulary } from "../../components/BusinessVocabulary";
 import { OperatingModelEditor } from "../../components/OperatingModelEditor";
@@ -39,6 +41,11 @@ export default function SettingsMobile() {
   const { t } = useTranslation();
   const { tenant, user, refreshTenant } = useAuth();
   const [open, setOpen] = useState(null);
+  // Adding a teammate moved here from Ops. Ops reads the team; creating one is
+  // configuration, which is what this screen is.
+  const { members, canManageTeam, roleOptions, refresh } = useTeamData();
+  const [addOpen, setAddOpen] = useState(false);
+  const [invite, setInvite] = useState(null);
 
   const [currency, setCurrency] = useState(tenant?.currency || "INR");
   const [threshold, setThreshold] = useState(String(tenant?.high_value_threshold ?? 50000));
@@ -67,6 +74,18 @@ export default function SettingsMobile() {
   // row so the common case needs no tap at all.
   const SECTIONS = [
     { key: "company", label: "Company", icon: Buildings, value: tenant?.name, body: <CompanyDetails /> },
+    // `action` rather than `body`: this row opens the AccessSheet directly.
+    // Routing it through the section sheet would nest a BottomSheet inside a
+    // BottomSheet, which traps focus and gives the form two headers.
+    ...(canManageTeam
+      ? [{
+          key: "add-member",
+          label: "Add team member",
+          icon: UserPlus,
+          value: `${members.length} ${members.length === 1 ? "person" : "people"} on the team`,
+          action: () => setAddOpen(true),
+        }]
+      : []),
     { key: "money", label: "Money & approvals", icon: CurrencyCircleDollar,
       value: `Owner approves above ${inr(Number(threshold) || 0)}`, body: null },
     { key: "vocabulary", label: "Your words for things", icon: BookOpen, body: <BusinessVocabulary /> },
@@ -91,7 +110,7 @@ export default function SettingsMobile() {
           <li key={s.key}>
             <button
               type="button"
-              onClick={() => setOpen(s.key)}
+              onClick={() => (s.action ? s.action() : setOpen(s.key))}
               data-testid={`settings-row-${s.key}`}
               className="flex w-full items-center gap-3 px-3.5 text-left transition-colors hover:bg-accent"
               style={{ minHeight: "var(--control-h-lg)" }}
@@ -194,6 +213,20 @@ export default function SettingsMobile() {
           section?.body
         )}
       </BottomSheet>
+
+      {/* Same sheet the Ops member card opens for editing access — in "add"
+          mode here because no `initial` is passed. A new member with a phone
+          comes back with an invite token, which opens the link sheet. */}
+      <AccessSheet
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        initial={null}
+        roleOptions={roleOptions}
+        members={members}
+        onSaved={refresh}
+        onInvite={setInvite}
+      />
+      <InviteSheet info={invite} onClose={() => setInvite(null)} />
     </div>
   );
 }

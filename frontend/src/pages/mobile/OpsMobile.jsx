@@ -8,15 +8,22 @@
  *   the four that explain it, and it is the same on first paint and after the
  *   list has been scrolled to the bottom.
  *
- *   The sheet is in normal flow behind a spacer, with rounded top corners and
- *   its own surface. Scrolling slides it up OVER the hero. Nothing animates it
- *   and nothing needs to — the scroll is the motion, which is what "quiet"
- *   buys: no parallax, no fade, no header that morphs on a threshold.
+ *   The sheet is pinned over it with rounded top corners and its own surface,
+ *   and SCROLLS INTERNALLY. Nothing animates it and nothing needs to — the
+ *   scroll is the motion, which is what "quiet" buys: no parallax, no fade, no
+ *   header that morphs on a threshold. (See the longer note at the sheet for
+ *   why it is pinned rather than sliding up with the page.)
  *
  * The hero is a chart, not a stat block, because the reading is comparative:
  * "is this number good, and which of the four is dragging it". A radial gauge
  * answers the first at a glance and the four tracks answer the second, in one
- * viewport, with no interaction.
+ * viewport, with no interaction. The company counters sit under it in the same
+ * glass, because they are the totals the per-person grid below sums to.
+ *
+ * Colour: the hero is monochrome by design. The arc and the bars are fixed
+ * translucent white and only the NUMBERS carry a band colour — a red arc plus
+ * four coloured bars made the score's own hue change with the data and turned
+ * the whole panel into an alarm.
  *
  * Chrome: the top bar is overlaid by Layout (IMMERSIVE_MOBILE_ROUTES) so the
  * logo and the bell sit on the hero rather than above a seam. The dock and the
@@ -28,7 +35,7 @@ import { useQuery } from "@tanstack/react-query";
 import api from "../../lib/api";
 import { cn } from "@/lib/utils";
 import {
-  Lightning, CurrencyCircleDollar, TrendUp, ChatCenteredDots, UserPlus,
+  Lightning, CurrencyCircleDollar, TrendUp, ChatCenteredDots,
 } from "@phosphor-icons/react";
 import { AccessSheet, InviteSheet, MemberCard, useTeamData } from "../../components/mobile";
 
@@ -45,25 +52,40 @@ const roleLabel = (r) => (r ? String(r).replace(/^./, (c) => c.toUpperCase()) : 
 // hero reads from the 400 steps. Same three bands, same meaning.
 const bandOnDark = (v) =>
   v == null ? "text-white/40" : v >= 70 ? "text-success-400" : v >= 40 ? "text-caution-400" : "text-danger-400";
-const strokeOnDark = (v) =>
-  v == null ? "stroke-white/25" : v >= 70 ? "stroke-success-400" : v >= 40 ? "stroke-caution-400" : "stroke-danger-400";
+// (A matching stroke ramp lived here. The gauge is a fixed translucent white
+// now, so nothing needed it.)
 // The sheet is a light surface and keeps the ordinary steps.
 const bandOnLight = (v) =>
   v == null ? "text-muted-foreground" : v >= 70 ? "text-success-600" : v >= 40 ? "text-caution-600" : "text-danger-600";
 
-const R = 58;                      // gauge radius
+const R = 47;                      // gauge radius
 const C = 2 * Math.PI * R;         // circumference, for the dash offset
+const GAUGE = 112;                 // box side; shrunk from 140 to make room
+                                   // for the counters that moved into the hero
 
-/** The overall score as a swept arc. Motion runs once, on mount, and stops. */
+// The hero is one glass material: translucent white fill, a lighter hairline to
+// catch the "edge", and no colour of its own. Everything floating on the dark
+// uses this so the section reads as a single pane rather than five widgets.
+const GLASS = "bg-white/[0.07] border border-white/[0.12] backdrop-blur-md";
+
+/**
+ * The overall score as a swept arc.
+ *
+ * Deliberately NOT colour-banded. It used to turn red below 40 and green above
+ * 70, which meant the hero's largest element changed hue with the data and
+ * fought the glass it sits in — a 33 painted the whole screen as an alarm. The
+ * arc and the number are now fixed translucent white; the score is the size it
+ * is, and the categories below say which part is weak. Motion still runs once.
+ */
 function Gauge({ value, armed }) {
   const pct = Math.max(0, Math.min(100, value ?? 0));
   return (
-    <div className="relative shrink-0" style={{ width: 140, height: 140 }}>
-      <svg width="140" height="140" viewBox="0 0 140 140" className="-rotate-90">
-        <circle cx="70" cy="70" r={R} fill="none" strokeWidth="10" className="stroke-white/10" />
+    <div className="relative shrink-0" style={{ width: GAUGE, height: GAUGE }}>
+      <svg width={GAUGE} height={GAUGE} viewBox={`0 0 ${GAUGE} ${GAUGE}`} className="-rotate-90">
+        <circle cx={GAUGE / 2} cy={GAUGE / 2} r={R} fill="none" strokeWidth="9" className="stroke-white/[0.10]" />
         <circle
-          cx="70" cy="70" r={R} fill="none" strokeWidth="10" strokeLinecap="round"
-          className={cn(strokeOnDark(value), "transition-[stroke-dashoffset] duration-[900ms] ease-out motion-reduce:transition-none")}
+          cx={GAUGE / 2} cy={GAUGE / 2} r={R} fill="none" strokeWidth="9" strokeLinecap="round"
+          className="stroke-white/70 transition-[stroke-dashoffset] duration-[900ms] ease-out motion-reduce:transition-none"
           strokeDasharray={C}
           // Held at empty for the first frame so the sweep has somewhere to
           // travel from; `armed` flips on the next tick.
@@ -72,23 +94,30 @@ function Gauge({ value, armed }) {
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span
-          className={cn("font-heading text-[44px] font-black leading-none tabular-nums", bandOnDark(value))}
+          className="font-heading text-[34px] font-black leading-none tabular-nums text-white/90"
           data-testid="ops-overall-score"
         >
           {value == null ? "—" : value}
         </span>
-        <span className="label-mono text-white/45 mt-1">/ 100</span>
+        <span className="label-mono text-white/40 mt-0.5">/ 100</span>
       </div>
     </div>
   );
 }
 
-/** One category: label, value, and a track that grows with the others. */
+/**
+ * One category: label, value, and a track that grows with the others.
+ *
+ * The bar is translucent white for the same reason the arc is — four bars in
+ * three different hues was the noisiest thing on the screen. The VALUE keeps
+ * its band colour, so the reading survives: the number tells you good or bad,
+ * the bar tells you how far along, and only one of those needs to shout.
+ */
 function CatTrack({ cat, value, armed, index }) {
   const has = value != null;
   return (
     <div data-testid={`ops-cat-${cat.key}`}>
-      <div className="flex items-center justify-between gap-2 mb-1.5">
+      <div className="flex items-center justify-between gap-2 mb-1">
         <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-white/60">
           <cat.icon size={13} weight="bold" /> {cat.label}
         </span>
@@ -96,17 +125,26 @@ function CatTrack({ cat, value, armed, index }) {
           {has ? value : "—"}
         </span>
       </div>
-      <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+      <div className="h-1.5 rounded-full bg-white/[0.10] overflow-hidden">
         <div
-          className={cn(
-            "h-full rounded-full transition-[width] duration-700 ease-out motion-reduce:transition-none",
-            has ? (value >= 70 ? "bg-success-400" : value >= 40 ? "bg-caution-400" : "bg-danger-400") : "bg-white/25"
-          )}
+          className="h-full rounded-full bg-white/70 transition-[width] duration-700 ease-out motion-reduce:transition-none"
           // Staggered behind the gauge so the hero resolves in one settling
           // gesture rather than four things starting at once.
           style={{ width: armed && has ? `${value}%` : "0%", transitionDelay: `${140 + index * 70}ms` }}
         />
       </div>
+    </div>
+  );
+}
+
+/** A company counter, as a glass tile on the hero rather than a card in the sheet. */
+function HeroCounter({ label, value, accent }) {
+  return (
+    <div className={cn("rounded-xl px-1 py-1.5 text-center", GLASS)}>
+      <p className={cn("font-heading text-base font-black leading-none tabular-nums", accent || "text-white/90")}>
+        {value}
+      </p>
+      <p className="label-mono mt-1 text-[9px] tracking-normal text-white/45">{label}</p>
     </div>
   );
 }
@@ -179,7 +217,7 @@ export default function OpsMobile() {
     <div className="lg:hidden fixed inset-0 z-0 overflow-hidden" data-block="ops" data-testid="ops-mobile">
       {/* ───────── static hero ───────── */}
       <div
-        className="absolute inset-x-0 top-0 h-[38svh] overflow-hidden bg-neutral-950"
+        className="absolute inset-x-0 top-0 h-[47svh] overflow-hidden bg-neutral-950"
         data-testid="ops-hero"
       >
         {/* A single soft brand bloom, off-centre. The hero is dark so the page
@@ -188,29 +226,45 @@ export default function OpsMobile() {
           className="absolute inset-0 pointer-events-none"
           style={{ background: "radial-gradient(120% 80% at 78% 4%, hsl(var(--brand-600) / 0.30), transparent 62%)" }}
         />
-        {/* The hero box is 38svh so its background runs on under the sheet's
-            rounded corners with no seam, but its CONTENT is boxed to the 34svh
-            the sheet leaves visible — otherwise the last category track sits
-            behind the lip, which is precisely what it did on the first pass.
-            pt clears the overlaid app bar; the rest centres in what's left. */}
-        {/* Column, not row: as a row this centres vertically but leaves the
+        {/* The hero box is 42svh so its background runs on under the sheet's
+            rounded corners with no seam, but its CONTENT is boxed to the 38svh
+            the sheet leaves visible — otherwise the bottom row sits behind the
+            lip, which is precisely what it did on the first pass.
+            pt clears the overlaid app bar; the rest centres in what's left.
+
+            Column, not row: as a row this centres vertically but leaves the
             content sized to itself, so the category tracks stopped ~70px short
             of the gutter. A column stretches children across the cross axis,
             which is the width, and justify-center still does the centring. */}
-        <div className="relative h-[34svh] flex flex-col justify-center px-5 pb-4 pt-[calc(env(safe-area-inset-top,0px)+3.5rem)]">
+        <div className="relative h-[43svh] flex flex-col justify-center gap-2 px-5 pb-4 pt-[calc(env(safe-area-inset-top,0px)+3.5rem)]">
           {enough ? (
-            <div className="flex items-center gap-5">
-              <Gauge value={overall} armed={armed} />
-              <div className="flex-1 min-w-0 space-y-3">
-                {CATS.map((c, i) => (
-                  <CatTrack key={c.key} cat={c} value={company.categories?.[c.key]} armed={armed} index={i} />
-                ))}
+            <>
+              <div className="flex items-center gap-3">
+                <Gauge value={overall} armed={armed} />
+                {/* The four categories in their own glass pane — the section
+                    reads as one instrument rather than four loose rows. */}
+                <div className={cn("flex-1 min-w-0 space-y-1.5 rounded-2xl px-3.5 py-2", GLASS)}>
+                  {CATS.map((c, i) => (
+                    <CatTrack key={c.key} cat={c} value={company.categories?.[c.key]} armed={armed} index={i} />
+                  ))}
+                </div>
               </div>
-            </div>
+
+              {/* The company counters, moved up out of the white sheet. They
+                  belong with the score: these are the totals the per-person
+                  grid below sums to, so they read as part of the instrument
+                  panel, not as the first four rows of the roster. */}
+              <div className="grid grid-cols-4 gap-2" data-testid="ops-stats">
+                <HeroCounter label="Done" value={stats?.done || 0} />
+                <HeroCounter label="Open" value={stats?.open || 0} />
+                <HeroCounter label="Overdue" value={stats?.overdue || 0} accent={(stats?.overdue || 0) > 0 ? "text-danger-400" : undefined} />
+                <HeroCounter label="Issues" value={stats?.open_complaints || 0} accent={(stats?.open_complaints || 0) > 0 ? "text-caution-400" : undefined} />
+              </div>
+            </>
           ) : (
-            <div className="flex items-center gap-5" data-testid="ops-not-ready">
+            <div className="flex items-center gap-4" data-testid="ops-not-ready">
               <Gauge value={null} armed={armed} />
-              <div className="flex-1 min-w-0">
+              <div className={cn("flex-1 min-w-0 rounded-2xl px-3.5 py-3", GLASS)}>
                 <p className="text-white font-heading text-base font-extrabold uppercase tracking-tight leading-tight">
                   Still learning your business
                 </p>
@@ -224,7 +278,7 @@ export default function OpsMobile() {
       </div>
 
       {/* ───────── sheet, laid over it ─────────
-          Its top is pinned at 34svh — 4svh above the hero's bottom edge, so the
+          Its top is pinned at 38svh — 4svh above the hero's bottom edge, so the
           lip already overlaps at rest and the thing reads as an overlay before
           anyone touches it — and the SCROLL IS INTERNAL.
 
@@ -237,7 +291,7 @@ export default function OpsMobile() {
           and scrolling its contents keeps the chart on screen permanently,
           which is the point of splitting the screen at all. */}
       <div
-        className="absolute inset-x-0 top-[34svh] bottom-0 z-10 rounded-t-[28px] bg-background border-t border-hairline shadow-[0_-10px_34px_rgba(0,0,0,0.20)] overflow-y-auto overscroll-contain scrollbar-none"
+        className="absolute inset-x-0 top-[43svh] bottom-0 z-10 rounded-t-[28px] bg-background border-t border-hairline shadow-[0_-10px_34px_rgba(0,0,0,0.20)] overflow-y-auto overscroll-contain scrollbar-none"
         data-testid="ops-sheet"
       >
         <div className="pb-dock">
@@ -246,41 +300,16 @@ export default function OpsMobile() {
           </div>
 
           <div className="px-5 pt-3">
-            {/* Four counters, because the list below is per-person and these are
-                the company totals it sums to. */}
-            <div className="grid grid-cols-4 gap-2 mb-6" data-testid="ops-stats">
-              {[
-                { label: "Done", value: stats?.done || 0 },
-                { label: "Open", value: stats?.open || 0 },
-                { label: "Overdue", value: stats?.overdue || 0, accent: (stats?.overdue || 0) > 0 ? "text-danger-600" : "" },
-                { label: "Issues", value: stats?.open_complaints || 0, accent: (stats?.open_complaints || 0) > 0 ? "text-caution-600" : "" },
-              ].map((s) => (
-                <div key={s.label} className="rounded-xl border border-hairline bg-card px-2 py-2.5 text-center">
-                  <p className={cn("font-heading text-xl font-black tabular-nums leading-none", s.accent)}>{s.value}</p>
-                  <p className="label-mono text-muted-foreground mt-1 text-[10px]">{s.label}</p>
-                </div>
-              ))}
+            {/* The company counters used to open this sheet; they moved onto
+                the hero, where they sit with the score they summarise.
+                Adding a member moved to Settings — this screen reads the team,
+                it no longer creates one. */}
+            <div className="flex items-baseline justify-between gap-3 mb-4">
+              <h2 className="font-heading text-lg font-extrabold uppercase tracking-tight">Teams &amp; executions</h2>
+              {people.length > 0 && (
+                <span className="label-mono text-muted-foreground shrink-0">{people.length}</span>
+              )}
             </div>
-
-            <div className="flex items-baseline justify-between gap-3 mb-1">
-              <h2 className="font-heading text-lg font-extrabold uppercase tracking-tight">Team execution</h2>
-              <div className="flex items-baseline gap-3 shrink-0">
-                {canManageTeam && (
-                  <button
-                    type="button"
-                    onClick={() => setAccess({ member: null })}
-                    data-testid="ops-add-member"
-                    className="flex items-center gap-1 text-[13px] font-semibold text-brand-600"
-                  >
-                    <UserPlus size={14} weight="bold" /> Add
-                  </button>
-                )}
-                {people.length > 0 && (
-                  <span className="label-mono text-muted-foreground">{people.length}</span>
-                )}
-              </div>
-            </div>
-            <p className="text-[13px] text-muted-foreground mb-4">Tap anyone to open their card.</p>
 
             {/* The list became a grid: two per row, name on its own line, role
                 under it. A grid of equal boxes is scannable in a way the old
@@ -293,8 +322,10 @@ export default function OpsMobile() {
                 <div className="rounded-xl border border-dashed border-hairline px-5 py-10 text-center">
                   <p className="text-sm font-semibold">No one on the team yet</p>
                   <p className="text-[13px] text-muted-foreground mt-1.5 leading-relaxed">
+                    {/* Points at where adding now lives, rather than offering a
+                        button this screen no longer owns. */}
                     {canManageTeam
-                      ? "Add a teammate and their execution shows up here."
+                      ? "Add a teammate in Settings and their execution shows up here."
                       : "Scores appear once your team has tasks assigned and closed."}
                   </p>
                 </div>
@@ -319,9 +350,16 @@ export default function OpsMobile() {
                         <span className="label-mono text-muted-foreground/70">
                           {absentIds.has(p.id) ? "Absent" : `${p.open ?? 0} open`}
                         </span>
-                        <span className={cn("font-heading text-lg font-black leading-none tabular-nums", bandOnLight(p.score))}>
-                          {p.score != null ? p.score : "—"}
-                        </span>
+                        {/* An em-dash at font-black/text-lg draws a thick bar
+                            that reads as redaction, not as "no score yet". A
+                            new member gets a light middle dot instead. */}
+                        {p.score != null ? (
+                          <span className={cn("font-heading text-lg font-black leading-none tabular-nums", bandOnLight(p.score))}>
+                            {p.score}
+                          </span>
+                        ) : (
+                          <span className="text-lg font-normal leading-none text-muted-foreground/40" title="No score yet">·</span>
+                        )}
                       </div>
                     </button>
                   </li>

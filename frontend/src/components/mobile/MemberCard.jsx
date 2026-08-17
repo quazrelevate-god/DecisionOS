@@ -56,7 +56,10 @@ function Pill({ icon: Icon, label, onClick, disabled, testid, tone = "default" }
       disabled={disabled}
       data-testid={testid}
       className={cn(
-        "flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 text-[13px] font-semibold shadow-lg transition-colors",
+        // rounded-2xl, not rounded-full: the same corner as the card above
+        // them, so the three read as siblings of it rather than as a
+        // separate tab bar that happened to land underneath.
+        "flex flex-1 items-center justify-center gap-1.5 rounded-2xl px-3 text-[13px] font-semibold shadow-lg transition-colors",
         "disabled:opacity-40 disabled:shadow-none",
         tone === "primary"
           ? "bg-primary text-primary-foreground"

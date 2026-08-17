@@ -280,8 +280,11 @@ export default function Layout({ children }) {
         </div>
       </aside>
 
-      {/* Main */}
-      <div className="flex-1 flex flex-col min-w-0">
+      {/* Main.
+          MPWA-14: below lg the column is capped and centred (`app-shell`) so
+          the app reads as one phone-width surface on any display; on lg it
+          resets to fill the space beside the sidebar. */}
+      <div className="flex flex-col min-w-0 app-shell lg:max-w-none lg:mx-0 lg:flex-1">
         {/* Desktop top bar */}
         <header className="hidden lg:flex h-16 border-b border-border bg-background/70 backdrop-blur-xl items-center justify-between px-8 sticky top-0 z-10">
           <div className="flex items-center gap-3">
@@ -307,9 +310,16 @@ export default function Layout({ children }) {
             entirely — nothing should be reachable from two places (§8).
             MPWA-02: min-h + top inset so nothing sits under the status bar in
             iOS standalone, where there is no browser chrome above us. */}
-        <header className="lg:hidden min-h-14 border-b border-border bg-background/80 backdrop-blur-xl flex items-center justify-between gap-2 px-chrome-safe pt-safe sticky top-0 z-20">
-          <Logo markOnly />
-          <div className="flex items-center gap-touch-gap shrink-0">
+        <header className="lg:hidden min-h-14 border-b border-border bg-background/80 backdrop-blur-xl grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-gutter-safe pt-safe sticky top-0 z-20">
+          {/* MPWA-14: the wordmark is centred like Instagram's. A three-track
+              grid (1fr · auto · 1fr) pins the logo to the header's true centre
+              independent of the bell's width — the equal side tracks guarantee
+              it, where a flex spacer only approximated it. `px-gutter-safe` is
+              symmetric (16/16) so the centre is the screen's centre, not the
+              content box's; the bell rides the right track, pushed to its end. */}
+          <span aria-hidden="true" />
+          <Logo />
+          <div className="flex items-center justify-self-end gap-touch-gap">
             <Bellicon mobile />
           </div>
         </header>

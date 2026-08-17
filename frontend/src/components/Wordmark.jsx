@@ -45,12 +45,22 @@ const INK_H = 269;
  */
 export function Wordmark({ size = 20, plate = false, className }) {
   const scale = size / INK_H;
-  const win = { width: Math.round(INK_W * scale), height: Math.round(INK_H * scale) };
+  // The window is cropped to the ink bbox, which measures flush to the outermost
+  // pixels of the D and the S. Cropped exactly there, their anti-aliased edges
+  // get shaved and the letters read as clipped. `bleed` reopens a hair of
+  // transparent room on every side so the ink floats inside the crop instead of
+  // pressing against it — invisible on any surface (the pixels are transparent),
+  // and it scales with the logo so the breathing room stays proportional.
+  const bleed = Math.max(1, Math.round(size * 0.08));
+  const win = {
+    width: Math.round(INK_W * scale) + bleed * 2,
+    height: Math.round(INK_H * scale) + bleed * 2,
+  };
   const img = {
     width: Math.round(BOX_W * scale),
     height: Math.round(BOX_H * scale),
-    marginLeft: -Math.round(INK_X * scale),
-    marginTop: -Math.round(INK_Y * scale),
+    marginLeft: -Math.round(INK_X * scale) + bleed,
+    marginTop: -Math.round(INK_Y * scale) + bleed,
     maxWidth: "none",   // the app sets img{max-width:100%}; that would rescale it
   };
 

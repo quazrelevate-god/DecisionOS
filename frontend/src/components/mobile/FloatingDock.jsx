@@ -104,7 +104,10 @@ export function FloatingDock({ user, onMore, moreOpen = false, moreBadge = 0 }) 
   return (
     <nav
       // lg:hidden — desktop keeps its sidebar, untouched (§8).
-      className="lg:hidden fixed left-4 z-[10000] bottom-safe-4"
+      // MPWA-14: `app-dock-left` anchors to the centred shell's left edge, so on
+      // a wide display the pill hugs the column instead of the viewport corner.
+      // On a phone the offset collapses to the original 1rem.
+      className="lg:hidden fixed app-dock-left z-[10000] bottom-safe-4"
       data-testid="floating-dock"
       aria-label={t("nav.primary", "Primary")}
     >

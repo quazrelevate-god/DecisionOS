@@ -70,9 +70,9 @@ function DeskBriefHeader() {
 
   if (isLoading || !data) {
     return (
-      <div className="mb-6">
-        <div className="h-8 w-64 bg-black/5 mb-2 animate-pulse" />
-        <div className="h-16 bg-black/5 animate-pulse" />
+      <div className="mb-10">
+        <div className="h-10 w-72 bg-muted rounded-lg mb-4 animate-pulse" />
+        <div className="h-12 bg-muted rounded-lg animate-pulse" />
       </div>
     );
   }
@@ -94,24 +94,42 @@ function DeskBriefHeader() {
   const CF_ICON = dirIcon(cash.direction);
 
   return (
-    <div className="mb-8" data-testid="desk-brief-header">
-      {/* Greeting */}
-      <h2 className="font-heading text-2xl font-black tracking-tighter mb-3" data-testid="desk-brief-greeting">
-        {data.greeting}.
+    <div className="mb-10" data-testid="desk-brief-header">
+      {/* RD-2 (2026-08-17) — the greeting is now the page's editorial moment.
+          Was 24px Inter at font-black / tracking-tighter, which read as a
+          shouted label. The reference opens every screen with a large serif
+          greeting split across two weights: the salutation in full ink, the
+          name muted. Same trick here, at 36px. */}
+      <h2 className="font-display text-4xl mb-6" data-testid="desk-brief-greeting">
+        {(() => {
+          // data.greeting arrives as "Good evening, Rajesh" — split on the
+          // last comma so the name can carry its own colour. Falls back to
+          // the whole string when the shape is different (other locales).
+          const g = String(data.greeting || "");
+          const i = g.lastIndexOf(",");
+          if (i === -1) return <span>{g}.</span>;
+          return (
+            <>
+              <span>{g.slice(0, i + 1)}</span>
+              <span className="text-muted-foreground">{g.slice(i + 1)}.</span>
+            </>
+          );
+        })()}
       </h2>
 
-      {/* Dex narrative bubble */}
+      {/* Dex narrative. RD-2: the hard border + brutal shadow + solid dark
+          avatar tile are gone. It now reads as a quiet inset note — the
+          content is the point, not the container. */}
       <div
         data-testid="desk-brief-narrative"
-        className="border border-black bg-white p-4 mb-4 shadow-brutal-sm flex gap-3"
+        className="flex gap-3 mb-6"
       >
-        <div className="w-9 h-9 shrink-0 flex items-center justify-center bg-brand-ink text-white">
-          <Sparkle size={18} weight="bold" />
+        <div className="w-7 h-7 shrink-0 flex items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+          <Sparkle size={15} weight="fill" />
         </div>
-        <div className="flex-1">
-          <p className="label-mono text-muted-foreground text-[10px] mb-1">DEX →</p>
-          <p className="text-sm leading-relaxed">{data.narrative}</p>
-        </div>
+        <p className="flex-1 text-sm leading-relaxed text-foreground/80 pt-0.5">
+          {data.narrative}
+        </p>
       </div>
 
       {/* Trends + Shortcuts side-by-side (stack on mobile) */}
@@ -122,11 +140,12 @@ function DeskBriefHeader() {
             Cash-flow          -> /finance?tab=revenue if overdue receivables,
                                   else /finance?tab=inbox if unmatched,
                                   else /finance?tab=overview. */}
-        <div className="border border-black bg-white p-4" data-testid="desk-brief-trends">
-          <p className="label-mono text-muted-foreground text-[10px] mb-3 flex items-center gap-1">
-            <ChartBar size={12} weight="bold" /> TRENDS
+        {/* RD-2: hairline card, sentence-case caption. */}
+        <div className="border border-border rounded-xl bg-card p-4" data-testid="desk-brief-trends">
+          <p className="text-xs font-medium text-muted-foreground mb-3 flex items-center gap-1.5">
+            <ChartBar size={13} /> Trends
           </p>
-          <div className="space-y-1">
+          <div className="space-y-0.5">
             {/* Delayed tasks — Epic 2 Sprint 6.5 (E2-51): most urgent, at top.
                 Founder ask 2026-08-15: 'compalanits, delayed task how we plan
                 to show them, redirecting to task section and crm section right'. */}
@@ -134,7 +153,7 @@ function DeskBriefHeader() {
               type="button"
               data-testid="desk-trend-delayed"
               onClick={() => navigate("/my-work?filter=overdue")}
-              className="w-full flex items-center justify-between text-sm p-2 -mx-2 rounded hover:bg-black/5 transition-colors text-left"
+              className="w-full flex items-center justify-between text-sm p-2 -mx-2 rounded-lg hover:bg-accent transition-colors text-left"
               title="See overdue tasks"
             >
               <span className="flex items-center gap-2">
@@ -153,7 +172,7 @@ function DeskBriefHeader() {
               type="button"
               data-testid="desk-trend-completion"
               onClick={() => navigate("/my-work?filter=completed")}
-              className="w-full flex items-center justify-between text-sm p-2 -mx-2 rounded hover:bg-black/5 transition-colors text-left"
+              className="w-full flex items-center justify-between text-sm p-2 -mx-2 rounded-lg hover:bg-accent transition-colors text-left"
               title="See completed tasks"
             >
               <span className="flex items-center gap-2">
@@ -175,7 +194,7 @@ function DeskBriefHeader() {
               type="button"
               data-testid="desk-trend-complaints"
               onClick={() => navigate("/crm?complaint=open")}
-              className="w-full flex items-center justify-between text-sm p-2 -mx-2 rounded hover:bg-black/5 transition-colors text-left"
+              className="w-full flex items-center justify-between text-sm p-2 -mx-2 rounded-lg hover:bg-accent transition-colors text-left"
               title="See customers with open complaints"
             >
               <span className="flex items-center gap-2">
@@ -202,7 +221,7 @@ function DeskBriefHeader() {
                     : "/finance?tab=overview";
                 navigate(dest);
               }}
-              className="w-full flex items-center justify-between text-sm p-2 -mx-2 rounded hover:bg-black/5 transition-colors text-left"
+              className="w-full flex items-center justify-between text-sm p-2 -mx-2 rounded-lg hover:bg-accent transition-colors text-left"
               title="Open Finance"
             >
               <span className="flex items-center gap-2">
@@ -218,14 +237,14 @@ function DeskBriefHeader() {
         </div>
 
         {/* Shortcuts card */}
-        <div className="border border-black bg-white p-4" data-testid="desk-brief-shortcuts">
-          <p className="label-mono text-muted-foreground text-[10px] mb-3">SHORTCUTS</p>
+        <div className="border border-border rounded-xl bg-card p-4" data-testid="desk-brief-shortcuts">
+          <p className="text-xs font-medium text-muted-foreground mb-3">Shortcuts</p>
           <div className="space-y-2">
             {isOwner && (
               <button
                 data-testid="desk-shortcut-journal"
                 onClick={() => navigate("/journal")}
-                className="w-full flex items-center gap-2 border border-black bg-white px-3 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors"
+                className="w-full flex items-center gap-2 border border-border rounded-lg bg-card px-3 py-2 text-sm font-medium hover:bg-accent transition-colors"
               >
                 <BookOpen size={14} weight="bold" /> CEO Journal
               </button>
@@ -234,7 +253,7 @@ function DeskBriefHeader() {
               <button
                 data-testid="desk-shortcut-ops"
                 onClick={() => navigate("/operating-score")}
-                className="w-full flex items-center gap-2 border border-black bg-white px-3 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors"
+                className="w-full flex items-center gap-2 border border-border rounded-lg bg-card px-3 py-2 text-sm font-medium hover:bg-accent transition-colors"
               >
                 <Gauge size={14} weight="bold" /> Ops health
               </button>
@@ -243,7 +262,7 @@ function DeskBriefHeader() {
               <button
                 data-testid="desk-shortcut-team"
                 onClick={() => navigate("/operating-score")}
-                className="w-full flex items-center gap-2 border border-black bg-white px-3 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors"
+                className="w-full flex items-center gap-2 border border-border rounded-lg bg-card px-3 py-2 text-sm font-medium hover:bg-accent transition-colors"
               >
                 <UsersFour size={14} weight="bold" /> Team leaderboard
               </button>
@@ -252,7 +271,7 @@ function DeskBriefHeader() {
               <button
                 data-testid="desk-shortcut-coach"
                 onClick={() => navigate("/coach")}
-                className="w-full flex items-center gap-2 border border-black bg-white px-3 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors"
+                className="w-full flex items-center gap-2 border border-border rounded-lg bg-card px-3 py-2 text-sm font-medium hover:bg-accent transition-colors"
               >
                 <Sparkle size={14} weight="bold" /> AI Coach
               </button>
@@ -282,19 +301,25 @@ function DeskCard({ card, onAction, currentUserId }) {
       ? "respond"
       : card.cta;
 
+  // RD-2 (2026-08-17): the arrow leaves the label — the reference never
+  // decorates a button with glyphs, and "Review →" plus a hover shadow was
+  // two affordances doing one job.
   const ctaLabel = {
-    review: "Review →",
+    review: "Review",
     respond: "Respond",
     chase: "Chase",
     nudge: "Nudge",
   }[effectiveCta] || "Open";
 
+  // Only the action that is genuinely ON the viewer gets the indigo fill.
+  // Chase and Nudge are things the viewer does TO someone else and sit one
+  // level quieter, as hairline buttons.
   const ctaStyle = {
-    review: "bg-brand-ink text-white hover:shadow-brutal-sm",
-    respond: "bg-brand-ink text-white hover:shadow-brutal-sm",
-    chase: "border border-black bg-white hover:bg-brand-600 hover:text-white",
-    nudge: "border border-black bg-white hover:bg-brand-yellow",
-  }[effectiveCta] || "border border-black bg-white";
+    review: "bg-primary text-primary-foreground hover:bg-brand-700",
+    respond: "bg-primary text-primary-foreground hover:bg-brand-700",
+    chase: "border border-border bg-card hover:bg-accent",
+    nudge: "border border-border bg-card hover:bg-accent",
+  }[effectiveCta] || "border border-border bg-card hover:bg-accent";
 
   const doAction = async (e) => {
     e.stopPropagation();
@@ -307,22 +332,27 @@ function DeskCard({ card, onAction, currentUserId }) {
   };
 
   return (
+    /* RD-2: hairline row, no shadow, hover darkens the border only. The
+       context line drops the mono face — it is prose ("Waiting 2 days ·
+       From Ravi Kumar"), not data, and mono made it read as a log entry.
+       The amount keeps mono + tabular numerals, because it IS data and it
+       has to align down the column. */
     <div
       data-testid={`desk-card-${card.id}`}
-      className="flex items-center justify-between gap-4 p-4 border border-black bg-white hover:shadow-brutal-sm transition-all"
+      className="flex items-center justify-between gap-4 px-4 py-3.5 border border-border rounded-xl bg-card hover:border-hairline-strong transition-colors"
     >
       <div className="flex-1 min-w-0">
-        <p className="font-heading font-bold text-base leading-tight truncate">{card.title}</p>
-        <p className="text-xs text-muted-foreground font-mono mt-1">{card.context_line}</p>
+        <p className="font-medium text-sm leading-snug truncate">{card.title}</p>
+        <p className="text-xs text-muted-foreground mt-1">{card.context_line}</p>
       </div>
       {card.amount_formatted && (
-        <p className="font-mono font-bold text-sm shrink-0">{card.amount_formatted}</p>
+        <p className="font-mono text-sm font-medium tabular-nums shrink-0">{card.amount_formatted}</p>
       )}
       <button
         data-testid={`desk-cta-${card.cta}-${card.id}`}
         onClick={doAction}
         disabled={busy}
-        className={`px-4 py-2 text-xs font-semibold uppercase tracking-wider shrink-0 disabled:opacity-50 transition-all ${ctaStyle}`}
+        className={`px-3.5 py-1.5 rounded-lg text-xs font-medium shrink-0 disabled:opacity-50 transition-colors ${ctaStyle}`}
       >
         {busy ? <Spinner size={12} className="animate-spin" /> : ctaLabel}
       </button>
@@ -437,9 +467,11 @@ export default function Desk() {
           Epic 2 Sprint 6 (E2-43..45): CEO Brief absorbed into Desk. */}
       <DeskBriefHeader />
 
-      {/* Header */}
-      <div className="mb-4">
-        <h1 className="font-heading text-4xl font-black tracking-tighter" data-testid="desk-title">
+      {/* RD-2 (2026-08-17): section heading drops font-black/tracking-tighter
+          for the serif display face, sized below the greeting so the page has
+          one clear lead and this reads as the section beneath it. */}
+      <div className="mb-5">
+        <h1 className="font-display text-2xl" data-testid="desk-title">
           Decision Desk
         </h1>
         <p className="text-sm text-muted-foreground mt-1" data-testid="desk-subline">
@@ -447,28 +479,36 @@ export default function Desk() {
         </p>
       </div>
 
-      {/* Chips */}
-      <div className="flex flex-wrap gap-2 mb-6" data-testid="desk-chips">
-        {CHIPS.map((c) => (
-          <button
-            key={c.key}
-            onClick={() => setChip(c.key)}
-            data-testid={`desk-chip-${c.key}`}
-            className={`flex items-center gap-2 px-4 py-2 border border-black text-sm font-semibold uppercase tracking-wider transition-colors ${
-              chip === c.key ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"
-            }`}
-          >
-            {c.icon && <c.icon size={14} weight="bold" />}
-            {c.label}
-            <span
-              className={`ml-1 px-1.5 py-0.5 text-[10px] font-bold ${
-                chip === c.key ? "bg-white/20 text-white" : "bg-black/10 text-black"
+      {/* RD-2: chips were bordered uppercase blocks that inverted to solid
+          dark when active — four of them made a row of buttons competing with
+          the list below. Now pill-shaped, sentence case, and the active one is
+          a soft indigo tint rather than a filled slab. */}
+      <div className="flex flex-wrap gap-1.5 mb-5" data-testid="desk-chips">
+        {CHIPS.map((c) => {
+          const active = chip === c.key;
+          return (
+            <button
+              key={c.key}
+              onClick={() => setChip(c.key)}
+              data-testid={`desk-chip-${c.key}`}
+              className={`flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-full text-sm transition-colors ${
+                active
+                  ? "bg-brand-50 text-brand-700 font-medium"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
               }`}
             >
-              {counters[c.key] ?? 0}
-            </span>
-          </button>
-        ))}
+              {c.icon && <c.icon size={14} weight={active ? "fill" : "regular"} />}
+              {c.label}
+              <span
+                className={`ml-0.5 min-w-[18px] px-1 py-0.5 rounded-full text-[11px] tabular-nums text-center ${
+                  active ? "bg-brand-600/15 text-brand-700" : "bg-muted text-muted-foreground"
+                }`}
+              >
+                {counters[c.key] ?? 0}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Card list */}
@@ -481,11 +521,14 @@ export default function Desk() {
           ))}
         </div>
       )}
+      {/* RD-2: dashed box removed (it read as a drop-zone), icon muted from
+          a heavy dark glyph to a quiet green tick — "caught up" is good news
+          and should feel calm, not loud. */}
       {!isLoading && cards.length === 0 && (
-        <div className="border border-black border-dashed bg-white p-10 text-center" data-testid="desk-empty">
-          <CheckCircle size={32} weight="bold" className="text-brand-ink mx-auto mb-3" />
-          <p className="font-heading font-bold text-lg">Nothing here — you're caught up</p>
-          <p className="text-sm text-muted-foreground mt-1">
+        <div className="py-16 text-center" data-testid="desk-empty">
+          <CheckCircle size={28} weight="regular" className="text-success-600 mx-auto mb-3" />
+          <p className="text-base font-medium">Nothing here — you're caught up</p>
+          <p className="text-sm text-muted-foreground mt-1.5">
             {chip === "needs_decision" && "No decisions are waiting on you right now."}
             {chip === "on_fire" && "No escalations, handoffs, or overdue items."}
             {chip === "due_today" && "Nothing you own is due today."}
@@ -493,7 +536,7 @@ export default function Desk() {
           </p>
         </div>
       )}
-      <div className="space-y-3" data-testid="desk-card-list">
+      <div className="space-y-2" data-testid="desk-card-list">
         {cards.map((c) => (
           <DeskCard key={c.id} card={c} onAction={onCardAction} currentUserId={user?.id} />
         ))}
@@ -501,8 +544,8 @@ export default function Desk() {
 
       {/* Refresh spinner */}
       {isFetching && !isLoading && (
-        <p className="text-xs text-muted-foreground font-mono mt-4 flex items-center gap-2">
-          <ArrowClockwise size={12} className="animate-spin" /> refreshing…
+        <p className="text-xs text-muted-foreground mt-4 flex items-center gap-2">
+          <ArrowClockwise size={12} className="animate-spin" /> Refreshing…
         </p>
       )}
 

@@ -1133,21 +1133,14 @@ export default function Ledger() {
   const [searchParams] = useSearchParams();
   const initialTab = TABS.some((tb) => tb.key === searchParams.get("tab")) ? searchParams.get("tab") : "overview";
   const [tab, setTab] = useState(initialTab);
-  const [reclassifying, setReclassifying] = useState(false);
   const qc = useQueryClient();
   const invalidate = () => ["ledger-summary", "expenses", "assets", "inventory", "revenue", "payables"].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
-
-  const reclassify = async () => {
-    if (!window.confirm("Re-run AI on all filed purchase bills and move any mis-booked ones into the correct bucket (Expense / Asset / Inventory)? This updates your ledger.")) return;
-    setReclassifying(true);
-    try {
-      const { data: s } = await api.post("/ledger/reclassify-purchases");
-      invalidate();
-      qc.invalidateQueries({ queryKey: ["ledger-ai"] });
-      toast.success(`Reviewed ${s.reviewed} bills — ${s.to_asset} → assets, ${s.to_inventory} → inventory${s.unknown ? `, ${s.unknown} need manual review` : ""}.`);
-    } catch (e) { toast.error(e?.response?.data?.detail || "Re-classification failed"); }
-    finally { setReclassifying(false); }
-  };
+  // U7-08.2 (2026-08-17): "Fix old purchases" button removed from the
+  // desktop Finance header per founder ask. The AI classifier already
+  // runs on every new capture; a manual re-run belongs in admin tooling
+  // if we need it again, not in the owner's day-to-day toolbar. Mobile
+  // still exposes it as "Recheck earlier bills" (FinanceMobile.jsx §8);
+  // the backend endpoint /ledger/reclassify-purchases stays live.
 
   const summaryQ = useQuery({ queryKey: ["ledger-summary"], queryFn: () => api.get("/ledger/summary").then((r) => r.data) });
   const expensesQ = useQuery({ queryKey: ["expenses"], queryFn: () => api.get("/expenses").then((r) => r.data) });
@@ -1201,14 +1194,6 @@ export default function Ledger() {
             ))}
           </div>
           {addBtn}
-          {user?.role === "owner" && (
-            <button onClick={reclassify} disabled={reclassifying} data-testid="ledger-reclassify-btn"
-              title="Re-run AI classification on historical purchase bills"
-              className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-semibold uppercase tracking-wider border border-black bg-white hover:bg-black/5 transition-colors disabled:opacity-50 w-full sm:w-auto">
-              <ArrowClockwise size={15} weight="bold" className={reclassifying ? "animate-spin" : ""} />
-              {reclassifying ? "Re-classifying…" : "Fix old purchases"}
-            </button>
-          )}
         </div>
       </PageHeader>
 

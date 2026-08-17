@@ -48,19 +48,26 @@ const STATUSES = ["lead", "active", "inactive"];
 // type -- customers travel a sales funnel; suppliers travel a
 // procurement journey. Colours below are the visual cue on the card
 // so founder can spot at-risk / on-hold instantly.
+// RD-3 (2026-08-17): lifecycle chips re-tinted onto the semantic ramp.
+// Was a mix of black/10, black/30-on-white, brand-blue/20, brand-green/20
+// and solid brand-yellow — five different colour systems in two arrays, and
+// `brand-green` is not even a defined token (it rendered as nothing).
+// Now every stage is a tint + darker-text pair, and colour tracks meaning:
+// neutral for "not started", success for healthy, danger for at-risk,
+// caution for on-hold, muted-strikethrough-adjacent for ended.
 const CUSTOMER_STAGES = [
-  { key: "lead", label: "Lead", cls: "bg-black/10 text-black" },
-  { key: "qualified", label: "Qualified", cls: "bg-brand-blue/20 text-brand-blue" },
-  { key: "active", label: "Active", cls: "bg-brand-green/20 text-brand-green" },
-  { key: "at_risk", label: "At Risk", cls: "bg-danger-600/20 text-danger-600" },
-  { key: "churned", label: "Churned", cls: "bg-black/30 text-white" },
+  { key: "lead", label: "Lead", cls: "bg-muted text-muted-foreground" },
+  { key: "qualified", label: "Qualified", cls: "bg-brand-50 text-brand-700" },
+  { key: "active", label: "Active", cls: "bg-success-50 text-success-800" },
+  { key: "at_risk", label: "At Risk", cls: "bg-danger-50 text-danger-700" },
+  { key: "churned", label: "Churned", cls: "bg-muted text-muted-foreground" },
 ];
 const SUPPLIER_STAGES = [
-  { key: "prospect", label: "Prospect", cls: "bg-black/10 text-black" },
-  { key: "active", label: "Active", cls: "bg-brand-green/20 text-brand-green" },
-  { key: "preferred", label: "Preferred", cls: "bg-brand-yellow text-black" },
-  { key: "on_hold", label: "On Hold", cls: "bg-brand-600/20 text-brand-600" },
-  { key: "retired", label: "Retired", cls: "bg-black/30 text-white" },
+  { key: "prospect", label: "Prospect", cls: "bg-muted text-muted-foreground" },
+  { key: "active", label: "Active", cls: "bg-success-50 text-success-800" },
+  { key: "preferred", label: "Preferred", cls: "bg-brand-50 text-brand-700" },
+  { key: "on_hold", label: "On Hold", cls: "bg-caution-50 text-caution-800" },
+  { key: "retired", label: "Retired", cls: "bg-muted text-muted-foreground" },
 ];
 function stagesForType(t) {
   if (VENDOR_TYPES.includes(t)) return SUPPLIER_STAGES;
@@ -70,7 +77,10 @@ function stageMeta(type, stage) {
   if (!stage) return null;
   return stagesForType(type).find((s) => s.key === stage) || null;
 }
-const inp = "w-full border border-black px-3 py-2 text-sm font-mono focus:outline-none focus:shadow-brutal-sm";
+// RD-3: form inputs lose the mono face and the hard frame. Mono in a text
+// field made every form read as a config file; the reference uses the UI
+// grotesque in inputs and reserves mono for rendered data.
+const inp = "w-full border border-border rounded-lg px-3 py-2 text-sm bg-card focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-brand-400 transition-colors";
 
 // Epic 2 Sprint 8 (E2-70): sort options for the CRM card grid. Founder
 // scans a lot of cards at once -- sorting by name (default), most-
@@ -141,10 +151,10 @@ function ComplaintDialog({ contact, onSaved }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <button data-testid={`crm-log-complaint-${contact.id}`} title="Log complaint" className="w-8 h-8 flex items-center justify-center border border-black hover:bg-purple-600 hover:text-white transition-colors">!</button>
+        <button data-testid={`crm-log-complaint-${contact.id}`} title="Log complaint" className="w-8 h-8 flex items-center justify-center border border-border hover:bg-purple-600 hover:text-white transition-colors">!</button>
       </DialogTrigger>
-      <DialogContent className="border border-black rounded-none">
-        <DialogHeader><DialogTitle className="font-heading uppercase tracking-tight">Log complaint — {contact.name}</DialogTitle></DialogHeader>
+      <DialogContent className="border border-border rounded-xl">
+        <DialogHeader><DialogTitle className="font-display text-xl">Log complaint — {contact.name}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <textarea data-testid="crm-complaint-text" className={inp} rows={3} placeholder="What went wrong?" value={text} onChange={(e) => setText(e.target.value)} />
           <select className={inp} value={severity} onChange={(e) => setSeverity(e.target.value)}>
@@ -152,7 +162,7 @@ function ComplaintDialog({ contact, onSaved }) {
           </select>
         </div>
         <DialogFooter>
-          <button data-testid="crm-complaint-save" onClick={save} className="bg-purple-600 text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all">Log complaint</button>
+          <button data-testid="crm-complaint-save" onClick={save} className="bg-purple-600 text-white px-5 py-2 text-sm font-medium rounded-lg border border-border transition-all">Log complaint</button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -226,9 +236,9 @@ function CrmContactDialog({ trigger, initial, onSaved, users, defaultType }) {
   return (
     <Dialog open={open} onOpenChange={openChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="border border-black rounded-none max-w-xl" data-testid="crm-contact-dialog">
+      <DialogContent className="border border-border rounded-xl max-w-xl" data-testid="crm-contact-dialog">
         <DialogHeader>
-          <DialogTitle className="font-heading uppercase tracking-tight">{dialogTitle}</DialogTitle>
+          <DialogTitle className="font-display text-xl">{dialogTitle}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-5">
@@ -237,7 +247,7 @@ function CrmContactDialog({ trigger, initial, onSaved, users, defaultType }) {
           {!initial && (
             <div>
               <p className="label-mono text-muted-foreground mb-2">Type</p>
-              <div className="flex border border-black" data-testid="crm-contact-type">
+              <div className="flex border border-border" data-testid="crm-contact-type">
                 {TYPE_TABS.map((tab, i) => {
                   const active = form.type === tab.key;
                   return (
@@ -246,9 +256,9 @@ function CrmContactDialog({ trigger, initial, onSaved, users, defaultType }) {
                       type="button"
                       onClick={() => applyType(tab.key)}
                       data-testid={`crm-contact-type-${tab.key}`}
-                      className={`flex-1 py-2 text-sm font-semibold uppercase tracking-wider transition-colors ${
-                        active ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"
-                      } ${i < TYPE_TABS.length - 1 ? "border-r border-black" : ""}`}
+                      className={`flex-1 py-2 text-sm font-medium transition-colors ${
+                        active ? "bg-primary text-primary-foreground" : "bg-white hover:bg-black/5"
+                      } ${i < TYPE_TABS.length - 1 ? "border-r border-border" : ""}`}
                     >
                       {tab.label}
                     </button>
@@ -312,14 +322,14 @@ function CrmContactDialog({ trigger, initial, onSaved, users, defaultType }) {
             <button
               type="button"
               onClick={() => setShowAdvanced((v) => !v)}
-              className="text-xs uppercase tracking-wider font-semibold text-muted-foreground hover:text-black flex items-center gap-1.5 transition-colors"
+              className="text-xs font-medium text-muted-foreground hover:text-foreground flex items-center gap-1.5 transition-colors"
               data-testid="crm-contact-advanced-toggle"
             >
               <span className={`transition-transform ${showAdvanced ? "rotate-90" : ""}`}>▸</span>
               More details {showAdvanced ? "" : "· GSTIN, address, tags, owner, notes"}
             </button>
             {showAdvanced && (
-              <div className="mt-3 space-y-2 pl-2 border-l-2 border-black/10">
+              <div className="mt-3 space-y-2 pl-2 border-l-2 border-border">
                 <input className={inp} placeholder="GSTIN / Tax ID" value={form.tax_id} onChange={set("tax_id")} />
                 <input className={inp} placeholder="Address" value={form.address} onChange={set("address")} />
                 <input className={inp} placeholder="Tags (comma separated)" value={form.tags} onChange={set("tags")} />
@@ -339,14 +349,14 @@ function CrmContactDialog({ trigger, initial, onSaved, users, defaultType }) {
           <button
             type="button"
             onClick={() => setOpen(false)}
-            className="px-4 py-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground hover:text-black transition-colors"
+            className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={save}
             data-testid="crm-contact-save"
-            className="bg-brand-ink text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all"
+            className="bg-primary text-primary-foreground px-5 py-2 text-sm font-medium rounded-lg border border-border transition-all"
           >
             {initial ? "Save changes" : "Add contact"}
           </button>
@@ -391,7 +401,7 @@ function AddContactMenu({ canManage, canImport, csvBusy, onImport, customerLabel
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="relative z-40 flex items-center gap-2 bg-brand-ink text-white px-4 py-2 text-sm font-semibold border border-black hover:shadow-brutal transition-all"
+        className="relative z-40 flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold border border-border transition-all"
       >
         <Plus size={16} weight="bold" /> Add contact
         <span className={`text-white/70 transition-transform ${open ? "rotate-180" : ""}`}>▾</span>
@@ -408,16 +418,16 @@ function AddContactMenu({ canManage, canImport, csvBusy, onImport, customerLabel
           />
           <div
             role="menu"
-            className="absolute left-0 top-full mt-1 z-30 min-w-[300px] border border-black bg-white shadow-brutal"
+            className="absolute left-0 top-full mt-1 z-30 min-w-[300px] border border-border bg-white shadow-lg"
           >
           {canManage && (
             <button
               type="button"
               role="menuitem"
               onClick={pick(() => document.querySelector('[data-testid="crm-add-customer"]')?.click())}
-              className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-brand-yellow/30 border-b border-black/10 transition-colors"
+              className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-accent border-b border-border transition-colors"
             >
-              <div className="w-9 h-9 flex items-center justify-center border border-black/20 bg-brand-blue/10 text-brand-blue shrink-0">
+              <div className="w-9 h-9 flex items-center justify-center border border-border bg-brand-blue/10 text-brand-blue shrink-0">
                 <AddressBook size={16} weight="bold" />
               </div>
               <div className="min-w-0 flex-1">
@@ -431,9 +441,9 @@ function AddContactMenu({ canManage, canImport, csvBusy, onImport, customerLabel
               type="button"
               role="menuitem"
               onClick={pick(() => document.querySelector('[data-testid="crm-add-supplier"]')?.click())}
-              className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-brand-yellow/30 transition-colors ${canImport ? "border-b border-black/20" : ""}`}
+              className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-accent transition-colors ${canImport ? "border-b border-border" : ""}`}
             >
-              <div className="w-9 h-9 flex items-center justify-center border border-black/20 bg-black/5 text-black shrink-0">
+              <div className="w-9 h-9 flex items-center justify-center border border-border bg-black/5 text-black shrink-0">
                 <Truck size={16} weight="bold" />
               </div>
               <div className="min-w-0 flex-1">
@@ -449,9 +459,9 @@ function AddContactMenu({ canManage, canImport, csvBusy, onImport, customerLabel
               onClick={pick(onImport)}
               disabled={csvBusy}
               data-testid="crm-import-csv"
-              className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-brand-yellow/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              <div className="w-9 h-9 flex items-center justify-center border border-black/20 bg-black/5 text-black shrink-0">
+              <div className="w-9 h-9 flex items-center justify-center border border-border bg-black/5 text-black shrink-0">
                 <UploadSimple size={16} weight="bold" />
               </div>
               <div className="min-w-0 flex-1">
@@ -692,8 +702,13 @@ export default function CRM() {
           not inline with the type toggle. Founder ask: 'make it better
           ui as actual CRM. remove all section, just Buyer / suppliers
           enough'. */}
-      <div className="mb-6" data-testid="crm-scope-chips">
-        <div className="flex border-b border-black/15">
+      {/* RD-3 (2026-08-17): the underline tab keeps its structure — it is the
+          right control for two mutually exclusive lanes — but drops the
+          uppercase + wide tracking, and the active count badge stops being a
+          solid dark slab. Underline moves to indigo so the accent marks the
+          selection here as it does everywhere else. */}
+      <div className="mb-5" data-testid="crm-scope-chips">
+        <div className="flex border-b border-border">
           {SCOPES.map((s) => {
             const active = scope === s.key;
             return (
@@ -701,12 +716,12 @@ export default function CRM() {
                 key={s.key}
                 onClick={() => setScope(s.key)}
                 data-testid={`crm-scope-${s.key}`}
-                className={`flex items-center gap-2 px-6 py-3 text-sm font-semibold tracking-wide transition-colors relative -mb-px border-b-2 ${active ? "border-brand-ink text-brand-ink" : "border-transparent text-muted-foreground hover:text-black"}`}
+                className={`flex items-center gap-2 px-5 py-2.5 text-sm transition-colors relative -mb-px border-b-2 ${active ? "border-brand-600 text-brand-700 font-medium" : "border-transparent text-muted-foreground hover:text-foreground"}`}
               >
-                {s.icon && <s.icon size={16} weight="bold" />}
-                <span className="uppercase tracking-wider">{s.label}</span>
+                {s.icon && <s.icon size={16} weight={active ? "fill" : "regular"} />}
+                <span>{s.label}</span>
                 <span
-                  className={`label-mono px-1.5 py-0.5 ${active ? "bg-brand-ink text-white" : "bg-black/5 text-muted-foreground"}`}
+                  className={`min-w-[18px] px-1 py-0.5 rounded-full text-[11px] tabular-nums text-center ${active ? "bg-brand-600/15 text-brand-700" : "bg-muted text-muted-foreground"}`}
                   data-testid={`crm-scope-count-${s.key}`}
                 >
                   {s.count}
@@ -719,28 +734,28 @@ export default function CRM() {
 
       {/* Filter strip -- search + status + sort, below the type toggle
           and visually secondary. Wraps on narrow viewports. */}
-      <div className="flex flex-wrap items-center gap-2 mb-6">
+      <div className="flex flex-wrap items-center gap-2 mb-5">
         <div className="relative flex-1 min-w-[200px] max-w-md">
-          <MagnifyingGlass size={14} weight="bold" className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+          <MagnifyingGlass size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
           <input
             data-testid="crm-search"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder={t("crm.search_ph")}
-            className="w-full border border-black/30 pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-black"
+            className="w-full border border-border rounded-lg bg-card pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-brand-400 transition-colors"
           />
         </div>
         <select
           data-testid="crm-status-filter"
           value={status}
           onChange={(e) => setStatus(e.target.value)}
-          className="border border-black/30 bg-white px-3 py-2 text-sm focus:outline-none focus:border-black"
+          className="border border-border rounded-lg bg-card px-3 py-2 text-sm capitalize focus:outline-none focus:ring-2 focus:ring-ring/30 transition-colors"
         >
           <option value="">{t("crm.all_statuses")}</option>
           {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
-        <div className="flex items-center border border-black/30 bg-white pl-3 focus-within:border-black">
-          <ArrowsDownUp size={14} weight="bold" className="text-muted-foreground" />
+        <div className="flex items-center border border-border rounded-lg bg-card pl-3 focus-within:ring-2 focus-within:ring-ring/30 transition-colors">
+          <ArrowsDownUp size={14} className="text-muted-foreground" />
           <select
             data-testid="crm-sort"
             value={sort}
@@ -789,9 +804,12 @@ export default function CRM() {
           // Lexicon-consistent: uses L.customer_singular / L.vendor_singular
           // so "BUYER"/"SUPPLIER" matches the tenant lexicon on both the
           // scope chip and the card.
+          // RD-3: the .toUpperCase() was baked into the DATA, not the CSS, so
+          // the chip stayed shouting after the stylesheet went sentence case.
+          // Lexicon values arrive already capitalised ("Buyer" / "Supplier").
           const typeChipLabel = isCustomer
-            ? L.customer_singular.toUpperCase()
-            : L.vendor_singular.toUpperCase();
+            ? L.customer_singular
+            : L.vendor_singular;
           const stage = stageMeta(c.type, c.lifecycle_stage);
           const statusDot =
             c.status === "active" ? "bg-green-600"
@@ -821,7 +839,7 @@ export default function CRM() {
             keySignal = {
               icon: CurrencyInr,
               text: `${payablesTxt} to pay`,
-              tone: "text-black/70",
+              tone: "text-muted-foreground",
             };
           }
 
@@ -832,14 +850,20 @@ export default function CRM() {
               data-testid={`crm-card-${c.id}`}
               onClick={() => can360 && navigate(`/contacts/${c.id}`)}
               disabled={!can360}
-              className="text-left border border-black/15 p-4 bg-white hover:border-black hover:shadow-brutal-sm transition-all disabled:cursor-default"
+              /* RD-3: `flex flex-col` is load-bearing, not cosmetic. A bare
+                 <button> centres its content in the box, so in a stretched
+                 grid row any card missing the optional key-signal line had
+                 its title pushed 16px below its neighbours'. Column flow
+                 pins content to the top; the footer then takes mt-auto so
+                 every card's meta row also lines up across the row. */
+              className="text-left flex flex-col border border-border rounded-xl p-4 bg-card hover:border-hairline-strong transition-colors disabled:cursor-default"
             >
               {/* Header: name + type + subtle status dot. Complaint red
                   dot sits inline next to name -- softer than the floating
                   corner badge that used to hover the card. */}
               <div className="flex items-start justify-between gap-2 mb-1">
                 <div className="min-w-0 flex-1">
-                  <p className="font-heading font-bold text-base leading-tight flex items-center gap-2">
+                  <p className="font-medium text-sm leading-snug flex items-center gap-2">
                     <span
                       className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDot}`}
                       aria-hidden="true"
@@ -850,7 +874,10 @@ export default function CRM() {
                       <span
                         data-testid={`crm-complaint-dot-${c.id}`}
                         title={`${complaintCount} open complaint${complaintCount === 1 ? "" : "s"}`}
-                        className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-danger-600 text-white text-[10px] font-bold rounded-full shrink-0"
+                        /* RD-3: 16px, not 18px. An 18px badge sits taller
+                           than the title's line box and pushed this card's
+                           heading ~10px below its neighbours' in the grid. */
+                        className="inline-flex items-center justify-center min-w-4 h-4 px-1 bg-danger-600 text-white text-[10px] font-semibold rounded-full shrink-0 leading-none"
                       >
                         {complaintCount}
                       </span>
@@ -860,14 +887,14 @@ export default function CRM() {
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <span
-                    className={`label-mono px-1.5 py-0.5 border ${isCustomer ? "border-brand-blue text-brand-blue" : "border-black text-black"}`}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-medium tracking-wide ${isCustomer ? "bg-brand-50 text-brand-700" : "bg-muted text-muted-foreground"}`}
                     data-testid={`crm-type-chip-${c.id}`}
                   >
                     {typeChipLabel}
                   </span>
                   {stage && (
                     <span
-                      className={`label-mono px-1.5 py-0.5 ${stage.cls}`}
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-medium tracking-wide ${stage.cls}`}
                       data-testid={`crm-stage-${c.id}`}
                     >
                       {stage.label}
@@ -881,7 +908,7 @@ export default function CRM() {
                   clean. */}
               {keySignal && (
                 <p
-                  className={`mt-3 flex items-center gap-1.5 text-sm font-mono font-semibold ${keySignal.tone}`}
+                  className={`mt-3 flex items-center gap-1.5 text-sm font-medium tabular-nums ${keySignal.tone}`}
                   data-testid={`crm-signal-${c.id}`}
                 >
                   <keySignal.icon size={13} weight="bold" />
@@ -891,7 +918,7 @@ export default function CRM() {
 
               {/* Footer meta: touched-ago + owner (if any). Small, muted,
                   right-aligned owner. */}
-              <div className="mt-3 pt-3 border-t border-black/10 flex items-center justify-between text-xs text-muted-foreground">
+              <div className="mt-auto pt-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
                 {touched && (
                   <span className="flex items-center gap-1" data-testid={`crm-touched-${c.id}`}>
                     <Clock size={11} weight="bold" /> {touched}

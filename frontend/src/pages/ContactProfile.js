@@ -19,10 +19,10 @@ import {
 // so the timeline reads at a glance.
 const ACTIVITY_META = {
   call: { icon: Phone, label: "Call", cls: "bg-brand-blue text-white" },
-  meeting: { icon: Handshake, label: "Meeting", cls: "bg-brand-yellow text-black" },
+  meeting: { icon: Handshake, label: "Meeting", cls: "bg-caution-50 text-caution-800" },
   note: { icon: Note, label: "Note", cls: "bg-black/10 text-black" },
   whatsapp: { icon: WhatsappLogo, label: "WhatsApp", cls: "bg-brand-green text-white" },
-  email: { icon: EnvelopeSimple, label: "Email", cls: "bg-brand-ink text-white" },
+  email: { icon: EnvelopeSimple, label: "Email", cls: "bg-muted text-muted-foreground" },
   other: { icon: ChatCircleDots, label: "Other", cls: "bg-black/10 text-black" },
 };
 
@@ -39,10 +39,13 @@ function timeAgo(iso) {
   return `${Math.floor(days / 30)}mo ago`;
 }
 
+// RD-3 (2026-08-17): the KPI tile, matching the reference's stat card —
+// small muted caption above a large, lightly-weighted number. Was
+// font-black/tracking-tight, which made a row of tiles read as a scoreboard.
 const Stat = ({ label, value, accent, testid }) => (
   <div className="card-brutal p-4" data-testid={testid}>
-    <p className="label-mono text-muted-foreground">{label}</p>
-    <p className={`font-heading text-2xl font-black tracking-tight mt-1 ${accent || ""}`}>{value}</p>
+    <p className="text-xs text-muted-foreground">{label}</p>
+    <p className={`text-2xl font-medium tabular-nums mt-1.5 ${accent || ""}`}>{value}</p>
   </div>
 );
 
@@ -54,10 +57,17 @@ const Section = ({ icon: Icon, title, count, children, hideWhenEmpty = false }) 
   if (hideWhenEmpty && !count) return null;
   return (
     <div className="mb-8">
+      {/* RD-3: section heading drops uppercase/extrabold for a plain
+          medium-weight line; the count moves into a quiet pill instead of
+          parentheses. The icon stays indigo — it is the only accent here. */}
       <div className="flex items-center gap-2 mb-3">
-        <Icon size={18} weight="bold" className="text-brand-600" />
-        <h2 className="font-heading text-xl font-extrabold uppercase tracking-tight">{title}</h2>
-        {count != null && <span className="label-mono text-muted-foreground">({count})</span>}
+        <Icon size={16} className="text-brand-600" />
+        <h2 className="text-sm font-medium">{title}</h2>
+        {count != null && (
+          <span className="px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground text-[11px] tabular-nums">
+            {count}
+          </span>
+        )}
       </div>
       {children}
     </div>
@@ -65,10 +75,19 @@ const Section = ({ icon: Icon, title, count, children, hideWhenEmpty = false }) 
 };
 
 function Table({ head, rows }) {
+  // RD-3: the header row was a solid dark bar with mono caps — it read as a
+  // terminal table. The reference uses muted grey header text on the card
+  // ground with a single hairline beneath.
   return (
-    <div className="overflow-x-auto border border-black bg-white">
+    <div className="overflow-x-auto border border-border rounded-xl bg-card">
       <table className="w-full text-sm">
-        <thead className="bg-brand-ink text-white"><tr>{head.map((h) => <th key={h} className="text-left px-3 py-2 label-mono">{h}</th>)}</tr></thead>
+        <thead className="border-b border-border">
+          <tr>
+            {head.map((h) => (
+              <th key={h} className="text-left px-3 py-2.5 text-xs font-medium text-muted-foreground">{h}</th>
+            ))}
+          </tr>
+        </thead>
         <tbody>{rows}</tbody>
       </table>
     </div>
@@ -122,7 +141,7 @@ export default function ContactProfile() {
   });
 
   if (!canView) return <EmptyState title="Restricted" hint="The 360° profile is available to Owner and Finance only." />;
-  if (isLoading) return <div className="font-mono text-sm uppercase tracking-widest py-20 text-center">Loading profile…</div>;
+  if (isLoading) return <div className="text-sm text-muted-foreground py-20 text-center">Loading profile…</div>;
   // MPWA-12i: a dead end is worst on an error path — he arrived from a link and
   // has nowhere to go. E2-13's own CTA, on the surface it missed.
   // `!data?.contact` as well as `error`: the API answers 200 with an empty body
@@ -163,14 +182,14 @@ export default function ContactProfile() {
   const rel = ai_relationship;
 
   const ScoreBox = ({ label, value, Icon, good }) => {
-    const color = value == null ? "text-black/30" : good ? (value >= 60 ? "text-green-600" : value >= 30 ? "text-amber-600" : "text-brand-600")
+    const color = value == null ? "text-muted-foreground" : good ? (value >= 60 ? "text-green-600" : value >= 30 ? "text-amber-600" : "text-brand-600")
       : (value >= 60 ? "text-brand-600" : value >= 30 ? "text-amber-600" : "text-green-600");
     return (
       <div className="flex items-center gap-3" data-testid={`rel-${label.toLowerCase()}`}>
-        <div className="w-14 h-14 flex flex-col items-center justify-center border-2 border-black bg-white shrink-0">
-          <span className={`font-heading text-2xl font-black leading-none ${color}`}>{value != null ? value : "—"}</span>
+        <div className="w-14 h-14 flex flex-col items-center justify-center rounded-xl border border-border bg-card shrink-0">
+          <span className={`text-2xl font-medium tabular-nums leading-none ${color}`}>{value != null ? value : "—"}</span>
         </div>
-        <div className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide">
+        <div className="flex items-center gap-1.5 text-sm font-medium">
           <Icon size={16} weight="bold" className="text-muted-foreground" /> {label}
         </div>
       </div>
@@ -183,17 +202,17 @@ export default function ContactProfile() {
     <div>
       {/* U7-07: label matches the nav item ("CRM") + route lands on
           /crm directly instead of hitting the redirect. */}
-      <button onClick={() => navigate("/crm")} data-testid="profile-back" className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider mb-4 hover:text-brand-600 transition-colors">
+      <button onClick={() => navigate("/crm")} data-testid="profile-back" className="flex items-center gap-2 text-sm text-muted-foreground mb-5 hover:text-foreground transition-colors">
         <ArrowLeft size={16} weight="bold" /> Back to CRM
       </button>
 
       {/* Header */}
       <div className="card-brutal p-6 mb-6" data-testid="profile-header">
         <div className="flex items-center gap-2 mb-2">
-          <Chip value={typeLabel(c.type)} className={c.type === "customer" ? "bg-brand-blue text-white" : "bg-brand-yellow text-black"} />
+          <Chip value={typeLabel(c.type)} className={c.type === "customer" ? "bg-brand-50 text-brand-700" : "bg-muted text-muted-foreground"} />
           <Chip value={c.status} />
         </div>
-        <h1 className="font-heading text-4xl font-black uppercase tracking-tighter">{c.name}</h1>
+        <h1 className="font-display text-3xl">{c.name}</h1>
         {c.company && <p className="text-muted-foreground flex items-center gap-2 mt-1"><Buildings size={14} weight="bold" /> {c.company}</p>}
         <div className="flex flex-wrap gap-4 mt-3 text-sm">
           {c.phone && <span className="flex items-center gap-1.5"><Phone size={14} weight="bold" className="text-muted-foreground" /> {c.phone}</span>}
@@ -205,7 +224,7 @@ export default function ContactProfile() {
 
       {/* Financial summary */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
-        <Stat testid="stat-outstanding" label="Outstanding" value={money(summary.outstanding, cur)} accent={summary.outstanding > 0 ? "text-brand-600" : "text-brand-ink"} />
+        <Stat testid="stat-outstanding" label="Outstanding" value={money(summary.outstanding, cur)} accent={summary.outstanding > 0 ? "text-brand-600" : "text-foreground"} />
         <Stat testid="stat-billed" label={isVendor ? "Total Billed" : "Total Invoiced"} value={money(summary.total_billed, cur)} />
         <Stat testid="stat-paid" label="Total Paid" value={money(summary.total_paid, cur)} />
         <Stat testid="stat-complaints" label="Open Complaints" value={summary.open_complaints} accent={summary.open_complaints > 0 ? "text-purple-600" : ""} />
@@ -216,19 +235,23 @@ export default function ContactProfile() {
           Now a subtle inline prompt when empty; expands into the full
           card only when there's actually a score to show. */}
       {!rel ? (
+        /* RD-3: this is an OFFER, not a warning — it was picked up by the
+           brand-yellow sweep and landed on a caution tint, which told the
+           user something was wrong when nothing is. Neutral hairline card;
+           the DexBadge already supplies the only accent it needs. */
         <div
-          className="border border-black/15 px-4 py-3 mb-8 flex items-center justify-between gap-3 flex-wrap bg-brand-yellow/15"
+          className="border border-border rounded-xl px-4 py-3 mb-8 flex items-center justify-between gap-3 flex-wrap bg-card"
           data-testid="relationship-card"
         >
           <div className="flex items-center gap-2 text-sm">
             <DexBadge />
-            <span>Analyze this relationship's health &amp; risk with AI.</span>
+            <span className="text-muted-foreground">Analyze this relationship's health &amp; risk with AI.</span>
           </div>
           <button
             onClick={() => rescore.mutate()}
             disabled={rescore.isPending}
             data-testid="rescore-contact-btn"
-            className="flex items-center gap-1.5 border border-black px-3 py-1.5 text-xs font-semibold uppercase tracking-wider hover:bg-brand-ink hover:text-white transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-accent transition-colors disabled:opacity-50"
           >
             <Sparkle size={14} weight="bold" /> {rescore.isPending ? "Scoring…" : "Score with AI"}
           </button>
@@ -238,13 +261,13 @@ export default function ContactProfile() {
           <div className="flex items-center justify-between gap-4 flex-wrap mb-4">
             <div className="flex items-center gap-2">
               <DexBadge />
-              <h2 className="font-heading text-xl font-extrabold uppercase tracking-tight">Relationship Intelligence</h2>
+              <h2 className="text-sm font-medium">Relationship Intelligence</h2>
             </div>
             <button
               onClick={() => rescore.mutate()}
               disabled={rescore.isPending}
               data-testid="rescore-contact-btn"
-              className="flex items-center gap-2 border border-black px-4 py-2 text-sm font-semibold uppercase tracking-wider bg-brand-yellow hover:shadow-brutal-sm transition-all disabled:opacity-50"
+              className="flex items-center gap-2 border border-border px-4 py-2 text-sm font-medium bg-card transition-all disabled:opacity-50"
             >
               <Sparkle size={16} weight="bold" /> {rescore.isPending ? "Scoring…" : "Re-score"}
             </button>
@@ -258,7 +281,7 @@ export default function ContactProfile() {
             {(rel.signals || []).length > 0 && (
               <div className="flex flex-wrap gap-2 mt-3" data-testid="rel-signals">
                 {rel.signals.map((s, i) => (
-                  <span key={`sig-${i}-${s.slice(0, 20)}`} className="inline-block px-2 py-0.5 text-xs border border-black bg-white">{s}</span>
+                  <span key={`sig-${i}-${s.slice(0, 20)}`} className="inline-block px-2 py-0.5 rounded-md text-xs bg-muted text-muted-foreground">{s}</span>
                 ))}
               </div>
             )}
@@ -270,12 +293,12 @@ export default function ContactProfile() {
           may log; anyone with finance perm can view. */}
       <Section icon={ChatCircleDots} title="Recent Activity" count={(activities || []).length}>
         {canWriteActivity && (
-          <div className="border border-black bg-white p-3 mb-3 flex flex-col md:flex-row gap-2" data-testid="crm-activity-logger">
+          <div className="border border-border rounded-xl bg-card p-3 mb-3 flex flex-col md:flex-row gap-2" data-testid="crm-activity-logger">
             <select
               value={actKind}
               onChange={(e) => setActKind(e.target.value)}
               data-testid="crm-activity-kind"
-              className="border border-black bg-white px-3 py-2 text-sm font-mono focus:outline-none"
+              className="border border-border rounded-lg bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30"
             >
               {Object.entries(ACTIVITY_META).map(([k, m]) => (
                 <option key={k} value={k}>{m.label}</option>
@@ -287,13 +310,13 @@ export default function ContactProfile() {
               onKeyDown={(e) => { if (e.key === "Enter" && actText.trim()) logActivity.mutate(); }}
               placeholder="What happened? (e.g. 'Rang about Rs 8L invoice, promised payment by Friday')"
               data-testid="crm-activity-text"
-              className="flex-1 border border-black bg-white px-3 py-2 text-sm font-mono focus:outline-none focus:shadow-brutal-sm"
+              className="flex-1 border border-border rounded-lg bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30"
             />
             <button
               onClick={() => actText.trim() && logActivity.mutate()}
               disabled={!actText.trim() || logActivity.isPending}
               data-testid="crm-activity-save"
-              className="bg-brand-ink text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider border border-black hover:shadow-brutal-sm transition-all disabled:opacity-50"
+              className="bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm font-medium hover:bg-brand-700 transition-colors disabled:opacity-50"
             >
               {logActivity.isPending ? "Saving…" : "Log"}
             </button>
@@ -307,9 +330,9 @@ export default function ContactProfile() {
               const meta = ACTIVITY_META[a.kind] || ACTIVITY_META.other;
               const Icon = meta.icon;
               return (
-                <div key={a.id} data-testid={`crm-activity-${a.id}`} className="border border-black bg-white p-3">
+                <div key={a.id} data-testid={`crm-activity-${a.id}`} className="border border-border bg-white p-3">
                   <div className="flex items-start gap-2 mb-1">
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold uppercase tracking-wider ${meta.cls}`}>
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium ${meta.cls}`}>
                       <Icon size={12} weight="bold" /> {meta.label}
                     </span>
                     <span className="text-xs text-muted-foreground font-mono ml-auto flex items-center gap-1">
@@ -335,7 +358,7 @@ export default function ContactProfile() {
       <Section icon={FlowArrow} title="Workflows" count={workflows.length} hideWhenEmpty>
         <div className="space-y-2">
           {workflows.map((w) => (
-            <div key={w.id} data-testid={`crm-workflow-${w.id}`} className="border border-black bg-white p-3 flex items-center justify-between gap-2">
+            <div key={w.id} data-testid={`crm-workflow-${w.id}`} className="border border-border bg-white p-3 flex items-center justify-between gap-2">
               <div>
                 <p className="text-sm font-semibold">{w.title || "(untitled)"}</p>
                 <p className="text-xs text-muted-foreground font-mono">{w.type} · created {timeAgo(w.created_at)}</p>
@@ -348,7 +371,7 @@ export default function ContactProfile() {
 
       <Section icon={Receipt} title={isVendor ? "Purchase Bills" : "Sales Bills"} count={invoices.length} hideWhenEmpty>
         <Table head={["Number", "Amount", "Date", "Due", "Status"]} rows={invoices.map((inv) => (
-          <tr key={inv.id} data-testid={`profile-invoice-${inv.id}`} className="border-t border-black/10">
+          <tr key={inv.id} data-testid={`profile-invoice-${inv.id}`} className="border-t border-border">
             <td className="px-3 py-2 font-mono">{inv.number || "—"}</td>
             <td className="px-3 py-2 font-semibold">{money(inv.amount, inv.currency)}</td>
             <td className="px-3 py-2 font-mono text-xs">{inv.date || "—"}</td>
@@ -360,8 +383,8 @@ export default function ContactProfile() {
 
       <Section icon={CurrencyCircleDollar} title="Payments" count={payments.length} hideWhenEmpty>
         <Table head={["Direction", "Amount", "Method", "Reference", "Date"]} rows={payments.map((p) => (
-          <tr key={p.id} data-testid={`profile-payment-${p.id}`} className="border-t border-black/10">
-            <td className="px-3 py-2"><Chip value={p.direction === "in" ? "received" : "paid"} className={p.direction === "in" ? "bg-brand-blue text-white" : "bg-brand-yellow text-black"} /></td>
+          <tr key={p.id} data-testid={`profile-payment-${p.id}`} className="border-t border-border">
+            <td className="px-3 py-2"><Chip value={p.direction === "in" ? "received" : "paid"} className={p.direction === "in" ? "bg-success-50 text-success-800" : "bg-muted text-muted-foreground"} /></td>
             <td className="px-3 py-2 font-semibold">{money(p.amount, p.currency)}</td>
             <td className="px-3 py-2">{p.method || "—"}</td>
             <td className="px-3 py-2 font-mono text-xs">{p.reference || "—"}</td>
@@ -373,7 +396,7 @@ export default function ContactProfile() {
       {isVendor && (
         <Section icon={Truck} title="Pending Deliveries" count={pending_deliveries.length} hideWhenEmpty>
           <div className="space-y-2">{pending_deliveries.map((w) => (
-            <div key={w.id} className="border border-black bg-white p-3 flex items-center justify-between gap-2">
+            <div key={w.id} className="border border-border bg-white p-3 flex items-center justify-between gap-2">
               <span className="text-sm font-semibold">{w.title}</span><Chip value={w.stage} />
             </div>
           ))}</div>
@@ -383,7 +406,7 @@ export default function ContactProfile() {
       {isVendor && price_history.length > 0 && (
         <Section icon={TrendUp} title="Price History" count={price_history.length}>
           <Table head={["Item", "Rate", "Date"]} rows={price_history.map((h, i) => (
-            <tr key={`${h.item || "row"}-${h.date || ""}-${i}`} className="border-t border-black/10">
+            <tr key={`${h.item || "row"}-${h.date || ""}-${i}`} className="border-t border-border">
               <td className="px-3 py-2">{h.item}</td>
               <td className="px-3 py-2 font-semibold">{money(h.rate, cur)}</td>
               <td className="px-3 py-2 font-mono text-xs">{h.date || "—"}</td>
@@ -394,7 +417,7 @@ export default function ContactProfile() {
 
       <Section icon={CheckSquare} title="Follow-ups & Tasks" count={follow_ups.length} hideWhenEmpty>
         <div className="space-y-2">{follow_ups.map((t) => (
-          <div key={t.id} className="border border-black bg-white p-3 flex items-center justify-between gap-2">
+          <div key={t.id} className="border border-border bg-white p-3 flex items-center justify-between gap-2">
             <span className="text-sm">{t.title}</span>
             <div className="flex gap-1.5">{t.assignee_role && <Chip value={t.assignee_role} className="bg-white" />}<Chip value={t.status} /></div>
           </div>
@@ -403,7 +426,7 @@ export default function ContactProfile() {
 
       <Section icon={Warning} title="Complaints" count={complaints.length} hideWhenEmpty>
         <div className="space-y-2">{complaints.map((cp) => (
-          <div key={cp.id} data-testid={`profile-complaint-${cp.id}`} className="border border-black bg-white p-3">
+          <div key={cp.id} data-testid={`profile-complaint-${cp.id}`} className="border border-border bg-white p-3">
             <div className="flex items-center gap-2 mb-1"><Chip value={cp.severity} /><Chip value={cp.status} /></div>
             <p className="text-sm">{cp.text}</p>
           </div>
@@ -412,7 +435,7 @@ export default function ContactProfile() {
 
       <Section icon={Brain} title="Linked Decisions" count={decisions.length} hideWhenEmpty>
         <div className="space-y-2">{decisions.map((d) => (
-          <div key={d.id} className="border border-black bg-white p-3">
+          <div key={d.id} className="border border-border bg-white p-3">
             <div className="flex items-center gap-2 mb-1"><Chip value={d.status} />{d.dtype && <Chip value={d.dtype} className="bg-brand-blue text-white" />}</div>
             <p className="text-sm font-semibold">{d.title}</p>
             {d.summary && <p className="text-xs text-muted-foreground">{d.summary}</p>}

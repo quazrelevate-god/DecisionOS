@@ -32,7 +32,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
-  CalendarBlank, AddressBook, Sparkle, BookOpen, Gauge,
+  CalendarBlank, AddressBook, UsersThree, Sparkle, BookOpen, Gauge,
   Bell, GearSix, Translate, MoonStars, Sun, SignOut, X,
   MagnifyingGlass, ArrowRight,
 } from "@phosphor-icons/react";
@@ -115,12 +115,12 @@ function buildTiles({ user, t, counts, live }) {
       live: live.crm,
     },
     { key: "notifications", to: "/notifications", label: t("nav.notifications", "Notifications"), icon: Bell, size: "small", badge: counts.notifications },
-    // Team has no tile below lg. The roster now lives inside Ops as the member
-    // grid, with Access / Invite / Mark-absent on each member's card, so a
-    // second door to the same people would be the "nothing reachable from two
-    // places" rule (§8) broken on purpose. The /team route still resolves for
-    // anyone holding a link, and the desktop sidebar keeps its Team entry —
-    // that page is untouched and is still the fuller surface on a big screen.
+    // Team is a tile again. It was folded into Ops for a while and the
+    // management actions went with it; U7-09 redesigned /team as its own
+    // page (card grid + click-through profile) and that is where the roster
+    // and its actions live now. No `perm`: U7-09 opened Team to every user
+    // read-only, with the edit affordances gated inside the page.
+    { key: "team", to: "/team", label: t("nav.team", "Team"), icon: UsersThree, size: "small" },
     {
       key: "operating-score",
       to: "/operating-score",

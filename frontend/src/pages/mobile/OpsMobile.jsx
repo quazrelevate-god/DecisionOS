@@ -37,7 +37,7 @@ import { cn } from "@/lib/utils";
 import {
   Lightning, CurrencyCircleDollar, TrendUp, ChatCenteredDots,
 } from "@phosphor-icons/react";
-import { AccessSheet, InviteSheet, MemberCard, useTeamData } from "../../components/mobile";
+import { MemberCard, useTeamData } from "../../components/mobile";
 
 const CATS = [
   { key: "execution", label: "Execution", icon: Lightning },
@@ -46,7 +46,86 @@ const CATS = [
   { key: "responsiveness", label: "Response", icon: ChatCenteredDots },
 ];
 
+// The self view's four tracks. Company categories are scored 0-100 already;
+// these are derived so the same dial and the same bars can render both — a
+// person's screen should not be a different instrument from their owner's.
+const SELF_TRACKS = [
+  { key: "completion", label: "Completion", icon: Lightning,
+    read: (s) => (s?.actionable > 0 ? s.completion_rate : null) },
+  { key: "ontime", label: "On time", icon: ChatCenteredDots,
+    read: (s) => (s?.open > 0 ? Math.round(100 - (s.overdue / s.open) * 100) : s?.actionable > 0 ? 100 : null) },
+  { key: "closed", label: "Closed", icon: TrendUp,
+    read: (s) => (s?.actionable > 0 ? Math.round((s.completed / s.actionable) * 100) : null) },
+  { key: "load", label: "Load", icon: CurrencyCircleDollar,
+    // Open work as a share of everything assigned — how full the plate is.
+    read: (s) => (s?.actionable > 0 ? Math.round((s.open / s.actionable) * 100) : null) },
+];
+
 const roleLabel = (r) => (r ? String(r).replace(/^./, (c) => c.toUpperCase()) : "");
+
+/** The self view's sheet: my open work, my running workflows, where I rank. */
+function SelfSheet({ work, workflows, peer }) {
+  return (
+    <div className="pb-4" data-testid="ops-self-sheet">
+      {work.length === 0 ? (
+        <div data-empty-state="true" data-testid="ops-self-empty-state">
+          <div className="rounded-xl border border-dashed border-hairline px-5 py-10 text-center">
+            <p className="text-sm font-semibold">Nothing open right now</p>
+            <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
+              New work assigned to you shows up here.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <ul className="divide-y divide-hairline" data-testid="ops-self-work">
+          {work.map((w) => (
+            <li key={w.id} className="flex items-start gap-3 py-3">
+              <span
+                className={cn(
+                  "mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full",
+                  w.overdue ? "bg-danger-600" : "bg-muted-foreground/40"
+                )}
+                aria-hidden="true"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold leading-snug">{w.title}</p>
+                <p className="label-mono mt-1 truncate text-muted-foreground">
+                  {[w.status, w.due_label || w.due_date, w.overdue ? "Overdue" : null]
+                    .filter(Boolean).join(" · ")}
+                </p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {workflows.length > 0 && (
+        <>
+          <h3 className="mt-6 mb-2 font-heading text-base font-extrabold uppercase tracking-tight">
+            Running workflows
+          </h3>
+          <ul className="divide-y divide-hairline" data-testid="ops-self-workflows">
+            {workflows.map((f) => (
+              <li key={f.id} className="py-3">
+                <p className="text-sm font-semibold leading-snug">{f.title || f.name}</p>
+                <p className="label-mono mt-1 truncate text-muted-foreground">
+                  {[f.stage_label || f.stage, f.pipeline].filter(Boolean).join(" · ")}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      {peer?.my_rank_in_role != null && (
+        <p className="mt-6 rounded-xl border border-hairline bg-card px-4 py-3 text-[13px] text-muted-foreground">
+          You're <strong className="text-foreground">#{peer.my_rank_in_role}</strong> of{" "}
+          {peer.role_ranked_size} in {roleLabel(peer.role)}.
+        </p>
+      )}
+    </div>
+  );
+}
 
 // The three colour ramps this screen used to band by — a stroke ramp for the
 // arc, a 400-step text ramp for the hero, a 600-step one for the sheet — are
@@ -173,15 +252,11 @@ export default function OpsMobile() {
     return () => cancelAnimationFrame(id);
   }, [isLoading, data]);
 
-  // Team management, now that the roster lives on this screen rather than
-  // behind its own menu entry. Same hook the Team screen uses.
-  const {
-    members, absentIds, isOwner, canManageTeam, roleOptions,
-    refresh, toggleAbsent, getInviteLink,
-  } = useTeamData();
+  // The roster, read-only. Ops shows WHO and HOW THEY ARE DOING; changing a
+  // person is the Team page's job again, so this takes the members and the
+  // absence flags and none of the write helpers.
+  const { members, absentIds, canManageTeam } = useTeamData();
   const [card, setCard] = useState(null);       // member whose card is expanded
-  const [access, setAccess] = useState(null);   // { member } | { member: null }
-  const [invite, setInvite] = useState(null);   // invite link payload
 
   // The grid is the ROSTER, joined to the score data — not the score list.
   // /operating-score only returns people it has something to say about, so
@@ -198,6 +273,9 @@ export default function OpsMobile() {
       .sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
   }, [members, data]);
 
+  const myWork = data?.my_open_work || [];
+  const myFlows = data?.my_active_workflows || [];
+
   if (isLoading || !data) {
     return (
       // Same two strata as the real screen, so nothing jumps when data lands.
@@ -209,10 +287,48 @@ export default function OpsMobile() {
     );
   }
 
+  // Epic 7 opened /operating-score to every role and made the payload
+  // role-dependent: an owner gets { view:"owner", company, employees,
+  // my_snapshot }, everyone else gets { view:"self", self, my_open_work,
+  // my_active_workflows, peer_context } and NO `company` at all. This screen
+  // read `company.enough_data` unconditionally, so the first non-owner to open
+  // Ops on a phone would have crashed on undefined. Both shapes now resolve to
+  // the same four things the hero needs.
+  const isOwnerView = data.view === "owner" || Boolean(data.company);
   const { company, stats } = data;
-  // `stats` is {} on a tenant with no activity — every read below is guarded.
-  const enough = company.enough_data !== false;
-  const overall = enough ? company.overall : null;
+
+  // Self view has no company categories; its four KPIs come from the same
+  // stats block the desktop SelfView tiles read.
+  const selfScore = !isOwnerView && stats?.actionable > 0
+    ? Math.max(0, Math.min(100, Math.round(
+        stats.completion_rate - (stats.open > 0 ? (stats.overdue / stats.open) * 40 : 0)
+      )))
+    : null;
+
+  const enough = isOwnerView ? company.enough_data !== false : stats?.actionable > 0;
+  const overall = isOwnerView ? (enough ? company.overall : null) : selfScore;
+
+  // The four tracks beside the dial: company categories for an owner, and for
+  // everyone else the four numbers that actually describe their own week.
+  const tracks = isOwnerView
+    ? CATS.map((c) => ({ key: c.key, label: c.label, icon: c.icon, value: company.categories?.[c.key] }))
+    : SELF_TRACKS.map((c) => ({ ...c, value: c.read(stats) }));
+
+  // The counters under it. Owner: company totals. Self: the same four the
+  // desktop SelfView shows, so a person sees one set of numbers on both.
+  const counters = isOwnerView
+    ? [
+        { label: "Done", value: stats?.done || 0 },
+        { label: "Open", value: stats?.open || 0 },
+        { label: "Overdue", value: stats?.overdue || 0 },
+        { label: "Issues", value: stats?.open_complaints || 0 },
+      ]
+    : [
+        { label: "Done", value: stats?.completed || 0 },
+        { label: "Open", value: stats?.open || 0 },
+        { label: "Overdue", value: stats?.overdue || 0 },
+        { label: "Rate", value: `${stats?.completion_rate ?? 0}%` },
+      ];
 
   return (
     // One fixed layer holding both strata, so the document itself never
@@ -253,8 +369,8 @@ export default function OpsMobile() {
                 {/* The four categories in their own glass pane — the section
                     reads as one instrument rather than four loose rows. */}
                 <div className={cn("flex-1 min-w-0 space-y-1.5 rounded-2xl px-3.5 py-2", GLASS)}>
-                  {CATS.map((c, i) => (
-                    <CatTrack key={c.key} cat={c} value={company.categories?.[c.key]} armed={armed} index={i} />
+                  {tracks.map((c, i) => (
+                    <CatTrack key={c.key} cat={c} value={c.value} armed={armed} index={i} />
                   ))}
                 </div>
               </div>
@@ -264,10 +380,9 @@ export default function OpsMobile() {
                   grid below sums to, so they read as part of the instrument
                   panel, not as the first four rows of the roster. */}
               <div className="grid grid-cols-4 gap-2" data-testid="ops-stats">
-                <HeroCounter label="Done" value={stats?.done || 0} />
-                <HeroCounter label="Open" value={stats?.open || 0} />
-                <HeroCounter label="Overdue" value={stats?.overdue || 0} />
-                <HeroCounter label="Issues" value={stats?.open_complaints || 0} />
+                {counters.map((c) => (
+                  <HeroCounter key={c.label} label={c.label} value={c.value} />
+                ))}
               </div>
             </>
           ) : (
@@ -275,10 +390,12 @@ export default function OpsMobile() {
               <Gauge value={null} armed={armed} />
               <div className={cn("flex-1 min-w-0 rounded-2xl px-3.5 py-3", GLASS)}>
                 <p className="text-white font-heading text-base font-extrabold uppercase tracking-tight leading-tight">
-                  Still learning your business
+                  {isOwnerView ? "Still learning your business" : "No score yet"}
                 </p>
                 <p className="text-[13px] text-white/55 leading-relaxed mt-1.5">
-                  The score starts once there are ~3 actionable tasks or your first invoices.
+                  {isOwnerView
+                    ? "The score starts once there are ~3 actionable tasks or your first invoices."
+                    : "Close a task or two and your score kicks in."}
                 </p>
               </div>
             </div>
@@ -309,16 +426,22 @@ export default function OpsMobile() {
           </div>
 
           <div className="px-5 pt-3">
-            {/* The company counters used to open this sheet; they moved onto
-                the hero, where they sit with the score they summarise.
-                Adding a member moved to Settings — this screen reads the team,
-                it no longer creates one. */}
+            {/* Owner: the roster and how each person is executing. Everyone
+                else: their own open work and running workflows, which is what
+                Epic 7's self view surfaces and what a team member can act on.
+                Same sheet, same hero above it — only the list differs. */}
             <div className="flex items-baseline justify-between gap-3 mb-4">
-              <h2 className="font-heading text-lg font-extrabold uppercase tracking-tight">Teams &amp; executions</h2>
-              {people.length > 0 && (
-                <span className="label-mono text-muted-foreground shrink-0">{people.length}</span>
-              )}
+              <h2 className="font-heading text-lg font-extrabold uppercase tracking-tight">
+                {isOwnerView ? "Teams & executions" : "Your open work"}
+              </h2>
+              <span className="label-mono text-muted-foreground shrink-0">
+                {isOwnerView ? (people.length || null) : (myWork.length || null)}
+              </span>
             </div>
+
+            {!isOwnerView && (
+              <SelfSheet work={myWork} workflows={myFlows} peer={data.peer_context} />
+            )}
 
             {/* The list became a grid: two per row, name on its own line, role
                 under it. A grid of equal boxes is scannable in a way the old
@@ -326,7 +449,7 @@ export default function OpsMobile() {
                 that row had five competing values and truncated the middle one
                 on every phone. The score keeps a corner because it is the one
                 number this screen is about. */}
-            {people.length === 0 ? (
+            {!isOwnerView ? null : people.length === 0 ? (
               <div className="pb-8" data-empty-state="true" data-testid="ops-employees-empty-state">
                 <div className="rounded-xl border border-dashed border-hairline px-5 py-10 text-center">
                   <p className="text-sm font-semibold">No one on the team yet</p>
@@ -379,33 +502,14 @@ export default function OpsMobile() {
         </div>
       </div>
 
-      {/* The expanded card, and the three management sheets its pills open —
-          the same components and the same requests the Team screen uses. */}
+      {/* The expanded card. No management sheets behind it any more — the
+          pills that opened them went back to the Team page. */}
       <MemberCard
         member={card}
         open={!!card}
         onClose={() => setCard(null)}
         isAbsent={!!card && absentIds.has(card.id)}
-        canEditAccess={!!card && canManageTeam && (card.role !== "owner" || isOwner)}
-        canInvite={!!card && canManageTeam && card.role !== "owner" && !!card.phone}
-        canMarkAbsent={!!card && canManageTeam && card.role !== "owner"}
-        onAccess={(m) => { setCard(null); setAccess({ member: m }); }}
-        onInvite={async (m) => {
-          const info = await getInviteLink(m);
-          if (info) { setCard(null); setInvite(info); }
-        }}
-        onToggleAbsent={async (m) => { await toggleAbsent(m); setCard(null); }}
       />
-      <AccessSheet
-        open={!!access}
-        onClose={() => setAccess(null)}
-        initial={access?.member || null}
-        roleOptions={roleOptions}
-        members={members}
-        onSaved={refresh}
-        onInvite={setInvite}
-      />
-      <InviteSheet info={invite} onClose={() => setInvite(null)} />
     </div>
   );
 }

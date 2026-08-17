@@ -1,31 +1,20 @@
 /**
  * The expanded member card — what opens when a box in the Ops grid is tapped.
  *
- * A floating card over a scrim, with the three management pills sitting BELOW
- * it as separate floating controls rather than inside its footer. That
- * separation is deliberate and is the layout that was asked for: the card is
- * the read (how this person is doing), the pills are the write (change their
- * access, send them a link, mark them out today). Keeping the write actions
- * physically outside the card stops a tap aimed at the summary landing on a
- * permissions change.
+ * A READ, and only a read. It carried three management pills — Access, Invite,
+ * Mark absent — for as long as the roster was folded into Ops and there was
+ * nowhere else for them to live. U7-09 gave /team its own page back (card grid,
+ * click-through profile), team management went with it, and this card lost the
+ * writes: one door to changing a person, and it is the Team page.
  *
- * CONTENT. This is the /work-coach payload — the same data the desktop coach
- * page renders — minus four tiles by request: proof uploads, plans used,
- * photos, voice updates. What remains is the four counters that describe
- * throughput and the AI review, which is the part worth reading on a phone.
- *
- * THE PILLS. Access, Invite and Mark absent do exactly what the desktop Team
- * page's three row buttons do, because they call the same helpers in
- * TeamActions — PATCH /users/:id, POST /users/:id/invite, POST /attendance.
- * Where desktop hides a button that doesn't apply, this disables it instead:
- * three pills that keep their positions read as a stable control strip, and a
- * greyed pill says "not for this person" where a missing one says nothing.
+ * CONTENT. The /work-coach payload — the same data the desktop coach page
+ * renders — minus four tiles by request: proof uploads, plans used, photos,
+ * voice updates. What remains is the four counters that describe throughput and
+ * the AI review, which is the part worth reading on a phone.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  X, Sparkle, TrendUp, Lightbulb, CheckCircle, PencilSimple, LinkSimple, UserMinus, Trophy,
-} from "@phosphor-icons/react";
+import { X, Sparkle, TrendUp, Lightbulb, CheckCircle, Trophy } from "@phosphor-icons/react";
 import api from "../../lib/api";
 import { cn } from "@/lib/utils";
 
@@ -48,35 +37,11 @@ function Counter({ label, value, suffix = "", accent = "" }) {
   );
 }
 
-function Pill({ icon: Icon, label, onClick, disabled, testid, tone = "default" }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      data-testid={testid}
-      className={cn(
-        // rounded-2xl, not rounded-full: the same corner as the card above
-        // them, so the three read as siblings of it rather than as a
-        // separate tab bar that happened to land underneath.
-        "flex flex-1 items-center justify-center gap-1.5 rounded-2xl px-3 text-[13px] font-semibold shadow-lg transition-colors",
-        "disabled:opacity-40 disabled:shadow-none",
-        tone === "primary"
-          ? "bg-primary text-primary-foreground"
-          : "border border-hairline bg-card text-foreground"
-      )}
-      style={{ minHeight: "var(--control-h-md)" }}
-    >
-      <Icon size={16} weight="bold" /> {label}
-    </button>
-  );
-}
-
-export function MemberCard({
-  member, open, onClose,
-  onAccess, onInvite, onToggleAbsent,
-  isAbsent = false, canEditAccess = false, canInvite = false, canMarkAbsent = false,
-}) {
+// The Access / Invite / Mark-absent pills lived here. They moved back to the
+// Team page with the rest of team management (U7-09 gave /team its own card
+// grid and click-through profile), so this card is a READ again: how this
+// person is doing, opened from the Ops grid, with no writes attached.
+export function MemberCard({ member, open, onClose, isAbsent = false }) {
   const qc = useQueryClient();
   const userId = member?.id;
 
@@ -110,7 +75,7 @@ export function MemberCard({
         data-testid="member-card-scrim"
       />
 
-      <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 flex flex-col gap-3">
+      <div className="absolute inset-x-4 top-1/2 -translate-y-1/2">
         {/* ── the card ── */}
         <div
           className="rounded-2xl border border-hairline bg-background shadow-2xl overflow-hidden"
@@ -226,27 +191,6 @@ export function MemberCard({
           </div>
         </div>
 
-        {/* ── the three pills, floating below the card and separated from it ── */}
-        <div className="flex items-center gap-2" data-testid="member-card-pills">
-          <Pill
-            icon={PencilSimple} label="Access" tone="primary"
-            testid="member-pill-access"
-            disabled={!canEditAccess}
-            onClick={() => onAccess?.(member)}
-          />
-          <Pill
-            icon={LinkSimple} label="Invite"
-            testid="member-pill-invite"
-            disabled={!canInvite}
-            onClick={() => onInvite?.(member)}
-          />
-          <Pill
-            icon={UserMinus} label={isAbsent ? "Present" : "Absent"}
-            testid="member-pill-absent"
-            disabled={!canMarkAbsent}
-            onClick={() => onToggleAbsent?.(member)}
-          />
-        </div>
       </div>
     </div>
   );

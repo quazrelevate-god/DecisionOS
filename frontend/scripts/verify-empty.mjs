@@ -144,8 +144,12 @@ if (await act.count()) {
   check('the primary action clears 44px', box.height >= 44, `${Math.round(box.height)}px`);
   await act.click();
   await page.waitForTimeout(900);
+  // MPWA-14: the dos:open-dex event used to raise a sheet; Dex is a route now,
+  // so "opens Dex" means landing on it with a composer ready.
   check('it opens Dex rather than doing nothing',
-    (await page.locator('[data-testid="dex-sheet"]').count()) === 1);
+    new URL(page.url()).pathname === '/brain'
+      && (await page.locator('[data-testid="dex-composer"]').count()) === 1,
+    new URL(page.url()).pathname);
 }
 
 // And on a screen where Dex cannot help, the action must not pretend it can.

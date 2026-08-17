@@ -43,8 +43,15 @@ check('theme toggle is off the mobile header',
 check('language switcher is off the mobile header',
   (await page.locator('header [data-testid="language-switcher"]:visible').count()) === 0);
 
-// the dock
-const dockItems = await page.locator('[data-testid^="dock-"]:not([data-testid$="-badge"])').all();
+// the dock. MPWA-14 added the raised Dex button to the same testid family, so
+// the DESTINATION slots are counted separately from it — "four slots plus Dex,
+// permanently" is still the rule, Dex is just inside the pill now. Dex is also
+// the one dock control with no visible label: it is an icon button carrying an
+// aria-label, exactly as the FAB it replaced was, and the label loop below
+// covers the four destinations that do make the §3.5 promise.
+const dockItems = await page.locator(
+  '[data-testid^="dock-"]:not([data-testid$="-badge"]):not([data-testid="dock-dex"])'
+).all();
 check('dock has exactly 4 slots', dockItems.length === 4,
   (await Promise.all(dockItems.map((d) => d.getAttribute('data-testid')))).join(', '));
 for (const d of dockItems) {
@@ -65,19 +72,20 @@ check('dock floats off the bottom edge', vh - (pill.y + pill.height) >= 12,
 check('dock floats off the left edge', pill.x >= 12, `${Math.round(pill.x)}px`);
 check('dock is 64px tall', Math.round(pill.height) === 64, `${Math.round(pill.height)}px`);
 
-// Dex FAB — separate circle, bottom-right, same baseline, 12px+ from the pill
-const fab = await page.locator('[data-testid="dex-fab"]').boundingBox();
-check('Dex FAB is 64px', Math.round(fab.width) === 64 && Math.round(fab.height) === 64,
-  `${Math.round(fab.width)}x${Math.round(fab.height)}`);
-check('Dex FAB is bottom-right', vw - (fab.x + fab.width) <= 20 && fab.x > vw / 2,
-  `${Math.round(vw - (fab.x + fab.width))}px from right`);
-check('Dex FAB shares the dock baseline',
-  Math.abs((fab.y + fab.height) - (pill.y + pill.height)) <= 2,
-  `fab bottom ${Math.round(fab.y + fab.height)} vs pill bottom ${Math.round(pill.y + pill.height)}`);
-check('Dex FAB clears the pill by >= 12px', fab.x - (pill.x + pill.width) >= 12,
-  `${Math.round(fab.x - (pill.x + pill.width))}px`);
-check('Dex FAB is labelled "Dex" for screen readers',
-  (await page.locator('[data-testid="dex-fab"]').getAttribute('aria-label')) === 'Dex');
+// MPWA-14: Dex is the dock's raised centre, not a separate bottom-right circle.
+// The geometry checks moved with it — centred rather than right-aligned, raised
+// above the pill rather than sharing its baseline. Full coverage in verify-dex.
+check('the separate Dex FAB is retired', (await page.locator('[data-testid="dex-fab"]').count()) === 0);
+const dexBtn = await page.locator('[data-testid="dock-dex"]').boundingBox();
+check('Dex is centred in the pill',
+  Math.abs((dexBtn.x + dexBtn.width / 2) - (pill.x + pill.width / 2)) <= 2,
+  `dex mid ${Math.round(dexBtn.x + dexBtn.width / 2)} vs pill mid ${Math.round(pill.x + pill.width / 2)}`);
+check('Dex is raised above the pill', dexBtn.y < pill.y,
+  `${Math.round(pill.y - dexBtn.y)}px proud`);
+check('Dex clears the 56px touch floor', dexBtn.width >= 56 && dexBtn.height >= 56,
+  `${Math.round(dexBtn.width)}x${Math.round(dexBtn.height)}`);
+check('Dex is labelled "Dex" for screen readers',
+  (await page.locator('[data-testid="dock-dex"]').getAttribute('aria-label')) === 'Dex');
 
 // active state uses three cues: fill weight + colour + label
 const active = page.locator('[data-testid="dock-desk"]');
@@ -250,12 +258,14 @@ if (tiles > 0) {
 }
 
 // --------------------------------------------- MPWA-12c · the promoted slot
-// §2.1: "The dock becomes Desk · Work · Money · More + Dex FAB."
+// §2.1 as amended by MPWA-14: Desk · Work · [Dex] · Money · More, with Dex
+// as the raised centre rather than a separate circle.
 await page.goto(`${BASE}/inbox`, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('[data-testid="floating-dock"]', { timeout: 8000 });
 await page.waitForTimeout(400);
-const dockLabels = await page.locator('[data-testid^="dock-"]:not([data-testid$="-badge"])')
-  .evaluateAll((els) => els.map((e) => e.innerText.trim()));
+const dockLabels = await page.locator(
+  '[data-testid^="dock-"]:not([data-testid$="-badge"]):not([data-testid="dock-dex"])'
+).evaluateAll((els) => els.map((e) => e.innerText.trim()));
 check('dock reads Desk · Work · Money · More',
   dockLabels.join(' · ') === 'Desk · Work · Money · More', dockLabels.join(' · '));
 check('Brief no longer occupies a dock slot',
@@ -276,40 +286,24 @@ check('/brief lands on the Desk\'s morning scope',
 check('the Desk slot is the active one after the redirect',
   (await page.locator('[data-testid="dock-desk"]').getAttribute('aria-current')) === 'page');
 
-// Dex FAB opens the sheet, which hosts the EXISTING capture bar
+// MPWA-14: the centre button navigates instead of opening a sheet. The sheet
+// offered speak / type / attach in front of the screen that offers exactly
+// those three; /brain is now a conversation and the sheet is retired. The
+// screen's own contract is verified in verify-dex.
 await page.goto(`${BASE}/inbox`, { waitUntil: 'domcontentloaded' });
-await page.waitForSelector('[data-testid="dex-fab"]', { timeout: 8000 });
+await page.waitForSelector('[data-testid="dock-dex"]', { timeout: 8000 });
 await page.waitForTimeout(300);
-await page.locator('[data-testid="dex-fab"]').click();
-await page.waitForSelector('[data-testid="dex-sheet"]', { timeout: 5000 });
-await page.waitForTimeout(400);
-check('Dex FAB opens DexSheet', await page.locator('[data-testid="dex-sheet"]').isVisible());
-// MPWA-12e replaced the sheet's presentation (§5.6: it "looks like a support
-// form, and Dex is the product's personality") while keeping the behaviour —
-// hooks/useDexCapture holds the recorder and the same Sprint 5 endpoints, and
-// DexCaptureBar still renders it verbatim on desktop /brain.
-check('DexSheet opens on the idle state',
-  (await page.locator('[data-testid="dex-sheet-stage"]').getAttribute('data-stage')) === 'idle');
-check('DexSheet offers speak, type and attach',
-  (await page.locator('[data-testid="dex-mic-record"]').isVisible())
-    && (await page.locator('[data-testid="dex-text-input"]').isVisible())
-    && (await page.locator('[data-testid="dex-file-upload"]').isVisible()));
-check('the old capture-bar form is gone from the sheet',
-  (await page.locator('[data-testid="dex-sheet"] [data-testid="dex-capture-bar"]').count()) === 0);
-check('DexSheet offers "Open Dex"',
-  await page.locator('[data-testid="dex-sheet-open-full"]').isVisible());
-const sendBox = await page.locator('[data-testid="dex-send"]').boundingBox();
-check('Dex send button is not clipped at the right edge',
-  sendBox.x + sendBox.width <= vw - 4,
-  `right edge at ${Math.round(sendBox.x + sendBox.width)} of ${vw}`);
-const micBox = await page.locator('[data-testid="dex-mic-record"]').boundingBox();
-check('Dex mic is >= 56px', micBox.height >= 56, `${Math.round(micBox.height)}px`);
-check('Dex mic is the sheet\'s hero, not one control in a row', micBox.height >= 64,
-  `${Math.round(micBox.width)}x${Math.round(micBox.height)}`);
-await page.locator('[data-testid="dex-sheet-open-full"]').click();
-await page.waitForTimeout(700);
-check('"Open Dex" navigates to /brain', new URL(page.url()).pathname === '/brain',
+await page.locator('[data-testid="dock-dex"]').click();
+await page.waitForTimeout(900);
+check('the dock\'s Dex button navigates to /brain', new URL(page.url()).pathname === '/brain',
   new URL(page.url()).pathname);
+check('no Dex sheet is opened on the way',
+  (await page.locator('[data-testid="dex-sheet"]').count()) === 0);
+await page.waitForSelector('[data-testid="dex-mobile"]', { timeout: 10000 });
+check('Dex opens as a conversation, with one composer',
+  (await page.locator('[data-testid="dex-composer"]').count()) === 1);
+check('the dock is still reachable over Dex',
+  (await page.locator('[data-testid="floating-dock"]').count()) === 1);
 await ctx.close();
 
 // ----------------------------------------------------------------- desktop
@@ -328,8 +322,8 @@ check('desktop keeps its theme toggle',
   await dpage.locator('[data-testid="theme-toggle"]').isVisible());
 check('dock is hidden on desktop',
   !(await dpage.locator('[data-testid="floating-dock"]').isVisible()));
-check('Dex FAB is hidden on desktop',
-  !(await dpage.locator('[data-testid="dex-fab"]').isVisible()));
+check('the mobile Dex screen is hidden on desktop',
+  !(await dpage.locator('[data-testid="dex-mobile"]').isVisible().catch(() => false)));
 const sidebarLinks = await dpage.locator('aside a[data-testid^="nav-"]').count();
 check('desktop sidebar nav intact', sidebarLinks >= 7, `${sidebarLinks} entries`);
 await dctx.close();

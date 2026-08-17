@@ -576,6 +576,32 @@
 .scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
 .scrollbar-none::-webkit-scrollbar { width: 0; height: 0; display: none; }
 
+/* Dex (/brain, mobile). Three settling animations, none of them looping
+   forever except the orb ring, which breathes slowly enough to read as alive
+   rather than as a spinner. Plain CSS, not @layer utilities — the JIT
+   tree-shakes custom rules out of that layer. */
+@keyframes dexEnter {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: none; }
+}
+.dex-enter { animation: dexEnter 520ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+@keyframes dexRotateIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: none; }
+}
+.dex-rotate-in { display: inline-block; animation: dexRotateIn 320ms ease-out both; }
+
+@keyframes dexOrbRing {
+    0%, 100% { transform: scale(1);    opacity: 0.7; }
+    50%      { transform: scale(1.07); opacity: 1; }
+}
+.dex-orb-ring { animation: dexOrbRing 3.4s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+    .dex-enter, .dex-rotate-in, .dex-orb-ring { animation: none; }
+}
+
 @keyframes pulse-ring {
     0% { box-shadow: 0 0 0 0 hsl(var(--destructive) / .5); }
     70% { box-shadow: 0 0 0 22px hsl(var(--destructive) / 0); }

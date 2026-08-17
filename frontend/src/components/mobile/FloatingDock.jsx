@@ -18,10 +18,15 @@
 //
 // Active state carries three cues together (§3.5): regular -> fill weight,
 // colour change, AND the label. Never colour alone, never an unlabelled icon.
+//
+// MPWA-14: Dex moves from a separate bottom-right circle INTO the dock, as a
+// raised centre button, and the four destinations split two-and-two around it.
+// The mic became a Sparkle: the button no longer starts a recording, it opens
+// Dex, and a microphone promised one input for a screen that takes four.
 import * as React from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Tray, Wallet, DotsThree, Briefcase } from "@phosphor-icons/react";
+import { Tray, Wallet, DotsThree, Briefcase, Sparkle } from "@phosphor-icons/react";
 import { hasPerm } from "@/lib/perms";
 import { cn } from "@/lib/utils";
 
@@ -94,6 +99,7 @@ function DockItem({ to, label, icon: Icon, testid, active, onClick }) {
 export function FloatingDock({ user, onMore, moreOpen = false, moreBadge = 0 }) {
   const { t } = useTranslation();
   const location = useLocation();
+  const navigate = useNavigate();
   const slots = React.useMemo(() => dockSlots(user, t), [user, t]);
 
   const isActive = (to) =>
@@ -101,41 +107,83 @@ export function FloatingDock({ user, onMore, moreOpen = false, moreBadge = 0 }) 
       ? location.pathname === "/inbox" || location.pathname === "/"
       : location.pathname.startsWith(to);
 
+  const more = (
+    <div className="relative">
+      <DockItem
+        to="#more"
+        label={t("bottomnav.more", "More")}
+        icon={DotsThree}
+        testid="dock-more"
+        active={moreOpen}
+        onClick={onMore}
+      />
+      {moreBadge > 0 && (
+        <span
+          data-testid="dock-more-badge"
+          aria-label={`${moreBadge} items need you`}
+          className="pointer-events-none absolute right-0 top-0 grid h-5 min-w-5 place-items-center rounded-pill bg-danger-600 px-1 text-[length:var(--text-label)] font-bold leading-none text-white"
+        >
+          {Math.min(9, moreBadge)}
+        </span>
+      )}
+    </div>
+  );
+
+  // Two destinations, Dex, then the rest. With Money permission that is a
+  // symmetrical 2 | Dex | 2; without it the right side carries only More and
+  // the pill stays centred rather than pretending to a balance it hasn't got.
+  const left = slots.slice(0, 2);
+  const right = slots.slice(2);
+
   return (
     <nav
       // lg:hidden — desktop keeps its sidebar, untouched (§8).
-      className="lg:hidden fixed left-4 z-[10000] bottom-safe-4"
+      // inset-x-4 (was left-4): the pill now spans the width because Dex sits
+      // in the middle of it, where the separate FAB used to sit off to the right.
+      className="lg:hidden fixed inset-x-4 z-[10000] bottom-safe-4 flex justify-center"
       data-testid="floating-dock"
       aria-label={t("nav.primary", "Primary")}
     >
       <div
         className={cn(
-          "flex h-16 items-center gap-1 rounded-pill border border-border bg-card px-2",
+          "flex h-16 w-full max-w-md items-center justify-between gap-1 rounded-pill border border-border bg-card px-3",
           "shadow-brutal-lg backdrop-blur-xl",
           "max-[359px]:h-[3.25rem]"
         )}
       >
-        {slots.map((s) => (
-          <DockItem key={s.to} {...s} active={isActive(s.to)} />
-        ))}
-        <div className="relative">
-          <DockItem
-            to="#more"
-            label={t("bottomnav.more", "More")}
-            icon={DotsThree}
-            testid="dock-more"
-            active={moreOpen}
-            onClick={onMore}
-          />
-          {moreBadge > 0 && (
-            <span
-              data-testid="dock-more-badge"
-              aria-label={`${moreBadge} items need you`}
-              className="pointer-events-none absolute right-0 top-0 grid h-5 min-w-5 place-items-center rounded-pill bg-danger-600 px-1 text-[length:var(--text-label)] font-bold leading-none text-white"
-            >
-              {Math.min(9, moreBadge)}
-            </span>
+        <div className="flex flex-1 items-center justify-around gap-1">
+          {left.map((s) => (
+            <DockItem key={s.to} {...s} active={isActive(s.to)} />
+          ))}
+        </div>
+
+        {/* Dex — the centrepiece.
+            Raised out of the pill and ringed in the page background so the pill
+            reads as notched around it rather than as a button sitting on top.
+            It NAVIGATES; it does not open a sheet. The sheet it used to open
+            was a menu in front of the screen that menu described. */}
+        <button
+          type="button"
+          onClick={() => navigate("/brain")}
+          data-testid="dock-dex"
+          aria-label={t("nav.dex", "Dex")}
+          aria-current={location.pathname.startsWith("/brain") ? "page" : undefined}
+          className={cn(
+            "relative -mt-7 grid h-[3.75rem] w-[3.75rem] shrink-0 place-items-center rounded-full",
+            "bg-primary text-primary-foreground ring-4 ring-background",
+            "shadow-brutal-lg transition-transform active:scale-95",
+            "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring",
+            "max-[359px]:h-14 max-[359px]:w-14"
           )}
+        >
+          <Sparkle size={26} weight="fill" aria-hidden="true" />
+        </button>
+
+        <div className="flex flex-1 items-center justify-around gap-1">
+          {right.map((s) => (
+            <DockItem key={s.to} {...s} active={isActive(s.to)} />
+          ))}
+          {more}
         </div>
       </div>
     </nav>

@@ -34,8 +34,6 @@ import { WelcomeOverlay } from "./WelcomeOverlay";
 // edge-to-edge tab bar and the hamburger drawer are both gone below lg.
 import { FloatingDock } from "./mobile/FloatingDock";
 import { AllAppsPanel } from "./mobile/AllAppsPanel";
-import { DexFab } from "./mobile/DexFab";
-import { DexSheet } from "./mobile/DexSheet";
 import { BottomSheet } from "./mobile/BottomSheet";
 import { InstallPrompt } from "./mobile/InstallPrompt";
 
@@ -122,19 +120,20 @@ export default function Layout({ children }) {
   const [profileOpen, setProfileOpen] = useState(false);
   // MPWA-03 mobile navigation state.
   const [allAppsOpen, setAllAppsOpen] = useState(false);
-  const [dexOpen, setDexOpen] = useState(false);
 
   // MPWA-12f: an empty state whose primary action is "tell Dex to start one" has
   // to be able to open the sheet, and the sheet's state lives here. A window
   // event rather than threading a callback through every page: the alternative is
   // a prop on Layout -> page -> list -> EmptyState, four levels deep, for one
   // button. 12i uses the same event across the rest of the empty states.
+  // MPWA-14: the event used to open the Dex sheet. The sheet is gone, so it
+  // now goes where the sheet's own "Open Dex" button went. Every empty state
+  // that dispatches this keeps working, unchanged.
   useEffect(() => {
-    const open = () => setDexOpen(true);
+    const open = () => navigate("/brain");
     window.addEventListener("dos:open-dex", open);
     return () => window.removeEventListener("dos:open-dex", open);
-  }, []);
-  const [dexRecording, setDexRecording] = useState({ on: false, secs: 0 });
+  }, [navigate]);
   const [langOpen, setLangOpen] = useState(false);
   const { data: notif } = useQuery({ queryKey: ["notifications"], queryFn: () => api.get("/notifications").then((r) => r.data), refetchInterval: 30000 });
   const unread = notif?.unread || 0;
@@ -368,19 +367,17 @@ export default function Layout({ children }) {
 
       {/* MPWA-03 — mobile navigation.
           A floating pill detached from the edges (lists scroll *under* it,
-          which is what `pb-dock` on main pays for), plus Dex as a separate
-          64px circle on the same baseline. Desktop keeps its sidebar. */}
+          which is what `pb-dock` on main pays for). MPWA-14: Dex is no longer a
+          separate circle beside the pill — it is the pill's raised centre, and
+          it navigates to /brain. The DexFab and the DexSheet it opened are both
+          retired: the sheet was a menu offering speak / type / attach in front
+          of the screen that already offers exactly those three.
+          Desktop keeps its sidebar. */}
       <FloatingDock
         user={user}
         onMore={() => setAllAppsOpen(true)}
         moreOpen={allAppsOpen}
         moreBadge={captureCount}
-      />
-      <DexFab
-        onOpen={() => setDexOpen(true)}
-        recording={dexRecording.on}
-        seconds={dexRecording.secs}
-        onStop={() => setDexOpen(true)}
       />
       <AllAppsPanel
         open={allAppsOpen}
@@ -394,12 +391,6 @@ export default function Layout({ children }) {
       />
       {/* MPWA-05: third session, dismissible, above the dock (§8). */}
       <InstallPrompt />
-      <DexSheet
-        open={dexOpen}
-        onClose={() => setDexOpen(false)}
-        onRecordingChange={(on, secs) => setDexRecording({ on, secs })}
-        onCaptured={() => qc.invalidateQueries({ queryKey: ["captures-pending"] })}
-      />
       {/* The Language tile opens the existing switcher in a thumb-reachable
           sheet rather than duplicating the language list. */}
       <BottomSheet

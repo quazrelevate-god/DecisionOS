@@ -9,6 +9,7 @@ import { MicDictateButton } from "../components/MicDictateButton";
 // Epic 2 Sprint 5 (E2-33): capture bar moves here from Desk. Single AI home.
 import { DexCaptureBar } from "../components/DexCaptureBar";
 import { useIsMobile } from "../hooks/useIsMobile";
+import DexMobile from "./mobile/DexMobile";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 function SearchPanel() {
@@ -156,11 +157,9 @@ export default function Brain() {
   // MPWA-11: mobile gets a wrapping pill tab strip and a thumb-sized capture
   // bar. Desktop renders unchanged below.
   const isMobile = useIsMobile();
-  const TABS = [
-    { key: "ask", label: t("brain.ask"), icon: ChatCircleText },
-    { key: "search", label: t("brain.search"), icon: MagnifyingGlass },
-    { key: "documents", label: "Documents", icon: Books },
-  ];
+  // (The mobile tab strip that read from a TABS array lived here. Desktop
+  // builds its three buttons inline, so nothing referenced it once the mobile
+  // branch became a conversation.)
 
   // Epic 2 Sprint 5 (E2-35): poll for captures Dex is still structuring.
   // Backend counts capture_drafts with status in {processing/queued/
@@ -180,52 +179,9 @@ export default function Brain() {
   });
   const inflightN = inflight?.count || 0;
 
-  if (isMobile) {
-    return (
-      <div data-testid="brain-mobile">
-        {/* Keep the Dex name — §8: never surface "Brain" or "Company Brain"
-            in mobile copy, even though the route stays /brain. */}
-        <h1 className="font-heading text-2xl font-bold tracking-tight">{t("brain.title")}</h1>
-        <p className="mt-1 text-[0.9375rem] text-muted-foreground">{t("brain.tabs_hint")}</p>
-
-        {/* The desktop strip is three uppercase buttons in a `w-fit` row, which
-            overflowed 390px. Pills that wrap, sentence case, no mono. */}
-        <div className="mt-3 flex flex-wrap gap-touch-gap" data-testid="brain-tabs">
-          {TABS.map((tb) => (
-            <button
-              key={tb.key}
-              type="button"
-              onClick={() => setTab(tb.key)}
-              data-testid={`brain-tab-${tb.key}`}
-              aria-pressed={tab === tb.key}
-              className={`flex items-center gap-1.5 rounded-pill border px-3.5 text-sm font-semibold transition-colors ${
-                tab === tb.key
-                  ? "border-transparent bg-primary text-primary-foreground"
-                  : "border-border bg-card hover:bg-accent"
-              }`}
-              style={{ minHeight: "var(--control-h-sm)" }}
-            >
-              <tb.icon size={18} weight={tab === tb.key ? "fill" : "regular"} aria-hidden="true" />
-              {tb.label}
-            </button>
-          ))}
-        </div>
-
-        {/* size="lg": mic 56px, input 48px, Send on its own row so it is never
-            clipped at the right edge (§8 MPWA-11). */}
-        <div className="mt-4">
-          <DexCaptureBar
-            size="lg"
-            onCaptured={() => qc.invalidateQueries({ queryKey: ["voice-notes"] })}
-          />
-        </div>
-
-        <div className="mt-4">
-          {tab === "ask" ? <AskPanel /> : tab === "search" ? <SearchPanel /> : <DocumentsPanel />}
-        </div>
-      </div>
-    );
-  }
+  // MPWA-14: the mobile screen is a conversation now — see DexMobile for what
+  // it replaced and where the three tabs went. Desktop below is untouched.
+  if (isMobile) return <DexMobile />;
 
   // Epic 2 Sprint 5 (E2-32): 'Company Brain' becomes 'Dex' -- single AI
   // persona. Founder ask 2026-08-14. Route stays /brain for bookmark

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import api from "../lib/api";
@@ -6,6 +6,7 @@ import { PageHeader } from "../components/common";
 import {
   Gauge, Lightning, CurrencyCircleDollar, TrendUp, ChatCenteredDots, Trophy,
   Sparkle, CaretRight, Camera, ClipboardText, Check, Warning, ArrowRight,
+  Info, CaretDown, CaretUp, Microphone, Receipt,
 } from "@phosphor-icons/react";
 
 // Epic 7 Sprint 1 Phase A -- role-aware dispatcher.
@@ -15,11 +16,27 @@ import {
 // Founder ask 2026-08-17: 'if the team person login and go the ops it have to
 // show the individuals person metrics'.
 
+// U7-01.16: each category carries its formula + weight so a (i) tooltip
+// can explain WHAT the number measures without the founder digging into
+// backend code. Weights match _score_execution / _score_sales / inline
+// finance + responsiveness in server.py (35/25/20/20).
 const CATS = [
-  { key: "execution", label: "Execution", icon: Lightning, color: "bg-brand-blue" },
-  { key: "finance", label: "Finance", icon: CurrencyCircleDollar, color: "bg-green-600" },
-  { key: "sales", label: "Sales", icon: TrendUp, color: "bg-brand-yellow" },
-  { key: "responsiveness", label: "Responsiveness", icon: ChatCenteredDots, color: "bg-purple-600" },
+  { key: "execution", label: "Execution", icon: Lightning, color: "bg-brand-blue",
+    weight: 35,
+    formula: "(tasks done ÷ total actionable) × 100  −  (overdue ÷ open) × 40",
+    plain: "How much of what you started is finished on time." },
+  { key: "finance", label: "Finance", icon: CurrencyCircleDollar, color: "bg-green-600",
+    weight: 25,
+    formula: "(paid ÷ billed) × 100  −  overdue invoices × 5",
+    plain: "How well cash is coming in vs. how much is stuck." },
+  { key: "sales", label: "Sales", icon: TrendUp, color: "bg-brand-yellow",
+    weight: 20,
+    formula: "approved decisions ÷ total decisions × 100",
+    plain: "Rate at which raised decisions get a green light." },
+  { key: "responsiveness", label: "Responsiveness", icon: ChatCenteredDots, color: "bg-purple-600",
+    weight: 20,
+    formula: "100  −  (open complaints × 12)  −  (overdue tasks × 3)",
+    plain: "How fast the team is closing loops -- complaints + missed dates." },
 ];
 
 const scoreColor = (v) =>
@@ -34,9 +51,11 @@ export default function OperatingScore() {
     queryFn: () => api.get("/operating-score").then((r) => r.data),
   });
 
-  if (isLoading || !data) {
-    return <div className="font-mono text-sm py-20 text-center">Loading your operating view…</div>;
-  }
+  // U7-01.20: skeleton matches the actual page shape (score circle +
+  // stat tiles + a wide content strip) so the layout doesn't jump when
+  // data arrives. Same skeleton for both views -- we don't know the
+  // role yet at loading time.
+  if (isLoading || !data) return <OperatingScoreSkeleton />;
 
   // `view` is the role-dispatch discriminator returned by the backend.
   // We defensively fall back on the presence of `company` for older payloads.
@@ -62,47 +81,7 @@ function OwnerView({ data }) {
       <PageHeader eyebrow="How well the business is running" title="Operating Score" />
 
       {!enough ? (
-        <div className="card-brutal p-8 mb-8 flex flex-col lg:flex-row items-center gap-8" data-testid="operating-overall">
-          <div className="flex flex-col items-center shrink-0">
-            <div className="w-36 h-36 flex flex-col items-center justify-center border-4 border-black bg-black/5 text-center px-3">
-              <Gauge size={30} weight="bold" className="text-muted-foreground mb-1" />
-              <span className="label-mono text-muted-foreground leading-tight" data-testid="operating-overall-score">Not enough data yet</span>
-            </div>
-            <div className="flex items-center gap-2 mt-3">
-              <Gauge size={16} weight="bold" className="text-brand-600" />
-              <span className="font-heading font-extrabold uppercase tracking-tight text-sm">Company Health</span>
-            </div>
-          </div>
-          <div className="flex-1 w-full" data-testid="operating-not-ready">
-            <p className="font-heading font-extrabold uppercase tracking-tight text-lg mb-2">We're still learning your business</p>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              The Operating Score kicks in once there's enough real activity to measure — roughly <strong>3+ actionable tasks</strong> or your <strong>first invoices</strong>.
-              Capture a few decisions on the Decision Desk and import or add invoices, and your score will start tracking automatically.
-            </p>
-            {/* MPWA-12i: two bugs lived in this block.
-                1. `stats.done + stats.open` is NaN whenever the API returns
-                   `stats: {}` — which is exactly what a tenant with no activity
-                   gets, i.e. the only tenant that ever sees this panel. It read
-                   "NaN Actionable tasks" on desktop too.
-                2. At 390px the three columns give each label a 63px box for a
-                   94px string, so every label was clipped. One column below lg;
-                   desktop is untouched. */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mt-4">
-              <div className="border border-black/30 p-3 text-center">
-                <p className="font-heading text-2xl font-black">{(stats?.done || 0) + (stats?.open || 0)}</p>
-                <p className="label-mono text-muted-foreground">Actionable tasks</p>
-              </div>
-              <div className="border border-black/30 p-3 text-center">
-                <p className="font-heading text-2xl font-black">{stats?.done || 0}</p>
-                <p className="label-mono text-muted-foreground">Completed</p>
-              </div>
-              <div className="border border-black/30 p-3 text-center">
-                <p className="font-heading text-2xl font-black">{stats?.total_decisions || 0}</p>
-                <p className="label-mono text-muted-foreground">Decisions</p>
-              </div>
-            </div>
-          </div>
-        </div>
+        <NotEnoughDataEmptyState stats={stats} />
       ) : (
       /* Company overall */
       <div className="card-brutal p-8 mb-8 flex flex-col lg:flex-row items-center gap-8" data-testid="operating-overall">
@@ -125,10 +104,29 @@ function OwnerView({ data }) {
                 <div className="flex items-center justify-between mb-1">
                   <span className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide">
                     <c.icon size={15} weight="bold" className="text-muted-foreground" /> {c.label}
+                    {/* U7-01.16: per-category (i) tooltip explains what the
+                        number measures in plain English before diving into
+                        the formula. Native title attribute keeps zero JS. */}
+                    <span
+                      title={`${c.plain}\n\nFormula: ${c.formula}\nWeight: ${c.weight}% of overall`}
+                      className="text-black/30 hover:text-brand-600 cursor-help"
+                      aria-label={`How ${c.label} is calculated`}
+                    >
+                      <Info size={13} weight="bold" />
+                    </span>
                   </span>
-                  <span className={`font-heading font-black ${scoreColor(v)}`}>{has ? v : "—"}</span>
+                  <span
+                    className={`font-heading font-black ${scoreColor(v)}`}
+                    role="progressbar"
+                    aria-label={`${c.label}: ${has ? v : "no data"} out of 100`}
+                    aria-valuenow={has ? v : undefined}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                  >
+                    {has ? v : "—"}
+                  </span>
                 </div>
-                <div className="h-3 bg-black/10 border border-black">
+                <div className="h-3 bg-black/10 border border-black" aria-hidden="true">
                   <div className={`h-full ${c.color}`} style={{ width: `${has ? v : 0}%` }} />
                 </div>
               </div>
@@ -137,6 +135,11 @@ function OwnerView({ data }) {
         </div>
       </div>
       )}
+
+      {/* U7-01.16: full formula panel, collapsed by default. Opens the
+          weights + formulas for all four categories so a founder can
+          reason about their score instead of trusting a black box. */}
+      {enough && <FormulaExplainer />}
 
       {/* Quick stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
@@ -444,4 +447,179 @@ function _formatDate(iso) {
   } catch {
     return iso;
   }
+}
+
+// -----------------------------------------------------------------------------
+// U7-01.20 -- skeleton matches final page shape so layout doesn't jump.
+// Same skeleton for owner + self because the role isn't known until data
+// arrives. Uses tokenized muted-foreground colors so both themes read.
+// -----------------------------------------------------------------------------
+function OperatingScoreSkeleton() {
+  return (
+    <div aria-busy="true" aria-live="polite" data-testid="operating-skeleton">
+      <div className="mb-6">
+        <div className="h-3 w-40 bg-black/10 mb-2 animate-pulse" />
+        <div className="h-8 w-64 bg-black/10 animate-pulse" />
+      </div>
+      <div className="card-brutal p-8 mb-8 flex flex-col lg:flex-row items-center gap-8">
+        <div className="w-36 h-36 border-4 border-black/20 bg-black/5 shrink-0 animate-pulse" />
+        <div className="flex-1 w-full space-y-3">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i}>
+              <div className="flex items-center justify-between mb-1">
+                <div className="h-3 w-32 bg-black/10 animate-pulse" />
+                <div className="h-4 w-8 bg-black/10 animate-pulse" />
+              </div>
+              <div className="h-3 bg-black/10 border border-black/20" />
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="card-brutal p-4">
+            <div className="h-3 w-16 bg-black/10 mb-3 animate-pulse" />
+            <div className="h-6 w-10 bg-black/10 animate-pulse" />
+          </div>
+        ))}
+      </div>
+      <div className="card-brutal divide-y divide-black/10">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="p-4 flex items-center gap-4">
+            <div className="h-4 w-4 bg-black/10 animate-pulse" />
+            <div className="flex-1 space-y-2">
+              <div className="h-3 w-40 bg-black/10 animate-pulse" />
+              <div className="h-3 w-56 bg-black/10 animate-pulse" />
+            </div>
+            <div className="w-14 h-14 border-2 border-black/20 bg-black/5 shrink-0 animate-pulse" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// U7-01.14 -- empty state as coaching checklist, not stat dump.
+// The old panel showed 3 tiles of zeros and the word "still learning" -- true
+// but useless. This one names the two gates that unlock the score
+// (3+ actionable tasks OR 1+ invoice) as tickable items with direct actions.
+// -----------------------------------------------------------------------------
+function NotEnoughDataEmptyState({ stats }) {
+  const doneCount = (stats?.done || 0) + (stats?.open || 0);
+  const hasTasks = doneCount >= 3;
+  const hasInvoices = (stats?.total_decisions || 0) > 0; // decisions is the closest proxy on the owner payload; invoice presence is inferred backend-side
+  const taskProgress = Math.min(doneCount, 3);
+
+  return (
+    <div className="card-brutal p-8 mb-8" data-testid="operating-not-ready">
+      <div className="flex flex-col lg:flex-row items-start gap-8">
+        <div className="flex flex-col items-center shrink-0">
+          <div className="w-36 h-36 flex flex-col items-center justify-center border-4 border-black bg-black/5 text-center px-3">
+            <Gauge size={30} weight="bold" className="text-muted-foreground mb-1" />
+            <span className="label-mono text-muted-foreground leading-tight" data-testid="operating-overall-score">
+              Score kicks in soon
+            </span>
+          </div>
+          <div className="flex items-center gap-2 mt-3">
+            <Gauge size={16} weight="bold" className="text-brand-600" />
+            <span className="font-heading font-extrabold uppercase tracking-tight text-sm">Company Health</span>
+          </div>
+        </div>
+        <div className="flex-1 w-full">
+          <p className="font-heading font-extrabold uppercase tracking-tight text-lg mb-2">
+            Two quick things and your score turns on
+          </p>
+          <p className="text-sm text-muted-foreground leading-relaxed mb-5">
+            The Operating Score needs a little real activity before it can say anything useful.
+            Do either of these and it starts tracking automatically.
+          </p>
+          <div className="space-y-3">
+            <ChecklistItem
+              done={hasTasks}
+              label={hasTasks
+                ? "Capture 3 actionable tasks"
+                : `Capture 3 actionable tasks  (${taskProgress} of 3)`}
+              hint="Speak or type a decision on the Decision Desk -- it becomes tasks automatically."
+              actionLabel="Open Desk"
+              actionTo="/inbox"
+              icon={Microphone}
+            />
+            <ChecklistItem
+              done={hasInvoices}
+              label="Add your first invoice"
+              hint="Import from Tally / Zoho, upload a PDF, or log manually in Finance."
+              actionLabel="Open Finance"
+              actionTo="/finance"
+              icon={Receipt}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ChecklistItem({ done, label, hint, actionLabel, actionTo, icon: Icon }) {
+  return (
+    <div className={`border-2 ${done ? "border-green-600/40 bg-green-50" : "border-black/30"} p-4 flex items-start gap-3`}>
+      <div className={`w-6 h-6 flex items-center justify-center border-2 ${done ? "border-green-600 bg-green-600 text-white" : "border-black/40"} shrink-0 mt-0.5`}>
+        {done && <Check size={14} weight="bold" />}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className={`text-sm font-semibold ${done ? "line-through text-muted-foreground" : ""}`}>{label}</p>
+        <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{hint}</p>
+      </div>
+      {!done && (
+        <Link
+          to={actionTo}
+          className="shrink-0 text-xs font-semibold uppercase tracking-wider text-brand-600 hover:underline flex items-center gap-1 mt-0.5"
+        >
+          <Icon size={12} weight="bold" /> {actionLabel}
+        </Link>
+      )}
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// U7-01.16 -- collapsible formula panel. Every category's formula + weight in
+// one place; opens on click, closed by default so it doesn't clutter the hero.
+// -----------------------------------------------------------------------------
+function FormulaExplainer() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mb-8 -mt-4">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-brand-600 transition-colors"
+        aria-expanded={open}
+        aria-controls="operating-formula-panel"
+        data-testid="operating-formula-toggle"
+      >
+        <Info size={12} weight="bold" />
+        How is this calculated?
+        {open ? <CaretUp size={12} weight="bold" /> : <CaretDown size={12} weight="bold" />}
+      </button>
+      {open && (
+        <div id="operating-formula-panel" className="mt-3 card-brutal p-5 space-y-4 text-sm" data-testid="operating-formula-panel">
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Overall = weighted average across the four categories below. Categories with no data yet are skipped and remaining weights renormalize.
+          </p>
+          {CATS.map((c) => (
+            <div key={c.key} className="border-l-4 pl-4 border-black/20">
+              <div className="flex items-center gap-2 mb-1">
+                <c.icon size={14} weight="bold" className="text-muted-foreground" />
+                <span className="font-semibold uppercase tracking-wide">{c.label}</span>
+                <span className="label-mono text-muted-foreground">weight {c.weight}%</span>
+              </div>
+              <p className="text-xs text-muted-foreground mb-1">{c.plain}</p>
+              <p className="font-mono text-xs">{c.formula}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }

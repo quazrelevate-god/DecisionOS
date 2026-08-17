@@ -5,23 +5,31 @@ import { cva } from "class-variance-authority";
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-control text-sm font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
-      // RD-1 (2026-08-17): every variant loses its drop shadow. Buttons in the
-      // reference are flat — a filled rectangle for the primary action, a
-      // hairline rectangle for everything else — and hover is a colour shift,
-      // never a lift. `default` resolves to --primary, which is the brand
-      // indigo: this is the one place the accent is allowed to fill a surface.
+      // NM-3 (NEUMORPHIC-REVAMP §3) amends RD-1's flat rule selectively, on
+      // §0's line: furniture may carry soft depth, the message may not.
+      //   default     — the PRIMARY ACTION: solid indigo fill, always. Never
+      //                 same-as-background (§6). It gains only the small soft
+      //                 shadow; its identity stays the fill.
+      //   destructive — a message (danger). Flat solid, untouched.
+      //   outline/secondary — furniture: the raised-tile treatment, pressing
+      //                 in on :active, which is what makes "pressable" legible
+      //                 without relying on the raised/inset convention alone.
+      //   ghost/link  — no surface, nothing to soften.
+      // Radius: rounded-control (14px) across all variants — base beats the
+      // recipe's rounded-tile because utilities out-cascade @layer components.
+      // Focus: 2px indigo ring, never shadow alone (§6).
       variant: {
         default:
-          "bg-primary text-primary-foreground hover:bg-brand-700 active:bg-brand-800",
+          "bg-primary text-primary-foreground shadow-nm-sm hover:bg-brand-700 active:bg-brand-800",
         destructive:
           "bg-destructive text-destructive-foreground hover:bg-danger-700",
         outline:
-          "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
+          "nm-tile text-foreground hover:shadow-nm active:shadow-nm-press",
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-muted",
+          "nm-tile text-primary hover:shadow-nm active:shadow-nm-press",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
       },

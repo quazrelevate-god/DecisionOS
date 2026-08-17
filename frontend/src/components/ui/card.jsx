@@ -5,9 +5,9 @@ import { cn } from "@/lib/utils"
 const Card = React.forwardRef(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    /* RD-1 (2026-08-17): shadow dropped — the card is a hairline rectangle
-       on the page ground, matching .card-brutal in index.css. */
-    className={cn("rounded-xl border bg-card text-card-foreground", className)}
+    /* NM-3: soft depth — same recipe as .card-brutal so the shadcn Card and
+       the workhorse class cannot drift. Callers' cn() overrides still win. */
+    className={cn("nm-raised text-card-foreground", className)}
     {...props} />
 ))
 Card.displayName = "Card"

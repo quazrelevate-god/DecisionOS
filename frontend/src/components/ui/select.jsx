@@ -14,8 +14,10 @@ const SelectTrigger = React.forwardRef(({ className, children, ...props }, ref) 
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      // MPWA-01 (§5.1): h-9 -> var(--control-h-base) — 36 desktop, 48 mobile.
-      "flex h-[var(--control-h-base)] w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background data-[placeholder]:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
+      // MPWA-01 (§5.1): h -> var(--control-h-base) — 36 desktop, 48 mobile.
+      // NM-3: a select is a field you put a value INTO — inset, like Input,
+      // with the same 44px floor and the same 2px indigo focus ring.
+      "flex min-h-11 h-[var(--control-h-base)] w-full items-center justify-between whitespace-nowrap nm-inset px-3 py-2 text-sm ring-offset-background transition-shadow data-[placeholder]:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none [&>span]:line-clamp-1",
       className
     )}
     {...props}>

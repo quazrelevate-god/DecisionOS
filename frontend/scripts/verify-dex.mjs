@@ -131,6 +131,63 @@ check('the answer is never an empty bubble', answer.trim().length > 0, `${answer
 check('failure copy does not promise a futile retry',
   !/please try again/i.test(answer) || !/could not reach/i.test(answer), answer.slice(0, 60));
 
+// ───────────────────────────── the orb actually reacts to audio
+// The orb's whole claim is that it moves BECAUSE of the audio, and that is not
+// falsifiable from a screenshot — a keyframe loop and a spectrum analyser look
+// identical in a still. So drive the engine with a real Web Audio graph
+// (oscillator -> MediaStreamDestination -> the same attachStream path a mic
+// uses) and assert the metrics track it.
+//
+// Timing is NOT asserted here. The loopback stream buffers on the order of a
+// second, so attack/release measured through it says more about the harness
+// than the engine; what is asserted is that the signal reaches the metrics and
+// that the frequency bands separate.
+const audio = await page.evaluate(async () => {
+  const e = window.__dexEngine;
+  if (!e) return { ok: false, reason: 'no engine handle' };
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  const ac = new Ctx();
+  const dest = ac.createMediaStreamDestination();
+  const gain = ac.createGain(); gain.gain.value = 0.0001; gain.connect(dest);
+  const osc = ac.createOscillator(); osc.type = 'sine'; osc.frequency.value = 120;
+  osc.connect(gain); osc.start();
+  const attached = e.attachStream(dest.stream);
+  await ac.resume().catch(() => {});
+  const settle = async (ms) => {
+    const t0 = performance.now();
+    while (performance.now() - t0 < ms) {
+      e.sample(performance.now());
+      await new Promise((r) => setTimeout(r, 8));
+    }
+    return { ...e.metrics };
+  };
+  await settle(400);
+  gain.gain.value = 0.45; osc.frequency.value = 120;
+  const low = await settle(1400);
+  osc.frequency.value = 5200;
+  const high = await settle(1400);
+  e.detachSource(); osc.stop(); ac.close();
+  return { ok: true, attached, low, high };
+});
+
+check('the audio engine is reachable and accepts a stream', audio.ok && audio.attached, audio.reason || '');
+if (audio.ok) {
+  check('a live signal moves the volume metric off zero', audio.low.volume > 0.05,
+    `volume ${audio.low.volume.toFixed(3)}`);
+  check('a low tone registers in the low band', audio.low.low > 0.15,
+    `low ${audio.low.low.toFixed(3)}`);
+  // The regression this guards: bands were plain means, so the 257-bin high
+  // band read ~0.01 for a tone that pinned its peak bin at 255, and the
+  // sparkle could never fire on speech.
+  check('a high tone registers in the high band', audio.high.high > 0.15,
+    `high ${audio.high.high.toFixed(3)} (was ~0.01 before the band fix)`);
+  check('the high band is quiet for a low tone', audio.low.high < 0.1,
+    `high-on-low ${audio.low.high.toFixed(3)}`);
+  check('bands are comparable in scale, not width-biased',
+    Math.abs(audio.high.high - audio.low.low) < 0.45,
+    `low-band ${audio.low.low.toFixed(2)} vs high-band ${audio.high.high.toFixed(2)}`);
+}
+
 // ───────────────────────────── the dock is still the way out
 check('the dock stays reachable over Dex',
   (await page.locator('[data-testid="floating-dock"]').count()) === 1);

@@ -50,6 +50,12 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false } =
   const audioRef = useRef(null); // { ctx, analyser, data, raf, interval }
   const pollRef = useRef(null);
   const aliveRef = useRef(true);
+  // MPWA-15: the live capture stream, exposed so the Dex orb can hang its own
+  // AnalyserNode on it. Sharing the stream rather than calling getUserMedia a
+  // second time — two concurrent captures of one mic is a real source of
+  // trouble on iOS, and the permission is already granted by the time this is
+  // set. Null whenever nothing is recording.
+  const streamRef = useRef(null);
 
   useEffect(() => {
     onRecordingChange?.(recording, recordSecs);
@@ -168,10 +174,12 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false } =
   const startRecording = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
       const mr = new MediaRecorder(stream);
       chunksRef.current = [];
       mr.ondataavailable = (e) => e.data.size && chunksRef.current.push(e.data);
       mr.onstop = async () => {
+        streamRef.current = null;
         stream.getTracks().forEach((t) => t.stop());
         stopMeter();
         const blob = new Blob(chunksRef.current, { type: "audio/webm" });
@@ -283,7 +291,7 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false } =
     sending, recording, recordSecs, levels,
     understanding, clearUnderstanding, reset,
     sendText, startRecording, stopRecording, uploadFile,
-    fileRef,
+    fileRef, streamRef,
   };
 }
 

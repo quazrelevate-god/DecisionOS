@@ -1323,6 +1323,18 @@ export default function MyWork() {
     if (f === "completed") setTab("completed");
   }, [params, isOwner]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // U7-05.9: if the currently-selected tab has no items, snap back to
+  // 'all' so the user doesn't see a "tab selected but no chip visible"
+  // dead state after tasks are cleared.
+  useEffect(() => {
+    if (tab === "all" || !tasksQ.data) return;
+    const all = tasksQ.data || [];
+    const count = tab === "completed"
+      ? all.filter(isTerminal).length
+      : all.filter((t) => !isTerminal(t) && t.task_type === tab).length;
+    if (count === 0) setTab("all");
+  }, [tab, tasksQ.data]);
+
   const scoreMap = {};
   (prioritiesQ.data?.tasks || []).forEach((pt) => { if (pt.ai_scores) scoreMap[pt.id] = pt.ai_scores; });
   const scoring = aiPriority && prioritiesQ.isFetching && !prioritiesQ.data;
@@ -1426,14 +1438,26 @@ export default function MyWork() {
       ) : (
       <div data-testid="mywork-list">
         <div>
+          {/* U7-05.9 (2026-08-17): only render tabs with something in them.
+              Founder ask: 'why are we showing all the chips here, only
+              open we can show that right'. Rule: 'All' always visible
+              (baseline nav + destination for currently-selected empty
+              tab); category tabs shown only when count > 0; Completed
+              only when there is at least one completed task. If the
+              currently-active tab is now empty (user finished the last
+              task in that category), snap back to 'all' so users don't
+              see a "selected but hidden" state. New categories can still
+              be reached via the New Task dialog. */}
           <div className="flex flex-wrap gap-1.5 mb-5 border-b border-black/10 pb-3" data-testid="work-tabs">
-            {WORK_TABS.map((tb) => (
-              <button key={tb.key} onClick={() => setTab(tb.key)} data-testid={`work-tab-${tb.key}`}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-black transition-colors ${tab === tb.key ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
-                {tb.label}
-                <span className={`px-1.5 py-0.5 text-[10px] leading-none border ${tab === tb.key ? "border-white/40" : "border-black/20 text-muted-foreground"}`}>{countFor(tb.key)}</span>
-              </button>
-            ))}
+            {WORK_TABS
+              .filter((tb) => tb.key === "all" || countFor(tb.key) > 0)
+              .map((tb) => (
+                <button key={tb.key} onClick={() => setTab(tb.key)} data-testid={`work-tab-${tb.key}`}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border border-black transition-colors ${tab === tb.key ? "bg-brand-ink text-white" : "bg-white hover:bg-black/5"}`}>
+                  {tb.label}
+                  <span className={`px-1.5 py-0.5 text-[10px] leading-none border ${tab === tb.key ? "border-white/40" : "border-black/20 text-muted-foreground"}`}>{countFor(tb.key)}</span>
+                </button>
+              ))}
           </div>
           {/* E2-14: skeleton on first load so the tab strip doesn't
               jump when tasks land. */}

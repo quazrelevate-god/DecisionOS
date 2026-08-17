@@ -12,7 +12,7 @@ Ships:
       {sent:True, channel:"notification", target_name, target_id}.
 
 Chips explained (all tenant + user scoped):
-  needs_decision -> decisions.status='pending' AND
+  needs_decision -> decisions.status in {'pending','pending_approval'} AND
                     (approver_id=me OR (approver_id is null AND created_by=me and I'm owner))
   on_fire        -> tasks whose latest 'updates' entry has
                     action in {escalate, handoff} and to_id=me
@@ -128,9 +128,15 @@ async def _pending_decisions_for(tid: str, user: dict) -> int:
     needs_decision chip logic."""
     uid = user["id"]
     is_owner = user.get("role") == "owner"
-    q = {"tenant_id": tid, "status": "pending"}
+    # U7-02.3: match _cards_needs_decision -- accept both status
+    # spellings AND treat missing approver_id as unassigned.
+    q = {"tenant_id": tid, "status": {"$in": ["pending", "pending_approval"]}}
     if is_owner:
-        q["$or"] = [{"approver_id": uid}, {"approver_id": {"$in": [None, ""]}}]
+        q["$or"] = [
+            {"approver_id": uid},
+            {"approver_id": {"$in": [None, ""]}},
+            {"approver_id": {"$exists": False}},
+        ]
     else:
         q["approver_id"] = uid
     return await db.decisions.count_documents(q)
@@ -378,10 +384,26 @@ def _latest_update(t: dict) -> Optional[dict]:
 async def _cards_needs_decision(tid: str, user: dict) -> list:
     uid = user["id"]
     is_owner = user.get("role") == "owner"
-    q = {"tenant_id": tid, "status": "pending"}
+    # U7-02.3 (2026-08-17): two bugs, one fix -- (a) status filter was
+    # `"pending"` while Dex-created decisions land in `"pending_approval"`
+    # (server.py process_voice_note), (b) "approver_id in [None, ""]"
+    # doesn't match documents where the field is entirely absent, and
+    # AI-created decisions don't set the field at all. Both together
+    # meant the chip counted 0 for every Dex-created decision.
+    #
+    # Accept both status spellings + treat missing/empty approver as
+    # unassigned. Renaming to one canonical status is a bigger sweep
+    # (frontend chips, backend counters, seeders, CEO Brief all read
+    # it); the widened filter fixes the visible bug without that risk.
+    q = {"tenant_id": tid, "status": {"$in": ["pending", "pending_approval"]}}
     if is_owner:
-        # Owner sees decisions where approver_id=me OR unassigned.
-        q["$or"] = [{"approver_id": uid}, {"approver_id": {"$in": [None, ""]}}]
+        # Owner sees decisions assigned to them OR unassigned (missing/
+        # null/empty approver_id).
+        q["$or"] = [
+            {"approver_id": uid},
+            {"approver_id": {"$in": [None, ""]}},
+            {"approver_id": {"$exists": False}},
+        ]
     else:
         q["approver_id"] = uid
     rows = await db.decisions.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)

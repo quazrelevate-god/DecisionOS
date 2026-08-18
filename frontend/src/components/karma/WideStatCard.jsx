@@ -4,7 +4,7 @@
 // Same whole-card-is-the-link rule as StatTile.
 import * as React from "react";
 import { Link } from "react-router-dom";
-import { ArrowUpRight } from "@phosphor-icons/react";
+import { ArrowRight } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { IconChip } from "./IconChip";
 import { BigNumeral } from "./BigNumeral";
@@ -22,7 +22,7 @@ export function WideStatCard({ icon, alert = false, label, value, urgent = false
       <div className="flex items-start justify-between gap-3">
         <IconChip icon={icon} alert={alert} />
         <span aria-hidden="true" className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-kr-ink text-white">
-          <ArrowUpRight size={18} weight="bold" className="kr-arrow transition-transform duration-200" />
+          <ArrowRight size={18} weight="bold" className="kr-arrow transition-transform duration-200" />
         </span>
       </div>
       <div className="mt-6 flex items-end justify-between gap-4">

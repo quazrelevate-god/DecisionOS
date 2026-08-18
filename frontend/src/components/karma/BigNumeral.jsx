@@ -21,10 +21,12 @@ import { CountUp } from "./CountUp";
 const SPLIT = /^([^\d-]*)(-?\d+(?:\.\d+)?)((?:,\d+)*)(.*)$/;
 
 const SIZES = {
-  xl: { main: "text-6xl", side: "text-2xl" },   // the dashboard score
-  lg: { main: "text-4xl", side: "text-xl" },    // wide money cards
-  md: { main: "text-3xl", side: "text-base" },  // KPI tiles
-  sm: { main: "text-xl",  side: "text-sm" },    // inline stats
+  // KR-8.1: measured against the full-res reference — the score is ~110px
+  // and tile numerals ~44px. Everything stepped up accordingly.
+  xl: { main: "text-7xl sm:text-8xl", side: "text-3xl" },  // the dashboard score
+  lg: { main: "text-5xl", side: "text-2xl" },              // wide money cards
+  md: { main: "text-4xl", side: "text-lg" },               // KPI tiles
+  sm: { main: "text-xl",  side: "text-sm" },               // inline stats
 };
 
 /**

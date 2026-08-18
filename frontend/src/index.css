@@ -80,7 +80,9 @@
            shadows, near-no borders. --background is the greige; surfaces stay
            white so every existing bg-surface/bg-card call site becomes "a
            white object on the tinted ground" for free. */
-        --background:       40 9% 93%;   /* ≈#EFEEEC — the greige canvas */
+        /* KR-8.1: cooled with --nm-bg (both are "the canvas" and must agree).
+           The reference's ground is silver, not greige — see the nm block. */
+        --background:       225 7% 92%;
         --surface:          0 0% 100%;
         --surface-raised:   0 0% 100%;
         --surface-sunken:   var(--neutral-100);
@@ -707,8 +709,14 @@
    most made the app read as "futuristic OS". The reference page is an
    undecorated surface; every bit of visual interest comes from the content
    and the hairlines. */
+/* KR-8.1 — TRANSPARENT, always. The canvas used to paint --background
+   opaquely, which sat exactly one paint layer above the fixed .app-sky
+   pseudo-elements — so the amber bloom was invisible on every light route
+   and only ever showed in the Dex room, where data-dex already made the
+   canvas transparent. The shell's own bg-nm is the ground now; the canvas
+   is just a window onto the weather. */
 .app-canvas {
-    background-color: hsl(var(--background));
+    background-color: transparent;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -785,9 +793,13 @@
    ═════════════════════════════════════════════════════════════════════════ */
 @layer base {
     :root {
-        --nm-bg:          40 9% 93%;    /* ≈#EFEEEC — the greige canvas */
+        /* KR-8.1 — the canvas COOLS. KR-2 warmed it on the theory that a warm
+           bloom wants a warm ground; the reference does the opposite and is
+           right: a cool silver ground is what makes the amber bloom READ as
+           light instead of tint. Warm ground + warm bloom = beige soup. */
+        --nm-bg:          225 7% 92%;   /* ≈#E9EAED — cool silver canvas */
         --nm-raised:      0 0% 100%;    /* card white — the object colour */
-        --nm-sunken:      40 8% 89%;    /* wells, one step under the canvas */
+        --nm-sunken:      225 6% 88%;   /* wells, one step under the canvas */
         /* The rail retires in KR-5; parked on card white so the last renders
            before the shell lands don't paint periwinkle on a warm page. */
         --nm-rail:        0 0% 100%;
@@ -805,7 +817,7 @@
 
         /* Container hairline — kept at low opacity in the recipes as the
            glare floor. CONTROLS do not use this: they use --kr-outline. */
-        --nm-edge: 40 6% 78%;
+        --nm-edge: 225 5% 77%;
 
         /* Karma's radius scale: visibly rounder than anything before it. */
         --radius-control: 16px;
@@ -820,7 +832,7 @@
         /* The control boundary. 40 5% 52% on the L93 greige measures ≈3.2:1 —
            re-verify at the KR-7 gate; this is the token that carries WCAG
            1.4.11 now that shadows are gone and containers are borderless. */
-        --kr-outline:      40 5% 52%;
+        --kr-outline:      225 4% 51%;
         /* Glass tints (used by .kr-glass in KR-3). */
         --kr-glass-blue:   222 18% 40%;
         --kr-glass-olive:  80 22% 32%;
@@ -985,11 +997,6 @@ html[data-dex="1"] {
     --nm-dark:    10 8 4;
 }
 
-/* The canvas hands its fill back so ONE continuous sky runs under the header,
-   past the rail and through the page. Two separately-painted gradients would
-   have shown a seam at the canvas edge. */
-html[data-dex="1"] .app-canvas { background-color: transparent; }
-
 /* THE ONE PLACE THE REVAMP'S OWN RULE HAS TO BEND. §2's premise is that a card
    sits at the SAME value as the page and is separated by shadow alone. That
    works because a shadow needs an unlit ground to fall on — and this room is
@@ -1060,12 +1067,18 @@ html[data-dex="1"].dark .text-muted-foreground { color: hsl(var(--muted-foregrou
    lower-left so the page reads lit rather than stamped. Opacities are low
    because text sits directly on this — the KR-7 gate re-measures secondary
    text against the WARMEST point of the bloom, not the bare greige. */
+/* KR-8.1 — the reference's bloom is not an accent, it IS the light in the
+   room: a large saturated amber core just left of the tile seam, an orange
+   deepening under it, and a soft fall-off that still tints the page edges.
+   Opacities carry text on top of them — the KR-7 numbers were re-taken at
+   the bloom's hottest point after this change. */
 .app-sky::before {
     opacity: 1;
     background-image:
-        radial-gradient(42% 46% at 68% 12%, hsl(35 96% 62% / .38), transparent 70%),
-        radial-gradient(30% 34% at 86% 30%, hsl(19 92% 55% / .16), transparent 72%),
-        radial-gradient(38% 40% at 8% 88%, hsl(35 80% 70% / .18), transparent 72%);
+        radial-gradient(46% 52% at 56% 30%, hsl(38 97% 58% / .62), transparent 68%),
+        radial-gradient(30% 36% at 62% 52%, hsl(22 95% 52% / .38), transparent 70%),
+        radial-gradient(26% 30% at 44% 16%, hsl(45 95% 68% / .38), transparent 72%),
+        radial-gradient(60% 64% at 55% 35%, hsl(33 90% 60% / .22), transparent 76%);
 }
 
 /* The Dex room: same amber family over the ink, pushed toward the orb's
@@ -1195,7 +1208,7 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
     }
     .kr-lift:hover  { transform: translateY(-4px); }
     .kr-lift:active { transform: translateY(-1px) scale(.99); }
-    .kr-lift:hover .kr-arrow { transform: rotate(45deg); }
+    .kr-lift:hover .kr-arrow { transform: translateX(3px); }
 
     .kr-reveal {
         opacity: 0;

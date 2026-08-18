@@ -9,7 +9,7 @@
 // It still rotates on hover because .kr-lift owns the .kr-arrow glyph.
 import * as React from "react";
 import { Link } from "react-router-dom";
-import { ArrowUpRight } from "@phosphor-icons/react";
+import { ArrowRight } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { IconChip } from "./IconChip";
 import { BigNumeral } from "./BigNumeral";
@@ -39,7 +39,7 @@ export function StatTile({
           : "bg-[hsl(var(--kr-action-bg,var(--kr-ink)))] text-[hsl(var(--kr-action-fg,0_0%_100%))]"
       )}
     >
-      <ArrowUpRight size={18} weight="bold" className="kr-arrow transition-transform duration-200" />
+      <ArrowRight size={18} weight="bold" className="kr-arrow transition-transform duration-200" />
     </span>
   );
 
@@ -48,7 +48,10 @@ export function StatTile({
       to={to}
       data-testid={testid}
       className={cn(
-        "kr-lift flex flex-col p-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline",
+        // KR-8.1: min-height + a flex spacer give the reference's air — the
+        // numeral sits at the BOTTOM of a tall tile, not under the label.
+        // Labels go roman: the full-res reference is not italic.
+        "kr-lift flex min-h-[190px] flex-col p-5 xl:min-h-[215px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline",
         glass ? "kr-glass kr-glass--blue" : "nm-tile",
         className
       )}
@@ -58,11 +61,11 @@ export function StatTile({
         {arrow}
       </div>
 
-      <p className={cn("mt-5 text-sm italic", glass ? "opacity-80" : "text-muted-foreground")}>
+      <p className={cn("mt-4 text-base", glass ? "opacity-90" : "text-foreground/80")}>
         {label}
       </p>
 
-      <div className="mt-1.5 flex items-end justify-between gap-3">
+      <div className="mt-auto flex items-end justify-between gap-3 pt-4">
         <BigNumeral text={value} size="md" accent={urgent && !glass} countUp={countUp} />
         {viz && <span className={cn("shrink-0 pb-0.5", glass ? "text-white" : "text-foreground")}>{viz}</span>}
       </div>

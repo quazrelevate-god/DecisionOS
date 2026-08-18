@@ -12,7 +12,7 @@
 // case is the common one on stat tiles.
 import * as React from "react";
 import { Link } from "react-router-dom";
-import { ArrowUpRight } from "@phosphor-icons/react";
+import { ArrowRight } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 
 const SIZES = { sm: 32, md: 40 };
@@ -33,7 +33,7 @@ export function ArrowButton({ label, to, onClick, size = "md", className, testid
     className
   );
   const glyph = (
-    <ArrowUpRight
+    <ArrowRight
       size={Math.round(px * 0.45)}
       weight="bold"
       aria-hidden="true"

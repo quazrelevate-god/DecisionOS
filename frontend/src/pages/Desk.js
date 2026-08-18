@@ -59,6 +59,34 @@ const SECTIONS = [
 const CTA_LABEL = { review: "Review", respond: "Respond", chase: "Chase", nudge: "Nudge" };
 const CTA_ICON = { review: Scales, respond: ChatCircleText, chase: Fire, nudge: Sun };
 
+/**
+ * The scope pair — the reference's Equifax/TransUnion pills, honestly: the
+ * company's grade vs the founder's own operator score. Only an owner has both.
+ *
+ * KR-8.11 — extracted because the pills now render in two places (stacked to
+ * the numeral's left from lg, above the score below it) and two copies of a
+ * toggle is two chances for the pressed state to drift apart. The pill's own
+ * size is untouched, per the founder: h-9, px-4, natural width.
+ */
+function ScopePills({ scope, setScope }) {
+  return [["company", "Company"], ["you", "You"]].map(([k, label]) => (
+    <button
+      key={k}
+      type="button"
+      onClick={() => setScope(k)}
+      aria-pressed={scope === k}
+      data-testid={`desk-scope-${k}`}
+      className={
+        scope === k
+          ? "h-9 rounded-pill bg-kr-ink px-4 text-sm font-medium text-white"
+          : "h-9 rounded-pill border border-kr-outline px-4 text-sm text-foreground/80 transition-colors hover:text-foreground"
+      }
+    >
+      {label}
+    </button>
+  ));
+}
+
 export default function Desk() {
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -222,27 +250,19 @@ export default function Desk() {
                 </>}
           </h1>
 
-          {/* Scope pills — the reference's Equifax/TransUnion pair, honestly:
-              the company's grade vs the founder's own operator score. Only an
-              owner has both. */}
+          {/* KR-8.11 — the pills only appear ABOVE the score below lg. From
+              lg they move into the score row, stacked to the numeral's left
+              (see below). Measured why: at 375 the numeral block is 166px
+              and the gauge 128 in a 343px column — 26px of slack against the
+              93px the stack needs.
+              The same arithmetic rules out the whole lg range: at 1024 the
+              left column is ~341, and 93 + 12 + 112 + 12 leaves 112px for
+              the gauge — an instrument too small to read. So the side stack
+              starts at xl (441px column, 423px of content), and below that
+              the pills stay where they were. */}
           {isOwnerView && (
-            <div className="mt-4 flex items-center gap-2" data-testid="desk-scope-pills">
-              {[["company", "Company"], ["you", "You"]].map(([k, label]) => (
-                <button
-                  key={k}
-                  type="button"
-                  onClick={() => setScope(k)}
-                  aria-pressed={scope === k}
-                  data-testid={`desk-scope-${k}`}
-                  className={
-                    scope === k
-                      ? "h-9 rounded-pill bg-kr-ink px-4 text-sm font-medium text-white"
-                      : "h-9 rounded-pill border border-kr-outline px-4 text-sm text-foreground/80 transition-colors hover:text-foreground"
-                  }
-                >
-                  {label}
-                </button>
-              ))}
+            <div className="mt-4 flex items-center gap-2 xl:hidden" data-testid="desk-scope-pills">
+              <ScopePills scope={scope} setScope={setScope} />
             </div>
           )}
 
@@ -261,8 +281,23 @@ export default function Desk() {
               natural height, so mt-auto on the well resolves to zero and
               would have given nothing. justify-center puts the numeral+gauge
               pair on the well's centre line. */}
-          <div className="mb-10 mt-2 flex items-end justify-center gap-5 sm:gap-8">
-            <div className="min-w-0">
+          <div className="mb-10 mt-2 flex items-end justify-center gap-5">
+            {/* KR-8.11 — the pills, stacked to the numeral's LEFT from xl.
+                items-end is the founder's "right aligned to the left side of
+                the number": the two pills keep their own natural widths (93
+                and 56) and line up on their RIGHT edges, so the stack ends
+                flush against the numeral rather than starting flush with it.
+                self-center puts the 80px stack on the 96px numeral's middle. */}
+            {isOwnerView && (
+              <div className="hidden flex-col items-end gap-2 self-center xl:flex" data-testid="desk-scope-pills-side">
+                <ScopePills scope={scope} setScope={setScope} />
+              </div>
+            )}
+
+            {/* shrink-0: this block was shrinking under pressure and wrapping
+                "/ 100" onto its own line — a silent reflow that made the row
+                25px taller. The score is not the thing that gives way. */}
+            <div className="shrink-0">
               {/* Delta eyebrow — demo-tenant only; no endpoint carries a real
                   score delta yet (see _operatingScoreDemo's wire-order note). */}
               {isDemoTenant(tenant) && scoreReady && (
@@ -299,9 +334,11 @@ export default function Desk() {
             <ArcGauge
               value={scoreReady ? shownScore : null}
               size={190}
-              /* The viewBox is fixed; the rendered width steps down so a
-                 190px instrument doesn't crowd the numeral on a phone. */
-              className="w-[128px] shrink-0 text-foreground sm:w-[160px] lg:w-[190px]"
+              /* The viewBox is fixed; the rendered width steps to whatever
+                 the row can actually afford. It gives up 12px at xl, which
+                 is where the 93px pill stack joins the row:
+                 93 + 20 + 112 + 20 + 178 = 423 in a 441px column. */
+              className="w-[128px] shrink-0 text-foreground sm:w-[160px] lg:w-[190px] xl:w-[178px]"
               testid="desk-gauge"
             />
           </div>

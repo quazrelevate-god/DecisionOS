@@ -33,16 +33,15 @@ export function DarkBand({ children, reveal = true, className, testid }) {
         "--kr-chip-line": "40 12% 55%",
       }}
     >
-      {/* KR-8.2 — the reference's centre shape: a small ink tab rising out
-          of the band's top edge with a grab-handle pill inside it. Pure
-          decoration (aria-hidden), but it is what makes the band read as a
-          sheet surfacing from below rather than a painted rectangle. */}
+      {/* KR-8.5 — the grab handle, sitting INSIDE the dip. The dip itself is
+          cut out of the band by a mask (see .kr-dark-band) so the bloom shows
+          through it; this is only the small dark bar the reference draws in
+          the middle of that dip. Ink at low alpha so it reads on whatever the
+          bloom happens to be doing behind it. */}
       <span
         aria-hidden="true"
-        className="absolute -top-[14px] left-1/2 grid h-[18px] w-28 -translate-x-1/2 place-items-end justify-center rounded-t-2xl bg-kr-ink pb-[7px]"
-      >
-        <span className="block h-[4px] w-9 rounded-full bg-white/30" />
-      </span>
+        className="absolute -top-[11px] left-1/2 block h-[4px] w-10 -translate-x-1/2 rounded-full bg-kr-ink/45"
+      />
       <div ref={reveal ? ref : undefined} className={reveal ? "kr-reveal" : undefined}>
         {children}
       </div>

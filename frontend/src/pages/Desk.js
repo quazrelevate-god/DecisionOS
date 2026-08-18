@@ -6,11 +6,14 @@
 //                       score with delta eyebrow + band caption, the thin
 //                       ArcGauge, two wide money cards
 //   light zone · RIGHT  the 3×2 StatTile grid, one glass tile among five
-//   dark band  · LEFT   HistoryBand — the ONLY real dated series the backend
-//                       owns (6 months of spend), range pills 3/6
-//   dark band  · RIGHT  the decision queue as the Offers rail — the four desk
-//                       chips as glass pills with live counts, cards as glass
-//                       actions. All DeskCard behaviour ported verbatim.
+//   dark band          THE DESK, full width (KR-8.5) — all four sections at
+//                       once as one bento, boxes sized by priority, each
+//                       section carrying its own gradient. No filter pills:
+//                       colour is the grouping. All DeskCard behaviour ported
+//                       verbatim; acted cards dim in place.
+//                       (The spend chart moved out — a money chart belongs on
+//                       /finance, and the founder wanted this sheet to be the
+//                       desk and nothing else.)
 //
 // WHAT DIED HERE: FounderBento.jsx (its data wiring lives on in
 // useDeskMetrics), the two-pane NM-22 split, the kanban board markup — and,
@@ -21,7 +24,7 @@
 //
 // Deep-link contract preserved: /inbox?decision=<id> forces the
 // needs_decision pill and auto-opens the DecisionDialog (E2-66/U7-02.2).
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "../lib/api";
@@ -32,7 +35,7 @@ import { inrCompact } from "../lib/format";
 import { selfScore, scoreBand } from "../lib/karmaScore";
 import { isDemoTenant, demoDelta } from "./_operatingScoreDemo";
 import {
-  ArcGauge, StatTile, WideStatCard, HistoryBand, OfferRail,
+  ArcGauge, StatTile, WideStatCard, DecisionBento,
   BigNumeral, KDeltaChip, DarkBand, DotProgress, MiniBars, CircleDots, TinySpark,
 } from "../components/karma";
 import { useDeskMetrics } from "./desk/useDeskMetrics";
@@ -41,11 +44,15 @@ import {
   ChatCircleText, Gauge as GaugeIcon, Receipt, HandCoins, TrendUp,
 } from "@phosphor-icons/react";
 
-const CHIPS = [
-  { key: "needs_decision", label: "Needs you", icon: Scales },
-  { key: "on_fire", label: "On fire", icon: Fire },
-  { key: "due_today", label: "Due today", icon: Sun },
-  { key: "important", label: "Important", icon: Star },
+// KR-8.5 — the four sections, in urgency order. `tint` is the gradient each
+// section's boxes wear; `dot` is its solid swatch in the section header.
+// Order matters twice: it is the reading order, and DecisionBento uses the
+// index as the first term of its size ranking.
+const SECTIONS = [
+  { key: "needs_decision", label: "Needs your decision", icon: Scales, tint: "kr-desk--needs", dot: "bg-[hsl(30_88%_52%)]", empty: "No decisions waiting on you" },
+  { key: "on_fire",        label: "On fire",             icon: Fire,   tint: "kr-desk--fire",  dot: "bg-[hsl(6_78%_50%)]",  empty: "Nothing on fire" },
+  { key: "due_today",      label: "Due today",           icon: Sun,    tint: "kr-desk--today", dot: "bg-[hsl(210_55%_52%)]", empty: "Nothing due today" },
+  { key: "important",      label: "Important",           icon: Star,   tint: "kr-desk--flag",  dot: "bg-[hsl(92_34%_44%)]", empty: "Nothing flagged" },
 ];
 
 const CTA_LABEL = { review: "Review", respond: "Respond", chase: "Chase", nudge: "Nudge" };
@@ -57,21 +64,61 @@ export default function Desk() {
   const { user, tenant } = useAuth();
   const m = useDeskMetrics();
 
-  const [chip, setChip] = useState("needs_decision");
   const [openDecision, setOpenDecision] = useState(null);
   const [busyId, setBusyId] = useState(null);
+  // KR-8.5: cards the founder has already acted on this session. They dim in
+  // place rather than vanishing — losing your place in a grid is worse than
+  // seeing a finished item.
+  const [doneIds, setDoneIds] = useState(() => new Set());
+  const markDone = useCallback((id) => setDoneIds((prev) => new Set(prev).add(id)), []);
+
+  // KR-8.5 — the hero blurs progressively as the sheet climbs over it.
+  // A passive scroll listener writing three custom properties, rAF-coalesced:
+  // the alternative (blur as React state) would re-render the whole dashboard
+  // on every scroll frame. Desktop only — the hero is not pinned below lg, so
+  // blurring it there would just fog content the founder is still reading.
+  const heroRef = useRef(null);
+  useEffect(() => {
+    const el = heroRef.current;
+    if (!el) return undefined;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const wide = window.matchMedia("(min-width: 1024px)");
+    let raf = 0;
+    const paint = () => {
+      raf = 0;
+      if (reduced.matches || !wide.matches) {
+        el.style.removeProperty("--kr-hero-blur");
+        el.style.removeProperty("--kr-hero-fade");
+        el.style.removeProperty("--kr-hero-scale");
+        return;
+      }
+      // Full effect by the time the sheet has climbed ~320px.
+      const p = Math.max(0, Math.min(1, window.scrollY / 320));
+      el.style.setProperty("--kr-hero-blur", `${(p * 9).toFixed(2)}px`);
+      el.style.setProperty("--kr-hero-fade", (1 - p * 0.5).toFixed(3));
+      el.style.setProperty("--kr-hero-scale", (1 - p * 0.028).toFixed(4));
+    };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(paint); };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    paint();
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, []);
   // Owner sees Company/You; everyone else only ever has their own view.
   const [scope, setScope] = useState("company");
 
   // E2-66: deep-link from a decision-focused nudge notification.
   const [searchParams] = useSearchParams();
   const focusDecisionId = searchParams.get("decision");
-  useEffect(() => { if (focusDecisionId) setChip("needs_decision"); }, [focusDecisionId]);
   useEffect(() => { if (focusDecisionId) setOpenDecision(focusDecisionId); }, [focusDecisionId]);
 
   // The board fetch — all four chips in parallel, cache-shared, 30s fresh.
   const boardQs = useQueries({
-    queries: CHIPS.map((c) => ({
+    queries: SECTIONS.map((c) => ({
       queryKey: ["desk", c.key],
       queryFn: () => api.get(`/desk?chip=${c.key}`).then((r) => r.data),
       refetchInterval: 30000,
@@ -79,10 +126,7 @@ export default function Desk() {
   });
   const counters = boardQs.find((q) => q.data?.counters)?.data?.counters
     || { needs_decision: 0, on_fire: 0, due_today: 0, important: 0 };
-  const activeIdx = CHIPS.findIndex((c) => c.key === chip);
-  const activeQ = boardQs[activeIdx];
-  const cards = activeQ?.data?.cards || [];
-
+  
   const refresh = () => qc.invalidateQueries({ queryKey: ["desk"] });
 
   // U7-02.1: "chase" on a card the viewer owns is really "respond".
@@ -91,7 +135,7 @@ export default function Desk() {
 
   const onCardAction = async (card) => {
     const cta = effectiveCta(card);
-    if (cta === "review" && card.target_kind === "decision") { setOpenDecision(card.target_id); return; }
+    if (cta === "review" && card.target_kind === "decision") { setOpenDecision(card.target_id); markDone(card.id); return; }
     if (cta === "respond") { navigate(`/my-work?task=${card.target_id}`); return; }
     if (cta === "chase" || cta === "nudge") {
       setBusyId(card.id);
@@ -101,6 +145,7 @@ export default function Desk() {
         toast.success(card.cta === "chase"
           ? `Chased ${to} — sent via ${res.data?.channel}`
           : `Nudged ${to} — sent via ${res.data?.channel}`);
+        markDone(card.id);
         refresh();
       } catch (e) {
         toast.error(e.response?.data?.detail || "Nudge failed");
@@ -121,6 +166,8 @@ export default function Desk() {
       : youScore;
   const band = scoreBand(shownScore);
   const scoreReady = shownScore != null;
+
+  const total = SECTIONS.reduce((n, sec) => n + (counters[sec.key] ?? 0), 0);
 
   const greeting = m.greeting;
   const gi = greeting.lastIndexOf(",");
@@ -144,7 +191,7 @@ export default function Desk() {
        behind the sheet. The phone scrolls the whole document. */
     <div data-testid="desk-page">
       {/* ── LIGHT ZONE — pinned; the sheet passes over it ─────────────── */}
-      <div className="grid gap-8 lg:sticky lg:top-5 lg:z-0 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-10">
+      <div ref={heroRef} className="kr-hero grid gap-8 lg:sticky lg:top-5 lg:z-0 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-10">
         {/* LEFT column — title, scope, score, gauge, money cards */}
         <div className="min-w-0">
           <h1 className="font-display text-3xl sm:text-4xl" data-testid="desk-brief-greeting">
@@ -307,35 +354,34 @@ export default function Desk() {
       {/* ── THE DARK BAND ──────────────────────────────────────────────── */}
       <DarkBand
         testid="desk-band"
-        className="relative z-10 mt-8 pt-7 pb-28 lg:mt-10 lg:min-h-[62vh] lg:pb-10 -mb-4 lg:-mb-8"
+        className="relative z-10 mt-8 pt-8 pb-28 lg:mt-10 lg:pt-10 lg:pb-14 -mb-4 lg:-mb-8"
       >
-        <div className="grid gap-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-          <HistoryBand
-            series={m.ledger?.byMonth || []}
-            loading={m.loading.ledger}
-            title="Spend history"
-            testid="desk-history"
-          />
-          <OfferRail
-            testid="desk-rail"
-            headline={`${counters.needs_decision ?? 0} waiting on you`}
-            chips={CHIPS.map((c) => ({ ...c, count: counters[c.key] ?? 0 }))}
-            active={chip}
-            onChip={setChip}
-            cards={cards}
-            loading={activeQ?.isLoading}
-            busyId={busyId}
-            verbFor={(card) => CTA_LABEL[effectiveCta(card)] || "Open"}
-            iconFor={(card) => CTA_ICON[effectiveCta(card)] || Scales}
-            onCard={onCardAction}
-            emptyLabel={{
-              needs_decision: "No decisions waiting",
-              on_fire: "Nothing on fire",
-              due_today: "Nothing due today",
-              important: "Nothing flagged",
-            }[chip]}
-          />
+        {/* KR-8.5 — the desk takes the WHOLE sheet. The spend line chart is
+            gone from here (it lives on /finance, where a money chart belongs);
+            the four sections now use the full width as one bento, all visible
+            at once, sized by priority. No filter pills: colour does the
+            grouping, so nothing is a click away. */}
+        <div className="mb-5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h2 className="text-h2">Decision desk</h2>
+          <p className="text-sm opacity-70">
+            {total === 0 ? "Nothing waiting on you" : `${total} waiting on you`}
+          </p>
         </div>
+
+        <DecisionBento
+          testid="desk-bento"
+          sections={SECTIONS.map((sec, i) => ({
+            ...sec,
+            count: counters[sec.key] ?? 0,
+            cards: boardQs[i]?.data?.cards || [],
+            loading: boardQs[i]?.isLoading,
+          }))}
+          verbFor={(card) => CTA_LABEL[effectiveCta(card)] || "Open"}
+          iconFor={(card) => CTA_ICON[effectiveCta(card)] || Scales}
+          onCard={onCardAction}
+          busyId={busyId}
+          doneIds={doneIds}
+        />
       </DarkBand>
 
       {/* Decision review modal — mechanics untouched. */}

@@ -13,4 +13,4 @@ export { KDeltaChip } from "./KDeltaChip";
 export { StatTile } from "./StatTile";
 export { WideStatCard } from "./WideStatCard";
 export { HistoryBand } from "./HistoryBand";
-export { OfferRail, GlassActionCard } from "./OfferRail";
+export { DecisionBento } from "./DecisionBento";

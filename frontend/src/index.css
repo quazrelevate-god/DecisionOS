@@ -1128,6 +1128,26 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
         background: hsl(var(--kr-ink));
         border-radius: 44px 44px 0 0;   /* KR-8.2: matched to the reference */
 
+        /* KR-8.5 — THE NOTCH DIPS, IT DOES NOT RISE. KR-8.2 read the
+           reference upside down and built a tab protruding above the top
+           edge; the founder's snippet shows the opposite — the edge sinks at
+           centre and the page shows through the dip.
+           It is cut with a mask rather than painted, because what shows
+           through is the amber bloom: any solid "notch coloured like the
+           background" would be a flat patch on a gradient. Two mask layers,
+           excluded: a full-cover layer minus a hard-edged ellipse at top
+           centre. */
+        -webkit-mask-image:
+            radial-gradient(58px 20px at 50% 0%, #000 98%, transparent 100%),
+            linear-gradient(#000, #000);
+        mask-image:
+            radial-gradient(58px 20px at 50% 0%, #000 98%, transparent 100%),
+            linear-gradient(#000, #000);
+        -webkit-mask-repeat: no-repeat, no-repeat;
+        mask-repeat: no-repeat, no-repeat;
+        -webkit-mask-composite: xor;
+        mask-composite: exclude;
+
         /* the re-scope — band children read tokens, not variants */
         --background:       var(--kr-ink);
         --surface:          240 4% 10%;
@@ -1203,6 +1223,38 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
     .kr-glass--blue  { --kr-glass-from: 214 45% 58%; --kr-glass-to: 28 55% 50%; }
     .kr-glass--olive { --kr-glass-from: 85 34% 42%;  --kr-glass-to: 75 32% 22%; }
     .kr-glass--warm  { --kr-glass-from: 36 18% 48%;  --kr-glass-to: 225 12% 38%; }
+
+    /* KR-8.5 — the desk's four identities. Colour IS the grouping here, so
+       these carry the load that filter pills used to: amber = waiting on
+       you, red = on fire, blue = due today, olive = flagged. Ordered by
+       urgency, and only the first two run hot — if all four shouted, none
+       would. */
+    .kr-desk--needs { --kr-glass-from: 33 92% 56%;  --kr-glass-to: 16 82% 36%; }
+    .kr-desk--fire  { --kr-glass-from: 6 78% 52%;   --kr-glass-to: 348 55% 26%; }
+    .kr-desk--today { --kr-glass-from: 210 55% 50%; --kr-glass-to: 228 42% 27%; }
+    .kr-desk--flag  { --kr-glass-from: 92 34% 42%;  --kr-glass-to: 155 30% 22%; }
+
+    /* Acted on. Dimmed and drained rather than removed — the founder keeps
+       their place in the grid, and "I already did this" is a state worth
+       seeing. */
+    .kr-done {
+        opacity: .42;
+        filter: saturate(.3);
+        transition: opacity 260ms ease, filter 260ms ease;
+    }
+
+    /* KR-8.5 — the hero blurs progressively as the sheet climbs over it.
+       Driven by three custom properties a scroll handler writes; all three
+       are compositor-friendly and default to "no effect", so if the handler
+       never runs (or reduced motion short-circuits it) the hero is simply
+       sharp. */
+    .kr-hero {
+        filter: blur(var(--kr-hero-blur, 0px));
+        opacity: var(--kr-hero-fade, 1);
+        transform: scale(var(--kr-hero-scale, 1));
+        transform-origin: 50% 22%;
+        will-change: filter, opacity, transform;
+    }
 
     /* KR-4 — the two motion verbs the primitives share.
 

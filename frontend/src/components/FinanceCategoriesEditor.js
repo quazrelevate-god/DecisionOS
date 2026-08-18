@@ -28,7 +28,7 @@ function CategoryGroup({ title, items, onSet, onAdd, onDel, testid }) {
             </button>
           </div>
         ))}
-        <button onClick={onAdd} data-testid={`${testid}-add`} className="flex items-center gap-1 text-sm font-semibold text-brand-blue hover:underline px-2 py-1">
+        <button onClick={onAdd} data-testid={`${testid}-add`} className="flex items-center gap-1 text-sm font-semibold text-brand-700 hover:underline px-2 py-1">
           <Plus size={13} weight="bold" /> Add
         </button>
       </div>
@@ -84,7 +84,7 @@ export function FinanceCategoriesEditor() {
         <Tag size={20} weight="bold" className="text-brand-600" />
         <h2 className="text-base font-medium">Finance Categories</h2>
       </div>
-      <p className="text-xs text-muted-foreground mb-4">
+      <p className="text-sm text-muted-foreground mb-4">
         The buckets your Expenses and Assets are filed under — AI-generated for <span className="font-semibold">{tenant?.industry || "your industry"}</span>. Edit them or let AI regenerate. “Other” is always kept.
       </p>
 

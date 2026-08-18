@@ -18,7 +18,7 @@ function Row({ label, hint, value, onChange, testid }) {
     <label className="block">
       <span className="label-mono text-muted-foreground">{label}</span>
       <input data-testid={testid} className={`${inp} mt-1`} value={value} onChange={(e) => onChange(e.target.value)} />
-      {hint && <span className="text-[11px] text-muted-foreground">{hint}</span>}
+      {hint && <span className="text-xs text-muted-foreground">{hint}</span>}
     </label>
   );
 }
@@ -66,7 +66,7 @@ export function BusinessVocabulary() {
         <Translate size={20} weight="bold" className="text-brand-600" />
         <h2 className="text-base font-medium">Business Vocabulary</h2>
       </div>
-      <p className="text-xs text-muted-foreground mb-4">
+      <p className="text-sm text-muted-foreground mb-4">
         The words DecisionOS uses across the app, tailored to <span className="font-semibold">{tenant?.industry || "your industry"}</span>. Edit them to match how your team talks, or let AI regenerate from your industry.
       </p>
 

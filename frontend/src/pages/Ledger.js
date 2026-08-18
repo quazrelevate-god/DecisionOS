@@ -72,7 +72,7 @@ function AttachmentLink({ att }) {
   if (!att?.url) return null;
   return (
     <a href={`${process.env.REACT_APP_BACKEND_URL}${att.url}`} target="_blank" rel="noopener noreferrer" data-testid="view-attachment"
-      className="ml-2 inline-flex items-center gap-1 text-xs text-brand-blue hover:underline align-middle">
+      className="ml-2 inline-flex items-center gap-1 text-xs text-brand-700 hover:underline align-middle">
       <Paperclip size={12} weight="bold" /> {t("finance.bill")}
     </a>
   );
@@ -400,7 +400,7 @@ function InsightCard({ insight, scope, idx, members, roleOptions, onAsk }) {
       <button onClick={() => setOpen((o) => !o)} data-testid={`insight-toggle-${scope}-${idx}`} className="w-full flex items-center gap-3 p-3 text-left hover:bg-accent/50 transition-colors">
         <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${LEVEL_DOT[insight.level] || "bg-black"}`} title={LEVEL_LABEL[insight.level]} />
         <span className="flex-1 min-w-0 font-semibold text-sm leading-snug">{insight.title}</span>
-        <span className="hidden sm:inline label-mono text-[10px] text-muted-foreground shrink-0">{LEVEL_LABEL[insight.level] || ""}</span>
+        <span className="hidden sm:inline label-mono text-xs text-muted-foreground shrink-0">{LEVEL_LABEL[insight.level] || ""}</span>
         <CaretDown size={16} weight="bold" className={`shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
@@ -465,7 +465,7 @@ function AiPanel({ scope, variant = "inline" }) {
           <h3 className={`font-medium ${isBrief ? "text-base" : "text-sm"}`}>{isBrief ? t("finance.finance_brief") : t("finance.ai_analysis")}</h3>
         </div>
         <div className="flex items-center gap-2">
-          {data?.generated_at && <span className="text-[11px] text-muted-foreground hidden sm:inline">{t("finance.updated", { time: new Date(data.generated_at).toLocaleString() })}</span>}
+          {data?.generated_at && <span className="text-xs text-muted-foreground hidden sm:inline">{t("finance.updated", { time: new Date(data.generated_at).toLocaleString() })}</span>}
           <button onClick={refresh} disabled={refreshing} data-testid={`ai-refresh-${scope}`} className="flex items-center gap-1 text-xs font-semibold border border-border px-2.5 py-1.5 hover:bg-accent transition-colors disabled:opacity-50">
             <ArrowClockwise size={13} weight="bold" className={refreshing ? "animate-spin" : ""} /> {refreshing ? t("finance.analysing") : t("finance.refresh")}
           </button>
@@ -594,7 +594,7 @@ function NeedsMatchingPanel({ title, hint, unmatched, open, cur, endpoint, stand
         <WarningCircle size={18} weight="bold" className="text-brand-600" />
         <h3 className="text-sm font-medium">{title} ({unmatched.length})</h3>
       </div>
-      <p className="text-xs text-muted-foreground mb-3">{hint}</p>
+      <p className="text-sm text-muted-foreground mb-3">{hint}</p>
       <div className="space-y-2">
         {unmatched.map((p) => (
           <div key={p.id} className="flex flex-wrap items-center gap-2 bg-card border border-border rounded-lg p-2" data-testid={`${testid}-item-${p.id}`}>
@@ -639,7 +639,7 @@ function RevenueTab({ data, cur, onDelete, onChange }) {
   const [sortKey, setSortKey] = useState("date-desc");       // date-desc | date-asc | amount-desc | overdue
 
   const invStatus = (s) => s.status === "paid" ? { label: "received", cls: "bg-green-600 text-white" }
-    : s.status === "partial" ? { label: "partial", cls: "bg-brand-blue text-white" }
+    : s.status === "partial" ? { label: "partial", cls: "bg-brand-50 text-brand-700" }
     : { label: "awaiting", cls: "bg-caution-50 text-caution-800" };
 
   const isOverdue = (s) => s.status !== "paid" && (daysSinceIso(s.date) || 0) > REVENUE_OVERDUE_DAYS;

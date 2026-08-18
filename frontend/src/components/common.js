@@ -87,7 +87,7 @@ export function EmptyState({ title, hint, ctaLabel, onCta, ctaTo, secondary, tes
     // have nothing here yet". The CTA is the only coloured thing in the block.
     <div
       data-testid={testid || "empty-state"}
-      className="py-16 px-6 text-center"
+      className="py-12 px-6 text-center"
     >
       <p className="text-base font-medium">{title}</p>
       {hint && <p className="text-sm text-muted-foreground mt-1.5 max-w-sm mx-auto leading-relaxed">{hint}</p>}
@@ -200,7 +200,7 @@ export function DexBadge({ inline = false, className = "" }) {
     return (
       <span
         data-testid="dex-badge-inline"
-        className={`inline-flex items-center gap-1 mr-1.5 text-[10px] font-medium text-brand-600 ${className}`}
+        className={`inline-flex items-center gap-1 mr-1.5 text-xs font-medium text-brand-600 ${className}`}
       >
         <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <path d="M12 2l2.4 5.6L20 10l-5.6 2.4L12 18l-2.4-5.6L4 10l5.6-2.4L12 2z"/>
@@ -215,7 +215,7 @@ export function DexBadge({ inline = false, className = "" }) {
   return (
     <div
       data-testid="dex-badge-block"
-      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-medium bg-brand-50 text-brand-700 ${className}`}
+      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-medium bg-brand-50 text-brand-700 ${className}`}
     >
       <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
         <path d="M12 2l2.4 5.6L20 10l-5.6 2.4L12 18l-2.4-5.6L4 10l5.6-2.4L12 2z"/>

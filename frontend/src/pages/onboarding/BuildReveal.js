@@ -185,7 +185,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
 
             {!error && (
               <>
-                <div className="mt-8 max-w-md mx-auto">
+                <div className="mt-6 max-w-md mx-auto">
                   <div className="h-4 border border-border bg-white overflow-hidden" data-testid="build-progress-bar">
                     <motion.div className="h-full bg-brand-600" animate={{ width: `${pct}%` }} transition={{ duration: 0.4, ease: "easeOut" }} />
                   </div>
@@ -207,7 +207,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
             )}
 
             {error && (
-              <div className="mt-8">
+              <div className="mt-6">
                 <p data-testid="build-error" className="text-sm text-danger-600 font-semibold mb-3">{error}</p>
                 <button onClick={generate} data-testid="build-retry"
                   className="bg-primary text-primary-foreground text-sm font-medium px-6 py-3 border border-border transition-all">
@@ -238,7 +238,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
               ))}
             </div>
 
-            <div className="space-y-5 mb-8">
+            <div className="space-y-5 mb-6">
               <PreviewBlock label="Departments" items={bp.departments || []} tint="bg-white" />
               <PreviewBlock label="Workflows — named after how you actually work" items={workflowNames} tint="bg-caution-50/40" />
               <PreviewBlock label="Recurring tasks Dex will keep on rails" items={taskTitles.slice(0, 8)} tint="bg-brand-paper" />
@@ -252,12 +252,12 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
                 </p>
                 {!showRefine && (
                   <button onClick={() => setShowRefine(true)} data-testid="build-refine-open"
-                    className="text-[11px] font-medium text-brand-ink underline underline-offset-4 hover:text-brand-600">
+                    className="text-xs font-medium text-brand-ink underline underline-offset-4 hover:text-brand-600">
                     Add a workflow
                   </button>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground mb-3">
+              <p className="text-sm text-muted-foreground mb-3">
                 Speak or type any workflow, approval, or team detail Dex missed — he&apos;ll rewire the OS.
               </p>
               {showRefine && (
@@ -336,7 +336,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
             <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl leading-[1.02] mb-4">
               {payload.company_name} now runs on DecisionOS.
             </h1>
-            {welcome && <p data-testid="build-welcome-line" className="text-base leading-relaxed mb-8 max-w-xl">{welcome}</p>}
+            {welcome && <p data-testid="build-welcome-line" className="text-base leading-relaxed mb-6 max-w-xl">{welcome}</p>}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6" data-testid="build-counts">
               {counts.map((c, i) => (
                 <motion.div key={c.label} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 + i * 0.1 }}
@@ -347,7 +347,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
               ))}
             </div>
             {workflowNames.length > 0 && (
-              <div className="mb-8">
+              <div className="mb-6">
                 <p className="label-mono text-muted-foreground mb-2">Your workflows — named after how you actually work</p>
                 <div className="flex flex-wrap gap-1.5">
                   {workflowNames.slice(0, 6).map((n, i) => (

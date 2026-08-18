@@ -64,7 +64,7 @@ export default function AdminPortal() {
             </div>
             <div>
               <div className="font-heading font-black uppercase tracking-tighter leading-none">DecisionOS</div>
-              <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-[#e5484d]">Admin Console</div>
+              <div className="font-mono text-xs uppercase tracking-[0.3em] text-[#e5484d]">Admin Console</div>
             </div>
           </div>
           <div className="flex items-center gap-4">
@@ -72,7 +72,7 @@ export default function AdminPortal() {
             <button
               data-testid="admin-logout"
               onClick={logout}
-              className="font-mono text-[11px] uppercase tracking-wider px-3 py-2 border border-white/20 text-white/70 hover:border-[#e5484d] hover:text-[#e5484d] transition-colors flex items-center gap-1.5"
+              className="font-mono text-xs uppercase tracking-wider px-3 py-2 border border-white/20 text-white/70 hover:border-[#e5484d] hover:text-[#e5484d] transition-colors flex items-center gap-1.5"
             >
               <SignOut size={14} /> Logout
             </button>
@@ -88,7 +88,7 @@ export default function AdminPortal() {
               key={t.key}
               data-testid={`admin-tab-${t.key}`}
               onClick={() => setTab(t.key)}
-              className={`font-mono text-[11px] uppercase tracking-wider px-4 py-4 flex items-center gap-2 border-b-2 whitespace-nowrap transition-colors ${
+              className={`font-mono text-xs uppercase tracking-wider px-4 py-4 flex items-center gap-2 border-b-2 whitespace-nowrap transition-colors ${
                 tab === t.key
                   ? "border-[#e5484d] text-white"
                   : "border-transparent text-white/40 hover:text-white/70"

@@ -22,7 +22,7 @@ import { inr, inrCompact } from "../lib/format";
 import { Fire, Tray } from "@phosphor-icons/react";
 
 const Section = ({ id, title, children }) => (
-  <section className="mt-8" data-testid={`kit-${id}`}>
+  <section className="mt-6" data-testid={`kit-${id}`}>
     <h2 className="font-heading text-base font-semibold tracking-tight text-muted-foreground">
       {title}
     </h2>

@@ -26,7 +26,7 @@ import {
 // backend code. Weights match _score_execution / _score_sales / inline
 // finance + responsiveness in server.py (35/25/20/20).
 const CATS = [
-  { key: "execution", label: "Execution", icon: Lightning, color: "bg-brand-blue",
+  { key: "execution", label: "Execution", icon: Lightning, color: "bg-brand-600",
     weight: 35,
     formula: "(tasks done ÷ total actionable) × 100  −  (overdue ÷ open) × 40",
     plain: "How much of what you started is finished on time." },
@@ -163,7 +163,7 @@ function OwnerView({ data }) {
       {enough && <FormulaExplainer weights={weights} setWeights={setWeights} />}
 
       {/* Quick stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         {[
           { label: "Tasks Done", value: stats.done },
           { label: "Open Tasks", value: stats.open },
@@ -205,7 +205,7 @@ function OwnerView({ data }) {
 // -----------------------------------------------------------------------------
 function PersonalSnapshot({ stats, viewerName }) {
   return (
-    <div className="card-brutal p-6 mb-8" data-testid="operating-personal-snapshot">
+    <div className="card-brutal p-6 mb-6" data-testid="operating-personal-snapshot">
       <div className="flex items-center gap-2 mb-1">
         <Sparkle size={16} weight="bold" className="text-brand-600" />
         <h2 className="text-base font-medium">Your personal snapshot</h2>
@@ -250,7 +250,7 @@ function SelfView({ data }) {
       <PageHeader eyebrow={eyebrow} title={title} />
 
       {/* Hero -- personal score */}
-      <div className="card-brutal p-8 mb-8 flex flex-col lg:flex-row items-center gap-8" data-testid="operating-self-hero">
+      <div className="card-brutal p-8 mb-6 flex flex-col lg:flex-row items-center gap-6" data-testid="operating-self-hero">
         <div className="flex flex-col items-center shrink-0">
           <div className="w-36 h-36 flex flex-col items-center justify-center border-4 border-border bg-white">
             {hasActivity ? (
@@ -288,7 +288,7 @@ function SelfView({ data }) {
       </div>
 
       {/* Rich breakdown -- signals only the individual view surfaces */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-6">
         <BreakdownCard
           icon={Camera}
           label="Proof rate"
@@ -326,11 +326,11 @@ function SelfView({ data }) {
         </Link>
       </div>
       {openWork.length === 0 ? (
-        <div className="card-brutal p-6 mb-8 text-center">
+        <div className="card-brutal p-6 mb-6 text-center">
           <p className="text-sm text-muted-foreground">Nothing open right now — good place to be.</p>
         </div>
       ) : (
-        <div className="card-brutal divide-y divide-black/10 mb-8" data-testid="operating-self-open">
+        <div className="card-brutal divide-y divide-black/10 mb-6" data-testid="operating-self-open">
           {openWork.map((t) => (
             <Link key={t.id} to="/my-work" className="p-4 flex items-center gap-4 hover:bg-black/[0.03] transition-colors group">
               <div className="flex-1 min-w-0">
@@ -364,7 +364,7 @@ function SelfView({ data }) {
               See board <ArrowRight size={12} weight="bold" />
             </Link>
           </div>
-          <div className="card-brutal divide-y divide-black/10 mb-8" data-testid="operating-self-workflows">
+          <div className="card-brutal divide-y divide-black/10 mb-6" data-testid="operating-self-workflows">
             {activeWfs.map((w) => (
               <Link key={w.id} to="/workflows" className="p-4 flex items-center gap-4 hover:bg-muted/40 transition-colors group">
                 <div className="flex-1 min-w-0">
@@ -387,7 +387,7 @@ function SelfView({ data }) {
           a signal. A future Settings item (Phase B follow-up) will let users
           hide this even when peers exist. */}
       {peer && peer.my_rank_in_role && peer.role_ranked_size >= 2 && (
-        <div className="card-brutal p-4 mb-8 flex items-center gap-3" data-testid="operating-self-peer">
+        <div className="card-brutal p-4 mb-6 flex items-center gap-3" data-testid="operating-self-peer">
           <Trophy size={16} weight="bold" className="text-brand-600 shrink-0" />
           <p className="text-sm">
             Among your <strong>{peer.role}</strong> peers you're ranked{" "}
@@ -494,7 +494,7 @@ function HeroCard({ overall }) {
         <Sparkline values={demoTrend} />
       </div>
 
-      <div className="relative flex flex-col lg:flex-row items-start gap-8">
+      <div className="relative flex flex-col lg:flex-row items-start gap-6">
         <div className="flex flex-col items-center shrink-0">
           <div className="w-36 h-36 flex flex-col items-center justify-center border-4 border-border bg-white">
             <span
@@ -960,7 +960,7 @@ function OperatingScoreSkeleton() {
         <div className="h-3 w-40 bg-muted mb-2 animate-pulse" />
         <div className="h-8 w-64 bg-muted animate-pulse" />
       </div>
-      <div className="card-brutal p-8 mb-8 flex flex-col lg:flex-row items-center gap-8">
+      <div className="card-brutal p-8 mb-6 flex flex-col lg:flex-row items-center gap-6">
         <div className="w-36 h-36 border-4 border-border bg-muted shrink-0 animate-pulse" />
         <div className="flex-1 w-full space-y-3">
           {[0, 1, 2, 3].map((i) => (
@@ -974,7 +974,7 @@ function OperatingScoreSkeleton() {
           ))}
         </div>
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         {[0, 1, 2, 3].map((i) => (
           <div key={i} className="card-brutal p-4">
             <div className="h-3 w-16 bg-muted mb-3 animate-pulse" />
@@ -1011,8 +1011,8 @@ function NotEnoughDataEmptyState({ stats }) {
   const taskProgress = Math.min(doneCount, 3);
 
   return (
-    <div className="card-brutal p-8 mb-8" data-testid="operating-not-ready">
-      <div className="flex flex-col lg:flex-row items-start gap-8">
+    <div className="card-brutal p-8 mb-6" data-testid="operating-not-ready">
+      <div className="flex flex-col lg:flex-row items-start gap-6">
         <div className="flex flex-col items-center shrink-0">
           <div className="w-36 h-36 flex flex-col items-center justify-center border-4 border-border bg-muted text-center px-3">
             <Gauge size={30} weight="bold" className="text-muted-foreground mb-1" />
@@ -1097,7 +1097,7 @@ function FormulaExplainer({ weights = DEFAULT_WEIGHTS, setWeights }) {
   const setOne = (key, val) => setWeights && setWeights({ ...weights, [key]: Math.max(0, Math.min(100, val)) });
 
   return (
-    <div className="mb-8 -mt-4">
+    <div className="mb-6 -mt-4">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

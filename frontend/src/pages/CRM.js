@@ -427,7 +427,7 @@ function AddContactMenu({ canManage, canImport, csvBusy, onImport, customerLabel
               onClick={pick(() => document.querySelector('[data-testid="crm-add-customer"]')?.click())}
               className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-accent border-b border-border transition-colors"
             >
-              <div className="w-9 h-9 flex items-center justify-center border border-border bg-brand-blue/10 text-brand-blue shrink-0">
+              <div className="w-9 h-9 flex items-center justify-center border border-border bg-brand-50 text-brand-700 shrink-0">
                 <AddressBook size={16} weight="bold" />
               </div>
               <div className="min-w-0 flex-1">
@@ -721,7 +721,7 @@ export default function CRM() {
                 {s.icon && <s.icon size={16} weight={active ? "fill" : "regular"} />}
                 <span>{s.label}</span>
                 <span
-                  className={`min-w-[18px] px-1 py-0.5 rounded-full text-[11px] tabular-nums text-center ${active ? "bg-brand-600/15 text-brand-700" : "bg-muted text-muted-foreground"}`}
+                  className={`min-w-[18px] px-1 py-0.5 rounded-full text-xs tabular-nums text-center ${active ? "bg-brand-600/15 text-brand-700" : "bg-muted text-muted-foreground"}`}
                   data-testid={`crm-scope-count-${s.key}`}
                 >
                   {s.count}
@@ -877,7 +877,7 @@ export default function CRM() {
                         /* RD-3: 16px, not 18px. An 18px badge sits taller
                            than the title's line box and pushed this card's
                            heading ~10px below its neighbours' in the grid. */
-                        className="inline-flex items-center justify-center min-w-4 h-4 px-1 bg-danger-600 text-white text-[10px] font-semibold rounded-full shrink-0 leading-none"
+                        className="inline-flex items-center justify-center min-w-4 h-4 px-1 bg-danger-600 text-white text-xs font-semibold rounded-full shrink-0 leading-none"
                       >
                         {complaintCount}
                       </span>
@@ -887,14 +887,14 @@ export default function CRM() {
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <span
-                    className={`px-1.5 py-0.5 rounded text-[10px] font-medium tracking-wide ${isCustomer ? "bg-brand-50 text-brand-700" : "bg-muted text-muted-foreground"}`}
+                    className={`px-1.5 py-0.5 rounded text-xs font-medium tracking-wide ${isCustomer ? "bg-brand-50 text-brand-700" : "bg-muted text-muted-foreground"}`}
                     data-testid={`crm-type-chip-${c.id}`}
                   >
                     {typeChipLabel}
                   </span>
                   {stage && (
                     <span
-                      className={`px-1.5 py-0.5 rounded text-[10px] font-medium tracking-wide ${stage.cls}`}
+                      className={`px-1.5 py-0.5 rounded text-xs font-medium tracking-wide ${stage.cls}`}
                       data-testid={`crm-stage-${c.id}`}
                     >
                       {stage.label}

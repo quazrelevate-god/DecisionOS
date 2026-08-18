@@ -48,7 +48,7 @@ function SearchPanel() {
           {t("brain.search_btn")}
         </button>
       </form>
-      <p className="text-xs text-muted-foreground mb-8">{t("brain.search_hint")}</p>
+      <p className="text-xs text-muted-foreground mb-6">{t("brain.search_hint")}</p>
 
       {loading && <p className="font-mono text-sm">{t("brain.searching")}</p>}
       {!res && !loading && <EmptyState title={t("brain.empty_title")} hint={t("brain.empty_hint")} />}
@@ -130,7 +130,7 @@ function SearchPanel() {
             </section>
           </div>
           {(res.memory || []).length > 0 && (
-            <div className="mt-8">
+            <div className="mt-6">
               <h3 className="font-medium text-lg mb-3">{t("brain.memory")} ({res.memory.length})</h3>
               <div className="grid md:grid-cols-2 gap-3">
                 {res.memory.map((m) => (

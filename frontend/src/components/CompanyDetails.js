@@ -144,7 +144,7 @@ export function CompanyDetails() {
         <Buildings size={20} weight="bold" className="text-brand-600" />
         <h2 className="text-base font-medium">Company Details</h2>
       </div>
-      <p className="text-xs text-muted-foreground mb-4">Update your company profile, products, and team roles.</p>
+      <p className="text-sm text-muted-foreground mb-4">Update your company profile, products, and team roles.</p>
 
       <div className="grid sm:grid-cols-2 gap-3">
         {FIELDS.map((f) => (
@@ -184,7 +184,7 @@ export function CompanyDetails() {
       <div className="mt-4">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
-            <Package size={18} weight="bold" className="text-brand-blue" />
+            <Package size={18} weight="bold" className="text-brand-700" />
             <h3 className="font-medium">Products & Services</h3>
           </div>
           {canManage && (
@@ -271,7 +271,7 @@ export function CompanyDetails() {
                 name says that. */}
             <h3 className="font-medium">Rules &amp; templates</h3>
           </div>
-          <p className="text-xs text-muted-foreground mb-3">Free-standing task templates and org-wide approval rules. Pipelines and per-stage rules live in the Operations tab.</p>
+          <p className="text-sm text-muted-foreground mb-3">Free-standing task templates and org-wide approval rules. Pipelines and per-stage rules live in the Operations tab.</p>
 
           {/* WE-02 (2026-08-16): "Workflows" list removed from this
               card. It was a free-text brainstorm list that never drove
@@ -292,7 +292,7 @@ export function CompanyDetails() {
               </div>
             ))}
           </div>
-          <button onClick={addOpTask} data-testid="os-optask-add" className="mt-1.5 flex items-center gap-1 text-sm text-brand-blue font-semibold hover:underline"><Plus size={14} weight="bold" /> Add operational task</button>
+          <button onClick={addOpTask} data-testid="os-optask-add" className="mt-1.5 flex items-center gap-1 text-sm text-brand-700 font-semibold hover:underline"><Plus size={14} weight="bold" /> Add operational task</button>
 
           <label className="label-mono text-muted-foreground flex items-center gap-1.5 mt-4"><ShieldCheck size={13} weight="bold" /> Approval rules</label>
           <div className="space-y-2 mt-1.5" data-testid="os-rules-list">
@@ -306,7 +306,7 @@ export function CompanyDetails() {
               </div>
             ))}
           </div>
-          <button onClick={addRule} data-testid="os-rule-add" className="mt-1.5 flex items-center gap-1 text-sm text-brand-blue font-semibold hover:underline"><Plus size={14} weight="bold" /> Add approval rule</button>
+          <button onClick={addRule} data-testid="os-rule-add" className="mt-1.5 flex items-center gap-1 text-sm text-brand-700 font-semibold hover:underline"><Plus size={14} weight="bold" /> Add approval rule</button>
 
           {/* U7-11.1: label the two SAVE buttons on this card by scope
               so owners know which changes each one commits. Was

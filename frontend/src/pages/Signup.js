@@ -55,7 +55,7 @@ export default function Signup() {
           {PHASES.map((p, i) => (
             <div key={p.key} className="flex items-center gap-2">
               <div className={`w-6 h-1.5 border border-border transition-colors duration-500 ${i < phaseIdx ? "bg-primary" : i === phaseIdx ? "bg-brand-600" : "bg-white"}`} />
-              <span className={`hidden md:inline text-[11px] font-medium transition-colors ${i === phaseIdx ? "text-brand-ink" : "text-muted-foreground/60"}`}>{p.label}</span>
+              <span className={`hidden md:inline text-xs font-medium transition-colors ${i === phaseIdx ? "text-brand-ink" : "text-muted-foreground/60"}`}>{p.label}</span>
             </div>
           ))}
         </div>
@@ -91,8 +91,8 @@ export default function Signup() {
       </main>
 
       <footer className="px-6 lg:px-12 py-4 border-t border-border flex items-center justify-between">
-        <p className="text-[11px] text-muted-foreground font-mono">No credit card · 2 minutes · built around how you actually run</p>
-        <p className="text-[11px] text-muted-foreground font-mono hidden sm:block">The operational brain for founder-led SMEs</p>
+        <p className="text-xs text-muted-foreground font-mono">No credit card · 2 minutes · built around how you actually run</p>
+        <p className="text-xs text-muted-foreground font-mono hidden sm:block">The operational brain for founder-led SMEs</p>
       </footer>
     </div>
   );

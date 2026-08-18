@@ -397,7 +397,7 @@ function ApproverConfig({ roleOptions, members }) {
     <div className="card-brutal p-4" data-testid="leave-approver-config">
       <div className="flex items-center gap-2 mb-1"><Gear size={18} weight="bold" className="text-brand-600" />
         <h3 className="text-base font-medium">Leave Approvers by Department</h3></div>
-      <p className="text-xs text-muted-foreground mb-3">Choose who approves leave for each role. If an employee has a Reporting Manager set (in People → Employees), that manager takes priority. Otherwise this mapping is used, then the Owner.</p>
+      <p className="text-sm text-muted-foreground mb-3">Choose who approves leave for each role. If an employee has a Reporting Manager set (in People → Employees), that manager takes priority. Otherwise this mapping is used, then the Owner.</p>
       <div className="space-y-2">
         {roleOptions.filter((r) => r.key !== "owner").map((r) => (
           <div key={r.key} className="flex items-center gap-3">
@@ -461,7 +461,7 @@ export default function Leave({ embedded = false }) {
           <button key={t.key} onClick={() => setTab(t.key)} data-testid={`leave-tab-${t.key}`}
             className={`flex items-center gap-2 px-5 py-2.5 text-sm font-medium border-r border-border last:border-r-0 transition-colors ${tab === t.key ? "bg-primary text-primary-foreground" : "bg-white hover:bg-accent"}`}>
             {t.label}
-            {t.n > 0 && <span className={`min-w-5 h-5 px-1 flex items-center justify-center text-[10px] border border-border ${tab === t.key ? "bg-white text-black" : "bg-brand-600 text-white"}`}>{t.n}</span>}
+            {t.n > 0 && <span className={`min-w-5 h-5 px-1 flex items-center justify-center text-xs border border-border ${tab === t.key ? "bg-white text-black" : "bg-brand-600 text-white"}`}>{t.n}</span>}
           </button>
         ))}
       </div>

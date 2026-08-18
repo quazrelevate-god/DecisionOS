@@ -23,7 +23,7 @@ const VISIBILITIES = [
   { key: "private", label: "Only owner + named roles" },
 ];
 const KIND_TINT = {
-  policy: "bg-caution-50/40", filing: "bg-brand-blue/20", contract: "bg-white",
+  policy: "bg-caution-50/40", filing: "bg-brand-50", contract: "bg-white",
   sop: "bg-brand-600/10", report: "bg-brand-paper", note: "bg-white", other: "bg-white",
 };
 
@@ -94,7 +94,7 @@ function UploadDialog({ onClose, onUploaded }) {
               type="file" data-testid="brain-doc-upload-file"
               onChange={(e) => setFile(e.target.files?.[0] || null)}
               className="mt-1 block w-full text-sm border border-border bg-white file:mr-3 file:py-2 file:px-4 file:border-0 file:border-r file:border-border file:bg-primary file:text-white file:font-semibold file:uppercase file:tracking-wider file:text-xs" />
-            <span className="text-[11px] text-muted-foreground font-mono mt-1 block">PDF · DOCX · XLSX · TXT · images · 25MB max</span>
+            <span className="text-xs text-muted-foreground font-mono mt-1 block">PDF · DOCX · XLSX · TXT · images · 25MB max</span>
           </label>
 
           <label className="block">
@@ -256,7 +256,7 @@ export function DocumentsPanel() {
           </button>
         )}
       </div>
-      <p className="text-xs text-muted-foreground mb-8">
+      <p className="text-xs text-muted-foreground mb-6">
         Dump the policies, filings, contracts and old reports here — employees can find them by asking Dex or searching.
       </p>
 
@@ -279,17 +279,17 @@ export function DocumentsPanel() {
                   <File size={18} weight="bold" className="shrink-0" />
                   <p className="font-medium text-sm leading-tight truncate">{d.title}</p>
                 </div>
-                <span className={`px-2 py-0.5 border border-border text-[10px] font-mono  shrink-0 ${KIND_TINT[d.kind] || "bg-white"}`}>{d.kind}</span>
+                <span className={`px-2 py-0.5 border border-border text-xs font-mono  shrink-0 ${KIND_TINT[d.kind] || "bg-white"}`}>{d.kind}</span>
               </div>
               {d.summary && <p className="text-xs text-muted-foreground leading-relaxed">{d.summary}</p>}
               {(d.tags || []).length > 0 && (
                 <div className="flex flex-wrap gap-1">
                   {d.tags.map((t) => (
-                    <span key={t} className="px-1.5 py-0.5 border border-border text-[10px] font-mono bg-brand-paper">#{t}</span>
+                    <span key={t} className="px-1.5 py-0.5 border border-border text-xs font-mono bg-brand-paper">#{t}</span>
                   ))}
                 </div>
               )}
-              <div className="flex items-center justify-between text-[11px] font-mono text-muted-foreground pt-2 border-t border-border">
+              <div className="flex items-center justify-between text-xs font-mono text-muted-foreground pt-2 border-t border-border">
                 <span className="flex items-center gap-1.5">
                   {d.visibility === "public"
                     ? "Everyone"
@@ -301,12 +301,12 @@ export function DocumentsPanel() {
               </div>
               <div className="flex items-center gap-2">
                 <button onClick={() => download(d)} data-testid={`brain-doc-download-${d.id}`}
-                  className="flex-1 flex items-center justify-center gap-1.5 border border-border py-2 text-[11px] font-medium bg-white hover:bg-accent">
+                  className="flex-1 flex items-center justify-center gap-1.5 border border-border py-2 text-xs font-medium bg-white hover:bg-accent">
                   <DownloadSimple size={12} weight="bold" /> Download
                 </button>
                 {(isOwner || d.uploaded_by === user?.id) && (
                   <button onClick={() => remove(d)} disabled={deleting === d.id} data-testid={`brain-doc-delete-${d.id}`}
-                    className="flex items-center justify-center gap-1.5 border border-border py-2 px-3 text-[11px] font-medium bg-white hover:bg-brand-600 hover:text-white transition-colors disabled:opacity-40">
+                    className="flex items-center justify-center gap-1.5 border border-border py-2 px-3 text-xs font-medium bg-white hover:bg-brand-600 hover:text-white transition-colors disabled:opacity-40">
                     {deleting === d.id ? <CircleNotch size={12} className="animate-spin" /> : <Trash size={12} weight="bold" />}
                   </button>
                 )}

@@ -98,7 +98,7 @@ export function BasicsFlow({ form, setForm, onDone }) {
           <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl leading-[1.02] mb-2">
             {step.q(form)}
           </h1>
-          <p className="text-sm text-muted-foreground mb-8">{step.sub(form)}</p>
+          <p className="text-sm text-muted-foreground mb-6">{step.sub(form)}</p>
 
           {step.type === "chips" ? (
             <div className="flex flex-wrap gap-3" data-testid="signup-team-size-chips">
@@ -137,7 +137,7 @@ export function BasicsFlow({ form, setForm, onDone }) {
             className="mt-3 text-sm text-danger-600 font-semibold">{error}</motion.p>}
 
           {step.type !== "chips" && (
-            <div className="mt-8 flex items-center gap-4">
+            <div className="mt-6 flex items-center gap-4">
               <button onClick={() => advance()} disabled={checking} data-testid="signup-basics-next"
                 className="flex items-center gap-2 bg-primary text-primary-foreground font-medium text-sm px-8 py-3.5 border border-border hover:-translate-y-0.5 transition-all disabled:opacity-50">
                 {checking ? <CircleNotch size={16} className="animate-spin" /> : null}

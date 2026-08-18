@@ -159,7 +159,7 @@ function TaskTrail({ t, members, roleOptions, onChange }) {
             const Icon = UPDATE_ICON[u.kind] || ChatText;
             return (
               <li key={u.id} className="flex items-start gap-2 border border-border p-2.5">
-                <Icon size={15} weight="bold" className={`mt-0.5 shrink-0 ${u.kind === "escalate" ? "text-danger-600" : u.kind === "handoff" ? "text-brand-blue" : "text-muted-foreground"}`} />
+                <Icon size={15} weight="bold" className={`mt-0.5 shrink-0 ${u.kind === "escalate" ? "text-danger-600" : u.kind === "handoff" ? "text-brand-700" : "text-muted-foreground"}`} />
                 <div className="min-w-0 flex-1">
                   {u.step_text && <p className="label-mono text-muted-foreground">On: {u.step_text}</p>}
                   <p className="text-sm">{u.text}</p>
@@ -363,7 +363,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
                   : ask[s.id].error ? <p className="text-danger-600">Couldn't fetch a suggestion.</p>
                   : (
                     <>
-                      <p className="flex items-start gap-1.5"><Robot size={13} weight="bold" className="text-brand-blue mt-0.5 shrink-0" /><span>{ask[s.id].data.suggestion}</span></p>
+                      <p className="flex items-start gap-1.5"><Robot size={13} weight="bold" className="text-brand-700 mt-0.5 shrink-0" /><span>{ask[s.id].data.suggestion}</span></p>
                       {(ask[s.id].data.objections || []).length > 0 && (
                         <div className="mt-2 space-y-1.5">
                           <p className="label-mono text-muted-foreground">If they push back:</p>
@@ -538,7 +538,7 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
 
             {refs.length > 0 && (
               <div data-testid={`detail-reference-${t.id}`}>
-                <p className="flex items-center gap-2 font-heading font-medium tracking-tight text-sm mb-2"><Paperclip size={15} weight="bold" className="text-brand-blue" /> Reference material · {refs.length}</p>
+                <p className="flex items-center gap-2 font-heading font-medium tracking-tight text-sm mb-2"><Paperclip size={15} weight="bold" className="text-brand-700" /> Reference material · {refs.length}</p>
                 <div className="flex flex-wrap gap-2 items-center">
                   {refs.map((a) => (
                     isImg(a)
@@ -557,11 +557,11 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
                 </div>
                 {insights.map((ins, i) => (
                   <div key={`${ins.filename || "ref"}-${(ins.summary || "").slice(0, 40)}`} className="mt-3 border border-brand-200 rounded-lg bg-brand-50/60 p-3" data-testid={`detail-ref-insight-${t.id}-${i}`}>
-                    <p className="flex items-center gap-1.5 label-mono text-brand-blue mb-1"><Lightbulb size={13} weight="fill" className="text-brand-yellow" /> AI read this reference{ins.filename ? ` · ${ins.filename}` : ""}</p>
+                    <p className="flex items-center gap-1.5 label-mono text-brand-700 mb-1"><Lightbulb size={13} weight="fill" className="text-brand-yellow" /> AI read this reference{ins.filename ? ` · ${ins.filename}` : ""}</p>
                     <p className="text-sm">{ins.summary}</p>
                     {(ins.points || []).length > 0 && (
                       <ul className="mt-2 space-y-1">
-                        {ins.points.map((p) => <li key={p} className="flex items-start gap-1.5 text-xs text-muted-foreground"><ArrowRight size={11} weight="bold" className="mt-0.5 shrink-0 text-brand-blue" /> {p}</li>)}
+                        {ins.points.map((p) => <li key={p} className="flex items-start gap-1.5 text-xs text-muted-foreground"><ArrowRight size={11} weight="bold" className="mt-0.5 shrink-0 text-brand-700" /> {p}</li>)}
                       </ul>
                     )}
                   </div>
@@ -945,7 +945,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
                   title={`Open workflow: ${t.workflow_summary.title}`}
                 >
                   <FlowArrow size={11} weight="bold" />
-                  <span className=" text-[10px]">
+                  <span className=" text-xs">
                     {(t.workflow_summary.stage || "").replace(/_/g, " ")}
                   </span>
                 </a>
@@ -960,8 +960,8 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
                   <Paperclip size={11} weight="bold" /> {t.attachment_count}
                 </span>
               )}
-              {t.source === "escalation" && <span className="px-1.5 py-0.5 text-[10px] font-medium bg-danger-600 text-white">Escalation</span>}
-              {t.source === "handoff" && <span className="px-1.5 py-0.5 text-[10px] font-medium bg-brand-50 text-brand-700 rounded">Handoff</span>}
+              {t.source === "escalation" && <span className="px-1.5 py-0.5 text-xs font-medium bg-danger-600 text-white">Escalation</span>}
+              {t.source === "handoff" && <span className="px-1.5 py-0.5 text-xs font-medium bg-brand-50 text-brand-700 rounded">Handoff</span>}
             </div>
           </div>
         </div>
@@ -1011,11 +1011,11 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
             title={`Open workflow: ${t.workflow_summary.title}`}
           >
             <FlowArrow size={12} weight="bold" className="text-brand-600" />
-            <span className="font-medium text-[10px]">
+            <span className="font-medium text-xs">
               {(t.workflow_summary.title || "Workflow").slice(0, 40)}
             </span>
             <span className="text-muted-foreground">·</span>
-            <span className=" text-[10px]">
+            <span className=" text-xs">
               {(t.workflow_summary.stage || "").replace(/_/g, " ")}
             </span>
           </a>
@@ -1107,7 +1107,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
           <>
             {refs.length > 0 && (
               <div className="mt-3 border border-brand-200 rounded-lg bg-brand-50/60 p-3" data-testid={`reference-block-${t.id}`}>
-                <p className="label-mono text-brand-blue flex items-center gap-1.5 mb-2">
+                <p className="label-mono text-brand-700 flex items-center gap-1.5 mb-2">
                   <Paperclip size={13} weight="bold" /> Reference material · {refs.length}
                 </p>
                 <div className="flex flex-wrap gap-2 items-center">{refs.map(renderAtt)}</div>
@@ -1554,7 +1554,7 @@ export default function MyWork() {
                 <button key={tb.key} onClick={() => setTab(tb.key)} data-testid={`work-tab-${tb.key}`}
                   className={`flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-full text-xs transition-colors ${tab === tb.key ? "bg-brand-50 text-brand-700 font-medium" : "text-muted-foreground hover:bg-accent hover:text-foreground"}`}>
                   {tb.label}
-                  <span className={`min-w-[17px] px-1 py-0.5 rounded-full text-[10px] leading-none text-center tabular-nums ${tab === tb.key ? "bg-brand-600/15 text-brand-700" : "bg-muted text-muted-foreground"}`}>{countFor(tb.key)}</span>
+                  <span className={`min-w-[17px] px-1 py-0.5 rounded-full text-xs leading-none text-center tabular-nums ${tab === tb.key ? "bg-brand-600/15 text-brand-700" : "bg-muted text-muted-foreground"}`}>{countFor(tb.key)}</span>
                 </button>
               ))}
           </div>

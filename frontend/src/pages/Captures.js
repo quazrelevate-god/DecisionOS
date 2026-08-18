@@ -13,7 +13,7 @@ import {
 const inp = "w-full border border-border px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-600";
 
 const CLASS_STYLE = {
-  invoice: "bg-brand-blue text-white", payment: "bg-brand-blue text-white",
+  invoice: "bg-brand-50 text-brand-700", payment: "bg-brand-50 text-brand-700",
   purchase: "bg-purple-600 text-white", sales: "bg-green-600 text-white",
   hr: "bg-pink-600 text-white", meeting: "bg-amber-500 text-black",
   decision: "bg-primary text-primary-foreground", approval: "bg-brand-600 text-white",
@@ -235,7 +235,7 @@ function CaptureCard({ c, user, onChange }) {
           {c.clarification_note && <p className="text-xs text-amber-700 mt-1">Note: {c.clarification_note}</p>}
           {c.file_url && (
             <div className="mt-2">
-              <p className="label-mono text-muted-foreground text-[10px] mb-1">Under review — original file</p>
+              <p className="label-mono text-muted-foreground text-xs mb-1">Under review — original file</p>
               {c.kind === "image" ? (
                 <a href={`${process.env.REACT_APP_BACKEND_URL}${c.file_url}`} target="_blank" rel="noopener noreferrer" data-testid={`capture-file-${c.id}`} title="Open full image" className="inline-block border border-border transition-all">
                   <img src={`${process.env.REACT_APP_BACKEND_URL}${c.file_url}`} alt={c.filename || "attachment"} className="h-28 w-auto object-cover" />
@@ -253,26 +253,26 @@ function CaptureCard({ c, user, onChange }) {
 
       {edit && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3 border-t border-border/20 pt-3" data-testid={`capture-edit-${c.id}`}>
-          <label className="block"><span className="label-mono text-muted-foreground text-[10px]">Type</span>
+          <label className="block"><span className="label-mono text-muted-foreground text-xs">Type</span>
             <input className={inp} value={form.classification} onChange={(e) => setForm({ ...form, classification: e.target.value })} /></label>
-          <label className="block"><span className="label-mono text-muted-foreground text-[10px]">Reviewer role</span>
+          <label className="block"><span className="label-mono text-muted-foreground text-xs">Reviewer role</span>
             <select className={inp} value={form.reviewer_role} onChange={(e) => setForm({ ...form, reviewer_role: e.target.value, assignee_id: "" })}>
               {ROLE_OPTS.map((r) => <option key={r} value={r}>{r}</option>)}
             </select></label>
-          <label className="block"><span className="label-mono text-muted-foreground text-[10px]">Priority</span>
+          <label className="block"><span className="label-mono text-muted-foreground text-xs">Priority</span>
             <select className={inp} value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
               {PRIORITY_OPTS.map((p) => <option key={p} value={p}>{p}</option>)}
             </select></label>
-          <label className="block"><span className="label-mono text-muted-foreground text-[10px]">Due date</span>
+          <label className="block"><span className="label-mono text-muted-foreground text-xs">Due date</span>
             <input type="date" className={inp} value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} /></label>
           {roleMembers.length > 0 && (
-            <label className="block col-span-2"><span className="label-mono text-muted-foreground text-[10px]">Assign to</span>
+            <label className="block col-span-2"><span className="label-mono text-muted-foreground text-xs">Assign to</span>
               <select className={inp} value={form.assignee_id} onChange={(e) => setForm({ ...form, assignee_id: e.target.value })}>
                 <option value="">Auto (by workload)</option>
                 {roleMembers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select></label>
           )}
-          <label className="block col-span-2 md:col-span-4"><span className="label-mono text-muted-foreground text-[10px]">Summary</span>
+          <label className="block col-span-2 md:col-span-4"><span className="label-mono text-muted-foreground text-xs">Summary</span>
             <input className={inp} value={form.summary} onChange={(e) => setForm({ ...form, summary: e.target.value })} /></label>
         </div>
       )}

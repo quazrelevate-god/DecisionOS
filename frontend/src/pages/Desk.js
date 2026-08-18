@@ -70,7 +70,7 @@ function DeskBriefHeader() {
 
   if (isLoading || !data) {
     return (
-      <div className="mb-10">
+      <div className="mb-6">
         <div className="h-10 w-72 bg-muted rounded-lg mb-4 animate-pulse" />
         <div className="h-12 bg-muted rounded-lg animate-pulse" />
       </div>
@@ -94,7 +94,7 @@ function DeskBriefHeader() {
   const CF_ICON = dirIcon(cash.direction);
 
   return (
-    <div className="mb-10" data-testid="desk-brief-header">
+    <div className="mb-6" data-testid="desk-brief-header">
       {/* RD-2 (2026-08-17) — the greeting is now the page's editorial moment.
           Was 24px Inter at font-black / tracking-tighter, which read as a
           shouted label. The reference opens every screen with a large serif
@@ -183,7 +183,7 @@ function DeskBriefHeader() {
                 <WC_ICON size={12} weight="bold" />
                 {wc.value ?? 0}
                 {typeof wc.delta_pct === "number" && wc.delta_pct !== 0 && (
-                  <span className="text-[10px] opacity-70">
+                  <span className="text-xs opacity-70">
                     ({wc.delta_pct > 0 ? "+" : ""}{wc.delta_pct}%)
                   </span>
                 )}
@@ -205,7 +205,7 @@ function DeskBriefHeader() {
                 <CO_ICON size={12} weight="bold" />
                 {comp.value ?? 0}
                 {typeof comp.new_7d === "number" && comp.new_7d > 0 && (
-                  <span className="text-[10px] opacity-70">(+{comp.new_7d} 7d)</span>
+                  <span className="text-xs opacity-70">(+{comp.new_7d} 7d)</span>
                 )}
               </span>
             </button>
@@ -500,7 +500,7 @@ export default function Desk() {
               {c.icon && <c.icon size={14} weight={active ? "fill" : "regular"} />}
               {c.label}
               <span
-                className={`ml-0.5 min-w-[18px] px-1 py-0.5 rounded-full text-[11px] tabular-nums text-center ${
+                className={`ml-0.5 min-w-[18px] px-1 py-0.5 rounded-full text-xs tabular-nums text-center ${
                   active ? "bg-brand-600/15 text-brand-700" : "bg-muted text-muted-foreground"
                 }`}
               >
@@ -525,7 +525,7 @@ export default function Desk() {
           a heavy dark glyph to a quiet green tick — "caught up" is good news
           and should feel calm, not loud. */}
       {!isLoading && cards.length === 0 && (
-        <div className="py-16 text-center" data-testid="desk-empty">
+        <div className="py-12 text-center" data-testid="desk-empty">
           <CheckCircle size={28} weight="regular" className="text-success-600 mx-auto mb-3" />
           <p className="text-base font-medium">Nothing here — you're caught up</p>
           <p className="text-sm text-muted-foreground mt-1.5">

@@ -4,6 +4,39 @@ module.exports = {
     content: ["./src/**/*.{js,jsx,ts,tsx}", "./public/index.html"],
     theme: {
         extend: {
+            /* RD-6 (2026-08-17) — the type scale, lifted.
+               The redesign left the app at 424 `text-sm` (14px) and 322
+               `text-xs` (12px) against only 36 `text-base` — i.e. almost every
+               word on screen was 12-14px. On a 1400px desktop that reads as
+               small and thin, which is what "not readable" meant.
+
+               Rather than touch 746 call sites, the scale itself moves up one
+               notch and every existing class inherits it. The named steps keep
+               their names so nothing has to be renamed; only what they resolve
+               to changes. Line-heights are set explicitly and generously —
+               Tailwind's defaults tighten as size grows, which is right for
+               headlines and wrong for the 15px body copy that carries this UI.
+
+                 xs   12 -> 13   captions, meta, counts
+                 sm   14 -> 15   the workhorse body size
+                 base 16 -> 16   unchanged; card titles now land here
+                 lg   18 -> 19
+                 xl   20 -> 22
+                 2xl  24 -> 27   stat values
+                 3xl  30 -> 34
+                 4xl  36 -> 42   serif page leads                            */
+            fontSize: {
+                'xs':   ['0.8125rem', { lineHeight: '1.45' }],   /* 13 */
+                'sm':   ['0.9375rem', { lineHeight: '1.55' }],   /* 15 */
+                'base': ['1rem',      { lineHeight: '1.6'  }],   /* 16 */
+                'lg':   ['1.1875rem', { lineHeight: '1.5'  }],   /* 19 */
+                'xl':   ['1.375rem',  { lineHeight: '1.4'  }],   /* 22 */
+                '2xl':  ['1.6875rem', { lineHeight: '1.3'  }],   /* 27 */
+                '3xl':  ['2.125rem',  { lineHeight: '1.2'  }],   /* 34 */
+                '4xl':  ['2.625rem',  { lineHeight: '1.12' }],   /* 42 */
+                '5xl':  ['3.25rem',   { lineHeight: '1.05' }],   /* 52 */
+                '6xl':  ['4rem',      { lineHeight: '1'    }],   /* 64 */
+            },
             fontFamily: {
                 sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
                 heading: ['Inter', 'system-ui', 'sans-serif'],

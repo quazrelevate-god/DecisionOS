@@ -66,7 +66,7 @@ export function WebsiteIntel({ companyName, onDone }) {
             <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl leading-[1.02] mb-2">
               Does {companyName} live on the web?
             </h1>
-            <p className="text-sm text-muted-foreground mb-8">Drop your website — our AI reads it so you don't have to explain yourself twice.</p>
+            <p className="text-sm text-muted-foreground mb-6">Drop your website — our AI reads it so you don't have to explain yourself twice.</p>
             <div className="flex items-center gap-3 border-b-2 border-border focus-within:border-brand-600 transition-colors">
               <Globe size={26} weight="bold" className="text-muted-foreground shrink-0" />
               <input
@@ -79,7 +79,7 @@ export function WebsiteIntel({ companyName, onDone }) {
                 className="w-full bg-transparent py-3 font-heading text-2xl sm:text-3xl font-bold tracking-tight placeholder:text-black/20 placeholder:font-normal focus:outline-none"
               />
             </div>
-            <div className="mt-8 flex items-center gap-5">
+            <div className="mt-6 flex items-center gap-5">
               <button onClick={analyse} disabled={!url.trim()} data-testid="signup-website-analyse"
                 className="flex items-center gap-2 bg-brand-600 text-white font-medium text-sm px-8 py-3.5 border border-border hover:-translate-y-0.5 transition-all disabled:opacity-40">
                 <MagnifyingGlass size={16} weight="bold" /> Read my website
@@ -94,7 +94,7 @@ export function WebsiteIntel({ companyName, onDone }) {
 
         {stage === "scanning" && (
           <motion.div key="scan" {...fade} className="text-center py-10" data-testid="signup-website-scanning">
-            <div className="relative w-28 h-28 mx-auto mb-10">
+            <div className="relative w-28 h-28 mx-auto mb-6">
               <motion.div className="absolute inset-0 border-2 border-brand-600"
                 animate={{ rotate: 90, scale: [1, 1.15, 1] }} transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }} />
               <motion.div className="absolute inset-3 border border-border bg-white flex items-center justify-center"
@@ -178,7 +178,7 @@ export function WebsiteIntel({ companyName, onDone }) {
             <h1 className="font-display text-3xl sm:text-4xl leading-[1.02] mb-2">
               Place {companyName} on the map.
             </h1>
-            <p className="text-sm text-muted-foreground mb-8">Just the industry and who you sell to — Dex will ask about your operations in the interview.</p>
+            <p className="text-sm text-muted-foreground mb-6">Just the industry and who you sell to — Dex will ask about your operations in the interview.</p>
             <div className="space-y-5">
               <div>
                 <label className="label-mono text-muted-foreground">Industry</label>

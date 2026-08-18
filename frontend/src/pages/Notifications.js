@@ -75,7 +75,7 @@ export default function Notifications() {
             >
               <div className="flex items-start gap-3 min-w-0">
                 {!n.read && <span className="mt-1.5 w-2 h-2 rounded-full bg-brand-600 shrink-0" data-testid={`notif-unread-dot-${n.id}`} />}
-                <BellRinging size={18} weight="bold" className={`shrink-0 mt-0.5 ${n.level === "owner" ? "text-brand-600" : "text-brand-blue"}`} />
+                <BellRinging size={18} weight="bold" className={`shrink-0 mt-0.5 ${n.level === "owner" ? "text-brand-600" : "text-brand-700"}`} />
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <Chip value={meta.label} className={meta.cls} />

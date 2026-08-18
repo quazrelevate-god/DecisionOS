@@ -24,7 +24,7 @@ function StatusBadge({ status, detail }) {
   return (
     <span
       title={detail || ""}
-      className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider px-2 py-1 border"
+      className="inline-flex items-center gap-1.5 font-mono text-xs uppercase tracking-wider px-2 py-1 border"
       style={{ color, borderColor: `${color}55`, background: `${color}12` }}
     >
       <Circle size={7} weight="fill" style={{ color }} />
@@ -35,7 +35,7 @@ function StatusBadge({ status, detail }) {
 
 const CARD = "border border-white/10 bg-[#141418] p-5";
 const H2 = "font-heading text-lg font-black uppercase tracking-tight text-white";
-const BTN = "font-mono text-[11px] uppercase tracking-wider px-3 py-2 border transition-colors";
+const BTN = "font-mono text-xs uppercase tracking-wider px-3 py-2 border transition-colors";
 
 function Loading() {
   return (
@@ -70,7 +70,7 @@ export function OverviewSection() {
           <div key={c.k} className={CARD} data-testid={`metric-${c.k}`}>
             <c.icon size={20} className="text-[#e5484d] mb-3" weight="bold" />
             <div className="font-heading text-4xl font-black text-white tracking-tighter">{c.v}</div>
-            <div className="font-mono text-[11px] uppercase tracking-widest text-white/40 mt-1">{c.label}</div>
+            <div className="font-mono text-xs uppercase tracking-widest text-white/40 mt-1">{c.label}</div>
           </div>
         ))}
       </div>
@@ -145,13 +145,13 @@ export function AiKeysSection() {
               <div className="min-w-0">
                 <div className="flex items-center gap-3 flex-wrap">
                   <span className="font-heading font-black text-white uppercase text-sm tracking-tight">{k.label}</span>
-                  <span className="font-mono text-[10px] uppercase tracking-wider text-white/40 border border-white/15 px-2 py-0.5">
+                  <span className="font-mono text-xs uppercase tracking-wider text-white/40 border border-white/15 px-2 py-0.5">
                     {k.source === "custom" ? "custom" : k.source === "env" ? "env default" : "not set"}
                   </span>
                   {status[k.provider] && <StatusBadge status={status[k.provider].status} detail={status[k.provider].detail} />}
                 </div>
                 <div className="font-mono text-xs text-white/50 mt-2">{k.masked || "— not set —"}</div>
-                {k.note && <div className="font-mono text-[10px] text-[#d29922] mt-1">{k.note}</div>}
+                {k.note && <div className="font-mono text-xs text-[#d29922] mt-1">{k.note}</div>}
               </div>
               <button
                 data-testid={`edit-key-${k.provider}`}
@@ -241,7 +241,7 @@ export function UsageSection() {
         <div className="flex gap-1" data-testid="usage-range">
           {RANGES.map((r) => (
             <button key={r.key} data-testid={`usage-range-${r.key}`} onClick={() => setRange(r.key)}
-              className={`font-mono text-[11px] uppercase tracking-wider px-3 py-1.5 border transition-colors ${
+              className={`font-mono text-xs uppercase tracking-wider px-3 py-1.5 border transition-colors ${
                 range === r.key ? "bg-[#e5484d] border-[#e5484d] text-white" : "border-white/20 text-white/60 hover:border-white/40"}`}>
               {r.label}
             </button>
@@ -251,13 +251,13 @@ export function UsageSection() {
       <div className="flex gap-1 mb-4 flex-wrap" data-testid="usage-provider-filter">
         {PROVIDERS.map((p) => (
           <button key={p.key} data-testid={`usage-provider-${p.key}`} onClick={() => setProvider(p.key)}
-            className={`font-mono text-[10px] uppercase tracking-wider px-2.5 py-1 border transition-colors ${
+            className={`font-mono text-xs uppercase tracking-wider px-2.5 py-1 border transition-colors ${
               provider === p.key ? "bg-white/10 border-white/40 text-white" : "border-white/10 text-white/40 hover:border-white/25"}`}>
             {p.label}
           </button>
         ))}
       </div>
-      <p className="font-mono text-[11px] text-white/35 mb-5">
+      <p className="font-mono text-xs text-white/35 mb-5">
         Covers all providers — Sarvam (Indic voice transcription), Claude (text), OpenAI (voice fallback) & Gemini (document OCR). Costs are estimates
         (tokens ≈ chars/4; STT by audio duration), not exact provider billing.
       </p>
@@ -267,28 +267,28 @@ export function UsageSection() {
             <div className={CARD} data-testid="usage-total-calls">
               <ChartBar size={20} className="text-[#e5484d] mb-2" weight="bold" />
               <div className="font-heading text-3xl font-black text-white tracking-tighter">{fmtNum(data.totals.calls)}</div>
-              <div className="font-mono text-[11px] uppercase tracking-widest text-white/40 mt-1">AI Calls</div>
+              <div className="font-mono text-xs uppercase tracking-widest text-white/40 mt-1">AI Calls</div>
             </div>
             <div className={CARD} data-testid="usage-total-tokens">
               <Coins size={20} className="text-[#d29922] mb-2" weight="bold" />
               <div className="font-heading text-3xl font-black text-white tracking-tighter">{fmtNum(data.totals.tokens_total)}</div>
-              <div className="font-mono text-[11px] uppercase tracking-widest text-white/40 mt-1">Tokens</div>
+              <div className="font-mono text-xs uppercase tracking-widest text-white/40 mt-1">Tokens</div>
             </div>
             <div className={CARD} data-testid="usage-total-cost">
               <CurrencyDollar size={20} className="text-[#3fb950] mb-2" weight="bold" />
               <div className="font-heading text-3xl font-black text-white tracking-tighter">${data.totals.cost.toFixed(2)}</div>
-              <div className="font-mono text-[11px] uppercase tracking-widest text-white/40 mt-1">Est. Cost</div>
+              <div className="font-mono text-xs uppercase tracking-widest text-white/40 mt-1">Est. Cost</div>
             </div>
           </div>
 
           {data.by_provider && data.by_provider.length > 0 && (
             <div className="mb-6" data-testid="usage-by-provider">
-              <h3 className="font-mono text-[11px] uppercase tracking-widest text-white/40 mb-3">By Provider</h3>
+              <h3 className="font-mono text-xs uppercase tracking-widest text-white/40 mb-3">By Provider</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {data.by_provider.map((p) => (
                   <div key={p.provider} className={CARD} data-testid={`usage-provider-card-${p.provider}`}>
                     <div className="font-heading font-black uppercase text-white text-xs tracking-tight">{PROVIDER_LABEL[p.provider] || p.provider}</div>
-                    <div className="font-mono text-[11px] text-white/50 mt-2">{fmtNum(p.calls)} calls · {fmtNum(p.tokens_total)} tok</div>
+                    <div className="font-mono text-xs text-white/50 mt-2">{fmtNum(p.calls)} calls · {fmtNum(p.tokens_total)} tok</div>
                     <div className="font-mono text-sm text-[#3fb950] mt-1">${p.cost_estimate.toFixed(4)}</div>
                   </div>
                 ))}
@@ -302,7 +302,7 @@ export function UsageSection() {
             <div className="overflow-x-auto border border-white/10">
               <table className="w-full text-left">
                 <thead>
-                  <tr className="bg-[#141418] font-mono text-[10px] uppercase tracking-widest text-white/40">
+                  <tr className="bg-[#141418] font-mono text-xs uppercase tracking-widest text-white/40">
                     <th className="p-3">Workspace</th><th className="p-3 text-right">Calls</th>
                     <th className="p-3 text-right">Tokens In</th><th className="p-3 text-right">Tokens Out</th>
                     <th className="p-3 text-right">Total</th><th className="p-3 text-right">Est. Cost</th>
@@ -373,7 +373,7 @@ export function TenantsSection() {
       <div className="overflow-x-auto border border-white/10">
         <table className="w-full text-left">
           <thead>
-            <tr className="bg-[#141418] font-mono text-[10px] uppercase tracking-widest text-white/40">
+            <tr className="bg-[#141418] font-mono text-xs uppercase tracking-widest text-white/40">
               <th className="p-3">Workspace</th><th className="p-3">Industry</th>
               <th className="p-3 text-right">Users</th><th className="p-3 text-right">Decisions</th>
               <th className="p-3 text-right">Tasks</th><th className="p-3">Created</th>
@@ -433,7 +433,7 @@ export function TenantsSection() {
               {toDelete.users} user(s), {toDelete.tasks} task(s), {toDelete.decisions} decision(s), invoices, files and
               every other record. <span className="text-[#e5484d]">This cannot be undone.</span>
             </p>
-            <p className="font-mono text-[11px] uppercase tracking-wider text-white/40 mt-4 mb-1.5">
+            <p className="font-mono text-xs uppercase tracking-wider text-white/40 mt-4 mb-1.5">
               Type <span className="text-white normal-case tracking-normal">{toDelete.name}</span> to confirm
             </p>
             <input
@@ -491,7 +491,7 @@ export function UsersSection() {
       <div className="overflow-x-auto border border-white/10">
         <table className="w-full text-left">
           <thead>
-            <tr className="bg-[#141418] font-mono text-[10px] uppercase tracking-widest text-white/40">
+            <tr className="bg-[#141418] font-mono text-xs uppercase tracking-widest text-white/40">
               <th className="p-3">Name</th><th className="p-3">Email</th><th className="p-3">Workspace</th>
               <th className="p-3">Role</th><th className="p-3">Status</th><th className="p-3">Actions</th>
             </tr>
@@ -589,11 +589,11 @@ export function AuditSection() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="font-mono text-sm text-white/90">{e.message}</div>
-                  <div className="font-mono text-[11px] text-white/40 mt-0.5">
+                  <div className="font-mono text-xs text-white/40 mt-0.5">
                     {e.admin_email} · <span className="uppercase tracking-wider">{(e.action || "").replace(/_/g, " ")}</span>
                   </div>
                 </div>
-                <div className="font-mono text-[11px] text-white/40 shrink-0 whitespace-nowrap">{fmt(e.created_at)}</div>
+                <div className="font-mono text-xs text-white/40 shrink-0 whitespace-nowrap">{fmt(e.created_at)}</div>
               </div>
             );
           })}
@@ -628,16 +628,16 @@ export function HealthSection() {
               <span className="font-heading font-black uppercase text-white text-sm tracking-tight">{r.label}</span>
             </div>
             <div className="font-mono text-xs uppercase" style={{ color: ok(r.v) ? "#3fb950" : "#e5484d" }}>{r.v}</div>
-            {r.detail && <div className="font-mono text-[10px] text-white/40 mt-1">{r.detail}</div>}
+            {r.detail && <div className="font-mono text-xs text-white/40 mt-1">{r.detail}</div>}
           </div>
         ))}
       </div>
-      <h3 className="font-mono text-[11px] uppercase tracking-widest text-white/40 mt-8 mb-3">AI Provider Key Source</h3>
+      <h3 className="font-mono text-xs uppercase tracking-widest text-white/40 mt-6 mb-3">AI Provider Key Source</h3>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {Object.entries(h.ai_providers).map(([k, v]) => (
           <div key={k} className={CARD}>
             <div className="font-heading font-black uppercase text-white text-xs tracking-tight">{k}</div>
-            <div className="font-mono text-[11px] text-white/50 mt-1 uppercase">{v}</div>
+            <div className="font-mono text-xs text-white/50 mt-1 uppercase">{v}</div>
           </div>
         ))}
       </div>
@@ -700,7 +700,7 @@ export function MaintenanceSection() {
             <span className="font-heading font-black uppercase text-white text-sm tracking-tight">
               {running ? "In progress" : "Last run"}
             </span>
-            <span className="font-mono text-[11px] uppercase" style={{ color: running ? "#d29922" : "#3fb950" }}>
+            <span className="font-mono text-xs uppercase" style={{ color: running ? "#d29922" : "#3fb950" }}>
               {job.status} · {job.processed}/{job.total} workspaces {running ? `(${pct}%)` : ""}
             </span>
           </div>
@@ -723,11 +723,11 @@ export function MaintenanceSection() {
             ].map((c) => (
               <div key={c.k} className="border border-white/10 p-3" data-testid={`reclassify-stat-${c.k}`}>
                 <div className="font-heading text-2xl font-black text-white tracking-tighter">{totals[c.k] ?? 0}</div>
-                <div className="font-mono text-[10px] uppercase tracking-widest text-white/40 mt-1">{c.label}</div>
+                <div className="font-mono text-xs uppercase tracking-widest text-white/40 mt-1">{c.label}</div>
               </div>
             ))}
           </div>
-          {job.started_by && <p className="font-mono text-[10px] text-white/30 mt-3">Started by {job.started_by}</p>}
+          {job.started_by && <p className="font-mono text-xs text-white/30 mt-3">Started by {job.started_by}</p>}
         </div>
       )}
     </div>

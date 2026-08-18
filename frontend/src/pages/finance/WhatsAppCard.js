@@ -12,7 +12,7 @@ import { timeAgo } from "../../lib/format";
 
 const WA_STATUS_STYLE = {
   received: "bg-caution-50 text-caution-800",
-  draft: "bg-brand-blue text-white",
+  draft: "bg-brand-50 text-brand-700",
   attention: "bg-amber-500 text-black",
   filed: "bg-green-600 text-white",
   structured: "bg-green-600 text-white",
@@ -35,7 +35,7 @@ export default function WhatsAppCard() {
   const waLink = waNum ? `https://wa.me/${waNum}?text=${encodeURIComponent("Hi DecisionOS")}` : null;
 
   return (
-    <div className="card-brutal p-5 mb-8" data-testid="whatsapp-card">
+    <div className="card-brutal p-5 mb-6" data-testid="whatsapp-card">
       {!st?.configured && (
         <div className="flex items-center gap-2 mb-4">
           <Chip value="not connected" className="bg-brand-600 text-white" />

@@ -10,7 +10,7 @@ import {
 const TYPES = {
   meeting: { label: "Meetings", icon: UsersThree, color: "bg-primary", text: "text-brand-ink" },
   payment_due: { label: "Payments", icon: CurrencyCircleDollar, color: "bg-orange-500", text: "text-orange-600" },
-  task: { label: "Tasks", icon: CheckSquare, color: "bg-brand-blue", text: "text-brand-blue" },
+  task: { label: "Tasks", icon: CheckSquare, color: "bg-brand-600", text: "text-brand-700" },
   delivery: { label: "Deliveries", icon: Truck, color: "bg-green-600", text: "text-green-600" },
   complaint: { label: "Complaints", icon: Warning, color: "bg-purple-600", text: "text-purple-600" },
   birthday: { label: "Birthdays", icon: Cake, color: "bg-brand-600", text: "text-brand-600" },
@@ -44,7 +44,7 @@ export default function Calendar() {
     <div>
       <PageHeader eyebrow="Everything with a date, in one place" title="Business Calendar" />
 
-      <div className="flex flex-wrap gap-2 mb-8">
+      <div className="flex flex-wrap gap-2 mb-6">
         <button
           onClick={() => setFilter("all")}
           data-testid="cal-filter-all"
@@ -75,7 +75,7 @@ export default function Calendar() {
           ctaTo="/inbox"
         />
       ) : (
-        <div className="space-y-8" data-testid="calendar-days">
+        <div className="space-y-6" data-testid="calendar-days">
           {days.map((day) => (
             <section key={day.date} data-testid={`cal-day-${day.date}`}>
               <div className="flex items-center gap-3 mb-3">

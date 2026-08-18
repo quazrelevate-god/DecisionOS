@@ -30,10 +30,10 @@ export function WelcomeOverlay() {
             <motion.p initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
               className="label-mono text-brand-600 mb-4">Your executive office is ready</motion.p>
             <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
-              className="font-display text-4xl sm:text-5xl leading-[0.98] mb-10">
+              className="font-display text-4xl sm:text-5xl leading-[0.98] mb-6">
               Welcome{name ? `, ${name}` : ""}.<br /><span className="text-brand-600">Run the company</span> from here.
             </motion.h1>
-            <div className="space-y-3 mb-10">
+            <div className="space-y-3 mb-6">
               {POINTS.map((p, i) => {
                 const Icon = p.icon;
                 return (

@@ -55,7 +55,7 @@ export default function WorkCoach() {
       </div>
     );
   }
-  if (isLoading || !data) return <div className="font-mono text-sm py-20 text-center">Loading your coach…</div>;
+  if (isLoading || !data) return <div className="font-mono text-sm py-12 text-center">Loading your coach…</div>;
 
   const { target, stats, summary } = data;
   const s = refresh.data?.summary || summary;
@@ -76,9 +76,9 @@ export default function WorkCoach() {
         <Stat label="Overdue" value={stats.overdue} accent={stats.overdue > 0 ? "text-danger-600" : ""} />
         <Stat label="Completion" value={stats.completion_rate} suffix="%" />
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         <div className="card-brutal p-4 flex items-center gap-3">
-          <SealCheck size={22} weight="bold" className="text-brand-blue" />
+          <SealCheck size={22} weight="bold" className="text-brand-700" />
           <div><p className="label-mono text-muted-foreground">Proof uploads</p><p className="font-heading text-xl font-black">{stats.proof_upload_rate}%</p></div>
         </div>
         <div className="card-brutal p-4 flex items-center gap-3">

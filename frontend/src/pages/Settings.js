@@ -27,7 +27,7 @@ function LanguageCard() {
         <Translate size={20} weight="bold" className="text-brand-600" />
         <h2 className="text-base font-medium">{t("settings.language_title")}</h2>
       </div>
-      <p className="text-xs text-muted-foreground mb-4">{t("settings.language_desc")}</p>
+      <p className="text-sm text-muted-foreground mb-4">{t("settings.language_desc")}</p>
       <LanguageSwitcher variant="inline" />
     </div>
   );
@@ -40,7 +40,7 @@ function ProfileCard() {
         <UserCircle size={20} weight="bold" className="text-brand-600" />
         <h2 className="text-base font-medium">Your Profile</h2>
       </div>
-      <p className="text-xs text-muted-foreground mb-4">Your personal details, sign-in and WhatsApp routing.</p>
+      <p className="text-sm text-muted-foreground mb-4">Your personal details, sign-in and WhatsApp routing.</p>
       <ProfileForm />
     </div>
   );
@@ -53,7 +53,7 @@ function SecurityCard() {
         <Lock size={20} weight="bold" className="text-brand-600" />
         <h2 className="text-base font-medium">Password & Security</h2>
       </div>
-      <p className="text-xs text-muted-foreground mb-4">Change the password you use to sign in.</p>
+      <p className="text-sm text-muted-foreground mb-4">Change the password you use to sign in.</p>
       <ChangePasswordForm />
     </div>
   );
@@ -94,7 +94,7 @@ function MoneyAndApprovalsCard() {
             title. */}
         <h2 className="text-base font-medium">Money & Approvals</h2>
       </div>
-      <p className="text-xs text-muted-foreground mb-4">Controls how incoming invoices & payments (WhatsApp / uploads) are flagged and approved.</p>
+      <p className="text-sm text-muted-foreground mb-4">Controls how incoming invoices & payments (WhatsApp / uploads) are flagged and approved.</p>
 
       <div className="space-y-5">
         <div>
@@ -241,7 +241,7 @@ export default function Settings() {
         </div>
       </div>
 
-      <p className="text-xs text-muted-foreground mb-4 max-w-2xl">{active.desc}</p>
+      <p className="text-sm text-muted-foreground mb-4 max-w-2xl">{active.desc}</p>
 
       <div className="space-y-6 max-w-2xl" data-testid={`settings-panel-${tab}`}>
         {tab === "business" && (

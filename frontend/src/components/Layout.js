@@ -161,7 +161,7 @@ export default function Layout({ children }) {
             className={`relative flex items-center justify-center border border-border hover:bg-accent transition-colors ${mobile ? "w-12 h-12" : "w-10 h-10"}`}>
             <Bell size={mobile ? 22 : 18} weight="bold" />
             {count > 0 && (
-              <span data-testid="notif-count" className="absolute -top-2 -right-2 bg-brand-600 text-white text-[10px] min-w-5 h-5 px-1 flex items-center justify-center border border-border font-bold">
+              <span data-testid="notif-count" className="absolute -top-2 -right-2 bg-brand-600 text-white text-xs min-w-5 h-5 px-1 flex items-center justify-center border border-border font-bold">
                 {mobile ? Math.min(9, count) : (unread > 99 ? "99+" : unread)}
               </span>
             )}
@@ -182,7 +182,7 @@ export default function Layout({ children }) {
                   {!n.read && <span className="mt-1.5 w-2 h-2 rounded-full bg-brand-600 shrink-0" />}
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <Chip value={meta.label} className={`${meta.cls} text-[9px]`} />
+                      <Chip value={meta.label} className={`${meta.cls} text-xs`} />
                       <span className="label-mono text-muted-foreground">{timeAgo(n.created_at)}</span>
                     </div>
                     <p className="text-sm font-semibold mt-1 truncate">{n.work_title || n.message}</p>
@@ -222,11 +222,9 @@ export default function Layout({ children }) {
   // brief now (Sprint 6 merged CEOBrief into Desk header) so this
   // email-a-snapshot flow duplicated live data behind an SMTP gate.
 
-  // RD-1 (2026-08-17): the desktop nav is now an icon-only rail.
-  // Labels moved to hover tooltips, which buys back ~180px of content width
-  // and matches the reference shell. `NavItems` keeps its original signature
-  // and full-width row layout because the mobile AllAppsPanel still renders
-  // it — only the new `RailItems` below is icon-only.
+  // `NavItems` is the full-width row list. The mobile AllAppsPanel renders it;
+  // desktop uses `SidebarItems` below, which is the same idea sized for the
+  // 240px sidebar.
   const NavItems = ({ onNavigate }) => (
     <>
       {navMain.map(({ to, label, tkey, icon: Icon, testid }) => (
@@ -248,7 +246,7 @@ export default function Layout({ children }) {
           {t(`nav.${tkey}`)}
           {to === "/finance" && captureCount > 0 && (
             <span data-testid="nav-review-badge" title={`${captureCount} item(s) to review`}
-              className="ml-auto bg-brand-600 text-white text-[10px] min-w-5 h-5 px-1 flex items-center justify-center font-bold rounded-full">
+              className="ml-auto bg-brand-600 text-white text-xs min-w-5 h-5 px-1 flex items-center justify-center font-bold rounded-full">
               {captureCount}
             </span>
           )}
@@ -257,10 +255,18 @@ export default function Layout({ children }) {
     </>
   );
 
-  // The desktop rail. One 36px square per destination, centred in a 58px
-  // column. Active state is a tinted square + indigo glyph — no left border,
-  // no fill sweep. The label rides out on hover as a dark chip.
-  const RailItems = () => (
+  // RD-6 (2026-08-17): the 58px icon-only rail is retired.
+  //
+  // It was the reference's shell, and it was the wrong call here. Two things
+  // went wrong: the destination names only existed on hover, so nothing on
+  // screen told you where you were or where you could go; and it forced the
+  // wordmark out of the sidebar into the top bar, because a 108px horizontal
+  // lockup cannot live in a 58px column.
+  //
+  // A 240px labelled sidebar fixes both — names are always visible, and the
+  // lockup goes back where it belongs. Rows are 40px with 15px labels, which
+  // is a comfortable click target and readable at arm's length.
+  const SidebarItems = () => (
     <>
       {navMain.map(({ to, tkey, icon: Icon, testid }) => {
         const label = t(`nav.${tkey}`);
@@ -271,34 +277,26 @@ export default function Layout({ children }) {
             to={to}
             end={to === "/"}
             data-testid={testid}
-            aria-label={label}
             className={({ isActive }) =>
-              `group relative flex items-center justify-center w-9 h-9 rounded-lg transition-colors duration-150 ${
+              `flex items-center gap-3 h-10 px-3 mx-2 rounded-lg text-sm transition-colors duration-150 ${
                 isActive
-                  ? "bg-brand-600/[0.10] text-brand-600"
+                  ? "bg-brand-600/[0.10] text-brand-700 font-medium"
                   : "text-muted-foreground hover:bg-accent hover:text-foreground"
               }`
             }
           >
             {({ isActive }) => (
               <>
-                <Icon size={18} weight={isActive ? "fill" : "regular"} />
+                <Icon size={19} weight={isActive ? "fill" : "regular"} className="shrink-0" />
+                <span className="truncate">{label}</span>
                 {badge > 0 && (
                   <span
                     data-testid="nav-review-badge"
-                    className="absolute -top-0.5 -right-0.5 min-w-[15px] h-[15px] px-1 flex items-center justify-center rounded-full bg-brand-600 text-white text-[9px] font-bold leading-none"
+                    className="ml-auto min-w-[20px] h-5 px-1.5 flex items-center justify-center rounded-full bg-brand-600 text-white text-xs font-semibold leading-none tabular-nums"
                   >
                     {badge}
                   </span>
                 )}
-                {/* Hover label. `pointer-events-none` so it can never
-                    intercept the click meant for the icon beneath it. */}
-                <span
-                  role="tooltip"
-                  className="pointer-events-none absolute left-full ml-2 z-50 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs font-medium text-background opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100"
-                >
-                  {label}
-                </span>
               </>
             )}
           </NavLink>
@@ -310,73 +308,40 @@ export default function Layout({ children }) {
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
       <WelcomeOverlay />
-      {/* RD-1 (2026-08-17) — desktop top bar, full width.
-          The reference puts its mark in the rail's top cell, but that only
-          works with an icon mark and our artwork has none — the supplied
-          lockup is horizontal and renders 108px wide at its smallest legible
-          size, which overflowed a 58px rail. Wordmark.jsx is explicit that a
-          redrawn approximation is a different logo, so rather than invent a
-          glyph the bar spans the full width and carries the lockup at its
-          left, pixel-exact. The rail then starts below it and is pure nav.
-          Everything else about the bar follows the reference: one global
-          search occupying the width, controls right. */}
-      <header className="hidden lg:flex h-16 shrink-0 border-b border-border bg-background items-center gap-4 pl-5 pr-6 sticky top-0 z-20">
-        <div className="shrink-0">
-          <Logo markOnly />
-        </div>
-        <form
-          className="flex-1 flex items-center gap-2.5 min-w-0 border-l border-border pl-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const q = globalQuery.trim();
-            if (!q) return;
-            navigate(`/brain?q=${encodeURIComponent(q)}`);
-            setGlobalQuery("");
-          }}
-        >
-          <MagnifyingGlass size={16} className="text-muted-foreground shrink-0" />
-          <input
-            data-testid="global-search"
-            value={globalQuery}
-            onChange={(e) => setGlobalQuery(e.target.value)}
-            placeholder={t("header.search_ph", "Find anything…")}
-            aria-label={t("header.search_ph", "Find anything…")}
-            className="flex-1 min-w-0 bg-transparent text-sm placeholder:text-muted-foreground focus:outline-none"
-          />
-        </form>
-        <div className="flex items-center gap-1 shrink-0">
-          <LanguageSwitcher />
-          <ThemeToggle />
-          <Bellicon />
-        </div>
-      </header>
-
       <div className="flex flex-1 min-h-0">
-      {/* RD-1 — desktop rail.
-          Was a 256px labelled sidebar carrying the wordmark, tenant name,
-          industry, the nav, the user block and a Sign-out button. That whole
-          column is now 58px of nav icons. Tenant name + user identity +
-          sign-out moved into the avatar popover at its foot, which is where
-          the reference keeps them. */}
+      {/* RD-6 (2026-08-17) — desktop sidebar, 240px with labels.
+          Replaces the 58px icon rail, which hid every destination name behind
+          a hover tooltip and had no room for the wordmark. At 240px the
+          supplied lockup fits at full legible size, so the logo comes back to
+          the top-left where it belongs and the top bar is free to be nothing
+          but search. */}
       <aside
         data-testid="desktop-rail"
-        className="hidden lg:flex w-[58px] shrink-0 border-r border-border bg-background flex-col sticky top-16 h-[calc(100vh-4rem)]"
+        className="hidden lg:flex w-60 shrink-0 border-r border-border bg-background flex-col sticky top-0 h-screen"
       >
-        <nav className="flex-1 min-h-0 overflow-y-auto py-3 flex flex-col items-center gap-1">
-          <RailItems />
+        <div className="h-16 flex items-center px-5 shrink-0">
+          <Logo />
+        </div>
+        <nav className="flex-1 min-h-0 overflow-y-auto py-2 flex flex-col gap-0.5">
+          <SidebarItems />
         </nav>
-        <div className="shrink-0 py-3 flex justify-center">
+        <div className="shrink-0 p-2 border-t border-border">
           <Popover>
             <PopoverTrigger asChild>
               <button
                 data-testid="rail-user-menu"
-                aria-label={user?.name || "Account"}
-                className="w-8 h-8 rounded-lg bg-brand-600/[0.10] text-brand-600 text-xs font-semibold flex items-center justify-center hover:bg-brand-600/[0.16] transition-colors"
+                className="w-full flex items-center gap-3 h-12 px-2 rounded-lg hover:bg-accent transition-colors text-left"
               >
-                {(user?.name || "?").trim().charAt(0).toUpperCase()}
+                <span className="w-8 h-8 shrink-0 rounded-lg bg-brand-600/[0.10] text-brand-700 text-sm font-semibold flex items-center justify-center">
+                  {(user?.name || "?").trim().charAt(0).toUpperCase()}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-medium truncate leading-tight">{user?.name}</span>
+                  <span className="block text-xs text-muted-foreground truncate leading-tight">{tenant?.name}</span>
+                </span>
               </button>
             </PopoverTrigger>
-            <PopoverContent side="right" align="end" className="w-64 p-0">
+            <PopoverContent side="top" align="start" className="w-60 p-0">
               <div className="px-3 py-3 border-b border-border" data-testid="current-user">
                 <p className="text-sm font-semibold truncate">{user?.name}</p>
                 <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
@@ -407,6 +372,36 @@ export default function Layout({ children }) {
           the app reads as one phone-width surface on any display; on lg it
           resets to fill the space beside the sidebar. */}
       <div className="flex flex-col min-w-0 app-shell lg:max-w-none lg:mx-0 lg:flex-1">
+        {/* RD-6: desktop top bar, now scoped to the content column since the
+            wordmark moved back into the sidebar. Its only job is search. */}
+        <header className="hidden lg:flex h-16 shrink-0 border-b border-border bg-background items-center gap-4 px-8 sticky top-0 z-20">
+          <form
+            className="flex-1 flex items-center gap-2.5 min-w-0"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const q = globalQuery.trim();
+              if (!q) return;
+              navigate(`/brain?q=${encodeURIComponent(q)}`);
+              setGlobalQuery("");
+            }}
+          >
+            <MagnifyingGlass size={18} className="text-muted-foreground shrink-0" />
+            <input
+              data-testid="global-search"
+              value={globalQuery}
+              onChange={(e) => setGlobalQuery(e.target.value)}
+              placeholder={t("header.search_ph", "Find anything…")}
+              aria-label={t("header.search_ph", "Find anything…")}
+              className="flex-1 min-w-0 bg-transparent text-sm placeholder:text-muted-foreground focus:outline-none"
+            />
+          </form>
+          <div className="flex items-center gap-1 shrink-0">
+            <LanguageSwitcher />
+            <ThemeToggle />
+            <Bellicon />
+          </div>
+        </header>
+
         {/* Mobile top app bar — MPWA-03.
             Two controls, not four. The theme toggle moved to an All Apps tile
             (he switches theme roughly never and it was occupying prime

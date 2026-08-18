@@ -33,7 +33,7 @@ const Kicker = ({ children, big }) => (
 
 const Dept = ({ icon: Icon, tag, title, children }) => (
   <div className="border border-border bg-white p-6 transition-all">
-    <div className="flex items-center gap-2 text-brand-600 mb-2"><Icon size={18} weight="bold" /><span className="font-mono text-[11px] ">{tag}</span></div>
+    <div className="flex items-center gap-2 text-brand-600 mb-2"><Icon size={18} weight="bold" /><span className="font-mono text-xs ">{tag}</span></div>
     <h3 className="font-medium text-lg">{title}</h3>
     <p className="text-sm text-muted-foreground mt-1">{children}</p>
   </div>
@@ -64,13 +64,13 @@ export default function Landing() {
               See how it works
             </a>
           </div>
-          <p className="font-mono text-[11px]  text-white/40 mt-8">Voice · Text · WhatsApp · Documents — captured once, executed forever</p>
+          <p className="font-mono text-xs  text-white/40 mt-6">Voice · Text · WhatsApp · Documents — captured once, executed forever</p>
         </div>
       </section>
 
       {/* PROBLEM */}
       <section className="bg-[#f7f5f2]">
-        <div className="max-w-6xl mx-auto px-5 sm:px-8 py-20">
+        <div className="max-w-6xl mx-auto px-5 sm:px-8 py-12">
           <Kicker>The Founder Problem</Kicker>
           <h2 className="font-medium text-3xl sm:text-4xl leading-tight max-w-2xl">Your business lives inside your head. That's the risk.</h2>
           <div className="grid sm:grid-cols-2 gap-5 mt-10">
@@ -88,16 +88,16 @@ export default function Landing() {
 
       {/* WOW */}
       <section className="bg-[#16161a] text-white">
-        <div className="max-w-6xl mx-auto px-5 sm:px-8 py-20">
+        <div className="max-w-6xl mx-auto px-5 sm:px-8 py-12">
           <Kicker dark>The 10-Second Wow</Kicker>
           <h2 className="font-medium text-3xl sm:text-4xl leading-tight max-w-3xl">One sentence. A company-wide rule, <span className="text-brand-600">enforced.</span></h2>
           <div className="mt-10 space-y-4 max-w-3xl">
             <div className="border-l-4 border-brand-600 pl-5 py-2">
-              <div className="font-mono text-[11px]  text-brand-600/90">Second 0 — the owner speaks</div>
+              <div className="font-mono text-xs  text-brand-600/90">Second 0 — the owner speaks</div>
               <p className="font-medium text-xl sm:text-2xl mt-1 leading-snug">"From today, stop any dispatch that doesn't have payment approval."</p>
             </div>
             <div className="border-l-4 border-brand-600 pl-5 py-2">
-              <div className="font-mono text-[11px]  text-brand-600/90">Second 3 — the AI understands</div>
+              <div className="font-mono text-xs  text-brand-600/90">Second 3 — the AI understands</div>
               <div className="mt-2 flex flex-wrap gap-2">
                 {["Operating Rule", "Trigger: Dispatch", "Condition: Payment approved", "Scope: Company-wide"].map((c, i) => (
                   <span key={c} className={`text-xs font-semibold rounded-full px-3 py-1 ${i === 0 ? "bg-brand-600 text-white" : "bg-white/10 text-white border border-white/20"}`}>{c}</span>
@@ -105,19 +105,19 @@ export default function Landing() {
               </div>
             </div>
             <div className="border-l-4 border-brand-600 pl-5 py-2">
-              <div className="font-mono text-[11px]  text-brand-600/90">Second 10 — the business changes</div>
+              <div className="font-mono text-xs  text-brand-600/90">Second 10 — the business changes</div>
               <div className="mt-2 border border-white/15 bg-white/5 p-4 rounded">
                 <p className="text-white/90"><CheckCircle size={16} weight="fill" className="inline text-danger-600 mr-1" /> Rule live across the dispatch workflow · teams notified · exceptions escalate to the owner · filed to the Company Brain.</p>
               </div>
             </div>
           </div>
-          <p className="text-lg mt-8 max-w-2xl">Not a to-do — <span className="text-brand-600 font-semibold">an operational change, running itself.</span></p>
+          <p className="text-lg mt-6 max-w-2xl">Not a to-do — <span className="text-brand-600 font-semibold">an operational change, running itself.</span></p>
         </div>
       </section>
 
       {/* HOW IT WORKS */}
       <section id="how" className="bg-white">
-        <div className="max-w-6xl mx-auto px-5 sm:px-8 py-20">
+        <div className="max-w-6xl mx-auto px-5 sm:px-8 py-12">
           <Kicker>Decision Flow</Kicker>
           <h2 className="font-heading font-black tracking-tight text-3xl sm:text-4xl leading-tight">Capture → Execute → Remember.</h2>
           <div className="grid md:grid-cols-3 gap-5 mt-10">
@@ -139,11 +139,11 @@ export default function Landing() {
 
       {/* PROACTIVE */}
       <section className="bg-[#f7f5f2]">
-        <div className="max-w-6xl mx-auto px-5 sm:px-8 py-20">
+        <div className="max-w-6xl mx-auto px-5 sm:px-8 py-12">
           <Kicker>Proactive Intelligence</Kicker>
           <h2 className="font-heading font-black tracking-tight text-3xl sm:text-4xl leading-tight">It doesn't wait to be asked.</h2>
           <p className="text-muted-foreground mt-3 max-w-2xl">DecisionOS watches the business and speaks up first — surfacing the risk and the recommended action before it costs you money.</p>
-          <div className="grid sm:grid-cols-2 gap-4 mt-8">
+          <div className="grid sm:grid-cols-2 gap-4 mt-6">
             {[
               { t: "Cash flow", a: "₹45,000 overdue to a vendor — due today.", r: "→ Confirm terms & clear payment." },
               { t: "Inventory", a: "Stock won't cover next week's orders.", r: "→ Raise a purchase order now." },
@@ -151,7 +151,7 @@ export default function Landing() {
               { t: "Workload", a: "A teammate has 5 open, 1 overdue.", r: "→ Reassign or extend." },
             ].map((x) => (
               <div key={x.t} className="border border-border bg-white p-5">
-                <div className="flex items-center gap-2 text-brand-600 mb-2"><WarningCircle size={16} weight="bold" /><span className="font-mono text-[11px] ">{x.t}</span></div>
+                <div className="flex items-center gap-2 text-brand-600 mb-2"><WarningCircle size={16} weight="bold" /><span className="font-mono text-xs ">{x.t}</span></div>
                 <p className="font-semibold text-sm">{x.a}</p>
                 <p className="text-sm text-muted-foreground mt-1">{x.r}</p>
               </div>
@@ -163,7 +163,7 @@ export default function Landing() {
 
       {/* AI DEPARTMENTS */}
       <section className="bg-white">
-        <div className="max-w-6xl mx-auto px-5 sm:px-8 py-20">
+        <div className="max-w-6xl mx-auto px-5 sm:px-8 py-12">
           <Kicker>AI Departments</Kicker>
           <h2 className="font-heading font-black tracking-tight text-3xl sm:text-4xl leading-tight">Every function, quietly on autopilot.</h2>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-10">
@@ -179,7 +179,7 @@ export default function Landing() {
 
       {/* WHY */}
       <section className="bg-[#16161a] text-white">
-        <div className="max-w-6xl mx-auto px-5 sm:px-8 py-20">
+        <div className="max-w-6xl mx-auto px-5 sm:px-8 py-12">
           <Kicker dark>Why DecisionOS?</Kicker>
           <h2 className="font-heading font-black tracking-tight text-3xl sm:text-4xl leading-tight">Not a chatbot. Not a clunky ERP. <span className="text-brand-600">An operating brain.</span></h2>
           <div className="grid sm:grid-cols-3 gap-5 mt-10">
@@ -200,7 +200,7 @@ export default function Landing() {
 
       {/* CTA */}
       <section className="bg-brand-600 text-white">
-        <div className="max-w-6xl mx-auto px-5 sm:px-8 py-20 text-center">
+        <div className="max-w-6xl mx-auto px-5 sm:px-8 py-12 text-center">
           <Sparkle size={30} weight="fill" className="mx-auto mb-5" />
           <h2 className="font-heading font-black tracking-tight text-3xl sm:text-5xl leading-tight max-w-3xl mx-auto">Every business decision — remembered, organized, and executed.</h2>
           <div className="flex flex-wrap gap-3 justify-center mt-10">
@@ -225,7 +225,7 @@ export default function Landing() {
             <Link to="/login" className="hover:text-white transition-colors">Log in</Link>
             <Link to="/signup" className="hover:text-white transition-colors">Sign up</Link>
           </div>
-          <div className="font-mono text-[11px] ">© 2026 DecisionOS</div>
+          <div className="font-mono text-xs ">© 2026 DecisionOS</div>
         </div>
       </footer>
     </div>

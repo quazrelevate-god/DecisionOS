@@ -90,10 +90,13 @@ function workflowLabel(d) {
 function TimelineDot({ tone = "muted", check = false }) {
   // Small circular indicator used down the timeline column. `tone`:
   // green (raised / done), blue (current), muted (pending).
+  // RD-6: `green` was raw Tailwind `bg-green-600` sitting beside semantic
+  // tokens, and the sweep flattened `blue` to a tint that lost the filled-dot
+  // read. Both now come off the semantic ramp as solid markers.
   const bg = {
-    green: "bg-green-600 text-white",
-    blue: "bg-brand-blue text-white",
-    muted: "bg-white border border-border text-transparent",
+    green: "bg-success-600 text-white",
+    blue: "bg-brand-600 text-white",
+    muted: "bg-card border border-border text-transparent",
   }[tone];
   return (
     <span className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${bg}`}>
@@ -201,7 +204,7 @@ export function DecisionDialog({ decisionId, open, onClose }) {
             </DialogHeader>
             {amount && (
               <p
-                className="text-2xl font-medium text-brand-blue mt-1"
+                className="text-2xl font-medium text-brand-700 mt-1"
                 data-testid="decision-amount"
               >
                 {amount}
@@ -409,7 +412,7 @@ export function DecisionDialog({ decisionId, open, onClose }) {
                   {(d.timeline || []).map((e, i) => (
                     <div
                       key={`${e.ts}-${i}`}
-                      className={`text-sm pl-2 border-l-2 ${e.kind === "comment" ? "border-brand-blue" : "border-border"}`}
+                      className={`text-sm pl-2 border-l-2 ${e.kind === "comment" ? "border-brand-200" : "border-border"}`}
                     >
                       <p className={e.kind === "comment" ? "" : "text-muted-foreground"}>{e.label}</p>
                       <p className="label-mono text-muted-foreground">

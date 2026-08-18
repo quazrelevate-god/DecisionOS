@@ -181,8 +181,15 @@
            floor. 11px is the desktop value from §3.2 and does not move; the
            media query below lifts both to 13px under lg. No component edits —
            .text-meta / .text-label read the variable. */
-        --text-label: 0.6875rem;    /* 11 */
-        --text-meta: 0.6875rem;     /* 11 */
+        /* RD-6 (2026-08-17): both were 11px on desktop while mobile used 13px
+           — desktop, on a far bigger screen, was reading the SMALLER type.
+           That inversion is also what quietly defeated `.label-mono`: the
+           class @applies `text-xs` (13px) but a second rule further down sets
+           `font-size: var(--text-label)`, so every eyebrow in the app painted
+           at 11px regardless. Both tiers now sit at 13px and match text-xs,
+           so the two definitions agree instead of fighting. */
+        --text-label: 0.8125rem;    /* 13 */
+        --text-meta: 0.8125rem;     /* 13 */
 
         /* Tabs are a nested pair: the list is a fixed box and the trigger
            fills it minus p-1, so both need their own tier to stay exact. */
@@ -321,24 +328,28 @@
    Per §5.1 the measured getBoundingClientRect() is what must clear 44 — so
    these set real box size, not a padded-out hit area.
 --------------------------------------------------------------------------- */
+/* RD-6 (2026-08-17): Recharts writes font-size as an SVG presentation
+   attribute (`<text font-size="11">`), which no utility class reaches. This
+   override used to live inside the mobile media query below — so charts were
+   11px on DESKTOP and 13px on mobile, the same inversion that affected
+   --text-label. Hoisted out so it applies at every width. */
+.recharts-wrapper text,
+.recharts-wrapper tspan,
+.recharts-text {
+    font-size: 0.8125rem;
+}
+
 @media (max-width: 1023.98px) {
-    /* ---- type: nothing renders below 13px ---- */
-    .text-xs,
-    .text-\[9px\],
-    .text-\[10px\],
-    .text-\[11px\],
-    .text-\[12px\] {
+    /* ---- type: nothing renders below 13px ----
+       RD-6: the .text-[9/10/11/12px] selectors that used to be listed here
+       are gone from the source entirely — every call site now uses a named
+       step. `.text-xs` is 13px at all widths after the scale lift, so this
+       rule is a floor that the desktop scale already satisfies. */
+    .text-xs {
         font-size: 0.8125rem;
         line-height: 1.25rem;
     }
     .label-mono { font-size: var(--text-label); }
-
-    /* Recharts writes font-size as an SVG presentation attribute, so the
-       utility overrides above never reach axis ticks and legends. */
-    .recharts-wrapper text,
-    .recharts-wrapper tspan {
-        font-size: 0.8125rem;
-    }
 
     /* ---- touch: min-height/min-width are inert on inline boxes, so prose
        links keep their line box and only real controls grow. ---- */

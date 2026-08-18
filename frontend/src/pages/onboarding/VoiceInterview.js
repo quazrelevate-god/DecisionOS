@@ -35,7 +35,7 @@ const LangChip = ({ value, onChange, disabled }) => {
         onClick={() => !disabled && setOpen((o) => !o)}
         disabled={disabled}
         title="Change voice language"
-        className="flex items-center gap-1.5 px-2.5 h-10 border border-border bg-white text-[11px] font-medium hover:bg-accent disabled:opacity-40"
+        className="flex items-center gap-1.5 px-2.5 h-10 border border-border bg-white text-xs font-medium hover:bg-accent disabled:opacity-40"
       >
         <span>{langLabel(value)}</span>
         <CaretDown size={12} weight="bold" />
@@ -72,7 +72,7 @@ const LanguagePick = ({ onPick, onSkip }) => (
     <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl leading-[1.02] mb-2">
       Which language should Dex speak?
     </h1>
-    <p className="text-sm text-muted-foreground mb-8">Dex will ask every question — voice and text — in the language you pick. You can answer by speaking or typing.</p>
+    <p className="text-sm text-muted-foreground mb-6">Dex will ask every question — voice and text — in the language you pick. You can answer by speaking or typing.</p>
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
       {SPOKEN_LANGS.map((l, i) => (
         <motion.button
@@ -83,11 +83,11 @@ const LanguagePick = ({ onPick, onSkip }) => (
           className="group border border-border bg-white p-4 text-left hover:bg-accent hover:-translate-y-0.5 transition-all"
         >
           <p className="font-heading text-2xl font-black leading-none">{l.short}</p>
-          <p className="mt-2 text-[11px] font-medium text-muted-foreground group-hover:text-white/70">{l.label}</p>
+          <p className="mt-2 text-xs font-medium text-muted-foreground group-hover:text-white/70">{l.label}</p>
         </motion.button>
       ))}
     </div>
-    <div className="mt-8">
+    <div className="mt-6">
       <button onClick={onSkip} data-testid="interview-skip"
         className="text-xs font-medium text-muted-foreground hover:text-brand-ink underline underline-offset-4 transition-colors">
         Skip the interview — build from what you have
@@ -231,7 +231,7 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
   return (
     <div className="w-full max-w-2xl mx-auto" data-testid="signup-interview">
       {/* Assistant header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <div className="relative w-16 h-16">
             <motion.div className="absolute inset-0 rounded-full border-2 border-brand-600"
@@ -279,7 +279,7 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
                   animate={speaking ? { scale: [1, 1.6, 1], opacity: [1, 0.5, 1] } : { scale: 1, opacity: 0.5 }}
                   transition={speaking ? { repeat: Infinity, duration: 1 } : { duration: 0.2 }}
                 />
-                <p className="text-[10px] font-mono  text-muted-foreground">
+                <p className="text-xs font-mono  text-muted-foreground">
                   {speaking ? "Speaking · read along" : "Read or listen"}
                 </p>
               </div>
@@ -294,7 +294,7 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
       </div>
 
       {/* Answer area */}
-      <div className="mt-8 border border-border bg-white shadow-md p-4" data-testid="interview-answer-box">
+      <div className="mt-6 border border-border bg-white shadow-md p-4" data-testid="interview-answer-box">
         <textarea
           ref={inputRef}
           data-testid="interview-answer-input"
@@ -331,7 +331,7 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
             disabled={index <= 1 || thinking || starting}
             data-testid="interview-back"
             title="Go back to the previous question"
-            className="flex items-center gap-1 px-3 py-1.5 border border-border bg-white text-[11px] font-medium hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+            className="flex items-center gap-1 px-3 py-1.5 border border-border bg-white text-xs font-medium hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
             <CaretLeft size={12} weight="bold" /> Back
           </button>
           <div className="flex gap-1.5">

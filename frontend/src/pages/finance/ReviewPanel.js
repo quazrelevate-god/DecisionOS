@@ -56,7 +56,7 @@ function SelectField({ label, value, onChange, options, optLabels }) {
   const LB = optLabels || OPT_LABELS;
   return (
     <label className="block">
-      <span className="label-mono text-muted-foreground text-[10px]">{label}</span>
+      <span className="label-mono text-muted-foreground text-xs">{label}</span>
       <select className={inp} value={value ?? ""} onChange={(e) => onChange(e.target.value)}>
         {!options.includes(value) && <option value={value || ""}>{value || "—"}</option>}
         {options.map((o) => <option key={o} value={o}>{LB[o] || o}</option>)}
@@ -68,7 +68,7 @@ function SelectField({ label, value, onChange, options, optLabels }) {
 function Field({ label, value, onChange, placeholder }) {
   return (
     <label className="block">
-      <span className="label-mono text-muted-foreground text-[10px]">{label}</span>
+      <span className="label-mono text-muted-foreground text-xs">{label}</span>
       <input className={inp} value={value ?? ""} placeholder={placeholder || ""} onChange={(e) => onChange(e.target.value)} />
     </label>
   );
@@ -161,7 +161,7 @@ export default function ReviewPanel({ ingestion, onFiled, onCancel }) {
   };
 
   return (
-    <div className="card-brutal p-5 mb-8" data-testid="ingest-review-panel">
+    <div className="card-brutal p-5 mb-6" data-testid="ingest-review-panel">
       <div className="flex items-start justify-between gap-3 mb-4 flex-wrap">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -170,8 +170,8 @@ export default function ReviewPanel({ ingestion, onFiled, onCancel }) {
           </div>
           <p className="text-sm text-muted-foreground">{ingestion.summary || ingestion.filename}</p>
           <div className="flex items-center gap-2 mt-2 flex-wrap">
-            {ingestion.doc_type && <Chip value={ingestion.doc_type} className="bg-brand-blue text-white" />}
-            {ingestion.entity && <Chip value={ingestion.entity} className="bg-brand-blue text-white" />}
+            {ingestion.doc_type && <Chip value={ingestion.doc_type} className="bg-brand-50 text-brand-700" />}
+            {ingestion.entity && <Chip value={ingestion.entity} className="bg-brand-50 text-brand-700" />}
             {ingestion.confidence != null && (
               <span className="label-mono text-muted-foreground">confidence {Math.round(ingestion.confidence * 100)}%</span>
             )}
@@ -240,7 +240,7 @@ export default function ReviewPanel({ ingestion, onFiled, onCancel }) {
                 <SelectField label="Type" value={inv.type} onChange={(v) => setItem("invoices", i, "type", v)} options={INVOICE_TYPE_OPTS} />
                 {isPurchase && (
                   <label className="block" data-testid={`review-invoice-bucket-${i}`}>
-                    <span className="label-mono text-muted-foreground text-[10px]">Book as {needsBucket && <span className="text-brand-600">• pick one</span>}</span>
+                    <span className="label-mono text-muted-foreground text-xs">Book as {needsBucket && <span className="text-brand-600">• pick one</span>}</span>
                     <select className={`${inp} ${needsBucket ? "ring-2 ring-brand-600" : ""}`} value={pt}
                       data-testid={`review-invoice-bucket-select-${i}`}
                       onChange={(e) => setItem("invoices", i, "purchase_type", e.target.value)}>

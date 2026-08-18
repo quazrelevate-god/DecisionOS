@@ -311,8 +311,8 @@ export default function Workflows({ embedded = false }) {
                             {stageTasks.slice(0, 4).map((tk) => (
                               <a key={tk.id} href={`/my-work?task=${encodeURIComponent(tk.id)}`}
                                 data-testid={`wf-card-task-${w.id}-${tk.id}`}
-                                className="flex items-center gap-1.5 text-[11px] border border-border/60 bg-brand-paper/40 px-1.5 py-1 hover:bg-accent transition-colors">
-                                <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-primary text-primary-foreground text-[9px] font-bold shrink-0"
+                                className="flex items-center gap-1.5 text-xs border border-border/60 bg-brand-paper/40 px-1.5 py-1 hover:bg-accent transition-colors">
+                                <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-primary text-primary-foreground text-xs font-bold shrink-0"
                                   title={tk.assignee_name || tk.assignee_role || "Unassigned"}>
                                   {_initials(tk.assignee_name) || (tk.assignee_role ? tk.assignee_role.slice(0, 1).toUpperCase() : "?")}
                                 </span>
@@ -320,11 +320,11 @@ export default function Workflows({ embedded = false }) {
                               </a>
                             ))}
                             {stageTasks.length > 4 && (
-                              <p className="text-[10px] text-muted-foreground italic pl-1">+ {stageTasks.length - 4} more</p>
+                              <p className="text-xs text-muted-foreground italic pl-1">+ {stageTasks.length - 4} more</p>
                             )}
                           </div>
                         ) : (
-                          <p className="mt-2 text-[10px] text-muted-foreground italic">No open tasks at this stage.</p>
+                          <p className="mt-2 text-xs text-muted-foreground italic">No open tasks at this stage.</p>
                         )}
 
                         {updAt && (

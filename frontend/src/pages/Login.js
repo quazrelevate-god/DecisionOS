@@ -187,7 +187,7 @@ export default function Login() {
         {isDark ? <Sun size={18} weight="bold" /> : <MoonStars size={18} weight="bold" />}
       </button>
       {/* Left brand panel */}
-      <div className="hidden lg:flex flex-col justify-between bg-primary text-primary-foreground p-12 border-r border-border">
+      <div className="hidden lg:flex flex-col justify-between bg-primary text-primary-foreground p-8 border-r border-border">
         {/* The hero panel is dark in both themes, so `dark:` never fires here
             and the plate has to be explicit. */}
         <Wordmark size={24} plate />
@@ -206,7 +206,7 @@ export default function Login() {
       {/* Right form */}
       <div className="flex items-center justify-center p-6 lg:p-12">
         <div className="w-full max-w-md">
-          <div className="lg:hidden mb-8">
+          <div className="lg:hidden mb-6">
             <Wordmark size={20} />
           </div>
 
@@ -260,7 +260,7 @@ export default function Login() {
                       <span className="text-sm font-mono truncate">Code sent to <strong>{invite?.phone_masked || maskPhone(otpPhone)}</strong></span>
                     </div>
                     <button type="button" onClick={() => { setOtpSent(false); setOtpCode(""); setError(""); setResendIn(0); }} data-testid="otp-change-number"
-                      className="text-xs font-semibold uppercase text-brand-blue hover:underline whitespace-nowrap ml-2 shrink-0">Change</button>
+                      className="text-xs font-semibold uppercase text-brand-700 hover:underline whitespace-nowrap ml-2 shrink-0">Change</button>
                   </div>
                   <div>
                     <label className={labelCls}>Enter 6-digit code</label>
@@ -276,7 +276,7 @@ export default function Login() {
                     {resendIn > 0 ? (
                       <span className="text-muted-foreground">Resend code in <span className="font-semibold tabular-nums">{resendIn}s</span></span>
                     ) : (
-                      <button type="button" onClick={requestOtp} disabled={busy} data-testid="otp-resend" className="text-brand-blue font-semibold hover:underline">Didn't get it? Resend OTP</button>
+                      <button type="button" onClick={requestOtp} disabled={busy} data-testid="otp-resend" className="text-brand-700 font-semibold hover:underline">Didn't get it? Resend OTP</button>
                     )}
                   </div>
                 </>
@@ -284,8 +284,8 @@ export default function Login() {
             </form>
           )}
 
-          <Link to="/signup" data-testid="toggle-auth-mode" className="mt-4 inline-block text-sm text-brand-blue font-semibold hover:underline">Need a workspace? Register →</Link>
-          <div className="mt-8 border-t border-border pt-6">
+          <Link to="/signup" data-testid="toggle-auth-mode" className="mt-4 inline-block text-sm text-brand-700 font-semibold hover:underline">Need a workspace? Register →</Link>
+          <div className="mt-6 border-t border-border pt-6">
             <p className="label-mono text-muted-foreground mb-3">Try the Sharma demo</p>
             {/* MPWA-11 (§8): demo-role buttons WRAP rather than clip. */}
             <div className="flex flex-wrap gap-touch-gap">

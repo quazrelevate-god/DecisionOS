@@ -223,7 +223,7 @@ export function ContactsPanel({ types, addLabel = "Add Contact", readOnly = fals
             </div>
             {(c.tags || []).length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-3">
-                {c.tags.map((t) => <span key={t} className="text-[10px]  border border-border px-1.5 py-0.5">{t}</span>)}
+                {c.tags.map((t) => <span key={t} className="text-xs  border border-border px-1.5 py-0.5">{t}</span>)}
               </div>
             )}
             <div className="flex items-center justify-between mt-4 pt-3 border-t border-border text-xs text-muted-foreground">

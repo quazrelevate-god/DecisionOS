@@ -236,7 +236,7 @@ export function OperatingModelEditor() {
         <FlowArrow size={20} weight="bold" className="text-brand-600" />
         <h2 className="text-base font-medium">Operating Model</h2>
       </div>
-      <p className="text-xs text-muted-foreground mb-4">
+      <p className="text-sm text-muted-foreground mb-4">
         The workflow pipelines and task categories that shape your Workflows board and My Work — tailored to <span className="font-semibold">{tenant?.industry || "your industry"}</span>. Each stage owns its task templates + approval gate. Add your own or let AI regenerate.
       </p>
 
@@ -261,8 +261,8 @@ export function OperatingModelEditor() {
                   {/* Stage name row + reorder + delete */}
                   <div className="flex items-center gap-1.5">
                     <input className={`${smInp} flex-1`} placeholder="Stage name" value={s.label} onChange={(e) => setStage(pi, si, { label: e.target.value })} />
-                    <button onClick={() => moveStage(pi, si, -1)} disabled={si === 0} title="Move up" className="p-1 disabled:opacity-30 hover:text-brand-blue"><ArrowUp size={14} weight="bold" /></button>
-                    <button onClick={() => moveStage(pi, si, 1)} disabled={si === p.stages.length - 1} title="Move down" className="p-1 disabled:opacity-30 hover:text-brand-blue"><ArrowDown size={14} weight="bold" /></button>
+                    <button onClick={() => moveStage(pi, si, -1)} disabled={si === 0} title="Move up" className="p-1 disabled:opacity-30 hover:text-brand-700"><ArrowUp size={14} weight="bold" /></button>
+                    <button onClick={() => moveStage(pi, si, 1)} disabled={si === p.stages.length - 1} title="Move down" className="p-1 disabled:opacity-30 hover:text-brand-700"><ArrowDown size={14} weight="bold" /></button>
                     <button onClick={() => delStage(pi, si)} title="Delete stage" className="p-1 text-muted-foreground hover:text-danger-600"><Trash size={14} weight="bold" /></button>
                   </div>
 
@@ -270,10 +270,10 @@ export function OperatingModelEditor() {
                   <div className="mt-2.5 pl-1">
                     <div className="flex items-center gap-1.5 mb-1">
                       <ListChecks size={12} weight="bold" className="text-muted-foreground" />
-                      <span className="text-[11px] font-medium text-muted-foreground">Tasks that fire on entry</span>
+                      <span className="text-xs font-medium text-muted-foreground">Tasks that fire on entry</span>
                     </div>
                     {(s.tasks || []).length === 0 && (
-                      <p className="text-[11px] text-muted-foreground italic pl-4">None. Card just sits at this stage until manually advanced.</p>
+                      <p className="text-xs text-muted-foreground italic pl-4">None. Card just sits at this stage until manually advanced.</p>
                     )}
                     <div className="space-y-1.5">
                       {(s.tasks || []).map((t, ti) => (
@@ -283,7 +283,7 @@ export function OperatingModelEditor() {
                             <option value="">Unassigned</option>
                             {ROLE_KEYS.map((r) => <option key={r} value={r}>{r}</option>)}
                           </select>
-                          <label className="flex items-center gap-1 text-[11px] text-muted-foreground whitespace-nowrap" title="Require attached evidence to close">
+                          <label className="flex items-center gap-1 text-xs text-muted-foreground whitespace-nowrap" title="Require attached evidence to close">
                             <input type="checkbox" checked={!!t.evidence_required} onChange={(e) => setStageTask(pi, si, ti, { evidence_required: e.target.checked })} />
                             evidence
                           </label>
@@ -292,7 +292,7 @@ export function OperatingModelEditor() {
                       ))}
                     </div>
                     <button onClick={() => addStageTask(pi, si)} data-testid={`op-add-stage-task-${pi}-${si}`}
-                      className="flex items-center gap-1 text-[11px] font-semibold text-brand-blue hover:underline mt-1.5">
+                      className="flex items-center gap-1 text-xs font-semibold text-brand-700 hover:underline mt-1.5">
                       <Plus size={11} weight="bold" /> Add task template
                     </button>
                   </div>
@@ -300,7 +300,7 @@ export function OperatingModelEditor() {
                   {/* WE-04: per-stage approval gate */}
                   <div className="mt-2.5 pl-1 flex items-center flex-wrap gap-1.5">
                     <ShieldCheck size={12} weight="bold" className="text-muted-foreground" />
-                    <span className="text-[11px] font-medium text-muted-foreground">Approval to leave this stage</span>
+                    <span className="text-xs font-medium text-muted-foreground">Approval to leave this stage</span>
                     <select data-testid={`op-stage-approval-role-${pi}-${si}`} className={smInp}
                       value={s.approval?.role || ""}
                       onChange={(e) => setStageApproval(pi, si, { role: e.target.value })}>
@@ -308,7 +308,7 @@ export function OperatingModelEditor() {
                       {ROLE_KEYS.map((r) => <option key={r} value={r}>{r}</option>)}
                     </select>
                     {s.approval?.role && (
-                      <label className="flex items-center gap-1 text-[11px] text-muted-foreground whitespace-nowrap" title="If off, the gate is recorded but skippable">
+                      <label className="flex items-center gap-1 text-xs text-muted-foreground whitespace-nowrap" title="If off, the gate is recorded but skippable">
                         <input type="checkbox" checked={s.approval.required !== false}
                           onChange={(e) => setStageApproval(pi, si, { required: e.target.checked })} />
                         required
@@ -321,12 +321,12 @@ export function OperatingModelEditor() {
                     <div className="mt-2.5 pl-1">
                       <div className="flex items-center gap-1.5 mb-1">
                         <Lightning size={12} weight="bold" className="text-muted-foreground" />
-                        <span className="text-[11px] font-medium text-muted-foreground">Fires on entry</span>
+                        <span className="text-xs font-medium text-muted-foreground">Fires on entry</span>
                       </div>
                       <div className="flex flex-wrap gap-1.5">
                         {s.side_effects.map((se, ei) => (
                           <span key={se._uid} data-testid={`op-stage-side-effect-${pi}-${si}-${ei}`}
-                            className="inline-flex items-center gap-1 border border-border rounded-md px-2 py-0.5 text-[11px] font-mono bg-card">
+                            className="inline-flex items-center gap-1 border border-border rounded-md px-2 py-0.5 text-xs font-mono bg-card">
                             {se.kind}
                             <button onClick={() => delSideEffect(pi, si, ei)} title="Remove" className="text-muted-foreground hover:text-danger-600">
                               <Trash size={10} weight="bold" />
@@ -338,7 +338,7 @@ export function OperatingModelEditor() {
                   )}
                 </div>
               ))}
-              <button onClick={() => addStage(pi)} data-testid={`op-add-stage-${pi}`} className="flex items-center gap-1 text-xs font-semibold text-brand-blue hover:underline mt-1">
+              <button onClick={() => addStage(pi)} data-testid={`op-add-stage-${pi}`} className="flex items-center gap-1 text-xs font-semibold text-brand-700 hover:underline mt-1">
                 <Plus size={13} weight="bold" /> Add stage
               </button>
             </div>
@@ -350,7 +350,7 @@ export function OperatingModelEditor() {
                 <option value="">None</option>
                 {p.stages.filter((s) => s.key).map((s) => <option key={s._uid} value={s.key}>{s.label}</option>)}
               </select>
-              <span className="text-[11px] text-muted-foreground">(only the owner can advance to it)</span>
+              <span className="text-xs text-muted-foreground">(only the owner can advance to it)</span>
             </div>
           </div>
         ))}
@@ -367,7 +367,7 @@ export function OperatingModelEditor() {
             <button onClick={() => delCat(i)} title="Delete" className="text-muted-foreground hover:text-danger-600"><Trash size={13} weight="bold" /></button>
           </div>
         ))}
-        <button onClick={addCat} data-testid="op-add-cat" className="flex items-center gap-1 text-sm font-semibold text-brand-blue hover:underline px-2 py-1">
+        <button onClick={addCat} data-testid="op-add-cat" className="flex items-center gap-1 text-sm font-semibold text-brand-700 hover:underline px-2 py-1">
           <Plus size={13} weight="bold" /> Add category
         </button>
       </div>

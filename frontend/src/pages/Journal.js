@@ -31,7 +31,7 @@ const EVENT_ICON = {
 };
 
 const EVENT_COLOR = {
-  created: "text-brand-blue",
+  created: "text-brand-700",
   approved: "text-green-600",
   rejected: "text-danger-600",
   assigned: "text-brand-ink",
@@ -160,7 +160,7 @@ export default function Journal() {
 
       <form
         onSubmit={(e) => { e.preventDefault(); setTerm(q); }}
-        className="flex gap-2 mb-8 max-w-xl"
+        className="flex gap-2 mb-6 max-w-xl"
       >
         <div className="flex-1 min-w-0 flex items-center border border-border bg-white">
           <MagnifyingGlass size={18} weight="bold" className="ml-3 text-muted-foreground" />
@@ -223,7 +223,7 @@ export default function Journal() {
                           <Chip value={d.status} />
                         </div>
                         <p className="text-sm font-medium leading-tight">{d.title}</p>
-                        <span className="label-mono text-brand-blue mt-auto">View timeline →</span>
+                        <span className="label-mono text-brand-700 mt-auto">View timeline →</span>
                       </button>
                     ))}
                   </div>

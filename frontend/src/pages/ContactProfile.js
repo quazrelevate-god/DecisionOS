@@ -17,13 +17,19 @@ import {
 
 // Epic 2 Sprint 1 (E2-08): activity kind -> icon + colour. Small map
 // so the timeline reads at a glance.
+// RD-6 (2026-08-17): these survived the earlier sweeps because this file was
+// hand-edited in P3 and left out of the scripted passes. `bg-brand-green` is
+// the same phantom token found on the CRM lifecycle chip — it is defined
+// nowhere, so the WhatsApp marker was rendering with no background at all.
+// All six now sit on the semantic ramp; WhatsApp keeps a green tint because
+// it is a real brand mark rather than a status.
 const ACTIVITY_META = {
-  call: { icon: Phone, label: "Call", cls: "bg-brand-blue text-white" },
+  call: { icon: Phone, label: "Call", cls: "bg-brand-50 text-brand-700" },
   meeting: { icon: Handshake, label: "Meeting", cls: "bg-caution-50 text-caution-800" },
-  note: { icon: Note, label: "Note", cls: "bg-black/10 text-black" },
-  whatsapp: { icon: WhatsappLogo, label: "WhatsApp", cls: "bg-brand-green text-white" },
+  note: { icon: Note, label: "Note", cls: "bg-muted text-muted-foreground" },
+  whatsapp: { icon: WhatsappLogo, label: "WhatsApp", cls: "bg-success-50 text-success-800" },
   email: { icon: EnvelopeSimple, label: "Email", cls: "bg-muted text-muted-foreground" },
-  other: { icon: ChatCircleDots, label: "Other", cls: "bg-black/10 text-black" },
+  other: { icon: ChatCircleDots, label: "Other", cls: "bg-muted text-muted-foreground" },
 };
 
 function timeAgo(iso) {
@@ -56,7 +62,7 @@ const Stat = ({ label, value, accent, testid }) => (
 const Section = ({ icon: Icon, title, count, children, hideWhenEmpty = false }) => {
   if (hideWhenEmpty && !count) return null;
   return (
-    <div className="mb-8">
+    <div className="mb-6">
       {/* RD-3: section heading drops uppercase/extrabold for a plain
           medium-weight line; the count moves into a quiet pill instead of
           parentheses. The icon stays indigo — it is the only accent here. */}
@@ -64,7 +70,7 @@ const Section = ({ icon: Icon, title, count, children, hideWhenEmpty = false }) 
         <Icon size={16} className="text-brand-600" />
         <h2 className="text-sm font-medium">{title}</h2>
         {count != null && (
-          <span className="px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground text-[11px] tabular-nums">
+          <span className="px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground text-xs tabular-nums">
             {count}
           </span>
         )}
@@ -141,7 +147,7 @@ export default function ContactProfile() {
   });
 
   if (!canView) return <EmptyState title="Restricted" hint="The 360° profile is available to Owner and Finance only." />;
-  if (isLoading) return <div className="text-sm text-muted-foreground py-20 text-center">Loading profile…</div>;
+  if (isLoading) return <div className="text-sm text-muted-foreground py-12 text-center">Loading profile…</div>;
   // MPWA-12i: a dead end is worst on an error path — he arrived from a link and
   // has nowhere to go. E2-13's own CTA, on the surface it missed.
   // `!data?.contact` as well as `error`: the API answers 200 with an empty body
@@ -223,7 +229,7 @@ export default function ContactProfile() {
       </div>
 
       {/* Financial summary */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         <Stat testid="stat-outstanding" label="Outstanding" value={money(summary.outstanding, cur)} accent={summary.outstanding > 0 ? "text-brand-600" : "text-foreground"} />
         <Stat testid="stat-billed" label={isVendor ? "Total Billed" : "Total Invoiced"} value={money(summary.total_billed, cur)} />
         <Stat testid="stat-paid" label="Total Paid" value={money(summary.total_paid, cur)} />
@@ -240,7 +246,7 @@ export default function ContactProfile() {
            user something was wrong when nothing is. Neutral hairline card;
            the DexBadge already supplies the only accent it needs. */
         <div
-          className="border border-border rounded-xl px-4 py-3 mb-8 flex items-center justify-between gap-3 flex-wrap bg-card"
+          className="border border-border rounded-xl px-4 py-3 mb-6 flex items-center justify-between gap-3 flex-wrap bg-card"
           data-testid="relationship-card"
         >
           <div className="flex items-center gap-2 text-sm">
@@ -257,7 +263,7 @@ export default function ContactProfile() {
           </button>
         </div>
       ) : (
-        <div className="card-brutal p-6 mb-8" data-testid="relationship-card">
+        <div className="card-brutal p-6 mb-6" data-testid="relationship-card">
           <div className="flex items-center justify-between gap-4 flex-wrap mb-4">
             <div className="flex items-center gap-2">
               <DexBadge />
@@ -273,7 +279,7 @@ export default function ContactProfile() {
             </button>
           </div>
           <div>
-            <div className="flex flex-wrap gap-8">
+            <div className="flex flex-wrap gap-6">
               <ScoreBox label="Relationship" value={rel.relationship_score} Icon={Heart} good />
               <ScoreBox label="Risk" value={rel.risk_score} Icon={ShieldWarning} good={false} />
             </div>
@@ -340,7 +346,7 @@ export default function ContactProfile() {
                     </span>
                   </div>
                   <p className="text-sm">{a.text}</p>
-                  {a.actor_name && <p className="text-[11px] text-muted-foreground mt-1 font-mono">— {a.actor_name}</p>}
+                  {a.actor_name && <p className="text-xs text-muted-foreground mt-1 font-mono">— {a.actor_name}</p>}
                 </div>
               );
             })}
@@ -436,7 +442,7 @@ export default function ContactProfile() {
       <Section icon={Brain} title="Linked Decisions" count={decisions.length} hideWhenEmpty>
         <div className="space-y-2">{decisions.map((d) => (
           <div key={d.id} className="border border-border bg-white p-3">
-            <div className="flex items-center gap-2 mb-1"><Chip value={d.status} />{d.dtype && <Chip value={d.dtype} className="bg-brand-blue text-white" />}</div>
+            <div className="flex items-center gap-2 mb-1"><Chip value={d.status} />{d.dtype && <Chip value={d.dtype} className="bg-brand-50 text-brand-700" />}</div>
             <p className="text-sm font-semibold">{d.title}</p>
             {d.summary && <p className="text-xs text-muted-foreground">{d.summary}</p>}
           </div>

@@ -32,7 +32,7 @@ function InviteLinkModal({ info, onClose }) {
             className="flex items-center justify-center gap-2 border border-border px-4 py-2.5 text-sm font-medium hover:bg-green-600 hover:text-white transition-colors">
             <WhatsappLogo size={16} weight="bold" /> Share on WhatsApp
           </a>
-          <p className="text-[11px] text-muted-foreground italic">Auto-SMS delivery starts once your SMS provider is connected — until then, share this link directly. Link expires in 7 days.</p>
+          <p className="text-xs text-muted-foreground italic">Auto-SMS delivery starts once your SMS provider is connected — until then, share this link directly. Link expires in 7 days.</p>
         </div>
       </DialogContent>
     </Dialog>
@@ -132,7 +132,7 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite, member
           </>}
           <input data-testid="member-phone-input" className={inp} type="tel" placeholder={form.passwordless ? "Mobile number (required for OTP login)" : "Mobile number (for OTP login)"} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
           {!editing && form.passwordless && (
-            <p className="text-[11px] text-muted-foreground -mt-1 italic" data-testid="passwordless-hint">No password needed — this member signs in with a one-time code sent to their mobile.</p>
+            <p className="text-xs text-muted-foreground -mt-1 italic" data-testid="passwordless-hint">No password needed — this member signs in with a one-time code sent to their mobile.</p>
           )}
           <div>
             <label className="label-mono text-muted-foreground">Role</label>
@@ -185,7 +185,7 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite, member
                   );
                 })}
               </div>
-              <p className="text-[11px] text-muted-foreground mt-2 italic">CEO Brief shows their personal brief. Everyone always has CEO Brief, My Work & Meeting Notes.</p>
+              <p className="text-xs text-muted-foreground mt-2 italic">CEO Brief shows their personal brief. Everyone always has CEO Brief, My Work & Meeting Notes.</p>
             </div>
             </>
             )}
@@ -303,7 +303,7 @@ export function TeamPanel({ readOnly = false } = {}) {
           can't edit; we tell them why + who to ask, so it doesn't look
           like a broken page. Owner + team_manage users skip this. */}
       {!canManageTeam && !readOnly && (
-        <div className="border border-border bg-caution-50 px-5 py-4 mb-8 flex items-start gap-3 rounded-xl" data-testid="team-view-only-banner">
+        <div className="border border-border bg-caution-50 px-5 py-4 mb-6 flex items-start gap-3 rounded-xl" data-testid="team-view-only-banner">
           <Eye size={16} weight="bold" className="text-brand-600 shrink-0 mt-0.5" />
           <div className="flex-1 text-sm">
             <p className="font-semibold">Read-only view</p>
@@ -345,7 +345,7 @@ export function TeamPanel({ readOnly = false } = {}) {
       </div>
 
       {grouped.length === 0 && (
-        <div className="border border-border p-10 text-center" data-testid="team-empty">
+        <div className="border border-border p-8 text-center" data-testid="team-empty">
           <p className="text-sm text-muted-foreground">
             {query ? `Nobody matches "${query}".` : "No team members yet."}
           </p>

@@ -937,6 +937,132 @@ html.theme-x *::after {
     }
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   NM-18 — the Dex sky.
+   NM-17 made /brain dark and it came out near-black: 240 12% 5% is a NEUTRAL
+   ground, and against it the composer, the rings and the suggestion pills all
+   sat within a few percent of the page. The founder's read — "very dark, I
+   cannot see the elements" — was a contrast problem wearing a mood problem's
+   clothes, so this fixes both halves.
+
+   HALF ONE: the ground goes navy and the surfaces open up. These override the
+   BASE variables (--surface, --hairline, --text-secondary…) rather than the
+   aliases, so --card, --border, --muted-foreground and the rest follow on
+   their own instead of being restated. Scoped to [data-dex] so ordinary dark
+   mode on every other page is untouched — this is Dex's room, not a change to
+   the theme.
+
+   HALF TWO: light in the room. Five layered gradients, `fixed` so the sky
+   stays put while the answer scrolls over it.
+   ═════════════════════════════════════════════════════════════════════════ */
+html[data-dex="1"] {
+    /* Deep navy, not black. Everything below is measured UP from this. */
+    --background:       226 48% 7%;
+    --surface:          226 34% 13%;
+    --surface-raised:   226 32% 17%;
+    --surface-sunken:   228 50% 5%;
+    --surface-hover:    226 30% 21%;
+    /* The hairline nearly doubles. On a lit ground the shadows lose their job
+       — a glow behind a card cancels the very gradient that separated it — so
+       the border carries the boundary here. */
+    --hairline:         224 26% 27%;
+    --hairline-strong:  224 30% 38%;
+    /* The subline was reading at roughly 3:1 on the old ground. */
+    --text-secondary:   220 24% 74%;
+    --text-tertiary:    220 16% 60%;
+
+    --nm-bg:      226 40% 10%;
+    --nm-raised:  226 32% 16%;
+    --nm-sunken:  228 46% 6%;
+    /* Bright, and deliberately so — see the rim-light note below. */
+    --nm-edge:    224 32% 58%;
+    /* The soft-depth highlight takes the room's colour: on a blue-lit surface
+       a grey highlight reads as dust. */
+    --nm-light:   106 128 186;
+    --nm-dark:    2 4 10;
+}
+
+/* The canvas hands its fill back so ONE continuous sky runs under the header,
+   past the rail and through the page. Two separately-painted gradients would
+   have shown a seam at the canvas edge. */
+html[data-dex="1"] .app-canvas { background-color: transparent; }
+
+/* THE ONE PLACE THE REVAMP'S OWN RULE HAS TO BEND. §2's premise is that a card
+   sits at the SAME value as the page and is separated by shadow alone. That
+   works because a shadow needs an unlit ground to fall on — and this room is
+   lit. With a glow behind it the composer measured rgb(15,20,36) against a
+   page of rgb(15,20,36): identical, and the shadow that was supposed to
+   separate them was being cancelled by the very gradient behind it. Here, and
+   only here, raised surfaces take the raised VALUE. */
+html[data-dex="1"] .nm-raised,
+html[data-dex="1"] .nm-tile { background-color: hsl(var(--nm-raised)); }
+
+/* RIM LIGHT — and the one place the §5 stop clause does NOT apply.
+   In the light theme I could not get a card boundary to WCAG's 3:1 without
+   drawing a visible grey frame, which is exactly what §1 removes, so I stopped
+   there and said so. Here the opposite is true: a bright 1px rim on a dark
+   surface is idiomatic, it reads as the edge catching the room's light rather
+   than as a box drawn round a card, and it is the only thing that can carry
+   the boundary once a glow behind the card has cancelled its shadow.
+   Measured against the composer's own fill, not against the page. */
+html[data-dex="1"] .nm-raised,
+html[data-dex="1"] .nm-tile  { border-color: hsl(var(--nm-edge) / .80); }
+html[data-dex="1"] .nm-inset { border-color: hsl(var(--nm-edge) / .55); }
+
+/* RD-1's dark cleanup hard-codes `.dark .text-muted-foreground` to a fixed
+   neutral grey, which bypasses --muted-foreground entirely — so raising the
+   token above did nothing to the one thing it was raised for. Restored to the
+   token inside this room only; the global override is left alone because
+   every dark screen in the app depends on it and that is a separate call.
+   (Unlayered, so it beats the @layer base rule without a specificity war.) */
+html[data-dex="1"].dark .text-muted-foreground { color: hsl(var(--muted-foreground)); }
+
+/* The sky is a PSEUDO-ELEMENT that is always present and fades on opacity,
+   rather than a background-image switched on with the route. background-image
+   is not interpolable between `none` and a gradient — it snaps — so painting
+   it directly on the shell would have popped the whole field into existence
+   halfway through NM-17's 480ms colour cross-fade. Same duration and easing
+   here, so the room lights up as the theme turns. */
+/* `isolation` is load-bearing, not tidiness. Without a stacking context here
+   the z-index:-1 layer below belongs to the ROOT context, and the painting
+   order there puts negative-z descendants BEFORE in-flow block backgrounds —
+   so this element's own bg-nm would paint straight over the sky and the whole
+   thing would be invisible. Making the shell a stacking context moves the
+   layer to just above its own background, which is where it belongs.
+   `isolation` rather than a z-index so nothing about the existing z-order of
+   the dock, the rail or the sticky header changes. */
+.app-sky { position: relative; isolation: isolate; }
+
+.app-sky::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 480ms cubic-bezier(.4, 0, .2, 1);
+    background-image:
+        /* The orb's own light, placed where the orb actually sits. */
+        radial-gradient(58% 42% at 50% 26%, hsl(228 92% 60% / .26), transparent 68%),
+        /* A cool wash from the left so the page does not go black behind the
+           rail. */
+        radial-gradient(44% 48% at 3% 32%, hsl(212 90% 55% / .17), transparent 70%),
+        /* Violet counterweight — two blues alone read as a gradient, three
+           hues read as a room. */
+        radial-gradient(46% 44% at 97% 76%, hsl(258 86% 60% / .17), transparent 70%),
+        /* A horizon lift, so the bottom third is not dead space. */
+        radial-gradient(84% 32% at 50% 104%, hsl(224 80% 48% / .18), transparent 72%),
+        /* Sheen down the top of the canvas. */
+        linear-gradient(180deg, hsl(226 68% 27% / .32), transparent 34%);
+    background-repeat: no-repeat;
+}
+
+html[data-dex="1"] .app-sky::before { opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+    .app-sky::before { transition: none; }
+}
+
 /* NM-11 — the Dex orb's idle breath. Runs ONLY when nothing is recording:
    with a live signal the rings are driven by the microphone and a loop on top
    of that would be two motions fighting. Off under reduced motion. */

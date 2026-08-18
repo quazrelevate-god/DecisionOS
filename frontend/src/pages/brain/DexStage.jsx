@@ -86,7 +86,10 @@ function Orb({ levels, recording, thinking, scale = 1 }) {
         style={{
           width: px(320), height: px(320),
           background: "radial-gradient(circle, hsl(var(--brand-500) / 0.30), transparent 65%)",
-          opacity: recording ? 0.55 + rings[0] * 0.45 : 0.30,
+          // NM-18: idle 0.30 was set against white, where a soft glow is
+          // plenty. On the navy sky it disappeared into the page's own
+          // gradient, so the core lost the halo that made it read as lit.
+          opacity: recording ? 0.55 + rings[0] * 0.45 : 0.45,
         }}
       />
 
@@ -96,7 +99,12 @@ function Orb({ levels, recording, thinking, scale = 1 }) {
           key={i}
           className={cn(
             "absolute rounded-full border transition-transform duration-100 ease-out",
-            recording ? "border-primary/30" : "border-primary/15",
+            // NM-18: a 15%-opacity indigo hairline is legible on white and
+            // invisible on a navy ground — the rings were there in the DOM and
+            // gone to the eye. Roughly doubled in dark only.
+            recording
+              ? "border-primary/30 dark:border-primary/55"
+              : "border-primary/15 dark:border-primary/28",
             !recording && "dex-breathe"
           )}
           style={{

@@ -146,6 +146,16 @@ export default function Layout({ children }) {
     return () => clearTimeout(t);
   }, [wantDark]);
 
+  // NM-18: the sky's token overrides hang off <html>, not off a React node —
+  // they have to reach the header and the rail, which are siblings of the
+  // canvas. Separate from the dark class above because the two answer
+  // different questions: `dark` is "which theme", `data-dex` is "which room".
+  useEffect(() => {
+    const root = document.documentElement;
+    if (dexRoute) root.setAttribute("data-dex", "1");
+    else root.removeAttribute("data-dex");
+  }, [dexRoute]);
+
   const [profileOpen, setProfileOpen] = useState(false);
   // MPWA-03 mobile navigation state.
   const [allAppsOpen, setAllAppsOpen] = useState(false);
@@ -387,7 +397,10 @@ export default function Layout({ children }) {
   // shadow + hairline, not by fill. bg-background stays untouched for
   // surfaces that opt out (sheets, popovers).
   return (
-    <div className="min-h-screen flex flex-col bg-nm text-foreground">
+    /* NM-18: `app-sky` is UNCONDITIONAL. The sky it owns is invisible at
+       opacity 0 off the Dex route, and keeping it mounted is what lets it fade
+       in and out with the theme instead of snapping — see .app-sky::before. */
+    <div className="app-sky min-h-screen flex flex-col bg-nm text-foreground">
       <WelcomeOverlay />
       {/* RD-1 (2026-08-17) — desktop top bar, full width.
           The reference puts its mark in the rail's top cell, but that only

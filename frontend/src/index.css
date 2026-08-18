@@ -954,50 +954,35 @@ html.theme-x *::after {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   NM-18 — the Dex sky.
-   NM-17 made /brain dark and it came out near-black: 240 12% 5% is a NEUTRAL
-   ground, and against it the composer, the rings and the suggestion pills all
-   sat within a few percent of the page. The founder's read — "very dark, I
-   cannot see the elements" — was a contrast problem wearing a mood problem's
-   clothes, so this fixes both halves.
-
-   HALF ONE: the ground goes navy and the surfaces open up. These override the
-   BASE variables (--surface, --hairline, --text-secondary…) rather than the
-   aliases, so --card, --border, --muted-foreground and the rest follow on
-   their own instead of being restated. Scoped to [data-dex] so ordinary dark
-   mode on every other page is untouched — this is Dex's room, not a change to
-   the theme.
-
-   HALF TWO: light in the room. Five layered gradients, `fixed` so the sky
-   stays put while the answer scrolls over it.
+   KR-3 — the Dex room joins the Karma ink. (Was NM-18's navy sky.)
+   The MECHANICS are NM-18's, untouched and proven: token overrides scoped to
+   [data-dex] so the base variables carry the change, a pseudo-element sky
+   that fades on opacity through NM-17's crossfade, isolation on the shell.
+   Only the LIGHT changes: navy+indigo becomes the band ink warmed by the
+   same amber bloom the light zone uses — one atmosphere for the whole
+   product, at two exposures.
    ═════════════════════════════════════════════════════════════════════════ */
 html[data-dex="1"] {
-    /* Deep navy, not black. Everything below is measured UP from this. */
-    --background:       226 48% 7%;
-    --surface:          226 34% 13%;
-    --surface-raised:   226 32% 17%;
-    --surface-sunken:   228 50% 5%;
-    --surface-hover:    226 30% 21%;
-    /* The hairline nearly doubles. On a lit ground the shadows lose their job
-       — a glow behind a card cancels the very gradient that separated it — so
-       the border carries the boundary here. */
-    --hairline:         224 26% 27%;
-    --hairline-strong:  224 30% 38%;
-    /* The subline was reading at roughly 3:1 on the old ground. */
-    --text-secondary:   220 24% 74%;
-    --text-tertiary:    220 16% 60%;
+    /* The band ink, exactly — the room and the dark band are one material. */
+    --background:       240 4% 5%;
+    --surface:          240 4% 10%;
+    --surface-raised:   240 4% 13%;
+    --surface-sunken:   240 5% 3%;
+    --surface-hover:    240 4% 16%;
+    /* On a lit ground the border carries the boundary; warm, not blue. */
+    --hairline:         40 8% 24%;
+    --hairline-strong:  40 10% 34%;
+    --text-secondary:   40 12% 76%;
+    --text-tertiary:    40 8% 60%;
 
-    --nm-bg:      226 40% 10%;
-    --nm-raised:  226 32% 16%;
-    --nm-sunken:  228 46% 6%;
-    /* Same reasoning as .dark: one step up from this room's ground. */
-    --nm-rail:    226 32% 16%;
+    --nm-bg:      240 4% 7%;
+    --nm-raised:  240 4% 12%;
+    --nm-sunken:  240 5% 3%;
+    --nm-rail:    240 4% 12%;
     /* Bright, and deliberately so — see the rim-light note below. */
-    --nm-edge:    224 32% 58%;
-    /* The soft-depth highlight takes the room's colour: on a blue-lit surface
-       a grey highlight reads as dust. */
-    --nm-light:   106 128 186;
-    --nm-dark:    2 4 10;
+    --nm-edge:    40 12% 56%;
+    --nm-light:   186 160 128;
+    --nm-dark:    10 8 4;
 }
 
 /* The canvas hands its fill back so ONE continuous sky runs under the header,
@@ -1051,34 +1036,118 @@ html[data-dex="1"].dark .text-muted-foreground { color: hsl(var(--muted-foregrou
    the dock, the rail or the sticky header changes. */
 .app-sky { position: relative; isolation: isolate; }
 
-.app-sky::before {
+/* KR-3 — TWO skies on two pseudo-elements, faded on opacity, because
+   background-image cannot interpolate between two gradient sets: a single
+   layer would snap from bloom to bloom halfway through the 480ms crossfade.
+   ::before is the LIGHT-ZONE bloom (the default weather of the whole app);
+   ::after is the DEX-ROOM bloom (the same amber over ink). Both oversized
+   (inset -12%) so the 90s drift never exposes an edge. transform-only
+   animation — no layout, no paint storm; the blur is done once by the
+   gradient stops, not by filter. */
+.app-sky::before,
+.app-sky::after {
     content: "";
     position: fixed;
-    inset: 0;
+    inset: -12%;
     z-index: -1;
     pointer-events: none;
-    opacity: 0;
     transition: opacity 480ms cubic-bezier(.4, 0, .2, 1);
-    background-image:
-        /* The orb's own light, placed where the orb actually sits. */
-        radial-gradient(58% 42% at 50% 26%, hsl(228 92% 60% / .26), transparent 68%),
-        /* A cool wash from the left so the page does not go black behind the
-           rail. */
-        radial-gradient(44% 48% at 3% 32%, hsl(212 90% 55% / .17), transparent 70%),
-        /* Violet counterweight — two blues alone read as a gradient, three
-           hues read as a room. */
-        radial-gradient(46% 44% at 97% 76%, hsl(258 86% 60% / .17), transparent 70%),
-        /* A horizon lift, so the bottom third is not dead space. */
-        radial-gradient(84% 32% at 50% 104%, hsl(224 80% 48% / .18), transparent 72%),
-        /* Sheen down the top of the canvas. */
-        linear-gradient(180deg, hsl(226 68% 27% / .32), transparent 34%);
     background-repeat: no-repeat;
+    animation: kr-drift 90s ease-in-out infinite alternate;
 }
 
-html[data-dex="1"] .app-sky::before { opacity: 1; }
+/* The light zone: amber bloom off-centre right on the greige, a faint echo
+   lower-left so the page reads lit rather than stamped. Opacities are low
+   because text sits directly on this — the KR-7 gate re-measures secondary
+   text against the WARMEST point of the bloom, not the bare greige. */
+.app-sky::before {
+    opacity: 1;
+    background-image:
+        radial-gradient(42% 46% at 68% 12%, hsl(35 96% 62% / .38), transparent 70%),
+        radial-gradient(30% 34% at 86% 30%, hsl(19 92% 55% / .16), transparent 72%),
+        radial-gradient(38% 40% at 8% 88%, hsl(35 80% 70% / .18), transparent 72%);
+}
+
+/* The Dex room: same amber family over the ink, pushed toward the orb's
+   seat. Hidden by default; the crossfade trades the two layers as the
+   theme turns. */
+.app-sky::after {
+    opacity: 0;
+    background-image:
+        radial-gradient(50% 42% at 50% 24%, hsl(30 90% 50% / .20), transparent 68%),
+        radial-gradient(36% 40% at 12% 78%, hsl(19 90% 45% / .12), transparent 72%),
+        radial-gradient(70% 30% at 50% 104%, hsl(35 85% 55% / .12), transparent 72%),
+        linear-gradient(180deg, hsl(30 40% 16% / .35), transparent 30%);
+}
+
+html[data-dex="1"] .app-sky::before { opacity: 0; }
+html[data-dex="1"] .app-sky::after  { opacity: 1; }
+
+@keyframes kr-drift {
+    from { transform: translate3d(-1.5%, -1%, 0) scale(1); }
+    to   { transform: translate3d( 1.5%,  1%, 0) scale(1.04); }
+}
 
 @media (prefers-reduced-motion: reduce) {
-    .app-sky::before { transition: none; }
+    .app-sky::before, .app-sky::after { transition: none; animation: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   KR-3 — the dark band and the glass.
+
+   .kr-dark-band is the reference's bottom zone: a full-bleed near-black
+   section that ESCAPES the padded main via negative margins equal to the
+   page padding. --page-pad is declared here on the canvas (1rem, 2rem at lg,
+   mirroring main's p-4 lg:p-8) so the mechanism is self-contained; KR-5 can
+   move the declaration onto main when the shell is rebuilt.
+
+   Inside the band the SEMANTIC tokens are re-scoped — the same trick the
+   Dex room proved — so every token-reading child (text, chips, hairlines,
+   recipes) just works on ink without a `dark:` variant in sight.
+   ═════════════════════════════════════════════════════════════════════════ */
+.app-canvas { --page-pad: 1rem; }
+@media (min-width: 1024px) { .app-canvas { --page-pad: 2rem; } }
+
+@layer components {
+    .kr-dark-band {
+        margin-inline: calc(var(--page-pad, 1rem) * -1);
+        padding-inline: var(--page-pad, 1rem);
+        background: hsl(var(--kr-ink));
+        border-radius: 36px 36px 0 0;
+
+        /* the re-scope — band children read tokens, not variants */
+        --background:       var(--kr-ink);
+        --surface:          240 4% 10%;
+        --surface-raised:   var(--kr-ink-raised);
+        --surface-sunken:   240 5% 3%;
+        --surface-hover:    240 4% 16%;
+        --text-primary:     40 20% 97%;
+        --text-secondary:   40 12% 76%;
+        --text-tertiary:    40 8% 60%;
+        --hairline:         40 8% 24%;
+        --hairline-strong:  40 10% 34%;
+        --nm-bg:            240 4% 7%;
+        --nm-raised:        var(--kr-ink-raised);
+        --nm-sunken:        240 5% 3%;
+        --nm-edge:          40 12% 40%;
+        --kr-outline:       40 5% 60%;
+        color: hsl(var(--text-primary));
+    }
+
+    /* Frosted glass. The blur is the expensive part — budget ≤3 per
+       viewport; the tints are local variables so a variant is one line. */
+    .kr-glass {
+        --kr-glass-tint: var(--kr-glass-warm);
+        background: hsl(var(--kr-glass-tint) / .45);
+        -webkit-backdrop-filter: blur(20px) saturate(1.35);
+        backdrop-filter: blur(20px) saturate(1.35);
+        border: 1px solid rgb(255 255 255 / .14);
+        border-radius: var(--radius-tile);
+        color: hsl(40 20% 97%);
+    }
+    .kr-glass--blue  { --kr-glass-tint: var(--kr-glass-blue); }
+    .kr-glass--olive { --kr-glass-tint: var(--kr-glass-olive); }
+    .kr-glass--warm  { --kr-glass-tint: var(--kr-glass-warm); }
 }
 
 /* NM-11 — the Dex orb's idle breath. Runs ONLY when nothing is recording:

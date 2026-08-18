@@ -1,5 +1,5 @@
 // KR-4 · PillNav — the reference's centred header navigation: active = solid
-// ink pill with white text, inactive = 1px outlined pill on the open ground.
+// ink pill with white text, inactive = a black hairline on the open ground.
 //
 // Built on NavLink so active state comes from the ROUTER (aria-current=page
 // for free), not from local state that can drift from the URL. The outline
@@ -31,7 +31,11 @@ export function PillNav({ items = [], size = "md", className, testid }) {
               pad,
               isActive
                 ? "bg-kr-ink text-white"
-                : "border border-kr-outline text-foreground/80 hover:text-foreground hover:border-foreground/60"
+                /* KR-8.13 — a black hairline, not a 1px grey one. The founder
+                   wants every pill drawn with the thinnest possible black
+                   rule; kr-outline's grey was reading as a disabled edge
+                   beside the solid ink of the active pill. */
+                : "border-[0.5px] border-kr-ink text-foreground/80 hover:text-foreground"
             )
           }
         >

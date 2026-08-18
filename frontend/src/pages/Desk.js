@@ -79,18 +79,23 @@ function ScopePills({ scope, setScope }) {
       onClick={() => setScope(k)}
       aria-pressed={scope === k}
       data-testid={`desk-scope-${k}`}
-      /* KR-8.12 — no solid fill on the selected pill. The outlined form IS
-         the selected state now; the unselected one is the same shape faded
-         back. Opacity is not the only difference, deliberately: the border
-         darkens and the label goes medium, so the pair is still readable to
-         anyone who cannot separate two tints.
+      /* KR-8.13 — NO FILL ON EITHER PILL. Both grounds are the page itself;
+         the selected one is drawn purely by a darker border and a medium
+         label, the unselected by the same outline faded back. Opacity is
+         not the only difference, deliberately: weight and border strength
+         both move, so the pair is still readable to anyone who cannot
+         separate two tints (and aria-pressed carries it for anyone who
+         cannot see either).
+         KR-8.13 also thins both to a 0.5px BLACK hairline, matching
+         PillNav — the selected at full strength, the faded at 55%: still
+         black, just quieter, so each keeps its own boundary.
          The alphas are measured, not chosen — against the bloom's hottest
-         point the faded label sits at 5.19:1 and its border at 3.86:1.
+         point the faded label sits at 4.75:1 and its border at 3.63:1.
          foreground/45 would have looked right and measured 2.92:1. */
       className={
         scope === k
-          ? "h-9 rounded-pill border border-kr-ink/70 bg-white/50 px-4 text-sm font-medium text-foreground"
-          : "h-9 rounded-pill border border-kr-ink/55 px-4 text-sm text-foreground/65 transition-colors hover:text-foreground/85"
+          ? "h-9 rounded-pill border-[0.5px] border-kr-ink px-4 text-sm font-medium text-foreground"
+          : "h-9 rounded-pill border-[0.5px] border-kr-ink/55 px-4 text-sm text-foreground/65 transition-colors hover:text-foreground/85"
       }
     >
       {label}

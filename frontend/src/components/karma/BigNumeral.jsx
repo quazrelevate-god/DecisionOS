@@ -35,14 +35,20 @@ const SIZES = {
  * @param {boolean} countUp  animate — only when the primary group is a plain
  *                           number (scores, counts); formatted money counts
  *                           whole via CountUp's format prop at the call site
- * @param {boolean} accent   orange numeral — ALERT grammar (overdue > 0)
+ * @param {boolean} accent   KR-8.12: ink at 80%, not orange. The founder pulled
+ *                           red out of the tile numerals entirely — orange now
+ *                           lives ONLY on the notification badges (IconChip,
+ *                           PillNav, the dock), which is the one place a colour
+ *                           is doing a job type weight cannot. A weighted-down
+ *                           ink still reads as "this one is different" without
+ *                           six tiles shouting at once.
  */
 export function BigNumeral({ text, size = "md", countUp = false, accent = false, className, testid }) {
   const s = SIZES[size] || SIZES.md;
   const str = String(text ?? "");
   const m = str.match(SPLIT);
 
-  const tone = accent ? "text-kr-accent" : "text-current";
+  const tone = accent ? "text-kr-ink/80" : "text-current";
 
   if (!m) {
     return (

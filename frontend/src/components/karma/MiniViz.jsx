@@ -35,7 +35,11 @@ export function DotProgress({ value = 0, total = 100, dots = 5, className }) {
 
 /**
  * MiniBars — up to 6 bars normalised to the tallest. `accentIndex` marks one
- * bar orange (the alert grammar: the biggest month, the worst category).
+ * bar out (the biggest month, the worst category).
+ *
+ * KR-8.12 — that mark is ink at 80%, not orange. It still separates cleanly
+ * from its neighbours because they sit at 25%; the difference was never the
+ * hue, it was the weight.
  */
 export function MiniBars({ values = [], accentIndex = -1, width = 72, height = 26, className }) {
   const vals = values.map(Number).filter((v) => Number.isFinite(v)).slice(-6);
@@ -61,7 +65,7 @@ export function MiniBars({ values = [], accentIndex = -1, width = 72, height = 2
             width={bw}
             height={h}
             rx={2}
-            className={i === accentIndex ? "fill-kr-accent" : "fill-current opacity-25"}
+            className={i === accentIndex ? "fill-current opacity-80" : "fill-current opacity-25"}
           />
         );
       })}
@@ -82,7 +86,8 @@ export function CircleDots({ count = 0, max = 5, className }) {
           key={i}
           className={cn(
             "h-2.5 w-2.5 rounded-full border border-current",
-            i < n ? "bg-kr-accent border-transparent" : "opacity-35"
+            /* KR-8.12 — filled dots go ink at 80%, matching MiniBars. */
+            i < n ? "bg-current opacity-80 border-transparent" : "opacity-35"
           )}
         />
       ))}

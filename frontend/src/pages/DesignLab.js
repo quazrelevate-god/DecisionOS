@@ -329,7 +329,11 @@ function KarmaGallery() {
           <span className="kr-glass kr-glass--olive px-4 py-3 text-sm" data-testid="kg-band-glass">
             Bank of America · Rate <strong>8%</strong>
           </span>
-          <BigNumeral text={inr(685000)} size="md" accent testid="kg-band-numeral" />
+          {/* KR-8.12 — `accent` dropped here. It used to mean "orange"; it
+              now means ink at 80%, which on the band would be ink on ink.
+              Every real call site is a light tile, so the prop is a
+              light-surface tool and this demo should not imply otherwise. */}
+          <BigNumeral text={inr(685000)} size="md" testid="kg-band-numeral" />
         </div>
       </DarkBand>
     </section>

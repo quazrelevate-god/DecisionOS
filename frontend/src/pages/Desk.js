@@ -69,17 +69,28 @@ const CTA_ICON = { review: Scales, respond: ChatCircleText, chase: Fire, nudge: 
  * size is untouched, per the founder: h-9, px-4, natural width.
  */
 function ScopePills({ scope, setScope }) {
-  return [["company", "Company"], ["you", "You"]].map(([k, label]) => (
+  // KR-8.12 — "You" leads, "Company" follows. Stacked that puts You on top
+  // and Company below, which is the founder's order; the horizontal phone
+  // row inherits it rather than keeping a second, contradictory order.
+  return [["you", "You"], ["company", "Company"]].map(([k, label]) => (
     <button
       key={k}
       type="button"
       onClick={() => setScope(k)}
       aria-pressed={scope === k}
       data-testid={`desk-scope-${k}`}
+      /* KR-8.12 — no solid fill on the selected pill. The outlined form IS
+         the selected state now; the unselected one is the same shape faded
+         back. Opacity is not the only difference, deliberately: the border
+         darkens and the label goes medium, so the pair is still readable to
+         anyone who cannot separate two tints.
+         The alphas are measured, not chosen — against the bloom's hottest
+         point the faded label sits at 5.19:1 and its border at 3.86:1.
+         foreground/45 would have looked right and measured 2.92:1. */
       className={
         scope === k
-          ? "h-9 rounded-pill bg-kr-ink px-4 text-sm font-medium text-white"
-          : "h-9 rounded-pill border border-kr-outline px-4 text-sm text-foreground/80 transition-colors hover:text-foreground"
+          ? "h-9 rounded-pill border border-kr-ink/70 bg-white/50 px-4 text-sm font-medium text-foreground"
+          : "h-9 rounded-pill border border-kr-ink/55 px-4 text-sm text-foreground/65 transition-colors hover:text-foreground/85"
       }
     >
       {label}
@@ -281,7 +292,23 @@ export default function Desk() {
               natural height, so mt-auto on the well resolves to zero and
               would have given nothing. justify-center puts the numeral+gauge
               pair on the well's centre line. */}
-          <div className="mb-10 mt-2 flex items-end justify-center gap-5">
+          {/* KR-8.12 — EVEN AIR, COMPUTED NOT TYPED. The gaps were 8 above
+              and 58 below: mt-2/mb-10 set a floor, then the well's mt-auto
+              swept the column's leftover slack into the lower gap alone.
+              my-auto here replaces both. Two auto margins on the same flex
+              item split the free space equally by definition, so the score
+              sits dead centre between the greeting and the well at ANY
+              column height — no magic number to re-tune per breakpoint.
+              The well drops its own mt-auto, or it would compete for the
+              same slack and tip the balance back. my-8 is the phone floor,
+              where a stacked column has no free space to distribute.
+              lg:py-5 is the OTHER floor, and it has to be padding rather
+              than margin: at 1024 the column has no slack either, auto
+              collapses to 0, and the score ends up touching both neighbours.
+              Padding cannot collapse, so the gap is never smaller than 20px
+              — and because it is inside the row, both sides still grow by
+              the same amount and stay even. */}
+          <div className="my-8 flex items-end justify-center gap-5 lg:my-auto lg:py-5">
             {/* KR-8.11 — the pills, stacked to the numeral's LEFT from xl.
                 items-end is the founder's "right aligned to the left side of
                 the number": the two pills keep their own natural widths (93
@@ -353,7 +380,7 @@ export default function Desk() {
           <InsightWell
             insight={insight}
             loading={!insight}
-            className="min-h-[172px] lg:mt-auto"
+            className="min-h-[172px]"
             testid="desk-insight"
           />
         </div>

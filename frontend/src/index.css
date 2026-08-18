@@ -1131,6 +1131,39 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
         --nm-sunken:        240 5% 3%;
         --nm-edge:          40 12% 40%;
         --kr-outline:       40 5% 60%;
+
+        /* THE ALIAS TRAP, and why these lines exist (measured, not theory):
+           a custom property substitutes its var() refs at the element where
+           it is DECLARED, then inherits as a frozen value. The shadcn aliases
+           (--muted-foreground: var(--text-secondary), --card: var(--surface),
+           --border: var(--hairline)…) are declared on :root, so re-scoping
+           the base tokens above does NOT refresh them — children inherited
+           :root's already-resolved light values, and muted text measured
+           2.64:1 on the ink. The Dex room never hit this because data-dex
+           sits on <html>, the same element as the aliases. A nested scope
+           must re-declare the aliases so they re-substitute HERE. */
+        --foreground:         var(--text-primary);
+        --card:               var(--surface);
+        --card-foreground:    var(--text-primary);
+        --popover:            var(--surface-raised);
+        --popover-foreground: var(--text-primary);
+        --muted:              var(--surface-sunken);
+        --muted-foreground:   var(--text-secondary);
+        --accent:             var(--surface-hover);
+        --accent-foreground:  var(--text-primary);
+        --border:             var(--hairline);
+        --input:              var(--hairline);
+
+        /* Status chips on ink — same values as the .dark tier (DS-5). Without
+           these a "waiting" chip keeps its cream-on-ink, the exact bug the
+           badge tokens exist to prevent. Kept in lockstep with .dark's badge
+           block; if that block moves, move this with it. */
+        --badge-pending-bg:   29 49% 13%;   --badge-pending-fg:   var(--caution-300); --badge-pending-bd:   35 62% 22%;
+        --badge-directive-bg: 237 46% 18%;  --badge-directive-fg: var(--brand-300);   --badge-directive-bd: 238 57% 41%;
+        --badge-overdue-bg:   0 45% 15%;    --badge-overdue-fg:   var(--danger-300);  --badge-overdue-bd:   0 48% 24%;
+        --badge-completed-bg: 142 40% 12%;  --badge-completed-fg: var(--success-300); --badge-completed-bd: 142 45% 20%;
+        --badge-neutral-bg:   240 4% 14%;   --badge-neutral-fg:   40 8% 70%;          --badge-neutral-bd:   240 4% 22%;
+
         color: hsl(var(--text-primary));
     }
 
@@ -1180,6 +1213,19 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
     .kr-lift, .kr-lift:hover, .kr-lift:active { transition: none; transform: none; }
     .kr-lift:hover .kr-arrow { transform: none; }
     .kr-reveal { opacity: 1; transform: none; transition: none; }
+
+    /* KR-6 — the consolidated catch for every decorative loop that predates
+       the Karma pass and never carried its own off-switch (audited: fadeIn,
+       ds-pulse skeletons, wave-bar, halo-breathe, soft-rise, ring-flash).
+       Anything data-driven (the live mic rings) is JS-gated instead. */
+    .ds-skeleton,
+    [class*="wave-bar"],
+    .halo-breathe,
+    .soft-rise,
+    .flash-ring {
+        animation: none !important;
+        transition: none !important;
+    }
 }
 
 /* NM-11 — the Dex orb's idle breath. Runs ONLY when nothing is recording:

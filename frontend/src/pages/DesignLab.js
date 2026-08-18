@@ -13,7 +13,12 @@ import { FIXTURE_NAMES, FIXTURE_LABEL } from "../fixtures/mobile";
 import { Verdict, Pulse, Queue, Board, Grid, Strip, CompletionRing } from "../components/mobile/blocks";
 import { EmptyState } from "../components/mobile";
 import { inr } from "../lib/format";
-import { Fire, Sun, Stamp, Star, Camera, CheckCircle } from "@phosphor-icons/react";
+import { Fire, Sun, Stamp, Star, Camera, CheckCircle, Wallet, CalendarBlank, Bell } from "@phosphor-icons/react";
+// KR-4 — the Karma kit under test.
+import {
+  IconChip, ArrowButton, BigNumeral, PillNav, DarkBand,
+  DotProgress, MiniBars, CircleDots,
+} from "../components/karma";
 
 const SCREENS = [
   { path: "/inbox", label: "Desk · now" },
@@ -249,6 +254,88 @@ function BlockGallery() {
   );
 }
 
+/* KR-4 — the Karma kit, rendered once in every ambience it must survive:
+   the light zone, the dark band, and glass. This section is the visual QA
+   surface for the whole foundation — if a primitive reads wrong anywhere,
+   it reads wrong HERE first, before any page adopts it. */
+function KarmaGallery() {
+  return (
+    <section className="mb-10" data-testid="karma-gallery">
+      <h2 className="text-h2 mb-3">Karma kit</h2>
+
+      {/* light zone */}
+      <div className="app-canvas rounded-cardlg p-6" style={{ background: "hsl(var(--nm-bg))" }}>
+        <div className="flex flex-wrap items-center gap-4 mb-6">
+          <PillNav
+            testid="kg-pills"
+            items={[
+              { to: "/design-lab", label: "Karma", end: true },
+              { to: "/design-lab?x=1", label: "Credits" },
+              { to: "/design-lab?x=2", label: "Money", badge: 3 },
+            ]}
+          />
+          <IconChip icon={Wallet} />
+          <IconChip icon={CalendarBlank} alert />
+          <IconChip icon={Bell} alert={7} />
+          <ArrowButton label="Open example" />
+          <ArrowButton label="Open small" size="sm" />
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="nm-raised kr-lift p-5" data-testid="kg-tile">
+            <div className="flex items-start justify-between">
+              <IconChip icon={Wallet} alert />
+              <ArrowButton label="Open money" to="/finance" />
+            </div>
+            <p className="mt-5 text-sm text-muted-foreground">Total Dept</p>
+            <div className="mt-1 flex items-end justify-between gap-3">
+              <BigNumeral text={inr(64100)} size="lg" />
+              <MiniBars values={[4, 7, 3, 8, 6, 9]} accentIndex={5} />
+            </div>
+          </div>
+          <div className="nm-raised kr-lift p-5">
+            <div className="flex items-start justify-between">
+              <IconChip icon={CheckCircle} />
+              <ArrowButton label="Open payment history" />
+            </div>
+            <p className="mt-5 text-sm italic text-muted-foreground">Payment History</p>
+            <div className="mt-1 flex items-end justify-between gap-3">
+              <BigNumeral text="100%" size="lg" countUp />
+              <DotProgress value={100} total={100} />
+            </div>
+          </div>
+          <div className="kr-glass kr-glass--blue kr-lift p-5" data-testid="kg-glass">
+            <div className="flex items-start justify-between">
+              <IconChip icon={Star} />
+              <ArrowButton label="Open credit use" style={{ "--kr-action-bg": "0 0% 100%", "--kr-action-fg": "var(--kr-ink)" }} />
+            </div>
+            <p className="mt-5 text-sm italic opacity-80">Credit Card Use</p>
+            <div className="mt-1 flex items-end justify-between gap-3">
+              <BigNumeral text="9%" size="lg" />
+              <CircleDots count={2} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* the band */}
+      <DarkBand testid="kg-band" className="mt-6 py-8 rounded-cardlg" reveal={false}>
+        <div className="flex flex-wrap items-center gap-4">
+          <span className="text-h2">History</span>
+          <span className="inline-flex items-center rounded-pill border border-kr-outline px-3.5 h-9 text-sm">3 months</span>
+          <span className="inline-flex items-center rounded-pill bg-white text-kr-ink px-3.5 h-9 text-sm font-medium">6 months</span>
+          <ArrowButton label="See all offers" />
+          <IconChip icon={Fire} alert={2} />
+          <span className="kr-glass kr-glass--olive px-4 py-3 text-sm" data-testid="kg-band-glass">
+            Bank of America · Rate <strong>8%</strong>
+          </span>
+          <BigNumeral text={inr(685000)} size="md" accent testid="kg-band-numeral" />
+        </div>
+      </DarkBand>
+    </section>
+  );
+}
+
 export default function DesignLab() {
   const [screen, setScreen] = useState(SCREENS[0].path);
   const [states, setStates] = useState(FIXTURE_NAMES);
@@ -288,6 +375,8 @@ export default function DesignLab() {
           . The choice sticks for the tab.
         </p>
       </header>
+
+      <KarmaGallery />
 
       <div className="mb-5 flex flex-wrap items-center gap-2">
         {SCREENS.map((s) => (

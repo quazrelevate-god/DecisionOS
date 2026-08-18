@@ -1148,6 +1148,38 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
     .kr-glass--blue  { --kr-glass-tint: var(--kr-glass-blue); }
     .kr-glass--olive { --kr-glass-tint: var(--kr-glass-olive); }
     .kr-glass--warm  { --kr-glass-tint: var(--kr-glass-warm); }
+
+    /* KR-4 — the two motion verbs the primitives share.
+
+       .kr-lift: the card answers the cursor by rising; any ArrowButton
+       glyph inside rotates ↗ → → in sympathy, which is what makes a whole
+       tile read as one control instead of a box with a button in it.
+
+       .kr-reveal: the dark band's entrance — 24px rise + fade, stamped
+       `is-in` once by useReveal and never re-run. */
+    .kr-lift {
+        transition: transform 180ms cubic-bezier(.22, 1, .36, 1);
+    }
+    .kr-lift:hover  { transform: translateY(-4px); }
+    .kr-lift:active { transform: translateY(-1px) scale(.99); }
+    .kr-lift:hover .kr-arrow { transform: rotate(45deg); }
+
+    .kr-reveal {
+        opacity: 0;
+        transform: translateY(24px);
+        transition: opacity 500ms cubic-bezier(.22, 1, .36, 1),
+                    transform 500ms cubic-bezier(.22, 1, .36, 1);
+    }
+    .kr-reveal.is-in {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .kr-lift, .kr-lift:hover, .kr-lift:active { transition: none; transform: none; }
+    .kr-lift:hover .kr-arrow { transform: none; }
+    .kr-reveal { opacity: 1; transform: none; transition: none; }
 }
 
 /* NM-11 — the Dex orb's idle breath. Runs ONLY when nothing is recording:

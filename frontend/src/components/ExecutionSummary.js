@@ -1,24 +1,8 @@
-import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "./ui/dialog";
 import { CheckSquare, UsersThree, SealCheck, Truck, CalendarCheck, BellRinging, Lightning, ArrowRight } from "@phosphor-icons/react";
-
-function CountUp({ value, delay = 0, duration = 700 }) {
-  const [n, setN] = useState(0);
-  useEffect(() => {
-    let raf, start;
-    const startTimer = setTimeout(() => {
-      const step = (ts) => {
-        if (!start) start = ts;
-        const p = Math.min(1, (ts - start) / duration);
-        setN(Math.round(p * value));
-        if (p < 1) raf = requestAnimationFrame(step);
-      };
-      raf = requestAnimationFrame(step);
-    }, delay);
-    return () => { clearTimeout(startTimer); cancelAnimationFrame(raf); };
-  }, [value, delay, duration]);
-  return <span>{n}</span>;
-}
+// KR-4: the private CountUp moved to the shared kit — same ramp, plus the
+// reduced-motion guard this copy never had.
+import { CountUp } from "./karma/CountUp";
 
 const plural = (n, one, many) => (n === 1 ? one : many);
 

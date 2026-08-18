@@ -15,3 +15,5 @@ export { WideStatCard } from "./WideStatCard";
 export { HistoryBand } from "./HistoryBand";
 export { DecisionBento } from "./DecisionBento";
 export { InsightWell } from "./InsightWell";
+// KR-9 additions
+export { ScoreMeter } from "./ScoreMeter";

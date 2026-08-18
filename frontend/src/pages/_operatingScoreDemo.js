@@ -117,25 +117,14 @@ export const demoDex = {
   focus: "Responsiveness",
 };
 
-// ----- Suggested action chips (top 3 leverage points for the owner) -----
-// Each chip = a one-tap route into the surface that fixes the biggest lever.
-// Real backend derives these from stats + AI ranking. Demo picks by hand.
-export const demoActions = [
-  { label: "Resolve 3 open complaints", to: "/crm?filter=complaints", icon: "flame", lift: "+6" },
-  { label: "Chase 5 overdue invoices", to: "/finance?filter=overdue", icon: "money", lift: "+4" },
-  { label: "Approve 4 waiting decisions", to: "/inbox?filter=needs_decision", icon: "check", lift: "+3" },
-];
-
-// ----- Employee deltas (leaderboard) -----
-// Keyed by user id or role -- lookup at render. Real backend derives from
-// per-employee history snapshots.
-export const demoEmpDeltas = {
-  // by role (works for Kapoor's demo tenant)
-  finance: 5,
-  operations: -3,
-  owner: 0,
-  sales: 2,
-};
+// KR-9 — demoActions and demoEmpDeltas were DELETED here, not quarantined.
+// The quarantine flag exists for demo data that is merely unwired; those two
+// were something else. demoActions printed invented point-lifts ("+6 pts")
+// beside live figures, and demoEmpDeltas put fabricated week-over-week arrows
+// on real people's names. lib/karmaScore's scoreActions replaces the first
+// with the honest half — the ORDER, derived from stats, claiming no lift —
+// and nothing replaces the second, because no employee history exists to
+// derive it from.
 
 // ----- Category weight defaults + presets (Sprint 1 U7-01.17) -----
 // Owner can shift weights; frontend stores locally for now, backend later

@@ -355,10 +355,24 @@ export default function Layout({ children }) {
               // NM-2 (§3 Shell): active = a pressed tile — indigo tint, inset
               // shadow, indigo glyph. Inactive carries no container at all
               // until hover. Focus ring separate from any shadow state.
+              //
+              // NM-20 — hover RISES, it does not fill. It used to paint
+              // bg-nm-sunken, a grey wash, which is the flat idiom the revamp
+              // exists to replace and which fought the periwinkle wall behind
+              // it. The item now keeps the wall's own colour and simply lifts
+              // off it, so the two states read as one physical object moving:
+              // out on hover, in when it is the page you are on.
+              //
+              // This works better here than anywhere else in the app. NM-8
+              // took page surfaces to 99% lightness, which left the top-left
+              // white highlight ~1% of headroom and effectively killed it; the
+              // rail sits at 96.3%, so the highlight has almost four times the
+              // room and the rise is a real two-sided bevel rather than a
+              // single drop shadow.
               `relative flex w-full items-center h-11 rounded-control transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
                 isActive
                   ? "bg-primary/10 text-primary shadow-nm-press"
-                  : "text-muted-foreground hover:bg-nm-sunken hover:text-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:shadow-nm-sm"
               }`
             }
           >

@@ -9,7 +9,7 @@
 // exists; the reference's "1 year" pill is not drawn, because a pill that
 // promises data the backend cannot produce is a lie with rounded corners.
 import * as React from "react";
-import { ResponsiveContainer, BarChart, Bar, XAxis, Cell } from "recharts";
+import { ResponsiveContainer, LineChart, Line, XAxis } from "recharts";
 import { X } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { chartTheme } from "../../lib/chartTheme";
@@ -21,19 +21,20 @@ const MONTH_LABEL = (ym) => {
   return new Date(y, (m || 1) - 1, 1).toLocaleString("en-IN", { month: "short" });
 };
 
-/** Dashed-outline bar with an accent cap when it is the pinned month. */
-function DashedBar({ x, y, width, height, active, accent, line }) {
-  if (height <= 0) return null;
+/* KR-8.2 — founder's call: the history is a LINE now, not bars. The pinned
+   point wears the orange dot (alert grammar: it is the month under
+   discussion); every other point is a quiet white dot. Each dot carries an
+   oversized transparent hit ring so a fingertip can pin a month. */
+function PinDot({ cx, cy, index, active, accent, quiet, onPin }) {
+  if (cx == null || cy == null) return null;
   return (
-    <g>
-      <rect
-        x={x} y={y} width={width} height={height} rx={5}
-        fill="transparent"
-        stroke={line}
-        strokeDasharray="4 4"
-        strokeWidth="1.25"
+    <g onClick={() => onPin(index)} style={{ cursor: "pointer" }}>
+      <circle cx={cx} cy={cy} r="14" fill="transparent" />
+      <circle
+        cx={cx} cy={cy}
+        r={active ? 5 : 3}
+        fill={active ? accent : quiet}
       />
-      {active && <rect x={x} y={y - 5} width={width} height={3} rx={1.5} fill={accent} />}
     </g>
   );
 }
@@ -49,10 +50,6 @@ export function HistoryBand({ series = [], title = "Spend history", loading = fa
   const [chipOpen, setChipOpen] = React.useState(true);
 
   const data = React.useMemo(() => series.slice(-months), [series, months]);
-  const maxIdx = React.useMemo(
-    () => data.reduce((m, d, i) => (d.amount > (data[m]?.amount ?? -1) ? i : m), 0),
-    [data]
-  );
   const idx = pinned == null ? data.length - 1 : Math.min(pinned, data.length - 1);
   const cur = data[idx];
   const prev = data[idx - 1];
@@ -97,7 +94,7 @@ export function HistoryBand({ series = [], title = "Spend history", loading = fa
         ) : (
           <>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data} margin={{ top: 14, right: 4, left: 4, bottom: 0 }}>
+              <LineChart data={data} margin={{ top: 26, right: 14, left: 14, bottom: 0 }}>
                 <XAxis
                   dataKey="month"
                   tickFormatter={MONTH_LABEL}
@@ -106,22 +103,24 @@ export function HistoryBand({ series = [], title = "Spend history", loading = fa
                   tick={{ fill: t.onInk.tick, fontSize: 12 }}
                   dy={6}
                 />
-                <Bar
+                <Line
                   dataKey="amount"
+                  type="monotone"
+                  stroke={t.onInk.barLine}
+                  strokeWidth={2}
                   isAnimationActive={false}
-                  onClick={(_, i) => { setPinned(i); setChipOpen(true); }}
-                  shape={(p) => (
-                    <DashedBar
-                      {...p}
+                  dot={(p) => (
+                    <PinDot
+                      key={p.index}
+                      cx={p.cx} cy={p.cy} index={p.index}
                       active={p.index === idx}
                       accent={t.accent}
-                      line={p.index === maxIdx ? t.onInk.barLine : t.onInk.bar}
+                      quiet={t.onInk.barLine}
+                      onPin={(i) => { setPinned(i); setChipOpen(true); }}
                     />
                   )}
-                >
-                  {data.map((d) => <Cell key={d.month} cursor="pointer" />)}
-                </Bar>
-              </BarChart>
+                />
+              </LineChart>
             </ResponsiveContainer>
 
             {/* the pinned chip — reference's floating "816 +14%" card */}

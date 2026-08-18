@@ -1126,7 +1126,7 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
         margin-inline: calc(var(--page-pad, 1rem) * -1);
         padding-inline: var(--page-pad, 1rem);
         background: hsl(var(--kr-ink));
-        border-radius: 36px 36px 0 0;
+        border-radius: 44px 44px 0 0;   /* KR-8.2: matched to the reference */
 
         /* the re-scope — band children read tokens, not variants */
         --background:       var(--kr-ink);
@@ -1182,18 +1182,27 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
 
     /* Frosted glass. The blur is the expensive part — budget ≤3 per
        viewport; the tints are local variables so a variant is one line. */
+    /* KR-8.2 — each glass variant carries its OWN two-tone gradient wash
+       (founder, against the reference: "everything has its own gradient fill
+       with different color"). A flat tint read as a slab; the reference's
+       Credit Card Use runs blue into warm, Bank of America olive into deep
+       green, the frosted ones warm-grey into blue-grey. The bloom still
+       shows through the blur underneath the wash. */
     .kr-glass {
-        --kr-glass-tint: var(--kr-glass-warm);
-        background: hsl(var(--kr-glass-tint) / .45);
+        --kr-glass-from: 36 18% 48%;
+        --kr-glass-to:   225 12% 38%;
+        background: linear-gradient(145deg,
+            hsl(var(--kr-glass-from) / .60),
+            hsl(var(--kr-glass-to) / .42));
         -webkit-backdrop-filter: blur(20px) saturate(1.35);
         backdrop-filter: blur(20px) saturate(1.35);
-        border: 1px solid rgb(255 255 255 / .14);
+        border: 1px solid rgb(255 255 255 / .16);
         border-radius: var(--radius-tile);
         color: hsl(40 20% 97%);
     }
-    .kr-glass--blue  { --kr-glass-tint: var(--kr-glass-blue); }
-    .kr-glass--olive { --kr-glass-tint: var(--kr-glass-olive); }
-    .kr-glass--warm  { --kr-glass-tint: var(--kr-glass-warm); }
+    .kr-glass--blue  { --kr-glass-from: 214 45% 58%; --kr-glass-to: 28 55% 50%; }
+    .kr-glass--olive { --kr-glass-from: 85 34% 42%;  --kr-glass-to: 75 32% 22%; }
+    .kr-glass--warm  { --kr-glass-from: 36 18% 48%;  --kr-glass-to: 225 12% 38%; }
 
     /* KR-4 — the two motion verbs the primitives share.
 

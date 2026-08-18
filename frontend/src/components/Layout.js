@@ -5,7 +5,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../hooks/useTheme";
 import { hasPerm } from "../lib/perms";
-import { Wordmark } from "./Wordmark";
 import { toast } from "sonner";
 import api from "../lib/api";
 import { timeAgo } from "../lib/format";
@@ -25,8 +24,9 @@ import {
   UsersThree, // Epic 2 E2-01: Team nav entry (Employees list)
   MagnifyingGlass, // KR-5: the search circle that opens the ⌘K dialog
 } from "@phosphor-icons/react";
-// KR-5 — the Karma shell pieces.
+// KR-5/KR-8.2 — the Karma shell pieces.
 import { PillNav } from "./karma";
+import { KarmaLogo } from "./karma/Logo";
 import { CommandDialog, CommandInput, CommandList, CommandEmpty, CommandItem } from "./ui/command";
 import { ProfileDialog } from "./ProfileDialog";
 import { LanguageSwitcher } from "./LanguageSwitcher";
@@ -93,23 +93,9 @@ const NAV = [
 // carrying the wrong things — MPWA-03 replaced the bar itself. This supersedes
 // Epic 2's E2-10 bottom-nav rebalance, which was a founder decision.
 
-// MPWA-01: `markOnly` drops the wordmark. The mobile app bar cannot hold the
-// full wordmark plus four 44px controls at 390px (it measured 407 > 390 once
-// the §5.1 touch floor landed), and §5.2.1 forbids clipping at the right edge.
-// Interim — MPWA-03 rebuilds this header down to two controls.
-// The supplied lockup, at two sizes. `markOnly` used to mean "the D tile
-// without the words" — there is no separate mark in the artwork we were given,
-// only the full horizontal lockup, so it now means "the compact size" and the
-// mobile app bar shows the whole wordmark rather than a lone letter.
-// NM-12: `self-center`. Wordmark carries `self-start` so a column-flex parent
-// cannot stretch the plate into a slab — but both places Layout renders it are
-// ROW flex/grid containers with items-center, where align-self:flex-start pins
-// the ink to the top of its 44px pill instead of the middle. That is the
-// misalignment: the pill was always level with the search field; the logo
-// inside it was sitting ~12px high. Only the logo moves.
-const Logo = ({ markOnly = false }) => (
-  <Wordmark size={markOnly ? 15 : 22} className="self-center" />
-);
+// KR-8.2: the shell's logo is KarmaLogo (components/karma/Logo.jsx) — the
+// founder discarded the PNG lockup for this design system. Wordmark.jsx
+// survives untouched for Landing/Login, which keep the registered artwork.
 
 export default function Layout({ children }) {
   const { user, tenant, logout } = useAuth();
@@ -323,9 +309,14 @@ export default function Layout({ children }) {
           The search field is demoted from a full-width inset to a circle
           that opens a ⌘K dialog — the reference has no visible field, and
           the field's one real job (ask Dex) survives intact. */}
-      <header className="hidden lg:grid h-[72px] shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-4 px-6 sticky top-0 z-20 backdrop-blur-md bg-[hsl(var(--nm-bg)/0.72)]">
+      {/* KR-8.2 — the founder, against the reference: no "rectangle bar
+          suppression". The header is STATIC and fully transparent — chrome
+          floating directly on the bloom, scrolling away with the page. The
+          frosted sticky strip (KR-5) is deleted, not softened: any fill at
+          all reads as a bar. */}
+      <header className="hidden lg:grid h-[76px] shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-4 px-6 bg-transparent">
         <div className="flex items-center justify-self-start">
-          <Logo markOnly />
+          <KarmaLogo />
         </div>
 
         <PillNav
@@ -447,9 +438,11 @@ export default function Layout({ children }) {
             Two controls, not four; min-h + top inset so nothing sits under the
             status bar in iOS standalone. Untouched by KR-5 beyond what the
             recipes re-skin. */}
-        <header className="lg:hidden min-h-14 border-b border-border bg-background/80 backdrop-blur-xl grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-gutter-safe pt-safe sticky top-0 z-20">
+        {/* KR-8.2: the mobile bar blends too — transparent, no border, no
+            blur, static. The phone reference floats its title on the bloom. */}
+        <header className="lg:hidden min-h-14 grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-gutter-safe pt-safe bg-transparent">
           <span aria-hidden="true" />
-          <Logo />
+          <KarmaLogo size="sm" />
           <div className="flex items-center justify-self-end gap-touch-gap">
             <Bellicon mobile />
           </div>

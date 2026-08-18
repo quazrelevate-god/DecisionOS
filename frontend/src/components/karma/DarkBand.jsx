@@ -18,7 +18,7 @@ export function DarkBand({ children, reveal = true, className, testid }) {
   const ref = useReveal();
   return (
     <section
-      className={cn("kr-dark-band", className)}
+      className={cn("kr-dark-band relative", className)}
       data-testid={testid}
       style={{
         // ArrowButton inversion: ink circles would vanish on the ink.
@@ -28,6 +28,16 @@ export function DarkBand({ children, reveal = true, className, testid }) {
         "--kr-chip-line": "40 12% 55%",
       }}
     >
+      {/* KR-8.2 — the reference's centre shape: a small ink tab rising out
+          of the band's top edge with a grab-handle pill inside it. Pure
+          decoration (aria-hidden), but it is what makes the band read as a
+          sheet surfacing from below rather than a painted rectangle. */}
+      <span
+        aria-hidden="true"
+        className="absolute -top-[14px] left-1/2 grid h-[18px] w-28 -translate-x-1/2 place-items-end justify-center rounded-t-2xl bg-kr-ink pb-[7px]"
+      >
+        <span className="block h-[4px] w-9 rounded-full bg-white/30" />
+      </span>
       <div ref={reveal ? ref : undefined} className={reveal ? "kr-reveal" : undefined}>
         {children}
       </div>

@@ -18,40 +18,46 @@ export function PageHeader({ eyebrow, title, children }) {
 // a quiet annotation and colour only appears where it means something. Note
 // there is deliberately NO indigo default: indigo is the action colour, and a
 // status pill is not an action. Neutral states are grey.
+// KR-2 — migrated onto the --badge-* TOKENS, which is what DS-5 built them
+// for and this component never adopted. A ramp step (bg-caution-50) is a
+// fixed value: inside the dark band or the Dex room a "waiting" chip kept its
+// cream background and amber text on near-black — unreadable, and invisible
+// to every check because nothing measures contrast inside a chip. The badge
+// tokens carry a dark override, so the chip follows the surface it sits on.
 const STATUS_STYLES = {
   // neutral / in-flight
-  todo: "bg-muted text-muted-foreground",
-  blocked: "bg-muted text-muted-foreground",
-  observation: "bg-muted text-muted-foreground",
-  low: "bg-muted text-muted-foreground",
-  sales: "bg-muted text-muted-foreground",
-  production: "bg-muted text-muted-foreground",
-  finance: "bg-muted text-muted-foreground",
-  cancelled: "bg-muted text-muted-foreground line-through",
+  todo: "bg-badge-neutral text-badge-neutral-fg",
+  blocked: "bg-badge-neutral text-badge-neutral-fg",
+  observation: "bg-badge-neutral text-badge-neutral-fg",
+  low: "bg-badge-neutral text-badge-neutral-fg",
+  sales: "bg-badge-neutral text-badge-neutral-fg",
+  production: "bg-badge-neutral text-badge-neutral-fg",
+  finance: "bg-badge-neutral text-badge-neutral-fg",
+  cancelled: "bg-badge-neutral text-badge-neutral-fg line-through",
 
   // waiting on someone
-  pending_approval: "bg-caution-50 text-caution-800",
-  medium: "bg-caution-50 text-caution-800",
-  purchase: "bg-caution-50 text-caution-800",
-  sales_dispatch: "bg-caution-50 text-caution-800",
-  purchase_payment: "bg-caution-50 text-caution-800",
+  pending_approval: "bg-badge-pending text-badge-pending-fg",
+  medium: "bg-badge-pending text-badge-pending-fg",
+  purchase: "bg-badge-pending text-badge-pending-fg",
+  sales_dispatch: "bg-badge-pending text-badge-pending-fg",
+  purchase_payment: "bg-badge-pending text-badge-pending-fg",
 
   // settled / positive
-  approved: "bg-success-50 text-success-800",
-  done: "bg-success-50 text-success-800",
+  approved: "bg-badge-completed text-badge-completed-fg",
+  done: "bg-badge-completed text-badge-completed-fg",
 
   // at risk
-  high: "bg-danger-50 text-danger-700",
-  overdue: "bg-danger-50 text-danger-700",
-  rejected: "bg-danger-50 text-danger-700",
+  high: "bg-badge-overdue text-badge-overdue-fg",
+  overdue: "bg-badge-overdue text-badge-overdue-fg",
+  rejected: "bg-badge-overdue text-badge-overdue-fg",
 
   // informational — brand tint is reserved for things that ARE the workflow
-  in_progress: "bg-brand-50 text-brand-700",
-  decision: "bg-brand-50 text-brand-700",
-  directive: "bg-brand-50 text-brand-700",
-  approval: "bg-brand-50 text-brand-700",
-  policy: "bg-brand-50 text-brand-700",
-  owner: "bg-brand-50 text-brand-700",
+  in_progress: "bg-badge-directive text-badge-directive-fg",
+  decision: "bg-badge-directive text-badge-directive-fg",
+  directive: "bg-badge-directive text-badge-directive-fg",
+  approval: "bg-badge-directive text-badge-directive-fg",
+  policy: "bg-badge-directive text-badge-directive-fg",
+  owner: "bg-badge-directive text-badge-directive-fg",
 };
 
 const STATUS_LABELS = {

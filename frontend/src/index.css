@@ -62,26 +62,25 @@
         --success-600: 142 76% 36%;--success-700: 142 72% 29%; --success-800: 142 61% 24%;
         --success-900: 144 61% 20%;
 
-        /* RD-1 (2026-08-17) — neutrals retuned for the reference language.
-           Was a blue-tinted ramp (hue 210-228) at fairly high saturation, which
-           read as "product chrome". The reference canvas is near-monochrome, so
-           saturation drops to 4-12% and the hue moves onto 240 — the same
-           family as the brand indigo, so the greys read as chosen rather than
-           inherited. Hairlines get materially lighter (200 was 90% L, now 92%)
-           because depth in this system comes from the hairline alone, and a
-           dark hairline reads as a border-heavy grid instead of a quiet frame. */
-        --neutral-50: 240 20% 99%; --neutral-100: 240 14% 96%; --neutral-200: 240 11% 92%;
-        --neutral-300: 240 9% 85%; --neutral-400: 240 6% 64%;  --neutral-500: 240 5% 46%;
-        --neutral-600: 240 6% 34%; --neutral-700: 240 7% 22%;  --neutral-800: 240 9% 11%;
-        --neutral-900: 240 12% 5%;
+        /* KR-2 (2026-08-18) — neutrals rotate onto the warm axis.
+           RD-1 put the greys on hue 240 to sit with the indigo brand. Karma's
+           canvas is warm greige with an amber bloom, and cool greys on a warm
+           ground read as dirt — every secondary string would look faintly
+           blue-stained. Hue moves to 40 (the bloom's family), saturation
+           roughly halved so the greys stay greys and never turn beige. */
+        --neutral-50: 40 15% 99%;  --neutral-100: 40 10% 96%;  --neutral-200: 40 8% 92%;
+        --neutral-300: 40 6% 85%;  --neutral-400: 40 4% 63%;   --neutral-500: 40 3% 45%;
+        --neutral-600: 40 4% 33%;  --neutral-700: 40 5% 21%;   --neutral-800: 40 5% 11%;
+        --neutral-900: 40 6% 5%;
 
         /* ---- semantic · light ---- */
-        /* RD-1: page ground is pure white, not neutral-50. In the reference the
-           canvas and the cards share one ground and the hairline is the ONLY
-           thing separating them — a grey page behind white cards reintroduces
-           the "floating panel" look the redesign is removing. --surface-sunken
-           stays grey; it is what selected rows and inset wells use. */
-        --background:       0 0% 100%;
+        /* KR-2: the ground/card relationship INVERTS from RD-1. RD-1 put page
+           and cards on one white ground separated by hairline alone; Karma
+           separates by TONE — a warm greige page under pure-white cards, no
+           shadows, near-no borders. --background is the greige; surfaces stay
+           white so every existing bg-surface/bg-card call site becomes "a
+           white object on the tinted ground" for free. */
+        --background:       40 9% 93%;   /* ≈#EFEEEC — the greige canvas */
         --surface:          0 0% 100%;
         --surface-raised:   0 0% 100%;
         --surface-sunken:   var(--neutral-100);
@@ -630,24 +629,23 @@
        else. `card-brutal` is named for the retired brutalist system but is
        referenced in 52 files, so it is redefined rather than renamed — the
        rename is mechanical churn that would bury the real diff. */
-    /* NM-3 — redefined a second time, same move RD-1 made and for the same
-       reason: 73 call sites in 22 files take the new surface in one edit.
-       The card sits at the SAME value as the page (bg-nm), separated by the
-       dual shadow — and the hairline, which is the 3:1 boundary when glare
-       eats the shadow. Radius 20 (--radius-card). */
+    /* KR-2 — redefined a THIRD time, same move as RD-1 and NM-3 and for the
+       same reason: 73 call sites take the new surface in one edit. Karma's
+       card is a white object on the greige canvas, 28px radius, separated by
+       TONE — no shadow, the faint hairline as the glare floor. */
     .card-brutal {
-        @apply bg-nm border border-nm-edge/40 rounded-cardlg shadow-nm;
+        @apply bg-nm-raised border border-nm-edge/40 rounded-cardlg;
     }
-    /* NM-4 — pressable surfaces answer the cursor with elevation, not a
-       border shift: rise on hover, press IN on :active. The press-in is the
-       whole point (§3 Interaction). Below lg the tokens have already
-       collapsed nm-lg to nm-md, so this cannot put a large shadow on a
-       phone (§4). Still no translate — depth moves, the card does not. */
+    /* KR-2 — .shadow-hover keeps its NAME (dozens of call sites) but its
+       body inverts NM-4's rule: shadows no longer exist, so THE CARD MOVES.
+       Redefined in the same commit that zeroes the shadow vars — without
+       this, every pressable card would have had a dead hover until the
+       motion phase. Transform, not margin: no layout, no paint storm. */
     .shadow-hover {
-        @apply transition-shadow duration-150 ease-out;
+        @apply transition-transform duration-150 ease-out;
     }
-    .shadow-hover:hover  { box-shadow: var(--nm-shadow-lg); }
-    .shadow-hover:active { box-shadow: var(--nm-pressed); }
+    .shadow-hover:hover  { transform: translateY(-3px); }
+    .shadow-hover:active { transform: translateY(-1px) scale(.99); }
     /* RD-1: the eyebrow label loses the mono face and the wide letter-spacing.
        It was uppercase IBM Plex Mono at 0.12em across the entire app, which is
        what made every screen read as a terminal. The reference sets these in
@@ -765,113 +763,106 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   NM-1 — the soft-depth (neumorphic) layer. NEUMORPHIC-REVAMP.md §2.
+   KR-2 — the Karma surface layer. (Was NM-1's soft-depth layer.)
 
-   Additive on top of the RD-1 token file above: nothing there moves. The rule
-   that governs every use of these tokens is §0's — soft depth styles the
-   FURNITURE (cards, panels, tiles, inputs); it never styles the MESSAGE
-   (text, money, status badges, the primary action). And every raised surface
-   carries the low-opacity hairline: invisible in good light, it is what keeps
-   a component boundary at WCAG's 3:1 when glare eats the shadows. Not
-   decoration — do not remove it.
+   THE NAMES ARE PLUMBING, THE VALUES ARE THE DESIGN. Hundreds of call sites
+   reference bg-nm / nm-raised / shadow-nm / border-nm-edge; renaming them to
+   kr-* would be churn that buries the real diff, so — the same move RD-1 and
+   NM-3 made — the tokens keep their names and change what they mean:
+
+     ground      greige, not white    cards separate by TONE on it
+     card        pure white           borderless-looking, 24-28px radius
+     shadows     ZEROED               Karma has no drop shadows at all
+     boundary    tone for containers; a ≥3:1 OUTLINE for controls
+
+   The shadow variables are zeroed HERE rather than recipe-by-recipe because
+   28 raw `shadow-nm*` utility call sites exist outside the recipes — zeroing
+   the source is the only single edit that catches all of them. The value is
+   `0 0 #0000`, NOT `none`: Tailwind composes box-shadow as
+   `var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow)`,
+   and a literal `none` inside that comma list invalidates the whole
+   declaration — rings would die with the shadows.
    ═════════════════════════════════════════════════════════════════════════ */
 @layer base {
     :root {
-        /* Soft-depth surface. Depth needs a mid-tone to cast onto, so the page
-           background moves off near-white. Cards then sit at the SAME value
-           and are separated by shadow, not by fill. */
-        /* NM-8 — the surfaces move to white.
-           §2 set these at 95% L because neumorphism needs a mid-tone to cast a
-           WHITE highlight onto, and at 95% the UI read as grey. The founder
-           call is white, with separation carried by shadow. That trade is
-           real and one-directional: at 99% L the top-left highlight has ~1%
-           of headroom left, so it stops contributing and the depth becomes a
-           single soft dark shadow bottom-right. That is a cleaner, more
-           premium look — it is just no longer neumorphism in the textbook
-           sense. To keep the surfaces legible as objects the dark side is
-           strengthened (.30 -> .40 at sm) and the hairline does more work. */
-        --nm-bg:          228 40% 99%;   /* #FCFDFE — page + card surface */
-        --nm-raised:      0 0% 100%;     /* pure white — one step up */
-        --nm-sunken:      228 30% 96%;   /* #F1F3F8 — inset wells, the one
-                                            place a tint must survive: a well
-                                            with no tone is invisible */
+        --nm-bg:          40 9% 93%;    /* ≈#EFEEEC — the greige canvas */
+        --nm-raised:      0 0% 100%;    /* card white — the object colour */
+        --nm-sunken:      40 8% 89%;    /* wells, one step under the canvas */
+        /* The rail retires in KR-5; parked on card white so the last renders
+           before the shell lands don't paint periwinkle on a warm page. */
+        --nm-rail:        0 0% 100%;
 
-        /* NM-19 — the rail's own surface. #EDEFFE, the founder's value.
-           NM-8 took every surface to ~white on the principle that separation
-           comes from shadow alone; the rail is the deliberate exception, and
-           it earns it. It is the only element that persists across every
-           screen, so it is furniture in a stronger sense than a card is — a
-           wall, not an object on the page. A wall reads better with its own
-           tone, and the periwinkle keeps it in the brand's hue family rather
-           than turning it into a grey slab. */
-        /* Not round numbers on purpose: hsl(233 89% 96%) lands on
-           rgb(236,238,254), one step off the value that was asked for. These
-           are the coefficients that resolve to #EDEFFE exactly. */
-        --nm-rail:        232.9 89.5% 96.3%;
-
-        /* The light source: top-left. The highlight is kept (it still catches
-           the top edge of a raised tile against the sunken wells and in dark
-           mode) but the dark side now carries the separation. */
+        /* Dead once shadows are zero; left declared so any straggler
+           rgb(var(--nm-dark)/…) reference resolves instead of erroring. */
         --nm-light:       255 255 255;
         --nm-dark:        155 165 194;
 
-        --nm-shadow-sm:
-             2px  3px  8px rgb(var(--nm-dark) / .22),
-            -2px -2px  6px rgb(var(--nm-light) / .90);
-        --nm-shadow-md:
-             4px  6px 16px rgb(var(--nm-dark) / .26),
-            -4px -4px 12px rgb(var(--nm-light) / .95);
-        --nm-shadow-lg:
-             8px 12px 30px rgb(var(--nm-dark) / .30),
-            -8px -8px 22px rgb(var(--nm-light) / 1);
-        --nm-inset:
-            inset  2px  3px 6px rgb(var(--nm-dark) / .30),
-            inset -2px -2px 5px rgb(var(--nm-light) / .90);
-        --nm-pressed:
-            inset  2px  2px 5px rgb(var(--nm-dark) / .45),
-            inset -2px -2px 5px rgb(var(--nm-light) / .70);
+        --nm-shadow-sm:   0 0 #0000;
+        --nm-shadow-md:   0 0 #0000;
+        --nm-shadow-lg:   0 0 #0000;
+        --nm-inset:       0 0 #0000;
+        --nm-pressed:     0 0 #0000;
 
-        /* THE ACCESSIBILITY HAIRLINE. */
-        --nm-edge: 228 22% 78%;
+        /* Container hairline — kept at low opacity in the recipes as the
+           glare floor. CONTROLS do not use this: they use --kr-outline. */
+        --nm-edge: 40 6% 78%;
 
-        --radius-control: 14px;
-        --radius-tile:    16px;
-        --radius-card:    20px;
+        /* Karma's radius scale: visibly rounder than anything before it. */
+        --radius-control: 16px;
+        --radius-tile:    24px;
+        --radius-card:    28px;
+
+        /* ---- the KR additions: what Karma has that no prior system did ---- */
+        --kr-ink:          240 4% 5%;    /* #0C0C0D — band, active pill, arrow buttons */
+        --kr-ink-raised:   240 4% 9%;    /* one step up inside the band */
+        --kr-accent:       19 100% 50%;  /* vivid orange — alerts, deltas, markers ONLY */
+        --kr-accent-soft:  35 100% 62%;  /* the bloom's amber */
+        /* The control boundary. 40 5% 52% on the L93 greige measures ≈3.2:1 —
+           re-verify at the KR-7 gate; this is the token that carries WCAG
+           1.4.11 now that shadows are gone and containers are borderless. */
+        --kr-outline:      40 5% 52%;
+        /* Glass tints (used by .kr-glass in KR-3). */
+        --kr-glass-blue:   222 18% 40%;
+        --kr-glass-olive:  80 22% 32%;
+        --kr-glass-warm:   35 10% 38%;
     }
 
+    /* KR-2: user-facing dark mode RETIRES — Karma is a two-zone light
+       composition. `.dark` no longer means "the user's night theme"; it means
+       "inside the ink" (the Dex room via data-dex, and any surface that opts
+       in). Values are the band palette. */
     .dark {
-        /* Dark neumorphism goes muddy if both shadows stay equal: the
-           highlight has nowhere to go. Drop it to a whisper and lean on a
-           slightly raised surface instead. */
-        --nm-bg:      223 17% 10%;
-        --nm-raised:  222 16% 13%;
-        --nm-sunken:  225 18% 7%;
-        /* NM-19: the rail's tint is a LIGHT-theme device. Inverted it would be
-           a pale wall in a dark room — the one surface that never turns off.
-           Dark gets the same separation the other way round: one step up from
-           the ground, which is what --nm-raised already is. */
-        --nm-rail:    222 16% 13%;
+        --nm-bg:      240 4% 5%;     /* the ink itself */
+        --nm-raised:  240 4% 9%;
+        --nm-sunken:  240 5% 3%;
+        --nm-rail:    240 4% 9%;
         --nm-light:   90 96 112;
         --nm-dark:    5 6 9;
-        --nm-shadow-sm:  3px 3px  6px rgb(var(--nm-dark) / .55), -3px -3px 6px rgb(var(--nm-light) / .16);
-        --nm-shadow-md:  6px 6px 14px rgb(var(--nm-dark) / .60), -6px -6px 14px rgb(var(--nm-light) / .14);
-        --nm-shadow-lg: 10px 10px 26px rgb(var(--nm-dark) / .65), -10px -10px 26px rgb(var(--nm-light) / .12);
-        --nm-inset:      inset 3px 3px 7px rgb(var(--nm-dark) / .65), inset -3px -3px 7px rgb(var(--nm-light) / .12);
-        --nm-pressed:    inset 2px 2px 5px rgb(var(--nm-dark) / .70), inset -2px -2px 5px rgb(var(--nm-light) / .10);
-        --nm-edge: 223 14% 24%;
+        --nm-shadow-sm: 0 0 #0000;
+        --nm-shadow-md: 0 0 #0000;
+        --nm-shadow-lg: 0 0 #0000;
+        --nm-inset:     0 0 #0000;
+        --nm-pressed:   0 0 #0000;
+        --nm-edge: 40 6% 26%;
+        --kr-outline: 40 5% 60%;     /* boundaries brighten on ink */
     }
 }
 
-/* The three surface recipes. Every call site uses one of these — no hand-
-   rolled box-shadow at a call site, ever (§6). @layer components, not
-   utilities: this codebase has measured Tailwind tree-shaking custom
+/* The surface recipes. Every call site uses one of these — @layer components,
+   not utilities: this codebase has measured Tailwind tree-shaking custom
    utilities-layer rules out; components-layer classes referenced statically
-   in JSX survive (proven by .label-mono above), and the layer keeps plain
-   utilities able to override individual properties at a call site. */
+   in JSX survive, and the layer keeps plain utilities able to override
+   individual properties at a call site.
+
+   KR-2 — THE GROUND CHANGES UNDER THE RECIPES. Every prior system put cards
+   at the PAGE value (bg-nm) and separated by shadow; Karma puts cards at the
+   OBJECT value (bg-nm-raised, white) on a tinted page and separates by tone.
+   The faint nm-edge hairline stays as the glare floor on containers; it is
+   deliberately NOT the WCAG boundary — controls carry that via kr-outline. */
 @layer components {
-    .nm-raised { @apply bg-nm rounded-cardlg shadow-nm border border-nm-edge/40; }
-    .nm-tile   { @apply bg-nm rounded-tile   shadow-nm-sm border border-nm-edge/40; }
-    .nm-inset  { @apply bg-nm-sunken rounded-control shadow-nm-in border border-nm-edge/25; }
+    .nm-raised { @apply bg-nm-raised rounded-cardlg border border-nm-edge/40; }
+    .nm-tile   { @apply bg-nm-raised rounded-tile border border-nm-edge/40; }
+    .nm-inset  { @apply bg-nm-sunken rounded-control border-0; }
 
     /* NM-15 — the two INTERACTIVE recipes.
        nm-raised/tile/inset describe a surface at rest. These add what a
@@ -885,18 +876,22 @@
        nm-btn is deliberately NOT a Button variant: these are raw <button>
        elements across four pages, and routing them through shadcn would be a
        far larger change than making the flat ones look right. */
+    /* KR-2: a control is OUTLINED in this language — the full-opacity
+       kr-outline ring is what carries WCAG 1.4.11 now that shadows are gone
+       and containers are borderless-looking. Feedback moves from shadow to
+       transform: rise on hover, settle on press. */
     .nm-btn {
-        @apply rounded-control bg-nm border border-nm-edge/40 shadow-nm-sm
-               transition-shadow duration-150;
+        @apply rounded-control bg-nm-raised border border-kr-outline
+               transition-transform duration-150;
     }
-    .nm-btn:hover:not(:disabled)  { box-shadow: var(--nm-shadow-md); }
-    .nm-btn:active:not(:disabled) { box-shadow: var(--nm-pressed); }
+    .nm-btn:hover:not(:disabled)  { transform: translateY(-2px); }
+    .nm-btn:active:not(:disabled) { transform: translateY(0) scale(.98); }
 
     /* A field is the one thing that is genuinely concave — you type INTO it.
        Kept separate from nm-inset because inputs also need the focus ring and
        must not inherit a card's padding assumptions. */
     .nm-field {
-        @apply rounded-control bg-nm-sunken border border-nm-edge/25 shadow-nm-in
+        @apply rounded-control bg-nm-raised border border-kr-outline/70
                outline-none transition-shadow;
     }
     .nm-field:focus,
@@ -905,24 +900,13 @@
     }
 }
 
-/* §4 — mobile constraints, in the tokens themselves rather than at call
-   sites: below lg every recipe's spread shrinks ~40% (large soft shadows on
-   a 390px screen eat perceived space and cost paint), nm-lg collapses to md
-   so it cannot appear at all, and the hairline rises from barely-there to
-   clearly-there because glare kills the shadow and the hairline is what
-   survives. Call sites stay identical across breakpoints; the tokens flex. */
+/* §4's mobile shadow-shrink block is gone with the shadows themselves.
+   What survives is its second job: below lg the container hairline rises
+   from barely-there to clearly-there, because phones live in glare and on a
+   390px screen the tone difference between greige and white is all the eye
+   gets — the hairline is the floor under it. */
 @media (max-width: 1023.98px) {
-    :root {
-        --nm-shadow-sm:
-             2px  2px  4px rgb(var(--nm-dark) / .30),
-            -2px -2px  4px rgb(var(--nm-light) / .85);
-        --nm-shadow-md:
-             4px  4px  8px rgb(var(--nm-dark) / .32),
-            -4px -4px  8px rgb(var(--nm-light) / .90);
-        --nm-shadow-lg: var(--nm-shadow-md);
-    }
     .nm-raised, .nm-tile { border-color: hsl(var(--nm-edge) / .70); }
-    .nm-inset            { border-color: hsl(var(--nm-edge) / .50); }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

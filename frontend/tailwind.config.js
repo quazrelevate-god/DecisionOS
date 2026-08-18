@@ -117,6 +117,14 @@ module.exports = {
                 // contrast inside a chip. The --badge-* tokens carry a dark
                 // override; naming them here is what makes the chip follow the
                 // theme instead of the ramp.
+                // KR-2 — Karma's own names. ink = the band / active pill /
+                // arrow buttons; accent = orange, ALERT GRAMMAR ONLY (deltas,
+                // alert badges, chart markers) — never a button fill.
+                kr: {
+                    ink:    { DEFAULT: 'hsl(var(--kr-ink))', raised: 'hsl(var(--kr-ink-raised))' },
+                    accent: { DEFAULT: 'hsl(var(--kr-accent))', soft: 'hsl(var(--kr-accent-soft))' },
+                    outline: 'hsl(var(--kr-outline))',
+                },
                 badge: {
                     pending:   { DEFAULT: 'hsl(var(--badge-pending-bg))',   fg: 'hsl(var(--badge-pending-fg))',   line: 'hsl(var(--badge-pending-bd))' },
                     directive: { DEFAULT: 'hsl(var(--badge-directive-bg))', fg: 'hsl(var(--badge-directive-fg))', line: 'hsl(var(--badge-directive-bd))' },
@@ -191,6 +199,10 @@ module.exports = {
             },
             borderColor: {
                 'nm-edge': 'hsl(var(--nm-edge))',
+                // KR-2: the control boundary — the token that carries WCAG
+                // 1.4.11 in a language with no shadows and toneless borders
+                // on containers. (Also under `colors` above for ring/text use.)
+                'kr-outline': 'hsl(var(--kr-outline))',
             },
             keyframes: {
                 'accordion-down': { from: { height: '0' }, to: { height: 'var(--radix-accordion-content-height)' } },

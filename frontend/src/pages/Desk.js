@@ -21,7 +21,8 @@
 // nothing breaks in the interim; a follow-up will delete it.
 
 import { useState, useEffect } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { FounderBento } from "./desk/FounderBento";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "../lib/api";
 import { toast } from "sonner";
@@ -132,153 +133,7 @@ function DeskBriefHeader() {
         </p>
       </div>
 
-      {/* Trends + Shortcuts side-by-side (stack on mobile) */}
-      <div className="grid gap-4 md:grid-cols-2">
-        {/* Trends card — Epic 2 Sprint 6.5 (E2-51/52): rows are click-through.
-            Weekly completion  -> /my-work?filter=completed
-            Complaints         -> /crm?complaint=open  (CRM 'With Complaints' chip)
-            Cash-flow          -> /finance?tab=revenue if overdue receivables,
-                                  else /finance?tab=inbox if unmatched,
-                                  else /finance?tab=overview. */}
-        {/* RD-2: hairline card, sentence-case caption. */}
-        <div className="nm-raised p-4" data-testid="desk-brief-trends">
-          <p className="text-xs font-medium text-muted-foreground mb-3 flex items-center gap-1.5">
-            <ChartBar size={13} /> Trends
-          </p>
-          <div className="space-y-0.5">
-            {/* Delayed tasks — Epic 2 Sprint 6.5 (E2-51): most urgent, at top.
-                Founder ask 2026-08-15: 'compalanits, delayed task how we plan
-                to show them, redirecting to task section and crm section right'. */}
-            <button
-              type="button"
-              data-testid="desk-trend-delayed"
-              onClick={() => navigate("/my-work?filter=overdue")}
-              className="w-full flex items-center justify-between text-sm p-2 -mx-2 rounded-lg hover:bg-accent transition-colors text-left"
-              title="See overdue tasks"
-            >
-              <span className="flex items-center gap-2">
-                <Clock size={14} weight="bold" className="text-muted-foreground" />
-                Delayed tasks
-              </span>
-              <span className={`flex items-center gap-1 font-mono font-bold ${(data.counters?.delayed || 0) > 0 ? "text-brand-600" : "text-green-600"}`}>
-                {(data.counters?.delayed || 0) > 0
-                  ? <TrendUp size={12} weight="bold" />
-                  : <Minus size={12} weight="bold" />}
-                {data.counters?.delayed ?? 0}
-              </span>
-            </button>
-            {/* Weekly completion */}
-            <button
-              type="button"
-              data-testid="desk-trend-completion"
-              onClick={() => navigate("/my-work?filter=completed")}
-              className="w-full flex items-center justify-between text-sm p-2 -mx-2 rounded-lg hover:bg-accent transition-colors text-left"
-              title="See completed tasks"
-            >
-              <span className="flex items-center gap-2">
-                <CheckCircle size={14} weight="bold" className="text-muted-foreground" />
-                Weekly completion
-              </span>
-              <span className={`flex items-center gap-1 font-mono font-bold ${dirColor(wc.direction)}`}>
-                <WC_ICON size={12} weight="bold" />
-                {wc.value ?? 0}
-                {typeof wc.delta_pct === "number" && wc.delta_pct !== 0 && (
-                  <span className="text-[10px] opacity-70">
-                    ({wc.delta_pct > 0 ? "+" : ""}{wc.delta_pct}%)
-                  </span>
-                )}
-              </span>
-            </button>
-            {/* Complaints */}
-            <button
-              type="button"
-              data-testid="desk-trend-complaints"
-              onClick={() => navigate("/crm?complaint=open")}
-              className="w-full flex items-center justify-between text-sm p-2 -mx-2 rounded-lg hover:bg-accent transition-colors text-left"
-              title="See customers with open complaints"
-            >
-              <span className="flex items-center gap-2">
-                <ChatCircleText size={14} weight="bold" className="text-muted-foreground" />
-                Complaints
-              </span>
-              <span className={`flex items-center gap-1 font-mono font-bold ${dirColor(comp.direction, false)}`}>
-                <CO_ICON size={12} weight="bold" />
-                {comp.value ?? 0}
-                {typeof comp.new_7d === "number" && comp.new_7d > 0 && (
-                  <span className="text-[10px] opacity-70">(+{comp.new_7d} 7d)</span>
-                )}
-              </span>
-            </button>
-            {/* Cash-flow */}
-            <button
-              type="button"
-              data-testid="desk-trend-cashflow"
-              onClick={() => {
-                const dest = (cash.overdue_receivables_amount || 0) > 0
-                  ? "/finance?tab=revenue"
-                  : (cash.unmatched_payments || 0) > 0
-                    ? "/finance?tab=inbox"
-                    : "/finance?tab=overview";
-                navigate(dest);
-              }}
-              className="w-full flex items-center justify-between text-sm p-2 -mx-2 rounded-lg hover:bg-accent transition-colors text-left"
-              title="Open Finance"
-            >
-              <span className="flex items-center gap-2">
-                <CurrencyInr size={14} weight="bold" className="text-muted-foreground" />
-                Cash-flow
-              </span>
-              <span className={`flex items-center gap-1 font-mono font-bold ${cash.clear ? "text-green-600" : "text-brand-600"}`}>
-                <CF_ICON size={12} weight="bold" />
-                {cash.clear ? "All clear" : "Attention"}
-              </span>
-            </button>
-          </div>
-        </div>
-
-        {/* Shortcuts card */}
-        <div className="nm-raised p-4" data-testid="desk-brief-shortcuts">
-          <p className="text-xs font-medium text-muted-foreground mb-3">Shortcuts</p>
-          <div className="space-y-2">
-            {isOwner && (
-              <button
-                data-testid="desk-shortcut-journal"
-                onClick={() => navigate("/journal")}
-                className="w-full flex items-center gap-2 nm-tile px-3 py-2 text-sm font-medium hover:bg-accent transition-colors"
-              >
-                <BookOpen size={14} weight="bold" /> CEO Journal
-              </button>
-            )}
-            {isOwner && (
-              <button
-                data-testid="desk-shortcut-ops"
-                onClick={() => navigate("/operating-score")}
-                className="w-full flex items-center gap-2 nm-tile px-3 py-2 text-sm font-medium hover:bg-accent transition-colors"
-              >
-                <Gauge size={14} weight="bold" /> Ops health
-              </button>
-            )}
-            {isOwner && (
-              <button
-                data-testid="desk-shortcut-team"
-                onClick={() => navigate("/operating-score")}
-                className="w-full flex items-center gap-2 nm-tile px-3 py-2 text-sm font-medium hover:bg-accent transition-colors"
-              >
-                <UsersFour size={14} weight="bold" /> Team leaderboard
-              </button>
-            )}
-            {!isOwner && (
-              <button
-                data-testid="desk-shortcut-coach"
-                onClick={() => navigate("/coach")}
-                className="w-full flex items-center gap-2 nm-tile px-3 py-2 text-sm font-medium hover:bg-accent transition-colors"
-              >
-                <Sparkle size={14} weight="bold" /> AI Coach
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
+      <FounderBento />
     </div>
   );
 }
@@ -337,26 +192,31 @@ function DeskCard({ card, onAction, currentUserId }) {
        From Ravi Kumar"), not data, and mono made it read as a log entry.
        The amount keeps mono + tabular numerals, because it IS data and it
        has to align down the column. */
-    <div
+    /* NM-9: the WHOLE ROW is the action. It used to be a row with a 90px
+       button at its right end — one small target, and the other ~500px of a
+       row the founder had already read did nothing. The verb moves to a
+       label under the title so the row still says what tapping does, and the
+       row itself is the button. Kept as <button> rather than a div+onClick so
+       it is keyboard-reachable and gets the focus ring for free. */
+    <button
+      type="button"
       data-testid={`desk-card-${card.id}`}
-      className="flex items-center justify-between gap-4 px-4 py-3.5 nm-raised hover:border-hairline-strong transition-colors"
+      onClick={doAction}
+      disabled={busy}
+      className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left nm-tile transition-shadow duration-150 hover:shadow-nm active:shadow-nm-press disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
     >
       <div className="flex-1 min-w-0">
-        <p className="font-medium text-sm leading-snug truncate">{card.title}</p>
-        <p className="text-xs text-muted-foreground mt-1">{card.context_line}</p>
+        <p className="font-medium text-sm leading-snug line-clamp-2">{card.title}</p>
+        <p className="text-xs text-muted-foreground mt-1 truncate">{card.context_line}</p>
+        <p className="text-[11px] font-medium text-primary mt-1.5 flex items-center gap-1">
+          {busy ? <Spinner size={11} className="animate-spin" /> : null}
+          {busy ? "Working…" : ctaLabel}
+        </p>
       </div>
       {card.amount_formatted && (
-        <p className="font-mono text-sm font-medium tabular-nums shrink-0">{card.amount_formatted}</p>
+        <p className="font-mono text-sm font-medium tabular-nums shrink-0 self-start">{card.amount_formatted}</p>
       )}
-      <button
-        data-testid={`desk-cta-${card.cta}-${card.id}`}
-        onClick={doAction}
-        disabled={busy}
-        className={`px-3.5 py-1.5 rounded-lg text-xs font-medium shrink-0 disabled:opacity-50 transition-colors ${ctaStyle}`}
-      >
-        {busy ? <Spinner size={12} className="animate-spin" /> : ctaLabel}
-      </button>
-    </div>
+    </button>
   );
 }
 
@@ -391,6 +251,18 @@ export default function Desk() {
     queryKey: ["desk", chip],
     queryFn: () => api.get(`/desk?chip=${chip}`).then((r) => r.data),
     refetchInterval: 30000,
+  });
+
+  // NM-9: the board shows all four lists at once, so it fetches all four.
+  // useQueries rather than four useQuery calls so the count stays data-driven
+  // if CHIPS ever changes. Each column keeps its own cache entry, which means
+  // the single-chip query above and the board share whatever is already loaded.
+  const boardQs = useQueries({
+    queries: CHIPS.map((c) => ({
+      queryKey: ["desk", c.key],
+      queryFn: () => api.get(`/desk?chip=${c.key}`).then((r) => r.data),
+      refetchInterval: 30000,
+    })),
   });
 
   // E2-66: when a ?decision=<id> deep-link lands, force the chip to
@@ -479,67 +351,56 @@ export default function Desk() {
         </p>
       </div>
 
-      {/* RD-2: chips were bordered uppercase blocks that inverted to solid
-          dark when active — four of them made a row of buttons competing with
-          the list below. Now pill-shaped, sentence case, and the active one is
-          a soft indigo tint rather than a filled slab. */}
-      <div className="flex flex-wrap gap-1.5 mb-5" data-testid="desk-chips">
-        {CHIPS.map((c) => {
-          const active = chip === c.key;
+      {/* NM-9 — the board.
+          Was four filter chips over one list: three of the four counts were
+          visible but their contents were one click away each, so "what needs
+          me" took four clicks to read. All four are columns now, so the whole
+          decision surface is one glance. Columns keep their own scroll so a
+          long On Fire cannot push Due Today off the screen.
+
+          Not drag-and-drop: these are not stages a founder moves items
+          between — they are four questions the backend answers. A Kanban
+          affordance that cannot be dragged would be a lie. */}
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4" data-testid="desk-board">
+        {CHIPS.map((c, i) => {
+          const q = boardQs[i];
+          const list = q?.data?.cards || [];
+          const n = counters[c.key] ?? list.length;
+          const Icon = c.icon;
           return (
-            <button
-              key={c.key}
-              onClick={() => setChip(c.key)}
-              data-testid={`desk-chip-${c.key}`}
-              className={`flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-full text-sm transition-colors ${
-                active
-                  ? "bg-brand-50 text-brand-700 font-medium"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
-              }`}
-            >
-              {c.icon && <c.icon size={14} weight={active ? "fill" : "regular"} />}
-              {c.label}
-              <span
-                className={`ml-0.5 min-w-[18px] px-1 py-0.5 rounded-full text-[11px] tabular-nums text-center ${
-                  active ? "bg-brand-600/15 text-brand-700" : "bg-muted text-muted-foreground"
-                }`}
-              >
-                {counters[c.key] ?? 0}
-              </span>
-            </button>
+            <section key={c.key} className="flex flex-col min-w-0" data-testid={`desk-col-${c.key}`}>
+              {/* Column head sits on the page ground, not in the card — the
+                  cards are the objects, the heading is a label for them. */}
+              <div className="flex items-center gap-2 px-1 pb-2.5">
+                {Icon && <Icon size={14} weight="bold" className="text-muted-foreground" />}
+                <h2 className="text-sm font-medium">{c.label}</h2>
+                <span className="ml-auto min-w-[20px] rounded-full bg-nm-sunken px-1.5 py-0.5 text-center text-[11px] tabular-nums text-muted-foreground">
+                  {n}
+                </span>
+              </div>
+
+              <div className="flex-1 space-y-2 xl:max-h-[26rem] xl:overflow-y-auto xl:pr-0.5">
+                {q?.isLoading && Array.from({ length: 2 }).map((_, k) => <SkeletonCard key={k} lines={2} />)}
+
+                {!q?.isLoading && list.length === 0 && (
+                  <div className="nm-inset px-3 py-6 text-center" data-testid={`desk-col-empty-${c.key}`}>
+                    <CheckCircle size={18} weight="regular" className="text-success-600 mx-auto mb-1.5" />
+                    <p className="text-xs text-muted-foreground">
+                      {c.key === "needs_decision" && "No decisions waiting"}
+                      {c.key === "on_fire" && "Nothing on fire"}
+                      {c.key === "due_today" && "Nothing due today"}
+                      {c.key === "important" && "Nothing flagged"}
+                    </p>
+                  </div>
+                )}
+
+                {list.map((card) => (
+                  <DeskCard key={card.id} card={card} onAction={onCardAction} currentUserId={user?.id} />
+                ))}
+              </div>
+            </section>
           );
         })}
-      </div>
-
-      {/* Card list */}
-      {/* E2-14: skeleton cards on first load so the chip strip doesn't
-          collapse into a "Loading…" text jump when data lands. */}
-      {isLoading && (
-        <div className="space-y-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <SkeletonCard key={i} lines={3} />
-          ))}
-        </div>
-      )}
-      {/* RD-2: dashed box removed (it read as a drop-zone), icon muted from
-          a heavy dark glyph to a quiet green tick — "caught up" is good news
-          and should feel calm, not loud. */}
-      {!isLoading && cards.length === 0 && (
-        <div className="py-16 text-center" data-testid="desk-empty">
-          <CheckCircle size={28} weight="regular" className="text-success-600 mx-auto mb-3" />
-          <p className="text-base font-medium">Nothing here — you're caught up</p>
-          <p className="text-sm text-muted-foreground mt-1.5">
-            {chip === "needs_decision" && "No decisions are waiting on you right now."}
-            {chip === "on_fire" && "No escalations, handoffs, or overdue items."}
-            {chip === "due_today" && "Nothing you own is due today."}
-            {chip === "important" && "Nothing AI-flagged as important right now."}
-          </p>
-        </div>
-      )}
-      <div className="space-y-2" data-testid="desk-card-list">
-        {cards.map((c) => (
-          <DeskCard key={c.id} card={c} onAction={onCardAction} currentUserId={user?.id} />
-        ))}
       </div>
 
       {/* Refresh spinner */}

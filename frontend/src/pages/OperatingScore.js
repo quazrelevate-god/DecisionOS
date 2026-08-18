@@ -10,7 +10,7 @@ import {
   ArrowsClockwise, Flame, Coins, CheckCircle,
 } from "@phosphor-icons/react";
 import {
-  demoTrend, demoDelta, demoDrivers, demoDrilldowns, demoDex,
+  demoDelta, demoDrivers, demoDrilldowns, demoDex,
   demoActions, demoEmpDeltas, DEFAULT_WEIGHTS, WEIGHT_PRESETS,
 } from "./_operatingScoreDemo";
 
@@ -26,11 +26,11 @@ import {
 // backend code. Weights match _score_execution / _score_sales / inline
 // finance + responsiveness in server.py (35/25/20/20).
 const CATS = [
-  { key: "execution", label: "Execution", icon: Lightning, color: "bg-brand-blue",
+  { key: "execution", label: "Execution", icon: Lightning,
     weight: 35,
     formula: "(tasks done ÷ total actionable) × 100  −  (overdue ÷ open) × 40",
     plain: "How much of what you started is finished on time." },
-  { key: "finance", label: "Finance", icon: CurrencyCircleDollar, color: "bg-green-600",
+  { key: "finance", label: "Finance", icon: CurrencyCircleDollar,
     weight: 25,
     formula: "(paid ÷ billed) × 100  −  overdue invoices × 5",
     plain: "How well cash is coming in vs. how much is stuck." },
@@ -38,17 +38,21 @@ const CATS = [
     weight: 20,
     formula: "approved decisions ÷ total decisions × 100",
     plain: "Rate at which raised decisions get a green light." },
-  { key: "responsiveness", label: "Responsiveness", icon: ChatCenteredDots, color: "bg-purple-600",
+  { key: "responsiveness", label: "Responsiveness", icon: ChatCenteredDots,
     weight: 20,
     formula: "100  −  (open complaints × 12)  −  (overdue tasks × 3)",
     plain: "How fast the team is closing loops -- complaints + missed dates." },
 ];
 
+// NM-10: was green / amber / brand-600. Two problems — the first two were
+// raw palette rather than the semantic ramps, and a LOW score being brand
+// indigo said "this is the action to take" when it means "this is at risk".
+// Now the ramps carry their own meaning: settled, waiting, at risk.
 const scoreColor = (v) =>
-  v == null ? "text-black/30"
-  : v >= 70 ? "text-green-600"
-  : v >= 40 ? "text-amber-600"
-  : "text-brand-600";
+  v == null ? "text-muted-foreground"
+  : v >= 70 ? "text-success-600"
+  : v >= 40 ? "text-caution-600"
+  : "text-danger-600";
 
 export default function OperatingScore() {
   // Sprint 1 batch 4 (2026-08-17): owner can view any team member's ops via
@@ -255,7 +259,7 @@ function SelfView({ data }) {
           <div className="w-36 h-36 flex flex-col items-center justify-center border-4 border-border bg-white">
             {hasActivity ? (
               <>
-                <span className={`font-heading text-6xl font-black leading-none ${scoreColor(scoreOfMe)}`} data-testid="operating-self-score">
+                <span className={`text-5xl font-medium leading-none tabular-nums ${scoreColor(scoreOfMe)}`} data-testid="operating-self-score">
                   {scoreOfMe}
                 </span>
                 <span className="label-mono text-muted-foreground mt-1">/ 100</span>
@@ -487,38 +491,56 @@ function _formatDate(iso) {
 // first, so it carries the whole "what's my number and what changed" story.
 // -----------------------------------------------------------------------------
 function HeroCard({ overall }) {
+  // NM-10 — the score as a soft-depth dial.
+  //
+  // Was a 144px hard-bordered white square holding a 60px colour-banded
+  // number, with a 30-day sparkline bleeding across the card behind it. Three
+  // problems: the border was the retired brutalist language, the number
+  // changed hue with the value so the card's whole mood swung on the data,
+  // and the sparkline was decoration — the copy under it even admitted it
+  // ("hover the score for the exact day") for a graph nothing could hover.
+  //
+  // Now: an inset well with the arc riding in it, monochrome, and the score
+  // flat and high-contrast on top (§0 — depth is furniture, never the
+  // message). The sparkline is gone entirely.
+  const pct = Math.max(0, Math.min(100, Number(overall) || 0));
+  const R = 62, C = 2 * Math.PI * R;
   return (
-    <div className="card-brutal p-8 mb-4 relative overflow-hidden" data-testid="operating-overall">
-      {/* U7-01.3 sparkline sits behind, low-opacity, doesn't fight the score. */}
-      <div className="absolute inset-x-0 bottom-0 h-24 opacity-25 pointer-events-none" aria-hidden="true">
-        <Sparkline values={demoTrend} />
-      </div>
-
-      <div className="relative flex flex-col lg:flex-row items-start gap-8">
+    <div className="card-brutal p-8 mb-4" data-testid="operating-overall">
+      <div className="flex flex-col lg:flex-row items-center lg:items-start gap-8">
         <div className="flex flex-col items-center shrink-0">
-          <div className="w-36 h-36 flex flex-col items-center justify-center border-4 border-border bg-white">
-            <span
-              className={`font-heading text-6xl font-black leading-none ${scoreColor(overall)}`}
-              data-testid="operating-overall-score"
-            >{overall}</span>
-            <span className="label-mono text-muted-foreground mt-1">/ 100</span>
+          <div className="relative grid place-items-center w-[152px] h-[152px] rounded-full nm-inset">
+            <svg width="152" height="152" viewBox="0 0 152 152" className="-rotate-90 absolute inset-0">
+              <circle cx="76" cy="76" r={R} fill="none" strokeWidth="8"
+                className="stroke-nm-edge/30" />
+              <circle
+                cx="76" cy="76" r={R} fill="none" strokeWidth="8" strokeLinecap="round"
+                className="stroke-foreground/70 transition-[stroke-dashoffset] duration-700 ease-out"
+                strokeDasharray={C}
+                strokeDashoffset={C - (pct / 100) * C}
+              />
+            </svg>
+            <div className="relative flex flex-col items-center">
+              <span
+                className="text-5xl font-medium leading-none tabular-nums"
+                data-testid="operating-overall-score"
+              >{overall}</span>
+              <span className="text-xs text-muted-foreground mt-1">/ 100</span>
+            </div>
           </div>
-          <div className="flex items-center gap-2 mt-3">
-            <Gauge size={16} weight="bold" className="text-brand-600" />
-            <span className="font-heading font-medium tracking-tight text-sm">Company Health</span>
+          <div className="flex items-center gap-2 mt-4">
+            <Gauge size={15} className="text-muted-foreground" />
+            <span className="text-sm font-medium">Company health</span>
           </div>
         </div>
 
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 mb-3">
             <DeltaChip value={demoDelta.value} sign={demoDelta.sign} />
-            <span className="label-mono text-muted-foreground">{demoDelta.period}</span>
+            <span className="text-xs text-muted-foreground">{demoDelta.period}</span>
           </div>
-          <p className="font-heading font-medium tracking-tight text-lg leading-snug mb-3">
+          <p className="text-lg font-medium leading-snug">
             {demoDex.headline}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            30-day trend behind — hover the score for the exact day.
           </p>
         </div>
       </div>
@@ -526,30 +548,9 @@ function HeroCard({ overall }) {
   );
 }
 
-// U7-01.3 -- SVG line chart. Pure inline SVG; no chart library.
-function Sparkline({ values }) {
-  if (!values || values.length < 2) return null;
-  const w = 800, h = 96;
-  const min = Math.min(...values), max = Math.max(...values);
-  const span = max - min || 1;
-  const step = w / (values.length - 1);
-  const points = values
-    .map((v, i) => `${(i * step).toFixed(1)},${(h - ((v - min) / span) * h).toFixed(1)}`)
-    .join(" ");
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" width="100%" height="100%">
-      <polyline
-        points={points}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        className="text-brand-600"
-      />
-    </svg>
-  );
-}
+// (U7-01.3's inline SVG Sparkline lived here. NM-10 removed the 30-day
+// trend graph from the hero, and nothing else referenced it.)
 
-// U7-01.1 -- delta chip. Green when up, red when down, neutral when 0.
 function DeltaChip({ value, sign }) {
   if (value == null) return null;
   const isUp = sign === "up" || value > 0;
@@ -675,7 +676,7 @@ function CategoryCard({ cat, value, drivers, onDrillIn }) {
       </div>
       <div className="flex items-baseline gap-2 mb-3">
         <span
-          className={`font-heading text-4xl font-black leading-none ${scoreColor(value)}`}
+          className={`text-4xl font-medium leading-none tabular-nums ${scoreColor(value)}`}
           role="progressbar"
           aria-valuenow={has ? value : undefined}
           aria-valuemin={0}
@@ -685,7 +686,11 @@ function CategoryCard({ cat, value, drivers, onDrillIn }) {
         <span className="label-mono text-muted-foreground">/ 100</span>
       </div>
       <div className="h-2 bg-muted border border-border mb-3" aria-hidden="true">
-        <div className={`h-full ${cat.color}`} style={{ width: `${has ? value : 0}%` }} />
+        {/* NM-10: monochrome. Four categories in four different hues made the
+                page read as a chart legend; the VALUE beside it already says
+                good or bad. */}
+        <div className="h-full rounded-full bg-foreground/25 transition-[width] duration-700"
+             style={{ width: `${has ? value : 0}%` }} />
       </div>
       <ul className="space-y-1">
         {drivers.slice(0, 3).map((d, i) => (
@@ -731,7 +736,7 @@ function CategoryDrillModal({ cat, value, drivers, drill, onClose }) {
         onClick={(e) => e.stopPropagation()}
         className="bg-white border-4 border-border max-w-2xl w-full max-h-[85vh] flex flex-col shadow-xl"
       >
-        <div className={`p-5 border-b-4 border-border flex items-start gap-4 ${cat.color} bg-opacity-20`}>
+        <div className="p-5 border-b border-nm-edge/30 bg-nm-sunken flex items-start gap-4">
           <div className="w-12 h-12 flex items-center justify-center nm-tile shrink-0">
             <cat.icon size={22} weight="bold" />
           </div>
@@ -741,7 +746,7 @@ function CategoryDrillModal({ cat, value, drivers, drill, onClose }) {
               {drill?.title || cat.label}
             </h2>
           </div>
-          <span className={`font-heading text-5xl font-black ${scoreColor(value)} shrink-0`}>
+          <span className={`text-5xl font-medium tabular-nums ${scoreColor(value)} shrink-0`}>
             {has ? value : "—"}
           </span>
           <button
@@ -781,7 +786,7 @@ function CategoryDrillModal({ cat, value, drivers, drill, onClose }) {
                     <span className={`w-1.5 h-8 shrink-0 ${
                       item.tone === "bad" ? "bg-danger-600" :
                       item.tone === "warn" ? "bg-amber-500" :
-                      item.tone === "good" ? "bg-green-600" : "bg-black/20"
+                      item.tone === "good" ? "bg-success-600" : "bg-foreground/20"
                     }`} aria-hidden="true" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold truncate">{item.title}</p>
@@ -1067,7 +1072,7 @@ function NotEnoughDataEmptyState({ stats }) {
 function ChecklistItem({ done, label, hint, actionLabel, actionTo, icon: Icon }) {
   return (
     <div className={`border-2 ${done ? "border-green-600/40 bg-green-50" : "border-border"} p-4 flex items-start gap-3`}>
-      <div className={`w-6 h-6 flex items-center justify-center border-2 ${done ? "border-green-600 bg-green-600 text-white" : "border-border"} shrink-0 mt-0.5`}>
+      <div className={`w-6 h-6 flex items-center justify-center border-2 ${done ? "border-success-600 bg-success-600 text-white" : "border-border"} shrink-0 mt-0.5`}>
         {done && <Check size={14} weight="bold" />}
       </div>
       <div className="flex-1 min-w-0">

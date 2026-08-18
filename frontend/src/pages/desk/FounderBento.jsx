@@ -172,13 +172,22 @@ export function FounderBento() {
   }, [summaryQ.data]);
 
   return (
+    /* NM-21 — past 1400px this stops being a bento and becomes a COLUMN.
+       Above that width Desk.js puts it in a 300px pane beside the board, and a
+       four-across grid inside a 300px pane is four ~60px slivers. The
+       grid-cols-1 plus the span resets on each tile below are what turn the
+       same five tiles into a stack. Below 1400 nothing changes: it is still
+       the full-width band it was, because the page is still stacked there.
+
+       1400 rather than Tailwind's xl (1280) is a measured number, not a taste
+       one — see the note on the split in Desk.js. */
     <div
-      className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4 lg:auto-rows-[minmax(0,1fr)]"
+      className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4 lg:auto-rows-[minmax(0,1fr)] min-[1400px]:grid-cols-1 min-[1400px]:auto-rows-auto"
       data-testid="desk-bento"
     >
       {/* Ops — the 2x2 anchor. The number the whole business is graded on. */}
       {!ops ? (
-        <TileSkeleton className="md:col-span-2 lg:col-span-2 lg:row-span-2" />
+        <TileSkeleton className="md:col-span-2 lg:col-span-2 lg:row-span-2 min-[1400px]:col-span-1 min-[1400px]:row-span-1" />
       ) : (
         <Tile
           icon={Gauge}
@@ -194,7 +203,7 @@ export function FounderBento() {
           }
           to="/operating-score"
           testid="bento-ops"
-          className="md:col-span-2 lg:col-span-2 lg:row-span-2 justify-between"
+          className="md:col-span-2 lg:col-span-2 lg:row-span-2 justify-between min-[1400px]:col-span-1 min-[1400px]:row-span-1"
         >
           {/* The four category bars, monochrome — the shape of the score, not
               a second palette. Reads as one instrument with the number. */}
@@ -221,7 +230,7 @@ export function FounderBento() {
 
       {/* Work — what is actually late, and who owns it. */}
       {!work ? (
-        <TileSkeleton className="md:col-span-2" />
+        <TileSkeleton className="md:col-span-2 min-[1400px]:col-span-1" />
       ) : (
         <Tile
           icon={Briefcase}
@@ -239,13 +248,13 @@ export function FounderBento() {
           // Straight to the filtered view, not the page's front door.
           to="/my-work?filter=overdue"
           testid="bento-work"
-          className="md:col-span-2"
+          className="md:col-span-2 min-[1400px]:col-span-1"
         />
       )}
 
       {/* Money — what is owed TO us. The cash question a founder actually asks. */}
       {!cash ? (
-        <TileSkeleton className="md:col-span-2" />
+        <TileSkeleton className="md:col-span-2 min-[1400px]:col-span-1" />
       ) : (
         <Tile
           icon={Wallet}
@@ -259,7 +268,7 @@ export function FounderBento() {
           }
           to="/finance?tab=revenue"
           testid="bento-money"
-          className="md:col-span-2"
+          className="md:col-span-2 min-[1400px]:col-span-1"
         />
       )}
 

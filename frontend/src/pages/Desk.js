@@ -61,22 +61,17 @@ function DeskBriefHeader() {
   });
 
   if (isLoading || !data) {
-    return (
-      <div className="mb-10">
-        <div className="h-10 w-72 rounded-control bg-nm-sunken mb-4 animate-pulse" />
-        <div className="h-24 rounded-cardlg bg-nm-sunken animate-pulse" />
-      </div>
-    );
+    return <div className="mb-7 h-10 w-72 rounded-control bg-nm-sunken animate-pulse" />;
   }
 
   return (
-    <div className="mb-10" data-testid="desk-brief-header">
+    <div className="mb-7" data-testid="desk-brief-header">
       {/* RD-2 (2026-08-17) — the greeting is now the page's editorial moment.
           Was 24px Inter at font-black / tracking-tighter, which read as a
           shouted label. The reference opens every screen with a large serif
           greeting split across two weights: the salutation in full ink, the
           name muted. Same trick here, at 36px. */}
-      <h2 className="font-display text-4xl mb-6" data-testid="desk-brief-greeting">
+      <h2 className="font-display text-4xl" data-testid="desk-brief-greeting">
         {(() => {
           // data.greeting arrives as "Good evening, Rajesh" — split on the
           // last comma so the name can carry its own colour. Falls back to
@@ -101,8 +96,10 @@ function DeskBriefHeader() {
           Decision column showing exactly those three. Three sentences, no
           third fact, and it pushed the first actionable tile down the page.
           The greeting stays: it is the page's editorial opening, not a
-          duplicate readout. */}
-      <FounderBento />
+          duplicate readout.
+
+          NM-21 — the bento left this component. It is now a pane of the
+          two-column layout below, not something stacked under the greeting. */}
     </div>
   );
 }
@@ -292,23 +289,71 @@ export default function Desk() {
   if (isMobile) return <DeskMobile />;
 
   return (
-    <div className="max-w-5xl mx-auto">
+    /* NM-21: the 1024px cap was right for a single stacked column and is the
+       thing that made a split impossible — two panes inside it would have left
+       the desk about 650px wide. Raised to 1560 so the right pane can carry
+       four kanban columns of real width on a wide display, and still centred
+       so the page does not sprawl on a 27" monitor. */
+    <div className="max-w-[1560px] mx-auto">
       {/* Epic 2 Sprint 5 (E2-34): capture bar moved to /brain (Dex).
           Desk is now pure decision viewer.
           Epic 2 Sprint 6 (E2-43..45): CEO Brief absorbed into Desk. */}
       <DeskBriefHeader />
 
-      {/* RD-2 (2026-08-17): section heading drops font-black/tracking-tighter
-          for the serif display face, sized below the greeting so the page has
-          one clear lead and this reads as the section beneath it. */}
-      <div className="mb-5">
-        <h1 className="font-display text-2xl" data-testid="desk-title">
-          Decision Desk
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1" data-testid="desk-subline">
-          {subline}
-        </p>
-      </div>
+      {/* NM-21 — THE PAGE SPLITS.
+          The KPIs sat on top of the desk as a full-width band, which cost the
+          page twice. The bento's own tiles went four-across and short, so a
+          two-line "so what" line floated in a lot of empty tile; and the desk
+          underneath started ~420px down the screen, which left its four
+          columns squeezed into whatever height was left and put most of a
+          founder's actual queue below the fold.
+
+          Side by side, each half gets the dimension it needs. The KPIs are
+          five numbers — they want narrow and tall, which is a column. The desk
+          is a list that only ever grows, so it wants the height, and it now
+          starts at the top of the viewport instead of halfway down it.
+
+          THE BREAKPOINT IS 1400, NOT TAILWIND'S xl (1280), AND THAT IS
+          MEASURED. The split only pays for itself while the right pane can
+          still hold four kanban columns. At 1280 it cannot: 1280 - 84 rail -
+          64 padding - 300 pane - 24 gap leaves 808px, the board falls to a 2x2,
+          and the second row pushed the page 138px past the fold — a fresh
+          scroll traded for the whitespace this change removes. Verified at
+          1320 before moving it. Below 1400 the page keeps the stack it already
+          had: bento band, then desk. Same components, one grid declaration
+          apart. */}
+      <div className="grid gap-6 min-[1400px]:grid-cols-[300px_minmax(0,1fr)] min-[1400px]:items-start" data-testid="desk-split">
+
+        {/* Left pane — the read. Sticky in the split so the numbers stay put while
+            the queue on the right is scrolled. `self-start` is what lets the
+            sticky work: a stretched grid item is as tall as the row and has
+            nowhere to stick to. */}
+        {/* The pane gets the SAME height budget as a board column and its own
+            scroll. Without it the five stacked tiles run ~760px against the
+            board's 628px cap, so the page grew a tail that was KPI column on
+            the left and nothing at all on the right — trading the whitespace
+            this change removes for a new patch of it lower down. Two panes,
+            one screen, each scrolling on its own. */}
+        <aside
+          className="min-w-0 min-[1400px]:sticky min-[1400px]:top-[88px] min-[1400px]:self-start min-[1400px]:max-h-[calc(100vh-14rem)] min-[1400px]:overflow-y-auto min-[1400px]:pr-1"
+          data-testid="desk-kpi-pane"
+        >
+          <FounderBento />
+        </aside>
+
+        {/* Right pane — the work. */}
+        <section className="min-w-0" data-testid="desk-work-pane">
+          {/* RD-2 (2026-08-17): section heading drops font-black/tracking-tighter
+              for the serif display face, sized below the greeting so the page has
+              one clear lead and this reads as the section beneath it. */}
+          <div className="mb-5">
+            <h1 className="font-display text-2xl" data-testid="desk-title">
+              Decision Desk
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1" data-testid="desk-subline">
+              {subline}
+            </p>
+          </div>
 
       {/* NM-9 — the board.
           Was four filter chips over one list: three of the four counts were
@@ -319,7 +364,12 @@ export default function Desk() {
 
           Not drag-and-drop: these are not stages a founder moves items
           between — they are four questions the backend answers. A Kanban
-          affordance that cannot be dragged would be a lie. */}
+          affordance that cannot be dragged would be a lie.
+
+          NM-21: the column count is UNCHANGED. Setting the split's breakpoint
+          at the width where four columns still fit means the board never needs
+          a variant for the split — 4-up stacked below 1400, 4-up beside the
+          KPIs above it. At 1440 that is 228px a column; at the 1560 cap, 306. */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4" data-testid="desk-board">
         {CHIPS.map((c, i) => {
           const q = boardQs[i];
@@ -338,7 +388,13 @@ export default function Desk() {
                 </span>
               </div>
 
-              <div className="flex-1 space-y-2 lg:max-h-[26rem] lg:overflow-y-auto lg:pr-0.5">
+              {/* NM-21: the cap is tied to the viewport rather than a flat
+                  26rem. In the split the desk owns the screen's height, so a
+                  column should use whatever is actually there — and capping it
+                  at the fold is what keeps a 13-item On Fire from making the
+                  page 2000px tall with three empty columns beside it, which is
+                  the whitespace this change is about. */}
+              <div className="flex-1 space-y-2 lg:max-h-[26rem] lg:overflow-y-auto lg:pr-0.5 min-[1400px]:max-h-[calc(100vh-20rem)]">
                 {q?.isLoading && Array.from({ length: 2 }).map((_, k) => <SkeletonCard key={k} lines={2} />)}
 
                 {!q?.isLoading && list.length === 0 && (
@@ -362,12 +418,14 @@ export default function Desk() {
         })}
       </div>
 
-      {/* Refresh spinner */}
-      {isFetching && !isLoading && (
-        <p className="text-xs text-muted-foreground mt-4 flex items-center gap-2">
-          <ArrowClockwise size={12} className="animate-spin" /> Refreshing…
-        </p>
-      )}
+          {/* Refresh spinner */}
+          {isFetching && !isLoading && (
+            <p className="text-xs text-muted-foreground mt-4 flex items-center gap-2">
+              <ArrowClockwise size={12} className="animate-spin" /> Refreshing…
+            </p>
+          )}
+        </section>
+      </div>
 
       {/* Decision review modal */}
       {openDecision && (

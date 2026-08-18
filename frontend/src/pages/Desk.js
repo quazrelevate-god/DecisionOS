@@ -322,31 +322,44 @@ export default function Desk() {
           1320 before moving it. Below 1400 the page keeps the stack it already
           had: bento band, then desk. Same components, one grid declaration
           apart. */}
-      <div className="grid gap-6 min-[1400px]:grid-cols-[300px_minmax(0,1fr)] min-[1400px]:items-start" data-testid="desk-split">
+      {/* NM-22 — the row carries ONE explicit height and both panes stretch to
+          fill it, which is what makes the two tops and the two bottoms line up
+          by construction rather than by arithmetic. The previous pass gave
+          each pane its own max-height and I had to hand-tune two different
+          rem offsets to get the bottoms within a pixel of each other, because
+          the board sits 56px lower than the KPI column. With a stretched row
+          there is nothing left to tune: the grid decides once. */}
+      <div
+        className="grid gap-6 min-[1400px]:grid-cols-[300px_minmax(0,1fr)] min-[1400px]:h-[calc(100vh-12.75rem)]"
+        data-testid="desk-split"
+      >
 
-        {/* Left pane — the read. Sticky in the split so the numbers stay put while
-            the queue on the right is scrolled. `self-start` is what lets the
-            sticky work: a stretched grid item is as tall as the row and has
-            nowhere to stick to. */}
-        {/* The pane gets the SAME height budget as a board column and its own
-            scroll. Without it the five stacked tiles run ~760px against the
-            board's 628px cap, so the page grew a tail that was KPI column on
-            the left and nothing at all on the right — trading the whitespace
-            this change removes for a new patch of it lower down. Two panes,
-            one screen, each scrolling on its own. */}
+        {/* Left pane — the read. Its own scroll: five stacked tiles run ~760px
+            against a ~700px row, and a KPI column that pushed the page taller
+            than the screen would trade the whitespace this change removes for
+            a new patch of it lower down. */}
         <aside
-          className="min-w-0 min-[1400px]:sticky min-[1400px]:top-[88px] min-[1400px]:self-start min-[1400px]:max-h-[calc(100vh-14rem)] min-[1400px]:overflow-y-auto min-[1400px]:pr-1"
+          className="min-w-0 min-[1400px]:h-full min-[1400px]:overflow-y-auto min-[1400px]:pr-1"
           data-testid="desk-kpi-pane"
         >
           <FounderBento />
         </aside>
 
-        {/* Right pane — the work. */}
-        <section className="min-w-0" data-testid="desk-work-pane">
+        {/* Right pane — the work, now a single card.
+            NM-22: the heading moved INSIDE it. That is the whole trick behind
+            the alignment the founder drew: while "Decision Desk" sat on the
+            page ground above the board, the card could only ever start below
+            its own title, ~56px lower than the KPI column beside it. As the
+            card's header it costs no vertical offset and the two panes open on
+            the same line. */}
+        <section
+          className="min-w-0 nm-raised flex flex-col p-5 min-[1400px]:h-full min-[1400px]:min-h-0"
+          data-testid="desk-work-pane"
+        >
           {/* RD-2 (2026-08-17): section heading drops font-black/tracking-tighter
               for the serif display face, sized below the greeting so the page has
               one clear lead and this reads as the section beneath it. */}
-          <div className="mb-5">
+          <div className="mb-5 shrink-0">
             <h1 className="font-display text-2xl" data-testid="desk-title">
               Decision Desk
             </h1>
@@ -369,18 +382,23 @@ export default function Desk() {
           NM-21: the column count is UNCHANGED. Setting the split's breakpoint
           at the width where four columns still fit means the board never needs
           a variant for the split — 4-up stacked below 1400, 4-up beside the
-          KPIs above it. At 1440 that is 228px a column; at the 1560 cap, 306. */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4" data-testid="desk-board">
+          KPIs above it. At 1440 that is 228px a column; at the 1560 cap, 306.
+
+          NM-22: `flex-1 min-h-0` is what hands the board the card's leftover
+          height. Without min-h-0 a flex child refuses to shrink below its
+          content, the board would size to the longest column, and the card
+          would grow past the fold instead of scrolling inside itself. */}
+      <div className="flex-1 min-h-0 grid gap-4 md:grid-cols-2 lg:grid-cols-4" data-testid="desk-board">
         {CHIPS.map((c, i) => {
           const q = boardQs[i];
           const list = q?.data?.cards || [];
           const n = counters[c.key] ?? list.length;
           const Icon = c.icon;
           return (
-            <section key={c.key} className="flex flex-col min-w-0" data-testid={`desk-col-${c.key}`}>
-              {/* Column head sits on the page ground, not in the card — the
-                  cards are the objects, the heading is a label for them. */}
-              <div className="flex items-center gap-2 px-1 pb-2.5">
+            <section key={c.key} className="flex flex-col min-w-0 min-h-0" data-testid={`desk-col-${c.key}`}>
+              {/* Column head. NM-22: `shrink-0` so it holds its 30px while
+                  the list below it absorbs every pixel of the card's height. */}
+              <div className="flex shrink-0 items-center gap-2 px-1 pb-2.5">
                 {Icon && <Icon size={14} weight="bold" className="text-muted-foreground" />}
                 <h2 className="text-sm font-medium">{c.label}</h2>
                 <span className="ml-auto min-w-[20px] rounded-full bg-nm-sunken px-1.5 py-0.5 text-center text-[11px] tabular-nums text-muted-foreground">
@@ -388,13 +406,15 @@ export default function Desk() {
                 </span>
               </div>
 
-              {/* NM-21: the cap is tied to the viewport rather than a flat
-                  26rem. In the split the desk owns the screen's height, so a
-                  column should use whatever is actually there — and capping it
-                  at the fold is what keeps a 13-item On Fire from making the
-                  page 2000px tall with three empty columns beside it, which is
-                  the whitespace this change is about. */}
-              <div className="flex-1 space-y-2 lg:max-h-[26rem] lg:overflow-y-auto lg:pr-0.5 min-[1400px]:max-h-[calc(100vh-20rem)]">
+              {/* NM-22: inside the split the viewport arithmetic is GONE.
+                  NM-21 capped this at calc(100vh-20rem), a number I had to
+                  measure and would have to re-measure the moment anything
+                  above it changed height. The card is now a fixed-height flex
+                  column, so `flex-1 min-h-0` gives the list exactly what is
+                  left and the scroll falls out of the layout instead of out of
+                  a constant. The 26rem cap still governs the stacked layout
+                  below 1400, where there is no card to measure against. */}
+              <div className="flex-1 min-h-0 space-y-2 overflow-y-auto lg:max-h-[26rem] lg:pr-0.5 min-[1400px]:max-h-none">
                 {q?.isLoading && Array.from({ length: 2 }).map((_, k) => <SkeletonCard key={k} lines={2} />)}
 
                 {!q?.isLoading && list.length === 0 && (

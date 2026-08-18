@@ -13,6 +13,13 @@
 // realistic against Kapoor's actual company stats so an owner viewing
 // the page sees consistent numbers.
 
+// KR-8 — THE QUARANTINE FLAG (approved plan). Every surviving piece of this
+// file renders ONLY when the signed-in tenant is the demo tenant it was
+// written for; real tenants get honest fallbacks (usually: the element is
+// absent). One predicate, so post-demo removal is a single grep for
+// isDemoTenant.
+export const isDemoTenant = (tenant) => /kapoor/i.test(tenant?.name || "");
+
 // ----- 30-day trend (used for hero sparkline) -----
 // One entry per day, oldest first. Values 0-100.
 export const demoTrend = [

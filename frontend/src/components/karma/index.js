@@ -7,3 +7,10 @@ export { CountUp } from "./CountUp";
 export { PillNav } from "./PillNav";
 export { DarkBand } from "./DarkBand";
 export { DotProgress, MiniBars, CircleDots, TinySpark } from "./MiniViz";
+// KR-8 additions
+export { ArcGauge } from "./ArcGauge";
+export { KDeltaChip } from "./KDeltaChip";
+export { StatTile } from "./StatTile";
+export { WideStatCard } from "./WideStatCard";
+export { HistoryBand } from "./HistoryBand";
+export { OfferRail, GlassActionCard } from "./OfferRail";

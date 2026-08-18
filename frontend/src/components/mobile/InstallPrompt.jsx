@@ -82,7 +82,7 @@ export function InstallPrompt() {
           data-testid="install-prompt"
           role="region"
           aria-label={t("install.title", "Add DecisionOS to your home screen")}
-          className="lg:hidden fixed inset-x-3 z-[10040] mx-auto flex max-w-md items-center gap-3 rounded-xl border border-border bg-card px-3 py-3 shadow-brutal-lg"
+          className="lg:hidden fixed inset-x-3 z-[10040] mx-auto flex max-w-md items-center gap-3 nm-raised px-3 py-3 shadow-brutal-lg"
           // Sits above the dock, like UndoSnackbar, so it never covers the
           // navigation it is asking him to keep using.
           style={{ bottom: "calc(6rem + env(safe-area-inset-bottom, 0px))" }}

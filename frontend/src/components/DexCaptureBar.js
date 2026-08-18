@@ -63,7 +63,7 @@ export function DexCaptureBar({
 
   return (
     <div
-      className={lg ? "" : "border border-border bg-white p-3 mb-6"}
+      className={lg ? "" : "nm-tile p-3 mb-6"}
       data-testid="dex-capture-bar"
     >
       {/* At `lg` the row becomes a 2x2 grid: [mic][input] over [attach][Send].

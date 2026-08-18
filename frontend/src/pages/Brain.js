@@ -34,7 +34,7 @@ function SearchPanel() {
   return (
     <div>
       <form onSubmit={search} className="flex gap-2 mb-2 max-w-2xl">
-        <div className="flex-1 flex items-center border border-border bg-white px-4">
+        <div className="flex-1 flex items-center nm-tile px-4">
           <MagnifyingGlass size={18} weight="bold" className="text-muted-foreground" />
           <input
             data-testid="brain-search-input"

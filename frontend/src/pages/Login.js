@@ -17,7 +17,7 @@ const DEMO = [
 // MPWA-11 (§8): "56px fields and buttons" on mobile. min-h-touch-lg is 56px
 // below lg and unset above it, so desktop keeps its py-3 geometry. text-base
 // also stops iOS Safari zooming the viewport on focus.
-const inputCls = "w-full border border-border bg-white px-4 py-3 text-base lg:text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring/30 transition-shadow min-h-touch-lg lg:min-h-0";
+const inputCls = "w-full nm-tile px-4 py-3 text-base lg:text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring/30 transition-shadow min-h-touch-lg lg:min-h-0";
 const labelCls = "label-mono text-muted-foreground";
 
 // Masks a phone to show only the last 4 digits, e.g. +91 98765 43210 -> +91 ••••• •3210
@@ -79,7 +79,7 @@ const OtpBoxes = ({ value, onChange, disabled }) => {
           onChange={handleChange(i)}
           onKeyDown={handleKeyDown(i)}
           onFocus={(e) => e.target.select()}
-          className="w-full aspect-square min-w-0 border border-border bg-white text-center text-xl font-medium focus:outline-none focus:shadow-sm focus:border-brand-600 transition-all disabled:opacity-50"
+          className="w-full aspect-square min-w-0 nm-tile text-center text-xl font-medium focus:outline-none focus:shadow-sm focus:border-brand-600 transition-all disabled:opacity-50"
         />
       ))}
     </div>
@@ -182,7 +182,7 @@ export default function Login() {
         data-testid="login-theme-toggle"
         title={isDark ? "Switch to light mode" : "Switch to dark mode"}
         aria-label="Toggle dark mode"
-        className="fixed top-4 right-4 z-50 w-10 h-10 flex items-center justify-center border border-border bg-white text-brand-ink hover:bg-accent transition-colors"
+        className="fixed top-4 right-4 z-50 w-10 h-10 flex items-center justify-center nm-tile text-brand-ink hover:bg-accent transition-colors"
       >
         {isDark ? <Sun size={18} weight="bold" /> : <MoonStars size={18} weight="bold" />}
       </button>
@@ -254,7 +254,7 @@ export default function Login() {
                 </>
               ) : (
                 <>
-                  <div className="flex items-center justify-between border border-border bg-white px-3 py-2.5" data-testid="otp-phone-confirm">
+                  <div className="flex items-center justify-between nm-tile px-3 py-2.5" data-testid="otp-phone-confirm">
                     <div className="flex items-center gap-2 min-w-0">
                       <DeviceMobile size={16} weight="bold" className="text-brand-600 shrink-0" />
                       <span className="text-sm font-mono truncate">Code sent to <strong>{invite?.phone_masked || maskPhone(otpPhone)}</strong></span>

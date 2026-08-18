@@ -113,6 +113,9 @@ export function FloatingDock({ user, onMore, moreOpen = false, moreBadge = 0 }) 
     >
       <div
         className={cn(
+          // NM-8: deliberately NOT nm-tile. The sweep converted this and it was
+          // reverted — the dock and the Dex FAB are the two controls the founder
+          // must find without looking, and §4 keeps them solid.
           "flex h-16 items-center gap-1 rounded-pill border border-border bg-card px-2",
           "shadow-brutal-lg backdrop-blur-xl",
           "max-[359px]:h-[3.25rem]"

@@ -65,7 +65,7 @@ export function Queue({
       {!rows.length ? (
         empty
       ) : (
-        <div className="overflow-hidden rounded-xl border border-border bg-card">
+        <div className="overflow-hidden nm-raised">
           <ul className="divide-y divide-border">
             {shown.map((r) => {
               const d = dueLabel(r.due);

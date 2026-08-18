@@ -231,7 +231,7 @@ export function SkeletonTable({ rows = 5, cols = 4 }) {
     <div
       aria-hidden="true"
       data-testid="skeleton-table"
-      className="overflow-x-auto border border-border rounded-xl bg-card"
+      className="overflow-x-auto nm-raised"
     >
       <table className="w-full text-sm">
         <tbody>

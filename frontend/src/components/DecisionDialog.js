@@ -93,7 +93,7 @@ function TimelineDot({ tone = "muted", check = false }) {
   const bg = {
     green: "bg-green-600 text-white",
     blue: "bg-brand-blue text-white",
-    muted: "bg-white border border-border text-transparent",
+    muted: "nm-tile text-transparent",
   }[tone];
   return (
     <span className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${bg}`}>

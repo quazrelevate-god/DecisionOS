@@ -83,7 +83,7 @@ function Sources({ sources, onGo }) {
         {sources.map((s, i) => (
           <button key={`${s.id}-${i}`} onClick={() => onGo(s.deep_link)} data-testid={`brain-source-${i}`}
             title={s.confidence ? `${s.confidence}` : ""}
-            className="inline-flex items-center gap-1 border border-border bg-white px-2 py-1 text-xs hover:bg-accent transition-colors">
+            className="inline-flex items-center gap-1 nm-tile px-2 py-1 text-xs hover:bg-accent transition-colors">
             <span className="text-brand-600 uppercase font-semibold">{DEEP_TYPES[s.type] || s.type}</span>
             <span className="truncate max-w-[220px]">{s.title}</span>
           </button>
@@ -117,7 +117,7 @@ function ExportBar({ options, contextId }) {
         const Icon = ICON[o] || FileCsv;
         return (
           <button key={o} onClick={() => run(o)} disabled={!!busy} data-testid={`brain-export-${o}`}
-            className="inline-flex items-center gap-1.5 border border-border bg-white px-3 py-1.5 text-xs font-medium hover:bg-accent transition-colors disabled:opacity-50">
+            className="inline-flex items-center gap-1.5 nm-tile px-3 py-1.5 text-xs font-medium hover:bg-accent transition-colors disabled:opacity-50">
             <Icon size={15} weight="bold" /> {busy === o ? "…" : o === "excel" ? "Excel" : o.toUpperCase()}
           </button>
         );
@@ -260,7 +260,7 @@ export function AskPanel() {
       </div>
 
       <form onSubmit={(e) => { e.preventDefault(); ask(); }} className="flex gap-2 mt-3">
-        <div className="flex-1 min-w-0 flex items-center border border-border bg-white px-4">
+        <div className="flex-1 min-w-0 flex items-center nm-tile px-4">
           <span className="text-brand-600 font-bold">{">"}</span>
           <input
             data-testid="ask-input"
@@ -272,7 +272,7 @@ export function AskPanel() {
         </div>
         {log.length > 0 && (
           <button type="button" onClick={clear} data-testid="brain-clear" title="New conversation"
-            className="px-3 border border-border bg-white hover:bg-accent transition-colors">
+            className="px-3 nm-tile hover:bg-accent transition-colors">
             <Broom size={16} weight="bold" />
           </button>
         )}

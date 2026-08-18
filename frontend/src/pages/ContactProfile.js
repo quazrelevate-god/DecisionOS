@@ -186,7 +186,7 @@ export default function ContactProfile() {
       : (value >= 60 ? "text-brand-600" : value >= 30 ? "text-amber-600" : "text-green-600");
     return (
       <div className="flex items-center gap-3" data-testid={`rel-${label.toLowerCase()}`}>
-        <div className="w-14 h-14 flex flex-col items-center justify-center rounded-xl border border-border bg-card shrink-0">
+        <div className="w-14 h-14 flex flex-col items-center justify-center nm-raised shrink-0">
           <span className={`text-2xl font-medium tabular-nums leading-none ${color}`}>{value != null ? value : "—"}</span>
         </div>
         <div className="flex items-center gap-1.5 text-sm font-medium">
@@ -405,7 +405,7 @@ export default function ContactProfile() {
       {isVendor && (
         <Section icon={Truck} title="Pending Deliveries" count={pending_deliveries.length} hideWhenEmpty>
           <div className="space-y-2">{pending_deliveries.map((w) => (
-            <div key={w.id} className="border border-border bg-white p-3 flex items-center justify-between gap-2">
+            <div key={w.id} className="nm-tile p-3 flex items-center justify-between gap-2">
               <span className="text-sm font-semibold">{w.title}</span><Chip value={w.stage} />
             </div>
           ))}</div>
@@ -426,7 +426,7 @@ export default function ContactProfile() {
 
       <Section icon={CheckSquare} title="Follow-ups & Tasks" count={follow_ups.length} hideWhenEmpty>
         <div className="space-y-2">{follow_ups.map((t) => (
-          <div key={t.id} className="border border-border bg-white p-3 flex items-center justify-between gap-2">
+          <div key={t.id} className="nm-tile p-3 flex items-center justify-between gap-2">
             <span className="text-sm">{t.title}</span>
             <div className="flex gap-1.5">{t.assignee_role && <Chip value={t.assignee_role} className="bg-white" />}<Chip value={t.status} /></div>
           </div>
@@ -435,7 +435,7 @@ export default function ContactProfile() {
 
       <Section icon={Warning} title="Complaints" count={complaints.length} hideWhenEmpty>
         <div className="space-y-2">{complaints.map((cp) => (
-          <div key={cp.id} data-testid={`profile-complaint-${cp.id}`} className="border border-border bg-white p-3">
+          <div key={cp.id} data-testid={`profile-complaint-${cp.id}`} className="nm-tile p-3">
             <div className="flex items-center gap-2 mb-1"><Chip value={cp.severity} /><Chip value={cp.status} /></div>
             <p className="text-sm">{cp.text}</p>
           </div>
@@ -444,7 +444,7 @@ export default function ContactProfile() {
 
       <Section icon={Brain} title="Linked Decisions" count={decisions.length} hideWhenEmpty>
         <div className="space-y-2">{decisions.map((d) => (
-          <div key={d.id} className="border border-border bg-white p-3">
+          <div key={d.id} className="nm-tile p-3">
             <div className="flex items-center gap-2 mb-1"><Chip value={d.status} />{d.dtype && <Chip value={d.dtype} className="bg-brand-blue text-white" />}</div>
             <p className="text-sm font-semibold">{d.title}</p>
             {d.summary && <p className="text-xs text-muted-foreground">{d.summary}</p>}

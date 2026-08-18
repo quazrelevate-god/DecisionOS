@@ -358,7 +358,7 @@ function TaskSheet({ task, open, onClose, onChanged, members, roleOptions }) {
           </p>
           <ul className="mt-2 space-y-2">
             {(task.updates || []).slice().reverse().map((u, i) => (
-              <li key={u.id || i} className="rounded-xl border border-border bg-card p-3">
+              <li key={u.id || i} className="nm-raised p-3">
                 <p className="text-[length:var(--text-label)] font-semibold leading-4 text-muted-foreground">
                   {{ note: "Note", handoff: "Handed over", escalate: "Escalated" }[u.action] || "Update"}
                 </p>
@@ -578,7 +578,7 @@ export default function MyWorkMobile() {
             type="button"
             onClick={() => setScope((s) => (s === "mine" ? "all" : "mine"))}
             data-testid="work-scope-toggle"
-            className="flex items-center gap-1.5 rounded-pill border border-border bg-card px-3.5 text-sm font-semibold transition-colors hover:bg-accent"
+            className="flex items-center gap-1.5 rounded-pill nm-tile px-3.5 text-sm font-semibold transition-colors hover:bg-accent"
             style={{ minHeight: "var(--control-h-sm)" }}
           >
             {scope === "mine" ? "Mine" : "Everyone's"}

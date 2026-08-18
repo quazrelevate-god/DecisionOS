@@ -48,7 +48,7 @@ export function Grid({
               {...(item.onOpen ? { type: "button", onClick: item.onOpen } : {})}
               data-testid={`${testId}-tile-${item.id ?? i}`}
               className={cn(
-                "flex min-h-[7.25rem] flex-col justify-between rounded-xl border border-border bg-card p-3 text-left",
+                "flex min-h-[7.25rem] flex-col justify-between nm-raised p-3 text-left",
                 item.onOpen && "transition-colors hover:bg-accent"
               )}
             >

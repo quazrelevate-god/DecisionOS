@@ -185,7 +185,7 @@ function Tile({ tile, onPick }) {
       onClick={() => onPick(tile)}
       className={cn(
         // >= 100x100 per §5.7, so the 44px floor is met with room to spare.
-        "relative flex min-h-[6.25rem] flex-col rounded-xl border border-border bg-card p-3 text-left",
+        "relative flex min-h-[6.25rem] flex-col nm-raised p-3 text-left",
         "transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         big || wide ? "justify-between" : "items-center justify-center gap-1.5",
         SPAN[tile.size] || "",

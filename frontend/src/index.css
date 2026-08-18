@@ -766,33 +766,46 @@
         /* Soft-depth surface. Depth needs a mid-tone to cast onto, so the page
            background moves off near-white. Cards then sit at the SAME value
            and are separated by shadow, not by fill. */
-        --nm-bg:          228 30% 95%;   /* #EEF0F6 — page + card surface */
-        --nm-raised:      228 33% 97%;   /* #F5F6FA — one step up */
-        --nm-sunken:      228 26% 92%;   /* #E5E8F0 — inset wells */
+        /* NM-8 — the surfaces move to white.
+           §2 set these at 95% L because neumorphism needs a mid-tone to cast a
+           WHITE highlight onto, and at 95% the UI read as grey. The founder
+           call is white, with separation carried by shadow. That trade is
+           real and one-directional: at 99% L the top-left highlight has ~1%
+           of headroom left, so it stops contributing and the depth becomes a
+           single soft dark shadow bottom-right. That is a cleaner, more
+           premium look — it is just no longer neumorphism in the textbook
+           sense. To keep the surfaces legible as objects the dark side is
+           strengthened (.30 -> .40 at sm) and the hairline does more work. */
+        --nm-bg:          228 40% 99%;   /* #FCFDFE — page + card surface */
+        --nm-raised:      0 0% 100%;     /* pure white — one step up */
+        --nm-sunken:      228 30% 96%;   /* #F1F3F8 — inset wells, the one
+                                            place a tint must survive: a well
+                                            with no tone is invisible */
 
-        /* The light source: top-left. Two shadows, always as a pair. The dark
-           shadow is a cool indigo-grey, never pure black (§6). */
+        /* The light source: top-left. The highlight is kept (it still catches
+           the top edge of a raised tile against the sunken wells and in dark
+           mode) but the dark side now carries the separation. */
         --nm-light:       255 255 255;
-        --nm-dark:        163 172 196;
+        --nm-dark:        155 165 194;
 
         --nm-shadow-sm:
-             3px  3px  6px rgb(var(--nm-dark) / .30),
-            -3px -3px  6px rgb(var(--nm-light) / .85);
+             2px  3px  8px rgb(var(--nm-dark) / .22),
+            -2px -2px  6px rgb(var(--nm-light) / .90);
         --nm-shadow-md:
-             6px  6px 14px rgb(var(--nm-dark) / .32),
-            -6px -6px 14px rgb(var(--nm-light) / .90);
+             4px  6px 16px rgb(var(--nm-dark) / .26),
+            -4px -4px 12px rgb(var(--nm-light) / .95);
         --nm-shadow-lg:
-            10px 10px 26px rgb(var(--nm-dark) / .34),
-           -10px -10px 26px rgb(var(--nm-light) / .92);
+             8px 12px 30px rgb(var(--nm-dark) / .30),
+            -8px -8px 22px rgb(var(--nm-light) / 1);
         --nm-inset:
-            inset  3px  3px 7px rgb(var(--nm-dark) / .38),
-            inset -3px -3px 7px rgb(var(--nm-light) / .85);
+            inset  2px  3px 6px rgb(var(--nm-dark) / .30),
+            inset -2px -2px 5px rgb(var(--nm-light) / .90);
         --nm-pressed:
             inset  2px  2px 5px rgb(var(--nm-dark) / .45),
             inset -2px -2px 5px rgb(var(--nm-light) / .70);
 
         /* THE ACCESSIBILITY HAIRLINE. */
-        --nm-edge: 228 20% 82%;
+        --nm-edge: 228 22% 78%;
 
         --radius-control: 14px;
         --radius-tile:    16px;

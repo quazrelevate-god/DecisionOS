@@ -26,7 +26,7 @@ const humanDate = (iso) => dueLabel(iso)?.text || null;
 function Accordion({ id, title, icon: Icon, count, defaultOpen = false, children }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <section className="mt-3 overflow-hidden rounded-xl border border-border bg-card" data-testid={`cp-section-${id}`}>
+    <section className="mt-3 overflow-hidden nm-raised" data-testid={`cp-section-${id}`}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

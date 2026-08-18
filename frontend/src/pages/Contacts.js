@@ -160,12 +160,12 @@ export function ContactsPanel({ types, addLabel = "Add Contact", readOnly = fals
     }
   };
 
-  const selectCls = "border border-border bg-white px-3 py-2 text-sm font-mono focus:outline-none";
+  const selectCls = "nm-tile px-3 py-2 text-sm font-mono focus:outline-none";
 
   return (
     <div>
       <div className="flex flex-wrap items-center gap-2 mb-6">
-        <div className="flex items-center border border-border bg-white px-3 flex-1 min-w-[200px]">
+        <div className="flex items-center nm-tile px-3 flex-1 min-w-[200px]">
           <MagnifyingGlass size={16} weight="bold" className="text-muted-foreground" />
           <input data-testid="contact-search-input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, company, phone, email…" className="flex-1 py-2 px-2 text-sm font-mono focus:outline-none" />
         </div>

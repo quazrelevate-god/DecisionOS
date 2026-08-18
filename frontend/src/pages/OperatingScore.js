@@ -626,7 +626,7 @@ function SuggestedActions() {
             <Link
               key={a.label}
               to={a.to}
-              className="inline-flex items-center gap-2 border border-border bg-white px-3 py-2 text-sm font-semibold hover:bg-brand-600 hover:text-white hover:border-brand-600 transition-colors group"
+              className="inline-flex items-center gap-2 nm-tile px-3 py-2 text-sm font-semibold hover:bg-brand-600 hover:text-white hover:border-brand-600 transition-colors group"
             >
               <Icon size={14} weight="bold" />
               <span>{a.label}</span>
@@ -732,7 +732,7 @@ function CategoryDrillModal({ cat, value, drivers, drill, onClose }) {
         className="bg-white border-4 border-border max-w-2xl w-full max-h-[85vh] flex flex-col shadow-xl"
       >
         <div className={`p-5 border-b-4 border-border flex items-start gap-4 ${cat.color} bg-opacity-20`}>
-          <div className="w-12 h-12 flex items-center justify-center border border-border bg-white shrink-0">
+          <div className="w-12 h-12 flex items-center justify-center nm-tile shrink-0">
             <cat.icon size={22} weight="bold" />
           </div>
           <div className="flex-1 min-w-0">
@@ -747,7 +747,7 @@ function CategoryDrillModal({ cat, value, drivers, drill, onClose }) {
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 border border-border bg-white flex items-center justify-center hover:bg-black hover:text-white shrink-0"
+            className="w-8 h-8 nm-tile flex items-center justify-center hover:bg-black hover:text-white shrink-0"
             aria-label="Close drill-down"
           >
             <X size={14} weight="bold" />
@@ -842,7 +842,7 @@ function Leaderboard({ employees }) {
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
-            className="border border-border bg-white px-2 py-1 text-xs font-semibold"
+            className="nm-tile px-2 py-1 text-xs font-semibold"
             aria-label="Sort team by"
             data-testid="operating-leaderboard-sort"
           >
@@ -886,7 +886,7 @@ function Leaderboard({ employees }) {
                 <Sparkle size={13} weight="bold" /> Coach
               </Link>
               <Link to={`/operating-score?user=${e.id}`}
-                className="w-14 h-14 flex flex-col items-center justify-center border border-border bg-white shrink-0 hover:bg-brand-600 hover:text-white hover:border-brand-600 transition-colors">
+                className="w-14 h-14 flex flex-col items-center justify-center nm-tile shrink-0 hover:bg-brand-600 hover:text-white hover:border-brand-600 transition-colors">
                 <span className={`font-heading text-2xl font-black leading-none ${scoreColor(e.score)}`}>
                   {e.score != null ? e.score : "—"}
                 </span>

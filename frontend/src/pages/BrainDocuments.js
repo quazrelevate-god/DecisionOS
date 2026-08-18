@@ -93,7 +93,7 @@ function UploadDialog({ onClose, onUploaded }) {
             <input
               type="file" data-testid="brain-doc-upload-file"
               onChange={(e) => setFile(e.target.files?.[0] || null)}
-              className="mt-1 block w-full text-sm border border-border bg-white file:mr-3 file:py-2 file:px-4 file:border-0 file:border-r file:border-border file:bg-primary file:text-white file:font-semibold file:uppercase file:tracking-wider file:text-xs" />
+              className="mt-1 block w-full text-sm nm-tile file:mr-3 file:py-2 file:px-4 file:border-0 file:border-r file:border-border file:bg-primary file:text-white file:font-semibold file:uppercase file:tracking-wider file:text-xs" />
             <span className="text-[11px] text-muted-foreground font-mono mt-1 block">PDF · DOCX · XLSX · TXT · images · 25MB max</span>
           </label>
 
@@ -101,14 +101,14 @@ function UploadDialog({ onClose, onUploaded }) {
             <span className="label-mono text-muted-foreground">Title</span>
             <input value={title} onChange={(e) => setTitle(e.target.value)} data-testid="brain-doc-upload-title"
               placeholder={file?.name || "e.g. Leave Policy 2026"}
-              className="mt-1 w-full px-3 py-2 border border-border bg-white text-sm focus:outline-none" />
+              className="mt-1 w-full px-3 py-2 nm-tile text-sm focus:outline-none" />
           </label>
 
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
               <span className="label-mono text-muted-foreground">Kind</span>
               <select value={kind} onChange={(e) => setKind(e.target.value)} data-testid="brain-doc-upload-kind"
-                className="mt-1 w-full px-3 py-2 border border-border bg-white text-sm focus:outline-none">
+                className="mt-1 w-full px-3 py-2 nm-tile text-sm focus:outline-none">
                 {KINDS.map((k) => <option key={k.key} value={k.key}>{k.label}</option>)}
               </select>
             </label>
@@ -116,14 +116,14 @@ function UploadDialog({ onClose, onUploaded }) {
               <span className="label-mono text-muted-foreground">Tags (comma-separated)</span>
               <input value={tags} onChange={(e) => setTags(e.target.value)} data-testid="brain-doc-upload-tags"
                 placeholder="hr, leave, holiday"
-                className="mt-1 w-full px-3 py-2 border border-border bg-white text-sm focus:outline-none" />
+                className="mt-1 w-full px-3 py-2 nm-tile text-sm focus:outline-none" />
             </label>
           </div>
 
           <label className="block">
             <span className="label-mono text-muted-foreground">Who can see this?</span>
             <select value={visibility} onChange={(e) => setVisibility(e.target.value)} data-testid="brain-doc-upload-visibility"
-              className="mt-1 w-full px-3 py-2 border border-border bg-white text-sm focus:outline-none">
+              className="mt-1 w-full px-3 py-2 nm-tile text-sm focus:outline-none">
               {VISIBILITIES.map((v) => <option key={v.key} value={v.key}>{v.label}</option>)}
             </select>
           </label>
@@ -133,7 +133,7 @@ function UploadDialog({ onClose, onUploaded }) {
               <span className="label-mono text-muted-foreground">Department (role key)</span>
               <input value={department} onChange={(e) => setDepartment(e.target.value)} data-testid="brain-doc-upload-department"
                 placeholder="finance, sales, operations…"
-                className="mt-1 w-full px-3 py-2 border border-border bg-white text-sm focus:outline-none" />
+                className="mt-1 w-full px-3 py-2 nm-tile text-sm focus:outline-none" />
             </label>
           )}
           {visibility !== "public" && (
@@ -141,7 +141,7 @@ function UploadDialog({ onClose, onUploaded }) {
               <span className="label-mono text-muted-foreground">Also allow these roles (optional)</span>
               <input value={rolesAllowed} onChange={(e) => setRolesAllowed(e.target.value)} data-testid="brain-doc-upload-roles"
                 placeholder="finance, hr"
-                className="mt-1 w-full px-3 py-2 border border-border bg-white text-sm focus:outline-none" />
+                className="mt-1 w-full px-3 py-2 nm-tile text-sm focus:outline-none" />
             </label>
           )}
 
@@ -149,7 +149,7 @@ function UploadDialog({ onClose, onUploaded }) {
             <span className="label-mono text-muted-foreground">Short summary (optional)</span>
             <textarea value={summary} onChange={(e) => setSummary(e.target.value)} rows={2} data-testid="brain-doc-upload-summary"
               placeholder="One-line description Dex will use to help match this document to questions."
-              className="mt-1 w-full px-3 py-2 border border-border bg-white text-sm focus:outline-none resize-none" />
+              className="mt-1 w-full px-3 py-2 nm-tile text-sm focus:outline-none resize-none" />
           </label>
         </div>
         <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-3 bg-white">
@@ -234,7 +234,7 @@ export function DocumentsPanel() {
     <div data-testid="brain-documents-panel">
       {/* Search + filter + upload */}
       <div className="flex flex-col md:flex-row md:items-center gap-2 mb-2 max-w-3xl">
-        <div className="flex-1 flex items-center border border-border bg-white px-4">
+        <div className="flex-1 flex items-center nm-tile px-4">
           <MagnifyingGlass size={18} weight="bold" className="text-muted-foreground" />
           <input
             data-testid="brain-doc-search"
@@ -245,7 +245,7 @@ export function DocumentsPanel() {
         </div>
         <select value={kind} onChange={(e) => { setKind(e.target.value); load(q, e.target.value); }}
           data-testid="brain-doc-kind-filter"
-          className="px-3 py-2 border border-border bg-white text-sm font-mono focus:outline-none min-w-[140px]">
+          className="px-3 py-2 nm-tile text-sm font-mono focus:outline-none min-w-[140px]">
           <option value="">All kinds</option>
           {KINDS.map((k) => <option key={k.key} value={k.key}>{k.label}</option>)}
         </select>
@@ -273,7 +273,7 @@ export function DocumentsPanel() {
         <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4" data-testid="brain-doc-grid">
           {docs.map((d) => (
             <div key={d.id} data-testid={`brain-doc-card-${d.id}`}
-              className="border border-border bg-white shadow-sm p-4 flex flex-col gap-3 transition-shadow">
+              className="nm-tile shadow-sm p-4 flex flex-col gap-3 transition-shadow">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
                   <File size={18} weight="bold" className="shrink-0" />

@@ -202,7 +202,7 @@ function Understanding({ u, onLooksRight, onFix, busy }) {
           <p className="text-[length:var(--text-label)] font-semibold leading-4 text-muted-foreground">
             Dex turned that into
           </p>
-          <div className="mt-2 rounded-xl border border-border bg-card p-3.5">
+          <div className="mt-2 nm-raised p-3.5">
             <p className="font-heading text-[1.0625rem] font-bold leading-snug tracking-tight">
               {u.decision.title}
             </p>
@@ -415,7 +415,7 @@ export function DexSheet({ open, onClose, onRecordingChange, onCaptured }) {
               disabled={sending}
               data-testid="dex-mic-record"
               aria-label={t("dex.record", "Record a voice note for Dex")}
-              className="relative flex h-16 w-16 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-brutal-sm transition-transform active:scale-95 disabled:opacity-50"
+              className="relative flex h-16 w-16 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-nm-sm transition-transform active:scale-95 disabled:opacity-50"
             >
               <span
                 aria-hidden="true"
@@ -472,7 +472,7 @@ export function DexSheet({ open, onClose, onRecordingChange, onCaptured }) {
                   type="button"
                   data-testid="dex-suggestion"
                   onClick={() => setText(c)}
-                  className="flex shrink-0 items-center rounded-pill border border-border bg-card px-3.5 text-sm transition-colors hover:bg-accent"
+                  className="flex shrink-0 items-center rounded-pill nm-tile px-3.5 text-sm transition-colors hover:bg-accent"
                   style={{ minHeight: "var(--control-h-sm)" }}
                 >
                   {c}

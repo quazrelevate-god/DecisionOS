@@ -167,7 +167,7 @@ export function NumbersDetailSheet({ detail, period, onClose }) {
               <Row
                 {...(to ? { type: "button", onClick: () => { onClose(); navigate(to); } } : {})}
                 data-testid={`brief-detail-item-${it.id}`}
-                className={`flex w-full items-center gap-3 rounded-xl border border-border bg-card p-3 text-left ${to ? "transition-colors hover:bg-accent" : ""}`}
+                className={`flex w-full items-center gap-3 nm-raised p-3 text-left ${to ? "transition-colors hover:bg-accent" : ""}`}
                 style={{ minHeight: "var(--control-h-md)" }}
               >
                 <span className="min-w-0 flex-1">

@@ -290,7 +290,7 @@ export default function FinanceMobile() {
           onClick={reclassify}
           disabled={reclassifying}
           data-testid="finance-recheck-bills"
-          className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-card text-sm font-semibold transition-colors hover:bg-accent disabled:opacity-50"
+          className="mt-4 flex w-full items-center justify-center gap-2 nm-raised text-sm font-semibold transition-colors hover:bg-accent disabled:opacity-50"
           style={{ minHeight: "var(--control-h-sm)" }}
         >
           {reclassifying ? <Spinner size={18} className="animate-spin" /> : <ArrowClockwise size={18} weight="bold" />}
@@ -389,7 +389,7 @@ function Section({ title, rows, testid }) {
   return (
     <section className="mt-5" data-testid={testid}>
       <h2 className="font-heading text-base font-semibold tracking-tight">{title}</h2>
-      <ul className="mt-2 divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
+      <ul className="mt-2 divide-y divide-border overflow-hidden nm-raised">
         {rows.map(([k, v]) => (
           <li key={k} className="flex items-center justify-between gap-3 px-3.5 py-2.5">
             <span className="min-w-0 truncate text-sm">{k}</span>
@@ -576,7 +576,7 @@ function CaptureInbox() {
       <div className="grid grid-cols-2 gap-3">
         <label
           data-testid="capture-camera"
-          className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-border bg-card p-4 transition-colors hover:bg-accent"
+          className="flex cursor-pointer flex-col items-center justify-center gap-1.5 nm-raised p-4 transition-colors hover:bg-accent"
           style={{ minHeight: "5.5rem" }}
         >
           <Camera size={26} weight="regular" aria-hidden="true" />
@@ -585,7 +585,7 @@ function CaptureInbox() {
         </label>
         <label
           data-testid="capture-upload"
-          className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-border bg-card p-4 transition-colors hover:bg-accent"
+          className="flex cursor-pointer flex-col items-center justify-center gap-1.5 nm-raised p-4 transition-colors hover:bg-accent"
           style={{ minHeight: "5.5rem" }}
         >
           <UploadSimple size={26} weight="regular" aria-hidden="true" />
@@ -595,7 +595,7 @@ function CaptureInbox() {
       </div>
 
       {/* WhatsApp state as a card, in business language. No log, no env var. */}
-      <div className="mt-3 flex items-center gap-3 rounded-xl border border-border bg-card p-3.5" data-testid="capture-whatsapp">
+      <div className="mt-3 flex items-center gap-3 nm-raised p-3.5" data-testid="capture-whatsapp">
         <WhatsappLogo size={26} weight="regular" aria-hidden="true" className="shrink-0 text-success-600" />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold">WhatsApp bills</p>

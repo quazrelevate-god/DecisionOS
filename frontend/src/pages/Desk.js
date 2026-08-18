@@ -141,7 +141,7 @@ function DeskBriefHeader() {
                                   else /finance?tab=inbox if unmatched,
                                   else /finance?tab=overview. */}
         {/* RD-2: hairline card, sentence-case caption. */}
-        <div className="border border-border rounded-xl bg-card p-4" data-testid="desk-brief-trends">
+        <div className="nm-raised p-4" data-testid="desk-brief-trends">
           <p className="text-xs font-medium text-muted-foreground mb-3 flex items-center gap-1.5">
             <ChartBar size={13} /> Trends
           </p>
@@ -237,14 +237,14 @@ function DeskBriefHeader() {
         </div>
 
         {/* Shortcuts card */}
-        <div className="border border-border rounded-xl bg-card p-4" data-testid="desk-brief-shortcuts">
+        <div className="nm-raised p-4" data-testid="desk-brief-shortcuts">
           <p className="text-xs font-medium text-muted-foreground mb-3">Shortcuts</p>
           <div className="space-y-2">
             {isOwner && (
               <button
                 data-testid="desk-shortcut-journal"
                 onClick={() => navigate("/journal")}
-                className="w-full flex items-center gap-2 border border-border rounded-lg bg-card px-3 py-2 text-sm font-medium hover:bg-accent transition-colors"
+                className="w-full flex items-center gap-2 nm-tile px-3 py-2 text-sm font-medium hover:bg-accent transition-colors"
               >
                 <BookOpen size={14} weight="bold" /> CEO Journal
               </button>
@@ -253,7 +253,7 @@ function DeskBriefHeader() {
               <button
                 data-testid="desk-shortcut-ops"
                 onClick={() => navigate("/operating-score")}
-                className="w-full flex items-center gap-2 border border-border rounded-lg bg-card px-3 py-2 text-sm font-medium hover:bg-accent transition-colors"
+                className="w-full flex items-center gap-2 nm-tile px-3 py-2 text-sm font-medium hover:bg-accent transition-colors"
               >
                 <Gauge size={14} weight="bold" /> Ops health
               </button>
@@ -262,7 +262,7 @@ function DeskBriefHeader() {
               <button
                 data-testid="desk-shortcut-team"
                 onClick={() => navigate("/operating-score")}
-                className="w-full flex items-center gap-2 border border-border rounded-lg bg-card px-3 py-2 text-sm font-medium hover:bg-accent transition-colors"
+                className="w-full flex items-center gap-2 nm-tile px-3 py-2 text-sm font-medium hover:bg-accent transition-colors"
               >
                 <UsersFour size={14} weight="bold" /> Team leaderboard
               </button>
@@ -271,7 +271,7 @@ function DeskBriefHeader() {
               <button
                 data-testid="desk-shortcut-coach"
                 onClick={() => navigate("/coach")}
-                className="w-full flex items-center gap-2 border border-border rounded-lg bg-card px-3 py-2 text-sm font-medium hover:bg-accent transition-colors"
+                className="w-full flex items-center gap-2 nm-tile px-3 py-2 text-sm font-medium hover:bg-accent transition-colors"
               >
                 <Sparkle size={14} weight="bold" /> AI Coach
               </button>
@@ -317,9 +317,9 @@ function DeskCard({ card, onAction, currentUserId }) {
   const ctaStyle = {
     review: "bg-primary text-primary-foreground hover:bg-brand-700",
     respond: "bg-primary text-primary-foreground hover:bg-brand-700",
-    chase: "border border-border bg-card hover:bg-accent",
-    nudge: "border border-border bg-card hover:bg-accent",
-  }[effectiveCta] || "border border-border bg-card hover:bg-accent";
+    chase: "nm-tile hover:bg-accent",
+    nudge: "nm-tile hover:bg-accent",
+  }[effectiveCta] || "nm-tile hover:bg-accent";
 
   const doAction = async (e) => {
     e.stopPropagation();
@@ -339,7 +339,7 @@ function DeskCard({ card, onAction, currentUserId }) {
        has to align down the column. */
     <div
       data-testid={`desk-card-${card.id}`}
-      className="flex items-center justify-between gap-4 px-4 py-3.5 border border-border rounded-xl bg-card hover:border-hairline-strong transition-colors"
+      className="flex items-center justify-between gap-4 px-4 py-3.5 nm-raised hover:border-hairline-strong transition-colors"
     >
       <div className="flex-1 min-w-0">
         <p className="font-medium text-sm leading-snug truncate">{card.title}</p>

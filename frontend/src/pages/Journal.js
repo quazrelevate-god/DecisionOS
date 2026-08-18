@@ -89,7 +89,7 @@ function TimelineDialog({ decisionId, open, onClose }) {
               const color = EVENT_COLOR[e.kind] || "text-muted-foreground";
               return (
                 <li key={`${e.kind}-${e.ts || i}`} className="mb-6 ml-6" data-testid={`timeline-event-${i}`}>
-                  <span className="absolute -left-[13px] flex items-center justify-center w-6 h-6 bg-white border border-border">
+                  <span className="absolute -left-[13px] flex items-center justify-center w-6 h-6 nm-tile">
                     <Icon size={13} weight="bold" className={color} />
                   </span>
                   <p className="text-sm font-medium leading-tight">{e.label}</p>
@@ -162,7 +162,7 @@ export default function Journal() {
         onSubmit={(e) => { e.preventDefault(); setTerm(q); }}
         className="flex gap-2 mb-8 max-w-xl"
       >
-        <div className="flex-1 min-w-0 flex items-center border border-border bg-white">
+        <div className="flex-1 min-w-0 flex items-center nm-tile">
           <MagnifyingGlass size={18} weight="bold" className="ml-3 text-muted-foreground" />
           <input
             value={q}
@@ -250,7 +250,7 @@ export default function Journal() {
               type="button"
               onClick={() => setShowAllEntries(true)}
               data-testid="journal-show-earlier"
-              className="w-full rounded-xl border border-border bg-card text-sm font-semibold transition-colors hover:bg-accent min-h-touch"
+              className="w-full nm-raised text-sm font-semibold transition-colors hover:bg-accent min-h-touch"
             >
               Show {hiddenEntryCount} earlier {hiddenEntryCount === 1 ? "entry" : "entries"}
             </button>

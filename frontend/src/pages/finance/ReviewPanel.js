@@ -219,7 +219,7 @@ export default function ReviewPanel({ ingestion, onFiled, onCancel }) {
                 <Field label="Name" value={c.name} onChange={(v) => setItem("contacts", i, "name", v)} />
                 <Field label="Phone" value={c.phone} onChange={(v) => setItem("contacts", i, "phone", v)} />
                 <Field label="Email" value={c.email} onChange={(v) => setItem("contacts", i, "email", v)} />
-                <button onClick={() => removeItem("contacts", i)} data-testid={`remove-contact-${i}`} className="absolute -top-2 -right-2 w-6 h-6 flex items-center justify-center border border-border bg-white hover:bg-danger-600 hover:text-white transition-colors"><Trash size={12} weight="bold" /></button>
+                <button onClick={() => removeItem("contacts", i)} data-testid={`remove-contact-${i}`} className="absolute -top-2 -right-2 w-6 h-6 flex items-center justify-center nm-tile hover:bg-danger-600 hover:text-white transition-colors"><Trash size={12} weight="bold" /></button>
               </div>
             ))}
           </div>
@@ -253,7 +253,7 @@ export default function ReviewPanel({ ingestion, onFiled, onCancel }) {
                 <Field label="Party" value={inv.contact_name} onChange={(v) => setItem("invoices", i, "contact_name", v)} />
                 <Field label="Amount" value={inv.amount} onChange={(v) => setItem("invoices", i, "amount", v)} />
                 <Field label="Due date" value={inv.due_date} onChange={(v) => setItem("invoices", i, "due_date", v)} />
-                <button onClick={() => removeItem("invoices", i)} data-testid={`remove-invoice-${i}`} className="absolute -top-2 -right-2 w-6 h-6 flex items-center justify-center border border-border bg-white hover:bg-danger-600 hover:text-white transition-colors"><Trash size={12} weight="bold" /></button>
+                <button onClick={() => removeItem("invoices", i)} data-testid={`remove-invoice-${i}`} className="absolute -top-2 -right-2 w-6 h-6 flex items-center justify-center nm-tile hover:bg-danger-600 hover:text-white transition-colors"><Trash size={12} weight="bold" /></button>
               </div>
             );})}
           </div>
@@ -272,7 +272,7 @@ export default function ReviewPanel({ ingestion, onFiled, onCancel }) {
                 <Field label="Party" value={p.contact_name} onChange={(v) => setItem("payments", i, "contact_name", v)} />
                 <Field label="Method" value={p.method} onChange={(v) => setItem("payments", i, "method", v)} />
                 <Field label="Reference" value={p.reference} onChange={(v) => setItem("payments", i, "reference", v)} />
-                <button onClick={() => removeItem("payments", i)} data-testid={`remove-payment-${i}`} className="absolute -top-2 -right-2 w-6 h-6 flex items-center justify-center border border-border bg-white hover:bg-danger-600 hover:text-white transition-colors"><Trash size={12} weight="bold" /></button>
+                <button onClick={() => removeItem("payments", i)} data-testid={`remove-payment-${i}`} className="absolute -top-2 -right-2 w-6 h-6 flex items-center justify-center nm-tile hover:bg-danger-600 hover:text-white transition-colors"><Trash size={12} weight="bold" /></button>
               </div>
             ))}
           </div>
@@ -287,7 +287,7 @@ export default function ReviewPanel({ ingestion, onFiled, onCancel }) {
             {records.tasks.map((t, i) => (
               <div key={t._key} className="border border-border p-3 flex items-center gap-2 relative" data-testid={`review-task-${i}`}>
                 <input className={inp} value={t.title ?? ""} onChange={(e) => setItem("tasks", i, "title", e.target.value)} />
-                <button onClick={() => removeItem("tasks", i)} data-testid={`remove-task-${i}`} className="shrink-0 w-8 h-8 flex items-center justify-center border border-border bg-white hover:bg-danger-600 hover:text-white transition-colors"><Trash size={12} weight="bold" /></button>
+                <button onClick={() => removeItem("tasks", i)} data-testid={`remove-task-${i}`} className="shrink-0 w-8 h-8 flex items-center justify-center nm-tile hover:bg-danger-600 hover:text-white transition-colors"><Trash size={12} weight="bold" /></button>
               </div>
             ))}
           </div>

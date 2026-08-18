@@ -602,7 +602,7 @@ function NeedsMatchingPanel({ title, hint, unmatched, open, cur, endpoint, stand
             <span className="text-xs text-muted-foreground flex-1 min-w-0 truncate">{p.contact_name || "Unknown"}{p.date ? ` · ${p.date}` : ""}{p.invoice_number ? ` · ref ${p.invoice_number}` : ""}{p.applied > 0 ? ` · ${f(p.applied)} already applied` : ""}</span>
             <InvoicePicker open={open} value={picks[p.id] || ""} onChange={(v) => setPicks((s) => ({ ...s, [p.id]: v }))} cur={cur} testid={`match-picker-${p.id}`} />
             <button onClick={() => match(p.id)} disabled={busy === p.id} data-testid={`match-btn-${p.id}`} className="px-3 py-1.5 text-xs font-medium border border-border bg-green-600 text-white transition-all disabled:opacity-50">Match</button>
-            <button onClick={() => standalone(p.id)} disabled={busy === p.id} data-testid={`standalone-btn-${p.id}`} className="px-3 py-1.5 text-xs font-medium border border-border bg-white hover:bg-accent transition-all disabled:opacity-50">{standaloneLabel.btn}</button>
+            <button onClick={() => standalone(p.id)} disabled={busy === p.id} data-testid={`standalone-btn-${p.id}`} className="px-3 py-1.5 text-xs font-medium nm-tile hover:bg-accent transition-all disabled:opacity-50">{standaloneLabel.btn}</button>
           </div>
         ))}
       </div>
@@ -725,7 +725,7 @@ function RevenueTab({ data, cur, onDelete, onChange }) {
                 value={sortKey}
                 onChange={(e) => setSortKey(e.target.value)}
                 data-testid="revenue-sort"
-                className="border border-border bg-white px-2 py-1 focus:outline-none focus:shadow-sm text-xs"
+                className="nm-tile px-2 py-1 focus:outline-none focus:shadow-sm text-xs"
               >
                 <option value="date-desc">Newest first</option>
                 <option value="date-asc">Oldest first</option>
@@ -1071,13 +1071,13 @@ function CaptureHero({ pendingCount, onIngested, onOpenInbox }) {
 
   return (
     <>
-      <div className="border border-border bg-white p-3 mb-6 flex flex-wrap items-center gap-2" data-testid="finance-capture-hero">
+      <div className="nm-tile p-3 mb-6 flex flex-wrap items-center gap-2" data-testid="finance-capture-hero">
         <span className="text-xs text-muted-foreground hidden sm:inline mr-1">
           Capture
         </span>
         <label
           data-testid="finance-hero-doc"
-          className={`flex items-center gap-2 border border-border bg-white px-3 py-2 text-xs font-medium hover:bg-brand-600 hover:text-white transition-colors cursor-pointer ${uploading ? "opacity-60 pointer-events-none" : ""}`}
+          className={`flex items-center gap-2 nm-tile px-3 py-2 text-xs font-medium hover:bg-brand-600 hover:text-white transition-colors cursor-pointer ${uploading ? "opacity-60 pointer-events-none" : ""}`}
           title="Upload a bill or receipt (PDF or photo)"
         >
           <FilePdf size={14} weight="bold" />
@@ -1086,7 +1086,7 @@ function CaptureHero({ pendingCount, onIngested, onOpenInbox }) {
         </label>
         <label
           data-testid="finance-hero-photo"
-          className={`flex items-center gap-2 border border-border bg-white px-3 py-2 text-xs font-medium hover:bg-accent transition-colors cursor-pointer ${uploading ? "opacity-60 pointer-events-none" : ""}`}
+          className={`flex items-center gap-2 nm-tile px-3 py-2 text-xs font-medium hover:bg-accent transition-colors cursor-pointer ${uploading ? "opacity-60 pointer-events-none" : ""}`}
           title="Take a photo (mobile camera)"
         >
           <Camera size={14} weight="bold" />
@@ -1095,7 +1095,7 @@ function CaptureHero({ pendingCount, onIngested, onOpenInbox }) {
         </label>
         <label
           data-testid="finance-hero-csv"
-          className={`flex items-center gap-2 border border-border rounded-lg bg-card px-3 py-2 text-xs font-medium hover:bg-accent transition-colors cursor-pointer ${uploading ? "opacity-60 pointer-events-none" : ""}`}
+          className={`flex items-center gap-2 nm-tile px-3 py-2 text-xs font-medium hover:bg-accent transition-colors cursor-pointer ${uploading ? "opacity-60 pointer-events-none" : ""}`}
           title="Bulk CSV or Excel import"
         >
           <UploadSimple size={14} weight="bold" />

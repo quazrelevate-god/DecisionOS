@@ -86,7 +86,7 @@ export default function SettingsMobile() {
       <h1 className="font-heading text-2xl font-bold tracking-tight">Settings</h1>
       <p className="mt-1 text-[0.9375rem] text-muted-foreground">{tenant?.name}</p>
 
-      <ul className="mt-4 divide-y divide-border overflow-hidden rounded-xl border border-border bg-card" data-testid="settings-rows">
+      <ul className="mt-4 divide-y divide-border overflow-hidden nm-raised" data-testid="settings-rows">
         {SECTIONS.map((s) => (
           <li key={s.key}>
             <button

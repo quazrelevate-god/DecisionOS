@@ -87,7 +87,7 @@ function Stat({ label, value, series, tone, delta, invertDelta, onOpen, loading,
       data-testid={testid}
       {...(progress ? { "data-progress": progress } : {})}
       className={cn(
-        "flex min-h-[7.5rem] flex-col justify-between rounded-xl border border-border bg-card p-3 text-left",
+        "flex min-h-[7.5rem] flex-col justify-between nm-raised p-3 text-left",
         onOpen && "transition-colors hover:bg-accent"
       )}
     >

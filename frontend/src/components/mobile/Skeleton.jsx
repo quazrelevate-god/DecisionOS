@@ -45,7 +45,7 @@ export function CardSkeleton({ className, "data-testid": testId = "card-skeleton
     <div
       data-testid={testId}
       aria-busy="true"
-      className={cn("rounded-xl border border-border bg-card p-3.5", className)}
+      className={cn("nm-raised p-3.5", className)}
     >
       <SkeletonLine w="w-4/5" />
       <SkeletonLine w="w-3/5" className="mt-2.5 h-3" />

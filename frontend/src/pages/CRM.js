@@ -418,7 +418,7 @@ function AddContactMenu({ canManage, canImport, csvBusy, onImport, customerLabel
           />
           <div
             role="menu"
-            className="absolute left-0 top-full mt-1 z-30 min-w-[300px] border border-border bg-white shadow-lg"
+            className="absolute left-0 top-full mt-1 z-30 min-w-[300px] nm-tile shadow-lg"
           >
           {canManage && (
             <button
@@ -742,19 +742,19 @@ export default function CRM() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder={t("crm.search_ph")}
-            className="w-full border border-border rounded-lg bg-card pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-brand-400 transition-colors"
+            className="w-full nm-tile pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-brand-400 transition-colors"
           />
         </div>
         <select
           data-testid="crm-status-filter"
           value={status}
           onChange={(e) => setStatus(e.target.value)}
-          className="border border-border rounded-lg bg-card px-3 py-2 text-sm capitalize focus:outline-none focus:ring-2 focus:ring-ring/30 transition-colors"
+          className="nm-tile px-3 py-2 text-sm capitalize focus:outline-none focus:ring-2 focus:ring-ring/30 transition-colors"
         >
           <option value="">{t("crm.all_statuses")}</option>
           {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
-        <div className="flex items-center border border-border rounded-lg bg-card pl-3 focus-within:ring-2 focus-within:ring-ring/30 transition-colors">
+        <div className="flex items-center nm-tile pl-3 focus-within:ring-2 focus-within:ring-ring/30 transition-colors">
           <ArrowsDownUp size={14} className="text-muted-foreground" />
           <select
             data-testid="crm-sort"

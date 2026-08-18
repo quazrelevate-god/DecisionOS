@@ -144,7 +144,7 @@ function Frame({ path, fixture }) {
         width={VW}
         height={VH}
         onLoad={measure}
-        className="rounded-xl border border-border bg-card"
+        className="nm-raised"
         style={{ width: VW, height: VH }}
       />
       {m && (
@@ -231,7 +231,7 @@ function BlockGallery() {
           { key: "disp", label: "Dispatch", count: 2, done: 2, total: 2, items: [] },
         ]}
         renderItem={(it) => (
-          <div className="rounded-xl border border-border bg-card p-3">
+          <div className="nm-raised p-3">
             <p className="text-sm font-semibold">{it.title}</p>
           </div>
         )}

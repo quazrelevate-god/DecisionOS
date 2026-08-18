@@ -257,7 +257,7 @@ export function TaskBoard() {
         {COLUMNS.map((col) => {
           const cards = (data || []).filter((t) => t.status === col.key);
           return (
-            <div key={col.key} data-testid={`task-column-${col.key}`} className="border border-border bg-white">
+            <div key={col.key} data-testid={`task-column-${col.key}`} className="nm-tile">
               <div className="px-4 py-3 border-b border-border flex items-center justify-between bg-brand-paper">
                 <p className="label-mono">{col.label}</p>
                 <span className="font-medium">{cards.length}</span>

@@ -93,7 +93,7 @@ export function MobileCard({
       onClick={onOpen}
       data-testid={testId}
       className={cn(
-        "group flex w-full items-center gap-3 rounded-xl border border-border bg-card p-3.5 text-left",
+        "group flex w-full items-center gap-3 nm-raised p-3.5 text-left",
         "transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         className
       )}

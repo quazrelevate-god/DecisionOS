@@ -550,7 +550,7 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
                       : isAudio(a)
                         ? <audio key={a.url} controls preload="none" src={url(a.url)} className="h-9 w-full" data-testid={`detail-ref-voice-${t.id}-${a.url}`} />
                         : <a key={a.url} href={url(a.url)} target="_blank" rel="noreferrer" data-testid={`detail-ref-file-${t.id}-${a.url}`}
-                            className="inline-flex items-center gap-1.5 border border-border rounded-lg bg-card px-2.5 py-1.5 text-xs font-mono hover:bg-accent transition-colors max-w-[220px]">
+                            className="inline-flex items-center gap-1.5 nm-tile px-2.5 py-1.5 text-xs font-mono hover:bg-accent transition-colors max-w-[220px]">
                             <File size={14} weight="bold" /> <span className="truncate">{a.filename || "file"}</span>
                           </a>
                   ))}
@@ -590,7 +590,7 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
                     isAudio(a)
                       ? <audio key={a.url} controls preload="none" src={url(a.url)} className="h-9 w-full" data-testid={`detail-voice-${t.id}-${a.url}`} />
                       : <a key={a.url} href={url(a.url)} target="_blank" rel="noreferrer" data-testid={`detail-proof-file-${t.id}-${a.url}`}
-                          className="inline-flex items-center gap-1.5 border border-border rounded-lg bg-card px-2.5 py-1.5 text-xs font-mono hover:bg-accent transition-colors max-w-[220px]">
+                          className="inline-flex items-center gap-1.5 nm-tile px-2.5 py-1.5 text-xs font-mono hover:bg-accent transition-colors max-w-[220px]">
                           <File size={14} weight="bold" /> <span className="truncate">{a.filename || "file"}</span>
                         </a>
                   ))}
@@ -1099,7 +1099,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
             : isAudio(a)
               ? <audio key={a.url} controls preload="none" src={`${beUrl}${a.url}`} className="h-9" data-testid={`att-voice-${t.id}-${a.url}`} />
               : <a key={a.url} href={`${beUrl}${a.url}`} target="_blank" rel="noreferrer" data-testid={`att-file-${t.id}-${a.url}`}
-                  className="inline-flex items-center gap-1.5 border border-border rounded-lg bg-card px-2.5 py-1.5 text-xs font-mono hover:bg-accent transition-colors max-w-[180px]">
+                  className="inline-flex items-center gap-1.5 nm-tile px-2.5 py-1.5 text-xs font-mono hover:bg-accent transition-colors max-w-[180px]">
                   <File size={13} weight="bold" /> <span className="truncate">{a.filename || "file"}</span>
                 </a>
         );

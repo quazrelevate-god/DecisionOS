@@ -293,7 +293,7 @@ export default function CRMMobile() {
                       aria-hidden="true"
                       // border, not just a fill: the tile's hover state is also
                       // bg-accent, and the avatar disappeared into it.
-                      className="grid h-9 w-9 place-items-center rounded-pill border border-border bg-card font-heading text-sm font-bold"
+                      className="grid h-9 w-9 place-items-center rounded-pill nm-tile font-heading text-sm font-bold"
                     >
                       {initials(c)}
                     </span>

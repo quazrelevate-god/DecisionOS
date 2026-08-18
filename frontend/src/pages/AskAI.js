@@ -1,17 +1,29 @@
-import { useState, useRef, useEffect } from "react";
-import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
+// NM-13 — this file is now the ANSWER RENDERER, not a panel.
+//
+// It used to export AskPanel: a scroll region plus its own input + mic + Ask
+// button. /brain mounted that directly beneath the Dex stage, which already
+// had an input + mic + send, so the page showed the founder two identical
+// composers stacked. The conversation state and the one composer moved up to
+// Brain.js; what is genuinely reusable — how an /ask response is drawn — stays
+// here and is exported.
+import { useState } from "react";
 import api from "../lib/api";
 import { money } from "../lib/format";
-import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
 import {
-  PaperPlaneTilt, Lock, Sparkle, FileCsv, FileXls, FilePdf,
-  ArrowRight, WarningCircle, LinkSimple, Broom,
+  Lock, FileCsv, FileXls, FilePdf,
+  ArrowRight, WarningCircle, LinkSimple,
 } from "@phosphor-icons/react";
-import { MicDictateButton } from "../components/MicDictateButton";
 // Epic 2 Sprint 5 (E2-40): persona voice marker on every AI response.
 import { DexBadge } from "../components/common";
+
+/** Openers for a thread with nothing in it yet. */
+export const ASK_SUGGESTIONS = [
+  "What needs my attention today?",
+  "Show all tasks completed on time this month",
+  "Which employees have the most overdue tasks?",
+  "Show outstanding customer invoices",
+];
 
 const DEEP_TYPES = {
   task: "Task", employee: "Employee", invoice: "Invoice", payment: "Payment",
@@ -43,23 +55,27 @@ function DataTable({ table, currency }) {
   if (!table?.rows?.length) return null;
   const cols = table.columns || [];
   return (
-    <div className="border border-border overflow-x-auto mb-3" data-testid="brain-table">
+    /* NM-13: the head was a solid indigo bar — §0 reserves the brand fill for
+       the one action on a screen, and a table header is furniture. It reads as
+       a sunken well now, which is also what a fixed header IS: the surface the
+       rows scroll under. */
+    <div className="nm-raised overflow-x-auto mb-3" data-testid="brain-table">
       <table className="w-full text-sm">
         <thead>
-          <tr className="bg-primary text-primary-foreground">
+          <tr className="bg-nm-sunken">
             {cols.map((c) => (
-              <th key={c.key} className="text-left font-medium text-xs px-3 py-2 whitespace-nowrap">{c.label}</th>
+              <th key={c.key} className="text-left font-medium text-xs px-3 py-2 whitespace-nowrap text-muted-foreground">{c.label}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {table.rows.slice(0, 100).map((r, ri) => (
-            <tr key={`${r[cols[0]?.key] ?? ""}-${ri}`} className={ri % 2 ? "bg-muted/40" : ""} data-testid={`brain-row-${ri}`}>
+            <tr key={`${r[cols[0]?.key] ?? ""}-${ri}`} className={ri % 2 ? "bg-nm-sunken/50" : ""} data-testid={`brain-row-${ri}`}>
               {cols.map((c) => (
-                <td key={c.key} className="px-3 py-2 align-top border-t border-border">
+                <td key={c.key} className="px-3 py-2 align-top border-t border-nm-edge/30">
                   {c.type === "money" ? money(r[c.key], currency)
                     : c.key === "on_time"
-                      ? <span className={r[c.key] === "Yes" ? "text-green-600 font-semibold" : "text-brand-600 font-semibold"}>{r[c.key]}</span>
+                      ? <span className={r[c.key] === "Yes" ? "text-success-600 font-semibold" : "text-danger-600 font-semibold"}>{r[c.key]}</span>
                       : String(r[c.key] ?? "")}
                 </td>
               ))}
@@ -68,7 +84,7 @@ function DataTable({ table, currency }) {
         </tbody>
       </table>
       {table.total_rows > 100 && (
-        <p className="text-xs text-muted-foreground px-3 py-2 border-t border-border">Showing first 100 of {table.total_rows} rows — export for the full set.</p>
+        <p className="text-xs text-muted-foreground px-3 py-2 border-t border-nm-edge/30">Showing first 100 of {table.total_rows} rows — export for the full set.</p>
       )}
     </div>
   );
@@ -132,7 +148,7 @@ function FollowUps({ items, onAsk }) {
     <div className="mt-3 flex flex-wrap gap-2" data-testid="brain-followups">
       {items.map((s, i) => (
         <button key={`${s}-${i}`} onClick={() => onAsk(s)} data-testid={`brain-followup-${i}`}
-          className="inline-flex items-center gap-1 text-xs border border-border px-2.5 py-1 rounded-full hover:bg-accent transition-colors">
+          className="inline-flex items-center gap-1 rounded-pill nm-tile px-3 py-1.5 text-xs transition-shadow hover:shadow-nm-sm active:shadow-nm-press">
           {s} <ArrowRight size={12} weight="bold" />
         </button>
       ))}
@@ -140,7 +156,45 @@ function FollowUps({ items, onAsk }) {
   );
 }
 
-function AiAnswer({ m, onGo, onAsk, currency }) {
+/**
+ * NM-15 — the /ask answer arrives as light markdown and was being printed raw,
+ * so the founder read literal asterisks: "**File TDS return for Q2** assigned
+ * to Sunita Rao". Every emphasis the model added — which is exactly the task
+ * names, people and amounts — landed as punctuation noise.
+ *
+ * Deliberately NOT a markdown library. The backend emits `**bold**` and
+ * `` `code` `` and nothing else; pulling in a parser (and a sanitiser, since
+ * this is model output) to handle two constructs would be a dependency and an
+ * XSS surface for no gain. Split, never dangerouslySetInnerHTML — the text
+ * stays text and React escapes it.
+ */
+function RichText({ text }) {
+  // ** before * — otherwise the single-asterisk alternative eats the opening
+  // pair of every bold run and everything after it renders inside-out.
+  const parts = String(text ?? "").split(/(\*\*[^*]+\*\*|\*[^*\n]+\*|`[^`]+`)/g);
+  return (
+    <>
+      {parts.map((p, i) => {
+        if (p.startsWith("**") && p.endsWith("**") && p.length > 4) {
+          return <strong key={i} className="font-semibold">{p.slice(2, -2)}</strong>;
+        }
+        if (p.startsWith("*") && p.endsWith("*") && p.length > 2) {
+          return <em key={i}>{p.slice(1, -1)}</em>;
+        }
+        if (p.startsWith("`") && p.endsWith("`") && p.length > 2) {
+          return (
+            <code key={i} className="rounded bg-nm-sunken px-1 py-0.5 font-mono text-[0.9em]">
+              {p.slice(1, -1)}
+            </code>
+          );
+        }
+        return p;
+      })}
+    </>
+  );
+}
+
+export function AiAnswer({ m, onGo, onAsk, currency }) {
   if (m.resp?.type === "PERMISSION_DENIED") {
     return (
       <div className="card-brutal p-4 border-l-4 border-l-brand-600" data-testid="brain-permission-denied">
@@ -151,8 +205,8 @@ function AiAnswer({ m, onGo, onAsk, currency }) {
   }
   if (m.resp?.type === "INSUFFICIENT_DATA") {
     return (
-      <div className="card-brutal p-4 border-l-4 border-l-amber-500" data-testid="brain-insufficient">
-        <p className="flex items-center gap-2 font-semibold text-sm"><WarningCircle size={16} weight="bold" className="text-amber-500" /> Not enough information</p>
+      <div className="card-brutal p-4 border-l-4 border-l-caution-500" data-testid="brain-insufficient">
+        <p className="flex items-center gap-2 font-semibold text-sm"><WarningCircle size={16} weight="bold" className="text-caution-600" /> Not enough information</p>
         <p className="text-sm text-muted-foreground mt-1">{m.resp.answer}</p>
         {(m.resp.missing_information || []).length > 0 && (
           <ul className="mt-2 text-xs text-muted-foreground list-disc pl-5">
@@ -168,7 +222,7 @@ function AiAnswer({ m, onGo, onAsk, currency }) {
     <div className="space-y-1" data-testid="brain-answer">
       {r.answer && (
         <div className="text-sm leading-relaxed whitespace-pre-wrap mb-3">
-          <DexBadge inline />{r.answer}
+          <DexBadge inline /><RichText text={r.answer} />
         </div>
       )}
       <KpiGrid kpis={r.kpis} currency={r.currency || currency} />
@@ -180,107 +234,3 @@ function AiAnswer({ m, onGo, onAsk, currency }) {
   );
 }
 
-export function AskPanel() {
-  const { t } = useTranslation();
-  const { tenant } = useAuth();
-  const navigate = useNavigate();
-  const currency = tenant?.currency || "INR";
-  const SUGGESTIONS = [
-    "What needs my attention today?",
-    "Show all tasks completed on time this month",
-    "Which employees have the most overdue tasks?",
-    "Show outstanding customer invoices",
-  ];
-  const [log, setLog] = useState([]);
-  const [q, setQ] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [ctxId, setCtxId] = useState(null);
-  const endRef = useRef(null);
-  const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
-
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [log, busy]);
-
-  const go = (link) => { if (link) navigate(link); };
-
-  const ask = async (question) => {
-    const text = question ?? q;
-    if (!text.trim() || busy) return;
-    setLog((l) => [...l, { id: uid(), role: "user", text }]);
-    setQ("");
-    setBusy(true);
-    try {
-      const { data } = await api.post("/ask", { question: text, context_id: ctxId });
-      if (data.query_context_id) setCtxId(data.query_context_id);
-      setLog((l) => [...l, { id: uid(), role: "ai", resp: data }]);
-    } catch {
-      setLog((l) => [...l, { id: uid(), role: "ai", resp: { type: "ANSWER", answer: t("ask.error") } }]);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const clear = () => { setLog([]); setCtxId(null); };
-
-  return (
-    <div className="flex flex-col h-[calc(100vh-15rem)] lg:h-[calc(100vh-12rem)]">
-      <div className="flex-1 overflow-y-auto pr-1 space-y-5" data-testid="brain-conversation">
-        {log.length === 0 && (
-          <div className="card-brutal p-6" data-testid="brain-empty">
-            <p className="flex items-center gap-2 font-heading text-lg font-medium tracking-tight">
-              <Sparkle size={20} weight="fill" className="text-brand-600" /> Ask your company anything
-            </p>
-            <p className="text-sm text-muted-foreground mt-1">Every answer is computed from your authorised workspace data — with clickable sources you can open.</p>
-            <div className="flex flex-wrap gap-2 mt-4">
-              {SUGGESTIONS.map((s) => (
-                <button key={s} onClick={() => ask(s)} data-testid="ask-suggestion"
-                  className="text-xs border border-border px-3 py-1.5 hover:bg-accent transition-colors">
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        {log.map((m, i) => (
-          <div key={m.id} data-testid={`chat-msg-${m.role}-${i}`}>
-            {m.role === "user" ? (
-              <div className="flex justify-end">
-                <p className="inline-block bg-primary text-primary-foreground px-4 py-2 text-sm max-w-[85%]">{m.text}</p>
-              </div>
-            ) : (
-              <AiAnswer m={m} onGo={go} onAsk={ask} currency={currency} />
-            )}
-          </div>
-        ))}
-        {busy && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground animate-pulse" data-testid="brain-loading">
-            <Sparkle size={16} weight="fill" className="text-brand-600" /> Understanding your question, checking access & searching your records…
-          </div>
-        )}
-        <div ref={endRef} />
-      </div>
-
-      <form onSubmit={(e) => { e.preventDefault(); ask(); }} className="flex gap-2 mt-3">
-        <div className="flex-1 min-w-0 flex items-center nm-tile px-4">
-          <span className="text-brand-600 font-bold">{">"}</span>
-          <input
-            data-testid="ask-input"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Ask your company anything…"
-            className="flex-1 min-w-0 py-3 px-3 text-sm focus:outline-none"
-          />
-        </div>
-        {log.length > 0 && (
-          <button type="button" onClick={clear} data-testid="brain-clear" title="New conversation"
-            className="px-3 nm-tile hover:bg-accent transition-colors">
-            <Broom size={16} weight="bold" />
-          </button>
-        )}
-        <MicDictateButton className="px-4" title={t("ask.speak_q")} onText={(txt) => setQ((v) => (v ? `${v} ${txt}` : txt))} />
-        <button data-testid="ask-submit" disabled={busy} className="shrink-0 bg-brand-600 text-white px-6 flex items-center gap-2 text-sm font-medium border border-border transition-all disabled:opacity-50">
-          <PaperPlaneTilt size={16} weight="bold" /> {t("ask.btn")}
-        </button>
-      </form>
-    </div>
-  );
-}

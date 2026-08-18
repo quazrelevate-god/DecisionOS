@@ -1,183 +1,60 @@
-import { useState } from "react";
-import { formatPhone } from "../lib/format";
+// /brain — Dex.
+//
+// NM-13 (2026-08-18). This page was three things stacked: the Dex stage (orb +
+// composer), a three-way segmented strip (Ask · Search · Documents), and
+// whichever panel the strip selected — and the Ask panel brought its own
+// composer, so the founder saw the same input/mic/send row twice, ~200px
+// apart. It read as a settings screen wrapped around a chatbot.
+//
+// It is now a conversation. One composer, one thread, no strip:
+//
+//   ASK went away as a *tab* because it is the page. Nothing to switch to.
+//   SEARCH went away entirely. /brain/search returned four columns of raw
+//     matches; /ask searches the same records and answers in a sentence with
+//     the matches attached as clickable sources. Keeping both meant offering a
+//     worse version of the page's own job. This also FIXES the global header
+//     search, which has been navigating to /brain?q=… since RD-1 while nothing
+//     on this page read the parameter — the query was silently dropped. It is
+//     now asked on arrival.
+//   DOCUMENTS stayed, as a quiet link rather than a third of a segmented bar.
+//     It is a file library, not a way of talking to Dex.
+//
+// The composer is above the thread, not below it. With the orb as the page's
+// anchor, a bottom-docked composer would push the orb off-screen the moment a
+// conversation started; this way the input never moves and answers open
+// beneath it.
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "../lib/api";
-import { PageHeader, Chip, EmptyState } from "../components/common";
-import { MagnifyingGlass, ChatCircleText, Lock, Books, Sparkle, Spinner } from "@phosphor-icons/react";
-import { AskPanel } from "./AskAI";
+import { Books, ArrowLeft, Broom, Sparkle, Spinner } from "@phosphor-icons/react";
+import { AiAnswer, ASK_SUGGESTIONS } from "./AskAI";
 import { DocumentsPanel } from "./BrainDocuments";
-import { MicDictateButton } from "../components/MicDictateButton";
-// Epic 2 Sprint 5 (E2-33): capture bar moves here from Desk. Single AI home.
-import { DexCaptureBar } from "../components/DexCaptureBar";
 import { useDexCapture } from "../hooks/useDexCapture";
 import { DexStage } from "./brain/DexStage";
-import { useIsMobile } from "../hooks/useIsMobile";
+import { useAuth } from "../context/AuthContext";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-function SearchPanel() {
-  const { t } = useTranslation();
-  const [q, setQ] = useState("");
-  const [res, setRes] = useState(null);
-  const [loading, setLoading] = useState(false);
-
-  const search = async (e) => {
-    e?.preventDefault();
-    setLoading(true);
-    try {
-      const { data } = await api.get(`/brain/search?q=${encodeURIComponent(q)}`);
-      setRes(data);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const total = res ? res.decisions.length + res.tasks.length + res.workflows.length + (res.contacts?.length || 0) : 0;
-
-  return (
-    <div>
-      <form onSubmit={search} className="flex gap-2 mb-2 max-w-2xl">
-        <div className="flex-1 flex items-center nm-tile px-4">
-          <MagnifyingGlass size={18} weight="bold" className="text-muted-foreground" />
-          <input
-            data-testid="brain-search-input"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder={t("brain.search_ph")}
-            className="flex-1 py-3 px-3 text-sm font-mono focus:outline-none"
-          />
-        </div>
-        <MicDictateButton className="px-4" title={t("brain.speak_search")} onText={(txt) => setQ((v) => (v ? `${v} ${txt}` : txt))} />
-        <button data-testid="brain-search-button" className="bg-brand-600 text-white px-6 text-sm font-medium border border-border transition-all">
-          {t("brain.search_btn")}
-        </button>
-      </form>
-      <p className="text-xs text-muted-foreground mb-8">{t("brain.search_hint")}</p>
-
-      {loading && <p className="font-mono text-sm">{t("brain.searching")}</p>}
-      {!res && !loading && <EmptyState title={t("brain.empty_title")} hint={t("brain.empty_hint")} />}
-      {res && !loading && (
-        <>
-          <p className="label-mono text-muted-foreground mb-6">{t("brain.linked", { count: total })}</p>
-          {res.scope && res.scope.finance_visible === false && (
-            <div data-testid="brain-finance-restricted" className="mb-6 flex items-center gap-2 text-xs border-l-2 border-brand-600 bg-brand-600/5 px-3 py-2 rounded">
-              <Lock size={14} weight="bold" className="text-brand-600 shrink-0" />
-              <span>Financial records (invoices, expenses, assets, inventory &amp; amounts) are restricted to Owner and Finance roles.</span>
-            </div>
-          )}
-          <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-6">
-            {/* Decisions */}
-            <section>
-              <h3 className="font-medium text-lg mb-3">{t("brain.decisions")} ({res.decisions.length})</h3>
-              <div className="space-y-3">
-                {res.decisions.map((d) => (
-                  <div key={d.id} data-testid={`brain-decision-${d.id}`} className="card-brutal p-4">
-                    <div className="flex items-center justify-between mb-2"><Chip value="decision" className="bg-primary text-primary-foreground" /><Chip value={d.status} /></div>
-                    <p className="font-semibold text-sm">{d.title}</p>
-                    <p className="text-xs text-muted-foreground mt-1 line-clamp-3">{d.summary}</p>
-                    {d.tasks?.length > 0 && (
-                      <div className="mt-3 border-t border-border pt-2">
-                        <p className="label-mono text-muted-foreground mb-1">{t("brain.linked_tasks")}</p>
-                        {d.tasks.map((tk) => <p key={tk.id} className="text-xs">→ {tk.title}</p>)}
-                      </div>
-                    )}
-                  </div>
-                ))}
-                {res.decisions.length === 0 && <p className="text-xs text-muted-foreground">{t("brain.no_matches")}</p>}
-              </div>
-            </section>
-            {/* Tasks */}
-            <section>
-              <h3 className="font-medium text-lg mb-3">{t("brain.tasks")} ({res.tasks.length})</h3>
-              <div className="space-y-3">
-                {res.tasks.map((tk) => (
-                  <div key={tk.id} data-testid={`brain-task-${tk.id}`} className="card-brutal p-4">
-                    <div className="flex items-center justify-between mb-2"><Chip value={tk.status} />{tk.assignee_role && <Chip value={tk.assignee_role} className="bg-white" />}</div>
-                    <p className="font-semibold text-sm">{tk.title}</p>
-                    {tk.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{tk.description}</p>}
-                  </div>
-                ))}
-                {res.tasks.length === 0 && <p className="text-xs text-muted-foreground">{t("brain.no_matches")}</p>}
-              </div>
-            </section>
-            {/* Workflows */}
-            <section>
-              <h3 className="font-medium text-lg mb-3">{t("brain.workflows")} ({res.workflows.length})</h3>
-              <div className="space-y-3">
-                {res.workflows.map((w) => (
-                  <div key={w.id} data-testid={`brain-workflow-${w.id}`} className="card-brutal p-4">
-                    <div className="flex items-center justify-between mb-2"><Chip value={w.type} className="bg-caution-50 text-caution-800" /><Chip value={w.stage} /></div>
-                    <p className="font-semibold text-sm">{w.title}</p>
-                    {w.counterparty && <p className="text-xs text-muted-foreground mt-1">{w.counterparty}</p>}
-                  </div>
-                ))}
-                {res.workflows.length === 0 && <p className="text-xs text-muted-foreground">{t("brain.no_matches")}</p>}
-              </div>
-            </section>
-            {/* Contacts */}
-            <section>
-              <h3 className="font-medium text-lg mb-3">{t("brain.contacts")} ({res.contacts?.length || 0})</h3>
-              <div className="space-y-3">
-                {(res.contacts || []).map((c) => (
-                  <div key={c.id} data-testid={`brain-contact-${c.id}`} className="card-brutal p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <Chip value={c.type} className={c.type === "customer" ? "bg-primary text-primary-foreground" : "bg-caution-50 text-caution-800"} />
-                      <Chip value={c.status} />
-                    </div>
-                    <p className="font-semibold text-sm">{c.name}</p>
-                    {c.company && <p className="text-xs text-muted-foreground mt-1">{c.company}</p>}
-                    {c.phone && <p className="text-xs text-muted-foreground">{formatPhone(c.phone)}</p>}
-                  </div>
-                ))}
-                {(res.contacts || []).length === 0 && <p className="text-xs text-muted-foreground">{t("brain.no_matches")}</p>}
-              </div>
-            </section>
-          </div>
-          {(res.memory || []).length > 0 && (
-            <div className="mt-8">
-              <h3 className="font-medium text-lg mb-3">{t("brain.memory")} ({res.memory.length})</h3>
-              <div className="grid md:grid-cols-2 gap-3">
-                {res.memory.map((m) => (
-                  <div key={m.id} data-testid={`brain-memory-${m.id}`} className="card-brutal p-4 border-l-4 border-l-brand-600">
-                    <p className="text-sm">{m.text}</p>
-                    <Chip value={m.tag} className="mt-2 bg-primary text-primary-foreground" />
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
+const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
 export default function Brain() {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const [tab, setTab] = useState("ask");
-  // MPWA-11: mobile gets a wrapping pill tab strip and a thumb-sized capture
-  // bar. Desktop renders unchanged below.
-  const isMobile = useIsMobile();
-  const TABS = [
-    { key: "ask", label: t("brain.ask"), icon: ChatCircleText },
-    { key: "search", label: t("brain.search"), icon: MagnifyingGlass },
-    { key: "documents", label: "Documents", icon: Books },
-  ];
+  const navigate = useNavigate();
+  const { tenant } = useAuth();
+  const currency = tenant?.currency || "INR";
 
-  // Epic 2 Sprint 5 (E2-35): poll for captures Dex is still structuring.
-  // Backend counts capture_drafts with status in {processing/queued/
-  // structuring} scoped to this user. When > 0, render a small badge
-  // under the tabs so the founder sees 'did my capture go through?'
-  // answered with 'Dex is structuring N right now'. Refetch every 8s
-  // so the badge disappears within ~8s of the AI finishing.
-  //
-  // MPWA-13 (merge): this sat BELOW the mobile early return, which made it a
-  // conditional hook — the hook count differed between a phone and a desktop
-  // render of the same component, and React would have thrown on any viewport
-  // change. Both branches need the count anyway.
-  // One capture machine for the page — the stage renders it, the panels
-  // invalidate off it.
+  // NM-13: one implementation for both viewports. The mobile branch here was a
+  // heading + a wrapping pill strip + DexCaptureBar size="lg" — i.e. the same
+  // duplicate-composer problem in a thumb-sized costume. The stage is already
+  // a centred column with 44px controls, which is what the phone needed.
+  const [searchParams] = useSearchParams();
+  const [log, setLog] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [ctxId, setCtxId] = useState(null);
+  const [showDocs, setShowDocs] = useState(false);
+  const endRef = useRef(null);
+
   const capture = useDexCapture({
     onCaptured: () => {
       qc.invalidateQueries({ queryKey: ["voice-notes"] });
@@ -185,6 +62,40 @@ export default function Brain() {
     },
   });
 
+  const ask = useCallback(async (question) => {
+    const text = String(question || "").trim();
+    if (!text) return;
+    setShowDocs(false);
+    setLog((l) => [...l, { id: uid(), role: "user", text }]);
+    setBusy(true);
+    try {
+      const { data } = await api.post("/ask", { question: text, context_id: ctxId });
+      if (data.query_context_id) setCtxId(data.query_context_id);
+      setLog((l) => [...l, { id: uid(), role: "ai", resp: data }]);
+    } catch {
+      setLog((l) => [...l, { id: uid(), role: "ai", resp: { type: "ANSWER", answer: t("ask.error") } }]);
+    } finally {
+      setBusy(false);
+    }
+  }, [ctxId, t]);
+
+  // The header's global search lands here as ?q=…. Ask it once, on arrival.
+  const seededRef = useRef(false);
+  useEffect(() => {
+    const q = searchParams.get("q");
+    if (q && !seededRef.current) {
+      seededRef.current = true;
+      ask(q);
+    }
+  }, [searchParams, ask]);
+
+  // Answers open BELOW the composer, so the newest one is what we scroll to.
+  useEffect(() => {
+    if (log.length) endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [log, busy]);
+
+  // E2-35: poll for captures Dex is still structuring, so "did my capture go
+  // through?" is answered with "Dex is structuring N right now".
   const { data: inflight } = useQuery({
     queryKey: ["dex-inflight-count"],
     queryFn: () => api.get("/dex/inflight-count").then((r) => r.data),
@@ -192,109 +103,110 @@ export default function Brain() {
   });
   const inflightN = inflight?.count || 0;
 
-  if (isMobile) {
-    return (
-      <div data-testid="brain-mobile">
-        {/* Keep the Dex name — §8: never surface "Brain" or "Company Brain"
-            in mobile copy, even though the route stays /brain. */}
-        <h1 className="font-heading text-2xl font-bold tracking-tight">{t("brain.title")}</h1>
-        <p className="mt-1 text-[0.9375rem] text-muted-foreground">{t("brain.tabs_hint")}</p>
-
-        {/* The desktop strip is three uppercase buttons in a `w-fit` row, which
-            overflowed 390px. Pills that wrap, sentence case, no mono. */}
-        <div className="mt-3 flex flex-wrap gap-touch-gap" data-testid="brain-tabs">
-          {TABS.map((tb) => (
-            <button
-              key={tb.key}
-              type="button"
-              onClick={() => setTab(tb.key)}
-              data-testid={`brain-tab-${tb.key}`}
-              aria-pressed={tab === tb.key}
-              className={`flex items-center gap-1.5 rounded-pill border px-3.5 text-sm font-semibold transition-colors ${
-                tab === tb.key
-                  ? "border-transparent bg-primary text-primary-foreground"
-                  : "border-border bg-card hover:bg-accent"
-              }`}
-              style={{ minHeight: "var(--control-h-sm)" }}
-            >
-              <tb.icon size={18} weight={tab === tb.key ? "fill" : "regular"} aria-hidden="true" />
-              {tb.label}
-            </button>
-          ))}
-        </div>
-
-        {/* size="lg": mic 56px, input 48px, Send on its own row so it is never
-            clipped at the right edge (§8 MPWA-11). */}
-        <div className="mt-4">
-          <DexCaptureBar
-            size="lg"
-            onCaptured={() => qc.invalidateQueries({ queryKey: ["voice-notes"] })}
-          />
-        </div>
-
-        <div className="mt-4">
-          {tab === "ask" ? <AskPanel /> : tab === "search" ? <SearchPanel /> : <DocumentsPanel />}
-        </div>
-      </div>
-    );
-  }
-
-  // Epic 2 Sprint 5 (E2-32): 'Company Brain' becomes 'Dex' -- single AI
-  // persona. Founder ask 2026-08-14. Route stays /brain for bookmark
-  // safety; /dex is an alias set up in App.js.
+  const hasThread = log.length > 0 || busy;
+  const clear = () => { setLog([]); setCtxId(null); };
 
   return (
-    <div>
-      {/* NM-11: the PageHeader + segmented strip + horizontal capture bar are
-          gone. Dex is the product's selling point and it was laid out like a
-          settings screen. The stage puts a live, audio-reactive orb at the
-          centre and demotes the three sub-views to a quiet pill row beneath
-          it — they are where an answer LANDS, not the first decision to make.
-          Same capture machine underneath: useDexCapture, same endpoints. */}
+    <div className="mx-auto max-w-3xl" data-testid="brain-page">
       <DexStage
         capture={capture}
-        onSend={() => {
-          qc.invalidateQueries({ queryKey: ["voice-notes"] });
-          qc.invalidateQueries({ queryKey: ["dex-inflight-count"] });
-        }}
-        tabs={
-          <div className="flex items-center gap-1.5 rounded-pill nm-inset p-1" data-testid="brain-tabs">
-            {TABS.map((tb) => (
+        onAsk={ask}
+        thinking={busy}
+        compact={hasThread || showDocs}
+        trailing={
+          /* Quiet page actions. Text-weight on purpose — these are ways OUT of
+             the conversation, and nothing here should compete with the send
+             button two rows above. */
+          <div className="flex items-center gap-1.5" data-testid="brain-actions">
+            <button
+              type="button"
+              onClick={() => setShowDocs((v) => !v)}
+              data-testid="brain-documents-toggle"
+              aria-pressed={showDocs}
+              className="inline-flex items-center gap-1.5 rounded-pill px-3 py-1.5 text-xs font-medium text-muted-foreground transition-shadow hover:text-foreground hover:shadow-nm-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            >
+              {showDocs ? <ArrowLeft size={14} weight="bold" /> : <Books size={14} weight="bold" />}
+              {showDocs ? "Back to Dex" : "Documents"}
+            </button>
+            {log.length > 0 && !showDocs && (
               <button
-                key={tb.key}
-                onClick={() => setTab(tb.key)}
-                data-testid={`brain-tab-${tb.key}`}
-                aria-pressed={tab === tb.key}
-                className={`flex items-center gap-1.5 rounded-pill px-4 py-1.5 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
-                  tab === tb.key
-                    ? "bg-nm shadow-nm-sm text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
+                type="button"
+                onClick={clear}
+                data-testid="brain-clear"
+                className="inline-flex items-center gap-1.5 rounded-pill px-3 py-1.5 text-xs font-medium text-muted-foreground transition-shadow hover:text-foreground hover:shadow-nm-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               >
-                <tb.icon size={15} weight={tab === tb.key ? "fill" : "regular"} /> {tb.label}
+                <Broom size={14} weight="bold" /> New conversation
               </button>
-            ))}
+            )}
           </div>
         }
       />
 
-      {/* E2-35: in-flight badge. Only renders while Dex is actively
-          structuring at least one capture. Kills 'did my capture go
-          through?' anxiety. */}
+      {/* E2-35 in-flight badge. NM-13: a soft inset note, not a bordered
+          amber slab — it is a status whisper, not a warning. */}
       {inflightN > 0 && (
         <div
           data-testid="dex-inflight-badge"
-          className="mb-4 inline-flex items-center gap-2 border border-border bg-caution-50 px-3 py-1.5 shadow-sm"
+          className="mt-4 inline-flex items-center gap-2 rounded-pill nm-inset px-3 py-1.5"
         >
-          <Spinner size={14} weight="bold" className="animate-spin text-brand-ink" />
-          <Sparkle size={12} weight="fill" className="text-brand-600" />
-          <span className="text-xs font-medium text-brand-ink">
+          <Spinner size={14} weight="bold" className="animate-spin text-primary" />
+          <span className="text-xs font-medium text-muted-foreground">
             Dex is structuring {inflightN} capture{inflightN === 1 ? "" : "s"} right now
           </span>
         </div>
       )}
 
-      {tab === "ask" ? <AskPanel /> : tab === "search" ? <SearchPanel /> : <DocumentsPanel />}
+      {showDocs ? (
+        <div className="mt-6" data-testid="brain-documents">
+          <DocumentsPanel />
+        </div>
+      ) : (
+        <div className="mt-6 space-y-5" data-testid="brain-conversation">
+          {log.length === 0 && !busy && (
+            /* The opener. Four real questions rather than a paragraph about
+               what Dex can do — the fastest way to learn a chat surface is to
+               watch it answer once. */
+            <div className="flex flex-wrap justify-center gap-2" data-testid="brain-empty">
+              {ASK_SUGGESTIONS.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => ask(s)}
+                  data-testid="ask-suggestion"
+                  className="rounded-pill nm-tile px-3.5 py-2 text-xs text-muted-foreground transition-shadow hover:text-foreground hover:shadow-nm-sm active:shadow-nm-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {log.map((m, i) => (
+            <div key={m.id} data-testid={`chat-msg-${m.role}-${i}`}>
+              {m.role === "user" ? (
+                <div className="flex justify-end">
+                  {/* The founder's own line: a raised bubble, not the indigo
+                      fill. §0 keeps the brand colour for the one action on the
+                      screen — a transcript entry is not an action. */}
+                  <p className="inline-block max-w-[85%] rounded-cardlg nm-raised px-4 py-2.5 text-sm">
+                    {m.text}
+                  </p>
+                </div>
+              ) : (
+                <AiAnswer m={m} onGo={(link) => link && navigate(link)} onAsk={ask} currency={currency} />
+              )}
+            </div>
+          ))}
+
+          {busy && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground animate-pulse" data-testid="brain-loading">
+              <Sparkle size={16} weight="fill" className="text-primary" />
+              Understanding your question, checking access &amp; searching your records…
+            </div>
+          )}
+          <div ref={endRef} />
+        </div>
+      )}
     </div>
   );
 }

@@ -26,17 +26,12 @@ import { FounderBento } from "./desk/FounderBento";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "../lib/api";
 import { toast } from "sonner";
-import { SkeletonCard, DexBadge } from "../components/common";
+import { SkeletonCard } from "../components/common";
 import { DecisionDialog } from "../components/DecisionDialog";
 import { useIsMobile } from "../hooks/useIsMobile";
 import DeskMobile from "./mobile/DeskMobile";
 import {
   Fire, Sun, Star, CheckCircle, ArrowClockwise, Spinner,
-  // Epic 2 Sprint 6 (E2-43..E2-45): Desk absorbs CEO Brief header
-  Sparkle, TrendUp, TrendDown, Minus, ChartBar, BookOpen, Gauge, UsersFour,
-  ChatCircleText, CurrencyInr, Warning as WarningIcon,
-  // Epic 2 Sprint 6.5 (E2-51): Delayed-tasks row on Trends card
-  Clock,
 } from "@phosphor-icons/react";
 import { useAuth } from "../context/AuthContext";
 
@@ -59,10 +54,6 @@ import { useAuth } from "../context/AuthContext";
 // today; upgrade to LLM-generated in E2-48 (Backlog).
 // -----------------------------------------------------------------------------
 function DeskBriefHeader() {
-  const navigate = useNavigate();
-  const { user } = useAuth();
-  const isOwner = user?.role === "owner";
-
   const { data, isLoading } = useQuery({
     queryKey: ["desk-summary"],
     queryFn: () => api.get("/desk/summary").then((r) => r.data),
@@ -72,27 +63,11 @@ function DeskBriefHeader() {
   if (isLoading || !data) {
     return (
       <div className="mb-10">
-        <div className="h-10 w-72 bg-muted rounded-lg mb-4 animate-pulse" />
-        <div className="h-12 bg-muted rounded-lg animate-pulse" />
+        <div className="h-10 w-72 rounded-control bg-nm-sunken mb-4 animate-pulse" />
+        <div className="h-24 rounded-cardlg bg-nm-sunken animate-pulse" />
       </div>
     );
   }
-
-  const trends = data.trends || {};
-  const wc = trends.weekly_completion_rate || {};
-  const comp = trends.complaints_trend || {};
-  const cash = trends.cash_flow || {};
-
-  const dirIcon = (d) => d === "up" ? TrendUp : d === "down" ? TrendDown : Minus;
-  const dirColor = (d, positiveIsUp = true) => {
-    if (d === "up") return positiveIsUp ? "text-green-600" : "text-brand-600";
-    if (d === "down") return positiveIsUp ? "text-brand-600" : "text-green-600";
-    return "text-muted-foreground";
-  };
-
-  const WC_ICON = dirIcon(wc.direction);
-  const CO_ICON = dirIcon(comp.direction);
-  const CF_ICON = dirIcon(cash.direction);
 
   return (
     <div className="mb-10" data-testid="desk-brief-header">
@@ -118,21 +93,15 @@ function DeskBriefHeader() {
         })()}
       </h2>
 
-      {/* Dex narrative. RD-2: the hard border + brutal shadow + solid dark
-          avatar tile are gone. It now reads as a quiet inset note — the
-          content is the point, not the container. */}
-      <div
-        data-testid="desk-brief-narrative"
-        className="flex gap-3 mb-6"
-      >
-        <div className="w-7 h-7 shrink-0 flex items-center justify-center rounded-lg bg-brand-50 text-brand-600">
-          <Sparkle size={15} weight="fill" />
-        </div>
-        <p className="flex-1 text-sm leading-relaxed text-foreground/80 pt-0.5">
-          {data.narrative}
-        </p>
-      </div>
-
+      {/* NM-14 — the Dex narrative paragraph is gone.
+          It restated in prose what the bento states as numbers directly
+          beneath it: "14 tasks are delayed" over a Work tile reading 14 late,
+          "₹685,000 in overdue receivables" over a Money tile reading ₹6.8L,
+          "3 decisions are waiting on you — see below" over a Needs Your
+          Decision column showing exactly those three. Three sentences, no
+          third fact, and it pushed the first actionable tile down the page.
+          The greeting stays: it is the page's editorial opening, not a
+          duplicate readout. */}
       <FounderBento />
     </div>
   );
@@ -165,16 +134,6 @@ function DeskCard({ card, onAction, currentUserId }) {
     chase: "Chase",
     nudge: "Nudge",
   }[effectiveCta] || "Open";
-
-  // Only the action that is genuinely ON the viewer gets the indigo fill.
-  // Chase and Nudge are things the viewer does TO someone else and sit one
-  // level quieter, as hairline buttons.
-  const ctaStyle = {
-    review: "bg-primary text-primary-foreground hover:bg-brand-700",
-    respond: "bg-primary text-primary-foreground hover:bg-brand-700",
-    chase: "nm-tile hover:bg-accent",
-    nudge: "nm-tile hover:bg-accent",
-  }[effectiveCta] || "nm-tile hover:bg-accent";
 
   const doAction = async (e) => {
     e.stopPropagation();
@@ -361,7 +320,7 @@ export default function Desk() {
           Not drag-and-drop: these are not stages a founder moves items
           between — they are four questions the backend answers. A Kanban
           affordance that cannot be dragged would be a lie. */}
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4" data-testid="desk-board">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4" data-testid="desk-board">
         {CHIPS.map((c, i) => {
           const q = boardQs[i];
           const list = q?.data?.cards || [];
@@ -379,7 +338,7 @@ export default function Desk() {
                 </span>
               </div>
 
-              <div className="flex-1 space-y-2 xl:max-h-[26rem] xl:overflow-y-auto xl:pr-0.5">
+              <div className="flex-1 space-y-2 lg:max-h-[26rem] lg:overflow-y-auto lg:pr-0.5">
                 {q?.isLoading && Array.from({ length: 2 }).map((_, k) => <SkeletonCard key={k} lines={2} />)}
 
                 {!q?.isLoading && list.length === 0 && (

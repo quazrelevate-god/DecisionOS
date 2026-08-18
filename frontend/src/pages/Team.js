@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { UserPlus, PencilSimple, ShieldCheck, Check, LinkSimple, Copy, WhatsappLogo, Eye, MagnifyingGlass, User, EnvelopeSimple, Phone, X } from "@phosphor-icons/react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../components/ui/dialog";
 
-const inp = "w-full border border-border px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring/30";
+const inp = "w-full nm-field px-3 py-2 text-sm font-mono";
 
 function InviteLinkModal({ info, onClose }) {
   const link = info ? `${window.location.origin}/login?invite=${info.token}` : "";
@@ -21,16 +21,16 @@ function InviteLinkModal({ info, onClose }) {
   };
   return (
     <Dialog open={!!info} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="border border-border rounded-xl" data-testid="invite-link-modal">
+      <DialogContent className="rounded-cardlg border border-nm-edge/40" data-testid="invite-link-modal">
         <DialogHeader><DialogTitle className="font-display text-xl">Invite {info?.name}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">Share this one-tap link. {info?.name} opens it and gets a login code texted to <strong>{info?.phone_masked}</strong> — no password needed.</p>
           <div className="flex gap-2">
             <input readOnly value={link} data-testid="invite-link-input" className={inp} onFocus={(e) => e.target.select()} />
-            <button onClick={copy} data-testid="copy-invite-link" className="flex items-center gap-1.5 border border-border px-3 text-xs font-medium bg-primary text-primary-foreground transition-all"><Copy size={14} weight="bold" /> Copy</button>
+            <button onClick={copy} data-testid="copy-invite-link" className="flex items-center gap-1.5 nm-tile px-3 text-xs font-medium bg-primary text-primary-foreground transition-all"><Copy size={14} weight="bold" /> Copy</button>
           </div>
           <a href={`https://wa.me/?text=${encodeURIComponent(msg)}`} target="_blank" rel="noreferrer" data-testid="invite-whatsapp-share"
-            className="flex items-center justify-center gap-2 border border-border px-4 py-2.5 text-sm font-medium hover:bg-green-600 hover:text-white transition-colors">
+            className="flex items-center justify-center gap-2 nm-tile px-4 py-2.5 text-sm font-medium hover:bg-success-600 hover:text-white transition-colors">
             <WhatsappLogo size={16} weight="bold" /> Share on WhatsApp
           </a>
           <p className="text-[11px] text-muted-foreground italic">Auto-SMS delivery starts once your SMS provider is connected — until then, share this link directly. Link expires in 7 days.</p>
@@ -115,17 +115,17 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite, member
   return (
     <Dialog open={open} onOpenChange={openChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="border border-border rounded-xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="rounded-cardlg border border-nm-edge/40 max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle className="font-display text-xl">{editing ? `Edit access — ${initial.name}` : "Add team member"}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           {!editing && <>
             <input data-testid="member-name-input" className={inp} placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             <input data-testid="member-email-input" className={inp} type="email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-            <div className="flex border border-border" data-testid="login-method-toggle">
+            <div className="flex nm-tile" data-testid="login-method-toggle">
               <button type="button" data-testid="login-method-password" onClick={() => setForm({ ...form, passwordless: false })}
-                className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${!form.passwordless ? "bg-primary text-primary-foreground" : "bg-white hover:bg-accent"}`}>Password login</button>
+                className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${!form.passwordless ? "bg-primary text-primary-foreground" : "bg-nm hover:bg-accent"}`}>Password login</button>
               <button type="button" data-testid="login-method-otp" onClick={() => setForm({ ...form, passwordless: true })}
-                className={`flex-1 px-3 py-2 text-xs font-medium border-l border-border transition-colors ${form.passwordless ? "bg-primary text-primary-foreground" : "bg-white hover:bg-accent"}`}>Mobile OTP</button>
+                className={`flex-1 px-3 py-2 text-xs font-medium border-l border-nm-edge/40 transition-colors ${form.passwordless ? "bg-primary text-primary-foreground" : "bg-nm hover:bg-accent"}`}>Mobile OTP</button>
             </div>
             {!form.passwordless && (
               <input data-testid="member-password-input" className={inp} type="password" placeholder="Temp password (min 6)" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
@@ -165,22 +165,22 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite, member
                 const on = form.permissions.includes(p.key);
                 return (
                   <button key={p.key} type="button" data-testid={`perm-${p.key}`} aria-pressed={on} onClick={() => togglePerm(p.key)}
-                    className={`flex items-center justify-between gap-2 border border-border px-3 py-2 text-xs font-semibold text-left transition-colors ${on ? "bg-primary text-primary-foreground" : "bg-white hover:bg-accent"}`}>
+                    className={`flex items-center justify-between gap-2 nm-tile px-3 py-2 text-xs font-semibold text-left transition-colors ${on ? "bg-primary text-primary-foreground" : "bg-nm hover:bg-accent"}`}>
                     <span>{p.label}</span>
-                    <span className={`w-4 h-4 shrink-0 flex items-center justify-center border border-current ${on ? "bg-brand-600 text-white border-border" : ""}`}>{on && <Check size={10} weight="bold" />}</span>
+                    <span className={`w-4 h-4 shrink-0 flex items-center justify-center border border-current ${on ? "bg-brand-600 text-white border-nm-edge/40" : ""}`}>{on && <Check size={10} weight="bold" />}</span>
                   </button>
                 );
               })}
             </div>
 
-            <div className="mt-4 border-t border-border pt-3" data-testid="menu-preview">
+            <div className="mt-4 border-t border-nm-edge/40 pt-3" data-testid="menu-preview">
               <p className="label-mono text-muted-foreground mb-2">This member will see these menus</p>
               <div className="flex flex-wrap gap-1.5">
                 {MENU_PREVIEW.map((m) => {
                   const visible = !m.perm || form.permissions.includes(m.perm);
                   return (
                     <span key={m.label} data-testid={`preview-${m.label}`}
-                      className={`px-2 py-1 text-xs font-semibold border border-border ${visible ? "bg-green-600 text-white" : "bg-white text-muted-foreground line-through opacity-60"}`}>
+                      className={`px-2 py-1 text-xs font-semibold nm-tile ${visible ? "bg-success-600 text-white" : "bg-nm text-muted-foreground line-through opacity-60"}`}>
                       {m.label}
                     </span>
                   );
@@ -193,7 +193,7 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite, member
           </div>
         </div>
         <DialogFooter>
-          <button data-testid="member-save-submit" onClick={save} className="bg-brand-600 text-white px-5 py-2 text-sm font-medium border border-border transition-all">{editing ? "Save access" : "Add"}</button>
+          <button data-testid="member-save-submit" onClick={save} className="bg-brand-600 text-white px-5 py-2 text-sm font-medium nm-tile transition-all">{editing ? "Save access" : "Add"}</button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -304,7 +304,7 @@ export function TeamPanel({ readOnly = false } = {}) {
           can't edit; we tell them why + who to ask, so it doesn't look
           like a broken page. Owner + team_manage users skip this. */}
       {!canManageTeam && !readOnly && (
-        <div className="border border-border bg-caution-50 px-5 py-4 mb-8 flex items-start gap-3 rounded-xl" data-testid="team-view-only-banner">
+        <div className="nm-tile bg-caution-50 px-5 py-4 mb-8 flex items-start gap-3 rounded-xl" data-testid="team-view-only-banner">
           <Eye size={16} weight="bold" className="text-brand-600 shrink-0 mt-0.5" />
           <div className="flex-1 text-sm">
             <p className="font-semibold">Read-only view</p>
@@ -334,19 +334,19 @@ export function TeamPanel({ readOnly = false } = {}) {
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search"
                 data-testid="team-search"
-                className="border border-border pl-9 pr-3 py-2 text-sm w-52 focus:outline-none focus:border-brand-400"
+                className="nm-tile pl-9 pr-3 py-2 text-sm w-52 focus:outline-none focus:border-brand-400"
               />
             </div>
           )}
           {canManageTeam && (
             <MemberDialog roleOptions={roleOptions} members={members} isOwner={isOwner} onSaved={refresh} onInvite={setInvite}
-              trigger={<button data-testid="add-user-button" className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold border border-border transition-all"><UserPlus size={16} weight="bold" /> Add member</button>} />
+              trigger={<button data-testid="add-user-button" className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold nm-tile transition-all"><UserPlus size={16} weight="bold" /> Add member</button>} />
           )}
         </div>
       </div>
 
       {grouped.length === 0 && (
-        <div className="border border-border p-10 text-center" data-testid="team-empty">
+        <div className="nm-tile p-10 text-center" data-testid="team-empty">
           <p className="text-sm text-muted-foreground">
             {query ? `Nobody matches "${query}".` : "No team members yet."}
           </p>
@@ -365,7 +365,7 @@ export function TeamPanel({ readOnly = false } = {}) {
                 {roleLabel(roleKey)}
               </p>
               <span className="label-mono text-muted-foreground">{roleMembers.length}</span>
-              <div className="flex-1 border-b border-border" aria-hidden="true" />
+              <div className="flex-1 border-b border-nm-edge/40" aria-hidden="true" />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3" data-testid={`team-cards-${roleKey}`}>
               {roleMembers.map((u) => (
@@ -408,10 +408,10 @@ export function TeamPanel({ readOnly = false } = {}) {
 function MemberCard({ u, isMe, onOpen }) {
   const status = u.invite_status || "active";
   const statusMeta = {
-    active: { dot: "bg-green-600", label: "Active", tone: "text-muted-foreground" },
-    pending: { dot: "bg-amber-500", label: "Pending invite", tone: "text-amber-700" },
-    suspended: { dot: "bg-black/40", label: "Inactive", tone: "text-muted-foreground line-through" },
-  }[status] || { dot: "bg-green-600", label: "Active", tone: "text-muted-foreground" };
+    active: { dot: "bg-success-600", label: "Active", tone: "text-muted-foreground" },
+    pending: { dot: "bg-caution-500", label: "Pending invite", tone: "text-amber-700" },
+    suspended: { dot: "bg-neutral-400", label: "Inactive", tone: "text-muted-foreground line-through" },
+  }[status] || { dot: "bg-success-600", label: "Active", tone: "text-muted-foreground" };
   const accessLabel = u.role === "owner" ? "Full access" : `${userPerms(u).length} permissions`;
   const initial = u.name?.[0]?.toUpperCase() || "?";
   return (
@@ -419,11 +419,11 @@ function MemberCard({ u, isMe, onOpen }) {
       type="button"
       onClick={onOpen}
       data-testid={`team-member-${u.id}`}
-      className={`text-left border border-border p-4 hover:border-hairline-strong transition-all bg-white ${isMe ? "ring-2 ring-brand-400 ring-offset-1" : ""}`}
+      className={`text-left nm-tile p-4 transition-shadow duration-150 hover:shadow-nm active:shadow-nm-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${isMe ? "ring-2 ring-primary/40" : ""}`}
       aria-label={`Open profile for ${u.name}`}
     >
       <div className="flex items-start gap-3">
-        <div className={`w-11 h-11 shrink-0 flex items-center justify-center font-medium text-lg ${u.role === "owner" ? "bg-brand-600 text-white" : "bg-primary text-primary-foreground"}`}>
+        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-control nm-inset text-lg font-medium text-primary">
           {initial}
         </div>
         <div className="flex-1 min-w-0">
@@ -434,7 +434,7 @@ function MemberCard({ u, isMe, onOpen }) {
           <p className="text-xs text-muted-foreground truncate">{u.email}</p>
         </div>
       </div>
-      <div className="flex items-center justify-between mt-4 pt-3 border-t border-border">
+      <div className="flex items-center justify-between mt-4 pt-3 border-t border-nm-edge/40">
         <span className={`inline-flex items-center gap-1.5 text-xs ${statusMeta.tone}`} data-testid={`status-${u.id}`}>
           <span className={`w-1.5 h-1.5 rounded-full ${statusMeta.dot}`} aria-hidden="true" />
           {statusMeta.label}
@@ -457,127 +457,169 @@ function MemberProfileDialog({
   u, onClose, onSaved, onInvite, onInviteLink,
   members, roleOptions, canManageTeam, isOwner, currentUserId,
 }) {
-  const [editAccess, setEditAccess] = useState(false);
-  // Close swings edit-mode back off so a re-open starts read-only.
-  const openChange = (o) => { if (!o) { setEditAccess(false); onClose(); } };
+  // NM-16: `editAccess` is gone. It gated an intermediate card reading
+  // "Opening the full editor..." with a button under it — a two-step where
+  // the first step was a placeholder. The Edit control IS the editor's
+  // trigger now.
+  const openChange = (o) => { if (!o) onClose(); };
   if (!u) return null;
   const isMe = u.id === currentUserId;
   const status = u.invite_status || "active";
   const statusMeta = {
-    active: { dot: "bg-green-600", label: "Active" },
-    pending: { dot: "bg-amber-500", label: "Pending invite" },
-    suspended: { dot: "bg-black/40", label: "Inactive" },
-  }[status] || { dot: "bg-green-600", label: "Active" };
+    active: { dot: "bg-success-600", label: "Active" },
+    pending: { dot: "bg-caution-500", label: "Pending invite" },
+    suspended: { dot: "bg-neutral-400", label: "Inactive" },
+  }[status] || { dot: "bg-success-600", label: "Active" };
   const perms = u.role === "owner" ? PERMISSIONS.map((p) => p.key) : userPerms(u);
+  const granted = PERMISSIONS.filter((pp) => perms.includes(pp.key));
+  const denied = PERMISSIONS.filter((pp) => !perms.includes(pp.key));
   const manager = (members || []).find((m) => m.id === u.reporting_manager_id);
+  const canEdit = canManageTeam && (u.role !== "owner" || isOwner);
 
   return (
+    /* NM-16 — the expanded card, rebuilt.
+       WHAT WAS WRONG. Four blocks with three different paddings (p-6, px-6
+       py-4, px-6 py-4 again), a hard-cornered avatar tile, a heading in
+       font-black/tracking-tighter while every other page opens in the display
+       serif, and — the part that actually cost comprehension — an access
+       block that printed all nine permissions and struck through the ones the
+       member does NOT have. Reading "what can this person do" meant scanning
+       nine chips and mentally discarding five. Granted is the answer; denied
+       is the remainder, and it is now one line of text.
+
+       Everything sits on one 24px gutter and a 20px vertical rhythm, and each
+       block says what it is in a label above it, so no section depends on the
+       reader inferring its purpose from its contents. */
     <Dialog open={!!u} onOpenChange={openChange}>
-      <DialogContent className="border border-border rounded-xl max-w-2xl max-h-[85vh] overflow-y-auto p-0" data-testid={`profile-dialog-${u.id}`}>
+      <DialogContent
+        className="max-w-xl max-h-[85vh] overflow-y-auto rounded-cardlg border-nm-edge/40 bg-nm p-0 [&>button.absolute]:hidden"
+        data-testid={`profile-dialog-${u.id}`}
+      >
         <DialogHeader className="sr-only"><DialogTitle>{u.name}</DialogTitle></DialogHeader>
 
-        {/* Hero -- avatar + name + role + status dot. Minimalist, no
-            competing chrome. */}
-        <div className="p-6 border-b border-border flex items-start gap-4">
-          <div className={`w-16 h-16 shrink-0 flex items-center justify-center font-medium text-2xl ${u.role === "owner" ? "bg-brand-600 text-white" : "bg-primary text-primary-foreground"}`}>
+        {/* Identity. The avatar is a raised tile, so the person reads as the
+            one object on the card and everything below is information about
+            them. Close is a real 36px control, aligned to the avatar's top
+            edge rather than floating in the corner. */}
+        <div className="flex items-start gap-4 px-6 pt-6 pb-5">
+          <div className="grid h-16 w-16 shrink-0 place-items-center rounded-tile nm-raised text-2xl font-medium text-primary">
             {u.name?.[0]?.toUpperCase() || "?"}
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-heading text-2xl font-black tracking-tight truncate">
-              {u.name}{isMe && <span className="label-mono text-brand-600 ml-2">YOU</span>}
+          <div className="min-w-0 flex-1 pt-0.5">
+            <p className="flex items-center gap-2 font-display text-2xl leading-tight">
+              <span className="truncate">{u.name}</span>
+              {isMe && (
+                <span className="shrink-0 rounded-pill bg-nm-sunken px-2 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground">
+                  YOU
+                </span>
+              )}
             </p>
-            <p className="text-sm text-muted-foreground mt-0.5 capitalize">{u.role || "unassigned"}</p>
-            <span className="inline-flex items-center gap-1.5 mt-2 text-xs text-muted-foreground">
-              <span className={`w-1.5 h-1.5 rounded-full ${statusMeta.dot}`} aria-hidden="true" />
-              {statusMeta.label}
-            </span>
+            {/* Role and status on ONE line: they are both "who this person is
+                here", and stacking them made the header three rows tall for
+                four words. */}
+            <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+              <span className="capitalize">{u.role || "unassigned"}</span>
+              <span aria-hidden="true" className="text-muted-foreground/50">·</span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className={`h-1.5 w-1.5 rounded-full ${statusMeta.dot}`} aria-hidden="true" />
+                {statusMeta.label}
+              </span>
+            </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center hover:bg-accent shrink-0"
             aria-label="Close"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-control text-muted-foreground transition-shadow hover:text-foreground hover:shadow-nm-sm active:shadow-nm-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           >
             <X size={16} weight="bold" />
           </button>
         </div>
 
-        {/* Contact block */}
-        <div className="px-6 py-4 border-b border-border space-y-2 text-sm">
-          <ContactRow icon={EnvelopeSimple} label="Email" value={u.email} />
-          {u.phone && <ContactRow icon={Phone} label="Phone" value={formatPhone(u.phone)} />}
-          {manager && <ContactRow icon={User} label="Reports to" value={manager.name} />}
+        {/* Contact. A well, because these are facts to read, not controls.
+            Two columns on anything wider than a phone so email and phone sit
+            side by side instead of stacking into a list of near-empty rows. */}
+        <div className="px-6 pb-5">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Contact
+          </p>
+          <div className="grid grid-cols-1 gap-x-6 gap-y-4 rounded-control nm-inset px-4 py-4 sm:grid-cols-2">
+            <ContactRow icon={EnvelopeSimple} label="Email" value={u.email} />
+            {u.phone && <ContactRow icon={Phone} label="Phone" value={formatPhone(u.phone)} />}
+            {manager && <ContactRow icon={User} label="Reports to" value={manager.name} />}
+          </div>
         </div>
 
-        {/* Access block. Read-only summary by default; edit unlocks the
-            full permission grid for managers. */}
-        <div className="px-6 py-4 border-b border-border">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <ShieldCheck size={16} weight="bold" className="text-brand-600" />
-              <p className="font-semibold text-sm">Access</p>
-            </div>
-            {canManageTeam && (u.role !== "owner" || isOwner) && !editAccess && (
-              <button
-                type="button"
-                onClick={() => setEditAccess(true)}
-                data-testid={`edit-access-${u.id}`}
-                className="flex items-center gap-1 text-xs font-medium border border-border px-3 py-1 hover:bg-accent transition-colors"
-              >
-                <PencilSimple size={12} weight="bold" /> Edit
-              </button>
-            )}
-          </div>
-          {u.role === "owner" ? (
-            <p className="text-sm text-muted-foreground">Owner has full access to every part of the app.</p>
-          ) : editAccess ? (
-            // Inline access editor -- opens the existing MemberDialog on
-            // top so we reuse the tested edit flow (permission toggles +
-            // reporting manager + role switch).
-            <div className="border border-border p-3 space-y-2">
-              <p className="text-xs text-muted-foreground">Opening the full editor...</p>
+        {/* Access. */}
+        <div className="px-6 pb-5">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <ShieldCheck size={13} weight="bold" /> Access
+            </p>
+            {canEdit && u.role !== "owner" && (
               <MemberDialog
                 roleOptions={roleOptions}
                 initial={u}
                 members={members}
                 isOwner={isOwner}
-                onSaved={() => { setEditAccess(false); onSaved(); }}
-                trigger={<button className="w-full bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold border border-border transition-all">Open access editor</button>}
+                onSaved={onSaved}
+                // A save here can mint an invite token (phone added, or the
+                // member re-invited). Without this it was created and dropped.
+                onInvite={onInvite}
+                trigger={
+                  <button
+                    type="button"
+                    data-testid={`edit-access-${u.id}`}
+                    className="inline-flex items-center gap-1.5 rounded-pill nm-btn px-3 py-1.5 text-xs font-medium"
+                  >
+                    <PencilSimple size={12} weight="bold" /> Edit access
+                  </button>
+                }
               />
-            </div>
+            )}
+          </div>
+
+          {u.role === "owner" ? (
+            <p className="rounded-control nm-inset px-4 py-3 text-sm text-muted-foreground">
+              Owner has full access to every part of the app.
+            </p>
           ) : (
-            <div>
-              <p className="text-sm mb-2">{perms.length} permission{perms.length === 1 ? "" : "s"} granted</p>
-              <div className="flex flex-wrap gap-1.5">
-                {PERMISSIONS.map((p) => {
-                  const on = perms.includes(p.key);
-                  return (
-                    <span
-                      key={p.key}
-                      className={`text-xs border px-2 py-0.5 ${on ? "border-brand-ink bg-primary text-primary-foreground" : "border-border text-muted-foreground line-through opacity-60"}`}
-                    >
-                      {p.label}
+            <div className="rounded-control nm-inset px-4 py-4">
+              <p className="text-sm">
+                <span className="font-medium tabular-nums">{granted.length}</span>
+                <span className="text-muted-foreground"> of {PERMISSIONS.length} areas</span>
+              </p>
+              {granted.length > 0 ? (
+                <div className="mt-3 flex flex-wrap gap-1.5" data-testid={`granted-perms-${u.id}`}>
+                  {granted.map((pp) => (
+                    <span key={pp.key} className="rounded-pill nm-tile px-2.5 py-1 text-xs">
+                      {pp.label}
                     </span>
-                  );
-                })}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-muted-foreground">No areas granted yet.</p>
+              )}
+              {denied.length > 0 && (
+                <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+                  No access to {denied.map((pp) => pp.label).join(", ")}.
+                </p>
+              )}
             </div>
           )}
         </div>
 
-        {/* Actions block. Only shown when there's actually an action
-            available to this viewer. */}
-        {canManageTeam && u.role !== "owner" && (
-          <div className="px-6 py-4 flex items-center gap-2 flex-wrap">
-            {u.phone && (
-              <button
-                onClick={() => onInviteLink(u)}
-                data-testid={`invite-link-${u.id}`}
-                className="flex items-center gap-1.5 text-xs font-medium border border-border px-3 py-2 hover:bg-brand-600 hover:text-white transition-colors"
-              >
-                <LinkSimple size={14} weight="bold" /> Get invite link
-              </button>
-            )}
+        {/* Actions. Its own footer on the sunken ground so it reads as the
+            bottom of the card rather than a fifth information block. */}
+        {canManageTeam && u.role !== "owner" && u.phone && (
+          <div className="flex flex-wrap items-center gap-2 border-t border-nm-edge/40 bg-nm-sunken/60 px-6 py-4">
+            <button
+              onClick={() => onInviteLink(u)}
+              data-testid={`invite-link-${u.id}`}
+              className="inline-flex items-center gap-1.5 rounded-control nm-btn px-3.5 py-2 text-xs font-medium"
+            >
+              <LinkSimple size={14} weight="bold" /> Get invite link
+            </button>
           </div>
         )}
       </DialogContent>
@@ -585,12 +627,16 @@ function MemberProfileDialog({
   );
 }
 
+// NM-16: label ABOVE value, not a fixed 80px column beside it. The old row
+// spent a fifth of its width on a mono label and then truncated the email —
+// the one field on the card someone actually needs to copy.
 function ContactRow({ icon: Icon, label, value }) {
   return (
-    <div className="flex items-center gap-2 text-sm">
-      <Icon size={14} weight="bold" className="text-muted-foreground shrink-0" />
-      <span className="label-mono text-muted-foreground w-20 shrink-0">{label}</span>
-      <span className="truncate">{value}</span>
+    <div className="min-w-0">
+      <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        <Icon size={12} weight="bold" aria-hidden="true" /> {label}
+      </p>
+      <p className="mt-1 break-words text-sm">{value}</p>
     </div>
   );
 }

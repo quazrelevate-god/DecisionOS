@@ -92,7 +92,15 @@ const NAV = [
 // without the words" — there is no separate mark in the artwork we were given,
 // only the full horizontal lockup, so it now means "the compact size" and the
 // mobile app bar shows the whole wordmark rather than a lone letter.
-const Logo = ({ markOnly = false }) => <Wordmark size={markOnly ? 15 : 22} />;
+// NM-12: `self-center`. Wordmark carries `self-start` so a column-flex parent
+// cannot stretch the plate into a slab — but both places Layout renders it are
+// ROW flex/grid containers with items-center, where align-self:flex-start pins
+// the ink to the top of its 44px pill instead of the middle. That is the
+// misalignment: the pill was always level with the search field; the logo
+// inside it was sitting ~12px high. Only the logo moves.
+const Logo = ({ markOnly = false }) => (
+  <Wordmark size={markOnly ? 15 : 22} className="self-center" />
+);
 
 export default function Layout({ children }) {
   const { user, tenant, logout } = useAuth();
@@ -266,9 +274,20 @@ export default function Layout({ children }) {
     </>
   );
 
-  // The desktop rail. One 36px square per destination, centred in a 58px
-  // column. Active state is a tinted square + indigo glyph — no left border,
-  // no fill sweep. The label rides out on hover as a dark chip.
+  // The desktop rail.
+  //
+  // NM-12 — the rail expands as ONE panel. It used to hand out a per-icon
+  // tooltip: hover Finance, learn what Finance is, hover Ops, learn what Ops
+  // is. That answers "what is this glyph" but never "what is in this product",
+  // so a new user had to interrogate seven icons one at a time. Hovering
+  // anywhere over the bar now widens the whole thing and every label arrives
+  // together — the rail reads as a menu for as long as the pointer is near it
+  // and returns to a 72px strip the moment it leaves.
+  //
+  // The 44px tile does not move when this happens: the panel pads 14px a side,
+  // so at 72px the row IS the tile and at 232px the same tile simply grows a
+  // label. Nothing reflows — the aside keeps its 72px footprint and the panel
+  // floats over the canvas, so the page does not jump when the pointer crosses.
   const RailItems = () => (
     <>
       {navMain.map(({ to, tkey, icon: Icon, testid }) => {
@@ -282,10 +301,10 @@ export default function Layout({ children }) {
             data-testid={testid}
             aria-label={label}
             className={({ isActive }) =>
-              // NM-2 (§3 Shell): active = a 44px pressed tile — indigo tint,
-              // inset shadow, indigo glyph. Inactive carries no container at
-              // all until hover. Focus ring separate from any shadow state.
-              `group relative flex items-center justify-center w-11 h-11 rounded-control transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+              // NM-2 (§3 Shell): active = a pressed tile — indigo tint, inset
+              // shadow, indigo glyph. Inactive carries no container at all
+              // until hover. Focus ring separate from any shadow state.
+              `relative flex w-full items-center h-11 rounded-control transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
                 isActive
                   ? "bg-primary/10 text-primary shadow-nm-press"
                   : "text-muted-foreground hover:bg-nm-sunken hover:text-foreground"
@@ -294,20 +313,23 @@ export default function Layout({ children }) {
           >
             {({ isActive }) => (
               <>
-                <Icon size={22} weight={isActive ? "fill" : "regular"} />
-                {badge > 0 && (
-                  <span
-                    data-testid="nav-review-badge"
-                    className="absolute -top-0.5 -right-0.5 min-w-[15px] h-[15px] px-1 flex items-center justify-center rounded-full bg-brand-600 text-white text-[9px] font-bold leading-none"
-                  >
-                    {badge}
-                  </span>
-                )}
-                {/* Hover label. `pointer-events-none` so it can never
-                    intercept the click meant for the icon beneath it. */}
+                <span className="relative grid h-11 w-11 shrink-0 place-items-center">
+                  <Icon size={22} weight={isActive ? "fill" : "regular"} />
+                  {badge > 0 && (
+                    <span
+                      data-testid="nav-review-badge"
+                      className="absolute top-1 right-1 min-w-[15px] h-[15px] px-1 flex items-center justify-center rounded-full bg-brand-600 text-white text-[9px] font-bold leading-none"
+                    >
+                      {badge}
+                    </span>
+                  )}
+                </span>
+                {/* Clipped by the panel while collapsed, so it costs nothing
+                    to keep mounted — and it stays in the accessibility tree. */}
                 <span
-                  role="tooltip"
-                  className="pointer-events-none absolute left-full ml-2 z-50 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs font-medium text-background opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100"
+                  className={`whitespace-nowrap pr-3 text-sm opacity-0 transition-opacity duration-150 group-hover/rail:opacity-100 group-focus-within/rail:opacity-100 ${
+                    isActive ? "font-semibold" : "font-medium"
+                  }`}
                 >
                   {label}
                 </span>
@@ -384,14 +406,22 @@ export default function Layout({ children }) {
           panel inset 12px, 72px wide so a 44px active tile sits centred with
           air. Sticky offset = header 72 + margin 12; height = viewport minus
           header minus both margins, so the bottom margin matches the left. */}
+      {/* NM-12 — the aside is now only a 72px RESERVATION. The visible panel
+          is absolute inside it, so widening on hover overlays the canvas
+          instead of shoving it: a rail that reflowed the page every time the
+          pointer drifted past would be unusable. */}
       <aside
         data-testid="desktop-rail"
-        className="hidden lg:flex w-[72px] shrink-0 flex-col sticky top-[84px] ml-3 my-3 h-[calc(100vh-72px-1.5rem)] nm-raised"
+        className="hidden lg:block w-[72px] shrink-0 sticky top-[84px] ml-3 my-3 h-[calc(100vh-72px-1.5rem)]"
       >
-        <nav className="flex-1 min-h-0 overflow-y-auto py-3 flex flex-col items-center gap-1">
+        <div
+          data-testid="desktop-rail-panel"
+          className="group/rail absolute inset-y-0 left-0 z-30 flex w-[72px] flex-col overflow-hidden nm-raised px-3.5 transition-[width] duration-200 ease-out hover:w-[232px] focus-within:w-[232px]"
+        >
+        <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-3 flex flex-col gap-1">
           <RailItems />
         </nav>
-        <div className="shrink-0 py-3 flex justify-center">
+        <div className="shrink-0 py-3">
           <Popover>
             <PopoverTrigger asChild>
               {/* NM-2 — the avatar is furniture (§0's table lists it), so it
@@ -400,9 +430,14 @@ export default function Layout({ children }) {
               <button
                 data-testid="rail-user-menu"
                 aria-label={user?.name || "Account"}
-                className="w-11 h-11 nm-tile rounded-control text-brand-600 text-sm font-semibold flex items-center justify-center transition-shadow hover:shadow-nm active:shadow-nm-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                className="flex w-full items-center h-11 rounded-control transition-shadow hover:shadow-nm active:shadow-nm-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               >
-                {(user?.name || "?").trim().charAt(0).toUpperCase()}
+                <span className="grid h-11 w-11 shrink-0 place-items-center nm-tile rounded-control text-brand-600 text-sm font-semibold">
+                  {(user?.name || "?").trim().charAt(0).toUpperCase()}
+                </span>
+                <span className="min-w-0 whitespace-nowrap px-3 text-sm font-medium opacity-0 transition-opacity duration-150 group-hover/rail:opacity-100 group-focus-within/rail:opacity-100">
+                  {user?.name || "Account"}
+                </span>
               </button>
             </PopoverTrigger>
             <PopoverContent side="right" align="end" className="w-64 p-0">
@@ -428,6 +463,7 @@ export default function Layout({ children }) {
               </div>
             </PopoverContent>
           </Popover>
+        </div>
         </div>
       </aside>
 

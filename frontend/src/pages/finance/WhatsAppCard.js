@@ -12,13 +12,13 @@ import { timeAgo } from "../../lib/format";
 
 const WA_STATUS_STYLE = {
   received: "bg-caution-50 text-caution-800",
-  draft: "bg-brand-blue text-white",
-  attention: "bg-amber-500 text-black",
-  filed: "bg-green-600 text-white",
-  structured: "bg-green-600 text-white",
-  ignored: "bg-black/10 text-black",
+  draft: "bg-nm-sunken text-muted-foreground",
+  attention: "bg-caution-100 text-caution-800",
+  filed: "bg-success-600 text-white",
+  structured: "bg-success-600 text-white",
+  ignored: "bg-nm-sunken text-muted-foreground",
   rejected: "bg-danger-600 text-white",
-  signature_mismatch: "bg-orange-500 text-white",
+  signature_mismatch: "bg-danger-600 text-white",
   error: "bg-danger-600 text-white",
 };
 
@@ -38,19 +38,19 @@ export default function WhatsAppCard() {
     <div className="card-brutal p-5 mb-8" data-testid="whatsapp-card">
       {!st?.configured && (
         <div className="flex items-center gap-2 mb-4">
-          <Chip value="not connected" className="bg-brand-600 text-white" />
+          <Chip value="not connected" className="bg-nm-sunken text-muted-foreground" />
         </div>
       )}
 
-      <div className="grid md:grid-cols-[auto_1fr] gap-6">
+      <div className="grid gap-5">
         <div className="flex flex-col items-center text-center">
           {waLink ? (
             <a href={waLink} target="_blank" rel="noreferrer" data-testid="whatsapp-qr-link"
-              className="border border-border rounded-xl p-2.5 bg-white shadow-sm transition-all">
+              className="rounded-cardlg nm-raised p-2.5 transition-shadow hover:shadow-nm-lg">
               <QRCodeSVG value={waLink} size={132} level="M" />
             </a>
           ) : (
-            <div className="border-2 border-dashed border-border p-6 w-full">
+            <div className="w-full rounded-control nm-inset px-4 py-5 text-left">
               <p className="text-sm font-semibold">WhatsApp not connected yet</p>
               <p className="text-xs text-muted-foreground mt-1">{st?.token_error || "Add the WhatsApp credentials in your environment to enable forwarding."}</p>
             </div>
@@ -60,31 +60,31 @@ export default function WhatsAppCard() {
         <div>
           {isOwner && st && st.token_error && (
             <div className="flex items-center gap-2 mb-3 border border-danger-600/30 bg-danger-600/5 rounded-lg px-3 py-2" data-testid="whatsapp-token-error">
-              <Chip value="connection issue" className="bg-brand-600 text-white" />
+              <Chip value="connection issue" className="bg-danger-600 text-white" />
               <span className="text-xs text-muted-foreground">{st.token_error}</span>
             </div>
           )}
 
           {isOwner ? (
             <>
-              <div className="flex items-center justify-between mb-2">
-                <p className="label-mono font-bold text-green-600 flex items-center gap-1.5">
-                  <WhatsappLogo size={16} weight="bold" className="text-green-600" /> Recent WhatsApp activity
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <p className="label-mono font-bold text-success-600 flex items-center gap-1.5">
+                  <WhatsappLogo size={16} weight="bold" className="text-success-600" /> Recent WhatsApp activity
                 </p>
                 <button data-testid="whatsapp-logs-refresh" onClick={() => qc.invalidateQueries({ queryKey: ["wa-logs"] })}
-                  className="flex items-center gap-1 text-xs font-medium rounded-lg border border-border px-2 py-1 hover:bg-accent transition-colors">
+                  className="flex items-center gap-1 text-xs font-medium nm-btn px-2 py-1 hover:bg-accent transition-colors">
                   <ArrowClockwise size={12} weight="bold" /> Refresh
                 </button>
               </div>
               {(logs || []).length === 0 ? (
-                <div className="border border-border p-3 text-xs text-muted-foreground" data-testid="whatsapp-logs-empty">
+                <div className="nm-tile p-3 text-xs text-muted-foreground" data-testid="whatsapp-logs-empty">
                   No inbound messages logged yet. Scan the QR and send a test message — it will appear here within seconds. If nothing shows after sending, the webhook isn't reaching the app (check Meta → WhatsApp → Configuration: callback URL, <span className="font-mono">messages</span> field subscribed, and app published).
                 </div>
               ) : (
                 <div className="space-y-1.5 max-h-72 overflow-y-auto" data-testid="whatsapp-logs-list">
                   {logs.map((l, i) => (
-                    <div key={`${l.created_at || ""}-${l.from || ""}-${i}`} data-testid={`whatsapp-log-${i}`} className="border border-border p-2 flex items-start gap-2 flex-wrap">
-                      <Chip value={l.status} className={WA_STATUS_STYLE[l.status] || "bg-black/10 text-black"} />
+                    <div key={`${l.created_at || ""}-${l.from || ""}-${i}`} data-testid={`whatsapp-log-${i}`} className="nm-tile p-2 flex items-start gap-2 flex-wrap">
+                      <Chip value={l.status} className={WA_STATUS_STYLE[l.status] || "bg-nm-sunken text-muted-foreground"} />
                       <span className="label-mono text-muted-foreground">{l.mtype || "—"}</span>
                       <span className="text-xs font-mono">{l.from || "unknown"}</span>
                       <span className="text-xs text-muted-foreground flex-1 min-w-[120px]">{l.summary || l.reason || ""}</span>

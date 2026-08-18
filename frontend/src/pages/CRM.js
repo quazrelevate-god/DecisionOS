@@ -56,18 +56,18 @@ const STATUSES = ["lead", "active", "inactive"];
 // neutral for "not started", success for healthy, danger for at-risk,
 // caution for on-hold, muted-strikethrough-adjacent for ended.
 const CUSTOMER_STAGES = [
-  { key: "lead", label: "Lead", cls: "bg-muted text-muted-foreground" },
+  { key: "lead", label: "Lead", cls: "bg-nm-sunken text-muted-foreground" },
   { key: "qualified", label: "Qualified", cls: "bg-brand-50 text-brand-700" },
   { key: "active", label: "Active", cls: "bg-success-50 text-success-800" },
   { key: "at_risk", label: "At Risk", cls: "bg-danger-50 text-danger-700" },
-  { key: "churned", label: "Churned", cls: "bg-muted text-muted-foreground" },
+  { key: "churned", label: "Churned", cls: "bg-nm-sunken text-muted-foreground" },
 ];
 const SUPPLIER_STAGES = [
-  { key: "prospect", label: "Prospect", cls: "bg-muted text-muted-foreground" },
+  { key: "prospect", label: "Prospect", cls: "bg-nm-sunken text-muted-foreground" },
   { key: "active", label: "Active", cls: "bg-success-50 text-success-800" },
   { key: "preferred", label: "Preferred", cls: "bg-brand-50 text-brand-700" },
   { key: "on_hold", label: "On Hold", cls: "bg-caution-50 text-caution-800" },
-  { key: "retired", label: "Retired", cls: "bg-muted text-muted-foreground" },
+  { key: "retired", label: "Retired", cls: "bg-nm-sunken text-muted-foreground" },
 ];
 function stagesForType(t) {
   if (VENDOR_TYPES.includes(t)) return SUPPLIER_STAGES;
@@ -80,7 +80,7 @@ function stageMeta(type, stage) {
 // RD-3: form inputs lose the mono face and the hard frame. Mono in a text
 // field made every form read as a config file; the reference uses the UI
 // grotesque in inputs and reserves mono for rendered data.
-const inp = "w-full border border-border rounded-lg px-3 py-2 text-sm bg-card focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-brand-400 transition-colors";
+const inp = "w-full nm-field px-3 py-2 text-sm";
 
 // Epic 2 Sprint 8 (E2-70): sort options for the CRM card grid. Founder
 // scans a lot of cards at once -- sorting by name (default), most-
@@ -151,9 +151,9 @@ function ComplaintDialog({ contact, onSaved }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <button data-testid={`crm-log-complaint-${contact.id}`} title="Log complaint" className="w-8 h-8 flex items-center justify-center border border-border hover:bg-purple-600 hover:text-white transition-colors">!</button>
+        <button data-testid={`crm-log-complaint-${contact.id}`} title="Log complaint" className="w-8 h-8 flex items-center justify-center nm-btn text-muted-foreground transition-shadow hover:text-foreground">!</button>
       </DialogTrigger>
-      <DialogContent className="border border-border rounded-xl">
+      <DialogContent className="rounded-cardlg border border-nm-edge/40">
         <DialogHeader><DialogTitle className="font-display text-xl">Log complaint — {contact.name}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <textarea data-testid="crm-complaint-text" className={inp} rows={3} placeholder="What went wrong?" value={text} onChange={(e) => setText(e.target.value)} />
@@ -162,7 +162,7 @@ function ComplaintDialog({ contact, onSaved }) {
           </select>
         </div>
         <DialogFooter>
-          <button data-testid="crm-complaint-save" onClick={save} className="bg-purple-600 text-white px-5 py-2 text-sm font-medium rounded-lg border border-border transition-all">Log complaint</button>
+          <button data-testid="crm-complaint-save" onClick={save} className="bg-primary text-primary-foreground px-5 py-2 text-sm font-medium nm-btn">Log complaint</button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -236,7 +236,7 @@ function CrmContactDialog({ trigger, initial, onSaved, users, defaultType }) {
   return (
     <Dialog open={open} onOpenChange={openChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="border border-border rounded-xl max-w-xl" data-testid="crm-contact-dialog">
+      <DialogContent className="rounded-cardlg border border-nm-edge/40 max-w-xl" data-testid="crm-contact-dialog">
         <DialogHeader>
           <DialogTitle className="font-display text-xl">{dialogTitle}</DialogTitle>
         </DialogHeader>
@@ -247,7 +247,7 @@ function CrmContactDialog({ trigger, initial, onSaved, users, defaultType }) {
           {!initial && (
             <div>
               <p className="label-mono text-muted-foreground mb-2">Type</p>
-              <div className="flex border border-border" data-testid="crm-contact-type">
+              <div className="flex nm-tile" data-testid="crm-contact-type">
                 {TYPE_TABS.map((tab, i) => {
                   const active = form.type === tab.key;
                   return (
@@ -257,8 +257,8 @@ function CrmContactDialog({ trigger, initial, onSaved, users, defaultType }) {
                       onClick={() => applyType(tab.key)}
                       data-testid={`crm-contact-type-${tab.key}`}
                       className={`flex-1 py-2 text-sm font-medium transition-colors ${
-                        active ? "bg-primary text-primary-foreground" : "bg-white hover:bg-black/5"
-                      } ${i < TYPE_TABS.length - 1 ? "border-r border-border" : ""}`}
+                        active ? "bg-primary text-primary-foreground" : "bg-nm hover:bg-accent"
+                      } ${i < TYPE_TABS.length - 1 ? "border-r border-nm-edge/40" : ""}`}
                     >
                       {tab.label}
                     </button>
@@ -329,7 +329,7 @@ function CrmContactDialog({ trigger, initial, onSaved, users, defaultType }) {
               More details {showAdvanced ? "" : "· GSTIN, address, tags, owner, notes"}
             </button>
             {showAdvanced && (
-              <div className="mt-3 space-y-2 pl-2 border-l-2 border-border">
+              <div className="mt-3 space-y-2 pl-2 border-l-2 border-nm-edge/40">
                 <input className={inp} placeholder="GSTIN / Tax ID" value={form.tax_id} onChange={set("tax_id")} />
                 <input className={inp} placeholder="Address" value={form.address} onChange={set("address")} />
                 <input className={inp} placeholder="Tags (comma separated)" value={form.tags} onChange={set("tags")} />
@@ -356,7 +356,7 @@ function CrmContactDialog({ trigger, initial, onSaved, users, defaultType }) {
           <button
             onClick={save}
             data-testid="crm-contact-save"
-            className="bg-primary text-primary-foreground px-5 py-2 text-sm font-medium rounded-lg border border-border transition-all"
+            className="bg-primary text-primary-foreground px-5 py-2 text-sm font-medium nm-btn transition-all"
           >
             {initial ? "Save changes" : "Add contact"}
           </button>
@@ -401,7 +401,7 @@ function AddContactMenu({ canManage, canImport, csvBusy, onImport, customerLabel
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="relative z-40 flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold border border-border transition-all"
+        className="relative z-40 flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold nm-tile transition-all"
       >
         <Plus size={16} weight="bold" /> Add contact
         <span className={`text-white/70 transition-transform ${open ? "rotate-180" : ""}`}>▾</span>
@@ -425,9 +425,9 @@ function AddContactMenu({ canManage, canImport, csvBusy, onImport, customerLabel
               type="button"
               role="menuitem"
               onClick={pick(() => document.querySelector('[data-testid="crm-add-customer"]')?.click())}
-              className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-accent border-b border-border transition-colors"
+              className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-accent border-b border-nm-edge/40 transition-colors"
             >
-              <div className="w-9 h-9 flex items-center justify-center border border-border bg-brand-blue/10 text-brand-blue shrink-0">
+              <div className="w-9 h-9 flex items-center justify-center nm-inset text-primary shrink-0">
                 <AddressBook size={16} weight="bold" />
               </div>
               <div className="min-w-0 flex-1">
@@ -441,9 +441,9 @@ function AddContactMenu({ canManage, canImport, csvBusy, onImport, customerLabel
               type="button"
               role="menuitem"
               onClick={pick(() => document.querySelector('[data-testid="crm-add-supplier"]')?.click())}
-              className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-accent transition-colors ${canImport ? "border-b border-border" : ""}`}
+              className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-accent transition-colors ${canImport ? "border-b border-nm-edge/40" : ""}`}
             >
-              <div className="w-9 h-9 flex items-center justify-center border border-border bg-black/5 text-black shrink-0">
+              <div className="w-9 h-9 flex items-center justify-center nm-inset text-foreground shrink-0">
                 <Truck size={16} weight="bold" />
               </div>
               <div className="min-w-0 flex-1">
@@ -461,7 +461,7 @@ function AddContactMenu({ canManage, canImport, csvBusy, onImport, customerLabel
               data-testid="crm-import-csv"
               className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              <div className="w-9 h-9 flex items-center justify-center border border-border bg-black/5 text-black shrink-0">
+              <div className="w-9 h-9 flex items-center justify-center nm-inset text-foreground shrink-0">
                 <UploadSimple size={16} weight="bold" />
               </div>
               <div className="min-w-0 flex-1">
@@ -708,7 +708,7 @@ export default function CRM() {
           solid dark slab. Underline moves to indigo so the accent marks the
           selection here as it does everywhere else. */}
       <div className="mb-5" data-testid="crm-scope-chips">
-        <div className="flex border-b border-border">
+        <div className="flex border-b border-nm-edge/40">
           {SCOPES.map((s) => {
             const active = scope === s.key;
             return (
@@ -721,7 +721,7 @@ export default function CRM() {
                 {s.icon && <s.icon size={16} weight={active ? "fill" : "regular"} />}
                 <span>{s.label}</span>
                 <span
-                  className={`min-w-[18px] px-1 py-0.5 rounded-full text-[11px] tabular-nums text-center ${active ? "bg-brand-600/15 text-brand-700" : "bg-muted text-muted-foreground"}`}
+                  className={`min-w-[18px] px-1 py-0.5 rounded-full text-[11px] tabular-nums text-center ${active ? "bg-brand-600/15 text-brand-700" : "bg-nm-sunken text-muted-foreground"}`}
                   data-testid={`crm-scope-count-${s.key}`}
                 >
                   {s.count}
@@ -812,9 +812,9 @@ export default function CRM() {
             : L.vendor_singular;
           const stage = stageMeta(c.type, c.lifecycle_stage);
           const statusDot =
-            c.status === "active" ? "bg-green-600"
-            : c.status === "lead" ? "bg-amber-500"
-            : "bg-black/30";
+            c.status === "active" ? "bg-success-600"
+            : c.status === "lead" ? "bg-caution-500"
+            : "bg-neutral-400";
           const ownerName = c.assigned_id && users
             ? users.find((u) => u.id === c.assigned_id)?.name
             : null;
@@ -856,7 +856,7 @@ export default function CRM() {
                  its title pushed 16px below its neighbours'. Column flow
                  pins content to the top; the footer then takes mt-auto so
                  every card's meta row also lines up across the row. */
-              className="text-left flex flex-col border border-border rounded-xl p-4 bg-card hover:border-hairline-strong transition-colors disabled:cursor-default"
+              className="text-left flex flex-col nm-raised p-4 transition-shadow duration-150 hover:shadow-nm-lg active:shadow-nm-press disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
             >
               {/* Header: name + type + subtle status dot. Complaint red
                   dot sits inline next to name -- softer than the floating
@@ -887,7 +887,7 @@ export default function CRM() {
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <span
-                    className={`px-1.5 py-0.5 rounded text-[10px] font-medium tracking-wide ${isCustomer ? "bg-brand-50 text-brand-700" : "bg-muted text-muted-foreground"}`}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-medium tracking-wide ${isCustomer ? "bg-brand-50 text-brand-700" : "bg-nm-sunken text-muted-foreground"}`}
                     data-testid={`crm-type-chip-${c.id}`}
                   >
                     {typeChipLabel}
@@ -918,7 +918,7 @@ export default function CRM() {
 
               {/* Footer meta: touched-ago + owner (if any). Small, muted,
                   right-aligned owner. */}
-              <div className="mt-auto pt-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
+              <div className="mt-auto pt-3 border-t border-nm-edge/40 flex items-center justify-between text-xs text-muted-foreground">
                 {touched && (
                   <span className="flex items-center gap-1" data-testid={`crm-touched-${c.id}`}>
                     <Clock size={11} weight="bold" /> {touched}

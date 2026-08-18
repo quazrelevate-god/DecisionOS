@@ -1,9 +1,20 @@
 /**
- * NM-11 — the Dex stage.
+ * NM-11 / NM-13 — the Dex stage.
  *
  * WHAT THIS REPLACED. A PageHeader, a three-button segmented strip, and a
  * horizontal capture bar — the layout of a settings screen. Dex is the
  * product's selling point and it looked like a form with a microphone on it.
+ *
+ * NM-13 — ONE COMPOSER. The page used to carry two: this one (which captured
+ * a note) and AskPanel's (which asked a question) — visually identical, one
+ * above the other, so the page appeared to be asking the same thing twice.
+ * They were not the same: typing here posted to /voice-notes/text, typing
+ * there posted to /ask. Collapsing them means picking what a typed line MEANS,
+ * and for a page whose job is conversation the answer is: it is a question.
+ * So Enter and Send go to /ask. The mic and the paperclip still capture — a
+ * spoken line and a dropped bill are naturally "tell Dex", not "ask Dex" — and
+ * the note button keeps typed capture reachable in one click rather than
+ * deleting the capability along with the duplicate field.
  *
  * THE ORB IS REAL. It is driven by `levels` out of useDexCapture, which are
  * sampled from an AnalyserNode on the live microphone stream — so the rings
@@ -16,12 +27,14 @@
  * Same data, and the second one is what a founder should feel when the most
  * important surface in the product is waiting on them.
  *
- * The glow is the page's own, so /brain does not look like the rest of the app
- * wearing a different card. It sits behind everything at -z and never
- * intercepts a pointer.
+ * COMPACT. Once a conversation exists the orb is no longer the subject of the
+ * screen — the answer is. It shrinks to ~55% and the headline goes, so the
+ * composer stays put and the thread gets the room.
  */
 import { useMemo } from "react";
-import { Microphone, Stop, PaperPlaneTilt, Paperclip, Sparkle, Spinner } from "@phosphor-icons/react";
+import {
+  Microphone, Stop, PaperPlaneTilt, Paperclip, Sparkle, Spinner, NotePencil,
+} from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -31,7 +44,7 @@ import { cn } from "@/lib/utils";
  * few samples drive the inner rings and the older ones the outer, so a spoken
  * syllable visibly travels outward instead of every ring pulsing in lockstep.
  */
-function Orb({ levels, recording, thinking }) {
+function Orb({ levels, recording, thinking, scale = 1 }) {
   const rings = useMemo(() => {
     const n = 4;
     const win = levels && levels.length ? levels : [];
@@ -43,6 +56,7 @@ function Orb({ levels, recording, thinking }) {
   }, [levels]);
 
   const live = recording && rings.some((v) => v > 0.02);
+  const px = (n) => Math.round(n * scale);
 
   return (
     <div className="relative grid place-items-center" aria-hidden="true">
@@ -51,7 +65,7 @@ function Orb({ levels, recording, thinking }) {
       <div
         className="absolute rounded-full blur-3xl transition-opacity duration-300"
         style={{
-          width: 320, height: 320,
+          width: px(320), height: px(320),
           background: "radial-gradient(circle, hsl(var(--brand-500) / 0.30), transparent 65%)",
           opacity: recording ? 0.55 + rings[0] * 0.45 : 0.30,
         }}
@@ -67,8 +81,8 @@ function Orb({ levels, recording, thinking }) {
             !recording && "dex-breathe"
           )}
           style={{
-            width: 132 + i * 44,
-            height: 132 + i * 44,
+            width: px(132 + i * 44),
+            height: px(132 + i * 44),
             transform: `scale(${1 + v * (0.14 - i * 0.02)})`,
             animationDelay: `${i * 260}ms`,
           }}
@@ -77,29 +91,41 @@ function Orb({ levels, recording, thinking }) {
 
       {/* Core. The one solid object — everything else is atmosphere. */}
       <span
-        className="relative grid h-[104px] w-[104px] place-items-center rounded-full nm-raised transition-transform duration-100"
-        style={{ transform: `scale(${1 + (recording ? rings[0] * 0.10 : 0)})` }}
+        className="relative grid place-items-center rounded-full nm-raised transition-transform duration-100"
+        style={{
+          width: px(104), height: px(104),
+          transform: `scale(${1 + (recording ? rings[0] * 0.10 : 0)})`,
+        }}
       >
         {thinking
-          ? <Spinner size={30} className="animate-spin text-primary" />
-          : <Sparkle size={34} weight="fill" className={cn("text-primary transition-opacity", live ? "opacity-100" : "opacity-70")} />}
+          ? <Spinner size={px(30)} className="animate-spin text-primary" />
+          : <Sparkle size={px(34)} weight="fill" className={cn("text-primary transition-opacity", live ? "opacity-100" : "opacity-70")} />}
       </span>
     </div>
   );
 }
 
 /**
- * @param {object}   capture  the useDexCapture return, passed whole
- * @param {string}   status   the line under the orb
- * @param {node}     tabs     the sub-view switcher, rendered small and quiet
+ * @param {object}   capture   the useDexCapture return, passed whole
+ * @param {Function} onAsk     (text) => void — the ONE send path, goes to /ask
+ * @param {boolean}  thinking  an answer is in flight
+ * @param {boolean}  compact   a conversation already exists; give it the room
+ * @param {string}   status    the line under the orb
+ * @param {node}     trailing  quiet page-level actions (Documents, new thread)
  */
-export function DexStage({ capture, status, tabs, onSend }) {
+export function DexStage({ capture, onAsk, thinking, compact = false, status, trailing }) {
   const {
     text, setText, sending, recording, recordSecs, levels,
     sendText, startRecording, stopRecording, uploadFile, fileRef,
   } = capture;
 
-  const submit = () => { sendText(); onSend?.(); };
+  const busy = sending || thinking;
+  const submit = () => {
+    const q = text.trim();
+    if (!q || busy) return;
+    setText("");
+    onAsk?.(q);
+  };
 
   return (
     <div className="relative" data-testid="dex-stage">
@@ -116,22 +142,34 @@ export function DexStage({ capture, status, tabs, onSend }) {
         }}
       />
 
-      <div className="flex flex-col items-center pt-8 pb-2">
-        <Orb levels={levels} recording={recording} thinking={sending} />
+      <div className={cn("flex flex-col items-center", compact ? "pt-2 pb-1" : "pt-8 pb-2")}>
+        <Orb
+          levels={levels}
+          recording={recording}
+          thinking={busy}
+          scale={compact ? 0.55 : 1}
+        />
 
-        <p className="mt-7 text-2xl font-display" data-testid="dex-stage-status">
-          {recording ? "Listening…" : sending ? "Working on it…" : "Ask Dex anything"}
-        </p>
-        <p className="mt-1.5 text-sm text-muted-foreground">
-          {recording
-            ? `${recordSecs}s — tap stop when you're done`
-            : status || "Speak, type, or drop a bill. Dex remembers everything."}
-        </p>
+        {!compact && (
+          <>
+            <p className="mt-7 text-2xl font-display" data-testid="dex-stage-status">
+              {recording ? "Listening…" : busy ? "Working on it…" : "Ask Dex anything"}
+            </p>
+            <p className="mt-1.5 text-sm text-muted-foreground">
+              {recording
+                ? `${recordSecs}s — tap stop when you're done`
+                : status || "Speak, type, or drop a bill. Dex remembers everything."}
+            </p>
+          </>
+        )}
 
         {/* Composer. One row, and the mic and Send share the trailing slot so
             there are never two primary buttons competing. */}
         <div
-          className="mt-7 w-full max-w-2xl flex items-end gap-2 rounded-cardlg nm-raised p-2"
+          className={cn(
+            "w-full max-w-2xl flex items-end gap-1 rounded-cardlg nm-raised p-2",
+            compact ? "mt-4" : "mt-7"
+          )}
           data-testid="dex-stage-composer"
         >
           <input type="file" ref={fileRef} hidden onChange={uploadFile}
@@ -140,7 +178,7 @@ export function DexStage({ capture, status, tabs, onSend }) {
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
-            disabled={sending || recording}
+            disabled={busy || recording}
             data-testid="dex-stage-attach"
             aria-label="Attach a bill or photo"
             title="Attach a bill or photo"
@@ -149,24 +187,41 @@ export function DexStage({ capture, status, tabs, onSend }) {
             <Paperclip size={19} weight="bold" />
           </button>
 
+          {/* NM-13: typed CAPTURE, kept alive. Enter asks; this logs the same
+              line as a note instead. Only offered when there is something to
+              log, so the composer is one control wide at rest. */}
+          {text.trim() && !recording && (
+            <button
+              type="button"
+              onClick={sendText}
+              disabled={busy}
+              data-testid="dex-stage-note"
+              aria-label="Log this as a note instead of asking"
+              title="Log this as a note instead of asking"
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-control text-muted-foreground transition-shadow hover:shadow-nm-sm active:shadow-nm-press disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            >
+              <NotePencil size={19} weight="bold" />
+            </button>
+          )}
+
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
             rows={1}
             disabled={recording}
-            placeholder={recording ? "Listening…" : "Ask, or tell Dex what happened…"}
+            placeholder={recording ? "Listening…" : "Ask your company anything…"}
             data-testid="dex-stage-input"
-            className="min-h-11 max-h-40 flex-1 resize-none bg-transparent px-1 py-2.5 text-[15px] leading-snug placeholder:text-muted-foreground focus:outline-none disabled:opacity-60"
+            className="min-h-11 max-h-40 flex-1 resize-none bg-transparent px-2 py-2.5 text-[15px] leading-snug placeholder:text-muted-foreground focus:outline-none disabled:opacity-60"
           />
 
           {text.trim() ? (
             <button
               type="button"
               onClick={submit}
-              disabled={sending}
+              disabled={busy}
               data-testid="dex-stage-send"
-              aria-label="Send"
+              aria-label="Ask Dex"
               className="grid h-11 w-11 shrink-0 place-items-center rounded-control bg-primary text-primary-foreground shadow-nm-sm transition-opacity hover:opacity-95 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
             >
               <PaperPlaneTilt size={18} weight="fill" />
@@ -186,7 +241,7 @@ export function DexStage({ capture, status, tabs, onSend }) {
             <button
               type="button"
               onClick={startRecording}
-              disabled={sending}
+              disabled={busy}
               data-testid="dex-stage-mic"
               aria-label="Record a voice note"
               className="grid h-11 w-11 shrink-0 place-items-center rounded-control bg-primary text-primary-foreground shadow-nm-sm transition-opacity hover:opacity-95 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
@@ -196,7 +251,7 @@ export function DexStage({ capture, status, tabs, onSend }) {
           )}
         </div>
 
-        {tabs && <div className="mt-6">{tabs}</div>}
+        {trailing && <div className="mt-3">{trailing}</div>}
       </div>
     </div>
   );

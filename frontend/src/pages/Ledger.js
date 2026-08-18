@@ -32,7 +32,7 @@ import {
 
 const PALETTE = ["#E63946", "#1E1E24", "#F4A261", "#457B9D", "#2A9D8F", "#E76F51", "#8D99AE", "#A8DADC", "#6D6875", "#B5838D", "#264653", "#E9C46A"];
 const CHART_MARGIN = { top: 5, right: 5, left: 5, bottom: 5 };
-const inp = "w-full border border-border rounded-lg px-3 py-2 text-sm bg-card focus:outline-none focus:ring-2 focus:ring-ring/40";
+const inp = "w-full nm-field px-3 py-2 text-sm";
 const label = "text-xs text-muted-foreground";
 
 const fmt = (cur) => (n) => {
@@ -40,7 +40,7 @@ const fmt = (cur) => (n) => {
   catch { return `${cur || ""} ${Math.round(n || 0).toLocaleString()}`; }
 };
 
-const SOURCE_CHIP = { manual: "bg-muted text-muted-foreground", whatsapp: "bg-success-50 text-success-800", ingest: "bg-brand-50 text-brand-700", document: "bg-brand-50 text-brand-700" };
+const SOURCE_CHIP = { manual: "bg-nm-sunken text-muted-foreground", whatsapp: "bg-success-50 text-success-800", ingest: "bg-brand-50 text-brand-700", document: "bg-brand-50 text-brand-700" };
 const LEVEL_DOT = { high: "bg-danger-600", medium: "bg-caution-500", low: "bg-brand-600" };
 const LEVEL_ACCENT = { high: "border-l-danger-600", medium: "border-l-caution-500", low: "border-l-brand-600" };
 
@@ -52,7 +52,7 @@ function FileField({ file, setFile }) {
   const { t } = useTranslation();
   return (
     <Field label={t("finance.attach_label")}>
-      <label className="flex items-center gap-2 border border-dashed border-border rounded-lg px-3 py-2.5 text-sm cursor-pointer hover:bg-accent/50">
+      <label className="flex items-center gap-2 border border-dashed border-nm-edge/40 rounded-lg px-3 py-2.5 text-sm cursor-pointer hover:bg-accent/50">
         <Paperclip size={15} weight="bold" />
         <span className="truncate flex-1 text-muted-foreground">{file ? file.name : t("finance.attach_ph")}</span>
         <input type="file" accept="image/*,application/pdf" className="hidden" data-testid="ledger-file-input" onChange={(e) => {
@@ -114,11 +114,11 @@ function AddExpenseDialog({ categories, onDone }) {
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
       <DialogTrigger asChild>
-        <button data-testid="add-expense-btn" className="flex items-center justify-center gap-2 w-full sm:w-auto bg-primary text-primary-foreground px-4 py-2 text-sm font-medium border border-border transition-all">
+        <button data-testid="add-expense-btn" className="flex items-center justify-center gap-2 w-full sm:w-auto bg-primary text-primary-foreground px-4 py-2 text-sm font-medium nm-tile transition-all">
           <Plus size={16} weight="bold" /> {t("finance.add_expense")}
         </button>
       </DialogTrigger>
-      <DialogContent className="border border-border rounded-xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="rounded-cardlg border border-nm-edge/40 max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle className="font-display text-xl">{t("finance.new_expense")}</DialogTitle><DialogDescription className="text-xs text-muted-foreground">{t("finance.new_expense_desc")}</DialogDescription></DialogHeader>
         <div className="space-y-4">
           <FileField file={file} setFile={setFile} />
@@ -148,7 +148,7 @@ function AddExpenseDialog({ categories, onDone }) {
             <Field label={t("finance.c_date")}><input type="date" className={inp} value={f.date} onChange={(e) => set("date", e.target.value)} /></Field>
           </div>
           <Field label={t("finance.f_notes")}><textarea className={inp} rows={2} value={f.notes} onChange={(e) => set("notes", e.target.value)} /></Field>
-          <button onClick={save} disabled={busy} data-testid="expense-save" className="w-full bg-brand-600 text-white py-2.5 text-sm font-medium border border-border transition-all disabled:opacity-60">
+          <button onClick={save} disabled={busy} data-testid="expense-save" className="w-full bg-brand-600 text-white py-2.5 text-sm font-medium nm-tile transition-all disabled:opacity-60">
             {busy ? (file ? t("finance.ai_reading") : t("finance.saving")) : t("finance.save_expense")}
           </button>
         </div>
@@ -180,11 +180,11 @@ function AddAssetDialog({ categories, onDone }) {
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
       <DialogTrigger asChild>
-        <button data-testid="add-asset-btn" className="flex items-center justify-center gap-2 w-full sm:w-auto bg-primary text-primary-foreground px-4 py-2 text-sm font-medium border border-border transition-all">
+        <button data-testid="add-asset-btn" className="flex items-center justify-center gap-2 w-full sm:w-auto bg-primary text-primary-foreground px-4 py-2 text-sm font-medium nm-tile transition-all">
           <Plus size={16} weight="bold" /> {t("finance.add_asset")}
         </button>
       </DialogTrigger>
-      <DialogContent className="border border-border rounded-xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="rounded-cardlg border border-nm-edge/40 max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle className="font-display text-xl">{t("finance.new_asset")}</DialogTitle><DialogDescription className="text-xs text-muted-foreground">{t("finance.new_asset_desc")}</DialogDescription></DialogHeader>
         <div className="space-y-4">
           <FileField file={file} setFile={setFile} />
@@ -206,7 +206,7 @@ function AddAssetDialog({ categories, onDone }) {
               </select>
             </Field>
           </div>
-          <button onClick={save} disabled={busy} data-testid="asset-save" className="w-full bg-brand-600 text-white py-2.5 text-sm font-medium border border-border transition-all disabled:opacity-60">
+          <button onClick={save} disabled={busy} data-testid="asset-save" className="w-full bg-brand-600 text-white py-2.5 text-sm font-medium nm-tile transition-all disabled:opacity-60">
             {busy ? (file ? t("finance.ai_reading") : t("finance.saving")) : t("finance.save_asset")}
           </button>
         </div>
@@ -238,11 +238,11 @@ function AddInventoryDialog({ onDone }) {
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
       <DialogTrigger asChild>
-        <button data-testid="add-inventory-btn" className="flex items-center justify-center gap-2 w-full sm:w-auto bg-primary text-primary-foreground px-4 py-2 text-sm font-medium border border-border transition-all">
+        <button data-testid="add-inventory-btn" className="flex items-center justify-center gap-2 w-full sm:w-auto bg-primary text-primary-foreground px-4 py-2 text-sm font-medium nm-tile transition-all">
           <Plus size={16} weight="bold" /> {t("finance.add_item")}
         </button>
       </DialogTrigger>
-      <DialogContent className="border border-border rounded-xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="rounded-cardlg border border-nm-edge/40 max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle className="font-display text-xl">{t("finance.new_inv")}</DialogTitle><DialogDescription className="text-xs text-muted-foreground">{t("finance.new_inv_desc")}</DialogDescription></DialogHeader>
         <div className="space-y-4">
           <FileField file={file} setFile={setFile} />
@@ -259,7 +259,7 @@ function AddInventoryDialog({ onDone }) {
             <Field label={t("finance.c_category")}><input className={inp} value={f.category} onChange={(e) => set("category", e.target.value)} /></Field>
             <Field label={t("finance.c_vendor")}><input className={inp} value={f.vendor_name} onChange={(e) => set("vendor_name", e.target.value)} /></Field>
           </div>
-          <button onClick={save} disabled={busy} data-testid="inv-save" className="w-full bg-brand-600 text-white py-2.5 text-sm font-medium border border-border transition-all disabled:opacity-60">
+          <button onClick={save} disabled={busy} data-testid="inv-save" className="w-full bg-brand-600 text-white py-2.5 text-sm font-medium nm-tile transition-all disabled:opacity-60">
             {busy ? (file ? t("finance.ai_reading") : t("finance.saving")) : t("finance.save_item")}
           </button>
         </div>
@@ -292,11 +292,11 @@ function AddIncomeDialog({ onDone }) {
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
       <DialogTrigger asChild>
-        <button data-testid="add-income-btn" className="flex items-center justify-center gap-2 w-full sm:w-auto bg-primary text-primary-foreground px-4 py-2 text-sm font-medium border border-border transition-all">
+        <button data-testid="add-income-btn" className="flex items-center justify-center gap-2 w-full sm:w-auto bg-primary text-primary-foreground px-4 py-2 text-sm font-medium nm-tile transition-all">
           <Plus size={16} weight="bold" /> Add income
         </button>
       </DialogTrigger>
-      <DialogContent className="border border-border rounded-xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="rounded-cardlg border border-nm-edge/40 max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-display text-xl">Record sale / service income</DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">Money coming IN. Attach a sales invoice and AI will read the amount & customer, or type it in.</DialogDescription>
@@ -319,7 +319,7 @@ function AddIncomeDialog({ onDone }) {
             <Field label="Date"><input type="date" className={inp} value={f.date} onChange={(e) => set("date", e.target.value)} /></Field>
             <Field label="Due date"><input type="date" className={inp} value={f.due_date} onChange={(e) => set("due_date", e.target.value)} /></Field>
           </div>
-          <button onClick={save} disabled={busy} data-testid="income-save" className="w-full bg-brand-600 text-white py-2.5 text-sm font-medium border border-border transition-all disabled:opacity-60">
+          <button onClick={save} disabled={busy} data-testid="income-save" className="w-full bg-brand-600 text-white py-2.5 text-sm font-medium nm-tile transition-all disabled:opacity-60">
             {busy ? (file ? "AI reading…" : "Saving…") : "Save income"}
           </button>
         </div>
@@ -358,11 +358,11 @@ function CreateTaskFromInsight({ insight, members, roleOptions }) {
 
   return (
     <>
-      <button onClick={openDialog} data-testid="insight-create-task" className="flex items-center gap-1.5 text-xs font-medium border border-border bg-brand-600 text-white px-3 py-1.5 transition-all">
+      <button onClick={openDialog} data-testid="insight-create-task" className="flex items-center gap-1.5 text-xs font-medium nm-tile bg-brand-600 text-white px-3 py-1.5 transition-all">
         <ListPlus size={13} weight="bold" /> {t("finance.create_task")}
       </button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="border border-border rounded-xl">
+        <DialogContent className="rounded-cardlg border border-nm-edge/40">
           <DialogHeader><DialogTitle className="font-display text-xl">{t("finance.new_task_insight")}</DialogTitle><DialogDescription className="text-xs text-muted-foreground">{t("finance.new_task_insight_desc")}</DialogDescription></DialogHeader>
           <div className="space-y-4">
             <Field label={t("finance.task_title")}><input data-testid="insight-task-title" className={inp} value={title} onChange={(e) => setTitle(e.target.value)} /></Field>
@@ -381,7 +381,7 @@ function CreateTaskFromInsight({ insight, members, roleOptions }) {
                 </select>
               </Field>
             </div>
-            <button onClick={save} disabled={busy} data-testid="insight-task-save" className="w-full bg-brand-600 text-white py-2.5 text-sm font-medium border border-border transition-all disabled:opacity-60">
+            <button onClick={save} disabled={busy} data-testid="insight-task-save" className="w-full bg-brand-600 text-white py-2.5 text-sm font-medium nm-tile transition-all disabled:opacity-60">
               {busy ? t("finance.creating") : t("finance.create_task")}
             </button>
           </div>
@@ -396,7 +396,7 @@ function InsightCard({ insight, scope, idx, members, roleOptions, onAsk }) {
   const LEVEL_LABEL = { high: t("finance.urgent"), medium: t("finance.important"), low: t("finance.fyi") };
   const [open, setOpen] = useState(false);
   return (
-    <div className={`border border-border border-l-4 ${LEVEL_ACCENT[insight.level] || "border-l-black"} rounded-lg bg-card overflow-hidden transition-shadow`} data-testid={`ai-alert-${scope}-${idx}`}>
+    <div className={`nm-tile border-l-4 ${LEVEL_ACCENT[insight.level] || "border-l-black"} rounded-lg bg-nm overflow-hidden transition-shadow`} data-testid={`ai-alert-${scope}-${idx}`}>
       <button onClick={() => setOpen((o) => !o)} data-testid={`insight-toggle-${scope}-${idx}`} className="w-full flex items-center gap-3 p-3 text-left hover:bg-accent/50 transition-colors">
         <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${LEVEL_DOT[insight.level] || "bg-black"}`} title={LEVEL_LABEL[insight.level]} />
         <span className="flex-1 min-w-0 font-semibold text-sm leading-snug">{insight.title}</span>
@@ -408,7 +408,7 @@ function InsightCard({ insight, scope, idx, members, roleOptions, onAsk }) {
           {insight.detail && <p className="text-sm text-muted-foreground leading-relaxed">{insight.detail}</p>}
           <div className="flex flex-wrap gap-2">
             <CreateTaskFromInsight insight={insight} members={members} roleOptions={roleOptions} />
-            <button onClick={() => onAsk(insight.title)} data-testid={`insight-ask-${scope}-${idx}`} className="flex items-center gap-1.5 text-xs font-medium border border-border px-3 py-1.5 hover:bg-accent transition-colors">
+            <button onClick={() => onAsk(insight.title)} data-testid={`insight-ask-${scope}-${idx}`} className="flex items-center gap-1.5 text-xs font-medium nm-tile px-3 py-1.5 hover:bg-accent transition-colors">
               <Brain size={13} weight="bold" /> {t("finance.ask_ai")}
             </button>
           </div>
@@ -466,7 +466,7 @@ function AiPanel({ scope, variant = "inline" }) {
         </div>
         <div className="flex items-center gap-2">
           {data?.generated_at && <span className="text-[11px] text-muted-foreground hidden sm:inline">{t("finance.updated", { time: new Date(data.generated_at).toLocaleString() })}</span>}
-          <button onClick={refresh} disabled={refreshing} data-testid={`ai-refresh-${scope}`} className="flex items-center gap-1 text-xs font-semibold border border-border px-2.5 py-1.5 hover:bg-accent transition-colors disabled:opacity-50">
+          <button onClick={refresh} disabled={refreshing} data-testid={`ai-refresh-${scope}`} className="flex items-center gap-1 text-xs font-semibold nm-tile px-2.5 py-1.5 hover:bg-accent transition-colors disabled:opacity-50">
             <ArrowClockwise size={13} weight="bold" className={refreshing ? "animate-spin" : ""} /> {refreshing ? t("finance.analysing") : t("finance.refresh")}
           </button>
         </div>
@@ -491,15 +491,15 @@ function AiPanel({ scope, variant = "inline" }) {
         </>
       )}
 
-      <div className="border-t border-border pt-4">
+      <div className="border-t border-nm-edge/40 pt-4">
         <div className="flex items-center gap-1.5 mb-2 text-muted-foreground"><Brain size={15} weight="bold" /><span className="label-mono text-xs">{scope === "brief" ? t("finance.ask_about_fin") : t("finance.ask_about", { scope })}</span></div>
         <div className="flex gap-2">
           <input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && ask()} data-testid={`ai-ask-input-${scope}`} placeholder={t("finance.ask_ph")} className={inp} />
-          <button onClick={() => ask()} disabled={asking} data-testid={`ai-ask-btn-${scope}`} className="flex items-center gap-1 bg-primary text-primary-foreground px-3 py-2 text-sm font-semibold border border-border transition-all disabled:opacity-50 shrink-0">
+          <button onClick={() => ask()} disabled={asking} data-testid={`ai-ask-btn-${scope}`} className="flex items-center gap-1 bg-primary text-primary-foreground px-3 py-2 text-sm font-semibold nm-tile transition-all disabled:opacity-50 shrink-0">
             <PaperPlaneRight size={15} weight="bold" /> {asking ? "…" : t("finance.ask_btn")}
           </button>
         </div>
-        {answer && <div className="mt-3 border border-border rounded-lg p-3 bg-black/[0.02] text-sm leading-relaxed" data-testid={`ai-answer-${scope}`}>{answer}</div>}
+        {answer && <div className="mt-3 nm-inset p-3 text-sm leading-relaxed" data-testid={`ai-answer-${scope}`}>{answer}</div>}
       </div>
     </div>
   );
@@ -522,9 +522,9 @@ function KpiRow({ summary }) {
   const net = tt.net_profit ?? ((tt.revenue_billed || 0) - (tt.total_spend || 0));
   return (
     <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-      <KPI icon={CurrencyDollar} label="Revenue" value={f(tt.revenue_billed || 0)} accent="text-green-600" />
+      <KPI icon={CurrencyDollar} label="Revenue" value={f(tt.revenue_billed || 0)} accent="text-success-600" />
       <KPI icon={TrendUp} label={t("finance.k_spend")} value={f(tt.total_spend)} accent="text-brand-600" />
-      <KPI icon={Coins} label="Net Profit" value={f(net)} accent={net >= 0 ? "text-green-600" : "text-brand-600"} />
+      <KPI icon={Coins} label="Net Profit" value={f(net)} accent={net >= 0 ? "text-success-600" : "text-brand-600"} />
       <KPI icon={Receipt} label="Received" value={f(tt.revenue_received || 0)} />
       <KPI icon={Buildings} label={t("finance.k_asset")} value={f(tt.asset_value)} />
       <KPI icon={Package} label={t("finance.k_inv")} value={f(tt.inventory_value)} />
@@ -547,15 +547,15 @@ function InvoicePicker({ open, value, onChange, cur, testid }) {
         <CaretDown size={14} weight="bold" />
       </button>
       {show && (
-        <div className="absolute z-30 mt-1 w-full sm:w-[280px] bg-card border border-border shadow-md max-h-64 overflow-hidden flex flex-col">
+        <div className="absolute z-30 mt-1 w-full sm:w-[280px] bg-nm nm-tile shadow-md max-h-64 overflow-hidden flex flex-col">
           <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} data-testid={`${testid}-search`}
-            placeholder="Search invoice # or name…" className="px-3 py-2 text-sm border-b border-border focus:outline-none bg-transparent" />
+            placeholder="Search invoice # or name…" className="px-3 py-2 text-sm border-b border-nm-edge/40 focus:outline-none bg-transparent" />
           <div className="overflow-y-auto">
             {filtered.length === 0 && <div className="px-3 py-3 text-xs text-muted-foreground">No matching invoices</div>}
             {filtered.map((o) => (
               <button key={o.id} type="button" data-testid={`${testid}-opt-${o.id}`}
                 onClick={() => { onChange(o.id); setShow(false); setQ(""); }}
-                className="block w-full text-left px-3 py-2 text-sm hover:bg-brand-600 hover:text-white transition-colors border-b border-border/50">
+                className="block w-full text-left px-3 py-2 text-sm hover:bg-brand-600 hover:text-white transition-colors border-b border-nm-edge/40/50">
                 {label(o)}
               </button>
             ))}
@@ -597,11 +597,11 @@ function NeedsMatchingPanel({ title, hint, unmatched, open, cur, endpoint, stand
       <p className="text-xs text-muted-foreground mb-3">{hint}</p>
       <div className="space-y-2">
         {unmatched.map((p) => (
-          <div key={p.id} className="flex flex-wrap items-center gap-2 bg-card border border-border rounded-lg p-2" data-testid={`${testid}-item-${p.id}`}>
+          <div key={p.id} className="flex flex-wrap items-center gap-2 bg-nm nm-btn p-2" data-testid={`${testid}-item-${p.id}`}>
             <span className="text-sm font-semibold">{f(p.remaining ?? p.amount)}</span>
             <span className="text-xs text-muted-foreground flex-1 min-w-0 truncate">{p.contact_name || "Unknown"}{p.date ? ` · ${p.date}` : ""}{p.invoice_number ? ` · ref ${p.invoice_number}` : ""}{p.applied > 0 ? ` · ${f(p.applied)} already applied` : ""}</span>
             <InvoicePicker open={open} value={picks[p.id] || ""} onChange={(v) => setPicks((s) => ({ ...s, [p.id]: v }))} cur={cur} testid={`match-picker-${p.id}`} />
-            <button onClick={() => match(p.id)} disabled={busy === p.id} data-testid={`match-btn-${p.id}`} className="px-3 py-1.5 text-xs font-medium border border-border bg-green-600 text-white transition-all disabled:opacity-50">Match</button>
+            <button onClick={() => match(p.id)} disabled={busy === p.id} data-testid={`match-btn-${p.id}`} className="px-3 py-1.5 text-xs font-medium nm-tile bg-success-600 text-white transition-all disabled:opacity-50">Match</button>
             <button onClick={() => standalone(p.id)} disabled={busy === p.id} data-testid={`standalone-btn-${p.id}`} className="px-3 py-1.5 text-xs font-medium nm-tile hover:bg-accent transition-all disabled:opacity-50">{standaloneLabel.btn}</button>
           </div>
         ))}
@@ -638,8 +638,8 @@ function RevenueTab({ data, cur, onDelete, onChange }) {
   const [statusFilter, setStatusFilter] = useState("all");  // all | awaiting | partial | paid | overdue
   const [sortKey, setSortKey] = useState("date-desc");       // date-desc | date-asc | amount-desc | overdue
 
-  const invStatus = (s) => s.status === "paid" ? { label: "received", cls: "bg-green-600 text-white" }
-    : s.status === "partial" ? { label: "partial", cls: "bg-brand-blue text-white" }
+  const invStatus = (s) => s.status === "paid" ? { label: "received", cls: "bg-success-600 text-white" }
+    : s.status === "partial" ? { label: "partial", cls: "bg-caution-100 text-caution-800" }
     : { label: "awaiting", cls: "bg-caution-50 text-caution-800" };
 
   const isOverdue = (s) => s.status !== "paid" && (daysSinceIso(s.date) || 0) > REVENUE_OVERDUE_DAYS;
@@ -687,8 +687,8 @@ function RevenueTab({ data, cur, onDelete, onChange }) {
           invoice is overdue, add a callout under Outstanding so the
           summary strip itself carries the alarm, not just the table. */}
       <div className="grid grid-cols-3 gap-3">
-        <KPI icon={CurrencyDollar} label="Billed" value={f(tt.billed || 0)} accent="text-green-600" />
-        <KPI icon={Receipt} label="Received" value={f(tt.received || 0)} accent="text-green-600" />
+        <KPI icon={CurrencyDollar} label="Billed" value={f(tt.billed || 0)} accent="text-success-600" />
+        <KPI icon={Receipt} label="Received" value={f(tt.received || 0)} accent="text-success-600" />
         <KPI icon={WarningCircle} label="Outstanding" value={f(tt.outstanding || 0)} accent="text-brand-600" />
       </div>
 
@@ -751,11 +751,11 @@ function RevenueTab({ data, cur, onDelete, onChange }) {
                   className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium border transition-colors ${
                     active
                       ? (dangerActive ? "border-danger-600 bg-danger-600 text-white" : "border-transparent bg-primary text-primary-foreground")
-                      : (dangerActive ? "border-danger-600 text-danger-600 hover:bg-danger-600/5" : "border-border text-muted-foreground hover:text-foreground")
+                      : (dangerActive ? "border-danger-600 text-danger-600 hover:bg-danger-600/5" : "border-nm-edge/40 text-muted-foreground hover:text-foreground")
                   } ${zero && !active ? "opacity-50" : ""}`}
                 >
                   {f.label}
-                  <span className={`label-mono px-1 py-px ${active ? "bg-white/20" : "bg-muted"}`}>{f.count}</span>
+                  <span className={`label-mono px-1 py-px ${active ? "bg-nm/20" : "bg-nm-sunken"}`}>{f.count}</span>
                 </button>
               );
             })}
@@ -769,7 +769,7 @@ function RevenueTab({ data, cur, onDelete, onChange }) {
         ) : (
           <div className="card-brutal overflow-x-auto" data-testid="revenue-invoices-table">
             <table className="w-full text-sm">
-              <thead><tr className="border-b border-border text-left text-xs font-medium text-muted-foreground">
+              <thead><tr className="border-b border-nm-edge/40 text-left text-xs font-medium text-muted-foreground">
                 <th className="p-3">Invoice</th><th className="p-3">Customer</th><th className="p-3">Date</th><th className="p-3">Status</th><th className="p-3 text-right">Amount</th><th className="p-3"></th>
               </tr></thead>
               <tbody>
@@ -780,7 +780,7 @@ function RevenueTab({ data, cur, onDelete, onChange }) {
                   return (
                   <tr
                     key={s.id}
-                    className={`border-b border-border/60 hover:bg-accent/50 ${overdue ? "bg-danger-600/[0.03]" : ""}`}
+                    className={`border-b border-nm-edge/40/60 hover:bg-accent/50 ${overdue ? "bg-danger-600/[0.03]" : ""}`}
                     data-testid={`revenue-invoice-row-${s.id}`}
                   >
                     <td className="p-3 font-medium">
@@ -791,7 +791,7 @@ function RevenueTab({ data, cur, onDelete, onChange }) {
                         <span className="label-mono text-muted-foreground mr-1.5">#{s.number}</span>
                       )}
                       <span>{s.title || (s.number ? "" : "Sale")}</span>
-                      {s.source && s.source !== "manual" && <Chip value={s.source} className={`ml-2 ${SOURCE_CHIP[s.source] || "bg-muted"}`} />}
+                      {s.source && s.source !== "manual" && <Chip value={s.source} className={`ml-2 ${SOURCE_CHIP[s.source] || "bg-nm-sunken"}`} />}
                       <AttachmentLink att={s.attachment} />
                     </td>
                     <td className="p-3 text-muted-foreground">{s.contact_name || "—"}</td>
@@ -815,7 +815,7 @@ function RevenueTab({ data, cur, onDelete, onChange }) {
               </tbody>
               {filtered.length > 1 && (
                 <tfoot>
-                  <tr className="border-t border-border bg-muted/40">
+                  <tr className="border-t border-nm-edge/40 bg-nm-sunken/40">
                     <td colSpan={4} className="p-3 label-mono text-xs text-muted-foreground">
                       Showing {filtered.length} of {invoices.length}
                     </td>
@@ -836,17 +836,17 @@ function RevenueTab({ data, cur, onDelete, onChange }) {
           <h3 className="text-sm font-medium mb-3">Payments Received ({payments.length})</h3>
           <div className="card-brutal overflow-x-auto" data-testid="revenue-payments-table">
             <table className="w-full text-sm">
-              <thead><tr className="border-b border-border text-left text-xs font-medium text-muted-foreground">
+              <thead><tr className="border-b border-nm-edge/40 text-left text-xs font-medium text-muted-foreground">
                 <th className="p-3">Date</th><th className="p-3">Customer</th><th className="p-3">Method</th><th className="p-3">Reference</th><th className="p-3 text-right">Amount</th><th className="p-3"></th>
               </tr></thead>
               <tbody>
                 {payments.map((p) => (
-                  <tr key={p.id} className="border-b border-border/60 hover:bg-accent/50" data-testid={`revenue-payment-row-${p.id}`}>
+                  <tr key={p.id} className="border-b border-nm-edge/40/60 hover:bg-accent/50" data-testid={`revenue-payment-row-${p.id}`}>
                     <td className="p-3 text-muted-foreground">{p.date || "—"}</td>
-                    <td className="p-3 font-medium">{p.contact_name || "—"}{p.source && p.source !== "manual" && <Chip value={p.source} className={`ml-2 ${SOURCE_CHIP[p.source] || "bg-muted"}`} />}</td>
+                    <td className="p-3 font-medium">{p.contact_name || "—"}{p.source && p.source !== "manual" && <Chip value={p.source} className={`ml-2 ${SOURCE_CHIP[p.source] || "bg-nm-sunken"}`} />}</td>
                     <td className="p-3 text-muted-foreground">{p.method || "—"}</td>
                     <td className="p-3 text-muted-foreground">{p.reference || p.invoice_number || "—"}</td>
-                    <td className="p-3 text-right font-mono font-semibold text-green-600">{f(p.amount)}</td>
+                    <td className="p-3 text-right font-mono font-semibold text-success-600">{f(p.amount)}</td>
                     <td className="p-3 text-right"><button onClick={() => onDelete("payment", p.id)} data-testid={`revenue-payment-delete-${p.id}`} className="text-muted-foreground hover:text-danger-600"><Trash size={15} /></button></td>
                   </tr>
                 ))}
@@ -918,7 +918,7 @@ function OverviewTab({ summary }) {
               return (
                 <div key={v.vendor} className="flex items-center gap-3">
                   <span className="w-32 sm:w-48 truncate text-sm">{v.vendor}</span>
-                  <div className="flex-1 bg-muted h-5 rounded-sm overflow-hidden"><div className="h-full rounded-sm" style={{ width: `${(v.amount / max) * 100}%`, background: PALETTE[i % PALETTE.length] }} /></div>
+                  <div className="flex-1 bg-nm-sunken h-5 rounded-sm overflow-hidden"><div className="h-full rounded-sm" style={{ width: `${(v.amount / max) * 100}%`, background: PALETTE[i % PALETTE.length] }} /></div>
                   <span className="font-mono text-sm font-semibold w-24 text-right">{f(v.amount)}</span>
                 </div>
               );
@@ -937,14 +937,14 @@ function ExpensesTable({ rows, cur, onDelete }) {
   return (
     <div className="card-brutal overflow-x-auto" data-testid="expenses-table">
       <table className="w-full text-sm">
-        <thead><tr className="border-b border-border text-left text-xs font-medium text-muted-foreground">
+        <thead><tr className="border-b border-nm-edge/40 text-left text-xs font-medium text-muted-foreground">
           <th className="p-3">{t("finance.c_title")}</th><th className="p-3">{t("finance.c_category")}</th><th className="p-3">{t("finance.c_vendor")}</th><th className="p-3">{t("finance.c_date")}</th><th className="p-3">{t("finance.c_status")}</th><th className="p-3 text-right">{t("finance.c_amount")}</th><th className="p-3"></th>
         </tr></thead>
         <tbody>
           {rows.map((e) => (
-            <tr key={e.id} className="border-b border-border/60 hover:bg-accent/50" data-testid={`expense-row-${e.id}`}>
-              <td className="p-3 font-medium">{e.title}{e.source !== "manual" && <Chip value={e.source} className={`ml-2 ${SOURCE_CHIP[e.source] || "bg-muted"}`} />}<AttachmentLink att={e.attachment} /></td>
-              <td className="p-3"><Chip value={e.category} className="bg-muted text-foreground" /></td>
+            <tr key={e.id} className="border-b border-nm-edge/40/60 hover:bg-accent/50" data-testid={`expense-row-${e.id}`}>
+              <td className="p-3 font-medium">{e.title}{e.source !== "manual" && <Chip value={e.source} className={`ml-2 ${SOURCE_CHIP[e.source] || "bg-nm-sunken"}`} />}<AttachmentLink att={e.attachment} /></td>
+              <td className="p-3"><Chip value={e.category} className="bg-nm-sunken text-foreground" /></td>
               <td className="p-3 text-muted-foreground">{e.vendor_name || "—"}</td>
               <td className="p-3 text-muted-foreground">{e.date || "—"}</td>
               <td className="p-3"><Chip value={e.status} className={e.status === "paid" ? "bg-success-50 text-success-800" : "bg-caution-50 text-caution-800"} /></td>
@@ -965,17 +965,17 @@ function AssetsTable({ rows, cur, onDelete }) {
   return (
     <div className="card-brutal overflow-x-auto" data-testid="assets-table">
       <table className="w-full text-sm">
-        <thead><tr className="border-b border-border text-left text-xs font-medium text-muted-foreground">
+        <thead><tr className="border-b border-nm-edge/40 text-left text-xs font-medium text-muted-foreground">
           <th className="p-3">{t("finance.a_asset")}</th><th className="p-3">{t("finance.c_category")}</th><th className="p-3">{t("finance.c_vendor")}</th><th className="p-3">{t("finance.a_bought")}</th><th className="p-3">{t("finance.c_status")}</th><th className="p-3 text-right">{t("finance.a_value")}</th><th className="p-3"></th>
         </tr></thead>
         <tbody>
           {rows.map((a) => (
-            <tr key={a.id} className="border-b border-border/60 hover:bg-accent/50" data-testid={`asset-row-${a.id}`}>
-              <td className="p-3 font-medium">{a.name}{a.source !== "manual" && <Chip value={a.source} className={`ml-2 ${SOURCE_CHIP[a.source] || "bg-muted"}`} />}<AttachmentLink att={a.attachment} /></td>
-              <td className="p-3"><Chip value={a.category} className="bg-muted text-foreground" /></td>
+            <tr key={a.id} className="border-b border-nm-edge/40/60 hover:bg-accent/50" data-testid={`asset-row-${a.id}`}>
+              <td className="p-3 font-medium">{a.name}{a.source !== "manual" && <Chip value={a.source} className={`ml-2 ${SOURCE_CHIP[a.source] || "bg-nm-sunken"}`} />}<AttachmentLink att={a.attachment} /></td>
+              <td className="p-3"><Chip value={a.category} className="bg-nm-sunken text-foreground" /></td>
               <td className="p-3 text-muted-foreground">{a.vendor_name || "—"}</td>
               <td className="p-3 text-muted-foreground">{a.purchase_date || "—"}</td>
-              <td className="p-3"><Chip value={a.status} className={a.status === "active" ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"} /></td>
+              <td className="p-3"><Chip value={a.status} className={a.status === "active" ? "bg-primary text-primary-foreground" : "bg-nm-sunken text-foreground"} /></td>
               <td className="p-3 text-right font-mono font-semibold">{f(a.purchase_amount)}</td>
               <td className="p-3 text-right"><button onClick={() => onDelete(a.id)} className="text-muted-foreground hover:text-danger-600"><Trash size={15} /></button></td>
             </tr>
@@ -993,12 +993,12 @@ function InventoryTable({ rows, cur, onDelete }) {
   return (
     <div className="card-brutal overflow-x-auto" data-testid="inventory-table">
       <table className="w-full text-sm">
-        <thead><tr className="border-b border-border text-left text-xs font-medium text-muted-foreground">
+        <thead><tr className="border-b border-nm-edge/40 text-left text-xs font-medium text-muted-foreground">
           <th className="p-3">{t("finance.i_item")}</th><th className="p-3">{t("finance.i_sku")}</th><th className="p-3">{t("finance.i_qty")}</th><th className="p-3">{t("finance.i_unitcost")}</th><th className="p-3">{t("finance.c_vendor")}</th><th className="p-3 text-right">{t("finance.i_value")}</th><th className="p-3"></th>
         </tr></thead>
         <tbody>
           {rows.map((i) => (
-            <tr key={i.id} className="border-b border-border/60 hover:bg-accent/50" data-testid={`inv-row-${i.id}`}>
+            <tr key={i.id} className="border-b border-nm-edge/40/60 hover:bg-accent/50" data-testid={`inv-row-${i.id}`}>
               <td className="p-3 font-medium">{i.item}<AttachmentLink att={i.attachment} /></td>
               <td className="p-3 text-muted-foreground">{i.sku || "—"}</td>
               <td className="p-3 font-mono">{i.quantity} {i.unit}</td>
@@ -1106,7 +1106,7 @@ function CaptureHero({ pendingCount, onIngested, onOpenInbox }) {
           <button
             data-testid="finance-hero-inbox-badge"
             onClick={onOpenInbox}
-            className="flex items-center gap-2 border border-border bg-brand-600 text-white px-3 py-2 text-xs font-medium transition-all"
+            className="flex items-center gap-2 nm-tile bg-brand-600 text-white px-3 py-2 text-xs font-medium transition-all"
           >
             <Tray size={14} weight="bold" />
             {pendingCount} in Inbox →

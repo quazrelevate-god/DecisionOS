@@ -256,7 +256,7 @@ function SelfView({ data }) {
       {/* Hero -- personal score */}
       <div className="card-brutal p-8 mb-8 flex flex-col lg:flex-row items-center gap-8" data-testid="operating-self-hero">
         <div className="flex flex-col items-center shrink-0">
-          <div className="w-36 h-36 flex flex-col items-center justify-center border-4 border-border bg-white">
+          <div className="w-36 h-36 flex flex-col items-center justify-center nm-tile bg-nm">
             {hasActivity ? (
               <>
                 <span className={`text-5xl font-medium leading-none tabular-nums ${scoreColor(scoreOfMe)}`} data-testid="operating-self-score">
@@ -370,7 +370,7 @@ function SelfView({ data }) {
           </div>
           <div className="card-brutal divide-y divide-black/10 mb-8" data-testid="operating-self-workflows">
             {activeWfs.map((w) => (
-              <Link key={w.id} to="/workflows" className="p-4 flex items-center gap-4 hover:bg-muted/40 transition-colors group">
+              <Link key={w.id} to="/workflows" className="p-4 flex items-center gap-4 hover:bg-nm-sunken/40 transition-colors group">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold truncate group-hover:text-brand-600">{w.title}</p>
                   <p className="label-mono text-muted-foreground">
@@ -422,7 +422,7 @@ function SelfView({ data }) {
 // -----------------------------------------------------------------------------
 function StatTile({ label, value, accent, hint }) {
   return (
-    <div className="border border-border p-3">
+    <div className="nm-tile p-3">
       <p className="label-mono text-muted-foreground">{label}</p>
       <p className={`font-heading text-2xl font-black tracking-tight mt-1 ${accent || ""}`}>{value}</p>
       {hint && <p className="text-xs text-muted-foreground mt-1 leading-tight">{hint}</p>}
@@ -558,7 +558,7 @@ function DeltaChip({ value, sign }) {
   const abs = Math.abs(value);
   const tone = isUp ? "bg-green-100 text-green-800 border-green-600"
              : isDown ? "bg-red-100 text-red-800 border-red-600"
-             : "bg-muted text-muted-foreground border-border";
+             : "bg-nm-sunken text-muted-foreground border-nm-edge/40";
   const Icon = isUp ? ArrowUp : isDown ? ArrowDown : null;
   return (
     <span
@@ -588,7 +588,7 @@ function DexExplainerCard() {
   };
   return (
     <div className="card-brutal p-5 mb-4 flex items-start gap-4 bg-brand-600/5" data-testid="operating-dex-explainer">
-      <div className="w-10 h-10 border-2 border-brand-600 bg-white flex items-center justify-center shrink-0" aria-hidden="true">
+      <div className="w-10 h-10 border-2 border-brand-600 bg-nm flex items-center justify-center shrink-0" aria-hidden="true">
         <Sparkle size={18} weight="bold" className="text-brand-600" />
       </div>
       <div className="flex-1 min-w-0">
@@ -685,7 +685,7 @@ function CategoryCard({ cat, value, drivers, onDrillIn }) {
         >{has ? value : "—"}</span>
         <span className="label-mono text-muted-foreground">/ 100</span>
       </div>
-      <div className="h-2 bg-muted border border-border mb-3" aria-hidden="true">
+      <div className="h-2 overflow-hidden rounded-pill nm-inset mb-3" aria-hidden="true">
         {/* NM-10: monochrome. Four categories in four different hues made the
                 page read as a chart legend; the VALUE beside it already says
                 good or bad. */}
@@ -700,7 +700,7 @@ function CategoryCard({ cat, value, drivers, onDrillIn }) {
           </li>
         ))}
       </ul>
-      <div className="mt-3 pt-3 border-t border-border flex items-center justify-between text-xs font-semibold text-muted-foreground">
+      <div className="mt-3 pt-3 border-t border-nm-edge/40 flex items-center justify-between text-xs font-semibold text-muted-foreground">
         <span>See breakdown</span>
         <CaretRight size={12} weight="bold" />
       </div>
@@ -734,7 +734,7 @@ function CategoryDrillModal({ cat, value, drivers, drill, onClose }) {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-white border-4 border-border max-w-2xl w-full max-h-[85vh] flex flex-col shadow-xl"
+        className="nm-raised max-w-2xl w-full max-h-[85vh] flex flex-col shadow-nm-lg"
       >
         <div className="p-5 border-b border-nm-edge/30 bg-nm-sunken flex items-start gap-4">
           <div className="w-12 h-12 flex items-center justify-center nm-tile shrink-0">
@@ -760,16 +760,16 @@ function CategoryDrillModal({ cat, value, drivers, drill, onClose }) {
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          <div className="p-5 border-b border-border">
+          <div className="p-5 border-b border-nm-edge/40">
             <p className="text-sm font-semibold mb-1">{drill?.hero}</p>
             <p className="font-mono text-xs text-muted-foreground mt-2">{cat.formula}</p>
           </div>
 
-          <div className="p-5 border-b border-border">
+          <div className="p-5 border-b border-nm-edge/40">
             <p className="text-xs font-medium mb-3">Top drivers this period</p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {drivers.map((d, i) => (
-                <div key={i} className="border border-border p-3">
+                <div key={i} className="nm-tile p-3">
                   <p className="label-mono text-muted-foreground">{d.label}</p>
                   <p className={`font-heading text-xl font-black tabular-nums ${toneColor[d.tone] || ""}`}>{d.value}</p>
                 </div>
@@ -780,7 +780,7 @@ function CategoryDrillModal({ cat, value, drivers, drill, onClose }) {
           {drill?.items && (
             <div className="p-5">
               <p className="text-xs font-medium mb-3">Specifics</p>
-              <ul className="divide-y divide-black/10 border border-border">
+              <ul className="divide-y divide-black/10 nm-tile">
                 {drill.items.map((item, i) => (
                   <li key={i} className="p-3 flex items-center gap-3">
                     <span className={`w-1.5 h-8 shrink-0 ${
@@ -800,12 +800,12 @@ function CategoryDrillModal({ cat, value, drivers, drill, onClose }) {
         </div>
 
         {drill?.action && (
-          <div className="p-4 border-t border-border flex items-center justify-between gap-3 bg-muted/40">
+          <div className="p-4 border-t border-nm-edge/40 flex items-center justify-between gap-3 bg-nm-sunken/40">
             <span className="text-xs text-muted-foreground">Ready to act?</span>
             <Link
               to={drill.action.to}
               onClick={onClose}
-              className="inline-flex items-center gap-2 border border-border bg-black text-white px-4 py-2 text-sm font-semibold hover:bg-brand-600 hover:border-brand-600 transition-colors"
+              className="inline-flex items-center gap-2 nm-tile bg-black text-white px-4 py-2 text-sm font-semibold hover:bg-brand-600 hover:border-brand-600 transition-colors"
             >
               {drill.action.label}
               <ArrowRight size={14} weight="bold" />
@@ -865,7 +865,7 @@ function Leaderboard({ employees }) {
           const delta = demoEmpDeltas[e.role];
           return (
             <div key={e.id} data-testid={`operating-emp-${e.id}`}
-              className="p-4 flex items-center gap-4 hover:bg-muted/40 transition-colors group">
+              className="p-4 flex items-center gap-4 hover:bg-nm-sunken/40 transition-colors group">
               <span className="font-heading text-lg font-black text-muted-foreground w-6">{i + 1}</span>
               {/* Primary action: full ops view (open tasks + active workflows +
                   peer context). Sprint 1 batch 4 -- was /coach which only had
@@ -925,7 +925,7 @@ function InlineCapture() {
   return (
     <form
       onSubmit={submit}
-      className="mt-5 border border-border bg-muted/40 p-3 flex items-center gap-2"
+      className="mt-5 nm-tile bg-nm-sunken/40 p-3 flex items-center gap-2"
       data-testid="operating-inline-capture"
     >
       <Microphone size={16} weight="bold" className="text-brand-600 shrink-0" />
@@ -940,7 +940,7 @@ function InlineCapture() {
       <button
         type="submit"
         disabled={!text.trim()}
-        className="border border-border bg-black text-white px-3 py-1 text-xs font-semibold hover:bg-brand-600 hover:border-brand-600 transition-colors disabled:opacity-40"
+        className="nm-tile bg-black text-white px-3 py-1 text-xs font-semibold hover:bg-brand-600 hover:border-brand-600 transition-colors disabled:opacity-40"
       >
         Capture
       </button>
@@ -962,19 +962,19 @@ function OperatingScoreSkeleton() {
   return (
     <div aria-busy="true" aria-live="polite" data-testid="operating-skeleton">
       <div className="mb-6">
-        <div className="h-3 w-40 bg-muted mb-2 animate-pulse" />
-        <div className="h-8 w-64 bg-muted animate-pulse" />
+        <div className="h-3 w-40 bg-nm-sunken mb-2 animate-pulse" />
+        <div className="h-8 w-64 bg-nm-sunken animate-pulse" />
       </div>
       <div className="card-brutal p-8 mb-8 flex flex-col lg:flex-row items-center gap-8">
-        <div className="w-36 h-36 border-4 border-border bg-muted shrink-0 animate-pulse" />
+        <div className="w-36 h-36 nm-tile bg-nm-sunken shrink-0 animate-pulse" />
         <div className="flex-1 w-full space-y-3">
           {[0, 1, 2, 3].map((i) => (
             <div key={i}>
               <div className="flex items-center justify-between mb-1">
-                <div className="h-3 w-32 bg-muted animate-pulse" />
-                <div className="h-4 w-8 bg-muted animate-pulse" />
+                <div className="h-3 w-32 bg-nm-sunken animate-pulse" />
+                <div className="h-4 w-8 bg-nm-sunken animate-pulse" />
               </div>
-              <div className="h-3 bg-muted border border-border" />
+              <div className="h-3 bg-nm-sunken nm-tile" />
             </div>
           ))}
         </div>
@@ -982,20 +982,20 @@ function OperatingScoreSkeleton() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
         {[0, 1, 2, 3].map((i) => (
           <div key={i} className="card-brutal p-4">
-            <div className="h-3 w-16 bg-muted mb-3 animate-pulse" />
-            <div className="h-6 w-10 bg-muted animate-pulse" />
+            <div className="h-3 w-16 bg-nm-sunken mb-3 animate-pulse" />
+            <div className="h-6 w-10 bg-nm-sunken animate-pulse" />
           </div>
         ))}
       </div>
       <div className="card-brutal divide-y divide-black/10">
         {[0, 1, 2].map((i) => (
           <div key={i} className="p-4 flex items-center gap-4">
-            <div className="h-4 w-4 bg-muted animate-pulse" />
+            <div className="h-4 w-4 bg-nm-sunken animate-pulse" />
             <div className="flex-1 space-y-2">
-              <div className="h-3 w-40 bg-muted animate-pulse" />
-              <div className="h-3 w-56 bg-muted animate-pulse" />
+              <div className="h-3 w-40 bg-nm-sunken animate-pulse" />
+              <div className="h-3 w-56 bg-nm-sunken animate-pulse" />
             </div>
-            <div className="w-14 h-14 border border-border/20 bg-muted shrink-0 animate-pulse" />
+            <div className="w-14 h-14 nm-tile/20 bg-nm-sunken shrink-0 animate-pulse" />
           </div>
         ))}
       </div>
@@ -1019,7 +1019,7 @@ function NotEnoughDataEmptyState({ stats }) {
     <div className="card-brutal p-8 mb-8" data-testid="operating-not-ready">
       <div className="flex flex-col lg:flex-row items-start gap-8">
         <div className="flex flex-col items-center shrink-0">
-          <div className="w-36 h-36 flex flex-col items-center justify-center border-4 border-border bg-muted text-center px-3">
+          <div className="w-36 h-36 flex flex-col items-center justify-center rounded-full nm-inset text-center px-4">
             <Gauge size={30} weight="bold" className="text-muted-foreground mb-1" />
             <span className="label-mono text-muted-foreground leading-tight" data-testid="operating-overall-score">
               Score kicks in soon
@@ -1071,8 +1071,8 @@ function NotEnoughDataEmptyState({ stats }) {
 
 function ChecklistItem({ done, label, hint, actionLabel, actionTo, icon: Icon }) {
   return (
-    <div className={`border-2 ${done ? "border-green-600/40 bg-green-50" : "border-border"} p-4 flex items-start gap-3`}>
-      <div className={`w-6 h-6 flex items-center justify-center border-2 ${done ? "border-success-600 bg-success-600 text-white" : "border-border"} shrink-0 mt-0.5`}>
+    <div className={`border-2 ${done ? "border-green-600/40 bg-green-50" : "border-nm-edge/40"} p-4 flex items-start gap-3`}>
+      <div className={`w-6 h-6 flex items-center justify-center border-2 ${done ? "border-success-600 bg-success-600 text-white" : "border-nm-edge/40"} shrink-0 mt-0.5`}>
         {done && <Check size={14} weight="bold" />}
       </div>
       <div className="flex-1 min-w-0">
@@ -1123,7 +1123,7 @@ function FormulaExplainer({ weights = DEFAULT_WEIGHTS, setWeights }) {
 
           {/* U7-01.17 -- weights editor. Presets first, sliders below. */}
           {setWeights && (
-            <div className="border border-border p-4 bg-muted/40">
+            <div className="nm-tile p-4 bg-nm-sunken/40">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-xs font-medium">Customize weights for your business</p>
                 <span className={`label-mono ${total === 100 ? "text-muted-foreground" : "text-danger-600"}`}>
@@ -1136,7 +1136,7 @@ function FormulaExplainer({ weights = DEFAULT_WEIGHTS, setWeights }) {
                     key={k}
                     type="button"
                     onClick={() => applyPreset(k)}
-                    className="border border-border px-3 py-1.5 text-xs font-semibold hover:bg-brand-600 hover:text-white hover:border-brand-600 transition-colors"
+                    className="nm-tile px-3 py-1.5 text-xs font-semibold hover:bg-brand-600 hover:text-white hover:border-brand-600 transition-colors"
                   >
                     {p.label}
                   </button>
@@ -1171,7 +1171,7 @@ function FormulaExplainer({ weights = DEFAULT_WEIGHTS, setWeights }) {
           )}
 
           {CATS.map((c) => (
-            <div key={c.key} className="border-l-4 pl-4 border-border">
+            <div key={c.key} className="border-l-4 pl-4 border-nm-edge/40">
               <div className="flex items-center gap-2 mb-1">
                 <c.icon size={14} weight="bold" className="text-muted-foreground" />
                 <span className="font-semibold ">{c.label}</span>

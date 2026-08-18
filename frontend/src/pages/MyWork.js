@@ -32,7 +32,7 @@ import {
 // hard black border — eight of these in a row read as a control panel. Now a
 // hairline pill in sentence case; the active state each call-site applies on
 // top (indigo tint) is what carries the emphasis, not the frame.
-const CTRL = "flex items-center justify-center gap-1.5 px-3 lg:px-3.5 py-2 text-xs lg:text-sm font-medium rounded-lg border border-border transition-colors text-center leading-tight";
+const CTRL = "flex items-center justify-center gap-1.5 px-3 lg:px-3.5 py-2 text-xs lg:text-sm font-medium nm-btn text-center leading-tight";
 
 const STATUS_OPTIONS = [
   { key: "todo", label: "Not Started" },
@@ -56,7 +56,7 @@ function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel }) 
   const [toId, setToId] = useState("");
   const [toRole, setToRole] = useState("");
   const [busy, setBusy] = useState(false);
-  const inp = "w-full border border-border px-2 py-1.5 text-sm focus:outline-none";
+  const inp = "w-full nm-field px-2.5 py-2 text-sm";
 
   const submit = async () => {
     if (!text.trim()) return toast.error("Write what you found");
@@ -80,13 +80,13 @@ function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel }) 
   ];
 
   return (
-    <div className="border border-border rounded-lg p-3 space-y-2 bg-muted/40" data-testid={`update-form-${taskId}`}>
+    <div className="nm-btn p-3 space-y-2 bg-nm-sunken/40" data-testid={`update-form-${taskId}`}>
       <textarea rows={2} value={text} onChange={(e) => setText(e.target.value)} data-testid={`update-text-${taskId}`}
         placeholder="What did you find? e.g. Logistics can't commit to a date — supplier issue" className={inp} />
       <div className="flex gap-1">
         {ACTIONS.map((a) => (
           <button key={a.key} onClick={() => setAction(a.key)} data-testid={`update-action-${a.key}-${taskId}`}
-            className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium border border-border transition-colors ${action === a.key ? "bg-brand-50 text-brand-700 border-brand-200" : "bg-card hover:bg-accent"}`}>
+            className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium nm-tile transition-colors ${action === a.key ? "bg-brand-50 text-brand-700 border-brand-200" : "bg-nm hover:bg-accent"}`}>
             <a.icon size={13} weight="bold" /> {a.label}
           </button>
         ))}
@@ -106,10 +106,10 @@ function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel }) 
       {action === "escalate" && <p className="text-xs text-muted-foreground">This will alert the owner and create a follow-up for them.</p>}
       <div className="flex gap-2">
         <button onClick={submit} disabled={busy} data-testid={`update-submit-${taskId}`}
-          className="flex-1 bg-primary text-primary-foreground rounded-lg py-1.5 text-xs font-medium border border-border transition-all disabled:opacity-50">
+          className="flex-1 bg-primary text-primary-foreground rounded-lg py-1.5 text-xs font-medium nm-tile transition-all disabled:opacity-50">
           {busy ? "Posting…" : "Post"}
         </button>
-        <button onClick={onCancel} className="px-3 py-1.5 text-xs font-medium rounded-lg border border-border hover:bg-accent">Cancel</button>
+        <button onClick={onCancel} className="px-3 py-1.5 text-xs font-medium nm-btn hover:bg-accent">Cancel</button>
       </div>
     </div>
   );
@@ -127,7 +127,7 @@ function TaskTrail({ t, members, roleOptions, onChange }) {
   // inline. Full section header only when there's actual activity to
   // frame.
   return (
-    <div className="mt-4 border-t border-border pt-4" data-testid={`task-trail-${t.id}`}>
+    <div className="mt-4 border-t border-nm-edge/40 pt-4" data-testid={`task-trail-${t.id}`}>
       {hasUpdates ? (
         <div className="flex items-center justify-between mb-2">
           <span className="flex items-center gap-2 font-heading font-medium tracking-tight text-sm">
@@ -135,7 +135,7 @@ function TaskTrail({ t, members, roleOptions, onChange }) {
           </span>
           {!open && (
             <button onClick={() => setOpen(true)} data-testid={`add-update-${t.id}`}
-              className="flex items-center gap-1 text-xs font-medium rounded-lg border border-border px-2 py-1 hover:bg-accent transition-colors">
+              className="flex items-center gap-1 text-xs font-medium nm-btn px-2 py-1 hover:bg-accent transition-colors">
               <Plus size={12} weight="bold" /> Update / Escalate
             </button>
           )}
@@ -158,7 +158,7 @@ function TaskTrail({ t, members, roleOptions, onChange }) {
           {updates.map((u) => {
             const Icon = UPDATE_ICON[u.kind] || ChatText;
             return (
-              <li key={u.id} className="flex items-start gap-2 border border-border p-2.5">
+              <li key={u.id} className="flex items-start gap-2 nm-tile p-2.5">
                 <Icon size={15} weight="bold" className={`mt-0.5 shrink-0 ${u.kind === "escalate" ? "text-danger-600" : u.kind === "handoff" ? "text-brand-blue" : "text-muted-foreground"}`} />
                 <div className="min-w-0 flex-1">
                   {u.step_text && <p className="label-mono text-muted-foreground">On: {u.step_text}</p>}
@@ -279,7 +279,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
     } catch { setAsk((a) => ({ ...a, [s.id]: { error: true } })); }
   };
 
-  const inp = "flex-1 border border-border px-2 py-1.5 text-sm focus:outline-none";
+  const inp = "flex-1 nm-field px-2.5 py-2 text-sm";
 
   if (!plan && !steps.length) {
     // U7-05.EXP polish (2026-08-17): was two big dashed boxes taking
@@ -296,7 +296,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
           <Sparkle size={13} weight="bold" /> {busy ? "Thinking…" : "Ask Dex"}
         </button>
         <button onClick={startManual} disabled={busy} data-testid={`manual-plan-${t.id}`}
-          className="inline-flex items-center gap-1.5 border border-border rounded-lg px-3 py-1 text-xs font-medium hover:bg-accent transition-colors disabled:opacity-50">
+          className="inline-flex items-center gap-1.5 nm-btn px-3 py-1 text-xs font-medium hover:bg-accent transition-colors disabled:opacity-50">
           <PencilSimple size={13} weight="bold" /> Add manually
         </button>
       </div>
@@ -304,15 +304,15 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
   }
 
   return (
-    <div className="mt-4 border-t border-border pt-4" data-testid={`exec-plan-${t.id}`}>
+    <div className="mt-4 border-t border-nm-edge/40 pt-4" data-testid={`exec-plan-${t.id}`}>
       <div className="flex items-center justify-between mb-2">
         <span className="flex items-center gap-2 font-heading font-medium tracking-tight text-sm">
           <ListChecks size={16} weight="bold" className="text-brand-600" /> AI Execution Guide
         </span>
         <span className="label-mono" data-testid={`exec-progress-${t.id}`}>{progress}%</span>
       </div>
-      <div className="h-2 bg-muted border border-border mb-3">
-        <div className="h-full bg-brand-600 transition-all" style={{ width: `${progress}%` }} />
+      <div className="h-2 overflow-hidden rounded-pill nm-inset mb-3">
+        <div className="h-full rounded-pill bg-brand-600 transition-all" style={{ width: `${progress}%` }} />
       </div>
 
       <div className="space-y-2">
@@ -324,27 +324,27 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
                   <textarea value={s.text} onChange={(e) => editStep(i, e.target.value)} rows={2}
                     className={`${inp} w-full resize-y leading-snug`} />
                   <div className="flex gap-1 shrink-0 self-end sm:self-start">
-                    <button onClick={() => setViewStep(s)} data-testid={`exec-expand-${t.id}-${i}`} className="p-2 sm:p-1 rounded-lg border border-border hover:bg-accent" title="View full"><ArrowsOutSimple size={14} weight="bold" /></button>
-                    <button onClick={() => moveStep(i, -1)} className="p-2 sm:p-1 rounded-lg border border-border hover:bg-accent" title="Up"><ArrowUp size={14} weight="bold" /></button>
-                    <button onClick={() => moveStep(i, 1)} className="p-2 sm:p-1 rounded-lg border border-border hover:bg-accent" title="Down"><ArrowDown size={14} weight="bold" /></button>
-                    <button onClick={() => removeStep(i)} data-testid={`exec-remove-${t.id}-${i}`} className="p-2 sm:p-1 border border-border hover:bg-danger-600 hover:text-white" title="Remove"><Trash size={14} weight="bold" /></button>
+                    <button onClick={() => setViewStep(s)} data-testid={`exec-expand-${t.id}-${i}`} className="p-2 sm:p-1 nm-btn hover:bg-accent" title="View full"><ArrowsOutSimple size={14} weight="bold" /></button>
+                    <button onClick={() => moveStep(i, -1)} className="p-2 sm:p-1 nm-btn hover:bg-accent" title="Up"><ArrowUp size={14} weight="bold" /></button>
+                    <button onClick={() => moveStep(i, 1)} className="p-2 sm:p-1 nm-btn hover:bg-accent" title="Down"><ArrowDown size={14} weight="bold" /></button>
+                    <button onClick={() => removeStep(i)} data-testid={`exec-remove-${t.id}-${i}`} className="p-2 sm:p-1 nm-tile hover:bg-danger-600 hover:text-white" title="Remove"><Trash size={14} weight="bold" /></button>
                   </div>
                 </>
               ) : (
                 <>
                   <button onClick={() => toggle(i)} data-testid={`exec-toggle-${t.id}-${i}`}
-                    className={`w-5 h-5 shrink-0 mt-0.5 border border-border flex items-center justify-center ${s.done ? "bg-brand-600 text-white" : "bg-card"}`}>
+                    className={`w-5 h-5 shrink-0 mt-0.5 nm-tile flex items-center justify-center ${s.done ? "bg-brand-600 text-white" : "bg-nm"}`}>
                     {s.done && <CheckCircle size={13} weight="bold" />}
                   </button>
                   <button onClick={() => setViewStep(s)} data-testid={`exec-view-${t.id}-${i}`}
                     className={`text-sm flex-1 min-w-0 text-left break-words hover:underline decoration-dotted ${s.done ? "line-through text-muted-foreground" : ""}`}>{s.text}</button>
                   <div className="flex gap-1 shrink-0">
                     <button onClick={() => askAI(s)} data-testid={`exec-ask-${t.id}-${i}`}
-                      className="flex items-center gap-1 text-xs font-medium rounded-lg border border-border px-2 py-1 hover:bg-accent transition-colors">
+                      className="flex items-center gap-1 text-xs font-medium nm-btn px-2 py-1 hover:bg-accent transition-colors">
                       <Sparkle size={12} weight="bold" /> Ask AI
                     </button>
                     <button onClick={() => setUpdStep(updStep === s.id ? null : s.id)} data-testid={`exec-update-${t.id}-${i}`}
-                      className="flex items-center gap-1 text-xs font-medium rounded-lg border border-border px-2 py-1 hover:bg-accent transition-colors">
+                      className="flex items-center gap-1 text-xs font-medium nm-btn px-2 py-1 hover:bg-accent transition-colors">
                       <ArrowBendUpRight size={12} weight="bold" /> Update
                     </button>
                   </div>
@@ -358,7 +358,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
               </div>
             )}
             {ask[s.id] && (
-              <div className="ml-7 mt-1.5 mb-2 border border-border bg-brand-paper p-2.5 text-xs" data-testid={`exec-ask-result-${t.id}-${i}`}>
+              <div className="ml-7 mt-1.5 mb-2 nm-tile bg-nm-sunken p-2.5 text-xs" data-testid={`exec-ask-result-${t.id}-${i}`}>
                 {ask[s.id].loading ? <p className="font-mono">AI is thinking…</p>
                   : ask[s.id].error ? <p className="text-danger-600">Couldn't fetch a suggestion.</p>
                   : (
@@ -385,7 +385,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
         <div className="flex gap-2 mt-3">
           <input value={newStep} onChange={(e) => setNewStep(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addStep()}
             placeholder="Add your own step…" data-testid={`exec-newstep-${t.id}`} className={inp} />
-          <button onClick={addStep} data-testid={`exec-add-${t.id}`} className="px-3 border border-border hover:bg-accent"><Plus size={14} weight="bold" /></button>
+          <button onClick={addStep} data-testid={`exec-add-${t.id}`} className="px-3 nm-tile hover:bg-accent"><Plus size={14} weight="bold" /></button>
         </div>
       )}
 
@@ -393,22 +393,22 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
         {editing ? (
           <>
             <button onClick={() => save("accepted")} disabled={busy} data-testid={`exec-accept-${t.id}`}
-              className="flex-1 min-w-[140px] flex items-center justify-center gap-2 bg-primary text-primary-foreground py-2 text-sm font-medium rounded-lg border border-border transition-all disabled:opacity-50">
+              className="flex-1 min-w-[140px] flex items-center justify-center gap-2 bg-primary text-primary-foreground py-2 text-sm font-medium nm-btn transition-all disabled:opacity-50">
               <CheckCircle size={16} weight="bold" /> Accept plan
             </button>
             <button onClick={generate} disabled={busy} data-testid={`exec-regenerate-${t.id}`}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-border hover:bg-accent transition-colors disabled:opacity-50">
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium nm-btn hover:bg-accent transition-colors disabled:opacity-50">
               <ArrowClockwise size={15} weight="bold" /> Regenerate
             </button>
             <button onClick={cancelAIPlan} disabled={busy} data-testid={`exec-cancel-plan-${t.id}`}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-border text-brand-600 hover:bg-brand-600 hover:text-white transition-colors disabled:opacity-50">
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium nm-btn text-brand-600 hover:bg-brand-600 hover:text-white transition-colors disabled:opacity-50">
               <XCircle size={15} weight="bold" /> Cancel plan
             </button>
           </>
         ) : (
           t.status !== "done" && (
             <button onClick={() => setEditing(true)} data-testid={`exec-edit-${t.id}`}
-              className="flex items-center gap-2 text-sm font-medium rounded-lg border border-border px-4 py-2 hover:bg-accent transition-colors">
+              className="flex items-center gap-2 text-sm font-medium nm-btn px-4 py-2 hover:bg-accent transition-colors">
               <PencilSimple size={15} weight="bold" /> Customize steps
             </button>
           )
@@ -416,7 +416,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
       </div>
 
       <Dialog open={!!viewStep} onOpenChange={(o) => !o && setViewStep(null)}>
-        <DialogContent className="border border-border rounded-xl">
+        <DialogContent className="rounded-cardlg border border-nm-edge/40">
           <DialogHeader>
             <DialogTitle className="font-heading tracking-tight text-base flex items-center gap-2"><ListChecks size={18} weight="bold" className="text-brand-600" /> Execution Step</DialogTitle>
           </DialogHeader>
@@ -431,17 +431,17 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
 const PRIORITY_AXES = [
   { key: "business_impact", label: "Impact", color: "bg-brand-600",
     tip: "How much this moves the business -- customer relationship weight, workflow blockage, cross-team dependencies." },
-  { key: "revenue", label: "Revenue", color: "bg-green-600",
+  { key: "revenue", label: "Revenue", color: "bg-success-600",
     tip: "Amount tied to this task -- unpaid invoices, overdue collections, deal value." },
   { key: "risk", label: "Risk", color: "bg-brand-600",
     tip: "Downside if this slips -- customer complaints, compliance dates, financial penalties." },
-  { key: "urgency", label: "Urgency", color: "bg-orange-500",
+  { key: "urgency", label: "Urgency", color: "bg-caution-600",
     tip: "Time pressure -- days overdue, hours to due-date, escalation history." },
 ];
 
 function PriorityScoreBars({ scores }) {
   return (
-    <div className="mt-3 border border-border bg-black/[0.02] p-3" data-testid="priority-score-bars">
+    <div className="mt-3 nm-inset p-3" data-testid="priority-score-bars">
       <div className="flex items-center justify-between mb-2">
         <span className="label-mono text-muted-foreground flex items-center gap-1"><Sparkle size={12} weight="bold" className="text-brand-600" /> AI Priority</span>
         {scores.priority_score != null && (
@@ -461,8 +461,8 @@ function PriorityScoreBars({ scores }) {
             title={a.tip}
           >
             <span className="label-mono w-16 shrink-0 text-muted-foreground cursor-help">{a.label}</span>
-            <div className="flex-1 h-2 bg-muted border border-border">
-              <div className={`h-full ${a.color}`} style={{ width: `${scores[a.key] || 0}%` }} />
+            <div className="flex-1 h-2 overflow-hidden rounded-pill nm-inset">
+              <div className={`h-full rounded-pill ${a.color}`} style={{ width: `${scores[a.key] || 0}%` }} />
             </div>
             <span className="label-mono w-7 text-right tabular-nums">{scores[a.key] || 0}</span>
           </div>
@@ -503,19 +503,19 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
   const isAudio = (a) => a.kind === "voice" || (a.content_type || "").startsWith("audio/");
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) { setZoom(null); setConfirmDel(false); } onOpenChange(o); }}>
-      <DialogContent className="border border-border rounded-xl max-w-2xl max-h-[90vh] overflow-y-auto" data-testid={`task-detail-${t.id}`}>
+      <DialogContent className="rounded-cardlg border border-nm-edge/40 max-w-2xl max-h-[90vh] overflow-y-auto" data-testid={`task-detail-${t.id}`}>
         <DialogHeader>
           <DialogTitle className="font-heading tracking-tight text-base pr-6">{t.title}</DialogTitle>
         </DialogHeader>
         {zoom ? (
           <div className="space-y-3">
-            <button onClick={() => setZoom(null)} data-testid={`detail-zoom-back-${t.id}`} className="flex items-center gap-1 text-xs font-medium rounded-lg border border-border px-2 py-1 hover:bg-accent"><X size={14} weight="bold" /> Back to details</button>
-            <img src={zoom} alt="proof full" className="w-full h-auto max-h-[70vh] object-contain border border-border" />
+            <button onClick={() => setZoom(null)} data-testid={`detail-zoom-back-${t.id}`} className="flex items-center gap-1 text-xs font-medium nm-btn px-2 py-1 hover:bg-accent"><X size={14} weight="bold" /> Back to details</button>
+            <img src={zoom} alt="proof full" className="w-full h-auto max-h-[70vh] object-contain nm-tile" />
           </div>
         ) : (
           <div className="space-y-5">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-muted text-muted-foreground">{STATUS_LABEL[t.status] || t.status}</span>
+              <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-nm-sunken text-muted-foreground">{STATUS_LABEL[t.status] || t.status}</span>
               {t.assignee_name && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><UserCircle size={13} weight="bold" /> {t.assignee_name}</span>}
               {t.due_date && <span className="text-xs text-muted-foreground">due {new Date(t.due_date).toLocaleDateString()}</span>}
               <span className="label-mono text-muted-foreground ml-auto">{t.progress || 0}%</span>
@@ -528,7 +528,7 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
                 <ul className="space-y-1.5">
                   {steps.map((s) => (
                     <li key={s.id} className="flex items-start gap-2 text-sm" data-testid={`detail-step-${t.id}-${s.id}`}>
-                      <CheckCircle size={16} weight={s.done ? "fill" : "regular"} className={`mt-0.5 shrink-0 ${s.done ? "text-green-600" : "text-muted-foreground"}`} />
+                      <CheckCircle size={16} weight={s.done ? "fill" : "regular"} className={`mt-0.5 shrink-0 ${s.done ? "text-success-600" : "text-muted-foreground"}`} />
                       <span className={s.done ? "line-through text-muted-foreground" : ""}>{s.text}</span>
                     </li>
                   ))}
@@ -543,7 +543,7 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
                   {refs.map((a) => (
                     isImg(a)
                       ? <button key={a.url} type="button" onClick={() => setZoom(url(a.url))} data-testid={`detail-ref-photo-${t.id}-${a.url}`}
-                          className="relative w-24 h-24 border border-border overflow-hidden group" title="Click to view full image">
+                          className="relative w-24 h-24 nm-tile overflow-hidden group" title="Click to view full image">
                           <img src={url(a.url)} alt={a.filename || "reference"} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
                           <span className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"><MagnifyingGlassPlus size={20} weight="bold" className="text-white" /></span>
                         </button>
@@ -579,7 +579,7 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
                     <div className="flex flex-wrap gap-2">
                       {photos.map((a) => (
                         <button key={a.url} type="button" onClick={() => setZoom(url(a.url))} data-testid={`detail-photo-${t.id}-${a.url}`}
-                          className="relative w-24 h-24 border border-border overflow-hidden group" title="Click to view full photo">
+                          className="relative w-24 h-24 nm-tile overflow-hidden group" title="Click to view full photo">
                           <img src={url(a.url)} alt="proof" className="w-full h-full object-cover transition-transform group-hover:scale-105" />
                           <span className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"><MagnifyingGlassPlus size={20} weight="bold" className="text-white" /></span>
                         </button>
@@ -603,7 +603,7 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
                 <p className="flex items-center gap-2 font-heading font-medium tracking-tight text-sm mb-2"><ChatCircleText size={16} weight="bold" className="text-brand-600" /> Activity &amp; Handoffs</p>
                 <ul className="space-y-2">
                   {updates.map((u) => (
-                    <li key={u.id} className="flex items-start gap-2 border border-border p-2.5">
+                    <li key={u.id} className="flex items-start gap-2 nm-tile p-2.5">
                       <ChatText size={15} weight="bold" className="mt-0.5 shrink-0 text-muted-foreground" />
                       <div className="min-w-0 flex-1">
                         {u.step_text && <p className="label-mono text-muted-foreground">On: {u.step_text}</p>}
@@ -617,7 +617,7 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
             )}
 
             {isOwner && (
-              <div className="border-t border-border pt-3">
+              <div className="border-t border-nm-edge/40 pt-3">
                 {!confirmDel ? (
                   <button onClick={() => setConfirmDel(true)} data-testid={`delete-task-${t.id}`}
                     className="flex items-center gap-1.5 text-xs font-medium text-brand-700 border border-brand-200 rounded-lg px-3 py-1.5 hover:bg-brand-50 transition-colors">
@@ -631,7 +631,7 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
                       {deleting ? "Deleting…" : "Yes, delete"}
                     </button>
                     <button onClick={() => setConfirmDel(false)} disabled={deleting}
-                      className="text-xs font-medium border border-border px-3 py-1.5 hover:bg-accent transition-colors">
+                      className="text-xs font-medium nm-tile px-3 py-1.5 hover:bg-accent transition-colors">
                       Cancel
                     </button>
                   </div>
@@ -661,7 +661,7 @@ function BulkActionBar({ selectedIds, tasks = [], busy, onClear, onComplete, ope
         <p className="text-sm font-semibold">
           {selectedIds.length} selected
           {openCount > 0 && doneCount > 0 && (
-            <span className="label-mono text-black/60 ml-2">
+            <span className="label-mono text-muted-foreground ml-2">
               · {openCount} open · {doneCount} done
             </span>
           )}
@@ -671,7 +671,7 @@ function BulkActionBar({ selectedIds, tasks = [], busy, onClear, onComplete, ope
         type="button"
         onClick={onComplete}
         disabled={busy || openCount === 0}
-        className="inline-flex items-center gap-1.5 bg-primary text-primary-foreground rounded-lg px-3 py-1.5 text-xs font-medium border border-border disabled:opacity-40"
+        className="inline-flex items-center gap-1.5 bg-primary text-primary-foreground rounded-lg px-3 py-1.5 text-xs font-medium nm-tile disabled:opacity-40"
         data-testid="bulk-complete"
       >
         <CheckCircle size={13} weight="bold" />
@@ -681,7 +681,7 @@ function BulkActionBar({ selectedIds, tasks = [], busy, onClear, onComplete, ope
         type="button"
         onClick={openReassign}
         disabled={busy}
-        className="inline-flex items-center gap-1.5 bg-card px-3 py-1.5 text-xs font-medium rounded-lg border border-border hover:bg-accent disabled:opacity-40"
+        className="inline-flex items-center gap-1.5 bg-nm px-3 py-1.5 text-xs font-medium nm-btn hover:bg-accent disabled:opacity-40"
         data-testid="bulk-reassign"
       >
         <ArrowBendUpRight size={13} weight="bold" />
@@ -854,7 +854,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
   };
 
   const isOp = t.task_type === "operational" || !!t.op_category;
-  const selCls = "border border-border px-2 py-1 text-xs font-mono bg-white focus:outline-none";
+  const selCls = "nm-field px-2 py-1 text-xs font-mono";
 
   return (
     <div id={`task-card-${t.id}`} data-testid={`mywork-task-${t.id}`}
@@ -886,7 +886,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
               checked={selected}
               onChange={onToggleSelect}
               data-testid={`bulk-select-${t.id}`}
-              className="w-4 h-4 rounded border-border accent-brand-600 cursor-pointer"
+              className="w-4 h-4 rounded border-nm-edge/40 accent-brand-600 cursor-pointer"
               aria-label={`Select task ${t.title}`}
             />
           </label>
@@ -919,9 +919,9 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
               {/* Status pill -- muted when normal, red when overdue/rejected */}
               <span data-testid={`status-chip-${t.id}`}
                 className={`px-2 py-0.5 font-medium border ${
-                  terminal ? "bg-green-600/10 text-green-800 border-green-600/40"
+                  terminal ? "bg-success-600/10 text-success-800 border-success-600/40"
                   : awaitingApproval ? "bg-caution-50 text-caution-800 border-caution-200"
-                  : "bg-muted text-muted-foreground border-border"
+                  : "bg-nm-sunken text-muted-foreground border-nm-edge/40"
                 }`}>{STATUS_LABEL[t.status] || t.status}</span>
               {overdue && !terminal && (
                 <span data-testid={`overdue-${t.id}`}
@@ -970,7 +970,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
 
       {/* EXPANDED BODY -- everything else lives here. Rendered only when open. */}
       {expanded && (
-      <div id={`task-card-body-${t.id}`} className="px-4 pb-4 space-y-3 border-t border-border pt-3">
+      <div id={`task-card-body-${t.id}`} className="px-4 pb-4 space-y-3 border-t border-nm-edge/40 pt-3">
       {t.description && <p className="text-sm text-muted-foreground">{t.description}</p>}
       {showAssignee && !isOp && (
         <p className="label-mono text-muted-foreground flex items-center gap-1" data-testid={`assignee-line-${t.id}`}>
@@ -988,11 +988,11 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
 
       {isOp && (
         <div className="flex flex-wrap items-center gap-2" data-testid={`op-meta-${t.id}`}>
-          {t.op_category && <span className="inline-flex items-center gap-1 border border-border px-2 py-0.5 text-xs font-medium bg-caution-50"><Tag size={11} weight="bold" /> {t.op_category}</span>}
+          {t.op_category && <span className="inline-flex items-center gap-1 nm-tile px-2 py-0.5 text-xs font-medium bg-caution-50"><Tag size={11} weight="bold" /> {t.op_category}</span>}
           {t.assignee_name && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><UserCircle size={13} weight="bold" /> {t.assignee_name}</span>}
           {t.support_name && <span className="text-xs text-muted-foreground">+ {t.support_name}</span>}
           {t.approval_required && (
-            <span data-testid={`op-approval-${t.id}`} className={`inline-flex items-center gap-1 border border-border px-2 py-0.5 text-xs font-medium ${t.approval_status === "approved" ? "bg-green-600 text-white" : t.approval_status === "pending" ? "bg-caution-50" : t.approval_status === "rejected" ? "bg-danger-600 text-white" : "bg-brand-paper"}`}>
+            <span data-testid={`op-approval-${t.id}`} className={`inline-flex items-center gap-1 nm-tile px-2 py-0.5 text-xs font-medium ${t.approval_status === "approved" ? "bg-success-600 text-white" : t.approval_status === "pending" ? "bg-caution-50" : t.approval_status === "rejected" ? "bg-danger-600 text-white" : "bg-nm-sunken"}`}>
               <ShieldCheck size={11} weight="bold" /> {t.approval_status === "approved" ? "Approved" : t.approval_status === "pending" ? "Pending approval" : t.approval_status === "rejected" ? "Changes requested" : `${t.approver_name || "Approval"} required`}
             </span>
           )}
@@ -1007,7 +1007,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
           <a
             href={`/my-work?view=workflows&type=${encodeURIComponent(t.workflow_summary.type || "")}&focus=${encodeURIComponent(t.workflow_summary.id)}`}
             data-testid={`wf-chip-full-${t.id}`}
-            className="inline-flex items-center gap-1.5 border border-border px-2.5 py-1 text-xs font-mono bg-brand-paper hover:bg-accent transition-colors"
+            className="inline-flex items-center gap-1.5 nm-tile px-2.5 py-1 text-xs font-mono bg-nm-sunken hover:bg-accent transition-colors"
             title={`Open workflow: ${t.workflow_summary.title}`}
           >
             <FlowArrow size={12} weight="bold" className="text-brand-600" />
@@ -1036,7 +1036,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
               Due {new Date(t.due_date).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", ...(t.due_date.includes("T") ? { hour: "2-digit", minute: "2-digit" } : {}) })}
             </span>
           )}
-          {t.due_date && t.updated_at && <span className="text-black/20">·</span>}
+          {t.due_date && t.updated_at && <span className="text-muted-foreground/50">·</span>}
           {t.updated_at && (
             <span
               className="flex items-center gap-1"
@@ -1055,8 +1055,8 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
           separate "Set progress" dropdown is gone too. */}
       {!terminal && !awaitingApproval && (
         <div className="space-y-2">
-          <div className="h-2 bg-muted border border-border" title={`${t.progress || 0}% complete`} aria-label={`Progress: ${t.progress || 0}%`}>
-            <div className="h-full bg-brand-600 transition-all" style={{ width: `${t.progress || 0}%` }} data-testid={`progress-bar-${t.id}`} />
+          <div className="h-2 overflow-hidden rounded-pill nm-inset" title={`${t.progress || 0}% complete`} aria-label={`Progress: ${t.progress || 0}%`}>
+            <div className="h-full rounded-pill bg-brand-600 transition-all" style={{ width: `${t.progress || 0}%` }} data-testid={`progress-bar-${t.id}`} />
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <label className="label-mono text-muted-foreground">Status</label>
@@ -1089,7 +1089,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
         const renderAtt = (a) => (
           isImg(a)
             ? <button key={a.url} type="button" onClick={() => setLightbox(`${beUrl}${a.url}`)}
-                className="relative w-20 h-20 border border-border overflow-hidden group" title="Click to view full image"
+                className="relative w-20 h-20 nm-tile overflow-hidden group" title="Click to view full image"
                 data-testid={`att-photo-${t.id}-${a.url}`}>
                 <img src={`${beUrl}${a.url}`} alt={a.filename || "attachment"} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
                 <span className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
@@ -1120,7 +1120,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
               </div>
             )}
             {proof.length > 0 && (
-              <div className="mt-3 border border-border bg-black/[0.02] p-3" data-testid={`proof-block-${t.id}`}>
+              <div className="mt-3 nm-inset p-3" data-testid={`proof-block-${t.id}`}>
                 <p className="label-mono text-muted-foreground flex items-center gap-1.5 mb-2">
                   <Paperclip size={13} weight="bold" /> Proof of work · {proof.length}
                 </p>
@@ -1132,7 +1132,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
       })()}
 
       <Dialog open={!!lightbox} onOpenChange={(o) => !o && setLightbox(null)}>
-        <DialogContent className="border border-border rounded-xl max-w-3xl p-2" data-testid={`photo-lightbox-${t.id}`}>
+        <DialogContent className="rounded-cardlg border border-nm-edge/40 max-w-3xl p-2" data-testid={`photo-lightbox-${t.id}`}>
           <DialogHeader>
             <DialogTitle className="sr-only">Proof photo</DialogTitle>
           </DialogHeader>
@@ -1141,23 +1141,23 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
       </Dialog>
 
       {canApprove && awaitingApproval && (
-        <div className="flex flex-wrap gap-2 mt-4 border border-border bg-caution-50/40 p-3" data-testid={`approval-actions-${t.id}`}>
+        <div className="flex flex-wrap gap-2 mt-4 nm-tile bg-caution-50/40 p-3" data-testid={`approval-actions-${t.id}`}>
           <span className="w-full label-mono text-muted-foreground">This task needs your approval before {t.assignee_name || "the assignee"} can start work.</span>
           {t.approval_status === "rejected" && t.rejection_reason && <span className="w-full text-xs text-danger-600">Previously requested: {t.rejection_reason}</span>}
-          <button onClick={approveTask} data-testid={`approve-${t.id}`} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 text-sm font-medium rounded-lg border border-border transition-all">
+          <button onClick={approveTask} data-testid={`approve-${t.id}`} className="flex items-center gap-2 bg-success-600 text-white px-4 py-2 text-sm font-medium nm-btn transition-all">
             <CheckCircle size={16} weight="bold" /> Approve
           </button>
-          <button onClick={rejectTask} data-testid={`reject-${t.id}`} className="flex items-center gap-2 bg-danger-600 text-white px-4 py-2 text-sm font-medium rounded-lg border border-border transition-all">
+          <button onClick={rejectTask} data-testid={`reject-${t.id}`} className="flex items-center gap-2 bg-danger-600 text-white px-4 py-2 text-sm font-medium nm-btn transition-all">
             <WarningCircle size={16} weight="bold" /> Request changes
           </button>
-          <button onClick={clarifyTask} data-testid={`clarify-${t.id}`} className="flex items-center gap-2 bg-orange-500 text-black px-4 py-2 text-sm font-medium rounded-lg border border-border transition-all">
+          <button onClick={clarifyTask} data-testid={`clarify-${t.id}`} className="flex items-center gap-2 bg-caution-600 text-white px-4 py-2 text-sm font-medium nm-btn transition-all">
             <ChatText size={16} weight="bold" /> Ask clarification
           </button>
         </div>
       )}
 
       {lockedForAssignee && (
-        <div className="flex items-start gap-2 mt-4 border border-border bg-brand-paper p-3" data-testid={`approval-locked-${t.id}`}>
+        <div className="flex items-start gap-2 mt-4 nm-tile bg-nm-sunken p-3" data-testid={`approval-locked-${t.id}`}>
           <LockKey size={18} weight="bold" className="text-brand-600 shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-bold uppercase tracking-tight">{t.approval_status === "rejected" ? "Changes requested" : "Awaiting approval"}</p>
@@ -1168,8 +1168,8 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
       )}
 
       {t.evidence_required && !isTerminal(t) && !awaitingApproval && (
-        <div className={`mt-3 flex items-start gap-2 border border-border p-2.5 ${hasEvidence ? "bg-green-600/10" : "bg-caution-50/30"}`} data-testid={`evidence-required-${t.id}`}>
-          {hasEvidence ? <CheckCircle size={16} weight="fill" className="text-green-600 shrink-0 mt-0.5" /> : <Info size={16} weight="bold" className="text-brand-600 shrink-0 mt-0.5" />}
+        <div className={`mt-3 flex items-start gap-2 nm-tile p-2.5 ${hasEvidence ? "bg-success-600/10" : "bg-caution-50/30"}`} data-testid={`evidence-required-${t.id}`}>
+          {hasEvidence ? <CheckCircle size={16} weight="fill" className="text-success-600 shrink-0 mt-0.5" /> : <Info size={16} weight="bold" className="text-brand-600 shrink-0 mt-0.5" />}
           <p className="text-xs">{hasEvidence
             ? "Proof attached — you can mark this task complete."
             : "This task requires proof before it can be completed. Add a photo, voice note, or file below."}</p>
@@ -1183,7 +1183,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
               buttons were the original bug. */}
           <button onClick={complete} data-testid={`complete-${t.id}`}
             title={t.evidence_required && !hasEvidence ? "Add a photo, voice note, or file first" : "Mark as complete"}
-            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-border transition-all ${t.evidence_required && !hasEvidence ? "bg-muted text-muted-foreground" : "bg-primary text-primary-foreground"}`}>
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium nm-btn transition-all ${t.evidence_required && !hasEvidence ? "bg-nm-sunken text-muted-foreground" : "bg-primary text-primary-foreground"}`}>
             <CheckCircle size={16} weight="bold" /> Complete
           </button>
 
@@ -1193,14 +1193,14 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
               they share a single caption + icon-only compact buttons so
               Complete stays visually primary and the attach set reads as
               one concept. */}
-          <div className="flex items-center gap-1 border-l border-border pl-3 ml-1">
+          <div className="flex items-center gap-1 border-l border-nm-edge/40 pl-3 ml-1">
             <span className="label-mono text-muted-foreground mr-1 hidden sm:inline">Attach:</span>
             <button
               onClick={() => fileRef.current?.click()}
               disabled={uploading}
               data-testid={`photo-${t.id}`}
               title="Attach a photo"
-              className="w-9 h-9 flex items-center justify-center border border-border hover:bg-accent disabled:opacity-40"
+              className="w-9 h-9 flex items-center justify-center nm-tile hover:bg-accent disabled:opacity-40"
               aria-label="Attach a photo"
             >
               <Camera size={16} weight="bold" />
@@ -1211,7 +1211,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
               disabled={uploading}
               data-testid={`upload-file-${t.id}`}
               title="Upload a file"
-              className="w-9 h-9 flex items-center justify-center border border-border hover:bg-accent disabled:opacity-40"
+              className="w-9 h-9 flex items-center justify-center nm-tile hover:bg-accent disabled:opacity-40"
               aria-label="Upload a file"
             >
               <FileArrowUp size={16} weight="bold" />
@@ -1221,7 +1221,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
               onClick={toggleVoice}
               data-testid={`voice-${t.id}`}
               title={recording ? "Stop and send voice reply" : "Record a voice reply"}
-              className={`w-9 h-9 flex items-center justify-center border border-border transition-colors ${recording ? "bg-brand-600 text-white" : "hover:bg-accent"}`}
+              className={`w-9 h-9 flex items-center justify-center nm-tile transition-colors ${recording ? "bg-brand-600 text-white" : "hover:bg-accent"}`}
               aria-label={recording ? "Stop recording" : "Record voice reply"}
             >
               {recording ? <Stop size={16} weight="fill" /> : <Microphone size={16} weight="bold" />}
@@ -1231,7 +1231,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
                 onClick={cancelVoice}
                 data-testid={`voice-cancel-${t.id}`}
                 title="Discard recording"
-                className="w-9 h-9 flex items-center justify-center border border-border hover:bg-accent"
+                className="w-9 h-9 flex items-center justify-center nm-tile hover:bg-accent"
                 aria-label="Discard recording"
               >
                 <X size={16} weight="bold" />
@@ -1243,7 +1243,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
 
       {isTerminal(t) && !awaitingApproval && (
         <div className="flex flex-wrap gap-2 mt-4" data-testid={`reopen-actions-${t.id}`}>
-          <button onClick={reopen} data-testid={`reopen-${t.id}`} className="flex items-center gap-2 bg-white px-4 py-2 text-sm font-medium rounded-lg border border-border hover:bg-accent transition-colors">
+          <button onClick={reopen} data-testid={`reopen-${t.id}`} className="flex items-center gap-2 bg-nm px-4 py-2 text-sm font-medium nm-btn hover:bg-accent transition-colors">
             <ArrowClockwise size={16} weight="bold" /> Reopen
           </button>
           <span className="flex items-center text-xs text-muted-foreground">Completed by mistake? Reopen brings it back to your active work.</span>
@@ -1257,7 +1257,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
 
       {/* U7-05 dialog: reject / clarify reason (replaced window.prompt). */}
       <Dialog open={!!reasonDialog} onOpenChange={(o) => !o && !reasonBusy && setReasonDialog(null)}>
-        <DialogContent className="border border-border rounded-xl max-w-md" data-testid={`reason-dialog-${t.id}`}>
+        <DialogContent className="rounded-cardlg border border-nm-edge/40 max-w-md" data-testid={`reason-dialog-${t.id}`}>
           <DialogHeader>
             <DialogTitle className="font-heading tracking-tight">
               {reasonDialog?.kind === "reject" ? "Request changes" : "Ask for clarification"}
@@ -1273,7 +1273,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
             value={reasonText}
             onChange={(e) => setReasonText(e.target.value)}
             placeholder={reasonDialog?.kind === "reject" ? "e.g. Please add unit prices per line item." : "e.g. Which supplier's rate card do I use?"}
-            className="w-full border border-border px-3 py-2 text-sm focus:outline-none"
+            className="w-full nm-tile px-3 py-2 text-sm focus:outline-none"
             autoFocus
           />
           <div className="flex gap-2 justify-end">
@@ -1281,13 +1281,13 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
               type="button"
               onClick={() => setReasonDialog(null)}
               disabled={reasonBusy}
-              className="border border-border px-4 py-2 text-sm font-medium hover:bg-accent disabled:opacity-40"
+              className="nm-tile px-4 py-2 text-sm font-medium hover:bg-accent disabled:opacity-40"
             >Cancel</button>
             <button
               type="button"
               onClick={submitReason}
               disabled={reasonBusy || (reasonDialog?.kind === "clarify" && !reasonText.trim())}
-              className="bg-primary text-primary-foreground px-4 py-2 text-sm font-medium rounded-lg border border-border disabled:opacity-40"
+              className="bg-primary text-primary-foreground px-4 py-2 text-sm font-medium nm-btn disabled:opacity-40"
             >
               {reasonBusy ? "Sending..." : reasonDialog?.kind === "reject" ? "Request changes" : "Send question"}
             </button>
@@ -1461,9 +1461,9 @@ export default function MyWork() {
             {isOwner && (
               <>
                 <button onClick={() => { setScope("mine"); setView("mywork"); }} data-testid="work-scope-mine"
-                  className={`${CTRL} ${view === "mywork" && scope === "mine" ? "bg-brand-50 text-brand-700 border-brand-200" : "bg-card hover:bg-accent"}`}>{t("mywork.my_tasks")}</button>
+                  className={`${CTRL} ${view === "mywork" && scope === "mine" ? "bg-brand-50 text-brand-700 border-brand-200" : "bg-nm hover:bg-accent"}`}>{t("mywork.my_tasks")}</button>
                 <button onClick={() => { setScope("all"); setView("mywork"); }} data-testid="work-scope-all"
-                  className={`${CTRL} ${view === "mywork" && scope === "all" ? "bg-brand-50 text-brand-700 border-brand-200" : "bg-card hover:bg-accent"}`}>{t("mywork.all_tasks")}</button>
+                  className={`${CTRL} ${view === "mywork" && scope === "all" ? "bg-brand-50 text-brand-700 border-brand-200" : "bg-nm hover:bg-accent"}`}>{t("mywork.all_tasks")}</button>
               </>
             )}
             {/* U7-05: AI Priority is owner-only. Founder ask 2026-08-17:
@@ -1473,7 +1473,7 @@ export default function MyWork() {
                 to work on based on someone else's AI score. */}
             {isOwner && (
               <button onClick={() => { setAiPriority((v) => !v); setView("mywork"); }} data-testid="ai-priority-toggle"
-                className={`${CTRL} ${view === "mywork" && aiPriority ? "bg-brand-50 text-brand-700 border-brand-200" : "bg-card hover:bg-accent"}`}>
+                className={`${CTRL} ${view === "mywork" && aiPriority ? "bg-brand-50 text-brand-700 border-brand-200" : "bg-nm hover:bg-accent"}`}>
                 <Sparkle size={15} weight="bold" /> {scoring ? t("mywork.scoring") : aiPriority ? t("mywork.ai_priority_on") : t("mywork.ai_priority")}
               </button>
             )}
@@ -1490,18 +1490,18 @@ export default function MyWork() {
                 workflow and leave'. */}
             {!isOwner && (
               <button onClick={() => setView("mywork")} data-testid="work-view-mywork"
-                className={`${CTRL} ${view === "mywork" ? "bg-brand-50 text-brand-700 border-brand-200" : "bg-card hover:bg-accent"}`}>
+                className={`${CTRL} ${view === "mywork" ? "bg-brand-50 text-brand-700 border-brand-200" : "bg-nm hover:bg-accent"}`}>
                 <ListIcon size={15} weight="bold" /> {t("mywork.view_mywork")}
               </button>
             )}
             {canSeeWorkflows && (
               <button onClick={() => setView("workflows")} data-testid="work-view-workflows"
-                className={`${CTRL} ${view === "workflows" ? "bg-brand-50 text-brand-700 border-brand-200" : "bg-card hover:bg-accent"}`}>
+                className={`${CTRL} ${view === "workflows" ? "bg-brand-50 text-brand-700 border-brand-200" : "bg-nm hover:bg-accent"}`}>
                 <ArrowRight size={15} weight="bold" /> {t("mywork.view_workflows")}
               </button>
             )}
             <button onClick={() => setView("leave")} data-testid="work-view-leave"
-              className={`${CTRL} ${view === "leave" ? "bg-brand-50 text-brand-700 border-brand-200" : "bg-card hover:bg-accent"}`}>
+              className={`${CTRL} ${view === "leave" ? "bg-brand-50 text-brand-700 border-brand-200" : "bg-nm hover:bg-accent"}`}>
               <AirplaneTakeoff size={15} weight="bold" /> {t("mywork.view_leave")}
             </button>
           </div>
@@ -1547,14 +1547,14 @@ export default function MyWork() {
               borderless pills, sentence case, indigo tint on the active one.
               The bordered-uppercase version stacked a frame on every tab and
               the count badge carried a second frame inside it. */}
-          <div className="flex flex-wrap gap-1.5 mb-5 border-b border-border pb-3" data-testid="work-tabs">
+          <div className="flex flex-wrap gap-1.5 mb-5 border-b border-nm-edge/40 pb-3" data-testid="work-tabs">
             {WORK_TABS
               .filter((tb) => tb.key === "all" || countFor(tb.key) > 0)
               .map((tb) => (
                 <button key={tb.key} onClick={() => setTab(tb.key)} data-testid={`work-tab-${tb.key}`}
                   className={`flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-full text-xs transition-colors ${tab === tb.key ? "bg-brand-50 text-brand-700 font-medium" : "text-muted-foreground hover:bg-accent hover:text-foreground"}`}>
                   {tb.label}
-                  <span className={`min-w-[17px] px-1 py-0.5 rounded-full text-[10px] leading-none text-center tabular-nums ${tab === tb.key ? "bg-brand-600/15 text-brand-700" : "bg-muted text-muted-foreground"}`}>{countFor(tb.key)}</span>
+                  <span className={`min-w-[17px] px-1 py-0.5 rounded-full text-[10px] leading-none text-center tabular-nums ${tab === tb.key ? "bg-brand-600/15 text-brand-700" : "bg-nm-sunken text-muted-foreground"}`}>{countFor(tb.key)}</span>
                 </button>
               ))}
           </div>
@@ -1613,7 +1613,7 @@ export default function MyWork() {
 
           {/* U7-05.3 dialog: bulk-reassign target picker. */}
           <Dialog open={bulkReassignOpen} onOpenChange={(o) => !o && !bulkBusy && setBulkReassignOpen(false)}>
-            <DialogContent className="border border-border rounded-xl max-w-md" data-testid="bulk-reassign-dialog">
+            <DialogContent className="rounded-cardlg border border-nm-edge/40 max-w-md" data-testid="bulk-reassign-dialog">
               <DialogHeader>
                 <DialogTitle className="font-heading tracking-tight">
                   Reassign {selected.size} {selected.size === 1 ? "task" : "tasks"}
@@ -1625,7 +1625,7 @@ export default function MyWork() {
               <select
                 value={bulkAssigneeId}
                 onChange={(e) => setBulkAssigneeId(e.target.value)}
-                className="w-full border border-border px-3 py-2 text-sm focus:outline-none"
+                className="w-full nm-tile px-3 py-2 text-sm focus:outline-none"
               >
                 <option value="">— Reassign to a team member —</option>
                 {members.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
@@ -1634,7 +1634,7 @@ export default function MyWork() {
                 value={bulkAssigneeRole}
                 onChange={(e) => setBulkAssigneeRole(e.target.value)}
                 disabled={!!bulkAssigneeId}
-                className="w-full border border-border px-3 py-2 text-sm focus:outline-none disabled:opacity-40"
+                className="w-full nm-tile px-3 py-2 text-sm focus:outline-none disabled:opacity-40"
               >
                 <option value="">...or to a whole team {bulkAssigneeId ? "(member selected)" : ""}</option>
                 {roleOptions.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
@@ -1644,7 +1644,7 @@ export default function MyWork() {
                   type="button"
                   onClick={() => setBulkReassignOpen(false)}
                   disabled={bulkBusy}
-                  className="border border-border px-4 py-2 text-sm font-medium hover:bg-accent disabled:opacity-40"
+                  className="nm-tile px-4 py-2 text-sm font-medium hover:bg-accent disabled:opacity-40"
                 >Cancel</button>
                 <button
                   type="button"
@@ -1668,7 +1668,7 @@ export default function MyWork() {
                       toast.error(e.response?.data?.detail || "Bulk reassign failed");
                     } finally { setBulkBusy(false); }
                   }}
-                  className="bg-primary text-primary-foreground px-4 py-2 text-sm font-medium rounded-lg border border-border disabled:opacity-40"
+                  className="bg-primary text-primary-foreground px-4 py-2 text-sm font-medium nm-btn disabled:opacity-40"
                 >{bulkBusy ? "Reassigning..." : "Reassign"}</button>
               </div>
             </DialogContent>

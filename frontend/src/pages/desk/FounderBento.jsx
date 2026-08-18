@@ -173,12 +173,12 @@ export function FounderBento() {
 
   return (
     <div
-      className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 xl:auto-rows-[minmax(0,1fr)]"
+      className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4 lg:auto-rows-[minmax(0,1fr)]"
       data-testid="desk-bento"
     >
       {/* Ops — the 2x2 anchor. The number the whole business is graded on. */}
       {!ops ? (
-        <TileSkeleton className="md:col-span-2 xl:col-span-2 xl:row-span-2" />
+        <TileSkeleton className="md:col-span-2 lg:col-span-2 lg:row-span-2" />
       ) : (
         <Tile
           icon={Gauge}
@@ -194,7 +194,7 @@ export function FounderBento() {
           }
           to="/operating-score"
           testid="bento-ops"
-          className="md:col-span-2 xl:col-span-2 xl:row-span-2 justify-between"
+          className="md:col-span-2 lg:col-span-2 lg:row-span-2 justify-between"
         >
           {/* The four category bars, monochrome — the shape of the score, not
               a second palette. Reads as one instrument with the number. */}

@@ -18,7 +18,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "../../components/ui/dialog";
 
-const inp = "w-full border border-border px-2.5 py-1.5 text-sm font-mono focus:outline-none focus:shadow-sm bg-white";
+const inp = "w-full nm-field px-2.5 py-2 text-sm font-mono";
 
 const EMPTY = { contacts: [], invoices: [], payments: [], tasks: [] };
 const CONTACT_TYPE_OPTS = ["customer", "vendor", "dealer"];
@@ -83,12 +83,12 @@ function FilePreview({ fileUrl, kind, filename, testid }) {
   return (
     <>
       <button type="button" data-testid={testid} onClick={view} title="View attachment"
-        className="flex items-center gap-1.5 text-xs font-medium border border-border px-3 py-1.5 hover:bg-accent transition-colors">
+        className="flex items-center gap-1.5 text-xs font-medium nm-tile px-3 py-1.5 hover:bg-accent transition-colors">
         <Eye size={14} weight="bold" /> View
       </button>
       {isImage && (
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogContent className="border border-border rounded-xl max-w-3xl p-2" data-testid={`${testid}-lightbox`}>
+          <DialogContent className="rounded-cardlg border border-nm-edge/40 max-w-3xl p-2" data-testid={`${testid}-lightbox`}>
             <DialogHeader><DialogTitle className="font-display text-xl text-sm truncate">{filename || "Attachment"}</DialogTitle></DialogHeader>
             <img src={src} alt="attachment" className="w-full h-auto max-h-[80vh] object-contain" />
           </DialogContent>
@@ -170,8 +170,8 @@ export default function ReviewPanel({ ingestion, onFiled, onCancel }) {
           </div>
           <p className="text-sm text-muted-foreground">{ingestion.summary || ingestion.filename}</p>
           <div className="flex items-center gap-2 mt-2 flex-wrap">
-            {ingestion.doc_type && <Chip value={ingestion.doc_type} className="bg-brand-blue text-white" />}
-            {ingestion.entity && <Chip value={ingestion.entity} className="bg-brand-blue text-white" />}
+            {ingestion.doc_type && <Chip value={ingestion.doc_type} className="bg-nm-sunken text-muted-foreground" />}
+            {ingestion.entity && <Chip value={ingestion.entity} className="bg-nm-sunken text-muted-foreground" />}
             {ingestion.confidence != null && (
               <span className="label-mono text-muted-foreground">confidence {Math.round(ingestion.confidence * 100)}%</span>
             )}
@@ -179,11 +179,11 @@ export default function ReviewPanel({ ingestion, onFiled, onCancel }) {
         </div>
         <div className="flex gap-2">
           <FilePreview fileUrl={ingestion.file_url} kind={ingestion.kind} filename={ingestion.filename} testid="ingest-review-view-file" />
-          <button data-testid="ingest-cancel-button" onClick={onCancel} className="px-4 py-2 text-sm font-medium border border-border hover:bg-accent transition-colors">
+          <button data-testid="ingest-cancel-button" onClick={onCancel} className="px-4 py-2 text-sm font-medium nm-tile hover:bg-accent transition-colors">
             Discard
           </button>
           <button data-testid="ingest-file-button" disabled={filing || total === 0} onClick={fileIt}
-            className="flex items-center gap-2 bg-brand-600 text-white px-5 py-2 text-sm font-medium border border-border transition-all disabled:opacity-50">
+            className="flex items-center gap-2 bg-brand-600 text-white px-5 py-2 text-sm font-medium nm-tile transition-all disabled:opacity-50">
             <CheckCircle size={16} weight="bold" /> {filing ? "Filing…" : "File it"}
           </button>
         </div>
@@ -192,7 +192,7 @@ export default function ReviewPanel({ ingestion, onFiled, onCancel }) {
       {total === 0 && <EmptyState title="Nothing detected" hint="The AI couldn't pull structured records from this file." />}
 
       {total > 0 && (
-        <div className="border-l-4 border-brand-600 bg-brand-paper p-3 mb-5 flex items-start gap-2" data-testid="ingest-direction-banner">
+        <div className="border-l-4 border-brand-600 bg-nm-sunken p-3 mb-5 flex items-start gap-2" data-testid="ingest-direction-banner">
           <ArrowsLeftRight size={18} weight="bold" className="text-brand-600 shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-medium">{hint.label}</p>
@@ -202,7 +202,7 @@ export default function ReviewPanel({ ingestion, onFiled, onCancel }) {
       )}
 
       {ownHits.length > 0 && (
-        <div className="border border-border bg-caution-50 p-3 mb-5 flex items-start gap-2" data-testid="ingest-owncompany-warning">
+        <div className="nm-tile bg-caution-50 p-3 mb-5 flex items-start gap-2" data-testid="ingest-owncompany-warning">
           <WarningCircle size={18} weight="bold" className="shrink-0 mt-0.5" />
           <p className="text-xs font-semibold">Heads up: “{ownHits[0]}” looks like <b>your own company</b>, so it will be skipped and not saved as a contact. Only the other party is filed.</p>
         </div>
@@ -214,7 +214,7 @@ export default function ReviewPanel({ ingestion, onFiled, onCancel }) {
           <p className="label-mono text-brand-600 mb-2 flex items-center gap-1"><UsersThree size={14} weight="bold" /> {L.customer_plural} & {L.vendor_plural} ({records.contacts.length})</p>
           <div className="space-y-2">
             {records.contacts.map((c, i) => (
-              <div key={c._key} className={`border p-3 grid grid-cols-2 md:grid-cols-4 gap-2 relative ${isOwnCompany(c.name, ownNorm) ? "border-caution-300 bg-caution-50/60" : "border-border"}`} data-testid={`review-contact-${i}`}>
+              <div key={c._key} className={`border p-3 grid grid-cols-2 md:grid-cols-4 gap-2 relative ${isOwnCompany(c.name, ownNorm) ? "border-caution-300 bg-caution-50/60" : "border-nm-edge/40"}`} data-testid={`review-contact-${i}`}>
                 <SelectField label="Type" value={c.type} onChange={(v) => setItem("contacts", i, "type", v)} options={CONTACT_TYPE_OPTS} optLabels={optLabels} />
                 <Field label="Name" value={c.name} onChange={(v) => setItem("contacts", i, "name", v)} />
                 <Field label="Phone" value={c.phone} onChange={(v) => setItem("contacts", i, "phone", v)} />
@@ -236,7 +236,7 @@ export default function ReviewPanel({ ingestion, onFiled, onCancel }) {
               const pt = (inv.purchase_type || "").toLowerCase();
               const needsBucket = isPurchase && !PURCHASE_TYPE_OPTS.includes(pt);
               return (
-              <div key={inv._key} className={`border p-3 grid grid-cols-2 md:grid-cols-6 gap-2 relative ${needsBucket ? "border-brand-600 border-2 bg-brand-600/5" : "border-border"}`} data-testid={`review-invoice-${i}`}>
+              <div key={inv._key} className={`border p-3 grid grid-cols-2 md:grid-cols-6 gap-2 relative ${needsBucket ? "border-brand-600 border-2 bg-brand-600/5" : "border-nm-edge/40"}`} data-testid={`review-invoice-${i}`}>
                 <SelectField label="Type" value={inv.type} onChange={(v) => setItem("invoices", i, "type", v)} options={INVOICE_TYPE_OPTS} />
                 {isPurchase && (
                   <label className="block" data-testid={`review-invoice-bucket-${i}`}>
@@ -266,7 +266,7 @@ export default function ReviewPanel({ ingestion, onFiled, onCancel }) {
           <p className="label-mono text-brand-600 mb-2 flex items-center gap-1"><CurrencyCircleDollar size={14} weight="bold" /> Payments ({records.payments.length})</p>
           <div className="space-y-2">
             {records.payments.map((p, i) => (
-              <div key={p._key} className="border border-border p-3 grid grid-cols-2 md:grid-cols-5 gap-2 relative" data-testid={`review-payment-${i}`}>
+              <div key={p._key} className="nm-tile p-3 grid grid-cols-2 md:grid-cols-5 gap-2 relative" data-testid={`review-payment-${i}`}>
                 <SelectField label="Direction" value={p.direction} onChange={(v) => setItem("payments", i, "direction", v)} options={DIRECTION_OPTS} />
                 <Field label="Amount" value={p.amount} onChange={(v) => setItem("payments", i, "amount", v)} />
                 <Field label="Party" value={p.contact_name} onChange={(v) => setItem("payments", i, "contact_name", v)} />
@@ -285,7 +285,7 @@ export default function ReviewPanel({ ingestion, onFiled, onCancel }) {
           <p className="label-mono text-brand-600 mb-2 flex items-center gap-1"><ListChecks size={14} weight="bold" /> Follow-up tasks ({records.tasks.length})</p>
           <div className="space-y-2">
             {records.tasks.map((t, i) => (
-              <div key={t._key} className="border border-border p-3 flex items-center gap-2 relative" data-testid={`review-task-${i}`}>
+              <div key={t._key} className="nm-tile p-3 flex items-center gap-2 relative" data-testid={`review-task-${i}`}>
                 <input className={inp} value={t.title ?? ""} onChange={(e) => setItem("tasks", i, "title", e.target.value)} />
                 <button onClick={() => removeItem("tasks", i)} data-testid={`remove-task-${i}`} className="shrink-0 w-8 h-8 flex items-center justify-center nm-tile hover:bg-danger-600 hover:text-white transition-colors"><Trash size={12} weight="bold" /></button>
               </div>

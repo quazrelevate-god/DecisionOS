@@ -840,6 +840,37 @@
     .nm-raised { @apply bg-nm rounded-cardlg shadow-nm border border-nm-edge/40; }
     .nm-tile   { @apply bg-nm rounded-tile   shadow-nm-sm border border-nm-edge/40; }
     .nm-inset  { @apply bg-nm-sunken rounded-control shadow-nm-in border border-nm-edge/25; }
+
+    /* NM-15 — the two INTERACTIVE recipes.
+       nm-raised/tile/inset describe a surface at rest. These add what a
+       control needs on top: the 14px control radius, and the rise-then-press
+       behaviour §4 asks of anything clickable. They exist because /my-work,
+       /crm, /team and /finance carried ~180 hand-written copies of
+       `rounded-lg border border-border hover:bg-accent` — a 1px hairline with
+       a colour hover, which is the flat idiom the revamp is replacing. One
+       class, so the next one is a class reference and not a fourth variant.
+
+       nm-btn is deliberately NOT a Button variant: these are raw <button>
+       elements across four pages, and routing them through shadcn would be a
+       far larger change than making the flat ones look right. */
+    .nm-btn {
+        @apply rounded-control bg-nm border border-nm-edge/40 shadow-nm-sm
+               transition-shadow duration-150;
+    }
+    .nm-btn:hover:not(:disabled)  { box-shadow: var(--nm-shadow-md); }
+    .nm-btn:active:not(:disabled) { box-shadow: var(--nm-pressed); }
+
+    /* A field is the one thing that is genuinely concave — you type INTO it.
+       Kept separate from nm-inset because inputs also need the focus ring and
+       must not inherit a card's padding assumptions. */
+    .nm-field {
+        @apply rounded-control bg-nm-sunken border border-nm-edge/25 shadow-nm-in
+               outline-none transition-shadow;
+    }
+    .nm-field:focus,
+    .nm-field:focus-within {
+        @apply ring-2 ring-primary/40;
+    }
 }
 
 /* §4 — mobile constraints, in the tokens themselves rather than at call

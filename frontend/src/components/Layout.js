@@ -17,16 +17,17 @@ import {
   AddressBook,
   SignOut,
   Bell,
-  Sun,
-  MoonStars,
   Briefcase,
   GearSix,
   Tray,
   Wallet,
   Gauge, // Epic 2 E2-15: Ops nav entry (Operating Score)
   UsersThree, // Epic 2 E2-01: Team nav entry (Employees list)
-  MagnifyingGlass, // RD-1: global search in the desktop top bar
+  MagnifyingGlass, // KR-5: the search circle that opens the ⌘K dialog
 } from "@phosphor-icons/react";
+// KR-5 — the Karma shell pieces.
+import { PillNav } from "./karma";
+import { CommandDialog, CommandInput, CommandList, CommandEmpty, CommandItem } from "./ui/command";
 import { ProfileDialog } from "./ProfileDialog";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { WelcomeOverlay } from "./WelcomeOverlay";
@@ -43,7 +44,11 @@ import { InstallPrompt } from "./mobile/InstallPrompt";
 // suppliers) and Team (employees) are separate top-level entries. Ops is a
 // new owner-only shortcut to Operating Score (removed from Brief in E2-11).
 const NAV = [
-  { to: "/", label: "Decision Desk", tkey: "inbox", icon: Tray, testid: "nav-inbox", perm: "inbox" },
+  // KR-5: `/inbox`, not `/`. The root route only ever REDIRECTS a signed-in
+  // user here (App.js Home), so a pill pointing at "/" was active for zero
+  // real URLs — the Desk pill never lit. Router-driven active state is only
+  // honest if the `to` is a destination someone actually lands on.
+  { to: "/inbox", label: "Decision Desk", tkey: "inbox", icon: Tray, testid: "nav-inbox", perm: "inbox" },
   // Epic 2 Sprint 6 (E2-47): 'CEO Brief' merged into Desk header. Nav
   // entry retired; /brief URL redirects to /inbox in App.js.
   // { to: "/brief", label: "CEO Brief", tkey: "brief", icon: Sun, testid: "nav-ceo-brief" },
@@ -70,7 +75,11 @@ const NAV = [
   // Meetings.js + /api/meetings endpoints stay alive for a future
   // re-enable; the route redirects to / in App.js.
   // { to: "/meetings", label: "Meeting Notes", tkey: "meetings", icon: MicrophoneStage, testid: "nav-meetings" },
-  { to: "/settings", label: "Settings", tkey: "settings", icon: GearSix, testid: "nav-settings", ownerOnly: true },
+  // KR-5: Settings leaves the primary nav — seven destination pills is the
+  // ceiling before the strip stops reading as the reference's segment, and
+  // Settings is configuration, not a working surface. It lives in the avatar
+  // menu now (still ownerOnly), which is where the reference keeps identity-
+  // adjacent things. AllAppsPanel keeps its own Settings tile on mobile.
 ];
 
 // MPWA-03 (§8): BOTTOM_NAV is retired. The mobile 5-item tab bar put CRM and
@@ -116,17 +125,17 @@ export default function Layout({ children }) {
   const { isDark, toggle: toggleTheme } = useTheme();
 
   // ── NM-17 · the Dex dissolve ────────────────────────────────────────────
-  // /brain renders dark whatever the app's theme is. Dex is the product's
-  // centrepiece and the founder's call is that it gets its own room; the
-  // transition into that room is the point, so the swap is cross-faded rather
-  // than flipped.
+  // /brain renders dark whatever the app's theme is; the transition into the
+  // room is cross-faded rather than flipped.
   //
-  // This deliberately does NOT touch the stored preference — useTheme still
-  // owns `decisionos-theme`, and leaving /brain restores whatever the founder
-  // actually chose. Declared after useTheme so its effect runs second and
-  // wins the class on <html> when both fire in the same commit.
+  // KR-5: `wantDark = dexRoute`, full stop. User-facing dark mode retired
+  // with the Karma language (approved plan) — Karma is a two-zone light
+  // composition and `dark` now means "inside the ink", which only the Dex
+  // room asserts at page level. useTheme still owns the stored preference;
+  // the mobile AllAppsPanel theme tile keeps working against it for now, and
+  // desktop simply no longer reads it.
   const dexRoute = location.pathname.startsWith("/brain") || location.pathname.startsWith("/dex");
-  const wantDark = dexRoute || isDark;
+  const wantDark = dexRoute;
   const lastDark = useRef(null);
   useEffect(() => {
     const root = document.documentElement;
@@ -173,8 +182,19 @@ export default function Layout({ children }) {
   }, []);
   const [dexRecording, setDexRecording] = useState({ on: false, secs: 0 });
   const [langOpen, setLangOpen] = useState(false);
-  // RD-1: global search field in the desktop top bar.
+  // KR-5: the global search moved into a ⌘K dialog; same /brain?q= handoff.
   const [globalQuery, setGlobalQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setSearchOpen((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const { data: notif } = useQuery({ queryKey: ["notifications"], queryFn: () => api.get("/notifications").then((r) => r.data), refetchInterval: 30000 });
   const unread = notif?.unread || 0;
   // MPWA-03 (§8): the bell counts only what actually needs *him* — approvals,
@@ -207,18 +227,21 @@ export default function Layout({ children }) {
     return (
       <Popover>
         <PopoverTrigger asChild>
-          {/* NM-2: desktop becomes a 44px raised tile. The MOBILE variant is
-              deliberately untouched — §4: everything already shipped on the
-              phone chrome outranks this document. The badge inside stays a
-              solid indigo pill in both: it is a message, not furniture. */}
+          {/* KR-5: desktop = the reference's outlined circle. The MOBILE
+              variant is deliberately untouched — everything already shipped
+              on the phone chrome outranks this pass. The badge goes ORANGE:
+              a notification count is alert grammar, exactly what --kr-accent
+              exists for. */}
           <button data-testid="notif-bell"
             aria-label={count > 0 ? `Notifications, ${count} need you` : "Notifications"}
             className={mobile
               ? "relative flex items-center justify-center border border-border hover:bg-accent transition-colors w-12 h-12"
-              : "relative w-11 h-11 nm-tile rounded-control flex items-center justify-center text-foreground/80 transition-shadow hover:shadow-nm active:shadow-nm-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"}>
-            <Bell size={mobile ? 22 : 18} weight="bold" />
+              : "relative h-10 w-10 rounded-full border border-kr-outline grid place-items-center text-foreground/80 transition-colors hover:bg-white/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline"}>
+            <Bell size={mobile ? 22 : 18} weight="regular" />
             {count > 0 && (
-              <span data-testid="notif-count" className="absolute -top-2 -right-2 bg-brand-600 text-white text-[10px] min-w-5 h-5 px-1 flex items-center justify-center border border-border font-bold">
+              <span data-testid="notif-count" className={mobile
+                ? "absolute -top-2 -right-2 grid h-5 min-w-5 place-items-center rounded-full bg-kr-accent px-1 text-[10px] font-bold leading-none text-white"
+                : "absolute -top-1.5 -right-1.5 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-kr-accent px-1 text-[10px] font-bold leading-none text-white"}>
                 {mobile ? Math.min(9, count) : (unread > 99 ? "99+" : unread)}
               </span>
             )}
@@ -258,28 +281,11 @@ export default function Layout({ children }) {
     );
   };
 
-  // NM-2 — a 44px raised squircle, individually contained (§3 Shell). The
-  // focus ring is separate from any shadow change and lands now rather than
-  // waiting for NM-4: this button is being touched anyway.
-  // NM-17: on /brain the route forces dark, so this control cannot change what
-  // is on screen. It stays MOUNTED — pulling it would shuffle the other two
-  // tiles sideways every time the founder opens Dex — and is disabled with the
-  // reason, which is clearer than a button that silently does nothing. It still
-  // shows the stored preference, because that is what it actually controls.
-  const ThemeToggle = () => (
-    <button
-      onClick={toggleTheme}
-      disabled={dexRoute}
-      data-testid="theme-toggle"
-      title={dexRoute
-        ? "Dex is always dark — your theme comes back when you leave"
-        : isDark ? "Switch to light mode" : "Switch to dark mode"}
-      aria-label="Toggle dark mode"
-      className="w-11 h-11 nm-tile rounded-control flex items-center justify-center text-foreground/80 transition-shadow hover:shadow-nm active:shadow-nm-press disabled:opacity-40 disabled:hover:shadow-nm-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-    >
-      {isDark ? <Sun size={18} weight="bold" /> : <MoonStars size={18} weight="bold" />}
-    </button>
-  );
+  // KR-5: ThemeToggle is DELETED from the desktop shell, not hidden — dark
+  // mode retired with the Karma language and a control that can never change
+  // what is on screen is worse than no control. The mobile AllAppsPanel tile
+  // still receives isDark/onToggleTheme below and keeps working against the
+  // stored preference; that surface's retirement is a separate product call.
 
   const doLogout = () => {
     logout();
@@ -290,122 +296,10 @@ export default function Layout({ children }) {
   // brief now (Sprint 6 merged CEOBrief into Desk header) so this
   // email-a-snapshot flow duplicated live data behind an SMTP gate.
 
-  // RD-1 (2026-08-17): the desktop nav is now an icon-only rail.
-  // Labels moved to hover tooltips, which buys back ~180px of content width
-  // and matches the reference shell. `NavItems` keeps its original signature
-  // and full-width row layout because the mobile AllAppsPanel still renders
-  // it — only the new `RailItems` below is icon-only.
-  const NavItems = ({ onNavigate }) => (
-    <>
-      {navMain.map(({ to, label, tkey, icon: Icon, testid }) => (
-        <NavLink
-          key={to}
-          to={to}
-          end={to === "/"}
-          data-testid={testid}
-          onClick={onNavigate}
-          className={({ isActive }) =>
-            `flex items-center gap-3 mx-3 px-3 py-2.5 text-sm rounded-lg transition-colors duration-150 ${
-              isActive
-                ? "bg-brand-600/[0.08] text-brand-600 font-semibold"
-                : "text-foreground/70 hover:bg-accent hover:text-foreground"
-            }`
-          }
-        >
-          <Icon size={18} weight="bold" />
-          {t(`nav.${tkey}`)}
-          {to === "/finance" && captureCount > 0 && (
-            <span data-testid="nav-review-badge" title={`${captureCount} item(s) to review`}
-              className="ml-auto bg-brand-600 text-white text-[10px] min-w-5 h-5 px-1 flex items-center justify-center font-bold rounded-full">
-              {captureCount}
-            </span>
-          )}
-        </NavLink>
-      ))}
-    </>
-  );
-
-  // The desktop rail.
-  //
-  // NM-12 — the rail expands as ONE panel. It used to hand out a per-icon
-  // tooltip: hover Finance, learn what Finance is, hover Ops, learn what Ops
-  // is. That answers "what is this glyph" but never "what is in this product",
-  // so a new user had to interrogate seven icons one at a time. Hovering
-  // anywhere over the bar now widens the whole thing and every label arrives
-  // together — the rail reads as a menu for as long as the pointer is near it
-  // and returns to a 72px strip the moment it leaves.
-  //
-  // The 44px tile does not move when this happens: the panel pads 14px a side,
-  // so at 72px the row IS the tile and at 232px the same tile simply grows a
-  // label. Nothing reflows — the aside keeps its 72px footprint and the panel
-  // floats over the canvas, so the page does not jump when the pointer crosses.
-  const RailItems = () => (
-    <>
-      {navMain.map(({ to, tkey, icon: Icon, testid }) => {
-        const label = t(`nav.${tkey}`);
-        const badge = to === "/finance" ? captureCount : 0;
-        return (
-          <NavLink
-            key={to}
-            to={to}
-            end={to === "/"}
-            data-testid={testid}
-            aria-label={label}
-            className={({ isActive }) =>
-              // NM-2 (§3 Shell): active = a pressed tile — indigo tint, inset
-              // shadow, indigo glyph. Inactive carries no container at all
-              // until hover. Focus ring separate from any shadow state.
-              //
-              // NM-20 — hover RISES, it does not fill. It used to paint
-              // bg-nm-sunken, a grey wash, which is the flat idiom the revamp
-              // exists to replace and which fought the periwinkle wall behind
-              // it. The item now keeps the wall's own colour and simply lifts
-              // off it, so the two states read as one physical object moving:
-              // out on hover, in when it is the page you are on.
-              //
-              // This works better here than anywhere else in the app. NM-8
-              // took page surfaces to 99% lightness, which left the top-left
-              // white highlight ~1% of headroom and effectively killed it; the
-              // rail sits at 96.3%, so the highlight has almost four times the
-              // room and the rise is a real two-sided bevel rather than a
-              // single drop shadow.
-              `relative flex w-full items-center h-11 rounded-control transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
-                isActive
-                  ? "bg-primary/10 text-primary shadow-nm-press"
-                  : "text-muted-foreground hover:text-foreground hover:shadow-nm-sm"
-              }`
-            }
-          >
-            {({ isActive }) => (
-              <>
-                <span className="relative grid h-11 w-11 shrink-0 place-items-center">
-                  <Icon size={22} weight={isActive ? "fill" : "regular"} />
-                  {badge > 0 && (
-                    <span
-                      data-testid="nav-review-badge"
-                      className="absolute top-1 right-1 min-w-[15px] h-[15px] px-1 flex items-center justify-center rounded-full bg-brand-600 text-white text-[9px] font-bold leading-none"
-                    >
-                      {badge}
-                    </span>
-                  )}
-                </span>
-                {/* Clipped by the panel while collapsed, so it costs nothing
-                    to keep mounted — and it stays in the accessibility tree. */}
-                <span
-                  className={`whitespace-nowrap pr-3 text-sm opacity-0 transition-opacity duration-150 group-hover/rail:opacity-100 group-focus-within/rail:opacity-100 ${
-                    isActive ? "font-semibold" : "font-medium"
-                  }`}
-                >
-                  {label}
-                </span>
-              </>
-            )}
-          </NavLink>
-        );
-      })}
-    </>
-  );
-
+  // KR-5 — navigation is the header's centred pill strip now (PillNav from
+  // the Karma kit). NavItems and RailItems are DELETED, not parked: NavItems
+  // had no remaining render site, and the rail is gone with its aside. The
+  // Finance capture badge moves onto the Finance pill.
   // NM-2 — the page ground moves onto the soft-depth surface. Depth needs a
   // mid-tone to cast onto: cards sit at the SAME value and are separated by
   // shadow + hairline, not by fill. bg-background stays untouched for
@@ -416,106 +310,71 @@ export default function Layout({ children }) {
        in and out with the theme instead of snapping — see .app-sky::before. */
     <div className="app-sky min-h-screen flex flex-col bg-nm text-foreground">
       <WelcomeOverlay />
-      {/* RD-1 (2026-08-17) — desktop top bar, full width.
-          The reference puts its mark in the rail's top cell, but that only
-          works with an icon mark and our artwork has none — the supplied
-          lockup is horizontal and renders 108px wide at its smallest legible
-          size, which overflowed a 58px rail. Wordmark.jsx is explicit that a
-          redrawn approximation is a different logo, so rather than invent a
-          glyph the bar spans the full width and carries the lockup at its
-          left, pixel-exact. The rail then starts below it and is pure nav.
-          Everything else about the bar follows the reference: one global
-          search occupying the width, controls right. */}
-      {/* NM-2 — the bar itself dissolves: no border, no distinct fill, just the
-          page surface (opaque, so content scrolling beneath the sticky strip is
-          masked). What structures it now is its contents — the lockup on its
-          own raised pill, the search as the one genuinely intuitive inset (a
-          field you type INTO), and the three controls as individually raised
-          44px tiles. */}
-      <header className="hidden lg:flex h-[72px] shrink-0 bg-nm items-center gap-4 pl-3 pr-3 sticky top-0 z-20">
-        <div className="shrink-0 nm-raised rounded-pill h-11 px-4 flex items-center">
+      {/* KR-5 — the Karma header. Three tracks: logo · centred pill nav ·
+          circular controls + the avatar block. The reference's shell exactly,
+          which also KILLS two prior decisions on purpose:
+            · the opaque bar (NM-2 "the bar dissolves") — this one FROSTS over
+              the bloom instead, because the ground behind it is now weather,
+              and content scrolling under an opaque greige strip read as a
+              hole in the sky;
+            · the sidebar (every shell since RD-1) — seven destinations fit
+              the reference's segment strip, so the rail's 72px column goes
+              back to the content.
+          The search field is demoted from a full-width inset to a circle
+          that opens a ⌘K dialog — the reference has no visible field, and
+          the field's one real job (ask Dex) survives intact. */}
+      <header className="hidden lg:grid h-[72px] shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-4 px-6 sticky top-0 z-20 backdrop-blur-md bg-[hsl(var(--nm-bg)/0.72)]">
+        <div className="flex items-center justify-self-start">
           <Logo markOnly />
         </div>
-        <form
-          className="flex-1 flex items-center gap-2.5 min-w-0 nm-inset rounded-pill h-11 px-4 transition-shadow focus-within:ring-2 focus-within:ring-primary/40"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const q = globalQuery.trim();
-            if (!q) return;
-            navigate(`/brain?q=${encodeURIComponent(q)}`);
-            setGlobalQuery("");
-          }}
-        >
-          <MagnifyingGlass size={18} className="text-muted-foreground shrink-0" />
-          <input
-            data-testid="global-search"
-            value={globalQuery}
-            onChange={(e) => setGlobalQuery(e.target.value)}
-            placeholder={t("header.search_ph", "Find anything…")}
-            aria-label={t("header.search_ph", "Find anything…")}
-            className="flex-1 min-w-0 bg-transparent text-sm placeholder:text-muted-foreground focus:outline-none"
-          />
-        </form>
-        <div className="flex items-center gap-2 shrink-0">
-          <LanguageSwitcher />
-          <ThemeToggle />
-          <Bellicon />
-        </div>
-      </header>
 
-      <div className="flex flex-1 min-h-0">
-      {/* RD-1 — desktop rail.
-          Was a 256px labelled sidebar carrying the wordmark, tenant name,
-          industry, the nav, the user block and a Sign-out button. That whole
-          column is now 58px of nav icons. Tenant name + user identity +
-          sign-out moved into the avatar popover at its foot, which is where
-          the reference keeps them. */}
-      {/* NM-2 — the rail detaches from the viewport edge: a floating raised
-          panel inset 12px, 72px wide so a 44px active tile sits centred with
-          air. Sticky offset = header 72 + margin 12; height = viewport minus
-          header minus both margins, so the bottom margin matches the left. */}
-      {/* NM-12 made this a 72px RESERVATION with the visible panel absolute
-          inside it, so hovering overlaid the canvas and nothing reflowed.
-          NM-19 reverses that on the founder's call: the aside itself is what
-          grows, so the flex row gives main less space and the page travels
-          with the rail instead of being covered by it.
-          THE COST IS REAL AND IT IS THE POINT OF THE TRADE: this is a layout
-          animation, so every frame of the 200ms re-lays-out the canvas, and
-          on a page whose content is not width-capped (My Work, CRM, Finance)
-          text re-wraps while it moves. Pages that centre inside a max-width
-          just slide. Kept to 200ms ease-out for that reason, and `hover`
-          rather than a click keeps it feeling like a peek rather than a mode. */}
-      <aside
-        data-testid="desktop-rail"
-        className="group/rail hidden lg:block w-[72px] hover:w-[232px] focus-within:w-[232px] shrink-0 sticky top-[84px] ml-3 my-3 h-[calc(100vh-72px-1.5rem)] transition-[width] duration-200 ease-out"
-      >
-        <div
-          data-testid="desktop-rail-panel"
-          className="absolute inset-y-0 left-0 z-30 flex w-full flex-col overflow-hidden nm-raised bg-nm-rail px-3.5"
-        >
-        <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-3 flex flex-col gap-1">
-          <RailItems />
-        </nav>
-        <div className="shrink-0 py-3">
+        <PillNav
+          testid="header-pill-nav"
+          items={navMain.map((n) => ({
+            to: n.to,
+            end: n.to === "/",
+            label: t(`nav.${n.tkey}`),
+            testid: n.testid,
+            // The Finance capture badge rides its pill — same signal the
+            // rail's icon badge carried, same source, new seat.
+            badge: n.to === "/finance" ? captureCount : 0,
+          }))}
+        />
+
+        <div className="flex items-center gap-2.5 justify-self-end">
+          <button
+            type="button"
+            data-testid="global-search-open"
+            aria-label={t("header.search_ph", "Find anything…")}
+            title={`${t("header.search_ph", "Find anything…")} (⌘K)`}
+            onClick={() => setSearchOpen(true)}
+            className="h-10 w-10 rounded-full border border-kr-outline grid place-items-center text-foreground/80 transition-colors hover:bg-white/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline"
+          >
+            <MagnifyingGlass size={18} weight="regular" />
+          </button>
+          <LanguageSwitcher />
+          <Bellicon />
+
+          {/* The avatar block — initial circle + stacked name/role, and the
+              menu that absorbed the dead rail's foot: identity, workspace,
+              Settings (ownerOnly — it left the nav pills), sign out. */}
           <Popover>
             <PopoverTrigger asChild>
-              {/* NM-2 — the avatar is furniture (§0's table lists it), so it
-                  joins the tile system at the 44px floor. The indigo initial
-                  keeps it recognisably an identity, not just another button. */}
               <button
                 data-testid="rail-user-menu"
                 aria-label={user?.name || "Account"}
-                className="flex w-full items-center h-11 rounded-control transition-shadow hover:shadow-nm active:shadow-nm-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                className="flex items-center gap-2.5 rounded-pill py-1 pl-1 pr-2.5 transition-colors hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline"
               >
-                <span className="grid h-11 w-11 shrink-0 place-items-center nm-tile rounded-control text-brand-600 text-sm font-semibold">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-kr-outline bg-nm-raised text-sm font-semibold">
                   {(user?.name || "?").trim().charAt(0).toUpperCase()}
                 </span>
-                <span className="min-w-0 whitespace-nowrap px-3 text-sm font-medium opacity-0 transition-opacity duration-150 group-hover/rail:opacity-100 group-focus-within/rail:opacity-100">
-                  {user?.name || "Account"}
+                <span className="hidden xl:block min-w-0 text-left leading-tight">
+                  <span className="block max-w-[140px] truncate text-sm font-semibold">{user?.name}</span>
+                  <span className="block text-xs capitalize text-muted-foreground">{user?.role || "member"}</span>
                 </span>
               </button>
             </PopoverTrigger>
-            <PopoverContent side="right" align="end" className="w-64 p-0">
+            <PopoverContent align="end" className="w-64 p-0">
               <div className="px-3 py-3 border-b border-border" data-testid="current-user">
                 <p className="text-sm font-semibold truncate">{user?.name}</p>
                 <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
@@ -528,6 +387,15 @@ export default function Layout({ children }) {
                 )}
               </div>
               <div className="p-1.5">
+                {user?.role === "owner" && (
+                  <button
+                    onClick={() => navigate("/settings")}
+                    data-testid="nav-settings"
+                    className="w-full flex items-center gap-2 px-2.5 py-2 text-sm rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                  >
+                    <GearSix size={15} /> {t("nav.settings", "Settings")}
+                  </button>
+                )}
                 <button
                   onClick={doLogout}
                   data-testid="logout-button"
@@ -539,28 +407,47 @@ export default function Layout({ children }) {
             </PopoverContent>
           </Popover>
         </div>
-        </div>
-      </aside>
+      </header>
 
-      {/* Main.
-          MPWA-14: below lg the column is capped and centred (`app-shell`) so
-          the app reads as one phone-width surface on any display; on lg it
-          resets to fill the space beside the sidebar. */}
-      <div className="flex flex-col min-w-0 app-shell lg:max-w-none lg:mx-0 lg:flex-1">
+      {/* KR-5 — ⌘K. The reference shows no search field; the one real job the
+          old full-width input had (route a question to Dex) survives as a
+          command dialog. Enter submits to the exact navigation the field
+          used — /brain?q= — which /brain reads on arrival (NM-13). */}
+      <CommandDialog open={searchOpen} onOpenChange={setSearchOpen}>
+        <CommandInput
+          data-testid="global-search"
+          placeholder={t("header.search_ph", "Find anything…")}
+          value={globalQuery}
+          onValueChange={setGlobalQuery}
+        />
+        <CommandList>
+          <CommandEmpty>Type, then Enter — Dex answers.</CommandEmpty>
+          {globalQuery.trim() && (
+            <CommandItem
+              data-testid="global-search-go"
+              onSelect={() => {
+                const q = globalQuery.trim();
+                setSearchOpen(false);
+                setGlobalQuery("");
+                navigate(`/brain?q=${encodeURIComponent(q)}`);
+              }}
+            >
+              Ask Dex — “{globalQuery.trim()}”
+            </CommandItem>
+          )}
+        </CommandList>
+      </CommandDialog>
+
+      {/* Main. MPWA-14: below lg the column is capped and centred (`app-shell`)
+          so the app reads as one phone-width surface on any display; at lg the
+          rail is gone (KR-5), so the column centres inside a 1400px cap — the
+          reference is a centred composition, not an edge-to-edge one. */}
+      <div className="flex flex-col min-w-0 app-shell lg:max-w-[1400px] lg:w-full lg:mx-auto lg:flex-1">
         {/* Mobile top app bar — MPWA-03.
-            Two controls, not four. The theme toggle moved to an All Apps tile
-            (he switches theme roughly never and it was occupying prime
-            top-bar space beside the bell), and the hamburger drawer is gone
-            entirely — nothing should be reachable from two places (§8).
-            MPWA-02: min-h + top inset so nothing sits under the status bar in
-            iOS standalone, where there is no browser chrome above us. */}
+            Two controls, not four; min-h + top inset so nothing sits under the
+            status bar in iOS standalone. Untouched by KR-5 beyond what the
+            recipes re-skin. */}
         <header className="lg:hidden min-h-14 border-b border-border bg-background/80 backdrop-blur-xl grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-gutter-safe pt-safe sticky top-0 z-20">
-          {/* MPWA-14: the wordmark is centred like Instagram's. A three-track
-              grid (1fr · auto · 1fr) pins the logo to the header's true centre
-              independent of the bell's width — the equal side tracks guarantee
-              it, where a flex spacer only approximated it. `px-gutter-safe` is
-              symmetric (16/16) so the centre is the screen's centre, not the
-              content box's; the bell rides the right track, pushed to its end. */}
           <span aria-hidden="true" />
           <Logo />
           <div className="flex items-center justify-self-end gap-touch-gap">
@@ -568,11 +455,10 @@ export default function Layout({ children }) {
           </div>
         </header>
 
-        {/* MPWA-02: pb-dock clears the tab bar (and, from MPWA-03, the floating
-            dock) plus the home indicator, so the last row is never trapped. */}
+        {/* MPWA-02: pb-dock clears the floating dock plus the home indicator,
+            so the last row is never trapped. */}
         <main className="flex-1 p-4 lg:p-8 pb-dock lg:pb-8 px-gutter-safe overflow-x-hidden app-canvas">{children}</main>
       </div>
-      </div>{/* /RD-1 rail+content row */}
 
       {/* MPWA-03 — mobile navigation.
           A floating pill detached from the edges (lists scroll *under* it,

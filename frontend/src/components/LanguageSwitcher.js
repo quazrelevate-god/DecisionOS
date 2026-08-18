@@ -54,12 +54,12 @@ export function LanguageSwitcher({ variant = "icon" }) {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        {/* NM-2 — a 44px raised tile like its two header siblings. This icon
-            variant renders only in the desktop top bar; the mobile sheet uses
-            variant="inline", untouched. */}
+        {/* KR-5 — the reference's outlined circle, like its header siblings.
+            This icon variant renders only in the desktop top bar; the mobile
+            sheet uses variant="inline", untouched. */}
         <button data-testid="language-switcher" title={t("common.language")}
-          className="w-11 h-11 nm-tile rounded-control flex items-center justify-center text-foreground/80 transition-shadow hover:shadow-nm active:shadow-nm-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
-          <Globe size={18} weight="bold" />
+          className="h-10 w-10 rounded-full border border-kr-outline grid place-items-center text-foreground/80 transition-colors hover:bg-white/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline">
+          <Globe size={18} weight="regular" />
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-44 p-0 border border-border shadow-md">

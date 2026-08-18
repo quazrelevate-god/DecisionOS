@@ -42,7 +42,7 @@ export function DexFab({ onOpen, recording = false, seconds = 0, onStop }) {
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         recording
           ? "bg-danger-600 text-white recording-pulse"
-          : "bg-primary text-primary-foreground hover:opacity-95"
+          : "bg-kr-ink text-white hover:opacity-95"
       )}
     >
       {recording ? (

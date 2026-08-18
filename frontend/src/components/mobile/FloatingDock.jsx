@@ -69,7 +69,9 @@ function DockItem({ to, label, icon: Icon, testid, active, onClick }) {
   const cls = cn(
     "dock-item flex flex-col items-center justify-center gap-0.5 rounded-xl px-1.5 transition-colors",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-    active ? "text-primary" : "text-neutral-500 hover:text-foreground"
+    // On ink: active = full white, inactive = white at 55%. Colour alone is
+    // never the only cue — fill weight + label carry it too (§3.5 held).
+    active ? "text-white" : "text-white/55 hover:text-white/80"
   );
   if (onClick) {
     return (
@@ -113,11 +115,12 @@ export function FloatingDock({ user, onMore, moreOpen = false, moreBadge = 0 }) 
     >
       <div
         className={cn(
-          // NM-8: deliberately NOT nm-tile. The sweep converted this and it was
-          // reverted — the dock and the Dex FAB are the two controls the founder
-          // must find without looking, and §4 keeps them solid.
-          "flex h-16 items-center gap-1 rounded-pill border border-border bg-card px-2",
-          "shadow-brutal-lg backdrop-blur-xl",
+          // KR-5: the dock takes the BAND's material — an ink pill, the one
+          // Karma object that reads instantly against the greige bloom. Still
+          // deliberately not a recipe class: this and the FAB are the two
+          // controls the founder must find without looking.
+          "flex h-16 items-center gap-1 rounded-pill bg-kr-ink px-2",
+          "backdrop-blur-xl",
           "max-[359px]:h-[3.25rem]"
         )}
       >
@@ -137,7 +140,7 @@ export function FloatingDock({ user, onMore, moreOpen = false, moreBadge = 0 }) 
             <span
               data-testid="dock-more-badge"
               aria-label={`${moreBadge} items need you`}
-              className="pointer-events-none absolute right-0 top-0 grid h-5 min-w-5 place-items-center rounded-pill bg-danger-600 px-1 text-[length:var(--text-label)] font-bold leading-none text-white"
+              className="pointer-events-none absolute right-0 top-0 grid h-5 min-w-5 place-items-center rounded-pill bg-kr-accent px-1 text-[length:var(--text-label)] font-bold leading-none text-white"
             >
               {Math.min(9, moreBadge)}
             </span>

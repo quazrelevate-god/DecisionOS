@@ -460,8 +460,12 @@ export default function Desk() {
 
   if (isMobile) return <DeskMobile />;
 
+  // RD-6: was max-w-5xl (1024px). With the 240px sidebar already taking
+  // width, that left ~90px dead either side at 1440 and ~330px at 1920 —
+  // the "lot of white space". 6xl keeps a readable measure while actually
+  // using the screen.
   return (
-    <div className="max-w-5xl mx-auto">
+    <div className="max-w-6xl mx-auto">
       {/* Epic 2 Sprint 5 (E2-34): capture bar moved to /brain (Dex).
           Desk is now pure decision viewer.
           Epic 2 Sprint 6 (E2-43..45): CEO Brief absorbed into Desk. */}

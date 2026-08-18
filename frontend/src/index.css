@@ -861,3 +861,13 @@
     .nm-raised, .nm-tile { border-color: hsl(var(--nm-edge) / .70); }
     .nm-inset            { border-color: hsl(var(--nm-edge) / .50); }
 }
+
+/* NM-11 — the Dex orb's idle breath. Runs ONLY when nothing is recording:
+   with a live signal the rings are driven by the microphone and a loop on top
+   of that would be two motions fighting. Off under reduced motion. */
+@keyframes dexBreathe {
+    0%, 100% { transform: scale(1);     opacity: .55; }
+    50%      { transform: scale(1.045); opacity: .9;  }
+}
+.dex-breathe { animation: dexBreathe 4.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .dex-breathe { animation: none; } }

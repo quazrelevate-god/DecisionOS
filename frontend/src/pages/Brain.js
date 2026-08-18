@@ -9,6 +9,8 @@ import { DocumentsPanel } from "./BrainDocuments";
 import { MicDictateButton } from "../components/MicDictateButton";
 // Epic 2 Sprint 5 (E2-33): capture bar moves here from Desk. Single AI home.
 import { DexCaptureBar } from "../components/DexCaptureBar";
+import { useDexCapture } from "../hooks/useDexCapture";
+import { DexStage } from "./brain/DexStage";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -174,6 +176,15 @@ export default function Brain() {
   // conditional hook — the hook count differed between a phone and a desktop
   // render of the same component, and React would have thrown on any viewport
   // change. Both branches need the count anyway.
+  // One capture machine for the page — the stage renders it, the panels
+  // invalidate off it.
+  const capture = useDexCapture({
+    onCaptured: () => {
+      qc.invalidateQueries({ queryKey: ["voice-notes"] });
+      qc.invalidateQueries({ queryKey: ["dex-inflight-count"] });
+    },
+  });
+
   const { data: inflight } = useQuery({
     queryKey: ["dex-inflight-count"],
     queryFn: () => api.get("/dex/inflight-count").then((r) => r.data),
@@ -234,34 +245,38 @@ export default function Brain() {
 
   return (
     <div>
-      <PageHeader eyebrow={t("brain.eyebrow")} title={t("brain.title")}>
-        <div className="flex flex-col gap-1" data-testid="brain-tabs-wrap">
-          <div className="flex border border-border w-fit" data-testid="brain-tabs">
-            <button onClick={() => setTab("ask")} data-testid="brain-tab-ask"
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-r border-border transition-colors ${tab === "ask" ? "bg-primary text-primary-foreground" : "bg-white hover:bg-accent"}`}>
-              <ChatCircleText size={16} weight="bold" /> {t("brain.ask")}
-            </button>
-            <button onClick={() => setTab("search")} data-testid="brain-tab-search"
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-r border-border transition-colors ${tab === "search" ? "bg-primary text-primary-foreground" : "bg-white hover:bg-accent"}`}>
-              <MagnifyingGlass size={16} weight="bold" /> {t("brain.search")}
-            </button>
-            <button onClick={() => setTab("documents")} data-testid="brain-tab-documents"
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${tab === "documents" ? "bg-primary text-primary-foreground" : "bg-white hover:bg-accent"}`}>
-              <Books size={16} weight="bold" /> Documents
-            </button>
+      {/* NM-11: the PageHeader + segmented strip + horizontal capture bar are
+          gone. Dex is the product's selling point and it was laid out like a
+          settings screen. The stage puts a live, audio-reactive orb at the
+          centre and demotes the three sub-views to a quiet pill row beneath
+          it — they are where an answer LANDS, not the first decision to make.
+          Same capture machine underneath: useDexCapture, same endpoints. */}
+      <DexStage
+        capture={capture}
+        onSend={() => {
+          qc.invalidateQueries({ queryKey: ["voice-notes"] });
+          qc.invalidateQueries({ queryKey: ["dex-inflight-count"] });
+        }}
+        tabs={
+          <div className="flex items-center gap-1.5 rounded-pill nm-inset p-1" data-testid="brain-tabs">
+            {TABS.map((tb) => (
+              <button
+                key={tb.key}
+                onClick={() => setTab(tb.key)}
+                data-testid={`brain-tab-${tb.key}`}
+                aria-pressed={tab === tb.key}
+                className={`flex items-center gap-1.5 rounded-pill px-4 py-1.5 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+                  tab === tb.key
+                    ? "bg-nm shadow-nm-sm text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <tb.icon size={15} weight={tab === tb.key ? "fill" : "regular"} /> {tb.label}
+              </button>
+            ))}
           </div>
-          <p className="text-xs text-muted-foreground" data-testid="brain-tabs-hint">{t("brain.tabs_hint")}</p>
-        </div>
-      </PageHeader>
-
-      {/* Epic 2 Sprint 5 (E2-33): capture bar migrated from Desk. Always-visible
-          at the top of Dex so speak/type/upload is one click from every sub-tab. */}
-      <DexCaptureBar onCaptured={() => {
-        qc.invalidateQueries({ queryKey: ["voice-notes"] });
-        // E2-35: bump the in-flight badge immediately, don't wait for the
-        // 8s poll to catch up.
-        qc.invalidateQueries({ queryKey: ["dex-inflight-count"] });
-      }} />
+        }
+      />
 
       {/* E2-35: in-flight badge. Only renders while Dex is actively
           structuring at least one capture. Kills 'did my capture go

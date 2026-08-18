@@ -5,14 +5,17 @@ module.exports = {
     theme: {
         extend: {
             fontFamily: {
-                sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
-                heading: ['Inter', 'system-ui', 'sans-serif'],
-                // RD-1 (2026-08-17): the editorial display face. `font-display`
-                // is for page-leading headings and greetings only — never UI
-                // chrome, never below 24px. `font-heading` stays Inter so the
-                // ~200 existing font-heading call sites keep their grotesque.
-                display: ['Instrument Serif', 'ui-serif', 'Georgia', 'serif'],
-                logo: ['Chivo', 'sans-serif'],
+                // KR-1 (2026-08-18): one geometric voice. sans/heading/display
+                // all resolve to Urbanist — the three keys survive because
+                // hundreds of call sites reference them, but they are no longer
+                // three faces. `display` keeps meaning "page-leading heading":
+                // its weight/tracking voice lives in index.css (.font-display),
+                // the family is just no longer a serif. `logo` is deleted
+                // (zero call sites — the wordmark is a PNG). Mono stays for
+                // genuine data: money columns, IDs, receipts.
+                sans: ['Urbanist', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
+                heading: ['Urbanist', 'system-ui', 'sans-serif'],
+                display: ['Urbanist', 'system-ui', 'sans-serif'],
                 mono: ['IBM Plex Mono', 'ui-monospace', 'monospace'],
             },
             borderRadius: {

@@ -1,10 +1,14 @@
-/* RD-1 (2026-08-17) — Instrument Serif joins the stack as the display face.
-   The reference system leads every page with a large editorial serif greeting
-   ("Good afternoon, Sam") against an otherwise neutral grotesque UI. Inter
-   alone made those moments read as "big bold sans" rather than editorial.
-   Instrument Serif ships one weight + italic, which is all a display face
-   needs — it is never used below 24px. */
-@import url('https://fonts.googleapis.com/css2?family=Chivo:wght@700;800;900&family=Instrument+Serif:ital@0;1&family=Inter:wght@100..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+/* KR-1 (2026-08-18) — one voice: Urbanist, variable.
+   The Karma reference is a geometric low-contrast sans at every size — no
+   serif moments, no second face. Urbanist over the closer-looking Poppins
+   for one load-bearing reason: Poppins ships static weights only, and this
+   type ladder depends on weight 650 for the h2/h3 distinction (see the
+   .text-h3 note below) — on a static face 650 silently rounds to 700 and
+   the tier collapses. Urbanist carries the full variable axis plus italics,
+   which the reference's italic tile-labels want anyway.
+   Inter, Instrument Serif and Chivo (zero call sites) retire. IBM Plex Mono
+   stays: money columns and code need tabular figures we can trust. */
+@import url('https://fonts.googleapis.com/css2?family=Urbanist:ital,wght@0,100..900;1,100..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -482,32 +486,35 @@
     * {
         @apply border-border;
     }
-    /* DS-3 — Geist is dropped. It was still hardcoded here, which is why the
-       app rendered in Geist even after tailwind.config.js said Inter: this rule
-       is more specific than the utility and won every time.
+    /* KR-1 — Urbanist everywhere. Loaded on the VARIABLE axis at the top of
+       this file; that is not optional — .text-h3 asks for weight 650, which
+       only exists on a variable face. With static weights it silently rounds
+       to 700 and the h2/h3 distinction disappears.
 
-       Inter is loaded on the VARIABLE axis (wght@100..900) at the top of this
-       file. That is not optional — .text-h3 asks for weight 650, which only
-       exists on a variable face. With static weights it silently rounds to 700
-       and the h2/h3 distinction disappears.
-
-       Chivo stays, on .font-logo only. The wordmark is identity, not theme. */
+       TRACKING: Inter wanted negative tracking at text sizes; a geometric
+       face does not — its round forms already sit close, and squeezing them
+       makes 14px body read as a smear. Body goes to 0; headings keep only a
+       whisper. (.font-logo is deleted, not restyled: zero call sites — the
+       wordmark has been a PNG since RD-1.) */
     body {
         @apply bg-background text-foreground;
-        font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+        font-family: 'Urbanist', system-ui, -apple-system, 'Segoe UI', sans-serif;
         font-size: 14px;
         line-height: 21px;
-        letter-spacing: -0.011em;
-        /* Money columns align down a list without every call-site opting in. */
+        letter-spacing: 0;
+        /* KR-1, MEASURED: Urbanist has NO tnum feature — ten 1s render 53px
+           against ten 9s at 105.31px with tabular-nums requested, so this
+           declaration is a no-op on the body face. It stays for the fallback
+           stack, but alignment work is carried by font-mono/.text-code
+           (IBM Plex Mono) on money columns — which the amount call sites
+           already use. Display numerals are proportional on purpose: so is
+           the reference's "$64,100". */
         font-variant-numeric: tabular-nums lining-nums;
         -webkit-font-smoothing: antialiased;
     }
     h1, h2, h3, h4, .font-heading {
-        font-family: 'Inter', system-ui, sans-serif;
-        letter-spacing: -0.02em;
-    }
-    .font-logo {
-        font-family: 'Chivo', sans-serif;
+        font-family: 'Urbanist', system-ui, sans-serif;
+        letter-spacing: -0.01em;
     }
     :focus-visible {
         outline: 2px solid hsl(var(--focus-ring));
@@ -544,13 +551,13 @@
     .text-display {
         font-size: 1.75rem;        /* 28 */
         line-height: 1.15;
-        letter-spacing: -0.028em;
+        letter-spacing: -0.012em;   /* KR-1: geometric face — barely-there */
         font-weight: 800;
     }
     .text-h1 {
         font-size: 1.375rem;       /* 22 */
         line-height: 1.2;
-        letter-spacing: -0.024em;
+        letter-spacing: -0.01em;
         font-weight: 700;
     }
     @media (min-width: 640px) {
@@ -560,46 +567,46 @@
     .text-h2 {
         font-size: 1.0625rem;      /* 17 */
         line-height: 1.3;
-        letter-spacing: -0.020em;
+        letter-spacing: -0.008em;
         font-weight: 700;
     }
     .text-h3 {
         font-size: 0.9375rem;      /* 15 */
         line-height: 1.35;
-        letter-spacing: -0.017em;
+        letter-spacing: -0.006em;
         /* 650 exists only on a variable face. If this computes to 700, the
-           Inter variable axis did not load — see the @import at the top. */
+           Urbanist variable axis did not load — see the @import at the top. */
         font-weight: 650;
     }
     .text-body {
         font-size: 0.875rem;       /* 14 */
         line-height: 1.5;
-        letter-spacing: -0.011em;
+        letter-spacing: 0;
         font-weight: 400;
     }
     .text-body-strong {
         font-size: 0.875rem;       /* 14 */
         line-height: 1.5;
-        letter-spacing: -0.011em;
+        letter-spacing: 0;
         font-weight: 600;
     }
     .text-lead {
         font-size: 0.9375rem;      /* 15 */
         line-height: 1.55;
-        letter-spacing: -0.013em;
+        letter-spacing: 0;
         font-weight: 400;
     }
     .text-small {
         font-size: 0.8125rem;      /* 13 */
         line-height: 1.45;
-        letter-spacing: -0.006em;
+        letter-spacing: 0;
         font-weight: 400;
     }
     /* 11px desktop, 13px below lg — the variable is defined in the token block. */
     .text-meta {
         font-size: var(--text-meta);
         line-height: 1.4;
-        letter-spacing: -0.004em;
+        letter-spacing: 0;
         font-weight: 400;
     }
     .text-label {
@@ -650,13 +657,20 @@
     .label-mono {
         @apply text-xs font-medium tracking-normal normal-case text-muted-foreground;
     }
-    /* The editorial display face. Used for page-leading headings and greetings
-       only — never below 24px, never for UI chrome. */
-    .text-display {
-        font-family: 'Instrument Serif', ui-serif, Georgia, serif;
-        font-weight: 400;
-        letter-spacing: -0.012em;
-        line-height: 1.08;
+    /* KR-1 — the serif override is DELETED, not restyled. The display voice
+       is now carried entirely by the `display` fontFamily key in
+       tailwind.config.js (→ Urbanist) plus the weight rule below, so all 40
+       font-display call sites re-voice in one place. The .text-display SIZE
+       tier in the DS-4 ladder above is untouched — size and voice were
+       always two separate systems.
+
+       The weight rule is safe to stack: font-display is a font-family
+       utility, so weight/tracking from here never conflict with it. Without
+       this, the old serif headings (which carried hierarchy at weight 400
+       purely through the face change) would land as plain-body Urbanist. */
+    .font-display {
+        font-weight: 600;
+        letter-spacing: -0.015em;
     }
 }
 

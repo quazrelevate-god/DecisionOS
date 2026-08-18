@@ -33,14 +33,16 @@ export function DarkBand({ children, reveal = true, className, testid }) {
         "--kr-chip-line": "40 12% 55%",
       }}
     >
-      {/* KR-8.5 — the grab handle, sitting INSIDE the dip. The dip itself is
-          cut out of the band by a mask (see .kr-dark-band) so the bloom shows
-          through it; this is only the small dark bar the reference draws in
-          the middle of that dip. Ink at low alpha so it reads on whatever the
-          bloom happens to be doing behind it. */}
+      {/* The grab handle, sitting INSIDE the dip. The dip itself is cut out
+          of the band by a mask (see .kr-dark-band) so the bloom shows through
+          it; this is only the small dark bar the reference draws in the
+          middle of that gap. Ink at low alpha so it reads on whatever the
+          bloom happens to be doing behind it.
+          KR-8.6 — it was at -11px, i.e. floating ABOVE the band's edge. In
+          the reference the bar sits low, in the sag itself: 36×4 at +4px. */}
       <span
         aria-hidden="true"
-        className="absolute -top-[11px] left-1/2 block h-[4px] w-10 -translate-x-1/2 rounded-full bg-kr-ink/45"
+        className="absolute top-[4px] left-1/2 block h-[4px] w-9 -translate-x-1/2 rounded-full bg-kr-ink/55"
       />
       <div ref={reveal ? ref : undefined} className={reveal ? "kr-reveal" : undefined}>
         {children}

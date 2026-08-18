@@ -23,8 +23,17 @@
 // ACTED CARDS GO QUIET. Once a card's action fires, it dims and desaturates
 // with a tick — "I dealt with this" — instead of vanishing, so the founder
 // keeps their place in the grid.
+//
+// ONE ROW, THEN ON DEMAND (KR-8.6). Four sections' worth of every open card
+// is a wall. The founder: "for each section it's showing the entire list of
+// bento boxes — I just want only one row shown, and the ability to expand."
+// So each section collapses to EXACTLY one full grid row and keeps a
+// "+N more" toggle. "One row" is computed, not guessed: the tiers below have
+// known column spans per breakpoint, so the collapsed slice is the longest
+// prefix whose spans still fit the row — which is why the count changes with
+// width instead of leaving a ragged half-row.
 import * as React from "react";
-import { CheckCircle, Spinner, CaretRight } from "@phosphor-icons/react";
+import { CheckCircle, Spinner, CaretRight, CaretDown } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 
 /** Tier → grid span + type scale. Never narrower than the text can carry. */
@@ -63,6 +72,49 @@ function tiersFor(cards, sectionRank) {
     if (i <= 2 && (withMoney ? Number(c.amount) > 0 : true)) return "b";
     return "c";
   });
+}
+
+/* The same spans as TIER above, as NUMBERS — the row-fitting maths needs
+   them arithmetically and Tailwind needs them as literal classes, so the two
+   forms are kept adjacent and must be edited together. */
+const COLS = { base: 2, sm: 4, xl: 12 };
+const SPAN = {
+  a: { base: 2, sm: 4, xl: 6 },
+  b: { base: 2, sm: 2, xl: 3 },
+  c: { base: 1, sm: 2, xl: 3 },
+};
+
+/** Which of the three grid widths is live. Media queries, not a resize
+ *  listener — this fires on the two crossings only, never per pixel. */
+function useBreakpoint() {
+  const read = () =>
+    typeof window === "undefined" ? "xl"
+      : window.matchMedia("(min-width: 1280px)").matches ? "xl"
+      : window.matchMedia("(min-width: 640px)").matches ? "sm"
+      : "base";
+  const [bp, setBp] = React.useState(read);
+  React.useEffect(() => {
+    const mqs = [window.matchMedia("(min-width: 1280px)"), window.matchMedia("(min-width: 640px)")];
+    const onChange = () => setBp(read());
+    mqs.forEach((mq) => mq.addEventListener("change", onChange));
+    onChange();
+    return () => mqs.forEach((mq) => mq.removeEventListener("change", onChange));
+  }, []);
+  return bp;
+}
+
+/** The longest prefix of `tiers` that fits one row at this width. */
+function firstRowCount(tiers, bp) {
+  const cols = COLS[bp];
+  let used = 0;
+  let n = 0;
+  for (const t of tiers) {
+    const w = SPAN[t]?.[bp] ?? 1;
+    if (used + w > cols) break;
+    used += w;
+    n += 1;
+  }
+  return Math.max(1, n);   // a card wider than the row still shows, alone
 }
 
 function DecisionBox({ card, tier, tint, verb, icon: Icon, busy, done, onAction }) {
@@ -115,36 +167,72 @@ function DecisionBox({ card, tier, tint, verb, icon: Icon, busy, done, onAction 
  * @param {Array} sections [{key,label,tint,icon,count,cards,loading,empty}]
  */
 export function DecisionBento({ sections, verbFor, iconFor, onCard, busyId, doneIds, className, testid }) {
+  const bp = useBreakpoint();
+  const [open, setOpen] = React.useState(() => new Set());
+  const toggle = (key) =>
+    setOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+
   return (
     <div className={cn("min-w-0", className)} data-testid={testid}>
-      {sections.map((s, si) => (
-        <section key={s.key} className={cn(si > 0 && "mt-8")} data-testid={`desk-section-${s.key}`}>
-          <div className="mb-3 flex items-center gap-2.5">
-            <span aria-hidden="true" className={cn("h-3 w-3 rounded-full", s.dot)} />
-            <h3 className="text-base font-semibold">{s.label}</h3>
-            <span className="rounded-pill bg-white/10 px-2 py-0.5 text-xs font-semibold tabular-nums">
-              {s.count ?? 0}
-            </span>
-          </div>
+      {sections.map((s, si) => {
+        const cards = s.cards || [];
+        const tiers = tiersFor(cards, si);
+        const rowN = firstRowCount(tiers, bp);
+        const expanded = open.has(s.key);
+        const shown = expanded ? cards : cards.slice(0, rowN);
+        const hidden = cards.length - rowN;
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-12">
-            {s.loading && Array.from({ length: 3 }, (_, i) => (
-              <div key={i} className={cn("ds-skeleton rounded-tile", TIER[i === 0 ? "a" : "b"].span, TIER.b.minH)} />
-            ))}
+        return (
+          <section key={s.key} className={cn(si > 0 && "mt-8")} data-testid={`desk-section-${s.key}`}>
+            <div className="mb-3 flex items-center gap-2.5">
+              <span aria-hidden="true" className={cn("h-3 w-3 rounded-full", s.dot)} />
+              <h3 className="text-base font-semibold">{s.label}</h3>
+              <span className="rounded-pill bg-white/10 px-2 py-0.5 text-xs font-semibold tabular-nums">
+                {s.count ?? 0}
+              </span>
 
-            {!s.loading && (s.cards || []).length === 0 && (
-              <div
-                data-testid={`desk-section-empty-${s.key}`}
-                className="col-span-2 flex min-h-[92px] items-center gap-2.5 rounded-tile border border-white/10 px-4 sm:col-span-4 xl:col-span-12"
-              >
-                <CheckCircle size={17} className="opacity-55" aria-hidden="true" />
-                <p className="text-sm opacity-65">{s.empty}</p>
-              </div>
-            )}
+              {/* The expander only exists when there is something behind the
+                  fold — a permanent "show less" on a one-card section would
+                  be a control that does nothing. */}
+              {!s.loading && hidden > 0 && (
+                <button
+                  type="button"
+                  onClick={() => toggle(s.key)}
+                  aria-expanded={expanded}
+                  data-testid={`desk-expand-${s.key}`}
+                  className="ml-auto flex h-8 items-center gap-1.5 rounded-pill border border-white/20 px-3 text-xs font-semibold transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+                >
+                  {expanded ? "Show less" : `+${hidden} more`}
+                  <CaretDown
+                    size={11}
+                    weight="bold"
+                    aria-hidden="true"
+                    className={cn("transition-transform duration-200", expanded && "rotate-180")}
+                  />
+                </button>
+              )}
+            </div>
 
-            {!s.loading && (() => {
-              const tiers = tiersFor(s.cards || [], si);
-              return (s.cards || []).map((card, i) => (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-12">
+              {s.loading && Array.from({ length: 3 }, (_, i) => (
+                <div key={i} className={cn("ds-skeleton rounded-tile", TIER[i === 0 ? "a" : "b"].span, TIER.b.minH)} />
+              ))}
+
+              {!s.loading && cards.length === 0 && (
+                <div
+                  data-testid={`desk-section-empty-${s.key}`}
+                  className="col-span-2 flex min-h-[92px] items-center gap-2.5 rounded-tile border border-white/10 px-4 sm:col-span-4 xl:col-span-12"
+                >
+                  <CheckCircle size={17} className="opacity-55" aria-hidden="true" />
+                  <p className="text-sm opacity-65">{s.empty}</p>
+                </div>
+              )}
+
+              {!s.loading && shown.map((card, i) => (
                 <DecisionBox
                   key={card.id}
                   card={card}
@@ -156,11 +244,11 @@ export function DecisionBento({ sections, verbFor, iconFor, onCard, busyId, done
                   onAction={() => onCard(card)}
                   tint={s.tint}
                 />
-              ));
-            })()}
-          </div>
-        </section>
-      ))}
+              ))}
+            </div>
+          </section>
+        );
+      })}
     </div>
   );
 }

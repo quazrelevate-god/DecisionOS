@@ -1,18 +1,26 @@
-// KR-8 · ArcGauge — the reference's instrument: a thin 240° arc with tick
-// marks and a needle, not a filled dial. The geometry descends from the old
-// OperatingScore HeroCard circle (r·2πr dashoffset math); the voice is new.
+// KR-8 · ArcGauge — the reference's instrument: a thin arc with a needle,
+// not a filled dial. The geometry descends from the old OperatingScore
+// HeroCard circle (r·2πr dashoffset math); the voice is new.
 //
-// The arc opens DOWNWARD (starts at 150°, sweeps 240° clockwise to 30°), so
-// the needle at 0 points down-left and at 100 down-right — the way an
-// analogue meter reads.
+// KR-8.6 — EXACTLY HALF A CIRCLE. The founder, measuring us against the
+// reference: "the gauge meter is exactly half circle, but our UI is showing
+// more than half — cut the circle in half." KR-8 had it at 240°, which reads
+// as a speedometer; the reference is a true semicircle sitting ON its
+// diameter. So: start at 180° (due left), sweep 180° to due right, needle at
+// 0 pointing left and at 100 pointing right.
+//
+// The SVG is CROPPED to that half — height is c + a hair, not `size`. A
+// square viewBox would ship 50% empty space under the arc and silently push
+// everything beside it out of alignment, which is the other half of the
+// founder's note.
 //
 // Honesty: when value is null (enough_data false), the needle and progress
 // arc simply don't render — a gauge pointing at zero would be a claim.
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
-const START = 150;      // degrees
-const SWEEP = 240;
+const START = 180;      // degrees — due left
+const SWEEP = 180;      // …clockwise over the top to due right
 
 export function ArcGauge({ value = null, size = 200, className, testid }) {
   const pct = value == null ? null : Math.max(0, Math.min(100, Number(value)));
@@ -20,15 +28,18 @@ export function ArcGauge({ value = null, size = 200, className, testid }) {
   const R = c - 10;
   const CIRC = 2 * Math.PI * R;
   const arcLen = (SWEEP / 360) * CIRC;
+  // The drawn box: the upper half, plus 8px so the hub and the needle's tip
+  // cap (both centred on the diameter line) are not clipped in half.
+  const H = c + 8;
 
   const needleAngle = pct == null ? null : START + (pct / 100) * SWEEP;
 
   return (
     <svg
-      viewBox={`0 0 ${size} ${size}`}
+      viewBox={`0 0 ${size} ${H}`}
       width={size}
-      height={size}
-      className={cn("overflow-visible", className)}
+      height={H}
+      className={cn("h-auto overflow-visible", className)}
       data-testid={testid}
       role="img"
       aria-label={pct == null ? "Score gauge — not enough data yet" : `Score gauge at ${pct} of 100`}

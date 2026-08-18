@@ -51,7 +51,10 @@ export function StatTile({
         // KR-8.1: min-height + a flex spacer give the reference's air — the
         // numeral sits at the BOTTOM of a tall tile, not under the label.
         // Labels go roman: the full-res reference is not italic.
-        "kr-lift flex min-h-[150px] flex-col p-4 sm:p-5 lg:min-h-[168px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline",
+        // KR-8.6: the lg floor drops to 170 because the grid now stretches
+        // its rows (auto-rows-fr) — the min-height is a floor for short
+        // columns, not the thing that sets tile height.
+        "kr-lift flex min-h-[150px] flex-col p-4 sm:p-5 lg:min-h-[170px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline",
         glass ? "kr-glass kr-glass--blue" : "nm-tile",
         className
       )}

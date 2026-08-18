@@ -191,7 +191,11 @@ export default function Desk() {
        behind the sheet. The phone scrolls the whole document. */
     <div data-testid="desk-page">
       {/* ── LIGHT ZONE — pinned; the sheet passes over it ─────────────── */}
-      <div ref={heroRef} className="kr-hero grid gap-8 lg:sticky lg:top-5 lg:z-0 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-10">
+      {/* KR-8.6 — the split and the gaps are MEASURED off the reference, not
+          eyeballed. In the reference the light zone divides 36 / 56 with a
+          wide 8% trough between; we were at 42 / 58 with a 40px gap, which is
+          what made our tiles read as squeezed and over-spaced at once. */}
+      <div ref={heroRef} className="kr-hero grid gap-8 lg:sticky lg:top-5 lg:z-0 lg:grid-cols-[minmax(0,29fr)_minmax(0,45fr)] lg:gap-20">
         {/* LEFT column — title, scope, score, gauge, money cards */}
         <div className="min-w-0">
           <h1 className="font-display text-3xl sm:text-4xl" data-testid="desk-brief-greeting">
@@ -259,14 +263,16 @@ export default function Desk() {
             </div>
             <ArcGauge
               value={scoreReady ? shownScore : null}
-              size={158}
-              className="shrink-0 text-foreground"
+              size={190}
+              /* The viewBox is fixed; the rendered width steps down so a
+                 190px instrument doesn't crowd the numeral on a phone. */
+              className="w-[128px] shrink-0 text-foreground sm:w-[160px] lg:w-[190px]"
               testid="desk-gauge"
             />
           </div>
 
           {/* The two wide money cards. */}
-          <div className="mt-6 grid gap-4 sm:grid-cols-2" data-testid="desk-money-cards">
+          <div className="mt-6 grid gap-3 sm:grid-cols-2" data-testid="desk-money-cards">
             <WideStatCard
               icon={HandCoins}
               alert={(m.cash?.overdue || 0) > 0}
@@ -287,8 +293,17 @@ export default function Desk() {
           </div>
         </div>
 
-        {/* RIGHT — the 3×2 grid. Six honest tiles; Score mix is the glass one. */}
-        <div className="grid min-w-0 grid-cols-2 content-start gap-4 xl:grid-cols-3" data-testid="desk-kpi-grid">
+        {/* RIGHT — the 3×2 grid. Six honest tiles; Score mix is the glass one.
+            KR-8.6 · three fixes to the founder's "slightly spaced" note:
+            · 3 columns from lg, not xl — below 1280 we were rendering a 2×3
+              portrait grid, which is a different composition from the
+              reference's 3×2, not a tighter version of it;
+            · 12px gutters (the reference's gutter is ~4% of a tile, ours was
+              6.6%);
+            · auto-rows-fr so the two rows are EQUAL and the grid's floor lands
+              on the money cards' floor. Ragged row heights (173/200/173) were
+              the actual misalignment. */}
+        <div className="grid min-w-0 grid-cols-2 gap-3 lg:auto-rows-fr lg:grid-cols-3" data-testid="desk-kpi-grid">
           <StatTile
             icon={Timer}
             label="Delayed"

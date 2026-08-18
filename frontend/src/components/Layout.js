@@ -460,17 +460,24 @@ export default function Layout({ children }) {
           panel inset 12px, 72px wide so a 44px active tile sits centred with
           air. Sticky offset = header 72 + margin 12; height = viewport minus
           header minus both margins, so the bottom margin matches the left. */}
-      {/* NM-12 — the aside is now only a 72px RESERVATION. The visible panel
-          is absolute inside it, so widening on hover overlays the canvas
-          instead of shoving it: a rail that reflowed the page every time the
-          pointer drifted past would be unusable. */}
+      {/* NM-12 made this a 72px RESERVATION with the visible panel absolute
+          inside it, so hovering overlaid the canvas and nothing reflowed.
+          NM-19 reverses that on the founder's call: the aside itself is what
+          grows, so the flex row gives main less space and the page travels
+          with the rail instead of being covered by it.
+          THE COST IS REAL AND IT IS THE POINT OF THE TRADE: this is a layout
+          animation, so every frame of the 200ms re-lays-out the canvas, and
+          on a page whose content is not width-capped (My Work, CRM, Finance)
+          text re-wraps while it moves. Pages that centre inside a max-width
+          just slide. Kept to 200ms ease-out for that reason, and `hover`
+          rather than a click keeps it feeling like a peek rather than a mode. */}
       <aside
         data-testid="desktop-rail"
-        className="hidden lg:block w-[72px] shrink-0 sticky top-[84px] ml-3 my-3 h-[calc(100vh-72px-1.5rem)]"
+        className="group/rail hidden lg:block w-[72px] hover:w-[232px] focus-within:w-[232px] shrink-0 sticky top-[84px] ml-3 my-3 h-[calc(100vh-72px-1.5rem)] transition-[width] duration-200 ease-out"
       >
         <div
           data-testid="desktop-rail-panel"
-          className="group/rail absolute inset-y-0 left-0 z-30 flex w-[72px] flex-col overflow-hidden nm-raised px-3.5 transition-[width] duration-200 ease-out hover:w-[232px] focus-within:w-[232px]"
+          className="absolute inset-y-0 left-0 z-30 flex w-full flex-col overflow-hidden nm-raised bg-nm-rail px-3.5"
         >
         <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-3 flex flex-col gap-1">
           <RailItems />

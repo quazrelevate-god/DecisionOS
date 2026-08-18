@@ -782,6 +782,19 @@
                                             place a tint must survive: a well
                                             with no tone is invisible */
 
+        /* NM-19 — the rail's own surface. #EDEFFE, the founder's value.
+           NM-8 took every surface to ~white on the principle that separation
+           comes from shadow alone; the rail is the deliberate exception, and
+           it earns it. It is the only element that persists across every
+           screen, so it is furniture in a stronger sense than a card is — a
+           wall, not an object on the page. A wall reads better with its own
+           tone, and the periwinkle keeps it in the brand's hue family rather
+           than turning it into a grey slab. */
+        /* Not round numbers on purpose: hsl(233 89% 96%) lands on
+           rgb(236,238,254), one step off the value that was asked for. These
+           are the coefficients that resolve to #EDEFFE exactly. */
+        --nm-rail:        232.9 89.5% 96.3%;
+
         /* The light source: top-left. The highlight is kept (it still catches
            the top edge of a raised tile against the sunken wells and in dark
            mode) but the dark side now carries the separation. */
@@ -819,6 +832,11 @@
         --nm-bg:      223 17% 10%;
         --nm-raised:  222 16% 13%;
         --nm-sunken:  225 18% 7%;
+        /* NM-19: the rail's tint is a LIGHT-theme device. Inverted it would be
+           a pale wall in a dark room — the one surface that never turns off.
+           Dark gets the same separation the other way round: one step up from
+           the ground, which is what --nm-raised already is. */
+        --nm-rail:    222 16% 13%;
         --nm-light:   90 96 112;
         --nm-dark:    5 6 9;
         --nm-shadow-sm:  3px 3px  6px rgb(var(--nm-dark) / .55), -3px -3px 6px rgb(var(--nm-light) / .16);
@@ -974,6 +992,8 @@ html[data-dex="1"] {
     --nm-bg:      226 40% 10%;
     --nm-raised:  226 32% 16%;
     --nm-sunken:  228 46% 6%;
+    /* Same reasoning as .dark: one step up from this room's ground. */
+    --nm-rail:    226 32% 16%;
     /* Bright, and deliberately so — see the rim-light note below. */
     --nm-edge:    224 32% 58%;
     /* The soft-depth highlight takes the room's colour: on a blue-lit surface

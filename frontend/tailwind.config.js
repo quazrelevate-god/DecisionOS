@@ -181,6 +181,10 @@ module.exports = {
                 nm: 'hsl(var(--nm-bg))',
                 'nm-raised': 'hsl(var(--nm-raised))',
                 'nm-sunken': 'hsl(var(--nm-sunken))',
+                // NM-19: the rail is the one surface that is deliberately NOT
+                // the page value. Its own name so no other component can drift
+                // onto it by copying a class.
+                'nm-rail': 'hsl(var(--nm-rail))',
             },
             borderColor: {
                 'nm-edge': 'hsl(var(--nm-edge))',

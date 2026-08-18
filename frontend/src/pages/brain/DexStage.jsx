@@ -58,8 +58,27 @@ function Orb({ levels, recording, thinking, scale = 1 }) {
   const live = recording && rings.some((v) => v > 0.02);
   const px = (n) => Math.round(n * scale);
 
+  // NM-17 — THE ORB NOW RESERVES ITS OWN SPACE.
+  //
+  // Every ring and the bloom are absolutely positioned, so the only thing in
+  // normal flow was the 104px core. The container was therefore 104px tall
+  // while the outermost ring is 264px across — 80px of it hung below the box
+  // and landed on top of "Ask Dex anything". That is the overlap: not a
+  // z-index problem, a layout one. The box is now sized to the largest ring
+  // at full amplitude (264 x 1.14 = 301), so everything after it starts
+  // BELOW the orb instead of inside it.
+  //
+  // The bloom is deliberately allowed to exceed the box. It is a blurred
+  // gradient with no edge, so containing it would only make the glow smaller
+  // for no gain in clearance.
+  const box = px(312);
+
   return (
-    <div className="relative grid place-items-center" aria-hidden="true">
+    <div
+      className="relative grid shrink-0 place-items-center"
+      style={{ width: box, height: box }}
+      aria-hidden="true"
+    >
       {/* Atmospheric bloom. Scales with the loudest current ring so the whole
           stage brightens when someone speaks. */}
       <div
@@ -132,17 +151,31 @@ export function DexStage({ capture, onAsk, thinking, compact = false, status, tr
       {/* The page's own atmosphere. Sits behind content, never takes a
           pointer, and is the reason /brain reads as a different surface
           rather than the same app in a different card. */}
+      {/* NM-17: anchored to the ORB, not to the top of the page. It used to
+          start at -top-10 with a fixed 520px height, which was right when the
+          orb sat near the top; now that the stage centres, a glow pinned to
+          the top edge would be lighting empty canvas above the thing it is
+          supposed to be lighting. */}
       <div
-        className="pointer-events-none absolute -inset-x-8 -top-10 h-[520px] -z-10"
+        className="pointer-events-none absolute -inset-x-8 inset-y-0 -z-10"
         aria-hidden="true"
         style={{
           background:
-            "radial-gradient(60% 60% at 50% 0%, hsl(var(--brand-500) / 0.14), transparent 70%)," +
-            "radial-gradient(40% 40% at 85% 25%, hsl(var(--brand-400) / 0.10), transparent 70%)",
+            "radial-gradient(46% 34% at 50% 30%, hsl(var(--brand-500) / 0.16), transparent 72%)," +
+            "radial-gradient(34% 26% at 84% 14%, hsl(var(--brand-400) / 0.10), transparent 72%)",
         }}
       />
 
-      <div className={cn("flex flex-col items-center", compact ? "pt-2 pb-1" : "pt-8 pb-2")}>
+      {/* NM-17: with nothing asked yet the stage is the whole screen, so it
+          centres in the canvas instead of clinging to the top edge with 400px
+          of dead space under it. The moment a thread exists it releases the
+          height and the answer takes the page. */}
+      <div
+        className={cn(
+          "flex flex-col items-center",
+          compact ? "pt-1 pb-1" : "justify-center min-h-[calc(100vh-16rem)] py-6"
+        )}
+      >
         <Orb
           levels={levels}
           recording={recording}
@@ -152,10 +185,10 @@ export function DexStage({ capture, onAsk, thinking, compact = false, status, tr
 
         {!compact && (
           <>
-            <p className="mt-7 text-2xl font-display" data-testid="dex-stage-status">
+            <p className="mt-2 text-[28px] leading-tight font-display" data-testid="dex-stage-status">
               {recording ? "Listening…" : busy ? "Working on it…" : "Ask Dex anything"}
             </p>
-            <p className="mt-1.5 text-sm text-muted-foreground">
+            <p className="mt-2.5 text-sm text-muted-foreground">
               {recording
                 ? `${recordSecs}s — tap stop when you're done`
                 : status || "Speak, type, or drop a bill. Dex remembers everything."}
@@ -168,7 +201,7 @@ export function DexStage({ capture, onAsk, thinking, compact = false, status, tr
         <div
           className={cn(
             "w-full max-w-2xl flex items-end gap-1 rounded-cardlg nm-raised p-2",
-            compact ? "mt-4" : "mt-7"
+            compact ? "mt-4" : "mt-9"
           )}
           data-testid="dex-stage-composer"
         >
@@ -210,7 +243,11 @@ export function DexStage({ capture, onAsk, thinking, compact = false, status, tr
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
             rows={1}
             disabled={recording}
-            placeholder={recording ? "Listening…" : "Ask your company anything…"}
+            // Short on purpose: the textarea is rows={1} with no auto-grow, so
+            // a placeholder that does not fit WRAPS and gets clipped by the
+            // 44px line box. "Ask your company anything…" did exactly that at
+            // phone width. The full invitation lives in the subline above.
+            placeholder={recording ? "Listening…" : "Ask your company…"}
             data-testid="dex-stage-input"
             className="min-h-11 max-h-40 flex-1 resize-none bg-transparent px-2 py-2.5 text-[15px] leading-snug placeholder:text-muted-foreground focus:outline-none disabled:opacity-60"
           />

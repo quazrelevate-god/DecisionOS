@@ -1,5 +1,5 @@
-import { useEffect, useState, useMemo } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { useEffect, useState, useMemo, useRef } from "react";
+import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
@@ -112,7 +112,40 @@ export default function Layout({ children }) {
     return !n.perm || hasPerm(user, n.perm);
   }), [user]);
   const navigate = useNavigate();
+  const location = useLocation();
   const { isDark, toggle: toggleTheme } = useTheme();
+
+  // ── NM-17 · the Dex dissolve ────────────────────────────────────────────
+  // /brain renders dark whatever the app's theme is. Dex is the product's
+  // centrepiece and the founder's call is that it gets its own room; the
+  // transition into that room is the point, so the swap is cross-faded rather
+  // than flipped.
+  //
+  // This deliberately does NOT touch the stored preference — useTheme still
+  // owns `decisionos-theme`, and leaving /brain restores whatever the founder
+  // actually chose. Declared after useTheme so its effect runs second and
+  // wins the class on <html> when both fire in the same commit.
+  const dexRoute = location.pathname.startsWith("/brain") || location.pathname.startsWith("/dex");
+  const wantDark = dexRoute || isDark;
+  const lastDark = useRef(null);
+  useEffect(() => {
+    const root = document.documentElement;
+    // Only fade an actual CHANGE. Without this the first paint of every
+    // /brain navigation would arm a 480ms transition on the whole document
+    // for a swap that is not happening.
+    const changed = lastDark.current !== null && lastDark.current !== wantDark;
+    lastDark.current = wantDark;
+
+    if (!changed) {
+      root.classList.toggle("dark", wantDark);
+      return undefined;
+    }
+    root.classList.add("theme-x");
+    root.classList.toggle("dark", wantDark);
+    const t = setTimeout(() => root.classList.remove("theme-x"), 520);
+    return () => clearTimeout(t);
+  }, [wantDark]);
+
   const [profileOpen, setProfileOpen] = useState(false);
   // MPWA-03 mobile navigation state.
   const [allAppsOpen, setAllAppsOpen] = useState(false);
@@ -218,13 +251,21 @@ export default function Layout({ children }) {
   // NM-2 — a 44px raised squircle, individually contained (§3 Shell). The
   // focus ring is separate from any shadow change and lands now rather than
   // waiting for NM-4: this button is being touched anyway.
+  // NM-17: on /brain the route forces dark, so this control cannot change what
+  // is on screen. It stays MOUNTED — pulling it would shuffle the other two
+  // tiles sideways every time the founder opens Dex — and is disabled with the
+  // reason, which is clearer than a button that silently does nothing. It still
+  // shows the stored preference, because that is what it actually controls.
   const ThemeToggle = () => (
     <button
       onClick={toggleTheme}
+      disabled={dexRoute}
       data-testid="theme-toggle"
-      title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+      title={dexRoute
+        ? "Dex is always dark — your theme comes back when you leave"
+        : isDark ? "Switch to light mode" : "Switch to dark mode"}
       aria-label="Toggle dark mode"
-      className="w-11 h-11 nm-tile rounded-control flex items-center justify-center text-foreground/80 transition-shadow hover:shadow-nm active:shadow-nm-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+      className="w-11 h-11 nm-tile rounded-control flex items-center justify-center text-foreground/80 transition-shadow hover:shadow-nm active:shadow-nm-press disabled:opacity-40 disabled:hover:shadow-nm-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
     >
       {isDark ? <Sun size={18} weight="bold" /> : <MoonStars size={18} weight="bold" />}
     </button>

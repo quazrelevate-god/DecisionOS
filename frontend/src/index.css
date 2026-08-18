@@ -893,6 +893,50 @@
     .nm-inset            { border-color: hsl(var(--nm-edge) / .50); }
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   NM-17 — the Dex dissolve.
+   /brain is a DARK route regardless of the app's light/dark setting: Dex is
+   the product's centrepiece and it gets its own room, not the same shell in a
+   different accent. Entering and leaving it therefore swaps every token in the
+   sheet at once, which without help is a one-frame flash from white to near
+   black — jarring, and it makes the app look broken rather than deliberate.
+
+   `theme-x` is added to <html> for the length of the swap and removed after.
+   The `*` + !important is doing real work here and is the reason it is
+   temporary: token changes land on background-color, color, border-color and
+   box-shadow of essentially every node, and there is no single element to
+   transition instead. Leaving this rule on permanently would put a 500ms
+   easing on every hover in the app; 500ms of it, twice a session, is free.
+
+   `fill` is included because the Phosphor glyphs are SVG — without it the
+   icons would snap while their containers faded.
+   ═════════════════════════════════════════════════════════════════════════ */
+html.theme-x,
+html.theme-x body,
+html.theme-x *,
+html.theme-x *::before,
+html.theme-x *::after {
+    transition:
+        background-color 480ms cubic-bezier(.4, 0, .2, 1),
+        color            480ms cubic-bezier(.4, 0, .2, 1),
+        border-color     480ms cubic-bezier(.4, 0, .2, 1),
+        box-shadow       480ms cubic-bezier(.4, 0, .2, 1),
+        fill             480ms cubic-bezier(.4, 0, .2, 1) !important;
+}
+
+/* A cross-fade IS the motion here — there is no non-animated fallback that
+   still reads as one theme becoming another, so under reduced motion the swap
+   is simply instant. */
+@media (prefers-reduced-motion: reduce) {
+    html.theme-x,
+    html.theme-x body,
+    html.theme-x *,
+    html.theme-x *::before,
+    html.theme-x *::after {
+        transition: none !important;
+    }
+}
+
 /* NM-11 — the Dex orb's idle breath. Runs ONLY when nothing is recording:
    with a live signal the rings are driven by the microphone and a loop on top
    of that would be two motions fighting. Off under reduced motion. */

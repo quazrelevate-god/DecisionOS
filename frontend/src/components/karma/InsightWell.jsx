@@ -1,32 +1,22 @@
-// KR-8.7 · InsightWell — Dex's read of today, sunk into the page.
+// KR-8.9 · InsightWell — Dex's read of today, pressed into the page.
 //
-// THE FOUNDER'S BRIEF: "a subtle recessed, inset, or indented concave depth
-// box with beautiful gradient filled glassmorphism style… and a looping
-// natural subtle wavy glow-ish random cyclic animation" on the border,
-// against the supplied border.png (blue → violet → magenta → rose → orange,
-// bright ring plus an outer bloom).
+// THE FOUNDER'S BRIEF, third pass: "remove all the glowing effect. I want a
+// borderless box in neumorphic inset box-shadows like a pit or depression
+// rather than an extruded pop-up. And a same neumorphic style small round
+// pop-up button with a brain / Dex symbol to route it to /brain."
 //
-// THREE LAYERS, IN DOM ORDER, and the order is the whole trick — painting is
-// resolved by document position, NOT z-index. An earlier pass on this
-// codebase burned a debugging cycle on exactly this: a negative-z-index
-// pseudo-element inside an `isolation: isolate` box paints ABOVE its
-// parent's own background, so a "behind" glow lands in front of the glass.
-// Layering by DOM order has no such trap.
+// So the aurora is gone entirely — ring, bloom, both conic layers and their
+// animated angles. What is left is quieter and, honestly, better suited to a
+// panel that has to sit under a greeting all day: no border at all, and the
+// edge drawn purely by light. See .kr-well__pane in index.css for the one
+// rule that matters (dark inset from the top-left, highlight inset from the
+// bottom-right — reverse the pair and the pit becomes a bump).
 //
-//   glow   the conic ring again, oversized and blurred — the bloom that
-//          leaks past the edge. Under everything.
-//   pane   the glass itself. Opaque enough to hide the glow behind it, so
-//          only the leaked halo reads.
-//   ring   the 1.5px conic hairline, masked to the border box. Last, so it
-//          sits on top of the pane's own edge.
-//
-// The two conic layers run on SEPARATE angle properties at different periods
-// and opposite directions (18s / 27s), and the glow breathes on a third,
-// coprime period (7s). Nothing here is random — but three cycles that never
-// line up read as "natural" rather than as a spinning wheel, which is what
-// the founder asked for.
+// The Dex button is the same material inverted: .kr-pop, shadows outside
+// instead of in. A pit and a bump lit from the same corner read as one
+// surface; lit from different corners they read as a mistake.
 import * as React from "react";
-import { Sparkle, ArrowRight } from "@phosphor-icons/react";
+import { Brain, ArrowRight } from "@phosphor-icons/react";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
@@ -37,17 +27,10 @@ import { cn } from "@/lib/utils";
 export function InsightWell({ insight, loading = false, className, testid }) {
   return (
     <div className={cn("kr-well", className)} data-testid={testid}>
-      <span aria-hidden="true" className="kr-well__glow" />
-
       <div className="kr-well__pane flex h-full flex-col p-5">
-        <div className="flex items-center gap-2">
-          <span className="grid h-6 w-6 place-items-center rounded-full border border-white/25">
-            <Sparkle size={12} weight="fill" aria-hidden="true" />
-          </span>
-          <span className="text-xs font-semibold tracking-wide opacity-80">
-            Dex · today&rsquo;s read
-          </span>
-        </div>
+        <span className="text-xs font-semibold tracking-wide text-foreground/75">
+          Dex · today&rsquo;s read
+        </span>
 
         {loading || !insight ? (
           <div className="mt-4 space-y-2" aria-hidden="true">
@@ -57,7 +40,7 @@ export function InsightWell({ insight, loading = false, className, testid }) {
         ) : (
           <>
             <p
-              className="mt-3 text-lg font-semibold leading-snug xl:text-xl"
+              className="mt-2 text-lg font-semibold leading-snug xl:text-xl"
               data-testid="desk-insight-headline"
             >
               {insight.headline}
@@ -66,7 +49,10 @@ export function InsightWell({ insight, loading = false, className, testid }) {
             {insight.lines.length > 0 && (
               <ul className="mt-3 space-y-1.5">
                 {insight.lines.map((l) => (
-                  <li key={l} className="flex gap-2 text-xs leading-relaxed opacity-70">
+                  /* foreground/70, not text-muted-foreground: the token is
+                     tuned for an opaque card, and over glass on the bloom's
+                     hot point it measured 4.34:1 — under AA. */
+                  <li key={l} className="flex gap-2 text-xs leading-relaxed text-foreground/70">
                     <span aria-hidden="true" className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-current" />
                     {l}
                   </li>
@@ -74,19 +60,44 @@ export function InsightWell({ insight, loading = false, className, testid }) {
               </ul>
             )}
 
+          </>
+        )}
+
+        {/* KR-8.10 — the floor of the well: the action on the left, Dex on
+            the right, both 44px tall so they sit on one line rather than
+            merely near each other. pt-7 is the founder's "proper space at
+            the top of the Chase it" — the bullets were crowding it.
+            The row renders even while the insight is loading, because the
+            way into Dex should not depend on Dex having finished thinking. */}
+        <div className="mt-auto flex items-center justify-between gap-3 pt-7">
+          {insight && (
+            /* Borderless too — a hairline pill next to a shadow-modelled
+               well would be two different materials in one box. */
             <Link
               to={insight.to}
               data-testid="desk-insight-cta"
-              className="kr-lift mt-auto inline-flex w-fit items-center gap-2 rounded-pill border border-white/25 px-3.5 py-2 pt-2 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+              className="kr-pop inline-flex h-11 w-fit items-center gap-2 rounded-pill px-4 text-xs font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60"
             >
               {insight.cta}
               <ArrowRight size={12} weight="bold" aria-hidden="true" className="kr-arrow transition-transform duration-200" />
             </Link>
-          </>
-        )}
-      </div>
+          )}
 
-      <span aria-hidden="true" className="kr-well__ring" />
+          {/* The raised twin of the well it sits in. Icon-only, so it carries
+              a real label for anything not looking at it. 44px, not the 40px
+              the StatTile arrows use — those are presentational spans inside
+              a link, this is the tap target. */}
+          <Link
+            to="/brain"
+            aria-label="Ask Dex"
+            title="Ask Dex"
+            data-testid="desk-insight-dex"
+            className="kr-pop ml-auto grid h-11 w-11 shrink-0 place-items-center rounded-full text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/60"
+          >
+            <Brain size={19} weight="duotone" aria-hidden="true" />
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }

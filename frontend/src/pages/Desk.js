@@ -246,19 +246,22 @@ export default function Desk() {
             </div>
           )}
 
-          {/* Dex's read of today — the page's one piece of prose, and the
-              reason the score moved down. flex-1 so it eats the slack
-              between the greeting and the score's floor. */}
-          <InsightWell
-            insight={insight}
-            loading={!insight}
-            className="mt-6 min-h-[168px] flex-1"
-            testid="desk-insight"
-          />
-
-          {/* Score + gauge, side by side like the reference. Last child, so
-              it bottoms out level with the KPI grid opposite. */}
-          <div className="mt-6 flex items-center gap-5 sm:gap-8">
+          {/* Score + gauge, side by side like the reference — back in their
+              original slot under the pills (KR-8.8).
+              items-END, not items-center: with the caption gone the block is
+              just a numeral, and the gauge is a HALF circle whose diameter
+              is its floor. Bottom-aligning the two lands the needle hub on
+              the numeral's baseline, which is the relationship the reference
+              draws. Centring them left the instrument floating high. */}
+          {/* KR-8.10 — CENTRED over the well, and lifted off it.
+              mt-2 pulls the block up toward the pills (the founder's "move
+              the score number and the odometer a little bit upper");
+              mb-10 is the air below it. That margin has to be REAL, not
+              slack: the left column's content already exceeds the KPI grid's
+              natural height, so mt-auto on the well resolves to zero and
+              would have given nothing. justify-center puts the numeral+gauge
+              pair on the well's centre line. */}
+          <div className="mb-10 mt-2 flex items-end justify-center gap-5 sm:gap-8">
             <div className="min-w-0">
               {/* Delta eyebrow — demo-tenant only; no endpoint carries a real
                   score delta yet (see _operatingScoreDemo's wire-order note). */}
@@ -281,11 +284,17 @@ export default function Desk() {
                 />
                 {scoreReady && <span className="text-2xl text-muted-foreground">/ 100</span>}
               </div>
-              <p className="mt-2 text-sm leading-snug text-muted-foreground" data-testid="desk-score-caption">
-                {scoreReady
-                  ? <><span className="font-medium text-foreground">{band}</span><br />Updated live</>
-                  : <>Score kicks in soon —<br />a little real activity first</>}
-              </p>
+              {/* KR-8.8 — the "Needs work / Updated live" caption is gone on
+                  the founder's call: the band word is already the tile grid's
+                  job and "Updated live" is decoration.
+                  It survives ONLY in the not-enough-data case, where a bare
+                  "—" would be a shrug. That is the honesty line, not the
+                  caption the founder asked to remove. */}
+              {!scoreReady && (
+                <p className="mt-2 text-sm leading-snug text-muted-foreground" data-testid="desk-score-caption">
+                  Score kicks in soon —<br />a little real activity first
+                </p>
+              )}
             </div>
             <ArcGauge
               value={scoreReady ? shownScore : null}
@@ -297,10 +306,19 @@ export default function Desk() {
             />
           </div>
 
-          {/* KR-8.7 — the two money cards LEFT this column for the KPI grid
-              opposite, taking the slots Due today and Completion rate gave
-              up. Nothing follows the score block now; that is what puts its
-              baseline on the grid's. */}
+          {/* KR-8.8 — the well moves to the floor. mt-auto, not flex-1: the
+              founder wants it ALIGNED to the grid's bottom line, not
+              stretched to swallow the slack above it. So it keeps its own
+              height and the air collects between the score and the well.
+              (The two money cards left this column in KR-8.7 for the KPI
+              grid opposite, taking the slots Due today and Completion rate
+              gave up.) */}
+          <InsightWell
+            insight={insight}
+            loading={!insight}
+            className="min-h-[172px] lg:mt-auto"
+            testid="desk-insight"
+          />
         </div>
 
         {/* RIGHT — the 3×2 grid. Six honest tiles; Score mix is the glass one.

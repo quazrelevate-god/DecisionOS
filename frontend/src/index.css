@@ -1288,117 +1288,76 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
         transform: none;
     }
 
-    /* ═══ KR-8.7 · THE INSIGHT WELL ═══════════════════════════════════════
-       Founder brief: "a subtle recessed, inset, indented concave depth box
-       with beautiful gradient filled glassmorphism", ringed by "a looping
-       natural subtle wavy glow-ish random cyclic animation" matching the
-       supplied border.png.
+    /* ═══ KR-8.9 · THE INSIGHT WELL — A PIT, NOT A PANEL ═════════════════
+       Founder, third pass: "remove all the glowing effect… borderless box
+       in neumorphic inset box-shadows like a pit or depression rather than
+       an extruded pop-up."
 
-       RECESSED, NOT RAISED. Every other Karma surface sits ON the ground;
-       this one is cut INTO it, which is what earns it the page's one
-       remaining piece of editorial real estate. The concavity is two inset
-       shadows doing opposite jobs: a soft dark one at the top (the lip
-       casting into the well) and a 1px light one at the bottom (the far
-       wall catching the light). This is the single deliberate exception to
-       KR-2's shadow kill — an inset shadow is depth, not a drop shadow.
+       THE AURORA IS GONE — ring, bloom, both conic layers, the two animated
+       @property angles and their keyframes. Nothing here animates now.
 
-       WHY THREE LAYERS AND NOT ONE PSEUDO-ELEMENT: the glow has to sit
-       BEHIND the glass while the ring sits IN FRONT of it. Negative z-index
-       cannot do that — inside a stacking context a z-index:-1 child paints
-       above its parent's own background, which is the trap that cost a
-       cycle on .app-sky. So the layers are ordered in the DOM instead
-       (glow → pane → ring) and carry no z-index at all. */
+       WHAT CARRIES THE EDGE INSTEAD. There is no border, so the boundary is
+       entirely light: a shadow cast IN from the top-left where the lip
+       overhangs, and a highlight IN from the bottom-right where the far
+       wall catches. That pairing is the whole illusion — reverse it and the
+       same box pops out instead of sinking in. One light source, upper
+       left, shared with .kr-pop below so a raised control and a sunken well
+       never contradict each other about where the light is.
+
+       Still glass: the wash is a white film, not a fill, and the backdrop
+       blur is what separates the panel from the bloom drifting behind it.
+       This and .kr-pop are the deliberate exceptions to KR-2's shadow kill
+       — that rule retired DROP shadows on resting surfaces; depth modelled
+       from a fixed light is a different material claim. */
     .kr-well {
         position: relative;
         border-radius: var(--radius-tile);
     }
 
-    .kr-well__glow,
-    .kr-well__ring {
-        position: absolute;
-        border-radius: inherit;
-        pointer-events: none;
-        /* border.png's ramp: blue → violet → magenta → rose, then handed to
-           OUR two accent tokens for the warm quarter, so the ring belongs to
-           this palette rather than being imported wholesale. */
-        background: conic-gradient(from var(--kr-aurora-a),
-            hsl(215 92% 62%)   0deg,
-            hsl(265 84% 64%)  62deg,
-            hsl(300 78% 62%) 128deg,
-            hsl(345 88% 62%) 196deg,
-            hsl(var(--kr-accent))      258deg,
-            hsl(var(--kr-accent-soft)) 312deg,
-            hsl(215 92% 62%) 360deg);
-    }
-
-    /* the hairline itself — conic fill masked down to the border box */
-    .kr-well__ring {
-        inset: 0;
-        padding: 1.5px;
-        -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-                mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-        -webkit-mask-composite: xor;
-                mask-composite: exclude;
-        animation: kr-aurora-a 18s linear infinite;
-    }
-
-    /* the bloom that leaks past the edge — same ramp, oversized and blurred,
-       turning the OTHER way on its own clock so the two never lock step */
-    .kr-well__glow {
-        inset: -7px;
-        filter: blur(15px);
-        opacity: .55;
-        background: conic-gradient(from var(--kr-aurora-b),
-            hsl(215 92% 62%)   0deg,
-            hsl(265 84% 64%)  62deg,
-            hsl(300 78% 62%) 128deg,
-            hsl(345 88% 62%) 196deg,
-            hsl(var(--kr-accent))      258deg,
-            hsl(var(--kr-accent-soft)) 312deg,
-            hsl(215 92% 62%) 360deg);
-        animation: kr-aurora-b 27s linear infinite,
-                   kr-aurora-breathe 7s ease-in-out infinite alternate;
-    }
-
     .kr-well__pane {
         position: relative;
         border-radius: inherit;
-        background: linear-gradient(165deg,
-            hsl(228 26% 17% / .90),
-            hsl(233 24% 11% / .94));
-        backdrop-filter: blur(18px) saturate(1.3);
-        -webkit-backdrop-filter: blur(18px) saturate(1.3);
+        border: 0;
+        /* 34% → 20%: the floor of the wash is the contrast floor of
+           everything printed on it, and the bloom drifts under this panel on
+           a 90s cycle. Measured against the bloom's hottest point, a 12%
+           floor put the supporting lines at 4.34:1 — under the AA line. */
+        background: linear-gradient(160deg,
+            hsl(0 0% 100% / .34),
+            hsl(0 0% 100% / .20));
+        backdrop-filter: blur(22px) saturate(1.6);
+        -webkit-backdrop-filter: blur(22px) saturate(1.6);
         box-shadow:
-            inset 0 3px 8px hsl(230 40% 3% / .55),
-            inset 0 -1px 0 hsl(0 0% 100% / .07);
-        color: hsl(40 20% 97%);
+            inset 7px 7px 14px hsl(230 22% 34% / .20),
+            inset -7px -7px 14px hsl(0 0% 100% / .62);
     }
-}
 
-/* @property is what makes an <angle> animatable at all — without it the
-   custom property is an unparsed token and the conic gradient simply holds
-   still. Declared OUTSIDE @layer so the cascade can't reorder it, and the
-   degradation when a browser lacks it is a static ring, not a broken one. */
-@property --kr-aurora-a {
-    syntax: "<angle>";
-    initial-value: 0deg;
-    inherits: false;
-}
-@property --kr-aurora-b {
-    syntax: "<angle>";
-    initial-value: 210deg;
-    inherits: false;
-}
-@keyframes kr-aurora-a {
-    to { --kr-aurora-a: 360deg; }
-}
-@keyframes kr-aurora-b {
-    /* counter-rotation: 210 → -150 is the same 360°, the other way round */
-    to { --kr-aurora-b: -150deg; }
-}
-@keyframes kr-aurora-breathe {
-    from { opacity: .38; }
-    to   { opacity: .68; }
+    /* The raised twin: same light, opposite direction. Shadows sit OUTSIDE,
+       dark to the lower-right, highlight to the upper-left — so it reads as
+       pressed out of the same sheet the well is pressed into. Pressing it
+       flips both to inset, which is the only honest "down" state a
+       borderless control has. */
+    .kr-pop {
+        border: 0;
+        background: hsl(0 0% 100% / .38);
+        backdrop-filter: blur(14px) saturate(1.4);
+        -webkit-backdrop-filter: blur(14px) saturate(1.4);
+        box-shadow:
+            -4px -4px 9px hsl(0 0% 100% / .72),
+             5px  5px 12px hsl(230 22% 34% / .24);
+        transition: box-shadow 160ms ease, transform 160ms ease;
+    }
+    .kr-pop:hover {
+        box-shadow:
+            -5px -5px 11px hsl(0 0% 100% / .80),
+             6px  6px 14px hsl(230 22% 34% / .28);
+    }
+    .kr-pop:active {
+        transform: translateY(1px);
+        box-shadow:
+            inset 4px 4px 8px hsl(230 22% 34% / .24),
+            inset -4px -4px 8px hsl(0 0% 100% / .70);
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1406,11 +1365,13 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
     .kr-lift:hover .kr-arrow { transform: none; }
     .kr-reveal { opacity: 1; transform: none; transition: none; }
 
-    /* KR-8.7 — the aurora ring holds still. It keeps its colour (the ramp is
-       the card's identity, not the motion) and settles at a fixed opacity
-       rather than mid-breath. */
-    .kr-well__ring { animation: none; }
-    .kr-well__glow { animation: none; opacity: .5; }
+    /* KR-8.9 — the aurora is gone, so the well itself has nothing left to
+       guard. .kr-pop still does: it eases its shadows on hover and drops 1px
+       on press, and the blanket rule below only catches the named legacy
+       loops. Same treatment as .kr-lift — the state still changes, it just
+       arrives instantly. */
+    .kr-pop, .kr-pop:hover, .kr-pop:active { transition: none; }
+    .kr-pop:active { transform: none; }
 
     /* KR-6 — the consolidated catch for every decorative loop that predates
        the Karma pass and never carried its own off-switch (audited: fadeIn,

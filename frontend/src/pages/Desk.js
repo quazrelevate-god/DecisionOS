@@ -257,7 +257,11 @@ export default function Desk() {
             column's floor — which the hero grid has already made equal to
             the right column's floor. */}
         <div className="flex min-w-0 flex-col">
-          <h1 className="font-display text-3xl sm:text-4xl" data-testid="desk-brief-greeting">
+          {/* KR-8.14 — centred, to share the score's axis. The score row is
+              justify-center within this column, so centring the greeting in
+              the same column puts both on the column's centre line rather
+              than needing either to know the other's width. */}
+          <h1 className="text-center font-display text-3xl sm:text-4xl" data-testid="desk-brief-greeting">
             {gi === -1
               ? <span>{greeting || " "}</span>
               : <>
@@ -277,7 +281,10 @@ export default function Desk() {
               starts at xl (441px column, 423px of content), and below that
               the pills stay where they were. */}
           {isOwnerView && (
-            <div className="mt-4 flex items-center gap-2 xl:hidden" data-testid="desk-scope-pills">
+            /* justify-center too: below xl the pills sit BETWEEN the centred
+               greeting and the centred score, and a left-aligned row in that
+               gap reads as a mistake rather than a choice. */
+            <div className="mt-4 flex items-center justify-center gap-2 xl:hidden" data-testid="desk-scope-pills">
               <ScopePills scope={scope} setScope={setScope} />
             </div>
           )}

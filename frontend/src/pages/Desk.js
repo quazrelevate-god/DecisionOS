@@ -126,9 +126,25 @@ export default function Desk() {
   const gi = greeting.lastIndexOf(",");
 
   return (
+    /* KR-8.4 — THE SHEET RISES OVER A PINNED HERO.
+       Founder, correcting KR-8.3: "the black card should scroll along with
+       the content — I don't want the content inside it scrollable." So the
+       band has NO inner scroller. Instead the light zone is STICKY: it holds
+       at the top of the viewport while the page scrolls, and the band — one
+       opaque sheet, content and all — travels up and over it. That is the
+       motion the centre tab has been promising since KR-8.2.
+
+       z-order is what makes it read: the hero sits at z-0 and the band at
+       z-10, so the ink covers rather than blends as it passes. Sticky (not
+       fixed) so the hero still participates in layout and the page height is
+       simply hero + band.
+
+       Below lg the hero is NOT pinned — it is several screens tall on a
+       phone, and pinning it would leave the dashboard permanently hidden
+       behind the sheet. The phone scrolls the whole document. */
     <div data-testid="desk-page">
-      {/* ── LIGHT ZONE ─────────────────────────────────────────────────── */}
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-10">
+      {/* ── LIGHT ZONE — pinned; the sheet passes over it ─────────────── */}
+      <div className="grid gap-8 lg:sticky lg:top-5 lg:z-0 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-10">
         {/* LEFT column — title, scope, score, gauge, money cards */}
         <div className="min-w-0">
           <h1 className="font-display text-3xl sm:text-4xl" data-testid="desk-brief-greeting">
@@ -165,7 +181,7 @@ export default function Desk() {
           )}
 
           {/* Score + gauge, side by side like the reference. */}
-          <div className="mt-6 flex items-center gap-6 sm:gap-10">
+          <div className="mt-5 flex items-center gap-5 sm:gap-8">
             <div className="min-w-0">
               {/* Delta eyebrow — demo-tenant only; no endpoint carries a real
                   score delta yet (see _operatingScoreDemo's wire-order note). */}
@@ -196,14 +212,14 @@ export default function Desk() {
             </div>
             <ArcGauge
               value={scoreReady ? shownScore : null}
-              size={190}
+              size={158}
               className="shrink-0 text-foreground"
               testid="desk-gauge"
             />
           </div>
 
           {/* The two wide money cards. */}
-          <div className="mt-8 grid gap-4 sm:grid-cols-2" data-testid="desk-money-cards">
+          <div className="mt-6 grid gap-4 sm:grid-cols-2" data-testid="desk-money-cards">
             <WideStatCard
               icon={HandCoins}
               alert={(m.cash?.overdue || 0) > 0}
@@ -291,7 +307,7 @@ export default function Desk() {
       {/* ── THE DARK BAND ──────────────────────────────────────────────── */}
       <DarkBand
         testid="desk-band"
-        className="mt-10 pt-8 pb-28 lg:pb-10 -mb-4 lg:-mb-8"
+        className="relative z-10 mt-8 pt-7 pb-28 lg:mt-10 lg:min-h-[62vh] lg:pb-10 -mb-4 lg:-mb-8"
       >
         <div className="grid gap-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
           <HistoryBand

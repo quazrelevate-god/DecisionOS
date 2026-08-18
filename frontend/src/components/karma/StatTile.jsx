@@ -51,7 +51,7 @@ export function StatTile({
         // KR-8.1: min-height + a flex spacer give the reference's air — the
         // numeral sits at the BOTTOM of a tall tile, not under the label.
         // Labels go roman: the full-res reference is not italic.
-        "kr-lift flex min-h-[190px] flex-col p-5 xl:min-h-[215px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline",
+        "kr-lift flex min-h-[150px] flex-col p-4 sm:p-5 lg:min-h-[168px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline",
         glass ? "kr-glass kr-glass--blue" : "nm-tile",
         className
       )}

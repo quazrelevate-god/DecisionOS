@@ -58,7 +58,7 @@ export function HistoryBand({ series = [], title = "Spend history", loading = fa
     : null;
 
   return (
-    <div className={cn("min-w-0", className)} data-testid={testid}>
+    <div className={cn("flex min-w-0 flex-col", className)} data-testid={testid}>
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="text-h2 mr-2">{title}</h2>
         {[3, 6].map((m) => (
@@ -80,7 +80,10 @@ export function HistoryBand({ series = [], title = "Spend history", loading = fa
         ))}
       </div>
 
-      <div className="relative mt-4 h-[220px]">
+      {/* KR-8.3: the plot FILLS whatever the band gives it (min 150px)
+          instead of demanding a fixed 220 — inside a height-constrained band
+          a fixed chart is what forces the scroll it was meant to avoid. */}
+      <div className="relative mt-4 min-h-[150px] flex-1">
         {loading ? (
           <div className="flex h-full items-end gap-3 opacity-40" aria-hidden="true">
             {Array.from({ length: months }, (_, i) => (

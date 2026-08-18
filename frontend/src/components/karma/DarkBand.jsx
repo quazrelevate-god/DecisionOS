@@ -13,6 +13,11 @@ import { useReveal } from "../../hooks/useReveal";
 
 /**
  * @param {boolean} reveal  rise-in on first viewport entry (default true)
+ *
+ * KR-8.4 — the band NEVER scrolls internally. An earlier pass gave it an
+ * inner scroller; the founder's correction is that the card travels WITH its
+ * content, as one sheet, over whatever is pinned behind it. Page scroll moves
+ * the whole section — that is the sheet metaphor the centre tab promises.
  */
 export function DarkBand({ children, reveal = true, className, testid }) {
   const ref = useReveal();

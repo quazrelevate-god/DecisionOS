@@ -1229,6 +1229,7 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
         opacity: 1;
         transform: none;
     }
+
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -450,7 +450,14 @@ export default function Layout({ children }) {
 
         {/* MPWA-02: pb-dock clears the floating dock plus the home indicator,
             so the last row is never trapped. */}
-        <main className="flex-1 p-4 lg:p-8 pb-dock lg:pb-8 px-gutter-safe overflow-x-hidden app-canvas">{children}</main>
+        {/* KR-8.4 — `overflow-x-clip`, NOT `-hidden`, and the difference is
+            load-bearing: when one axis is hidden and the other visible, CSS
+            computes the visible one to `auto`, which silently made <main> a
+            scroll container. Every `position: sticky` inside it then stuck to
+            main's scrollport — which never scrolls, because the DOCUMENT does
+            — so sticky quietly did nothing app-wide. `clip` crops the same
+            pixels without creating a scroll container, so sticky works. */}
+        <main className="flex-1 p-4 lg:p-8 pb-dock lg:pb-8 px-gutter-safe overflow-x-clip app-canvas">{children}</main>
       </div>
 
       {/* MPWA-03 — mobile navigation.

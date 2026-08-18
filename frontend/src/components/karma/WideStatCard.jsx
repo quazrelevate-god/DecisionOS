@@ -15,7 +15,7 @@ export function WideStatCard({ icon, alert = false, label, value, urgent = false
       to={to}
       data-testid={testid}
       className={cn(
-        "kr-lift nm-tile flex flex-col p-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline",
+        "kr-lift nm-tile flex flex-col p-4 sm:p-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline",
         className
       )}
     >
@@ -25,7 +25,7 @@ export function WideStatCard({ icon, alert = false, label, value, urgent = false
           <ArrowRight size={18} weight="bold" className="kr-arrow transition-transform duration-200" />
         </span>
       </div>
-      <div className="mt-6 flex items-end justify-between gap-4">
+      <div className="mt-5 flex items-end justify-between gap-4">
         <span className="text-sm leading-snug text-muted-foreground">{label}</span>
         <BigNumeral text={value} size="lg" accent={urgent} />
       </div>

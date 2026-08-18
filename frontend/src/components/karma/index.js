@@ -14,3 +14,4 @@ export { StatTile } from "./StatTile";
 export { WideStatCard } from "./WideStatCard";
 export { HistoryBand } from "./HistoryBand";
 export { DecisionBento } from "./DecisionBento";
+export { InsightWell } from "./InsightWell";

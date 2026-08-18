@@ -35,12 +35,13 @@ import { inrCompact } from "../lib/format";
 import { selfScore, scoreBand } from "../lib/karmaScore";
 import { isDemoTenant, demoDelta } from "./_operatingScoreDemo";
 import {
-  ArcGauge, StatTile, WideStatCard, DecisionBento,
-  BigNumeral, KDeltaChip, DarkBand, DotProgress, MiniBars, CircleDots, TinySpark,
+  ArcGauge, StatTile, DecisionBento, InsightWell,
+  BigNumeral, KDeltaChip, DarkBand, MiniBars, CircleDots, TinySpark,
 } from "../components/karma";
 import { useDeskMetrics } from "./desk/useDeskMetrics";
+import { deskInsight } from "../lib/deskInsight";
 import {
-  Fire, Sun, Star, Scales, Timer, CalendarCheck, ChartLineUp,
+  Fire, Sun, Star, Scales, Timer,
   ChatCircleText, Gauge as GaugeIcon, Receipt, HandCoins, TrendUp,
 } from "@phosphor-icons/react";
 
@@ -169,6 +170,12 @@ export default function Desk() {
 
   const total = SECTIONS.reduce((n, sec) => n + (counters[sec.key] ?? 0), 0);
 
+  // KR-8.7 — Dex's lead for the well. A ranker over metrics the page has
+  // already fetched, so it adds a request count of zero and cannot contradict
+  // a tile. Owners get the decision backlog as a candidate; everyone else
+  // only ever sees their own work and money.
+  const insight = deskInsight(m, isOwnerView ? (counters.needs_decision ?? 0) : 0);
+
   const greeting = m.greeting;
   const gi = greeting.lastIndexOf(",");
 
@@ -196,8 +203,16 @@ export default function Desk() {
           wide 8% trough between; we were at 42 / 58 with a 40px gap, which is
           what made our tiles read as squeezed and over-spaced at once. */}
       <div ref={heroRef} className="kr-hero grid gap-8 lg:sticky lg:top-5 lg:z-0 lg:grid-cols-[minmax(0,29fr)_minmax(0,45fr)] lg:gap-20">
-        {/* LEFT column — title, scope, score, gauge, money cards */}
-        <div className="min-w-0">
+        {/* LEFT column (KR-8.7) — greeting, scope, THE INSIGHT WELL, and the
+            score pushed to the floor.
+            The founder wanted the editorial space directly under the greeting
+            for Dex, and the score block moved down to sit level with the KPI
+            grid's bottom edge. A flex column does both in one move: the well
+            takes flex-1 (it absorbs whatever height the grid dictates) and
+            the score block, being last with nothing after it, lands on the
+            column's floor — which the hero grid has already made equal to
+            the right column's floor. */}
+        <div className="flex min-w-0 flex-col">
           <h1 className="font-display text-3xl sm:text-4xl" data-testid="desk-brief-greeting">
             {gi === -1
               ? <span>{greeting || " "}</span>
@@ -231,8 +246,19 @@ export default function Desk() {
             </div>
           )}
 
-          {/* Score + gauge, side by side like the reference. */}
-          <div className="mt-5 flex items-center gap-5 sm:gap-8">
+          {/* Dex's read of today — the page's one piece of prose, and the
+              reason the score moved down. flex-1 so it eats the slack
+              between the greeting and the score's floor. */}
+          <InsightWell
+            insight={insight}
+            loading={!insight}
+            className="mt-6 min-h-[168px] flex-1"
+            testid="desk-insight"
+          />
+
+          {/* Score + gauge, side by side like the reference. Last child, so
+              it bottoms out level with the KPI grid opposite. */}
+          <div className="mt-6 flex items-center gap-5 sm:gap-8">
             <div className="min-w-0">
               {/* Delta eyebrow — demo-tenant only; no endpoint carries a real
                   score delta yet (see _operatingScoreDemo's wire-order note). */}
@@ -271,26 +297,10 @@ export default function Desk() {
             />
           </div>
 
-          {/* The two wide money cards. */}
-          <div className="mt-6 grid gap-3 sm:grid-cols-2" data-testid="desk-money-cards">
-            <WideStatCard
-              icon={HandCoins}
-              alert={(m.cash?.overdue || 0) > 0}
-              label="To collect (overdue)"
-              value={m.cash ? inrCompact(m.cash.overdue) : "…"}
-              urgent={(m.cash?.overdue || 0) > 0}
-              to="/finance?tab=revenue&filter=overdue"
-              testid="desk-card-collect"
-            />
-            <WideStatCard
-              icon={TrendUp}
-              label="Net profit"
-              value={m.ledger && Number.isFinite(m.ledger.netProfit) ? inrCompact(m.ledger.netProfit) : "…"}
-              urgent={m.ledger ? m.ledger.netProfit < 0 : false}
-              to="/finance"
-              testid="desk-card-profit"
-            />
-          </div>
+          {/* KR-8.7 — the two money cards LEFT this column for the KPI grid
+              opposite, taking the slots Due today and Completion rate gave
+              up. Nothing follows the score block now; that is what puts its
+              baseline on the grid's. */}
         </div>
 
         {/* RIGHT — the 3×2 grid. Six honest tiles; Score mix is the glass one.
@@ -316,23 +326,6 @@ export default function Desk() {
             testid="kpi-delayed"
           />
           <StatTile
-            icon={CalendarCheck}
-            label="Due today"
-            value={String(m.work ? m.work.dueToday : "…")}
-            viz={m.work ? <DotProgress value={m.work.dueToday} total={Math.max(1, m.work.dueToday + m.work.overdue)} /> : null}
-            to="/my-work"
-            countUp
-            testid="kpi-due-today"
-          />
-          <StatTile
-            icon={ChartLineUp}
-            label="Completion rate"
-            value={m.weekly ? `${m.weekly.value}%` : "…"}
-            viz={m.weekly ? <KDeltaChip pct={m.weekly.delta_pct} direction={m.weekly.direction} downIsBad testid="kpi-completion-delta" /> : null}
-            to="/operating-score"
-            testid="kpi-completion"
-          />
-          <StatTile
             icon={ChatCircleText}
             label="Complaints"
             value={String(m.complaints ? m.complaints.value : "…")}
@@ -352,6 +345,31 @@ export default function Desk() {
             viz={isOwnerView ? <MiniBars values={ops.catValues} width={64} /> : null}
             to="/operating-score"
             testid="kpi-score-mix"
+          />
+          {/* KR-8.7 — the money pair, moved in from the left column and
+              re-cut as tiles. They were WideStatCards; in a 3×2 grid whose
+              whole point is six identical cells, a second card anatomy read
+              as a mistake. Same data, same destinations, same orange alert
+              on overdue.
+              TESTID RENAME: desk-card-collect/profit → kpi-collect/profit.
+              The old names shared the `desk-card-` prefix with the bento's
+              decision boxes, which already cost one bad measurement. */}
+          <StatTile
+            icon={HandCoins}
+            alert={(m.cash?.overdue || 0) > 0}
+            label="To collect (overdue)"
+            value={m.cash ? inrCompact(m.cash.overdue) : "…"}
+            urgent={(m.cash?.overdue || 0) > 0}
+            to="/finance?tab=revenue&filter=overdue"
+            testid="kpi-collect"
+          />
+          <StatTile
+            icon={TrendUp}
+            label="Net profit"
+            value={m.ledger && Number.isFinite(m.ledger.netProfit) ? inrCompact(m.ledger.netProfit) : "…"}
+            urgent={m.ledger ? m.ledger.netProfit < 0 : false}
+            to="/finance"
+            testid="kpi-profit"
           />
           <StatTile
             icon={Receipt}

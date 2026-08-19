@@ -1094,18 +1094,55 @@ html[data-dex="1"].dark .text-muted-foreground { color: hsl(var(--muted-foregrou
    together. Defaults are the amber the founder approved on /inbox, so that
    page is byte-identical to before this block existed. */
 .app-sky::before {
-    --sky-core: 38 97% 58%;
-    --sky-deep: 22 95% 52%;
-    --sky-lift: 45 95% 68%;
-    --sky-wash: 33 90% 60%;
-
     opacity: 1;
     background-image:
-        radial-gradient(46% 52% at 56% 30%, hsl(var(--sky-core) / .62), transparent 68%),
-        radial-gradient(30% 36% at 62% 52%, hsl(var(--sky-deep) / .38), transparent 70%),
-        radial-gradient(26% 30% at 44% 16%, hsl(var(--sky-lift) / .38), transparent 72%),
-        radial-gradient(60% 64% at 55% 35%, hsl(var(--sky-wash) / .22), transparent 76%);
+        radial-gradient(46% 52% at 56% 30%, var(--sky-core), transparent 68%),
+        radial-gradient(30% 36% at 62% 52%, var(--sky-deep), transparent 70%),
+        radial-gradient(26% 30% at 44% 16%, var(--sky-lift), transparent 72%),
+        radial-gradient(60% 64% at 55% 35%, var(--sky-wash), transparent 76%);
+    transition: opacity 480ms cubic-bezier(.4, 0, .2, 1);
 }
+
+/* KR-13 — THE ROOM CHANGES COLOUR, and the four stops live on .app-sky
+   rather than on its ::before. That placement is the whole fix.
+
+   The obvious version declares them on the pseudo-element, where the
+   gradient is. It renders correctly and it will not TRANSITION: measured by
+   sampling the composited gradient at 80/180/300/450/700ms through a
+   navigation, the value snapped from amber to violet inside one frame with
+   no intermediate colour. Custom-property transitions on a pseudo-element
+   do not run here.
+
+   So the properties are declared on the real element, which does animate
+   them, and ::before simply reads them through var(). That needs
+   inherits: true — with inherits: false the pseudo-element would fall back
+   to each property's initial value and every page would be amber.
+
+   620ms, deliberately slower than the content's 320ms arrival: the weather
+   should still be settling as the furniture lands. That lag is what makes a
+   navigation feel like walking into a room instead of a slide advancing. */
+@property --sky-core { syntax: "<color>"; initial-value: hsl(38 97% 58% / .62); inherits: true; }
+@property --sky-deep { syntax: "<color>"; initial-value: hsl(22 95% 52% / .38); inherits: true; }
+@property --sky-lift { syntax: "<color>"; initial-value: hsl(45 95% 68% / .38); inherits: true; }
+@property --sky-wash { syntax: "<color>"; initial-value: hsl(33 90% 60% / .22); inherits: true; }
+
+.app-sky {
+    --sky-core: hsl(38 97% 58% / .62);
+    --sky-deep: hsl(22 95% 52% / .38);
+    --sky-lift: hsl(45 95% 68% / .38);
+    --sky-wash: hsl(33 90% 60% / .22);
+}
+/* NO `transition` HERE, and that absence is the finding.
+   A CSS transition on these four WEDGES them: with it declared, navigating
+   to /team left --sky-core reading amber indefinitely; removing the
+   declaration at runtime made it land on violet in the same frame. Measured
+   both ways. Transitions on registered custom properties do not run reliably
+   in this engine — the third time this branch has been bitten by a stalled
+   CSS transition (see .kr-pop ⇄ .kr-pressed in MyWork).
+   So the cross-fade is driven from JS instead: hooks/useSkyFade reads the
+   stylesheet's target for the new route and interpolates to it over rAF,
+   writing inline values that outrank the sheet. The CSS above is the TARGET
+   table; the motion is not CSS's job any more. */
 
 /* ── the per-page palettes ──────────────────────────────────────────────
    /inbox is deliberately absent: the founder asked for it to stay put, and
@@ -1130,30 +1167,30 @@ html[data-dex="1"].dark .text-muted-foreground { color: hsl(var(--muted-foregrou
 
 /* My Work — steel blue lifted with gold. Cool for a focus surface, warm
    enough not to feel like a spreadsheet. */
-html[data-page="my-work"] .app-sky::before {
-    --sky-core: 212 52% 79%;
-    --sky-deep: 202 44% 72%;
-    --sky-lift:  44 90% 77%;
-    --sky-wash: 216 34% 75%;
+html[data-page="my-work"] .app-sky {
+    --sky-core: hsl(212 52% 79% / .62);
+    --sky-deep: hsl(202 44% 72% / .38);
+    --sky-lift: hsl(44 90% 77% / .38);
+    --sky-wash: hsl(216 34% 75% / .22);
 }
 
 /* Ops — moss over amber. The diagnostic page reads "growing / healthy"
    without ever printing a green number. */
-html[data-page="operating-score"] .app-sky::before {
-    --sky-core:  92 44% 64%;
-    --sky-deep:  76 40% 56%;
-    --sky-lift:  45 90% 70%;
-    --sky-wash:  88 34% 62%;
+html[data-page="operating-score"] .app-sky {
+    --sky-core: hsl(92 44% 64% / .62);
+    --sky-deep: hsl(76 40% 56% / .38);
+    --sky-lift: hsl(45 90% 70% / .38);
+    --sky-wash: hsl(88 34% 62% / .22);
 }
 
 /* Finance — the founder's own suggestion: smoke with a gold glow. Money
    gets the most restrained sky in the app; the gold is the only thing in it
    with any chroma. */
-html[data-page="finance"] .app-sky::before {
-    --sky-core:  35 12% 72%;
+html[data-page="finance"] .app-sky {
+    --sky-core: hsl(35 12% 72% / .62);
     --sky-deep: 220  8% 64%;
-    --sky-lift:  46 92% 68%;
-    --sky-wash:  40 14% 68%;
+    --sky-lift: hsl(46 92% 68% / .38);
+    --sky-wash: hsl(40 14% 68% / .22);
 }
 
 /* CRM — KR-11.4, on the founder's call: steel, gold, graphite and white
@@ -1164,28 +1201,28 @@ html[data-page="finance"] .app-sky::before {
    little warmer and a little brighter so the two pages stay distinguishable
    side by side. Measured against muted ink: 4.27 vs Finance's 4.13 and the
    /inbox baseline's 4.00. */
-html[data-page="crm"] .app-sky::before {
-    --sky-core: 206 16% 78%;
-    --sky-deep: 218 10% 62%;
-    --sky-lift:  45 94% 70%;
-    --sky-wash: 208 12% 73%;
+html[data-page="crm"] .app-sky {
+    --sky-core: hsl(206 16% 78% / .62);
+    --sky-deep: hsl(218 10% 62% / .38);
+    --sky-lift: hsl(45 94% 70% / .38);
+    --sky-wash: hsl(208 12% 73% / .22);
 }
 
 /* Team — violet into peach. */
-html[data-page="team"] .app-sky::before {
-    --sky-core: 262 44% 81%;
-    --sky-deep: 248 38% 75%;
-    --sky-lift:  30 80% 81%;
-    --sky-wash: 258 30% 77%;
+html[data-page="team"] .app-sky {
+    --sky-core: hsl(262 44% 81% / .62);
+    --sky-deep: hsl(248 38% 75% / .38);
+    --sky-lift: hsl(30 80% 81% / .38);
+    --sky-wash: hsl(258 30% 77% / .22);
 }
 
 /* Settings — cool grey, gold barely present. The quietest room in the app,
    which is what a settings page should be. */
-html[data-page="settings"] .app-sky::before {
-    --sky-core: 220 12% 74%;
-    --sky-deep: 226 10% 66%;
-    --sky-lift:  45 62% 74%;
-    --sky-wash: 220 10% 70%;
+html[data-page="settings"] .app-sky {
+    --sky-core: hsl(220 12% 74% / .62);
+    --sky-deep: hsl(226 10% 66% / .38);
+    --sky-lift: hsl(45 62% 74% / .38);
+    --sky-wash: hsl(220 10% 70% / .22);
 }
 
 /* The Dex room: same amber family over the ink, pushed toward the orb's
@@ -1203,13 +1240,61 @@ html[data-page="settings"] .app-sky::before {
 html[data-dex="1"] .app-sky::before { opacity: 0; }
 html[data-dex="1"] .app-sky::after  { opacity: 1; }
 
+/* ═══ KR-13 · THE PAGE ARRIVES ════════════════════════════════════════════
+   Layer two of the navigation. The sky (above) says the room changed; this
+   says the furniture landed.
+
+   WHY NOT A SLIDE. A horizontal slide implies spatial adjacency — that Ops
+   sits to the RIGHT of My Work. The nav is seven peer pills with no order,
+   so a direction would be inventing a relationship the product does not
+   have, and would need "did I go left or right" logic that is meaningless
+   the moment anyone uses the ⌘K search instead of the pills.
+
+   WHY NOT BLUR HERE. /inbox already owns progressive blur, driven by scroll,
+   and reusing it for navigation would collide with a meaning that already
+   exists. Full-viewport blur is also the one effect on this list that cannot
+   run on the compositor alone. Blur is kept for the Dex boundary, below,
+   where you genuinely change rooms.
+
+   So: opacity + a 10px lift. Both compositor-only, both cheap on a page
+   carrying six Recharts surfaces. 320ms — long enough to read as motion,
+   short enough that a founder clicking through four pipelines in a row
+   never waits on it. */
+@keyframes kr-page-in {
+    from { opacity: 0; transform: translate3d(0, 10px, 0); }
+    to   { opacity: 1; transform: none; }
+}
+.kr-page-in {
+    animation: kr-page-in 320ms cubic-bezier(.22, 1, .36, 1) both;
+}
+
+/* KR-13.1 — THE DEX BOUNDARY OWNS ITS OWN MOTION, and nothing else plays
+   over it. A blur pulse lived here for one commit. The founder: "it's
+   interfering with the dark fade-in of the Dex page… only the light to dark
+   transition that is there within Dex should be there, no overlapping."
+   Right, and the reason is structural rather than a matter of taste:
+   entering Dex already runs a 480ms cross-fade across background-color,
+   color, border-color, box-shadow and fill on EVERY node in the app
+   (html.theme-x, further up this file). A second timeline over that does not
+   add richness, it competes — two easings, two durations, one moment.
+   .kr-page-in is suppressed across this boundary too; see Layout, where it
+   is skipped in both directions because leaving Dex runs the same
+   cross-fade as entering it. */
+
 @keyframes kr-drift {
     from { transform: translate3d(-1.5%, -1%, 0) scale(1); }
     to   { transform: translate3d( 1.5%,  1%, 0) scale(1.04); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .app-sky::before, .app-sky::after { transition: none; animation: none; }
+    /* KR-13 — the sky's COLOUR transition survives reduced motion on
+       purpose: a cross-fade between two static colours is not motion, it is
+       a slow recolour, and it is the only cue left that the page changed
+       once the lift and the blur are gone. The drift animation and the
+       page-arrival lift both stop. */
+    .app-sky::before, .app-sky::after { animation: none; }
+    .kr-page-in { animation: none; opacity: 1; transform: none; }
+    html.theme-x .app-canvas { animation: none; filter: none; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

@@ -3,6 +3,7 @@ import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
+import { useSkyFade } from "../hooks/useSkyFade";
 import { useTheme } from "../hooks/useTheme";
 import { hasPerm } from "../lib/perms";
 import { toast } from "sonner";
@@ -151,20 +152,48 @@ export default function Layout({ children }) {
     else root.removeAttribute("data-dex");
   }, [dexRoute]);
 
-  // KR-11.1 — the sky's colour is per-route now. Stamped on <html> for the
-  // same reason data-dex is: the bloom's pseudo-elements hang off .app-sky,
-  // which is a sibling of the header, so a React-node class could not reach
-  // it. Only the FIRST path segment is used — /finance?tab=revenue and
-  // /operating-score?user=x are the same room, and a sky that changed on a
-  // query param would flicker on every filter click.
-  // /inbox is deliberately not in the CSS table: its amber is the default,
-  // per the founder ("don't touch the first Inbox page").
+
+  // KR-13 — replay the page-arrival animation on every route change.
+  //
+  // The obvious version — key={location.pathname} on a wrapper — would
+  // remount the entire subtree on every navigation. On pages carrying six
+  // Recharts surfaces and four live queries that is a real cost, and it
+  // throws away scroll position and any component state React Router was
+  // otherwise happy to keep.
+  //
+  // So the node stays put and only its animation restarts. Removing the
+  // class, reading offsetWidth to force a style flush, then re-adding it is
+  // the standard restart: without that read the browser coalesces both
+  // mutations into one frame, sees no change, and never replays.
+  // KR-13 — the weather cross-fade. This hook OWNS data-page: the attribute
+  // has to land at the bottom of the opacity dip rather than at the click,
+  // so the stamp and the curtain cannot live in two places.
+  useSkyFade(location.pathname);
+
+  const mainRef = useRef(null);
+  const wasDex = useRef(dexRoute);
   useEffect(() => {
-    const seg = location.pathname.split("/").filter(Boolean)[0] || "";
-    const root = document.documentElement;
-    if (seg) root.setAttribute("data-page", seg);
-    else root.removeAttribute("data-page");
-  }, [location.pathname]);
+    const el = mainRef.current;
+    const leavingOrEnteringDex = dexRoute || wasDex.current;
+    wasDex.current = dexRoute;
+    if (!el) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    // KR-13.1 — NO PAGE TRANSITION ACROSS THE DEX BOUNDARY, in either
+    // direction. Dex already runs its own 480ms light↔dark cross-fade over
+    // every node in the app (html.theme-x); adding a 320ms rise on top of it
+    // meant two easings and two durations fighting over one moment, which is
+    // exactly the interference the founder reported. The room swap IS the
+    // transition there. Both directions, because leaving Dex runs the same
+    // cross-fade as entering it.
+    if (leavingOrEnteringDex) {
+      el.classList.remove("kr-page-in");
+      return;
+    }
+    el.classList.remove("kr-page-in");
+    void el.offsetWidth;
+    el.classList.add("kr-page-in");
+  }, [location.pathname, dexRoute]);
 
   const [profileOpen, setProfileOpen] = useState(false);
   // MPWA-03 mobile navigation state.
@@ -472,7 +501,7 @@ export default function Layout({ children }) {
             main's scrollport — which never scrolls, because the DOCUMENT does
             — so sticky quietly did nothing app-wide. `clip` crops the same
             pixels without creating a scroll container, so sticky works. */}
-        <main className="flex-1 p-4 lg:p-8 pb-dock lg:pb-8 px-gutter-safe overflow-x-clip app-canvas">{children}</main>
+        <main ref={mainRef} className="flex-1 p-4 lg:p-8 pb-dock lg:pb-8 px-gutter-safe overflow-x-clip app-canvas">{children}</main>
       </div>
 
       {/* MPWA-03 — mobile navigation.

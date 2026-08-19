@@ -5,8 +5,8 @@ import { opModel } from "../lib/operatingModel";
 import { toast } from "sonner";
 import { FlowArrow, FloppyDisk, Sparkle, Plus, Trash, ArrowUp, ArrowDown, ShieldCheck, ListChecks, Lightning } from "@phosphor-icons/react";
 
-const inp = "w-full border border-border rounded-lg px-3 py-2 text-sm bg-card focus:outline-none focus:ring-2 focus:ring-ring/40";
-const smInp = "border border-border rounded-md px-2 py-1.5 text-sm bg-card focus:outline-none focus:ring-2 focus:ring-ring/40";
+const inp = "w-full border border-nm-edge/40 rounded-lg px-3 py-2 text-sm bg-card focus:outline-none focus:ring-2 focus:ring-ring/40";
+const smInp = "border border-nm-edge/40 rounded-md px-2 py-1.5 text-sm bg-card focus:outline-none focus:ring-2 focus:ring-ring/40";
 let _uid = 0;
 const uid = () => `k${Date.now()}_${_uid++}`;
 
@@ -231,25 +231,25 @@ export function OperatingModelEditor() {
   };
 
   return (
-    <div className="card-brutal p-5" data-testid="settings-operating-model-card">
+    <div className="nm-tile p-5" data-testid="settings-operating-model-card">
       <div className="flex items-center gap-2 mb-1">
-        <FlowArrow size={20} weight="bold" className="text-brand-600" />
+        <FlowArrow size={20} weight="bold" className="text-muted-foreground" />
         <h2 className="text-base font-medium">Operating Model</h2>
       </div>
       <p className="text-xs text-muted-foreground mb-4">
         The workflow pipelines and task categories that shape your Workflows board and My Work — tailored to <span className="font-semibold">{tenant?.industry || "your industry"}</span>. Each stage owns its task templates + approval gate. Add your own or let AI regenerate.
       </p>
 
-      <p className="label-mono text-brand-600 mb-2">Workflow pipelines</p>
+      <p className="label-mono text-muted-foreground mb-2">Workflow pipelines</p>
       <div className="space-y-4">
         {model.pipelines.map((p, pi) => (
-          <div key={p._uid} className="border border-border rounded-lg p-3" data-testid={`op-pipeline-${pi}`}>
+          <div key={p._uid} className="border border-nm-edge/40 rounded-lg p-3" data-testid={`op-pipeline-${pi}`}>
             <div className="flex items-start gap-2">
               <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <input data-testid={`op-pipeline-label-${pi}`} className={inp} placeholder="Pipeline name (e.g. Appointments)" value={p.label} onChange={(e) => setPipeline(pi, { label: e.target.value })} />
                 <input data-testid={`op-pipeline-sub-${pi}`} className={inp} placeholder="Subtitle (e.g. Booked → Completed)" value={p.sub} onChange={(e) => setPipeline(pi, { sub: e.target.value })} />
               </div>
-              <button onClick={() => delPipeline(pi)} data-testid={`op-pipeline-delete-${pi}`} title="Delete pipeline" className="mt-1 text-muted-foreground hover:text-danger-600 transition-colors">
+              <button onClick={() => delPipeline(pi)} data-testid={`op-pipeline-delete-${pi}`} title="Delete pipeline" className="mt-1 text-muted-foreground hover:text-kr-accent transition-colors">
                 <Trash size={16} weight="bold" />
               </button>
             </div>
@@ -257,13 +257,13 @@ export function OperatingModelEditor() {
             <div className="mt-3 space-y-3">
               <span className="label-mono text-muted-foreground">Stages (in order)</span>
               {p.stages.map((s, si) => (
-                <div key={s._uid} className="border border-border/60 rounded-md p-2.5 bg-accent/30" data-testid={`op-stage-${pi}-${si}`}>
+                <div key={s._uid} className="border border-nm-edge/40/60 rounded-md p-2.5 bg-accent/30" data-testid={`op-stage-${pi}-${si}`}>
                   {/* Stage name row + reorder + delete */}
                   <div className="flex items-center gap-1.5">
                     <input className={`${smInp} flex-1`} placeholder="Stage name" value={s.label} onChange={(e) => setStage(pi, si, { label: e.target.value })} />
                     <button onClick={() => moveStage(pi, si, -1)} disabled={si === 0} title="Move up" className="p-1 disabled:opacity-30 hover:text-brand-blue"><ArrowUp size={14} weight="bold" /></button>
                     <button onClick={() => moveStage(pi, si, 1)} disabled={si === p.stages.length - 1} title="Move down" className="p-1 disabled:opacity-30 hover:text-brand-blue"><ArrowDown size={14} weight="bold" /></button>
-                    <button onClick={() => delStage(pi, si)} title="Delete stage" className="p-1 text-muted-foreground hover:text-danger-600"><Trash size={14} weight="bold" /></button>
+                    <button onClick={() => delStage(pi, si)} title="Delete stage" className="p-1 text-muted-foreground hover:text-kr-accent"><Trash size={14} weight="bold" /></button>
                   </div>
 
                   {/* WE-04: task templates that spawn when this stage starts */}
@@ -287,7 +287,7 @@ export function OperatingModelEditor() {
                             <input type="checkbox" checked={!!t.evidence_required} onChange={(e) => setStageTask(pi, si, ti, { evidence_required: e.target.checked })} />
                             evidence
                           </label>
-                          <button onClick={() => delStageTask(pi, si, ti)} title="Delete task" className="p-1 text-muted-foreground hover:text-danger-600"><Trash size={12} weight="bold" /></button>
+                          <button onClick={() => delStageTask(pi, si, ti)} title="Delete task" className="p-1 text-muted-foreground hover:text-kr-accent"><Trash size={12} weight="bold" /></button>
                         </div>
                       ))}
                     </div>
@@ -326,9 +326,9 @@ export function OperatingModelEditor() {
                       <div className="flex flex-wrap gap-1.5">
                         {s.side_effects.map((se, ei) => (
                           <span key={se._uid} data-testid={`op-stage-side-effect-${pi}-${si}-${ei}`}
-                            className="inline-flex items-center gap-1 border border-border rounded-md px-2 py-0.5 text-[11px] font-mono bg-card">
+                            className="inline-flex items-center gap-1 border border-nm-edge/40 rounded-md px-2 py-0.5 text-[11px] font-mono bg-card">
                             {se.kind}
-                            <button onClick={() => delSideEffect(pi, si, ei)} title="Remove" className="text-muted-foreground hover:text-danger-600">
+                            <button onClick={() => delSideEffect(pi, si, ei)} title="Remove" className="text-muted-foreground hover:text-kr-accent">
                               <Trash size={10} weight="bold" />
                             </button>
                           </span>
@@ -355,16 +355,16 @@ export function OperatingModelEditor() {
           </div>
         ))}
       </div>
-      <button onClick={addPipeline} data-testid="op-add-pipeline" className="flex items-center gap-1 text-sm font-semibold text-brand-600 hover:underline mt-3">
+      <button onClick={addPipeline} data-testid="op-add-pipeline" className="flex items-center gap-1 text-sm font-semibold text-muted-foreground hover:underline mt-3">
         <Plus size={14} weight="bold" /> Add pipeline
       </button>
 
-      <p className="label-mono text-brand-600 mt-6 mb-2">Task categories</p>
+      <p className="label-mono text-muted-foreground mt-6 mb-2">Task categories</p>
       <div className="flex flex-wrap gap-2">
         {model.task_categories.map((c, i) => (
-          <div key={c._uid} className="flex items-center gap-1 border border-border rounded-md pl-2 pr-1 py-1" data-testid={`op-cat-${i}`}>
+          <div key={c._uid} className="flex items-center gap-1 border border-nm-edge/40 rounded-md pl-2 pr-1 py-1" data-testid={`op-cat-${i}`}>
             <input className="bg-transparent text-sm w-28 focus:outline-none" value={c.label} onChange={(e) => setCat(i, e.target.value)} />
-            <button onClick={() => delCat(i)} title="Delete" className="text-muted-foreground hover:text-danger-600"><Trash size={13} weight="bold" /></button>
+            <button onClick={() => delCat(i)} title="Delete" className="text-muted-foreground hover:text-kr-accent"><Trash size={13} weight="bold" /></button>
           </div>
         ))}
         <button onClick={addCat} data-testid="op-add-cat" className="flex items-center gap-1 text-sm font-semibold text-brand-blue hover:underline px-2 py-1">
@@ -374,11 +374,11 @@ export function OperatingModelEditor() {
 
       <div className="mt-6 flex flex-wrap gap-3">
         <button onClick={save} disabled={saving} data-testid="op-save"
-          className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2 text-sm font-medium rounded-lg transition-all disabled:opacity-60">
+          className="flex items-center gap-2 bg-kr-ink text-white px-5 py-2 text-sm font-medium rounded-lg transition-all disabled:opacity-60">
           <FloppyDisk size={16} weight="bold" /> {saving ? "Saving…" : "Save Model"}
         </button>
         <button onClick={regenerate} disabled={regen} data-testid="op-regenerate"
-          className="flex items-center gap-2 border border-border px-5 py-2 text-sm font-medium rounded-lg hover:bg-accent transition-all disabled:opacity-60">
+          className="flex items-center gap-2 border border-nm-edge/40 px-5 py-2 text-sm font-medium rounded-lg hover:bg-accent transition-all disabled:opacity-60">
           <Sparkle size={16} weight="bold" /> {regen ? "Regenerating…" : "Regenerate with AI"}
         </button>
       </div>

@@ -3,8 +3,6 @@ import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import api from "../lib/api";
 import { hasPerm } from "../lib/perms";
-import { useIsMobile } from "../hooks/useIsMobile";
-import SettingsMobile from "./mobile/SettingsMobile";
 import { PageHeader } from "../components/common";
 import { CompanyDetails } from "../components/CompanyDetails";
 import { BusinessVocabulary } from "../components/BusinessVocabulary";
@@ -17,14 +15,14 @@ import { toast } from "sonner";
 import { CurrencyCircleDollar, ShieldCheck, FloppyDisk, Info, UserCircle, Translate, Lock, Buildings, FlowArrow, User } from "@phosphor-icons/react";
 
 const CURRENCIES = ["INR", "USD", "EUR", "GBP", "AED", "SGD", "AUD"];
-const inp = "w-full border border-border rounded-lg px-3 py-2 text-sm font-mono bg-card focus:outline-none focus:ring-2 focus:ring-ring/40";
+const inp = "w-full nm-field px-3 py-2 text-sm";
 
 function LanguageCard() {
   const { t } = useTranslation();
   return (
-    <div className="card-brutal p-5" data-testid="settings-language-card">
+    <div className="kr-bento p-5 sm:p-6" data-testid="settings-language-card">
       <div className="flex items-center gap-2 mb-1">
-        <Translate size={20} weight="bold" className="text-brand-600" />
+        <Translate size={20} weight="bold" aria-hidden="true" className="text-muted-foreground" />
         <h2 className="text-base font-medium">{t("settings.language_title")}</h2>
       </div>
       <p className="text-xs text-muted-foreground mb-4">{t("settings.language_desc")}</p>
@@ -35,9 +33,9 @@ function LanguageCard() {
 
 function ProfileCard() {
   return (
-    <div className="card-brutal p-5" data-testid="settings-profile-card">
+    <div className="kr-bento p-5 sm:p-6" data-testid="settings-profile-card">
       <div className="flex items-center gap-2 mb-1">
-        <UserCircle size={20} weight="bold" className="text-brand-600" />
+        <UserCircle size={20} weight="bold" aria-hidden="true" className="text-muted-foreground" />
         <h2 className="text-base font-medium">Your Profile</h2>
       </div>
       <p className="text-xs text-muted-foreground mb-4">Your personal details, sign-in and WhatsApp routing.</p>
@@ -48,9 +46,9 @@ function ProfileCard() {
 
 function SecurityCard() {
   return (
-    <div className="card-brutal p-5" data-testid="settings-security-card">
+    <div className="kr-bento p-5 sm:p-6" data-testid="settings-security-card">
       <div className="flex items-center gap-2 mb-1">
-        <Lock size={20} weight="bold" className="text-brand-600" />
+        <Lock size={20} weight="bold" aria-hidden="true" className="text-muted-foreground" />
         <h2 className="text-base font-medium">Password & Security</h2>
       </div>
       <p className="text-xs text-muted-foreground mb-4">Change the password you use to sign in.</p>
@@ -85,9 +83,9 @@ function MoneyAndApprovalsCard() {
   };
 
   return (
-    <div className="card-brutal p-5" data-testid="settings-money-card">
+    <div className="kr-bento p-5 sm:p-6" data-testid="settings-money-card">
       <div className="flex items-center gap-2 mb-1">
-        <CurrencyCircleDollar size={20} weight="bold" className="text-brand-600" />
+        <CurrencyCircleDollar size={20} weight="bold" aria-hidden="true" className="text-muted-foreground" />
         {/* U7-11.1 (2026-08-17): match the uppercase / extrabold
             header treatment used by every other card in Settings. Was
             lowercase-looking and read as a sub-heading, not a card
@@ -115,8 +113,8 @@ function MoneyAndApprovalsCard() {
         </div>
 
         <button type="button" onClick={() => setSignoff(!signoff)} data-testid="settings-signoff-toggle"
-          className="flex items-start gap-3 w-full text-left border border-border rounded-lg p-3 hover:bg-accent transition-colors">
-          <span className={`w-5 h-5 shrink-0 mt-0.5 border border-border rounded flex items-center justify-center ${signoff ? "bg-primary text-primary-foreground" : "bg-card"}`}>
+          className="nm-inset flex w-full items-start gap-3 p-3.5 text-left transition-colors">
+          <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border border-kr-outline ${signoff ? "bg-kr-ink text-white" : "bg-nm-raised"}`}>
             {signoff && <ShieldCheck size={13} weight="bold" />}
           </span>
           <span>
@@ -127,7 +125,7 @@ function MoneyAndApprovalsCard() {
       </div>
 
       <button onClick={save} disabled={saving} data-testid="settings-save"
-        className="mt-6 flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2 text-sm font-medium rounded-lg transition-all disabled:opacity-60">
+        className="kr-lift mt-6 flex items-center gap-2 rounded-pill bg-kr-ink px-5 py-2.5 text-sm font-medium text-white transition-all disabled:opacity-60">
         <FloppyDisk size={16} weight="bold" /> {saving ? "Saving…" : "Save Settings"}
       </button>
     </div>
@@ -164,7 +162,6 @@ export default function Settings() {
   // MPWA-11 (§8): rebuilt below lg as a row-list; desktop untouched. WE-04's
   // 8-cards-to-4-tabs restructure replaced this component wholesale, so the
   // mobile branch is re-applied on top of it rather than merged into it.
-  const isMobile = useIsMobile();
   const { user } = useAuth();
   const isOwner = user?.role === "owner" || hasPerm(user, "team_manage");
   // U7-11.1 (2026-08-17): persist active tab in URL. Was useState-only,
@@ -189,7 +186,6 @@ export default function Settings() {
     }
   }, [urlTab, tab]);
 
-  if (isMobile) return <SettingsMobile />;
 
   // Non-owner view stays a simple stack -- just Profile + Security.
   // No tabs needed for 2 sections; the tabbed layout is an owner-only
@@ -197,7 +193,12 @@ export default function Settings() {
   if (!isOwner) {
     return (
       <div>
-        <PageHeader eyebrow="Account" title="Settings" />
+      <header className="mb-7 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Account</p>
+          <h1 className="mt-1.5 font-display text-3xl sm:text-4xl">Settings</h1>
+        </div>
+        </header>
         <div className="max-w-2xl">
           <ProfileCard />
           <div className="mt-6"><SecurityCard /></div>
@@ -210,13 +211,19 @@ export default function Settings() {
 
   return (
     <div>
-      <PageHeader eyebrow="Account & workspace" title="Settings" />
+      <header className="mb-7 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Account &amp; workspace</p>
+          <h1 className="mt-1.5 font-display text-3xl sm:text-4xl">Settings</h1>
+        </div>
+      </header>
 
-      {/* Tab bar. Horizontal-scroll on narrow screens so the four
-          chips don't clip. Active tab uses the brand-600 underline
-          consistent with the rest of the app. */}
-      <div className="border-b border-border mb-5" data-testid="settings-tabs">
-        <div className="flex gap-1 overflow-x-auto">
+      {/* KR-12 — the same black-hairline pill Finance, CRM and the nav wear.
+          Was an underline tab bar, which is a third tab grammar in an app
+          that already has two too many. Still horizontal-scrolls on narrow
+          screens so the four never clip. */}
+      <div className="mb-5 flex flex-wrap gap-2" data-testid="settings-tabs">
+        <div className="flex gap-2 overflow-x-auto pb-1">
           {TABS.map((t) => {
             const Icon = t.icon;
             const isActive = t.key === tab;
@@ -227,13 +234,13 @@ export default function Settings() {
                 onClick={() => selectTab(t.key)}
                 data-testid={`settings-tab-${t.key}`}
                 aria-pressed={isActive}
-                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-all border-b-2 ${
+                className={`flex h-9 items-center gap-2 whitespace-nowrap rounded-pill border-[0.5px] px-4 text-sm ${
                   isActive
-                    ? "border-brand-600 text-brand-600"
-                    : "border-transparent text-muted-foreground hover:text-foreground"
+                    ? "border-kr-ink font-medium text-foreground"
+                    : "border-kr-ink/55 text-foreground/65 hover:text-foreground/85"
                 }`}
               >
-                <Icon size={16} weight={isActive ? "bold" : "regular"} />
+                <Icon size={16} weight="regular" aria-hidden="true" />
                 {t.label}
               </button>
             );

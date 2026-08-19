@@ -5,7 +5,7 @@ import { lex } from "../lib/lexicon";
 import { toast } from "sonner";
 import { Translate, FloppyDisk, Sparkle } from "@phosphor-icons/react";
 
-const inp = "w-full border border-border rounded-lg px-3 py-2 text-sm font-mono bg-card focus:outline-none focus:ring-2 focus:ring-ring/40";
+const inp = "w-full border border-nm-edge/40 rounded-lg px-3 py-2 text-sm font-mono bg-card focus:outline-none focus:ring-2 focus:ring-ring/40";
 
 // WE-02 (2026-08-16): WF_KEYS + workflow pipelines editor removed. The
 // three labels were a dead output; pipeline labels are edited via the
@@ -61,9 +61,9 @@ export function BusinessVocabulary() {
   };
 
   return (
-    <div className="card-brutal p-5" data-testid="settings-vocabulary-card">
+    <div className="nm-tile p-5" data-testid="settings-vocabulary-card">
       <div className="flex items-center gap-2 mb-1">
-        <Translate size={20} weight="bold" className="text-brand-600" />
+        <Translate size={20} weight="bold" className="text-muted-foreground" />
         <h2 className="text-base font-medium">Business Vocabulary</h2>
       </div>
       <p className="text-xs text-muted-foreground mb-4">
@@ -83,7 +83,7 @@ export function BusinessVocabulary() {
              editor (see OperatingModelEditor.js). */}
 
         <div>
-          <p className="label-mono text-brand-600 mb-2">Task type / department labels</p>
+          <p className="label-mono text-muted-foreground mb-2">Task type / department labels</p>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             {TT_KEYS.map((k) => (
               <Row key={k} label={k} testid={`vocab-tt-${k}`} value={form.task_types[k]} onChange={(v) => setTt(k, v)} />
@@ -94,11 +94,11 @@ export function BusinessVocabulary() {
 
       <div className="mt-6 flex flex-wrap gap-3">
         <button onClick={save} disabled={saving} data-testid="vocab-save"
-          className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2 text-sm font-medium rounded-lg transition-all disabled:opacity-60">
+          className="flex items-center gap-2 bg-kr-ink text-white px-5 py-2 text-sm font-medium rounded-lg transition-all disabled:opacity-60">
           <FloppyDisk size={16} weight="bold" /> {saving ? "Saving…" : "Save Vocabulary"}
         </button>
         <button onClick={regenerate} disabled={regen} data-testid="vocab-regenerate"
-          className="flex items-center gap-2 border border-border px-5 py-2 text-sm font-medium rounded-lg hover:bg-accent transition-all disabled:opacity-60">
+          className="flex items-center gap-2 border border-nm-edge/40 px-5 py-2 text-sm font-medium rounded-lg hover:bg-accent transition-all disabled:opacity-60">
           <Sparkle size={16} weight="bold" /> {regen ? "Regenerating…" : "Regenerate with AI"}
         </button>
       </div>

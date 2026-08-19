@@ -27,8 +27,6 @@ import { lex } from "../lib/lexicon";
 import { PageHeader, Chip, EmptyState, SkeletonGrid } from "../components/common";
 import { typeLabel } from "../lib/format";
 import api from "../lib/api";
-import { useIsMobile } from "../hooks/useIsMobile";
-import CRMMobile from "./mobile/CRMMobile";
 import { toast } from "sonner";
 import {
   Plus, MagnifyingGlass, PencilSimple, Trash, Phone, EnvelopeSimple,
@@ -57,16 +55,16 @@ const STATUSES = ["lead", "active", "inactive"];
 // caution for on-hold, muted-strikethrough-adjacent for ended.
 const CUSTOMER_STAGES = [
   { key: "lead", label: "Lead", cls: "bg-nm-sunken text-muted-foreground" },
-  { key: "qualified", label: "Qualified", cls: "bg-brand-50 text-brand-700" },
-  { key: "active", label: "Active", cls: "bg-success-50 text-success-800" },
-  { key: "at_risk", label: "At Risk", cls: "bg-danger-50 text-danger-700" },
+  { key: "qualified", label: "Qualified", cls: "border-[0.5px] border-kr-ink text-foreground" },
+  { key: "active", label: "Active", cls: "bg-kr-ink text-white" },
+  { key: "at_risk", label: "At Risk", cls: "border-[0.5px] border-kr-accent text-kr-accent" },
   { key: "churned", label: "Churned", cls: "bg-nm-sunken text-muted-foreground" },
 ];
 const SUPPLIER_STAGES = [
   { key: "prospect", label: "Prospect", cls: "bg-nm-sunken text-muted-foreground" },
-  { key: "active", label: "Active", cls: "bg-success-50 text-success-800" },
-  { key: "preferred", label: "Preferred", cls: "bg-brand-50 text-brand-700" },
-  { key: "on_hold", label: "On Hold", cls: "bg-caution-50 text-caution-800" },
+  { key: "active", label: "Active", cls: "bg-kr-ink text-white" },
+  { key: "preferred", label: "Preferred", cls: "border-[0.5px] border-kr-ink text-foreground" },
+  { key: "on_hold", label: "On Hold", cls: "border-[0.5px] border-kr-ink/55 text-foreground/70" },
   { key: "retired", label: "Retired", cls: "bg-nm-sunken text-muted-foreground" },
 ];
 function stagesForType(t) {
@@ -162,7 +160,7 @@ function ComplaintDialog({ contact, onSaved }) {
           </select>
         </div>
         <DialogFooter>
-          <button data-testid="crm-complaint-save" onClick={save} className="bg-primary text-primary-foreground px-5 py-2 text-sm font-medium nm-btn">Log complaint</button>
+          <button data-testid="crm-complaint-save" onClick={save} className="kr-lift rounded-pill bg-kr-ink px-5 py-2.5 text-sm font-medium text-white">Log complaint</button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -257,7 +255,7 @@ function CrmContactDialog({ trigger, initial, onSaved, users, defaultType }) {
                       onClick={() => applyType(tab.key)}
                       data-testid={`crm-contact-type-${tab.key}`}
                       className={`flex-1 py-2 text-sm font-medium transition-colors ${
-                        active ? "bg-primary text-primary-foreground" : "bg-nm hover:bg-accent"
+                        active ? "bg-kr-ink text-white" : "nm-btn"
                       } ${i < TYPE_TABS.length - 1 ? "border-r border-nm-edge/40" : ""}`}
                     >
                       {tab.label}
@@ -356,7 +354,7 @@ function CrmContactDialog({ trigger, initial, onSaved, users, defaultType }) {
           <button
             onClick={save}
             data-testid="crm-contact-save"
-            className="bg-primary text-primary-foreground px-5 py-2 text-sm font-medium nm-btn transition-all"
+            className="kr-lift rounded-pill bg-kr-ink px-5 py-2.5 text-sm font-medium text-white transition-all"
           >
             {initial ? "Save changes" : "Add contact"}
           </button>
@@ -401,7 +399,7 @@ function AddContactMenu({ canManage, canImport, csvBusy, onImport, customerLabel
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="relative z-40 flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold nm-tile transition-all"
+        className="kr-lift relative z-40 flex items-center gap-2 rounded-pill bg-kr-ink px-4 py-2.5 text-sm font-semibold text-white transition-all"
       >
         <Plus size={16} weight="bold" /> Add contact
         <span className={`text-white/70 transition-transform ${open ? "rotate-180" : ""}`}>▾</span>
@@ -418,7 +416,7 @@ function AddContactMenu({ canManage, canImport, csvBusy, onImport, customerLabel
           />
           <div
             role="menu"
-            className="absolute left-0 top-full mt-1 z-30 min-w-[300px] nm-tile shadow-lg"
+            className="kr-bento absolute left-0 top-full z-30 mt-2 min-w-[300px] p-1"
           >
           {canManage && (
             <button
@@ -482,7 +480,6 @@ function AddContactMenu({ canManage, canImport, csvBusy, onImport, customerLabel
 // -----------------------------------------------------------------------------
 export default function CRM() {
   // MPWA-10: rebuilt below lg (§8); desktop tree untouched.
-  const isMobile = useIsMobile();
   const { user, tenant } = useAuth();
   const { t } = useTranslation();
   const L = lex(tenant);
@@ -642,14 +639,14 @@ export default function CRM() {
     { key: "suppliers", label: L.vendor_plural, icon: Truck, count: scopeCounts.suppliers },
   ];
 
-  if (isMobile) return <CRMMobile />;
 
   return (
     <div>
-      <PageHeader
-        eyebrow={t("crm.eyebrow", { customers: L.customer_plural.toLowerCase(), suppliers: L.vendor_plural.toLowerCase() })}
-        title={t("crm.title")}
-      >
+      <header className="mb-7 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{t("crm.eyebrow", { customers: L.customer_plural.toLowerCase(), suppliers: L.vendor_plural.toLowerCase() })}</p>
+          <h1 className="mt-1.5 font-display text-3xl sm:text-4xl">{t("crm.title")}</h1>
+        </div>
         {/* U7-07 (2026-08-17): three equal-weight header CTAs (Add
             Buyer / Add Supplier / Import CSV) collapsed to ONE primary
             "+ Add contact" with a small popover menu. Founder ask:
@@ -694,7 +691,7 @@ export default function CRM() {
             />
           </div>
         )}
-      </PageHeader>
+      </header>
 
       {/* U7-07 (2026-08-17): HRM-style segmented tabs -- Buyers | Suppliers.
           Two big equal-width tabs with a shared underline that slides
@@ -716,12 +713,12 @@ export default function CRM() {
                 key={s.key}
                 onClick={() => setScope(s.key)}
                 data-testid={`crm-scope-${s.key}`}
-                className={`flex items-center gap-2 px-5 py-2.5 text-sm transition-colors relative -mb-px border-b-2 ${active ? "border-brand-600 text-brand-700 font-medium" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+                className={`flex h-9 items-center gap-2 rounded-pill border-[0.5px] px-4 text-sm ${active ? "border-kr-ink font-medium text-foreground" : "border-kr-ink/55 text-foreground/65 hover:text-foreground/85"}`}
               >
                 {s.icon && <s.icon size={16} weight={active ? "fill" : "regular"} />}
                 <span>{s.label}</span>
                 <span
-                  className={`min-w-[18px] px-1 py-0.5 rounded-full text-[11px] tabular-nums text-center ${active ? "bg-brand-600/15 text-brand-700" : "bg-nm-sunken text-muted-foreground"}`}
+                  className="min-w-[18px] rounded-pill px-1 py-0.5 text-center font-mono text-[11px] tabular-nums opacity-65"
                   data-testid={`crm-scope-count-${s.key}`}
                 >
                   {s.count}
@@ -742,19 +739,19 @@ export default function CRM() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder={t("crm.search_ph")}
-            className="w-full nm-tile pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-brand-400 transition-colors"
+            className="nm-field w-full py-2 pl-9 pr-3 text-sm"
           />
         </div>
         <select
           data-testid="crm-status-filter"
           value={status}
           onChange={(e) => setStatus(e.target.value)}
-          className="nm-tile px-3 py-2 text-sm capitalize focus:outline-none focus:ring-2 focus:ring-ring/30 transition-colors"
+          className="nm-field px-3 py-2 text-sm capitalize"
         >
           <option value="">{t("crm.all_statuses")}</option>
           {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
-        <div className="flex items-center nm-tile pl-3 focus-within:ring-2 focus-within:ring-ring/30 transition-colors">
+        <div className="nm-field flex items-center pl-3">
           <ArrowsDownUp size={14} className="text-muted-foreground" />
           <select
             data-testid="crm-sort"
@@ -812,8 +809,8 @@ export default function CRM() {
             : L.vendor_singular;
           const stage = stageMeta(c.type, c.lifecycle_stage);
           const statusDot =
-            c.status === "active" ? "bg-success-600"
-            : c.status === "lead" ? "bg-caution-500"
+            c.status === "active" ? "bg-foreground/70"
+            : c.status === "lead" ? "bg-foreground/35"
             : "bg-neutral-400";
           const ownerName = c.assigned_id && users
             ? users.find((u) => u.id === c.assigned_id)?.name
@@ -827,13 +824,13 @@ export default function CRM() {
             keySignal = {
               icon: WarningIcon,
               text: `${complaintCount} open complaint${complaintCount === 1 ? "" : "s"}`,
-              tone: "text-danger-600",
+              tone: "text-kr-accent",
             };
           } else if (receivablesTxt) {
             keySignal = {
               icon: CurrencyInr,
               text: `${receivablesTxt} owed${isOverdue ? ` · oldest ${outstanding.oldest_days}d` : ""}`,
-              tone: isOverdue ? "text-danger-600" : "text-brand-600",
+              tone: isOverdue ? "text-kr-accent" : "text-muted-foreground",
             };
           } else if (payablesTxt) {
             keySignal = {
@@ -856,7 +853,11 @@ export default function CRM() {
                  its title pushed 16px below its neighbours'. Column flow
                  pins content to the top; the footer then takes mt-auto so
                  every card's meta row also lines up across the row. */
-              className="text-left flex flex-col nm-raised p-4 transition-shadow duration-150 hover:shadow-nm-lg active:shadow-nm-press disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              /* KR-12 — .kr-bento, the same tile My Work's grid and the
+                 workflow board are made of: glass wash + backdrop blur,
+                 neumorphic raised light, and a real edge so the card reads
+                 as separated from the steel-and-gold sky behind it. */
+              className="kr-bento flex flex-col p-4 text-left disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/40"
             >
               {/* Header: name + type + subtle status dot. Complaint red
                   dot sits inline next to name -- softer than the floating
@@ -877,7 +878,7 @@ export default function CRM() {
                         /* RD-3: 16px, not 18px. An 18px badge sits taller
                            than the title's line box and pushed this card's
                            heading ~10px below its neighbours' in the grid. */
-                        className="inline-flex items-center justify-center min-w-4 h-4 px-1 bg-danger-600 text-white text-[10px] font-semibold rounded-full shrink-0 leading-none"
+                        className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-kr-accent px-1 text-[10px] font-semibold leading-none text-white"
                       >
                         {complaintCount}
                       </span>
@@ -887,7 +888,7 @@ export default function CRM() {
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <span
-                    className={`px-1.5 py-0.5 rounded text-[10px] font-medium tracking-wide ${isCustomer ? "bg-brand-50 text-brand-700" : "bg-nm-sunken text-muted-foreground"}`}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-medium tracking-wide ${isCustomer ? "border-[0.5px] border-kr-ink/55 text-foreground/70" : "bg-nm-sunken text-muted-foreground"}`}
                     data-testid={`crm-type-chip-${c.id}`}
                   >
                     {typeChipLabel}

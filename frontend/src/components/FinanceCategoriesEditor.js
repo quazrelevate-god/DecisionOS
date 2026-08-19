@@ -16,14 +16,14 @@ const fromTenant = (tenant) => {
 function CategoryGroup({ title, items, onSet, onAdd, onDel, testid }) {
   return (
     <div data-testid={testid}>
-      <p className="label-mono text-brand-600 mb-2">{title}</p>
+      <p className="label-mono text-muted-foreground mb-2">{title}</p>
       <div className="flex flex-wrap gap-2">
         {items.map((c, i) => (
-          <div key={c._uid} className="flex items-center gap-1 border border-border rounded-md pl-2 pr-1 py-1" data-testid={`${testid}-item-${i}`}>
+          <div key={c._uid} className="flex items-center gap-1 border border-nm-edge/40 rounded-md pl-2 pr-1 py-1" data-testid={`${testid}-item-${i}`}>
             <input className="bg-transparent text-sm w-32 focus:outline-none" value={c.label}
               data-testid={`${testid}-input-${i}`}
               onChange={(e) => onSet(i, e.target.value)} />
-            <button onClick={() => onDel(i)} title="Remove" className="text-muted-foreground hover:text-danger-600">
+            <button onClick={() => onDel(i)} title="Remove" className="text-muted-foreground hover:text-kr-accent">
               <Trash size={13} weight="bold" />
             </button>
           </div>
@@ -79,9 +79,9 @@ export function FinanceCategoriesEditor() {
   };
 
   return (
-    <div className="card-brutal p-5" data-testid="settings-finance-categories-card">
+    <div className="nm-tile p-5" data-testid="settings-finance-categories-card">
       <div className="flex items-center gap-2 mb-1">
-        <Tag size={20} weight="bold" className="text-brand-600" />
+        <Tag size={20} weight="bold" className="text-muted-foreground" />
         <h2 className="text-base font-medium">Finance Categories</h2>
       </div>
       <p className="text-xs text-muted-foreground mb-4">
@@ -97,11 +97,11 @@ export function FinanceCategoriesEditor() {
 
       <div className="mt-6 flex flex-wrap gap-3">
         <button onClick={save} disabled={saving} data-testid="fc-save"
-          className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2 text-sm font-medium rounded-lg transition-all disabled:opacity-60">
+          className="flex items-center gap-2 bg-kr-ink text-white px-5 py-2 text-sm font-medium rounded-lg transition-all disabled:opacity-60">
           <FloppyDisk size={16} weight="bold" /> {saving ? "Saving…" : "Save Categories"}
         </button>
         <button onClick={regenerate} disabled={regen} data-testid="fc-regenerate"
-          className="flex items-center gap-2 border border-border px-5 py-2 text-sm font-medium rounded-lg hover:bg-accent transition-all disabled:opacity-60">
+          className="flex items-center gap-2 border border-nm-edge/40 px-5 py-2 text-sm font-medium rounded-lg hover:bg-accent transition-all disabled:opacity-60">
           <Sparkle size={16} weight="bold" /> {regen ? "Regenerating…" : "Regenerate with AI"}
         </button>
       </div>

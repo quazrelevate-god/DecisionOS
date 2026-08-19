@@ -2,8 +2,6 @@ import { useMemo, useState } from "react";
 import { formatPhone } from "../lib/format";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api, { formatApiError } from "../lib/api";
-import { useIsMobile } from "../hooks/useIsMobile";
-import TeamMobile from "./mobile/TeamMobile";
 import { useAuth } from "../context/AuthContext";
 import { PERMISSIONS, defaultPermsForRole, hasPerm, userPerms } from "../lib/perms";
 import { toast } from "sonner";
@@ -27,10 +25,10 @@ function InviteLinkModal({ info, onClose }) {
           <p className="text-sm text-muted-foreground">Share this one-tap link. {info?.name} opens it and gets a login code texted to <strong>{info?.phone_masked}</strong> — no password needed.</p>
           <div className="flex gap-2">
             <input readOnly value={link} data-testid="invite-link-input" className={inp} onFocus={(e) => e.target.select()} />
-            <button onClick={copy} data-testid="copy-invite-link" className="flex items-center gap-1.5 nm-tile px-3 text-xs font-medium bg-primary text-primary-foreground transition-all"><Copy size={14} weight="bold" /> Copy</button>
+            <button onClick={copy} data-testid="copy-invite-link" className="kr-lift flex items-center gap-1.5 rounded-pill bg-kr-ink px-3.5 py-2 text-xs font-medium text-white transition-all"><Copy size={14} weight="bold" /> Copy</button>
           </div>
           <a href={`https://wa.me/?text=${encodeURIComponent(msg)}`} target="_blank" rel="noreferrer" data-testid="invite-whatsapp-share"
-            className="flex items-center justify-center gap-2 nm-tile px-4 py-2.5 text-sm font-medium hover:bg-success-600 hover:text-white transition-colors">
+            className="kr-pop flex items-center justify-center gap-2 rounded-pill px-4 py-2.5 text-sm font-medium">
             <WhatsappLogo size={16} weight="bold" /> Share on WhatsApp
           </a>
           <p className="text-[11px] text-muted-foreground italic">Auto-SMS delivery starts once your SMS provider is connected — until then, share this link directly. Link expires in 7 days.</p>
@@ -123,9 +121,9 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite, member
             <input data-testid="member-email-input" className={inp} type="email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
             <div className="flex nm-tile" data-testid="login-method-toggle">
               <button type="button" data-testid="login-method-password" onClick={() => setForm({ ...form, passwordless: false })}
-                className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${!form.passwordless ? "bg-primary text-primary-foreground" : "bg-nm hover:bg-accent"}`}>Password login</button>
+                className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${!form.passwordless ? "kr-pressed font-semibold" : "kr-pop text-foreground/70"}`}>Password login</button>
               <button type="button" data-testid="login-method-otp" onClick={() => setForm({ ...form, passwordless: true })}
-                className={`flex-1 px-3 py-2 text-xs font-medium border-l border-nm-edge/40 transition-colors ${form.passwordless ? "bg-primary text-primary-foreground" : "bg-nm hover:bg-accent"}`}>Mobile OTP</button>
+                className={`flex-1 px-3 py-2 text-xs font-medium border-l border-nm-edge/40 transition-colors ${form.passwordless ? "kr-pressed font-semibold" : "kr-pop text-foreground/70"}`}>Mobile OTP</button>
             </div>
             {!form.passwordless && (
               <input data-testid="member-password-input" className={inp} type="password" placeholder="Temp password (min 6)" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
@@ -150,12 +148,12 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite, member
           </div>
           <div>
             <div className="flex items-center gap-1.5 mb-2 mt-1">
-              <ShieldCheck size={16} weight="bold" className="text-brand-600" />
+              <ShieldCheck size={16} weight="bold" aria-hidden="true" className="text-muted-foreground" />
               <label className="label-mono text-muted-foreground">Access — pick what this member can open & use</label>
             </div>
             {form.role === "owner" ? (
-              <div className="border border-brand-600 bg-brand-600/5 px-3 py-3 text-sm" data-testid="owner-access-note">
-                <p className="font-semibold flex items-center gap-1.5"><ShieldCheck size={15} weight="bold" className="text-brand-600" /> Full company access</p>
+              <div className="nm-inset px-3.5 py-3 text-sm" data-testid="owner-access-note">
+                <p className="font-semibold flex items-center gap-1.5"><ShieldCheck size={15} weight="bold" aria-hidden="true" className="text-muted-foreground" /> Full company access</p>
                 <p className="text-xs text-muted-foreground mt-1">Owners can open and manage everything — team, finances, workflows and all data. Individual permissions don't apply.</p>
               </div>
             ) : (
@@ -165,9 +163,9 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite, member
                 const on = form.permissions.includes(p.key);
                 return (
                   <button key={p.key} type="button" data-testid={`perm-${p.key}`} aria-pressed={on} onClick={() => togglePerm(p.key)}
-                    className={`flex items-center justify-between gap-2 nm-tile px-3 py-2 text-xs font-semibold text-left transition-colors ${on ? "bg-primary text-primary-foreground" : "bg-nm hover:bg-accent"}`}>
+                    className={`flex items-center justify-between gap-2 nm-tile px-3 py-2 text-xs font-semibold text-left transition-colors ${on ? "bg-kr-ink text-white" : "nm-btn"}`}>
                     <span>{p.label}</span>
-                    <span className={`w-4 h-4 shrink-0 flex items-center justify-center border border-current ${on ? "bg-brand-600 text-white border-nm-edge/40" : ""}`}>{on && <Check size={10} weight="bold" />}</span>
+                    <span className={`w-4 h-4 shrink-0 flex items-center justify-center border border-current ${on ? "bg-white text-kr-ink border-transparent" : ""}`}>{on && <Check size={10} weight="bold" />}</span>
                   </button>
                 );
               })}
@@ -180,7 +178,7 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite, member
                   const visible = !m.perm || form.permissions.includes(m.perm);
                   return (
                     <span key={m.label} data-testid={`preview-${m.label}`}
-                      className={`px-2 py-1 text-xs font-semibold nm-tile ${visible ? "bg-success-600 text-white" : "bg-nm text-muted-foreground line-through opacity-60"}`}>
+                      className={`px-2 py-1 text-xs font-semibold nm-tile ${visible ? "bg-kr-ink text-white" : "bg-nm-sunken text-muted-foreground line-through opacity-60"}`}>
                       {m.label}
                     </span>
                   );
@@ -193,7 +191,7 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite, member
           </div>
         </div>
         <DialogFooter>
-          <button data-testid="member-save-submit" onClick={save} className="bg-brand-600 text-white px-5 py-2 text-sm font-medium nm-tile transition-all">{editing ? "Save access" : "Add"}</button>
+          <button data-testid="member-save-submit" onClick={save} className="kr-lift rounded-pill bg-kr-ink px-5 py-2.5 text-sm font-medium text-white transition-all">{editing ? "Save access" : "Add"}</button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -207,15 +205,13 @@ import { PageHeader } from "../components/common";
 
 export default function TeamPage() {
   // MPWA-10: rebuilt below lg (§8); desktop tree untouched.
-  const isMobile = useIsMobile();
-  if (isMobile) return <TeamMobile />;
 
   return (
     <div>
-      <PageHeader
-        eyebrow="Employees · access · reporting lines"
-        title="Team"
-      />
+      <header className="mb-7">
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Employees · access · reporting lines</p>
+        <h1 className="mt-1.5 font-display text-3xl sm:text-4xl">Team</h1>
+      </header>
       <TeamPanel />
     </div>
   );
@@ -304,8 +300,8 @@ export function TeamPanel({ readOnly = false } = {}) {
           can't edit; we tell them why + who to ask, so it doesn't look
           like a broken page. Owner + team_manage users skip this. */}
       {!canManageTeam && !readOnly && (
-        <div className="nm-tile bg-caution-50 px-5 py-4 mb-8 flex items-start gap-3 rounded-xl" data-testid="team-view-only-banner">
-          <Eye size={16} weight="bold" className="text-brand-600 shrink-0 mt-0.5" />
+        <div className="mb-8 flex items-start gap-3 rounded-control border-l-[3px] border-kr-accent bg-kr-accent/8 px-5 py-4" data-testid="team-view-only-banner">
+          <Eye size={16} weight="bold" aria-hidden="true" className="mt-0.5 shrink-0 text-muted-foreground" />
           <div className="flex-1 text-sm">
             <p className="font-semibold">Read-only view</p>
             <p className="text-muted-foreground mt-0.5 text-xs">
@@ -334,19 +330,19 @@ export function TeamPanel({ readOnly = false } = {}) {
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search"
                 data-testid="team-search"
-                className="nm-tile pl-9 pr-3 py-2 text-sm w-52 focus:outline-none focus:border-brand-400"
+                className="nm-field w-52 py-2 pl-9 pr-3 text-sm"
               />
             </div>
           )}
           {canManageTeam && (
             <MemberDialog roleOptions={roleOptions} members={members} isOwner={isOwner} onSaved={refresh} onInvite={setInvite}
-              trigger={<button data-testid="add-user-button" className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold nm-tile transition-all"><UserPlus size={16} weight="bold" /> Add member</button>} />
+              trigger={<button data-testid="add-user-button" className="kr-lift flex items-center gap-2 rounded-pill bg-kr-ink px-4 py-2.5 text-sm font-semibold text-white transition-all"><UserPlus size={16} weight="bold" /> Add member</button>} />
           )}
         </div>
       </div>
 
       {grouped.length === 0 && (
-        <div className="nm-tile p-10 text-center" data-testid="team-empty">
+        <div className="kr-glass-well p-10 text-center" data-testid="team-empty">
           <p className="text-sm text-muted-foreground">
             {query ? `Nobody matches "${query}".` : "No team members yet."}
           </p>
@@ -408,10 +404,10 @@ export function TeamPanel({ readOnly = false } = {}) {
 function MemberCard({ u, isMe, onOpen }) {
   const status = u.invite_status || "active";
   const statusMeta = {
-    active: { dot: "bg-success-600", label: "Active", tone: "text-muted-foreground" },
-    pending: { dot: "bg-caution-500", label: "Pending invite", tone: "text-amber-700" },
+    active: { dot: "bg-foreground/70", label: "Active", tone: "text-muted-foreground" },
+    pending: { dot: "bg-kr-accent", label: "Pending invite", tone: "text-muted-foreground" },
     suspended: { dot: "bg-neutral-400", label: "Inactive", tone: "text-muted-foreground line-through" },
-  }[status] || { dot: "bg-success-600", label: "Active", tone: "text-muted-foreground" };
+  }[status] || { dot: "bg-foreground/70", label: "Active", tone: "text-muted-foreground" };
   const accessLabel = u.role === "owner" ? "Full access" : `${userPerms(u).length} permissions`;
   const initial = u.name?.[0]?.toUpperCase() || "?";
   return (
@@ -419,7 +415,10 @@ function MemberCard({ u, isMe, onOpen }) {
       type="button"
       onClick={onOpen}
       data-testid={`team-member-${u.id}`}
-      className={`text-left nm-tile p-4 transition-shadow duration-150 hover:shadow-nm active:shadow-nm-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${isMe ? "ring-2 ring-primary/40" : ""}`}
+      /* KR-12 — the member card takes .kr-bento, matching CRM's contact
+         cards and My Work's tiles. A person and a contact are the same class
+         of object; they should be made of the same thing. */
+      className={`kr-bento p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-ink/40 ${isMe ? "ring-2 ring-kr-ink/40" : ""}`}
       aria-label={`Open profile for ${u.name}`}
     >
       <div className="flex items-start gap-3">
@@ -429,7 +428,7 @@ function MemberCard({ u, isMe, onOpen }) {
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-sm truncate flex items-center gap-2">
             <span className="truncate">{u.name}</span>
-            {isMe && <span className="label-mono text-brand-600 shrink-0" data-testid={`is-you-${u.id}`}>YOU</span>}
+            {isMe && <span className="label-mono shrink-0 opacity-60" data-testid={`is-you-${u.id}`}>YOU</span>}
           </p>
           <p className="text-xs text-muted-foreground truncate">{u.email}</p>
         </div>
@@ -466,10 +465,10 @@ function MemberProfileDialog({
   const isMe = u.id === currentUserId;
   const status = u.invite_status || "active";
   const statusMeta = {
-    active: { dot: "bg-success-600", label: "Active" },
-    pending: { dot: "bg-caution-500", label: "Pending invite" },
+    active: { dot: "bg-foreground/70", label: "Active" },
+    pending: { dot: "bg-kr-accent", label: "Pending invite" },
     suspended: { dot: "bg-neutral-400", label: "Inactive" },
-  }[status] || { dot: "bg-success-600", label: "Active" };
+  }[status] || { dot: "bg-foreground/70", label: "Active" };
   const perms = u.role === "owner" ? PERMISSIONS.map((p) => p.key) : userPerms(u);
   const granted = PERMISSIONS.filter((pp) => perms.includes(pp.key));
   const denied = PERMISSIONS.filter((pp) => !perms.includes(pp.key));
@@ -592,7 +591,7 @@ function MemberProfileDialog({
               {granted.length > 0 ? (
                 <div className="mt-3 flex flex-wrap gap-1.5" data-testid={`granted-perms-${u.id}`}>
                   {granted.map((pp) => (
-                    <span key={pp.key} className="rounded-pill nm-tile px-2.5 py-1 text-xs">
+                    <span key={pp.key} className="kr-pop rounded-pill px-2.5 py-1 text-xs">
                       {pp.label}
                     </span>
                   ))}

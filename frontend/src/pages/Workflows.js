@@ -316,7 +316,12 @@ export default function Workflows({ embedded = false }) {
                  what the kanban cards below them are made of. */
               <button key={pip.key} onClick={() => setTab(pip.key)} data-testid={`workflow-tab-${pip.key}`}
                 title={pip.sub || undefined} aria-pressed={active}
-                className={`flex h-10 items-center gap-2 rounded-pill px-4 text-sm transition-all ${
+                /* No transition on the swap — same wedged-transition bug My
+                   Work's toolbar hit: .kr-pop's outset shadow pair and
+                   .kr-pressed's inset pair are not interpolable, and the
+                   stalled animation leaves the element painting its previous
+                   colour. Selection snaps. */
+                className={`flex h-10 items-center gap-2 rounded-pill px-4 text-sm ${
                   active ? "kr-pressed font-semibold text-foreground" : "kr-pop text-foreground/75"
                 }`}>
                 {pip.label}

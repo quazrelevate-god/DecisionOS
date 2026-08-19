@@ -55,10 +55,23 @@ import {
 // So they are joined by GEOMETRY: the two buttons touch, outer corners round
 // and inner corners square, with a hairline on the seam. A segmented control
 // drawn with nothing but shape. Selected is pressed, unselected is raised.
-const SEG = "flex h-10 items-center justify-center gap-1.5 px-4 text-xs font-medium leading-tight transition-all lg:text-sm";
+// NO TRANSITION ON THESE, and it is a bug fix, not a taste call.
+// With transition-all (and still with transition-colors) the live buttons got
+// STUCK mid-transition: the class swapped to text-foreground, the stylesheet
+// had the rule, and the element kept painting the previous colour — for
+// seconds. Proved by cloning the live node into the same parent: identical
+// classes, correct colour on the clone, stale colour on the original. Only a
+// running transition can produce that gap.
+// These controls swap between .kr-pop (outset shadow pair) and .kr-pressed
+// (inset pair), which are not interpolable, and the wedged animation takes
+// the whole transition group down with it.
+// Selection should snap anyway — a state indicator that fades in over 150ms
+// is a worse indicator. .kr-pop keeps its own hover transition; this is only
+// about the selected/unselected swap.
+const SEG = "flex h-10 items-center justify-center gap-1.5 px-4 text-xs font-medium leading-tight lg:text-sm";
 const SEG_ON = "kr-pressed font-semibold text-foreground";
 const SEG_OFF = "kr-pop text-foreground/70";
-const SECTION_BTN = "flex h-10 items-center justify-center gap-1.5 rounded-pill px-4 text-xs font-medium leading-tight transition-all lg:text-sm";
+const SECTION_BTN = "flex h-10 items-center justify-center gap-1.5 rounded-pill px-4 text-xs font-medium leading-tight lg:text-sm";
 
 const STATUS_OPTIONS = [
   { key: "todo", label: "Not Started" },
@@ -1626,45 +1639,47 @@ export default function MyWork() {
           <div className="order-2 flex flex-wrap items-center gap-2.5 lg:order-1" data-testid="mywork-actions">
             <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members}
               triggerClassName={`${SECTION_BTN} kr-lift bg-kr-ink text-white`} />
+            {/* THE CLUSTER. My Tasks and All Tasks are joined by GEOMETRY —
+                touching, outer corners round, inner corners square, a
+                hairline on the seam. No track, no fill, no tint, per the
+                founder. AI Priority sits with them as a circle: a third lens
+                on the same list, close enough to read as one group, round
+                enough not to read as a third tab. */}
             {isOwner && (
-              <>
-                {/* The pair. Touching, outer corners round, inner corners
-                    square, a hairline on the seam — grouped by GEOMETRY, not
-                    by a container. No track, no fill, no tint, per the
-                    founder: "don't use gray or any colour, just make it look
-                    like it's grouped." */}
-                <div className="flex items-center" role="group" aria-label="Task scope" data-testid="mywork-lens-group">
-                  <button onClick={() => { setScope("mine"); setView("mywork"); }} data-testid="work-scope-mine"
-                    aria-pressed={view === "mywork" && scope === "mine" && !aiPriority}
-                    className={`${SEG} rounded-l-pill ${view === "mywork" && scope === "mine" && !aiPriority ? SEG_ON : SEG_OFF}`}>
-                    {t("mywork.my_tasks")}
-                  </button>
-                  <span aria-hidden="true" className="h-6 w-px shrink-0 bg-kr-ink/15" />
-                  <button onClick={() => { setScope("all"); setView("mywork"); }} data-testid="work-scope-all"
-                    aria-pressed={view === "mywork" && scope === "all" && !aiPriority}
-                    className={`${SEG} rounded-r-pill ${view === "mywork" && scope === "all" && !aiPriority ? SEG_ON : SEG_OFF}`}>
-                    {t("mywork.all_tasks")}
+                <div className="flex items-center gap-2" role="group" aria-label="Task view" data-testid="mywork-lens-group">
+                  <div className="flex items-center">
+                    <button onClick={() => { setScope("mine"); setView("mywork"); }} data-testid="work-scope-mine"
+                      aria-pressed={view === "mywork" && scope === "mine" && !aiPriority}
+                      className={`${SEG} rounded-l-pill ${view === "mywork" && scope === "mine" && !aiPriority ? SEG_ON : SEG_OFF}`}>
+                      {t("mywork.my_tasks")}
+                    </button>
+                    <span aria-hidden="true" className="h-6 w-px shrink-0 bg-kr-ink/15" />
+                    <button onClick={() => { setScope("all"); setView("mywork"); }} data-testid="work-scope-all"
+                      aria-pressed={view === "mywork" && scope === "all" && !aiPriority}
+                      className={`${SEG} rounded-r-pill ${view === "mywork" && scope === "all" && !aiPriority ? SEG_ON : SEG_OFF}`}>
+                      {t("mywork.all_tasks")}
+                    </button>
+                  </div>
+
+                  {/* KR-11.6 — AI Priority is a circle now, and it lives INSIDE
+                      this cluster. It is a third lens on the same list, so it
+                      belongs with the other two; the circle is what keeps it
+                      from reading as a third tab. Icon-only, so it carries a
+                      real label and a title for anything not looking at it.
+                      Ink, not accent — the founder's call, and it also stops
+                      the toolbar's only red from sitting next to the overdue
+                      pills it has nothing to do with. */}
+                  <button onClick={() => { setAiPriority((v) => !v); setView("mywork"); }} data-testid="ai-priority-toggle"
+                    aria-pressed={view === "mywork" && aiPriority}
+                    aria-label={aiPriority ? t("mywork.ai_priority_on") : t("mywork.ai_priority")}
+                    title={scoring ? t("mywork.scoring") : aiPriority ? t("mywork.ai_priority_on") : t("mywork.ai_priority")}
+                    className={`grid h-10 w-10 shrink-0 place-items-center rounded-full text-foreground ${
+                      view === "mywork" && aiPriority ? "kr-pressed" : "kr-pop"
+                    }`}>
+                    <Sparkle size={16} weight={view === "mywork" && aiPriority ? "fill" : "bold"} aria-hidden="true"
+                      className={scoring ? "animate-pulse" : ""} />
                   </button>
                 </div>
-
-                {/* U7-05: AI Priority is owner-only. Founder ask 2026-08-17:
-                    'ai priority also right only for owner got it'. The ranker
-                    is a whole-team judgment tool, not something an IC needs
-                    over their own list.
-                    KR-11.4 — now its OWN button, same shape and material as
-                    Leave, carrying the accent because it is a MODE the whole
-                    list switches into rather than a filter on it. */}
-                <button onClick={() => { setAiPriority((v) => !v); setView("mywork"); }} data-testid="ai-priority-toggle"
-                  aria-pressed={view === "mywork" && aiPriority}
-                  className={`${SECTION_BTN} ${
-                    view === "mywork" && aiPriority
-                      ? "kr-pressed font-semibold text-kr-accent"
-                      : "kr-pop text-kr-accent/85"
-                  }`}>
-                  <Sparkle size={15} weight="bold" aria-hidden="true" />
-                  {scoring ? t("mywork.scoring") : aiPriority ? t("mywork.ai_priority_on") : t("mywork.ai_priority")}
-                </button>
-              </>
             )}
           </div>
           <div className="order-1 flex flex-wrap items-center gap-2.5 lg:order-2" data-testid="work-view-toggle">
@@ -1684,15 +1699,17 @@ export default function MyWork() {
                 <ListIcon size={15} weight="regular" aria-hidden="true" /> {t("mywork.view_mywork")}
               </button>
             )}
-            {/* Workflows — INVERTED, on the founder's call: pressed IN at
-                rest, popping UP when you are in it. Every other control in
-                this row does the opposite, which is exactly why this one
-                reads as a different kind of destination. */}
+            {/* Workflows — the one control that NEVER changes depth. Held
+                pressed in BOTH states on the founder's call, so colour alone
+                carries selection: brown at rest, ink when you are in it.
+                Everything else in this row moves between raised and sunken,
+                which is what lets a permanently-sunken button read as a
+                place rather than a toggle. */}
             {canSeeWorkflows && (
               <button onClick={() => setView("workflows")} data-testid="work-view-workflows"
                 aria-pressed={view === "workflows"}
-                className={`${SECTION_BTN} ${
-                  view === "workflows" ? "kr-pop font-semibold text-foreground" : "kr-pressed text-foreground/75"
+                className={`${SECTION_BTN} kr-pressed ${
+                  view === "workflows" ? "font-semibold text-foreground" : "text-kr-brown"
                 }`}>
                 <FlowArrow size={16} weight="bold" aria-hidden="true" /> {t("mywork.view_workflows")}
               </button>

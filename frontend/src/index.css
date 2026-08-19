@@ -833,6 +833,11 @@
            re-verify at the KR-7 gate; this is the token that carries WCAG
            1.4.11 now that shadows are gone and containers are borderless. */
         --kr-outline:      225 4% 51%;
+        /* KR-11.6 — the founder's brown, for the Workflows switch. Warm and
+           earthy rather than another grey: it is the one control that never
+           changes depth, so colour is the only thing it has left to speak
+           with. */
+        --kr-brown:        24 44% 33%;
         /* Glass tints (used by .kr-glass in KR-3). */
         --kr-glass-blue:   222 18% 40%;
         --kr-glass-olive:  80 22% 32%;

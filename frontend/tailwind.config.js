@@ -121,6 +121,7 @@ module.exports = {
                 // arrow buttons; accent = orange, ALERT GRAMMAR ONLY (deltas,
                 // alert badges, chart markers) — never a button fill.
                 kr: {
+          brown: "hsl(var(--kr-brown))",
                     ink:    { DEFAULT: 'hsl(var(--kr-ink))', raised: 'hsl(var(--kr-ink-raised))' },
                     accent: { DEFAULT: 'hsl(var(--kr-accent))', soft: 'hsl(var(--kr-accent-soft))' },
                     outline: 'hsl(var(--kr-outline))',

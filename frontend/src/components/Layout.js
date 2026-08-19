@@ -151,6 +151,21 @@ export default function Layout({ children }) {
     else root.removeAttribute("data-dex");
   }, [dexRoute]);
 
+  // KR-11.1 — the sky's colour is per-route now. Stamped on <html> for the
+  // same reason data-dex is: the bloom's pseudo-elements hang off .app-sky,
+  // which is a sibling of the header, so a React-node class could not reach
+  // it. Only the FIRST path segment is used — /finance?tab=revenue and
+  // /operating-score?user=x are the same room, and a sky that changed on a
+  // query param would flicker on every filter click.
+  // /inbox is deliberately not in the CSS table: its amber is the default,
+  // per the founder ("don't touch the first Inbox page").
+  useEffect(() => {
+    const seg = location.pathname.split("/").filter(Boolean)[0] || "";
+    const root = document.documentElement;
+    if (seg) root.setAttribute("data-page", seg);
+    else root.removeAttribute("data-page");
+  }, [location.pathname]);
+
   const [profileOpen, setProfileOpen] = useState(false);
   // MPWA-03 mobile navigation state.
   const [allAppsOpen, setAllAppsOpen] = useState(false);

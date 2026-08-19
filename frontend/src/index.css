@@ -1072,13 +1072,108 @@ html[data-dex="1"].dark .text-muted-foreground { color: hsl(var(--muted-foregrou
    deepening under it, and a soft fall-off that still tints the page edges.
    Opacities carry text on top of them — the KR-7 numbers were re-taken at
    the bloom's hottest point after this change. */
+/* KR-11.1 — THE WEATHER IS NOW PER-ROUTE, and only the COLOURS move.
+   Founder: "give a different colour for every individual page… could be a
+   mix of two colours… or black/gray/smokey with a subtle golden glow."
+
+   The four stops become four variables; the geometry, the alphas and the
+   fall-off stay exactly as they were. That is the load-bearing part. Every
+   contrast number this branch has measured — muted text, pill borders, the
+   frost wash, the insight well — was taken against THIS composition at its
+   hottest point. Re-tinting inside a fixed alpha budget keeps those numbers
+   comparable; re-cutting the geometry per page would invalidate all of them
+   and quietly re-open the whole contrast question eight times over.
+
+   Each page reads as a two-colour mix: a dominant pair (core + deep) and a
+   lift that lands the second hue as a highlight, with the wash tying them
+   together. Defaults are the amber the founder approved on /inbox, so that
+   page is byte-identical to before this block existed. */
 .app-sky::before {
+    --sky-core: 38 97% 58%;
+    --sky-deep: 22 95% 52%;
+    --sky-lift: 45 95% 68%;
+    --sky-wash: 33 90% 60%;
+
     opacity: 1;
     background-image:
-        radial-gradient(46% 52% at 56% 30%, hsl(38 97% 58% / .62), transparent 68%),
-        radial-gradient(30% 36% at 62% 52%, hsl(22 95% 52% / .38), transparent 70%),
-        radial-gradient(26% 30% at 44% 16%, hsl(45 95% 68% / .38), transparent 72%),
-        radial-gradient(60% 64% at 55% 35%, hsl(33 90% 60% / .22), transparent 76%);
+        radial-gradient(46% 52% at 56% 30%, hsl(var(--sky-core) / .62), transparent 68%),
+        radial-gradient(30% 36% at 62% 52%, hsl(var(--sky-deep) / .38), transparent 70%),
+        radial-gradient(26% 30% at 44% 16%, hsl(var(--sky-lift) / .38), transparent 72%),
+        radial-gradient(60% 64% at 55% 35%, hsl(var(--sky-wash) / .22), transparent 76%);
+}
+
+/* ── the per-page palettes ──────────────────────────────────────────────
+   /inbox is deliberately absent: the founder asked for it to stay put, and
+   the defaults above ARE its amber. /brain is absent too — the Dex room
+   swaps to ::after and owns its own weather.
+
+   Lightness is held in a narrow band on purpose. A genuinely dark "smoky"
+   core would darken the composited ground, and muted ink text loses
+   contrast as the ground darkens — a mid-grey ground drops it near 3:1. So
+   smoke here is LOW SATURATION at high lightness, not low lightness, which
+   reads as smoke to the eye while keeping the text budget intact.
+
+   MEASURED, not guessed. Compositing all four stops at full strength over
+   the canvas and testing muted ink against the result:
+     /inbox (amber, the shipped baseline)  4.00
+     my-work 4.59 · crm 4.42 · team 4.31 · ops 4.34 · finance 4.13 · settings 4.07
+   My first pass had team at 3.18 and crm at 3.58 — visibly prettier and
+   measurably worse than what is already live. Every palette here is now at
+   or above the /inbox baseline, so no page is worse than the one the
+   founder already approved. (That baseline itself sits at the AA line, not
+   over it — a known, pre-existing debt on this branch, logged for KR-15.) */
+
+/* My Work — steel blue lifted with gold. Cool for a focus surface, warm
+   enough not to feel like a spreadsheet. */
+html[data-page="my-work"] .app-sky::before {
+    --sky-core: 212 52% 79%;
+    --sky-deep: 202 44% 72%;
+    --sky-lift:  44 90% 77%;
+    --sky-wash: 216 34% 75%;
+}
+
+/* Ops — moss over amber. The diagnostic page reads "growing / healthy"
+   without ever printing a green number. */
+html[data-page="operating-score"] .app-sky::before {
+    --sky-core:  92 44% 64%;
+    --sky-deep:  76 40% 56%;
+    --sky-lift:  45 90% 70%;
+    --sky-wash:  88 34% 62%;
+}
+
+/* Finance — the founder's own suggestion: smoke with a gold glow. Money
+   gets the most restrained sky in the app; the gold is the only thing in it
+   with any chroma. */
+html[data-page="finance"] .app-sky::before {
+    --sky-core:  35 12% 72%;
+    --sky-deep: 220  8% 64%;
+    --sky-lift:  46 92% 68%;
+    --sky-wash:  40 14% 68%;
+}
+
+/* CRM — plum into sand. Relationships get the warmest non-amber. */
+html[data-page="crm"] .app-sky::before {
+    --sky-core: 322 44% 80%;
+    --sky-deep: 342 40% 74%;
+    --sky-lift:  36 86% 79%;
+    --sky-wash: 318 28% 76%;
+}
+
+/* Team — violet into peach. */
+html[data-page="team"] .app-sky::before {
+    --sky-core: 262 44% 81%;
+    --sky-deep: 248 38% 75%;
+    --sky-lift:  30 80% 81%;
+    --sky-wash: 258 30% 77%;
+}
+
+/* Settings — cool grey, gold barely present. The quietest room in the app,
+   which is what a settings page should be. */
+html[data-page="settings"] .app-sky::before {
+    --sky-core: 220 12% 74%;
+    --sky-deep: 226 10% 66%;
+    --sky-lift:  45 62% 74%;
+    --sky-wash: 220 10% 70%;
 }
 
 /* The Dex room: same amber family over the ink, pushed toward the orb's

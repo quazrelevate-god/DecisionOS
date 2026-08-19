@@ -8,8 +8,6 @@ import { PageHeader, Chip, EmptyState, SkeletonCard } from "../components/common
 import { useAuth } from "../context/AuthContext";
 import { userPerms } from "../lib/perms";
 import { opModel } from "../lib/operatingModel";
-import { useIsMobile } from "../hooks/useIsMobile";
-import MyWorkMobile from "./mobile/MyWorkMobile";
 import { toast } from "sonner";
 // WE-14 (2026-08-16): TaskBoard import retired -- the Board sub-tab
 // under Workflows is gone. NewTaskDialog stays -- it is used by the
@@ -32,7 +30,14 @@ import {
 // hard black border — eight of these in a row read as a control panel. Now a
 // hairline pill in sentence case; the active state each call-site applies on
 // top (indigo tint) is what carries the emphasis, not the frame.
-const CTRL = "flex items-center justify-center gap-1.5 px-3 lg:px-3.5 py-2 text-xs lg:text-sm font-medium nm-btn text-center leading-tight";
+// KR-11 — one recipe for every toolbar control, and it is the pill the rest
+// of the app now wears: black hairline, no fill, the selected one at full
+// strength against faded neighbours. The old CTRL was an nm-btn whose active
+// state was an indigo tint, which put three different "on" colours (indigo
+// tint, indigo solid, grey) in one 8-button row.
+const CTRL = "flex h-9 items-center justify-center gap-1.5 rounded-pill border-[0.5px] px-3.5 text-xs font-medium leading-tight transition-colors lg:text-sm";
+const CTRL_ON = "border-kr-ink text-foreground";
+const CTRL_OFF = "border-kr-ink/55 text-foreground/65 hover:text-foreground/85";
 
 const STATUS_OPTIONS = [
   { key: "todo", label: "Not Started" },
@@ -86,7 +91,7 @@ function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel }) 
       <div className="flex gap-1">
         {ACTIONS.map((a) => (
           <button key={a.key} onClick={() => setAction(a.key)} data-testid={`update-action-${a.key}-${taskId}`}
-            className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium nm-tile transition-colors ${action === a.key ? "bg-brand-50 text-brand-700 border-brand-200" : "bg-nm hover:bg-accent"}`}>
+            className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium nm-tile transition-colors ${action === a.key ? CTRL_ON : CTRL_OFF}`}>
             <a.icon size={13} weight="bold" /> {a.label}
           </button>
         ))}
@@ -106,7 +111,7 @@ function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel }) 
       {action === "escalate" && <p className="text-xs text-muted-foreground">This will alert the owner and create a follow-up for them.</p>}
       <div className="flex gap-2">
         <button onClick={submit} disabled={busy} data-testid={`update-submit-${taskId}`}
-          className="flex-1 bg-primary text-primary-foreground rounded-lg py-1.5 text-xs font-medium nm-tile transition-all disabled:opacity-50">
+          className="kr-lift flex-1 rounded-pill bg-kr-ink py-2 text-xs font-medium text-white transition-all disabled:opacity-50">
           {busy ? "Posting…" : "Post"}
         </button>
         <button onClick={onCancel} className="px-3 py-1.5 text-xs font-medium nm-btn hover:bg-accent">Cancel</button>
@@ -131,7 +136,7 @@ function TaskTrail({ t, members, roleOptions, onChange }) {
       {hasUpdates ? (
         <div className="flex items-center justify-between mb-2">
           <span className="flex items-center gap-2 font-heading font-medium tracking-tight text-sm">
-            <ChatCircleText size={16} weight="bold" className="text-brand-600" /> Activity &amp; Handoffs
+            <ChatCircleText size={16} weight="bold" aria-hidden="true" className="text-muted-foreground" /> Activity &amp; Handoffs
           </span>
           {!open && (
             <button onClick={() => setOpen(true)} data-testid={`add-update-${t.id}`}
@@ -147,7 +152,7 @@ function TaskTrail({ t, members, roleOptions, onChange }) {
               <ChatCircleText size={12} weight="bold" /> No activity yet
             </span>
             <button onClick={() => setOpen(true)} data-testid={`add-update-${t.id}`}
-              className="flex items-center gap-1 text-xs font-medium text-brand-600 hover:underline">
+              className="flex items-center gap-1 text-xs font-medium hover:underline">
               <Plus size={12} weight="bold" /> Log update or hand off
             </button>
           </div>
@@ -159,7 +164,7 @@ function TaskTrail({ t, members, roleOptions, onChange }) {
             const Icon = UPDATE_ICON[u.kind] || ChatText;
             return (
               <li key={u.id} className="flex items-start gap-2 nm-tile p-2.5">
-                <Icon size={15} weight="bold" className={`mt-0.5 shrink-0 ${u.kind === "escalate" ? "text-danger-600" : u.kind === "handoff" ? "text-brand-blue" : "text-muted-foreground"}`} />
+                <Icon size={15} weight="bold" className={`mt-0.5 shrink-0 ${u.kind === "escalate" ? "text-kr-accent" : "text-muted-foreground"}`} />
                 <div className="min-w-0 flex-1">
                   {u.step_text && <p className="label-mono text-muted-foreground">On: {u.step_text}</p>}
                   <p className="text-sm">{u.text}</p>
@@ -292,7 +297,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
       <div className="mt-4 flex items-center gap-2 flex-wrap" data-testid={`exec-plan-empty-${t.id}`}>
         <span className="label-mono text-muted-foreground">Break this into steps?</span>
         <button onClick={generate} disabled={busy} data-testid={`generate-plan-${t.id}`}
-          className="inline-flex items-center gap-1.5 border border-brand-200 text-brand-700 rounded-lg px-3 py-1 text-xs font-medium hover:bg-brand-50 transition-colors disabled:opacity-50">
+          className="nm-btn inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium disabled:opacity-50">
           <Sparkle size={13} weight="bold" /> {busy ? "Thinking…" : "Ask Dex"}
         </button>
         <button onClick={startManual} disabled={busy} data-testid={`manual-plan-${t.id}`}
@@ -307,12 +312,12 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
     <div className="mt-4 border-t border-nm-edge/40 pt-4" data-testid={`exec-plan-${t.id}`}>
       <div className="flex items-center justify-between mb-2">
         <span className="flex items-center gap-2 font-heading font-medium tracking-tight text-sm">
-          <ListChecks size={16} weight="bold" className="text-brand-600" /> AI Execution Guide
+          <ListChecks size={16} weight="bold" aria-hidden="true" className="text-muted-foreground" /> AI Execution Guide
         </span>
         <span className="label-mono" data-testid={`exec-progress-${t.id}`}>{progress}%</span>
       </div>
       <div className="h-2 overflow-hidden rounded-pill nm-inset mb-3">
-        <div className="h-full rounded-pill bg-brand-600 transition-all" style={{ width: `${progress}%` }} />
+        <div className="h-full rounded-pill bg-foreground/70 transition-all" style={{ width: `${progress}%` }} />
       </div>
 
       <div className="space-y-2">
@@ -327,13 +332,13 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
                     <button onClick={() => setViewStep(s)} data-testid={`exec-expand-${t.id}-${i}`} className="p-2 sm:p-1 nm-btn hover:bg-accent" title="View full"><ArrowsOutSimple size={14} weight="bold" /></button>
                     <button onClick={() => moveStep(i, -1)} className="p-2 sm:p-1 nm-btn hover:bg-accent" title="Up"><ArrowUp size={14} weight="bold" /></button>
                     <button onClick={() => moveStep(i, 1)} className="p-2 sm:p-1 nm-btn hover:bg-accent" title="Down"><ArrowDown size={14} weight="bold" /></button>
-                    <button onClick={() => removeStep(i)} data-testid={`exec-remove-${t.id}-${i}`} className="p-2 sm:p-1 nm-tile hover:bg-danger-600 hover:text-white" title="Remove"><Trash size={14} weight="bold" /></button>
+                    <button onClick={() => removeStep(i)} data-testid={`exec-remove-${t.id}-${i}`} className="p-2 sm:p-1 nm-tile hover:bg-kr-accent hover:text-white" title="Remove"><Trash size={14} weight="bold" /></button>
                   </div>
                 </>
               ) : (
                 <>
                   <button onClick={() => toggle(i)} data-testid={`exec-toggle-${t.id}-${i}`}
-                    className={`w-5 h-5 shrink-0 mt-0.5 nm-tile flex items-center justify-center ${s.done ? "bg-brand-600 text-white" : "bg-nm"}`}>
+                    className={`w-5 h-5 shrink-0 mt-0.5 nm-tile flex items-center justify-center ${s.done ? "bg-kr-ink text-white" : "bg-nm"}`}>
                     {s.done && <CheckCircle size={13} weight="bold" />}
                   </button>
                   <button onClick={() => setViewStep(s)} data-testid={`exec-view-${t.id}-${i}`}
@@ -360,7 +365,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
             {ask[s.id] && (
               <div className="ml-7 mt-1.5 mb-2 nm-tile bg-nm-sunken p-2.5 text-xs" data-testid={`exec-ask-result-${t.id}-${i}`}>
                 {ask[s.id].loading ? <p className="font-mono">AI is thinking…</p>
-                  : ask[s.id].error ? <p className="text-danger-600">Couldn't fetch a suggestion.</p>
+                  : ask[s.id].error ? <p className="text-kr-accent">Couldn't fetch a suggestion.</p>
                   : (
                     <>
                       <p className="flex items-start gap-1.5"><Robot size={13} weight="bold" className="text-brand-blue mt-0.5 shrink-0" /><span>{ask[s.id].data.suggestion}</span></p>
@@ -372,7 +377,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
                           ))}
                         </div>
                       )}
-                      <button onClick={() => setAsk((a) => ({ ...a, [s.id]: undefined }))} className="mt-2 label-mono text-brand-600">dismiss</button>
+                      <button onClick={() => setAsk((a) => ({ ...a, [s.id]: undefined }))} className="mt-2 label-mono underline">dismiss</button>
                     </>
                   )}
               </div>
@@ -393,7 +398,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
         {editing ? (
           <>
             <button onClick={() => save("accepted")} disabled={busy} data-testid={`exec-accept-${t.id}`}
-              className="flex-1 min-w-[140px] flex items-center justify-center gap-2 bg-primary text-primary-foreground py-2 text-sm font-medium nm-btn transition-all disabled:opacity-50">
+              className="kr-lift flex min-w-[140px] flex-1 items-center justify-center gap-2 rounded-pill bg-kr-ink py-2.5 text-sm font-medium text-white transition-all disabled:opacity-50">
               <CheckCircle size={16} weight="bold" /> Accept plan
             </button>
             <button onClick={generate} disabled={busy} data-testid={`exec-regenerate-${t.id}`}
@@ -401,7 +406,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
               <ArrowClockwise size={15} weight="bold" /> Regenerate
             </button>
             <button onClick={cancelAIPlan} disabled={busy} data-testid={`exec-cancel-plan-${t.id}`}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium nm-btn text-brand-600 hover:bg-brand-600 hover:text-white transition-colors disabled:opacity-50">
+              className="nm-btn flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50">
               <XCircle size={15} weight="bold" /> Cancel plan
             </button>
           </>
@@ -418,7 +423,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
       <Dialog open={!!viewStep} onOpenChange={(o) => !o && setViewStep(null)}>
         <DialogContent className="rounded-cardlg border border-nm-edge/40">
           <DialogHeader>
-            <DialogTitle className="font-heading tracking-tight text-base flex items-center gap-2"><ListChecks size={18} weight="bold" className="text-brand-600" /> Execution Step</DialogTitle>
+            <DialogTitle className="font-heading tracking-tight text-base flex items-center gap-2"><ListChecks size={18} weight="bold" aria-hidden="true" className="text-muted-foreground" /> Execution Step</DialogTitle>
           </DialogHeader>
           <p className="text-sm leading-relaxed whitespace-pre-wrap break-words" data-testid={`exec-step-detail-${t.id}`}>{viewStep?.text}</p>
           <p className="label-mono text-muted-foreground mt-1">Tap outside to close</p>
@@ -429,13 +434,13 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
 }
 
 const PRIORITY_AXES = [
-  { key: "business_impact", label: "Impact", color: "bg-brand-600",
+  { key: "business_impact", label: "Impact", color: "bg-foreground/70",
     tip: "How much this moves the business -- customer relationship weight, workflow blockage, cross-team dependencies." },
-  { key: "revenue", label: "Revenue", color: "bg-success-600",
+  { key: "revenue", label: "Revenue", color: "bg-foreground/70",
     tip: "Amount tied to this task -- unpaid invoices, overdue collections, deal value." },
-  { key: "risk", label: "Risk", color: "bg-brand-600",
+  { key: "risk", label: "Risk", color: "bg-foreground/70",
     tip: "Downside if this slips -- customer complaints, compliance dates, financial penalties." },
-  { key: "urgency", label: "Urgency", color: "bg-caution-600",
+  { key: "urgency", label: "Urgency", color: "bg-foreground/70",
     tip: "Time pressure -- days overdue, hours to due-date, escalation history." },
 ];
 
@@ -443,7 +448,7 @@ function PriorityScoreBars({ scores }) {
   return (
     <div className="mt-3 nm-inset p-3" data-testid="priority-score-bars">
       <div className="flex items-center justify-between mb-2">
-        <span className="label-mono text-muted-foreground flex items-center gap-1"><Sparkle size={12} weight="bold" className="text-brand-600" /> AI Priority</span>
+        <span className="label-mono text-muted-foreground flex items-center gap-1"><Sparkle size={12} weight="bold" aria-hidden="true" className="text-muted-foreground" /> AI Priority</span>
         {scores.priority_score != null && (
           <span
             className="font-heading font-black text-lg leading-none"
@@ -524,11 +529,11 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
 
             {steps.length > 0 && (
               <div>
-                <p className="flex items-center gap-2 font-heading font-medium tracking-tight text-sm mb-2"><ListChecks size={16} weight="bold" className="text-brand-600" /> What was done</p>
+                <p className="flex items-center gap-2 font-heading font-medium tracking-tight text-sm mb-2"><ListChecks size={16} weight="bold" aria-hidden="true" className="text-muted-foreground" /> What was done</p>
                 <ul className="space-y-1.5">
                   {steps.map((s) => (
                     <li key={s.id} className="flex items-start gap-2 text-sm" data-testid={`detail-step-${t.id}-${s.id}`}>
-                      <CheckCircle size={16} weight={s.done ? "fill" : "regular"} className={`mt-0.5 shrink-0 ${s.done ? "text-success-600" : "text-muted-foreground"}`} />
+                      <CheckCircle size={16} weight={s.done ? "fill" : "regular"} className={`mt-0.5 shrink-0 ${s.done ? "text-foreground" : "text-muted-foreground"}`} />
                       <span className={s.done ? "line-through text-muted-foreground" : ""}>{s.text}</span>
                     </li>
                   ))}
@@ -556,7 +561,7 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
                   ))}
                 </div>
                 {insights.map((ins, i) => (
-                  <div key={`${ins.filename || "ref"}-${(ins.summary || "").slice(0, 40)}`} className="mt-3 border border-brand-200 rounded-lg bg-brand-50/60 p-3" data-testid={`detail-ref-insight-${t.id}-${i}`}>
+                  <div key={`${ins.filename || "ref"}-${(ins.summary || "").slice(0, 40)}`} className="nm-inset mt-3 p-3" data-testid={`detail-ref-insight-${t.id}-${i}`}>
                     <p className="flex items-center gap-1.5 label-mono text-brand-blue mb-1"><Lightbulb size={13} weight="fill" className="text-brand-yellow" /> AI read this reference{ins.filename ? ` · ${ins.filename}` : ""}</p>
                     <p className="text-sm">{ins.summary}</p>
                     {(ins.points || []).length > 0 && (
@@ -570,7 +575,7 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
             )}
 
             <div>
-              <p className="flex items-center gap-2 font-heading font-medium tracking-tight text-sm mb-2"><Paperclip size={15} weight="bold" className="text-brand-600" /> Proof of work{proof.length > 0 ? ` · ${proof.length}` : ""}</p>
+              <p className="flex items-center gap-2 font-heading font-medium tracking-tight text-sm mb-2"><Paperclip size={15} weight="bold" aria-hidden="true" className="text-muted-foreground" /> Proof of work{proof.length > 0 ? ` · ${proof.length}` : ""}</p>
               {proof.length === 0 ? (
                 <p className="text-sm text-muted-foreground" data-testid={`detail-no-proof-${t.id}`}>No proof uploaded for this task.</p>
               ) : (
@@ -600,7 +605,7 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
 
             {updates.length > 0 && (
               <div>
-                <p className="flex items-center gap-2 font-heading font-medium tracking-tight text-sm mb-2"><ChatCircleText size={16} weight="bold" className="text-brand-600" /> Activity &amp; Handoffs</p>
+                <p className="flex items-center gap-2 font-heading font-medium tracking-tight text-sm mb-2"><ChatCircleText size={16} weight="bold" aria-hidden="true" className="text-muted-foreground" /> Activity &amp; Handoffs</p>
                 <ul className="space-y-2">
                   {updates.map((u) => (
                     <li key={u.id} className="flex items-start gap-2 nm-tile p-2.5">
@@ -620,14 +625,14 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
               <div className="border-t border-nm-edge/40 pt-3">
                 {!confirmDel ? (
                   <button onClick={() => setConfirmDel(true)} data-testid={`delete-task-${t.id}`}
-                    className="flex items-center gap-1.5 text-xs font-medium text-brand-700 border border-brand-200 rounded-lg px-3 py-1.5 hover:bg-brand-50 transition-colors">
+                    className="nm-btn flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium">
                     <Trash size={13} weight="bold" /> Delete task
                   </button>
                 ) : (
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs font-semibold">Delete this task permanently?</span>
                     <button onClick={doDelete} disabled={deleting} data-testid={`delete-task-confirm-${t.id}`}
-                      className="text-xs font-medium bg-primary text-primary-foreground rounded-lg px-3 py-1.5 border border-transparent transition-all disabled:opacity-60">
+                      className="kr-lift rounded-pill bg-kr-ink px-3.5 py-2 text-xs font-medium text-white transition-all disabled:opacity-60">
                       {deleting ? "Deleting…" : "Yes, delete"}
                     </button>
                     <button onClick={() => setConfirmDel(false)} disabled={deleting}
@@ -653,7 +658,10 @@ function BulkActionBar({ selectedIds, tasks = [], busy, onClear, onComplete, ope
   const doneCount = tasks.filter(isTerminal).length;
   return (
     <div
-      className="sticky top-0 z-20 -mx-4 mb-4 border border-brand-200 rounded-xl bg-brand-50 px-4 py-3 flex items-center gap-3 flex-wrap"
+      /* KR-11 — the plan's call: a worklist has no hero moment, so My Work's
+         Karma-dark ingredient is this bar rather than a full band. Ink pill,
+         floating, only present while a selection exists. */
+      className="sticky top-2 z-20 mb-4 flex flex-wrap items-center gap-3 rounded-pill bg-kr-ink px-5 py-3 text-white shadow-none"
       data-testid="bulk-action-bar"
     >
       <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -671,7 +679,7 @@ function BulkActionBar({ selectedIds, tasks = [], busy, onClear, onComplete, ope
         type="button"
         onClick={onComplete}
         disabled={busy || openCount === 0}
-        className="inline-flex items-center gap-1.5 bg-primary text-primary-foreground rounded-lg px-3 py-1.5 text-xs font-medium nm-tile disabled:opacity-40"
+        className="kr-lift inline-flex items-center gap-1.5 rounded-pill bg-white px-3.5 py-2 text-xs font-medium text-kr-ink disabled:opacity-40"
         data-testid="bulk-complete"
       >
         <CheckCircle size={13} weight="bold" />
@@ -858,19 +866,19 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
 
   return (
     <div id={`task-card-${t.id}`} data-testid={`mywork-task-${t.id}`}
-      className={`card-brutal transition-all overflow-hidden ${highlight ? "ring-2 ring-brand-600 ring-offset-2 ring-offset-background" : ""}`}>
+      className={`card-brutal transition-all overflow-hidden ${highlight ? "ring-2 ring-kr-ink ring-offset-2 ring-offset-background" : ""}`}>
       {/* U7-05.10: overdue severity spike -- red left stripe on the whole
           card, immediately readable as "urgent" without reading a chip. */}
       <div className="flex">
         {overdue && !terminal && (
-          <div className="w-1.5 bg-danger-600 shrink-0" aria-hidden="true" />
+          <div className="w-1.5 shrink-0 bg-kr-accent" aria-hidden="true" />
         )}
         <div className="flex-1 min-w-0">
 
       {/* U7-05.2: SUMMARY ROW -- the only thing shown when card is collapsed.
           Click-target on the whole row toggles expand. Right-side quick actions
           stopPropagation so they don't collapse when clicked. */}
-      <div className={`w-full flex items-stretch group ${selected ? "bg-caution-50/30" : "hover:bg-accent/50"} transition-colors`}>
+      <div className={`w-full flex items-stretch group ${selected ? "bg-nm-sunken/60" : "hover:bg-nm-sunken/30"} transition-colors`}>
         {/* U7-05.3: bulk-select checkbox. Sits outside the expand button
             so clicking it doesn't toggle the card. Only rendered when
             onToggleSelect is passed (skip in TaskDetailDialog and other
@@ -886,7 +894,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
               checked={selected}
               onChange={onToggleSelect}
               data-testid={`bulk-select-${t.id}`}
-              className="w-4 h-4 rounded border-nm-edge/40 accent-brand-600 cursor-pointer"
+              className="w-4 h-4 rounded border-nm-edge/40 accent-kr-ink cursor-pointer"
               aria-label={`Select task ${t.title}`}
             />
           </label>
@@ -919,13 +927,13 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
               {/* Status pill -- muted when normal, red when overdue/rejected */}
               <span data-testid={`status-chip-${t.id}`}
                 className={`px-2 py-0.5 font-medium border ${
-                  terminal ? "bg-success-600/10 text-success-800 border-success-600/40"
-                  : awaitingApproval ? "bg-caution-50 text-caution-800 border-caution-200"
+                  terminal ? "bg-kr-ink text-white border-transparent"
+                  : awaitingApproval ? "border-[0.5px] border-kr-ink text-foreground"
                   : "bg-nm-sunken text-muted-foreground border-nm-edge/40"
                 }`}>{STATUS_LABEL[t.status] || t.status}</span>
               {overdue && !terminal && (
                 <span data-testid={`overdue-${t.id}`}
-                  className="px-2 py-0.5 font-medium bg-danger-600 text-white border border-danger-600">
+                  className="rounded-pill bg-kr-accent px-2 py-0.5 font-medium text-white">
                   Overdue
                 </span>
               )}
@@ -941,7 +949,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
                   href={`/my-work?view=workflows&type=${encodeURIComponent(t.workflow_summary.type || "")}&focus=${encodeURIComponent(t.workflow_summary.id)}`}
                   onClick={(e) => e.stopPropagation()}
                   data-testid={`wf-chip-${t.id}`}
-                  className="inline-flex items-center gap-1 text-brand-600 hover:underline"
+                  className="inline-flex items-center gap-1 hover:underline"
                   title={`Open workflow: ${t.workflow_summary.title}`}
                 >
                   <FlowArrow size={11} weight="bold" />
@@ -960,8 +968,8 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
                   <Paperclip size={11} weight="bold" /> {t.attachment_count}
                 </span>
               )}
-              {t.source === "escalation" && <span className="px-1.5 py-0.5 text-[10px] font-medium bg-danger-600 text-white">Escalation</span>}
-              {t.source === "handoff" && <span className="px-1.5 py-0.5 text-[10px] font-medium bg-brand-50 text-brand-700 rounded">Handoff</span>}
+              {t.source === "escalation" && <span className="rounded-pill bg-kr-accent px-1.5 py-0.5 text-[10px] font-medium text-white">Escalation</span>}
+              {t.source === "handoff" && <span className="rounded-pill border-[0.5px] border-kr-ink/55 px-1.5 py-0.5 text-[10px] font-medium">Handoff</span>}
             </div>
           </div>
         </div>
@@ -988,11 +996,11 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
 
       {isOp && (
         <div className="flex flex-wrap items-center gap-2" data-testid={`op-meta-${t.id}`}>
-          {t.op_category && <span className="inline-flex items-center gap-1 nm-tile px-2 py-0.5 text-xs font-medium bg-caution-50"><Tag size={11} weight="bold" /> {t.op_category}</span>}
+          {t.op_category && <span className="inline-flex items-center gap-1 nm-tile px-2 py-0.5 text-xs font-medium"><Tag size={11} weight="bold" /> {t.op_category}</span>}
           {t.assignee_name && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><UserCircle size={13} weight="bold" /> {t.assignee_name}</span>}
           {t.support_name && <span className="text-xs text-muted-foreground">+ {t.support_name}</span>}
           {t.approval_required && (
-            <span data-testid={`op-approval-${t.id}`} className={`inline-flex items-center gap-1 nm-tile px-2 py-0.5 text-xs font-medium ${t.approval_status === "approved" ? "bg-success-600 text-white" : t.approval_status === "pending" ? "bg-caution-50" : t.approval_status === "rejected" ? "bg-danger-600 text-white" : "bg-nm-sunken"}`}>
+            <span data-testid={`op-approval-${t.id}`} className={`inline-flex items-center gap-1 nm-tile px-2 py-0.5 text-xs font-medium ${t.approval_status === "approved" ? "bg-kr-ink text-white" : t.approval_status === "rejected" ? "bg-kr-accent text-white" : "bg-nm-sunken"}`}>
               <ShieldCheck size={11} weight="bold" /> {t.approval_status === "approved" ? "Approved" : t.approval_status === "pending" ? "Pending approval" : t.approval_status === "rejected" ? "Changes requested" : `${t.approver_name || "Approval"} required`}
             </span>
           )}
@@ -1010,7 +1018,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
             className="inline-flex items-center gap-1.5 nm-tile px-2.5 py-1 text-xs font-mono bg-nm-sunken hover:bg-accent transition-colors"
             title={`Open workflow: ${t.workflow_summary.title}`}
           >
-            <FlowArrow size={12} weight="bold" className="text-brand-600" />
+            <FlowArrow size={12} weight="bold" aria-hidden="true" className="text-muted-foreground" />
             <span className="font-medium text-[10px]">
               {(t.workflow_summary.title || "Workflow").slice(0, 40)}
             </span>
@@ -1056,7 +1064,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
       {!terminal && !awaitingApproval && (
         <div className="space-y-2">
           <div className="h-2 overflow-hidden rounded-pill nm-inset" title={`${t.progress || 0}% complete`} aria-label={`Progress: ${t.progress || 0}%`}>
-            <div className="h-full rounded-pill bg-brand-600 transition-all" style={{ width: `${t.progress || 0}%` }} data-testid={`progress-bar-${t.id}`} />
+            <div className="h-full rounded-pill bg-foreground/70 transition-all" style={{ width: `${t.progress || 0}%` }} data-testid={`progress-bar-${t.id}`} />
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <label className="label-mono text-muted-foreground">Status</label>
@@ -1067,7 +1075,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
                 the rare team that manages progress separately from status.
                 Default hidden -- one less dropdown for the 95% of users. */}
             <details className="ml-1">
-              <summary className="label-mono text-muted-foreground cursor-pointer hover:text-brand-600">
+              <summary className="label-mono text-muted-foreground cursor-pointer hover:text-foreground">
                 Set % manually
               </summary>
               <select data-testid={`progress-select-${t.id}`} value={PROGRESS_OPTIONS.includes(t.progress) ? t.progress : 0} onChange={(e) => setProgress(e.target.value)} className={`${selCls} mt-1`}>
@@ -1106,7 +1114,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
         return (
           <>
             {refs.length > 0 && (
-              <div className="mt-3 border border-brand-200 rounded-lg bg-brand-50/60 p-3" data-testid={`reference-block-${t.id}`}>
+              <div className="nm-inset mt-3 p-3" data-testid={`reference-block-${t.id}`}>
                 <p className="label-mono text-brand-blue flex items-center gap-1.5 mb-2">
                   <Paperclip size={13} weight="bold" /> Reference material · {refs.length}
                 </p>
@@ -1143,14 +1151,14 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
       {canApprove && awaitingApproval && (
         <div className="flex flex-wrap gap-2 mt-4 nm-tile bg-caution-50/40 p-3" data-testid={`approval-actions-${t.id}`}>
           <span className="w-full label-mono text-muted-foreground">This task needs your approval before {t.assignee_name || "the assignee"} can start work.</span>
-          {t.approval_status === "rejected" && t.rejection_reason && <span className="w-full text-xs text-danger-600">Previously requested: {t.rejection_reason}</span>}
-          <button onClick={approveTask} data-testid={`approve-${t.id}`} className="flex items-center gap-2 bg-success-600 text-white px-4 py-2 text-sm font-medium nm-btn transition-all">
+          {t.approval_status === "rejected" && t.rejection_reason && <span className="w-full text-xs text-muted-foreground">Previously requested: {t.rejection_reason}</span>}
+          <button onClick={approveTask} data-testid={`approve-${t.id}`} className="kr-lift flex items-center gap-2 rounded-pill bg-kr-ink px-4 py-2.5 text-sm font-medium text-white transition-all">
             <CheckCircle size={16} weight="bold" /> Approve
           </button>
-          <button onClick={rejectTask} data-testid={`reject-${t.id}`} className="flex items-center gap-2 bg-danger-600 text-white px-4 py-2 text-sm font-medium nm-btn transition-all">
+          <button onClick={rejectTask} data-testid={`reject-${t.id}`} className="flex items-center gap-2 rounded-pill border border-kr-accent px-4 py-2.5 text-sm font-medium text-kr-accent transition-colors hover:bg-kr-accent/10">
             <WarningCircle size={16} weight="bold" /> Request changes
           </button>
-          <button onClick={clarifyTask} data-testid={`clarify-${t.id}`} className="flex items-center gap-2 bg-caution-600 text-white px-4 py-2 text-sm font-medium nm-btn transition-all">
+          <button onClick={clarifyTask} data-testid={`clarify-${t.id}`} className="nm-btn flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-all">
             <ChatText size={16} weight="bold" /> Ask clarification
           </button>
         </div>
@@ -1158,18 +1166,18 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
 
       {lockedForAssignee && (
         <div className="flex items-start gap-2 mt-4 nm-tile bg-nm-sunken p-3" data-testid={`approval-locked-${t.id}`}>
-          <LockKey size={18} weight="bold" className="text-brand-600 shrink-0 mt-0.5" />
+          <LockKey size={18} weight="bold" aria-hidden="true" className="mt-0.5 shrink-0 text-muted-foreground" />
           <div>
             <p className="text-sm font-bold uppercase tracking-tight">{t.approval_status === "rejected" ? "Changes requested" : "Awaiting approval"}</p>
             <p className="text-xs text-muted-foreground">You can start once {t.approver_name || "the approver"} approves this task. Status, progress and the execution plan are locked until then.</p>
-            {t.approval_status === "rejected" && t.rejection_reason && <p className="text-xs text-danger-600 mt-1">Note: {t.rejection_reason}</p>}
+            {t.approval_status === "rejected" && t.rejection_reason && <p className="mt-1 text-xs text-muted-foreground">Note: {t.rejection_reason}</p>}
           </div>
         </div>
       )}
 
       {t.evidence_required && !isTerminal(t) && !awaitingApproval && (
-        <div className={`mt-3 flex items-start gap-2 nm-tile p-2.5 ${hasEvidence ? "bg-success-600/10" : "bg-caution-50/30"}`} data-testid={`evidence-required-${t.id}`}>
-          {hasEvidence ? <CheckCircle size={16} weight="fill" className="text-success-600 shrink-0 mt-0.5" /> : <Info size={16} weight="bold" className="text-brand-600 shrink-0 mt-0.5" />}
+        <div className={`mt-3 flex items-start gap-2 nm-tile p-2.5 ${hasEvidence ? "bg-nm-sunken" : "bg-kr-accent/8"}`} data-testid={`evidence-required-${t.id}`}>
+          {hasEvidence ? <CheckCircle size={16} weight="fill" aria-hidden="true" className="mt-0.5 shrink-0" /> : <Info size={16} weight="bold" aria-hidden="true" className="mt-0.5 shrink-0 text-kr-accent" />}
           <p className="text-xs">{hasEvidence
             ? "Proof attached — you can mark this task complete."
             : "This task requires proof before it can be completed. Add a photo, voice note, or file below."}</p>
@@ -1183,7 +1191,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
               buttons were the original bug. */}
           <button onClick={complete} data-testid={`complete-${t.id}`}
             title={t.evidence_required && !hasEvidence ? "Add a photo, voice note, or file first" : "Mark as complete"}
-            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium nm-btn transition-all ${t.evidence_required && !hasEvidence ? "bg-nm-sunken text-muted-foreground" : "bg-primary text-primary-foreground"}`}>
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium nm-btn transition-all ${t.evidence_required && !hasEvidence ? "bg-nm-sunken text-muted-foreground" : "bg-kr-ink text-white"}`}>
             <CheckCircle size={16} weight="bold" /> Complete
           </button>
 
@@ -1221,7 +1229,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
               onClick={toggleVoice}
               data-testid={`voice-${t.id}`}
               title={recording ? "Stop and send voice reply" : "Record a voice reply"}
-              className={`w-9 h-9 flex items-center justify-center nm-tile transition-colors ${recording ? "bg-brand-600 text-white" : "hover:bg-accent"}`}
+              className={`w-9 h-9 flex items-center justify-center nm-tile transition-colors ${recording ? "bg-kr-accent text-white" : "hover:bg-accent"}`}
               aria-label={recording ? "Stop recording" : "Record voice reply"}
             >
               {recording ? <Stop size={16} weight="fill" /> : <Microphone size={16} weight="bold" />}
@@ -1287,7 +1295,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
               type="button"
               onClick={submitReason}
               disabled={reasonBusy || (reasonDialog?.kind === "clarify" && !reasonText.trim())}
-              className="bg-primary text-primary-foreground px-4 py-2 text-sm font-medium nm-btn disabled:opacity-40"
+              className="kr-lift rounded-pill bg-kr-ink px-4 py-2.5 text-sm font-medium text-white disabled:opacity-40"
             >
               {reasonBusy ? "Sending..." : reasonDialog?.kind === "reject" ? "Request changes" : "Send question"}
             </button>
@@ -1305,7 +1313,6 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
 export default function MyWork() {
   // MPWA-08: rebuilt below lg (§8). Above lg the original tree renders
   // unchanged, keeping §9.2's desktop diff empty by construction.
-  const isMobile = useIsMobile();
   const qc = useQueryClient();
   const { t } = useTranslation();
   const { tenant, user } = useAuth();
@@ -1449,21 +1456,23 @@ export default function MyWork() {
     list = [...list].sort((a, b) => (scoreMap[b.id]?.priority_score || 0) - (scoreMap[a.id]?.priority_score || 0));
   }
 
-  if (isMobile) return <MyWorkMobile />;
-
   return (
     <div>
-      <PageHeader eyebrow={t("mywork.eyebrow")} title={t("mywork.title")}>
-        <div className="w-full lg:w-auto flex flex-col lg:flex-row lg:items-center gap-2" data-testid="mywork-controls">
+      <header className="mb-7 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{t("mywork.eyebrow")}</p>
+          <h1 className="mt-1.5 font-display text-3xl sm:text-4xl">{t("mywork.title")}</h1>
+        </div>
+        <div className="flex w-full flex-col gap-2 lg:w-auto lg:flex-row lg:items-center" data-testid="mywork-controls">
           <div className="order-2 lg:order-1 grid grid-cols-4 gap-2 lg:flex lg:flex-wrap lg:items-center" data-testid="mywork-actions">
             <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members}
-              triggerClassName={`${CTRL} bg-primary text-primary-foreground border-transparent hover:bg-brand-700`} />
+              triggerClassName={`${CTRL} border-transparent bg-kr-ink text-white kr-lift`} />
             {isOwner && (
               <>
                 <button onClick={() => { setScope("mine"); setView("mywork"); }} data-testid="work-scope-mine"
-                  className={`${CTRL} ${view === "mywork" && scope === "mine" ? "bg-brand-50 text-brand-700 border-brand-200" : "bg-nm hover:bg-accent"}`}>{t("mywork.my_tasks")}</button>
+                  className={`${CTRL} ${view === "mywork" && scope === "mine" ? CTRL_ON : CTRL_OFF}`}>{t("mywork.my_tasks")}</button>
                 <button onClick={() => { setScope("all"); setView("mywork"); }} data-testid="work-scope-all"
-                  className={`${CTRL} ${view === "mywork" && scope === "all" ? "bg-brand-50 text-brand-700 border-brand-200" : "bg-nm hover:bg-accent"}`}>{t("mywork.all_tasks")}</button>
+                  className={`${CTRL} ${view === "mywork" && scope === "all" ? CTRL_ON : CTRL_OFF}`}>{t("mywork.all_tasks")}</button>
               </>
             )}
             {/* U7-05: AI Priority is owner-only. Founder ask 2026-08-17:
@@ -1473,7 +1482,7 @@ export default function MyWork() {
                 to work on based on someone else's AI score. */}
             {isOwner && (
               <button onClick={() => { setAiPriority((v) => !v); setView("mywork"); }} data-testid="ai-priority-toggle"
-                className={`${CTRL} ${view === "mywork" && aiPriority ? "bg-brand-50 text-brand-700 border-brand-200" : "bg-nm hover:bg-accent"}`}>
+                className={`${CTRL} ${view === "mywork" && aiPriority ? CTRL_ON : CTRL_OFF}`}>
                 <Sparkle size={15} weight="bold" /> {scoring ? t("mywork.scoring") : aiPriority ? t("mywork.ai_priority_on") : t("mywork.ai_priority")}
               </button>
             )}
@@ -1490,30 +1499,30 @@ export default function MyWork() {
                 workflow and leave'. */}
             {!isOwner && (
               <button onClick={() => setView("mywork")} data-testid="work-view-mywork"
-                className={`${CTRL} ${view === "mywork" ? "bg-brand-50 text-brand-700 border-brand-200" : "bg-nm hover:bg-accent"}`}>
+                className={`${CTRL} ${view === "mywork" ? CTRL_ON : CTRL_OFF}`}>
                 <ListIcon size={15} weight="bold" /> {t("mywork.view_mywork")}
               </button>
             )}
             {canSeeWorkflows && (
               <button onClick={() => setView("workflows")} data-testid="work-view-workflows"
-                className={`${CTRL} ${view === "workflows" ? "bg-brand-50 text-brand-700 border-brand-200" : "bg-nm hover:bg-accent"}`}>
+                className={`${CTRL} ${view === "workflows" ? CTRL_ON : CTRL_OFF}`}>
                 <ArrowRight size={15} weight="bold" /> {t("mywork.view_workflows")}
               </button>
             )}
             <button onClick={() => setView("leave")} data-testid="work-view-leave"
-              className={`${CTRL} ${view === "leave" ? "bg-brand-50 text-brand-700 border-brand-200" : "bg-nm hover:bg-accent"}`}>
+              className={`${CTRL} ${view === "leave" ? CTRL_ON : CTRL_OFF}`}>
               <AirplaneTakeoff size={15} weight="bold" /> {t("mywork.view_leave")}
             </button>
           </div>
         </div>
-      </PageHeader>
+      </header>
 
       {focusDenied && (
-        <div data-testid="access-restricted-banner" className="card-brutal p-4 mb-6 bg-brand-600 text-white flex items-center gap-3">
-          <LockKey size={22} weight="bold" className="shrink-0" />
+        <div data-testid="access-restricted-banner" className="mb-6 flex items-center gap-3 rounded-control border-l-[3px] border-kr-accent bg-kr-accent/10 p-4">
+          <LockKey size={20} weight="bold" aria-hidden="true" className="shrink-0 text-kr-accent" />
           <div>
-            <p className="font-bold uppercase tracking-tight">{t("mywork.access_restricted")}</p>
-            <p className="text-sm opacity-90">{t("mywork.access_restricted_desc")}</p>
+            <p className="text-sm font-semibold">{t("mywork.access_restricted")}</p>
+            <p className="text-sm text-muted-foreground">{t("mywork.access_restricted_desc")}</p>
           </div>
         </div>
       )}
@@ -1547,14 +1556,15 @@ export default function MyWork() {
               borderless pills, sentence case, indigo tint on the active one.
               The bordered-uppercase version stacked a frame on every tab and
               the count badge carried a second frame inside it. */}
-          <div className="flex flex-wrap gap-1.5 mb-5 border-b border-nm-edge/40 pb-3" data-testid="work-tabs">
+          <div className="mb-5 flex flex-wrap gap-2 border-b border-nm-edge/40 pb-4" data-testid="work-tabs">
             {WORK_TABS
               .filter((tb) => tb.key === "all" || countFor(tb.key) > 0)
               .map((tb) => (
                 <button key={tb.key} onClick={() => setTab(tb.key)} data-testid={`work-tab-${tb.key}`}
-                  className={`flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-full text-xs transition-colors ${tab === tb.key ? "bg-brand-50 text-brand-700 font-medium" : "text-muted-foreground hover:bg-accent hover:text-foreground"}`}>
+                  aria-pressed={tab === tb.key}
+                  className={`flex h-8 items-center gap-1.5 rounded-pill border-[0.5px] pl-3 pr-2 text-xs transition-colors ${tab === tb.key ? "border-kr-ink font-medium text-foreground" : "border-kr-ink/55 text-foreground/65 hover:text-foreground/85"}`}>
                   {tb.label}
-                  <span className={`min-w-[17px] px-1 py-0.5 rounded-full text-[10px] leading-none text-center tabular-nums ${tab === tb.key ? "bg-brand-600/15 text-brand-700" : "bg-nm-sunken text-muted-foreground"}`}>{countFor(tb.key)}</span>
+                  <span className="min-w-[17px] rounded-pill px-1 py-0.5 text-center font-mono text-[10px] leading-none tabular-nums opacity-65">{countFor(tb.key)}</span>
                 </button>
               ))}
           </div>
@@ -1668,7 +1678,7 @@ export default function MyWork() {
                       toast.error(e.response?.data?.detail || "Bulk reassign failed");
                     } finally { setBulkBusy(false); }
                   }}
-                  className="bg-primary text-primary-foreground px-4 py-2 text-sm font-medium nm-btn disabled:opacity-40"
+                  className="kr-lift rounded-pill bg-kr-ink px-4 py-2.5 text-sm font-medium text-white disabled:opacity-40"
                 >{bulkBusy ? "Reassigning..." : "Reassign"}</button>
               </div>
             </DialogContent>

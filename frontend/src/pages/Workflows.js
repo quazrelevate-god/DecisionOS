@@ -1,4 +1,38 @@
-import { useState, useEffect } from "react";
+// /workflows (and the Workflows tab inside /my-work) — KR-11.
+//
+// THE FOUNDER'S CALL: "the workflow section is the main core part of the
+// system, so focus more on it — optimize the layout and introduce drag and
+// drop if needed." Both, and the drag needed care rather than a library.
+//
+// ── DRAG TO MOVE A STAGE ────────────────────────────────────────────────
+// Dropping a card on a column calls the SAME advance endpoint the button
+// calls, including the 409 "stage not ready" path that opens the override
+// dialog. That is the whole point: drag is a second way to trigger one
+// behaviour, not a second behaviour. If the engine refuses a move, it
+// refuses it identically whether you dragged or clicked, and the override
+// reason still lands in wf.history and the audit log.
+//
+// Native HTML5 drag, no new dependency. dnd-kit or react-beautiful-dnd would
+// add ~30kB gz to do what four event handlers do here, and this board never
+// needs sortable-within-column (stage order is the backend's, not the
+// user's) — only cross-column transfer, which is exactly what HTML5 DnD is.
+//
+// THE BUTTON STAYS, and that is an accessibility decision, not clutter:
+// native DnD is mouse-only. It does not fire on touch at all, and it is not
+// keyboard-operable. "Advance to <next>" remains on every card as the path
+// for a phone, a trackpad user who prefers clicking, and anyone driving by
+// keyboard. Drag is the accelerator; the button is the contract.
+//
+// ONLY THE NEXT STAGE IS A LEGAL DROP, and the board says so before you let
+// go. workflow_engine enforces `tgt_idx == cur_idx + 1` and returns 400
+// "Can only advance to the next stage" for anything else — backwards, or
+// skipping ahead. I assumed otherwise and had to be corrected by a 400 while
+// testing a drag back.
+// So during a drag exactly ONE column lights up: the card's next stage.
+// Every other column goes inert — no preventDefault, so the cursor shows
+// "no drop" and the browser refuses the gesture itself. A rule the UI
+// enforces beats the same rule delivered as a red toast after the fact.
+import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -6,24 +40,23 @@ import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { lex } from "../lib/lexicon";
 import { opModel } from "../lib/operatingModel";
-import { PageHeader, Chip } from "../components/common";
-import { money, timeAgo, fullTime } from "../lib/format";
+import { money, timeAgo, fullTime, humanStage } from "../lib/format";
 import { toast } from "sonner";
-import { Plus, ArrowRight, Trash, ClockCounterClockwise, UserCircle, WarningCircle } from "@phosphor-icons/react";
+import {
+  Plus, ArrowRight, Trash, ClockCounterClockwise, WarningCircle, DotsSixVertical, Check,
+} from "@phosphor-icons/react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter,
 } from "../components/ui/dialog";
 
-const STAGE_LABEL = (s) => (s || "").replace(/_/g, " ");
-
-// WE-11/12 helper: a compact avatar chip from a name string (first-name
-// initial + last-name initial fallback to first two chars).
 function _initials(name) {
   if (!name) return "?";
   const parts = name.trim().split(/\s+/);
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
+
+const FIELD = "w-full nm-field px-3 py-2 text-sm";
 
 function NewWorkflowDialog({ type, typeLabel, custLabel, vendLabel, onCreated }) {
   const { t } = useTranslation();
@@ -45,87 +78,93 @@ function NewWorkflowDialog({ type, typeLabel, custLabel, vendLabel, onCreated })
   const create = async () => {
     if (!form.title.trim()) return;
     try {
-      await api.post("/workflows", { type, title: form.title, detail: form.detail, counterparty: form.counterparty, contact_id: form.contact_id || null, amount: form.amount ? Number(form.amount) : null });
+      await api.post("/workflows", {
+        type, title: form.title, detail: form.detail, counterparty: form.counterparty,
+        contact_id: form.contact_id || null, amount: form.amount ? Number(form.amount) : null,
+      });
       toast.success(t("workflows.created"));
       setForm({ title: "", detail: "", amount: "", counterparty: "", contact_id: "" });
       setOpen(false);
       onCreated();
-    } catch (e) {
+    } catch {
       toast.error(t("workflows.create_failed"));
     }
   };
-  const inp = "w-full border border-border px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring/30";
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <button data-testid="new-workflow-button" className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 text-sm font-medium border border-border transition-all">
-          <Plus size={16} weight="bold" /> {t("workflows.new")}
+        <button data-testid="new-workflow-button"
+          className="kr-lift flex items-center gap-2 rounded-pill bg-kr-ink px-4 py-2.5 text-sm font-medium text-white transition-all">
+          <Plus size={16} weight="bold" aria-hidden="true" /> {t("workflows.new")}
         </button>
       </DialogTrigger>
-      <DialogContent className="border border-border rounded-xl">
-        <DialogHeader><DialogTitle className="font-display text-xl">{t("workflows.dlg_title", { type: typeLabel })}</DialogTitle>
-          <DialogDescription className="text-sm text-muted-foreground">{t("workflows.dlg_desc", { type: typeLabel.toLowerCase() })}</DialogDescription>
+      <DialogContent className="rounded-cardlg border border-nm-edge/40">
+        <DialogHeader>
+          <DialogTitle className="font-display text-xl">{t("workflows.dlg_title", { type: typeLabel })}</DialogTitle>
+          <DialogDescription className="text-sm text-muted-foreground">
+            {t("workflows.dlg_desc", { type: typeLabel.toLowerCase() })}
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <input data-testid="wf-title-input" className={inp} placeholder={t("workflows.title_ph")} value={form.title} onChange={set("title")} />
+          <input data-testid="wf-title-input" className={FIELD} placeholder={t("workflows.title_ph")} value={form.title} onChange={set("title")} />
           <div>
-            <label className="label-mono text-muted-foreground">{contactLabel}</label>
-            <select data-testid="wf-contact-select" className={`${inp} mt-1`} value={form.contact_id} onChange={pickContact}>
+            <label className="text-xs text-muted-foreground">{contactLabel}</label>
+            <select data-testid="wf-contact-select" className={`${FIELD} mt-1`} value={form.contact_id} onChange={pickContact}>
               <option value="">{t("workflows.select_contact", { label: contactLabel.toLowerCase() })}</option>
               {(contacts || []).map((c) => <option key={c.id} value={c.id}>{c.company || c.name}</option>)}
             </select>
           </div>
-          <input data-testid="wf-counterparty-input" className={inp} placeholder={t("workflows.counterparty_ph")} value={form.counterparty} onChange={set("counterparty")} />
-          <input className={inp} type="number" placeholder={t("workflows.amount_ph")} value={form.amount} onChange={set("amount")} />
-          <textarea className={inp} rows={2} placeholder={t("workflows.detail_ph")} value={form.detail} onChange={set("detail")} />
+          <input data-testid="wf-counterparty-input" className={FIELD} placeholder={t("workflows.counterparty_ph")} value={form.counterparty} onChange={set("counterparty")} />
+          <input className={FIELD} type="number" placeholder={t("workflows.amount_ph")} value={form.amount} onChange={set("amount")} />
+          <textarea className={FIELD} rows={2} placeholder={t("workflows.detail_ph")} value={form.detail} onChange={set("detail")} />
         </div>
         <DialogFooter>
-          <button data-testid="wf-create-submit" onClick={create} className="bg-brand-600 text-white px-5 py-2 text-sm font-medium border border-border transition-all">{t("workflows.create")}</button>
+          <button data-testid="wf-create-submit" onClick={create}
+            className="kr-lift rounded-pill bg-kr-ink px-5 py-2.5 text-sm font-medium text-white transition-all">
+            {t("workflows.create")}
+          </button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
 
-// WE-13 (2026-08-16): manual-advance UX. When check_stage_ready is
-// False on the backend (409), the engine returns a message like
-// "Stage not ready: 2 task(s) still open at this stage". We surface
-// that inline in a modal and ask the user for a reason. If they
-// supply one, we retry with override=true + reason. The reason lands
-// in wf.history + audit_log so an override is never invisible.
-function OverrideReasonDialog({ open, onOpenChange, wfTitle, blockedReason, onConfirm }) {
+/**
+ * WE-13 — the engine returned 409 "stage not ready". Surface why, take a
+ * reason, retry with override. Reached from BOTH the button and a drop.
+ */
+function OverrideReasonDialog({ open, onOpenChange, wfTitle, blockedReason, targetLabel, onConfirm }) {
   const [reason, setReason] = useState("");
   useEffect(() => { if (!open) setReason(""); }, [open]);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="border border-border rounded-xl" data-testid="wf-override-dialog">
+      <DialogContent className="rounded-cardlg border border-nm-edge/40" data-testid="wf-override-dialog">
         <DialogHeader>
-          <DialogTitle className="font-display text-xl flex items-center gap-2">
-            <WarningCircle size={18} weight="bold" className="text-brand-600" />
+          <DialogTitle className="flex items-center gap-2 font-display text-xl">
+            <WarningCircle size={18} weight="bold" aria-hidden="true" className="text-kr-accent" />
             Stage not ready
           </DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
-            <span className="font-semibold text-foreground">{wfTitle}</span> can't auto-advance yet: {blockedReason}.
-            You can still force the transition, but you must record a reason. It goes into the
-            workflow history and the audit log.
+            <span className="font-semibold text-foreground">{wfTitle}</span> can&rsquo;t move
+            {targetLabel ? <> to <span className="font-semibold text-foreground">{targetLabel}</span></> : null} yet: {blockedReason}.
+            You can still force it, but you must record a reason — it goes into the workflow
+            history and the audit log.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
-          <label className="label-mono text-muted-foreground">Reason for override</label>
-          <textarea data-testid="wf-override-reason" className="w-full border border-border px-3 py-2 text-sm font-mono focus:outline-none focus:shadow-sm"
-            rows={3}
-            placeholder="e.g. Bill is delayed but customer has confirmed by phone, moving on"
+          <label className="text-xs text-muted-foreground">Reason for override</label>
+          <textarea data-testid="wf-override-reason" className={`${FIELD} font-mono`} rows={3}
+            placeholder="e.g. Bill is delayed but the customer confirmed by phone, moving on"
             value={reason} onChange={(e) => setReason(e.target.value)} />
         </div>
         <DialogFooter>
-          <button data-testid="wf-override-cancel" onClick={() => onOpenChange(false)}
-            className="border border-border px-4 py-2 text-sm font-medium hover:bg-accent">
+          <button data-testid="wf-override-cancel" onClick={() => onOpenChange(false)} className="nm-btn px-4 py-2.5 text-sm font-medium">
             Cancel
           </button>
           <button data-testid="wf-override-confirm"
             onClick={() => { if (reason.trim()) onConfirm(reason.trim()); }}
             disabled={!reason.trim()}
-            className="bg-brand-600 text-white px-4 py-2 text-sm font-medium border border-border transition-all disabled:opacity-50">
+            className="kr-lift rounded-pill bg-kr-ink px-4 py-2.5 text-sm font-medium text-white transition-all disabled:opacity-50">
             Override
           </button>
         </DialogFooter>
@@ -144,9 +183,10 @@ export default function Workflows({ embedded = false }) {
   const [params] = useSearchParams();
   const focusWf = params.get("wf") || params.get("focus");
   const focusWfType = params.get("wf_type") || params.get("type");
-  const [tab, setTab] = useState(() => (focusWfType && pipelines.some((p) => p.key === focusWfType)) ? focusWfType : pipelines[0]?.key);
+  const [tab, setTab] = useState(() =>
+    (focusWfType && pipelines.some((p) => p.key === focusWfType)) ? focusWfType : pipelines[0]?.key);
   const activeKey = pipelines.some((p) => p.key === tab) ? tab : pipelines[0]?.key;
-  // WE-12: fetch with with_tasks=true so each card carries stage_tasks[].
+
   const { data } = useQuery({
     queryKey: ["workflows", activeKey, "with_tasks"],
     queryFn: () => api.get(`/workflows?type=${activeKey}&with_tasks=true`).then((r) => r.data),
@@ -163,51 +203,62 @@ export default function Workflows({ embedded = false }) {
   const pipeline = pipelines.find((p) => p.key === activeKey) || pipelines[0];
   const stages = pipeline?.stages || [];
   const stageLabelMap = Object.fromEntries(stages.map((s) => [s.key, s.label]));
-  const labelOf = (k) => stageLabelMap[k] || STAGE_LABEL(k);
+  const labelOf = (k) => stageLabelMap[k] || humanStage(k);
   const tabLabel = pipeline?.label || "";
-  const newWfDialog = (
-    <NewWorkflowDialog
-      type={activeKey} typeLabel={tabLabel} custLabel={L.customer_singular} vendLabel={L.vendor_singular}
-      onCreated={() => qc.invalidateQueries({ queryKey: ["workflows", activeKey, "with_tasks"] })} />
-  );
 
-  // WE-13: override state -- when the engine returns 409, we open the
-  // reason dialog for the workflow the user was trying to advance.
-  const [overrideCtx, setOverrideCtx] = useState(null); // {wf, blockedReason, targetStage}
+  const [overrideCtx, setOverrideCtx] = useState(null);   // {wf, blockedReason, targetStage}
+  // Drag state. `dragId` is what is in flight; `overStage` is the column
+  // under the pointer, used only to paint the drop target.
+  const [dragId, setDragId] = useState(null);
+  const [overStage, setOverStage] = useState(null);
+  const [busyId, setBusyId] = useState(null);
+
+  const refresh = useCallback(() => {
+    qc.invalidateQueries({ queryKey: ["workflows", activeKey, "with_tasks"] });
+    qc.invalidateQueries({ queryKey: ["dashboard"] });
+    qc.invalidateQueries({ queryKey: ["tasks"] });
+  }, [qc, activeKey]);
 
   const _postAdvance = async (wf, targetStage, opts = {}) => {
     const body = { stage: targetStage, note: t("workflows.moved_to", { stage: labelOf(targetStage) }) };
     if (opts.override) { body.override = true; body.reason = opts.reason; }
     await api.patch(`/workflows/${wf.id}/advance`, body);
     toast.success(`→ ${labelOf(targetStage)}`);
-    qc.invalidateQueries({ queryKey: ["workflows", activeKey, "with_tasks"] });
-    qc.invalidateQueries({ queryKey: ["dashboard"] });
-    qc.invalidateQueries({ queryKey: ["tasks"] });
+    refresh();
   };
 
-  const advance = async (wf) => {
-    const idx = wf.stages.indexOf(wf.stage);
-    if (idx >= wf.stages.length - 1) return toast.info(t("workflows.already_final"));
-    const next = wf.stages[idx + 1];
+  /**
+   * The ONE move path. Button and drop both land here, so the 409 → override
+   * flow cannot drift between them.
+   */
+  const moveTo = async (wf, targetStage) => {
+    if (!wf || !targetStage || wf.stage === targetStage) return;
+    setBusyId(wf.id);
     try {
-      await _postAdvance(wf, next);
+      await _postAdvance(wf, targetStage);
     } catch (e) {
       const status = e.response?.status;
       const detail = e.response?.data?.detail || t("workflows.cannot_advance");
-      // WE-13: 409 == stage not ready. Open reason dialog for override.
       if (status === 409) {
-        setOverrideCtx({ wf, blockedReason: detail.replace(/^Stage not ready:\s*/, ""), targetStage: next });
+        setOverrideCtx({ wf, blockedReason: detail.replace(/^Stage not ready:\s*/, ""), targetStage });
       } else {
         toast.error(detail);
       }
+    } finally {
+      setBusyId(null);
     }
+  };
+
+  const advance = (wf) => {
+    const idx = wf.stages.indexOf(wf.stage);
+    if (idx >= wf.stages.length - 1) return toast.info(t("workflows.already_final"));
+    return moveTo(wf, wf.stages[idx + 1]);
   };
 
   const confirmOverride = async (reason) => {
     if (!overrideCtx) return;
     try {
-      await _postAdvance(overrideCtx.wf, overrideCtx.targetStage,
-        { override: true, reason });
+      await _postAdvance(overrideCtx.wf, overrideCtx.targetStage, { override: true, reason });
       setOverrideCtx(null);
     } catch (e) {
       toast.error(e.response?.data?.detail || t("workflows.cannot_advance"));
@@ -219,100 +270,170 @@ export default function Workflows({ embedded = false }) {
     try {
       await api.delete(`/workflows/${wf.id}`);
       toast.success(t("workflows.deleted"));
-      qc.invalidateQueries({ queryKey: ["workflows", activeKey, "with_tasks"] });
-      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      refresh();
     } catch (e) {
       toast.error(e.response?.data?.detail || t("workflows.delete_failed"));
     }
   };
 
-  return (
-    <div>
-      {embedded ? (
-        <div className="flex justify-end mb-4">
-          {newWfDialog}
-        </div>
-      ) : (
-        <PageHeader eyebrow={t("workflows.eyebrow")} title={t("workflows.title")}>
-          {newWfDialog}
-        </PageHeader>
-      )}
+  const onDrop = (e, stageKey) => {
+    e.preventDefault();
+    setOverStage(null);
+    setDragId(null);
+    const id = e.dataTransfer.getData("text/plain");
+    const wf = (data || []).find((w) => w.id === id);
+    if (wf) moveTo(wf, stageKey);
+  };
 
-      {/* U7-06.1 (2026-08-17): shorter pipeline chips -- full stage flow
-          moved to hover tooltip so this row stops chewing horizontal
-          space.
-          U7-06.4 (2026-08-17): the earlier hide-empty rule (only render
-          a pipeline chip when it had at least one workflow) is reverted.
-          Founder ask: 'show the complete operational, not only data
-          workflow which has the data'. The pipelines represent every
-          operational flow this business runs; hiding an empty one made
-          the tenant think a whole flow was missing. Zero-count chips
-          are muted (label-mono muted-foreground) so live pipelines
-          still visually dominate. */}
-      <div className="flex flex-wrap border border-border mb-6 w-fit">
-        {pipelines
-          .map((pip) => {
+  const total = (data || []).length;
+
+  return (
+    <div data-testid="workflows-page">
+      <header className={embedded ? "mb-5 flex flex-wrap items-center justify-between gap-3" : "mb-7 flex flex-wrap items-end justify-between gap-4"}>
+        {!embedded && (
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{t("workflows.eyebrow")}</p>
+            <h1 className="mt-1.5 font-display text-3xl sm:text-4xl">{t("workflows.title")}</h1>
+          </div>
+        )}
+
+        {/* Pipeline switch — the same black-hairline pill the nav, the scope
+            toggle and Finance's tabs wear. Was a welded bordered block with
+            an inverted active slab, which read as the loudest thing on a
+            page whose subject is the board below it.
+            Empty pipelines still render (U7-06.4, founder: "show the
+            complete operational, not only the ones with data") — they just
+            carry a 0 and sit at the faded weight. */}
+        <div className="flex flex-wrap items-center gap-2" data-testid="workflow-pipelines">
+          {pipelines.map((pip) => {
             const count = (data || []).filter((w) => w.type === pip.key).length;
+            const active = activeKey === pip.key;
             return (
               <button key={pip.key} onClick={() => setTab(pip.key)} data-testid={`workflow-tab-${pip.key}`}
-                title={pip.sub || undefined}
-                className={`px-4 py-2.5 text-left border-r border-border last:border-r-0 transition-colors flex items-center gap-2 ${activeKey === pip.key ? "bg-primary text-primary-foreground" : "bg-white hover:bg-accent"}`}>
-                <span className="text-sm font-medium">{pip.label}</span>
-                <span className={`label-mono ${activeKey === pip.key ? "text-white/70" : "text-muted-foreground"}`}>{count}</span>
+                title={pip.sub || undefined} aria-pressed={active}
+                className={`flex h-9 items-center gap-2 rounded-pill border-[0.5px] px-3.5 text-sm transition-colors ${
+                  active ? "border-kr-ink font-medium text-foreground" : "border-kr-ink/55 text-foreground/65 hover:text-foreground/85"
+                }`}>
+                {pip.label}
+                <span className={`font-mono text-xs tabular-nums ${active ? "opacity-70" : "opacity-55"}`}>{count}</span>
               </button>
             );
           })}
-      </div>
+        </div>
 
-      {/* Brutalist kanban */}
-      <div className="border border-border overflow-x-auto">
-        <div className="flex min-w-max">
+        <NewWorkflowDialog
+          type={activeKey} typeLabel={tabLabel} custLabel={L.customer_singular} vendLabel={L.vendor_singular}
+          onCreated={refresh} />
+      </header>
+
+      {/* One line telling the founder the board is draggable. A drag
+          affordance nobody discovers is a feature nobody has. */}
+      <p className="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground">
+        <DotsSixVertical size={13} weight="bold" aria-hidden="true" />
+        Drag a card into its next stage, or use its button. {total} in this pipeline.
+      </p>
+
+      {/* THE BOARD. Columns are fixed-width and the board scrolls
+          horizontally on its own — the page never does. Column headers stay
+          put while a long column scrolls under them. */}
+      <div className="nm-inset overflow-x-auto rounded-cardlg p-2.5" data-testid="workflow-board">
+        <div className="flex min-w-max items-stretch gap-2.5">
           {stages.map((stg) => {
             const cards = (data || []).filter((w) => w.stage === stg.key);
+            const draggedWf = dragId ? (data || []).find((w) => w.id === dragId) : null;
+            const isSource = draggedWf?.stage === stg.key;
+            // The single legal destination for whatever is in flight.
+            const dropOk = !!draggedWf && (() => {
+              const i = draggedWf.stages.indexOf(draggedWf.stage);
+              return i >= 0 && draggedWf.stages[i + 1] === stg.key;
+            })();
+            const isTarget = overStage === stg.key && dropOk;
             return (
-              <div key={stg.key} className="w-64 shrink-0 border-r border-border last:border-r-0" data-testid={`stage-column-${stg.key}`}>
-                <div className="px-3 py-2 border-b border-border bg-brand-paper sticky top-0">
-                  <p className="label-mono">{stg.label}</p>
-                  <p className="font-heading font-black text-lg">{cards.length}</p>
+              <section
+                key={stg.key}
+                data-testid={`stage-column-${stg.key}`}
+                onDragOver={(e) => {
+                  if (!dropOk) return;              // no preventDefault ⇒ browser shows "no drop"
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                  setOverStage(stg.key);
+                }}
+                onDragLeave={() => setOverStage((s) => (s === stg.key ? null : s))}
+                onDrop={(e) => onDrop(e, stg.key)}
+                className={`flex w-[286px] shrink-0 flex-col rounded-tile transition-all ${
+                  isTarget ? "bg-kr-accent/10 ring-2 ring-kr-accent/60"
+                  : dropOk ? "bg-nm-raised/70 ring-1 ring-dashed ring-foreground/30"
+                  : dragId && !isSource ? "bg-nm-raised/40 opacity-45"
+                  : "bg-nm-raised/55"
+                }`}
+              >
+                <div className="sticky top-0 z-10 flex items-baseline justify-between gap-2 rounded-t-tile px-3.5 py-3 backdrop-blur-sm">
+                  <p className="truncate text-sm font-semibold">{stg.label}</p>
+                  <span className="font-mono text-sm tabular-nums opacity-60">{cards.length}</span>
                 </div>
-                <div className="p-2 space-y-2 min-h-[300px] bg-white">
+
+                <div className="flex min-h-[320px] flex-1 flex-col gap-2.5 p-2.5 pt-0">
+                  {cards.length === 0 && (
+                    <div className="grid flex-1 place-items-center rounded-control border border-dashed border-foreground/15 p-4">
+                      <p className="text-center text-xs text-muted-foreground">
+                        {isTarget ? "Drop to move here" : dropOk ? "Drop here to advance" : "Nothing at this stage"}
+                      </p>
+                    </div>
+                  )}
+
                   {cards.map((w) => {
                     const isLast = w.stages.indexOf(w.stage) >= w.stages.length - 1;
                     const lastEv = (w.history || [])[(w.history || []).length - 1];
                     const updAt = lastEv?.at || w.created_at;
                     const updLabel = lastEv?.note || t("workflows.created_label");
-                    // WE-12: inline task list -- current-stage open tasks
-                    // enriched with assignee_name. Backend returns
-                    // stage_tasks[] on the workflow doc when we call
-                    // ?with_tasks=true.
                     const stageTasks = w.stage_tasks || [];
+                    const nextKey = !isLast ? w.stages[w.stages.indexOf(w.stage) + 1] : null;
+                    const dragging = dragId === w.id;
                     return (
-                      <div key={w.id} id={`workflow-card-${w.id}`} data-testid={`workflow-card-${w.id}`} className={`border border-border p-3 shadow-hover bg-white transition-all ${w.id === focusWf ? "ring-4 ring-brand-600 ring-offset-2" : ""}`}>
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="font-semibold text-sm leading-tight">{w.title}</p>
+                      <article
+                        key={w.id}
+                        id={`workflow-card-${w.id}`}
+                        data-testid={`workflow-card-${w.id}`}
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData("text/plain", w.id);
+                          e.dataTransfer.effectAllowed = "move";
+                          setDragId(w.id);
+                        }}
+                        onDragEnd={() => { setDragId(null); setOverStage(null); }}
+                        className={`nm-tile group cursor-grab p-3 transition-all active:cursor-grabbing ${
+                          dragging ? "opacity-40" : ""
+                        } ${busyId === w.id ? "opacity-60" : ""} ${
+                          w.id === focusWf ? "ring-2 ring-kr-ink ring-offset-2" : ""
+                        }`}
+                      >
+                        <div className="flex items-start gap-2">
+                          <DotsSixVertical size={15} weight="bold" aria-hidden="true"
+                            className="mt-0.5 shrink-0 text-muted-foreground opacity-40 transition-opacity group-hover:opacity-80" />
+                          <p className="min-w-0 flex-1 text-sm font-semibold leading-snug">{w.title}</p>
                           {user?.role === "owner" && (
                             <button onClick={() => del(w)} data-testid={`delete-workflow-${w.id}`} title={t("workflows.delete_card")}
-                              className="shrink-0 text-muted-foreground hover:text-brand-600 transition-colors">
-                              <Trash size={14} weight="bold" />
+                              className="shrink-0 text-muted-foreground transition-colors hover:text-kr-accent">
+                              <Trash size={14} weight="bold" aria-hidden="true" />
                             </button>
                           )}
                         </div>
-                        {w.counterparty && <p className="text-xs text-muted-foreground mt-1">{w.counterparty}</p>}
-                        {w.amount != null && <p className="font-mono text-xs mt-1">{money(w.amount, tenant?.currency)}</p>}
 
-                        {/* WE-12 (2026-08-16): inline task list for this
-                            card's CURRENT stage. Each row shows the
-                            task title truncated + an assignee avatar
-                            chip. Clicking the row opens the task in
-                            My Work. Empty stage-task list renders a
-                            small italic "no open tasks" hint. */}
+                        {(w.counterparty || w.amount != null) && (
+                          <div className="mt-1.5 flex items-baseline justify-between gap-2 pl-[23px]">
+                            {w.counterparty && <span className="truncate text-xs text-muted-foreground">{w.counterparty}</span>}
+                            {w.amount != null && <span className="shrink-0 font-mono text-xs font-semibold tabular-nums">{money(w.amount, tenant?.currency)}</span>}
+                          </div>
+                        )}
+
                         {stageTasks.length > 0 ? (
-                          <div className="mt-2 space-y-1" data-testid={`wf-card-tasks-${w.id}`}>
+                          <div className="mt-2.5 space-y-1" data-testid={`wf-card-tasks-${w.id}`}>
                             {stageTasks.slice(0, 4).map((tk) => (
                               <a key={tk.id} href={`/my-work?task=${encodeURIComponent(tk.id)}`}
                                 data-testid={`wf-card-task-${w.id}-${tk.id}`}
-                                className="flex items-center gap-1.5 text-[11px] border border-border/60 bg-brand-paper/40 px-1.5 py-1 hover:bg-accent transition-colors">
-                                <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-primary text-primary-foreground text-[9px] font-bold shrink-0"
+                                draggable={false}
+                                className="flex items-center gap-1.5 rounded-control bg-nm-sunken px-1.5 py-1 text-[11px] transition-colors hover:bg-nm-sunken/70">
+                                <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-kr-ink text-[9px] font-bold text-white"
                                   title={tk.assignee_name || tk.assignee_role || "Unassigned"}>
                                   {_initials(tk.assignee_name) || (tk.assignee_role ? tk.assignee_role.slice(0, 1).toUpperCase() : "?")}
                                 </span>
@@ -320,50 +441,49 @@ export default function Workflows({ embedded = false }) {
                               </a>
                             ))}
                             {stageTasks.length > 4 && (
-                              <p className="text-[10px] text-muted-foreground italic pl-1">+ {stageTasks.length - 4} more</p>
+                              <p className="pl-1 text-[10px] text-muted-foreground">+ {stageTasks.length - 4} more</p>
                             )}
                           </div>
                         ) : (
-                          <p className="mt-2 text-[10px] text-muted-foreground italic">No open tasks at this stage.</p>
+                          <p className="mt-2.5 text-[10px] text-muted-foreground">No open tasks at this stage.</p>
                         )}
 
                         {updAt && (
-                          <p className="label-mono text-muted-foreground mt-2 flex items-center gap-1" data-testid={`workflow-updated-${w.id}`} title={fullTime(updAt)}>
-                            <ClockCounterClockwise size={11} weight="bold" /> {updLabel} · {timeAgo(updAt)}
+                          <p className="mt-2.5 flex items-center gap-1 text-[10px] text-muted-foreground"
+                            data-testid={`workflow-updated-${w.id}`} title={fullTime(updAt)}>
+                            <ClockCounterClockwise size={10} weight="bold" aria-hidden="true" /> {updLabel} · {timeAgo(updAt)}
                           </p>
                         )}
-                        {!isLast && (() => {
-                          // U7-06.2 (2026-08-17): show the next stage name
-                          // on the Advance button so users know where the
-                          // card is heading before they click. Was just
-                          // "Advance ->" with no context.
-                          const nextKey = w.stages[w.stages.indexOf(w.stage) + 1];
-                          const nextLabel = labelOf(nextKey) || nextKey || "next";
-                          return (
-                            <button onClick={() => advance(w)} data-testid={`advance-workflow-${w.id}`}
-                              title={`Move to ${nextLabel}`}
-                              className="mt-3 w-full flex items-center justify-center gap-1 border border-border py-1.5 text-xs font-medium hover:bg-accent transition-colors">
-                              {t("workflows.advance")} to {nextLabel} <ArrowRight size={12} weight="bold" />
-                            </button>
-                          );
-                        })()}
-                        {isLast && <Chip value={labelOf(w.stage)} className="mt-3" />}
-                      </div>
+
+                        {nextKey ? (
+                          <button onClick={() => advance(w)} data-testid={`advance-workflow-${w.id}`}
+                            disabled={busyId === w.id}
+                            title={`Move to ${labelOf(nextKey)}`}
+                            className="nm-btn mt-3 flex w-full items-center justify-center gap-1.5 py-2 text-xs font-medium disabled:opacity-50">
+                            {t("workflows.advance")} to {labelOf(nextKey)}
+                            <ArrowRight size={12} weight="bold" aria-hidden="true" className="kr-arrow transition-transform duration-200" />
+                          </button>
+                        ) : (
+                          <p className="mt-3 flex items-center justify-center gap-1.5 rounded-control bg-kr-ink py-2 text-xs font-semibold text-white">
+                            <Check size={12} weight="bold" aria-hidden="true" /> {labelOf(w.stage)}
+                          </p>
+                        )}
+                      </article>
                     );
                   })}
                 </div>
-              </div>
+              </section>
             );
           })}
         </div>
       </div>
 
-      {/* WE-13 override reason dialog */}
       <OverrideReasonDialog
         open={!!overrideCtx}
         onOpenChange={(v) => { if (!v) setOverrideCtx(null); }}
         wfTitle={overrideCtx?.wf?.title || ""}
         blockedReason={overrideCtx?.blockedReason || ""}
+        targetLabel={overrideCtx ? labelOf(overrideCtx.targetStage) : ""}
         onConfirm={confirmOverride}
       />
     </div>

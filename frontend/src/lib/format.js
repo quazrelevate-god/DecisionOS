@@ -124,3 +124,13 @@ export function formatPhone(raw) {
   if (!m) return s;
   return `+91 ${m[1].slice(0, 5)} ${m[1].slice(5)}`;
 }
+
+// KR-11 — humanStage moved here from pages/mobile/MyWorkMobile.jsx, which was
+// deleted with the rest of the mobile variants. A pure string helper had no
+// business living in a page component, and ContactProfileMobile was reaching
+// across into a sibling page to import it. Workflows.js's STAGE_LABEL was the
+// same three lines under a different name; both now call this.
+export function humanStage(s) {
+  if (!s) return "";
+  return String(s).replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+}

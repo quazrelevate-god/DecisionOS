@@ -17,7 +17,7 @@ import {
 import api from "../../lib/api";
 import { inr } from "../../lib/format";
 import { EmptyState, ListSkeleton, MoneySkeleton, StatusChip, dueLabel } from "../../components/mobile";
-import { humanStage } from "./MyWorkMobile";
+import { humanStage } from "../../lib/format";
 
 // §5.4: relative inside 7 days, absolute beyond, and never a raw ISO string —
 // "due 2026-07-14" is a database value wearing a date's clothes.

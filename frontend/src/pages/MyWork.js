@@ -1401,7 +1401,19 @@ const TIER_SPAN = {
   medium: "col-span-6 sm:col-span-3 lg:col-span-2",
   low:    "col-span-6 sm:col-span-3 lg:col-span-2",
 };
-const TIER_MINH = { high: "min-h-[210px]", medium: "min-h-[182px]", low: "min-h-[156px]" };
+/* KR-14.2 — 210/182/156 → 148/128/112. The tiles were sized for a card that
+   does not exist: a task's summary is a title, a status chip and a meta row,
+   which lands around 80px, so a third of every box was empty. The founder
+   asked for spacious and got hollow.
+   Measured on the way down: at 148 the ink sat with 46px of air above AND
+   below it — the content is vertically centred, so every pixel of excess
+   floor is paid twice. 128 leaves ~16px each side of a one-line card and
+   still clears the tallest real content (a two-line title measures 94px)
+   without clipping, because these are FLOORS — a tile grows if its card
+   needs it.
+   Ratios stay rectangular, the original ask: at 1280 a high tile is
+   799 × 128 and a medium 391 × 128. */
+const TIER_MINH = { high: "min-h-[128px]", medium: "min-h-[112px]", low: "min-h-[100px]" };
 
 function TaskBento({ list, openId, setOpenId, cardProps }) {
   return (

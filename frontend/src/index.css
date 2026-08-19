@@ -1590,6 +1590,48 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
 
        .kr-reveal: the dark band's entrance — 24px rise + fade, stamped
        `is-in` once by useReveal and never re-run. */
+    /* KR-14 · .kr-glow — hover that lights up instead of lifting.
+       Founder, on the top nav: "it should not have any popping up effect…
+       it should have a glow or a colour feel when I hover. It should not
+       physically move."
+
+       THE HALO IS A PSEUDO-ELEMENT, not a box-shadow, and that is a fix
+       rather than a preference. box-shadow was the obvious tool and it did
+       not survive: these pills also carry focus-visible:ring-* utilities,
+       and Tailwind's ring implementation composes box-shadow from
+       --tw-ring-offset-shadow / --tw-ring-shadow / --tw-shadow. On hover the
+       composed value won and the halo read as two transparent shadows —
+       measured on the live element. A pseudo-element cannot be overwritten
+       by that machinery.
+
+       Nothing here affects layout: ::after is absolutely positioned outside
+       the pill, and the only animated properties are opacity and colour.
+       Deliberately NOT .kr-lift — that one translates, and a row of seven
+       destinations each flinching as the cursor crosses reads as a toolbar
+       of buttons rather than a set of places. */
+    .kr-glow {
+        position: relative;
+        transition: border-color 220ms ease, color 220ms ease, background-color 260ms ease;
+    }
+    .kr-glow::after {
+        content: "";
+        position: absolute;
+        inset: -4px;
+        border-radius: inherit;
+        pointer-events: none;
+        opacity: 0;
+        background: radial-gradient(60% 120% at 50% 50%,
+            hsl(var(--kr-accent) / .30), transparent 72%);
+        filter: blur(6px);
+        transition: opacity 280ms cubic-bezier(.22, 1, .36, 1);
+    }
+    .kr-glow:hover::after { opacity: 1; }
+    .kr-glow:hover {
+        background-color: hsl(var(--kr-accent) / .07);
+        border-color: hsl(var(--kr-ink));
+        color: hsl(var(--foreground));
+    }
+
     .kr-lift {
         transition: transform 180ms cubic-bezier(.22, 1, .36, 1);
     }
@@ -1698,6 +1740,10 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
 
 @media (prefers-reduced-motion: reduce) {
     .kr-lift, .kr-lift:hover, .kr-lift:active { transition: none; transform: none; }
+    /* .kr-glow keeps its hover state under reduced motion — it never moved
+       anything, and removing the only affordance a nav pill has would cost
+       more than the easing saves. Only the timing goes. */
+    .kr-glow, .kr-glow::after { transition: none; }
     .kr-lift:hover .kr-arrow { transform: none; }
     .kr-reveal { opacity: 1; transform: none; transition: none; }
 

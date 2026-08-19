@@ -1,5 +1,6 @@
 // KR-4 · PillNav — the reference's centred header navigation: active = solid
-// ink pill with white text, inactive = a black hairline on the open ground.
+// ink pill with white text, inactive = a faded black hairline that glows on
+// hover without moving (KR-14).
 //
 // Built on NavLink so active state comes from the ROUTER (aria-current=page
 // for free), not from local state that can drift from the URL. The outline
@@ -26,16 +27,28 @@ export function PillNav({ items = [], size = "md", className, testid }) {
           className={({ isActive }) =>
             cn(
               "relative inline-flex items-center gap-1.5 rounded-pill font-medium whitespace-nowrap",
-              "transition-colors duration-200",
+              /* No `transition-colors` here: it lives in @layer utilities,
+                 which the cascade puts AFTER @layer components, so it would
+                 overwrite .kr-glow's own transition and the halo would snap
+                 instead of blooming. .kr-glow owns the timing for inactive
+                 pills; the active pill has no hover state to time. */
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline focus-visible:ring-offset-2",
               pad,
               isActive
                 ? "bg-kr-ink text-white"
-                /* KR-8.13 — a black hairline, not a 1px grey one. The founder
-                   wants every pill drawn with the thinnest possible black
-                   rule; kr-outline's grey was reading as a disabled edge
-                   beside the solid ink of the active pill. */
-                : "border-[0.5px] border-kr-ink text-foreground/80 hover:text-foreground"
+                /* KR-14 — the unselected pills step BACK, then light up on
+                   hover without moving.
+                   Founder: "the remaining pills should be slightly grayed
+                   out, and when I hover it should not have any popping up
+                   effect — instead a glow or colour feel. It should not
+                   physically move."
+                   So: no translate, no scale, nothing that shifts a
+                   neighbour's position. The hairline and the label both sit
+                   at ~45% at rest and come up to full on hover, and .kr-glow
+                   adds the halo. Motion here would also be the wrong signal —
+                   these are destinations, and a destination that flinches
+                   when you approach it reads as a button, not a place. */
+                : "kr-glow border-[0.5px] border-kr-ink/45 text-foreground/55"
             )
           }
         >

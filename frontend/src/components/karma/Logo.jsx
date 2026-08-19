@@ -1,29 +1,42 @@
-// KR-8.2 · the Karma logo — founder's directive: "change the decisionOS logo
-// appropriate for this particular design system. Discard the current logo."
+// KR-14 · the Karma wordmark — text only.
 //
-// The reference's mark is an ink rounded-square chip with a white glyph and a
-// lowercase geometric wordmark beside it. This is that, drawn in code: the
-// chip is the same ink as every action circle, the glyph is a bold Urbanist
-// "d", the wordmark is the UI face — so the logo is OF the system instead of
-// pasted onto it.
+// The chip is gone on the founder's call: "remove the logo icon showing 'd'
+// and keep the text alone." It was a second mark competing with the wordmark
+// beside it at 8px apart, and in a header whose whole left edge is otherwise
+// empty it read as a favicon that had wandered onto the page.
+//
+// CASING is the founder's too — DecisionOS, capital D and capital OS. The
+// two-tone split survives: "Decision" at full ink, "OS" dropped back, so the
+// product name still reads as one word with a suffix rather than two words.
+//
+// The sparkle is the same glyph the AI Priority control wears in My Work,
+// and reusing it is the point: one mark for "there is a model behind this",
+// wherever it appears. Translucent ink, sitting off the wordmark's top-right
+// like a superscript — present, not announcing itself.
 //
 // The PNG Wordmark component survives untouched for Landing/Login (the
 // marketing surfaces keep the registered lockup); only the app shell wears
 // this one.
 import * as React from "react";
+import { Sparkle } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 
 export function KarmaLogo({ size = "md", className }) {
-  const chip = size === "sm" ? "h-7 w-7 rounded-[9px] text-[15px]" : "h-8 w-8 rounded-[10px] text-[17px]";
-  const word = size === "sm" ? "text-[15px]" : "text-[17px]";
+  const word = size === "sm" ? "text-[16px]" : "text-[19px]";
+  const star = size === "sm" ? 9 : 10;
   return (
-    <span className={cn("inline-flex items-center gap-2.5 select-none", className)} data-testid="karma-logo">
-      <span className={cn("grid place-items-center bg-kr-ink font-bold leading-none text-white", chip)} aria-hidden="true">
-        d
+    <span className={cn("inline-flex select-none items-start", className)} data-testid="karma-logo">
+      <span className={cn("font-semibold leading-none tracking-tight text-foreground", word)}>
+        Decision<span className="opacity-55">OS</span>
       </span>
-      <span className={cn("font-semibold tracking-tight leading-none text-foreground", word)}>
-        decision<span className="opacity-55">os</span>
-      </span>
+      {/* -ml-px so it hangs off the S rather than adding a word-space, and
+          -mt-px to sit it on the cap line instead of the baseline. */}
+      <Sparkle
+        size={star}
+        weight="fill"
+        aria-hidden="true"
+        className="-ml-px -mt-px shrink-0 text-kr-ink/45"
+      />
     </span>
   );
 }

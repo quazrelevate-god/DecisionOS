@@ -309,10 +309,15 @@ export default function Workflows({ embedded = false }) {
             const count = (data || []).filter((w) => w.type === pip.key).length;
             const active = activeKey === pip.key;
             return (
+              /* KR-11.3 — neumorphic, not hairline. The founder could not tell
+                 the page's own controls from the app's top nav because both
+                 wore the same outlined pill. These are RAISED by default and
+                 PRESSED when active, which is what the material means and
+                 what the kanban cards below them are made of. */
               <button key={pip.key} onClick={() => setTab(pip.key)} data-testid={`workflow-tab-${pip.key}`}
                 title={pip.sub || undefined} aria-pressed={active}
-                className={`flex h-9 items-center gap-2 rounded-pill border-[0.5px] px-3.5 text-sm transition-colors ${
-                  active ? "border-kr-ink font-medium text-foreground" : "border-kr-ink/55 text-foreground/65 hover:text-foreground/85"
+                className={`flex h-10 items-center gap-2 rounded-pill px-4 text-sm transition-all ${
+                  active ? "kr-pressed font-semibold text-foreground" : "kr-pop text-foreground/75"
                 }`}>
                 {pip.label}
                 <span className={`font-mono text-xs tabular-nums ${active ? "opacity-70" : "opacity-55"}`}>{count}</span>
@@ -336,8 +341,8 @@ export default function Workflows({ embedded = false }) {
       {/* THE BOARD. Columns are fixed-width and the board scrolls
           horizontally on its own — the page never does. Column headers stay
           put while a long column scrolls under them. */}
-      <div className="nm-inset overflow-x-auto rounded-cardlg p-2.5" data-testid="workflow-board">
-        <div className="flex min-w-max items-stretch gap-2.5">
+      <div className="nm-inset overflow-x-auto rounded-cardlg p-4" data-testid="workflow-board">
+        <div className="flex min-w-max items-stretch gap-4">
           {stages.map((stg) => {
             const cards = (data || []).filter((w) => w.stage === stg.key);
             const draggedWf = dragId ? (data || []).find((w) => w.id === dragId) : null;
@@ -360,19 +365,23 @@ export default function Workflows({ embedded = false }) {
                 }}
                 onDragLeave={() => setOverStage((s) => (s === stg.key ? null : s))}
                 onDrop={(e) => onDrop(e, stg.key)}
-                className={`flex w-[286px] shrink-0 flex-col rounded-tile transition-all ${
+                /* No fill at rest — the board's inset well is the ground, and
+                   a grey panel per column was a box inside a box. The column
+                   only paints while a drag is live, and then only to say
+                   "this one accepts" or "this one does not". */
+                className={`flex w-[300px] shrink-0 flex-col rounded-tile transition-all ${
                   isTarget ? "bg-kr-accent/10 ring-2 ring-kr-accent/60"
-                  : dropOk ? "bg-nm-raised/70 ring-1 ring-dashed ring-foreground/30"
-                  : dragId && !isSource ? "bg-nm-raised/40 opacity-45"
-                  : "bg-nm-raised/55"
+                  : dropOk ? "ring-1 ring-dashed ring-foreground/30"
+                  : dragId && !isSource ? "opacity-40"
+                  : ""
                 }`}
               >
-                <div className="sticky top-0 z-10 flex items-baseline justify-between gap-2 rounded-t-tile px-3.5 py-3 backdrop-blur-sm">
+                <div className="flex items-baseline justify-between gap-2 px-1.5 pb-1 pt-1">
                   <p className="truncate text-sm font-semibold">{stg.label}</p>
-                  <span className="font-mono text-sm tabular-nums opacity-60">{cards.length}</span>
+                  <span className="font-mono text-sm tabular-nums opacity-50">{cards.length}</span>
                 </div>
 
-                <div className="flex min-h-[320px] flex-1 flex-col gap-2.5 p-2.5 pt-0">
+                <div className="flex min-h-[320px] flex-1 flex-col gap-3 p-1.5">
                   {cards.length === 0 && (
                     <div className="grid flex-1 place-items-center rounded-control border border-dashed border-foreground/15 p-4">
                       <p className="text-center text-xs text-muted-foreground">
@@ -401,7 +410,7 @@ export default function Workflows({ embedded = false }) {
                           setDragId(w.id);
                         }}
                         onDragEnd={() => { setDragId(null); setOverStage(null); }}
-                        className={`nm-tile group cursor-grab p-3 transition-all active:cursor-grabbing ${
+                        className={`kr-bento group cursor-grab p-3.5 active:cursor-grabbing ${
                           dragging ? "opacity-40" : ""
                         } ${busyId === w.id ? "opacity-60" : ""} ${
                           w.id === focusWf ? "ring-2 ring-kr-ink ring-offset-2" : ""

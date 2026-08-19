@@ -35,9 +35,27 @@ import {
 // strength against faded neighbours. The old CTRL was an nm-btn whose active
 // state was an indigo tint, which put three different "on" colours (indigo
 // tint, indigo solid, grey) in one 8-button row.
-const CTRL = "flex h-9 items-center justify-center gap-1.5 rounded-pill border-[0.5px] px-3.5 text-xs font-medium leading-tight transition-colors lg:text-sm";
-const CTRL_ON = "border-kr-ink text-foreground";
-const CTRL_OFF = "border-kr-ink/55 text-foreground/65 hover:text-foreground/85";
+// KR-11.3 — THREE GROUPS, THREE TREATMENTS.
+// The founder could not tell the app's top nav from this page's own controls
+// because all five wore the identical hairline pill. They are different
+// kinds of thing and now look it:
+//
+//   scope/sort   My Tasks · All Tasks · AI Priority — one SEGMENTED track.
+//                They are mutually-related lenses on the same list, so they
+//                share a well and the chosen one sits raised inside it.
+//   workflows    a section switch, not a lens. Filled ink, its own island —
+//                the loudest control on the row, which is right: the founder
+//                calls it the core of the system.
+//   leave        also a section switch, but a quiet one. Standalone,
+//                neumorphic-raised, deliberately not grouped with anything.
+//
+// The segmented track inverts the neumorphic convention on purpose: the
+// TRACK is sunken and the SELECTION is raised, because here the selection is
+// a thing you picked up out of a groove, not a button you pushed in.
+const SEG = "flex h-9 items-center justify-center gap-1.5 rounded-pill px-3.5 text-xs font-medium leading-tight transition-all lg:text-sm";
+const SEG_ON = "kr-pop text-foreground";
+const SEG_OFF = "text-foreground/60 hover:text-foreground/85";
+const SECTION_BTN = "flex h-10 items-center justify-center gap-1.5 rounded-pill px-4 text-xs font-medium leading-tight transition-all lg:text-sm";
 
 const STATUS_OPTIONS = [
   { key: "todo", label: "Not Started" },
@@ -1602,30 +1620,31 @@ export default function MyWork() {
           <h1 className="mt-1.5 font-display text-3xl sm:text-4xl">{t("mywork.title")}</h1>
         </div>
         <div className="flex w-full flex-col gap-2 lg:w-auto lg:flex-row lg:items-center" data-testid="mywork-controls">
-          <div className="order-2 lg:order-1 grid grid-cols-4 gap-2 lg:flex lg:flex-wrap lg:items-center" data-testid="mywork-actions">
+          <div className="order-2 flex flex-wrap items-center gap-2.5 lg:order-1" data-testid="mywork-actions">
             <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members}
-              triggerClassName={`${CTRL} border-transparent bg-kr-ink text-white kr-lift`} />
+              triggerClassName={`${SECTION_BTN} kr-lift bg-kr-ink text-white`} />
             {isOwner && (
-              <>
+              <div className="nm-inset flex items-center gap-1 rounded-pill p-1" data-testid="mywork-lens-group">
                 <button onClick={() => { setScope("mine"); setView("mywork"); }} data-testid="work-scope-mine"
-                  className={`${CTRL} ${view === "mywork" && scope === "mine" ? CTRL_ON : CTRL_OFF}`}>{t("mywork.my_tasks")}</button>
+                  aria-pressed={view === "mywork" && scope === "mine" && !aiPriority}
+                  className={`${SEG} ${view === "mywork" && scope === "mine" && !aiPriority ? SEG_ON : SEG_OFF}`}>{t("mywork.my_tasks")}</button>
                 <button onClick={() => { setScope("all"); setView("mywork"); }} data-testid="work-scope-all"
-                  className={`${CTRL} ${view === "mywork" && scope === "all" ? CTRL_ON : CTRL_OFF}`}>{t("mywork.all_tasks")}</button>
-              </>
-            )}
+                  aria-pressed={view === "mywork" && scope === "all" && !aiPriority}
+                  className={`${SEG} ${view === "mywork" && scope === "all" && !aiPriority ? SEG_ON : SEG_OFF}`}>{t("mywork.all_tasks")}</button>
             {/* U7-05: AI Priority is owner-only. Founder ask 2026-08-17:
                 'ai priority also right only for owner got it'. The ranker
                 is a whole-team judgment tool, not something an IC needs
                 over their own list -- it hides which of my tasks I picked
                 to work on based on someone else's AI score. */}
-            {isOwner && (
-              <button onClick={() => { setAiPriority((v) => !v); setView("mywork"); }} data-testid="ai-priority-toggle"
-                className={`${CTRL} ${view === "mywork" && aiPriority ? CTRL_ON : CTRL_OFF}`}>
-                <Sparkle size={15} weight="bold" /> {scoring ? t("mywork.scoring") : aiPriority ? t("mywork.ai_priority_on") : t("mywork.ai_priority")}
-              </button>
+                <button onClick={() => { setAiPriority((v) => !v); setView("mywork"); }} data-testid="ai-priority-toggle"
+                  aria-pressed={view === "mywork" && aiPriority}
+                  className={`${SEG} ${view === "mywork" && aiPriority ? SEG_ON : SEG_OFF}`}>
+                  <Sparkle size={14} weight="bold" aria-hidden="true" /> {scoring ? t("mywork.scoring") : aiPriority ? t("mywork.ai_priority_on") : t("mywork.ai_priority")}
+                </button>
+              </div>
             )}
           </div>
-          <div className="order-1 lg:order-2 grid grid-cols-4 gap-2 lg:flex lg:items-center" data-testid="work-view-toggle">
+          <div className="order-1 flex flex-wrap items-center gap-2.5 lg:order-2" data-testid="work-view-toggle">
             {/* U7-05.11 (2026-08-17): 'Tasks' view toggle removed for
                 owner. The MY TASKS / ALL TASKS / AI PRIORITY buttons
                 already route back to view=mywork on click, so Tasks
@@ -1637,19 +1656,28 @@ export default function MyWork() {
                 workflow and leave'. */}
             {!isOwner && (
               <button onClick={() => setView("mywork")} data-testid="work-view-mywork"
-                className={`${CTRL} ${view === "mywork" ? CTRL_ON : CTRL_OFF}`}>
-                <ListIcon size={15} weight="bold" /> {t("mywork.view_mywork")}
+                aria-pressed={view === "mywork"}
+                className={`${SECTION_BTN} ${view === "mywork" ? "kr-pressed font-semibold" : "kr-pop text-foreground/75"}`}>
+                <ListIcon size={15} weight="regular" aria-hidden="true" /> {t("mywork.view_mywork")}
               </button>
             )}
+            {/* Workflows — the founder's "highlight it to differentiate".
+                Filled ink when open, ink-outlined when not: the only control
+                in the row that ever goes solid, so it never reads as one more
+                lens. */}
             {canSeeWorkflows && (
               <button onClick={() => setView("workflows")} data-testid="work-view-workflows"
-                className={`${CTRL} ${view === "workflows" ? CTRL_ON : CTRL_OFF}`}>
-                <ArrowRight size={15} weight="bold" /> {t("mywork.view_workflows")}
+                aria-pressed={view === "workflows"}
+                className={`${SECTION_BTN} kr-lift ${
+                  view === "workflows" ? "bg-kr-ink font-semibold text-white" : "border border-kr-ink bg-transparent text-foreground"
+                }`}>
+                <FlowArrow size={16} weight="bold" aria-hidden="true" /> {t("mywork.view_workflows")}
               </button>
             )}
             <button onClick={() => setView("leave")} data-testid="work-view-leave"
-              className={`${CTRL} ${view === "leave" ? CTRL_ON : CTRL_OFF}`}>
-              <AirplaneTakeoff size={15} weight="bold" /> {t("mywork.view_leave")}
+              aria-pressed={view === "leave"}
+              className={`${SECTION_BTN} ${view === "leave" ? "kr-pressed font-semibold" : "kr-pop text-foreground/75"}`}>
+              <AirplaneTakeoff size={15} weight="regular" aria-hidden="true" /> {t("mywork.view_leave")}
             </button>
           </div>
         </div>

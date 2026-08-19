@@ -30,12 +30,12 @@ const ABSENCE_REASONS = [
   { key: "other", label: "Other" },
 ];
 const STATUS_META = {
-  pending: { label: "Pending", cls: "bg-caution-50 text-caution-800" },
-  approved: { label: "Approved", cls: "bg-green-600 text-white" },
-  rejected: { label: "Rejected", cls: "bg-danger-600 text-white" },
-  info_requested: { label: "Info Requested", cls: "bg-orange-500 text-white" },
+  pending: { label: "Pending", cls: "border-[0.5px] border-kr-ink text-foreground" },
+  approved: { label: "Approved", cls: "bg-kr-ink text-white" },
+  rejected: { label: "Rejected", cls: "bg-kr-accent text-white" },
+  info_requested: { label: "Info Requested", cls: "border-[0.5px] border-kr-accent text-kr-accent" },
 };
-const inp = "w-full border border-border px-3 py-2 text-sm font-mono focus:outline-none focus:shadow-sm";
+const inp = "w-full nm-field px-3 py-2 text-sm";
 const typeLabel = (k) => LEAVE_TYPES.find((t) => t.key === k)?.label || k;
 const fmtRange = (lv) => lv.from_date === lv.to_date ? lv.from_date : `${lv.from_date} → ${lv.to_date}`;
 
@@ -61,12 +61,12 @@ function RequestLeaveDialog({ onDone }) {
         <button
           data-testid="request-leave-button"
           title="Plan time off in advance -- needs approval"
-          className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 text-sm font-medium border border-border transition-all"
+          className="kr-lift flex items-center gap-2 rounded-pill bg-kr-ink px-4 py-2.5 text-sm font-medium text-white transition-all"
         >
           <Plus size={16} weight="bold" /> Request Leave
         </button>
       </DialogTrigger>
-      <DialogContent className="border border-border rounded-xl">
+      <DialogContent className="rounded-cardlg border border-nm-edge/40">
         <DialogHeader>
           <DialogTitle className="font-display text-xl">Request Leave</DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">Your reporting manager or department approver will be notified.</DialogDescription>
@@ -88,16 +88,16 @@ function RequestLeaveDialog({ onDone }) {
               <input data-testid="leave-to-date" type="date" className={`${inp} mt-1`} value={form.to_date} onChange={set("to_date")} />
             </div>
           </div>
-          <div className="flex border border-border" data-testid="leave-portion-toggle">
+          <div className="nm-inset flex items-center gap-1 rounded-pill p-1" data-testid="leave-portion-toggle">
             <button type="button" onClick={() => setForm({ ...form, day_portion: "full" })}
-              className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${form.day_portion === "full" ? "bg-primary text-primary-foreground" : "bg-white hover:bg-accent"}`}>Full Day</button>
+              className={`flex-1 rounded-pill px-3 py-2 text-xs font-medium transition-all ${form.day_portion === "full" ? "kr-pop text-foreground" : "text-foreground/60 hover:text-foreground/85"}`}>Full Day</button>
             <button type="button" onClick={() => setForm({ ...form, day_portion: "half" })}
-              className={`flex-1 px-3 py-2 text-xs font-medium border-l border-border transition-colors ${form.day_portion === "half" ? "bg-primary text-primary-foreground" : "bg-white hover:bg-accent"}`}>Half Day</button>
+              className={`flex-1 rounded-pill px-3 py-2 text-xs font-medium transition-all ${form.day_portion === "half" ? "kr-pop text-foreground" : "text-foreground/60 hover:text-foreground/85"}`}>Half Day</button>
           </div>
           <textarea data-testid="leave-reason-input" className={inp} rows={2} placeholder="Reason" value={form.reason} onChange={set("reason")} />
         </div>
         <DialogFooter>
-          <button data-testid="leave-submit" onClick={submit} className="bg-brand-600 text-white px-5 py-2 text-sm font-medium border border-border transition-all">Submit</button>
+          <button data-testid="leave-submit" onClick={submit} className="kr-lift rounded-pill bg-kr-ink px-5 py-2.5 text-sm font-medium text-white transition-all">Submit</button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -122,12 +122,12 @@ function AbsenceDialog({ onDone }) {
         <button
           data-testid="report-absence-button"
           title="Same-day unplanned absence -- no approval needed"
-          className="flex items-center gap-2 bg-brand-600 text-white px-4 py-2 text-sm font-medium border border-border transition-all"
+          className="kr-lift flex items-center gap-2 rounded-pill bg-kr-ink px-4 py-2.5 text-sm font-medium text-white transition-all"
         >
           <WarningOctagon size={16} weight="bold" /> Report Absence Today
         </button>
       </DialogTrigger>
-      <DialogContent className="border border-border rounded-xl">
+      <DialogContent className="rounded-cardlg border border-nm-edge/40">
         <DialogHeader>
           <DialogTitle className="font-display text-xl">Report Absence Today</DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">Sends an immediate notification to your approver — no advance notice needed.</DialogDescription>
@@ -142,7 +142,7 @@ function AbsenceDialog({ onDone }) {
           <textarea data-testid="absence-note-input" className={inp} rows={2} placeholder="Optional note" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
         </div>
         <DialogFooter>
-          <button data-testid="absence-submit" onClick={submit} className="bg-brand-600 text-white px-5 py-2 text-sm font-medium border border-border transition-all">Notify Now</button>
+          <button data-testid="absence-submit" onClick={submit} className="kr-lift rounded-pill bg-kr-ink px-5 py-2.5 text-sm font-medium text-white transition-all">Notify Now</button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -150,8 +150,8 @@ function AbsenceDialog({ onDone }) {
 }
 
 const ACTION_META = {
-  reassign: { label: "Reassign", cls: "bg-primary text-primary-foreground", Icon: ArrowsClockwise },
-  extend: { label: "Extend due date", cls: "bg-orange-500 text-white", Icon: CalendarPlus },
+  reassign: { label: "Reassign", cls: "bg-kr-ink text-white", Icon: ArrowsClockwise },
+  extend: { label: "Extend due date", cls: "border-[0.5px] border-kr-ink text-foreground", Icon: CalendarPlus },
   monitor: { label: "Monitor", cls: "bg-white", Icon: Eye },
 };
 
@@ -210,10 +210,10 @@ function ImpactDialog({ leaveId, open, onOpenChange, onApplied }) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="border border-border rounded-xl max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="leave-impact-dialog">
+      <DialogContent className="rounded-cardlg border border-nm-edge/40 max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="leave-impact-dialog">
         <DialogHeader>
           <DialogTitle className="font-display text-xl flex items-center gap-2">
-            <Sparkle size={18} weight="fill" className="text-brand-600" /> AI Impact Analysis
+            <Sparkle size={18} weight="fill" aria-hidden="true" /> AI Impact Analysis
           </DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
             {data ? `What ${data.person}'s leave affects, and how to keep work on track.` : "Checking active tasks affected by this leave…"}
@@ -222,7 +222,7 @@ function ImpactDialog({ leaveId, open, onOpenChange, onApplied }) {
 
         {loading && (
           <div className="flex flex-col items-center justify-center py-12 text-muted-foreground" data-testid="impact-loading">
-            <CircleNotch size={34} weight="bold" className="animate-spin text-brand-600" />
+            <CircleNotch size={34} weight="bold" aria-hidden="true" className="animate-spin" />
             <p className="text-sm mt-3">Analyzing workload &amp; suggesting cover…</p>
           </div>
         )}
@@ -230,7 +230,7 @@ function ImpactDialog({ leaveId, open, onOpenChange, onApplied }) {
         {!loading && data && (
           <div className="space-y-3" data-testid="impact-content">
             {data.summary && (
-              <div className="border border-border bg-brand-paper p-3 text-sm" data-testid="impact-summary">{data.summary}</div>
+              <div className="nm-inset p-3 text-sm" data-testid="impact-summary">{data.summary}</div>
             )}
             {tasks.length === 0 && (
               <EmptyState title="No tasks at risk" hint="This person has no active tasks due during their absence. You're all set." />
@@ -240,7 +240,7 @@ function ImpactDialog({ leaveId, open, onOpenChange, onApplied }) {
               const e = edits[t.id] || {};
               const done = applied[t.id];
               return (
-                <div key={t.id} data-testid={`impact-task-${t.id}`} className="border border-border p-3">
+                <div key={t.id} data-testid={`impact-task-${t.id}`} className="nm-tile p-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="font-semibold text-sm leading-tight">{t.title}</p>
@@ -260,7 +260,7 @@ function ImpactDialog({ leaveId, open, onOpenChange, onApplied }) {
                         {members.map((mm) => <option key={mm.id} value={mm.id}>{mm.name} · {mm.role}</option>)}
                       </select>
                       <button onClick={() => applyOne(t)} data-testid={`impact-apply-${t.id}`}
-                        className="shrink-0 flex items-center gap-1 bg-primary text-primary-foreground px-3 py-1.5 text-xs font-medium border border-border transition-all">
+                        className="kr-lift flex shrink-0 items-center gap-1 rounded-pill bg-kr-ink px-3.5 py-2 text-xs font-medium text-white transition-all">
                         <ArrowsClockwise size={13} weight="bold" /> Reassign
                       </button>
                     </div>
@@ -270,7 +270,7 @@ function ImpactDialog({ leaveId, open, onOpenChange, onApplied }) {
                       <input type="date" data-testid={`impact-date-${t.id}`} className={`${inp} text-sm`}
                         value={e.due_date} onChange={(ev) => setEdits((s) => ({ ...s, [t.id]: { ...s[t.id], due_date: ev.target.value } }))} />
                       <button onClick={() => applyOne(t)} data-testid={`impact-apply-${t.id}`}
-                        className="shrink-0 flex items-center gap-1 bg-orange-500 text-white px-3 py-1.5 text-xs font-medium border border-border transition-all">
+                        className="flex shrink-0 items-center gap-1 rounded-pill border border-kr-accent px-3.5 py-2 text-xs font-medium text-kr-accent transition-all hover:bg-kr-accent/10">
                         <CalendarPlus size={13} weight="bold" /> Extend
                       </button>
                     </div>
@@ -287,7 +287,7 @@ function ImpactDialog({ leaveId, open, onOpenChange, onApplied }) {
             {recCount > 0 && (
               <DialogFooter className="pt-1">
                 <button onClick={applyAll} disabled={allApplied} data-testid="impact-apply-all"
-                  className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2 text-sm font-medium border border-border transition-all disabled:opacity-50">
+                  className="kr-lift flex items-center gap-2 rounded-pill bg-kr-ink px-5 py-2.5 text-sm font-medium text-white transition-all disabled:opacity-50">
                   <Sparkle size={15} weight="fill" /> {allApplied ? "All applied" : `Apply all recommended (${recCount})`}
                 </button>
               </DialogFooter>
@@ -316,10 +316,10 @@ function LeaveCard({ lv, canAct, onRefresh, highlight }) {
   };
 
   return (
-    <div data-testid={`leave-card-${lv.id}`} className={`card-brutal p-4 transition-all ${highlight ? "ring-4 ring-brand-600 ring-offset-2" : ""}`}>
+    <div data-testid={`leave-card-${lv.id}`} className={`kr-bento p-4 ${highlight ? "ring-2 ring-kr-ink ring-offset-2" : ""}`}>
       <div className="flex items-center gap-1.5 flex-wrap mb-2">
         <Chip value={st.label} className={st.cls} data-testid={`leave-status-${lv.id}`} />
-        <Chip value={typeLabel(lv.leave_type)} className="bg-primary text-primary-foreground" />
+        <Chip value={typeLabel(lv.leave_type)} className="bg-kr-ink text-white" />
         {lv.day_portion === "half" && <Chip value="Half day" className="bg-white" />}
         {lv.is_emergency && <Chip value="Emergency" className="bg-black text-white" />}
       </div>
@@ -330,14 +330,14 @@ function LeaveCard({ lv, canAct, onRefresh, highlight }) {
         <Clock size={11} weight="bold" /> {timeAgo(lv.created_at)}{lv.approver_name ? ` · Approver: ${lv.approver_name}` : ""}
       </p>
       {lv.status === "info_requested" && lv.info_note && (
-        <div className="mt-2 border border-orange-500 bg-orange-50 p-2 text-xs" data-testid={`leave-info-note-${lv.id}`}>
+        <div className="mt-2 rounded-control border-l-[3px] border-kr-accent bg-kr-accent/8 p-2.5 text-xs" data-testid={`leave-info-note-${lv.id}`}>
           <span className="font-semibold">Info requested:</span> {lv.info_note}
         </div>
       )}
 
       {canAct && lv.status === "approved" && (
         <button onClick={() => setImpactOpen(true)} data-testid={`leave-impact-btn-${lv.id}`}
-          className="mt-3 w-full flex items-center justify-center gap-1.5 bg-primary text-primary-foreground py-1.5 text-xs font-medium border border-border transition-all">
+          className="kr-lift mt-3 flex w-full items-center justify-center gap-1.5 rounded-pill bg-kr-ink py-2 text-xs font-medium text-white transition-all">
           <Sparkle size={14} weight="fill" /> AI Impact Analysis
         </button>
       )}
@@ -348,29 +348,29 @@ function LeaveCard({ lv, canAct, onRefresh, highlight }) {
           {!action ? (
             <div className="flex gap-2 flex-wrap">
               <button onClick={() => decide("approve")} data-testid={`leave-approve-${lv.id}`}
-                className="flex-1 flex items-center justify-center gap-1 bg-green-600 text-white py-1.5 text-xs font-medium border border-border transition-all">
+                className="kr-lift flex flex-1 items-center justify-center gap-1 rounded-pill bg-kr-ink py-2 text-xs font-medium text-white transition-all">
                 <CheckCircle size={14} weight="bold" /> Approve
               </button>
               <button onClick={() => setAction("reject")} data-testid={`leave-reject-${lv.id}`}
-                className="flex items-center gap-1 bg-white py-1.5 px-3 text-xs font-medium border border-border hover:bg-brand-600 hover:text-white transition-colors">
+                className="nm-btn flex items-center gap-1 px-3 py-2 text-xs font-medium">
                 <XCircle size={14} weight="bold" /> Reject
               </button>
               <button onClick={() => setAction("info")} data-testid={`leave-info-${lv.id}`}
-                className="flex items-center gap-1 bg-white py-1.5 px-3 text-xs font-medium border border-border hover:bg-orange-500 hover:text-white transition-colors">
+                className="flex items-center gap-1 rounded-pill border border-kr-accent px-3 py-2 text-xs font-medium text-kr-accent transition-colors hover:bg-kr-accent/10">
                 <ChatCircleText size={14} weight="bold" /> Info
               </button>
             </div>
           ) : (
-            <div className="space-y-2 border border-dashed border-border p-2">
+            <div className="nm-inset space-y-2 p-2.5">
               <textarea data-testid={`leave-note-${lv.id}`} className={`${inp} text-xs`} rows={2}
                 placeholder={action === "reject" ? "Reason for rejection (optional)" : "What info do you need?"}
                 value={note} onChange={(e) => setNote(e.target.value)} />
               <div className="flex gap-2">
                 <button onClick={() => decide(action === "reject" ? "reject" : "request-info")} data-testid={`leave-confirm-${lv.id}`}
-                  className="flex-1 bg-primary text-primary-foreground py-1.5 text-xs font-medium border border-border hover:bg-brand-600 transition-colors">
+                  className="kr-lift flex-1 rounded-pill bg-kr-ink py-2 text-xs font-medium text-white transition-colors">
                   {action === "reject" ? "Confirm Reject" : "Send Request"}
                 </button>
-                <button onClick={() => { setAction(null); setNote(""); }} className="px-3 py-1.5 text-xs font-medium border border-border hover:bg-accent">Cancel</button>
+                <button onClick={() => { setAction(null); setNote(""); }} className="nm-btn px-3 py-2 text-xs font-medium">Cancel</button>
               </div>
             </div>
           )}
@@ -394,8 +394,8 @@ function ApproverConfig({ roleOptions, members }) {
     } catch (e) { toast.error(e.response?.data?.detail || "Save failed"); }
   };
   return (
-    <div className="card-brutal p-4" data-testid="leave-approver-config">
-      <div className="flex items-center gap-2 mb-1"><Gear size={18} weight="bold" className="text-brand-600" />
+    <div className="nm-tile p-5" data-testid="leave-approver-config">
+      <div className="flex items-center gap-2 mb-1"><Gear size={18} weight="regular" aria-hidden="true" className="text-muted-foreground" />
         <h3 className="text-base font-medium">Leave Approvers by Department</h3></div>
       <p className="text-xs text-muted-foreground mb-3">Choose who approves leave for each role. If an employee has a Reporting Manager set (in People → Employees), that manager takes priority. Otherwise this mapping is used, then the Owner.</p>
       <div className="space-y-2">
@@ -411,7 +411,7 @@ function ApproverConfig({ roleOptions, members }) {
           </div>
         ))}
       </div>
-      <button onClick={save} data-testid="save-leave-approvers" className="mt-4 bg-primary text-primary-foreground px-5 py-2 text-sm font-medium border border-border transition-all">Save Approvers</button>
+      <button onClick={save} data-testid="save-leave-approvers" className="kr-lift mt-4 rounded-pill bg-kr-ink px-5 py-2.5 text-sm font-medium text-white transition-all">Save Approvers</button>
     </div>
   );
 }
@@ -456,12 +456,12 @@ export default function Leave({ embedded = false }) {
         <PageHeader eyebrow="Time off & availability" title="Leave & Absence">{actions}</PageHeader>
       )}
 
-      <div className="flex border border-border mb-6 w-fit" data-testid="leave-tabs">
+      <div className="nm-inset mb-6 flex w-fit items-center gap-1 rounded-pill p-1" data-testid="leave-tabs">
         {TABS.map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)} data-testid={`leave-tab-${t.key}`}
-            className={`flex items-center gap-2 px-5 py-2.5 text-sm font-medium border-r border-border last:border-r-0 transition-colors ${tab === t.key ? "bg-primary text-primary-foreground" : "bg-white hover:bg-accent"}`}>
+            className={`flex h-9 items-center gap-2 rounded-pill px-4 text-sm font-medium transition-all ${tab === t.key ? "kr-pop text-foreground" : "text-foreground/60 hover:text-foreground/85"}`}>
             {t.label}
-            {t.n > 0 && <span className={`min-w-5 h-5 px-1 flex items-center justify-center text-[10px] border border-border ${tab === t.key ? "bg-white text-black" : "bg-brand-600 text-white"}`}>{t.n}</span>}
+            {t.n > 0 && <span className="flex h-5 min-w-5 items-center justify-center rounded-pill px-1 font-mono text-[10px] tabular-nums opacity-60">{t.n}</span>}
           </button>
         ))}
       </div>

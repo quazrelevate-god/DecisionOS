@@ -1552,6 +1552,22 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
             -5px -5px 11px hsl(0 0% 100% / .80),
              6px  6px 14px hsl(230 22% 34% / .28);
     }
+    /* KR-11.3 · .kr-pressed — the "on" state of a neumorphic control.
+       .kr-pop's :active is momentary; this is the same look held. Selected
+       means pushed IN, which is the one thing this material says better than
+       a fill does: the app's outlined pills mark selection with contrast,
+       these mark it with depth, and the founder can now tell a page control
+       from a nav control at a glance. */
+    .kr-pressed {
+        border: 0;
+        background: hsl(0 0% 100% / .30);
+        -webkit-backdrop-filter: blur(14px) saturate(1.4);
+        backdrop-filter: blur(14px) saturate(1.4);
+        box-shadow:
+            inset 4px 4px 9px hsl(230 22% 34% / .22),
+            inset -4px -4px 9px hsl(0 0% 100% / .72);
+    }
+
     .kr-pop:active {
         transform: translateY(1px);
         box-shadow:

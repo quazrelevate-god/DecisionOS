@@ -38,11 +38,12 @@ export function DarkBand({ children, reveal = true, className, testid }) {
           it; this is only the small dark bar the reference draws in the
           middle of that gap. Ink at low alpha so it reads on whatever the
           bloom happens to be doing behind it.
-          KR-8.6 — it was at -11px, i.e. floating ABOVE the band's edge. In
-          the reference the bar sits low, in the sag itself: 36×4 at +4px. */}
+          KR-14.1 — the dip is 18px deep now (a drawn path, not an ellipse),
+          so the bar sits at +7px: centred in the flat floor rather than
+          clinging to one wall of an oval. */}
       <span
         aria-hidden="true"
-        className="absolute top-[4px] left-1/2 block h-[4px] w-9 -translate-x-1/2 rounded-full bg-kr-ink/55"
+        className="absolute top-[7px] left-1/2 block h-[4px] w-9 -translate-x-1/2 rounded-full bg-kr-ink/55"
       />
       <div ref={reveal ? ref : undefined} className={reveal ? "kr-reveal" : undefined}>
         {children}

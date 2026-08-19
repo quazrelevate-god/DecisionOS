@@ -1320,27 +1320,38 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
         background: hsl(var(--kr-ink));
         border-radius: 44px 44px 0 0;   /* KR-8.2: matched to the reference */
 
-        /* KR-8.5 — THE NOTCH DIPS, IT DOES NOT RISE. KR-8.2 read the
-           reference upside down and built a tab protruding above the top
-           edge; the founder's snippet shows the opposite — the edge sinks at
-           centre and the page shows through the dip.
-           It is cut with a mask rather than painted, because what shows
-           through is the amber bloom: any solid "notch coloured like the
-           background" would be a flat patch on a gradient. Two mask layers,
-           excluded: a full-cover layer minus a hard-edged ellipse at top
-           centre.
-           KR-8.6 — re-measured off the reference at full res. The dip is far
-           WIDER and SHALLOWER than KR-8.5 cut it (that one read as a bite;
-           the reference is a long, lazy sag): ~132px across against ~13px
-           deep, roughly a 10:1 ellipse. The grab bar moved down INSIDE it
-           (see DarkBand) — in the reference it sits in the gap, not above
-           the edge. */
+        /* KR-14.1 — THE NOTCH IS A DRAWN PATH, NOT AN ELLIPSE.
+           Every version until now cut the dip with a radial-gradient, which
+           can only ever produce an oval bite — the founder's words: "it's
+           some oval cut, it's not nice." An ellipse has no flat bottom and
+           no straight shoulders, so it curves continuously from the first
+           pixel and reads as a bubble taken out of the edge.
+
+           The reference shape is different in kind: the card's top edge runs
+           level, drops through an S-curve, holds FLAT across the middle, and
+           climbs back through a mirrored S. Three distinct segments. That is
+           a path, so it is drawn as one — an inline SVG used as a mask
+           layer, composited out of a full-cover layer exactly as before.
+
+           Proportions taken off the founder's snippet, scaled by the one
+           element in it whose real size is known: the grab bar is 36px in
+           the app and ~12.8% of the snippet's width, which puts the whole
+           dip at ~220px across and ~18px deep, with a ~124px flat floor and
+           48px shoulders.
+
+           It stays a CUT rather than a painted shape because what shows
+           through is the page's bloom — a notch "coloured like the
+           background" would be a flat patch sitting on a gradient. */
         -webkit-mask-image:
-            radial-gradient(66px 13px at 50% 0%, #000 98%, transparent 100%),
+            url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="220" height="18" viewBox="0 0 220 18"><path d="M0 0H220C196 0 196 18 172 18H48C24 18 24 0 0 0Z" fill="black"/></svg>'),
             linear-gradient(#000, #000);
         mask-image:
-            radial-gradient(66px 13px at 50% 0%, #000 98%, transparent 100%),
+            url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="220" height="18" viewBox="0 0 220 18"><path d="M0 0H220C196 0 196 18 172 18H48C24 18 24 0 0 0Z" fill="black"/></svg>'),
             linear-gradient(#000, #000);
+        -webkit-mask-size: 220px 18px, auto;
+                mask-size: 220px 18px, auto;
+        -webkit-mask-position: top center, top left;
+                mask-position: top center, top left;
         -webkit-mask-repeat: no-repeat, no-repeat;
         mask-repeat: no-repeat, no-repeat;
         -webkit-mask-composite: xor;
@@ -1590,44 +1601,24 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
 
        .kr-reveal: the dark band's entrance — 24px rise + fade, stamped
        `is-in` once by useReveal and never re-run. */
-    /* KR-14 · .kr-glow — hover that lights up instead of lifting.
-       Founder, on the top nav: "it should not have any popping up effect…
-       it should have a glow or a colour feel when I hover. It should not
-       physically move."
+    /* KR-14.1 · .kr-glow — a translucent BLACK fill on hover, not a glow.
+       Founder: "let that be a translucent black colour fill effect rather
+       than an orange glow."
+       Right call, and it fixes something the orange version got wrong: the
+       accent is this app's alert colour — it means overdue money, a failing
+       score, an escalation. Spending it on "your cursor is here" devalued it
+       everywhere else. Ink says the same thing and says nothing else.
 
-       THE HALO IS A PSEUDO-ELEMENT, not a box-shadow, and that is a fix
-       rather than a preference. box-shadow was the obvious tool and it did
-       not survive: these pills also carry focus-visible:ring-* utilities,
-       and Tailwind's ring implementation composes box-shadow from
-       --tw-ring-offset-shadow / --tw-ring-shadow / --tw-shadow. On hover the
-       composed value won and the halo read as two transparent shadows —
-       measured on the live element. A pseudo-element cannot be overwritten
-       by that machinery.
-
-       Nothing here affects layout: ::after is absolutely positioned outside
-       the pill, and the only animated properties are opacity and colour.
-       Deliberately NOT .kr-lift — that one translates, and a row of seven
-       destinations each flinching as the cursor crosses reads as a toolbar
-       of buttons rather than a set of places. */
+       Still no movement, which was the original ask: the only properties
+       that change are colours. Nothing here can shift a neighbour.
+       The pseudo-element halo is gone with the glow — a flat fill needs no
+       second layer, and box-shadow was unusable anyway (Tailwind's ring
+       utilities compose box-shadow on these same pills and win). */
     .kr-glow {
-        position: relative;
-        transition: border-color 220ms ease, color 220ms ease, background-color 260ms ease;
+        transition: background-color 220ms ease, border-color 220ms ease, color 220ms ease;
     }
-    .kr-glow::after {
-        content: "";
-        position: absolute;
-        inset: -4px;
-        border-radius: inherit;
-        pointer-events: none;
-        opacity: 0;
-        background: radial-gradient(60% 120% at 50% 50%,
-            hsl(var(--kr-accent) / .30), transparent 72%);
-        filter: blur(6px);
-        transition: opacity 280ms cubic-bezier(.22, 1, .36, 1);
-    }
-    .kr-glow:hover::after { opacity: 1; }
     .kr-glow:hover {
-        background-color: hsl(var(--kr-accent) / .07);
+        background-color: hsl(var(--kr-ink) / .07);
         border-color: hsl(var(--kr-ink));
         color: hsl(var(--foreground));
     }
@@ -1743,7 +1734,7 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
     /* .kr-glow keeps its hover state under reduced motion — it never moved
        anything, and removing the only affordance a nav pill has would cost
        more than the easing saves. Only the timing goes. */
-    .kr-glow, .kr-glow::after { transition: none; }
+    .kr-glow { transition: none; }
     .kr-lift:hover .kr-arrow { transform: none; }
     .kr-reveal { opacity: 1; transform: none; transition: none; }
 

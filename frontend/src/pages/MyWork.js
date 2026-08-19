@@ -40,21 +40,24 @@ import {
 // because all five wore the identical hairline pill. They are different
 // kinds of thing and now look it:
 //
-//   scope/sort   My Tasks · All Tasks · AI Priority — one SEGMENTED track.
-//                They are mutually-related lenses on the same list, so they
-//                share a well and the chosen one sits raised inside it.
-//   workflows    a section switch, not a lens. Filled ink, its own island —
-//                the loudest control on the row, which is right: the founder
-//                calls it the core of the system.
-//   leave        also a section switch, but a quiet one. Standalone,
-//                neumorphic-raised, deliberately not grouped with anything.
+//   scope        My Tasks · All Tasks — a pair joined by geometry, no box.
+//   AI priority  its own button, same shape as Leave, carrying the accent
+//                because it is a MODE the whole list switches into.
+//   workflows    INVERTED: sunken at rest, popping up when you are in it.
+//                Everything else in the row does the opposite, which is what
+//                makes it read as a destination rather than a filter.
+//   leave        a quiet section switch. Standalone, raised, grouped with
+//                nothing.
 //
-// The segmented track inverts the neumorphic convention on purpose: the
-// TRACK is sunken and the SELECTION is raised, because here the selection is
-// a thing you picked up out of a groove, not a button you pushed in.
-const SEG = "flex h-9 items-center justify-center gap-1.5 rounded-pill px-3.5 text-xs font-medium leading-tight transition-all lg:text-sm";
-const SEG_ON = "kr-pop text-foreground";
-const SEG_OFF = "text-foreground/60 hover:text-foreground/85";
+// KR-11.4 — NO CONTAINER around the pair. The founder: "remove the gray
+// grouping… group My Tasks and All Tasks alone, but don't use gray or any
+// colour. Just make it look like it's grouped."
+// So they are joined by GEOMETRY: the two buttons touch, outer corners round
+// and inner corners square, with a hairline on the seam. A segmented control
+// drawn with nothing but shape. Selected is pressed, unselected is raised.
+const SEG = "flex h-10 items-center justify-center gap-1.5 px-4 text-xs font-medium leading-tight transition-all lg:text-sm";
+const SEG_ON = "kr-pressed font-semibold text-foreground";
+const SEG_OFF = "kr-pop text-foreground/70";
 const SECTION_BTN = "flex h-10 items-center justify-center gap-1.5 rounded-pill px-4 text-xs font-medium leading-tight transition-all lg:text-sm";
 
 const STATUS_OPTIONS = [
@@ -1624,24 +1627,44 @@ export default function MyWork() {
             <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members}
               triggerClassName={`${SECTION_BTN} kr-lift bg-kr-ink text-white`} />
             {isOwner && (
-              <div className="nm-inset flex items-center gap-1 rounded-pill p-1" data-testid="mywork-lens-group">
-                <button onClick={() => { setScope("mine"); setView("mywork"); }} data-testid="work-scope-mine"
-                  aria-pressed={view === "mywork" && scope === "mine" && !aiPriority}
-                  className={`${SEG} ${view === "mywork" && scope === "mine" && !aiPriority ? SEG_ON : SEG_OFF}`}>{t("mywork.my_tasks")}</button>
-                <button onClick={() => { setScope("all"); setView("mywork"); }} data-testid="work-scope-all"
-                  aria-pressed={view === "mywork" && scope === "all" && !aiPriority}
-                  className={`${SEG} ${view === "mywork" && scope === "all" && !aiPriority ? SEG_ON : SEG_OFF}`}>{t("mywork.all_tasks")}</button>
-            {/* U7-05: AI Priority is owner-only. Founder ask 2026-08-17:
-                'ai priority also right only for owner got it'. The ranker
-                is a whole-team judgment tool, not something an IC needs
-                over their own list -- it hides which of my tasks I picked
-                to work on based on someone else's AI score. */}
+              <>
+                {/* The pair. Touching, outer corners round, inner corners
+                    square, a hairline on the seam — grouped by GEOMETRY, not
+                    by a container. No track, no fill, no tint, per the
+                    founder: "don't use gray or any colour, just make it look
+                    like it's grouped." */}
+                <div className="flex items-center" role="group" aria-label="Task scope" data-testid="mywork-lens-group">
+                  <button onClick={() => { setScope("mine"); setView("mywork"); }} data-testid="work-scope-mine"
+                    aria-pressed={view === "mywork" && scope === "mine" && !aiPriority}
+                    className={`${SEG} rounded-l-pill ${view === "mywork" && scope === "mine" && !aiPriority ? SEG_ON : SEG_OFF}`}>
+                    {t("mywork.my_tasks")}
+                  </button>
+                  <span aria-hidden="true" className="h-6 w-px shrink-0 bg-kr-ink/15" />
+                  <button onClick={() => { setScope("all"); setView("mywork"); }} data-testid="work-scope-all"
+                    aria-pressed={view === "mywork" && scope === "all" && !aiPriority}
+                    className={`${SEG} rounded-r-pill ${view === "mywork" && scope === "all" && !aiPriority ? SEG_ON : SEG_OFF}`}>
+                    {t("mywork.all_tasks")}
+                  </button>
+                </div>
+
+                {/* U7-05: AI Priority is owner-only. Founder ask 2026-08-17:
+                    'ai priority also right only for owner got it'. The ranker
+                    is a whole-team judgment tool, not something an IC needs
+                    over their own list.
+                    KR-11.4 — now its OWN button, same shape and material as
+                    Leave, carrying the accent because it is a MODE the whole
+                    list switches into rather than a filter on it. */}
                 <button onClick={() => { setAiPriority((v) => !v); setView("mywork"); }} data-testid="ai-priority-toggle"
                   aria-pressed={view === "mywork" && aiPriority}
-                  className={`${SEG} ${view === "mywork" && aiPriority ? SEG_ON : SEG_OFF}`}>
-                  <Sparkle size={14} weight="bold" aria-hidden="true" /> {scoring ? t("mywork.scoring") : aiPriority ? t("mywork.ai_priority_on") : t("mywork.ai_priority")}
+                  className={`${SECTION_BTN} ${
+                    view === "mywork" && aiPriority
+                      ? "kr-pressed font-semibold text-kr-accent"
+                      : "kr-pop text-kr-accent/85"
+                  }`}>
+                  <Sparkle size={15} weight="bold" aria-hidden="true" />
+                  {scoring ? t("mywork.scoring") : aiPriority ? t("mywork.ai_priority_on") : t("mywork.ai_priority")}
                 </button>
-              </div>
+              </>
             )}
           </div>
           <div className="order-1 flex flex-wrap items-center gap-2.5 lg:order-2" data-testid="work-view-toggle">
@@ -1661,15 +1684,15 @@ export default function MyWork() {
                 <ListIcon size={15} weight="regular" aria-hidden="true" /> {t("mywork.view_mywork")}
               </button>
             )}
-            {/* Workflows — the founder's "highlight it to differentiate".
-                Filled ink when open, ink-outlined when not: the only control
-                in the row that ever goes solid, so it never reads as one more
-                lens. */}
+            {/* Workflows — INVERTED, on the founder's call: pressed IN at
+                rest, popping UP when you are in it. Every other control in
+                this row does the opposite, which is exactly why this one
+                reads as a different kind of destination. */}
             {canSeeWorkflows && (
               <button onClick={() => setView("workflows")} data-testid="work-view-workflows"
                 aria-pressed={view === "workflows"}
-                className={`${SECTION_BTN} kr-lift ${
-                  view === "workflows" ? "bg-kr-ink font-semibold text-white" : "border border-kr-ink bg-transparent text-foreground"
+                className={`${SECTION_BTN} ${
+                  view === "workflows" ? "kr-pop font-semibold text-foreground" : "kr-pressed text-foreground/75"
                 }`}>
                 <FlowArrow size={16} weight="bold" aria-hidden="true" /> {t("mywork.view_workflows")}
               </button>

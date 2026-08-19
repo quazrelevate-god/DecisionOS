@@ -1151,12 +1151,19 @@ html[data-page="finance"] .app-sky::before {
     --sky-wash:  40 14% 68%;
 }
 
-/* CRM — plum into sand. Relationships get the warmest non-amber. */
+/* CRM — KR-11.4, on the founder's call: steel, gold, graphite and white
+   mixed. Plum-into-sand was the first iteration and he moved it here.
+   Steel carries the body (cool 206–218, low chroma, high lightness = the
+   "black / gray / white" read without any actual dark), and the gold is the
+   only saturated stop in the set — the same trick Finance uses, pitched a
+   little warmer and a little brighter so the two pages stay distinguishable
+   side by side. Measured against muted ink: 4.27 vs Finance's 4.13 and the
+   /inbox baseline's 4.00. */
 html[data-page="crm"] .app-sky::before {
-    --sky-core: 322 44% 80%;
-    --sky-deep: 342 40% 74%;
-    --sky-lift:  36 86% 79%;
-    --sky-wash: 318 28% 76%;
+    --sky-core: 206 16% 78%;
+    --sky-deep: 218 10% 62%;
+    --sky-lift:  45 94% 70%;
+    --sky-wash: 208 12% 73%;
 }
 
 /* Team — violet into peach. */

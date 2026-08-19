@@ -1388,6 +1388,29 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
        The tint is cool (215°) to sit WITH the my-work sky rather than fight
        it, but it is carried at high opacity so the tile still reads as an
        object on the weather, not a hole in it. */
+    /* KR-11.5 · .kr-glass-well — a RECESSED container you can see through.
+       The workflow board sat in .nm-inset, an opaque grey well. It held the
+       board together but it also stamped a grey rectangle over the page's
+       weather, which is the thing the founder keeps (rightly) objecting to.
+
+       This keeps the recess and drops the grey: a white wash at 16% → 5%,
+       a blur so the sky behind it is genuinely refracted rather than hidden,
+       and the same inset lip the neumorphic surfaces use — dark cast in from
+       the top, bright catch along the bottom. The tiles inside it are RAISED,
+       so the depth story still reads: cards sitting in a shallow tray. */
+    .kr-glass-well {
+        border-radius: var(--radius-cardlg);
+        background: linear-gradient(160deg,
+            hsl(0 0% 100% / .16),
+            hsl(0 0% 100% / .05));
+        -webkit-backdrop-filter: blur(16px) saturate(1.2);
+        backdrop-filter: blur(16px) saturate(1.2);
+        border: 1px solid hsl(0 0% 100% / .40);
+        box-shadow:
+            inset 0 2px 9px hsl(230 24% 30% / .10),
+            inset 0 -1px 0 hsl(0 0% 100% / .45);
+    }
+
     .kr-bento {
         position: relative;
         border-radius: var(--radius-tile);

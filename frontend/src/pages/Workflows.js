@@ -341,7 +341,10 @@ export default function Workflows({ embedded = false }) {
       {/* THE BOARD. Columns are fixed-width and the board scrolls
           horizontally on its own — the page never does. Column headers stay
           put while a long column scrolls under them. */}
-      <div className="nm-inset overflow-x-auto rounded-cardlg p-4" data-testid="workflow-board">
+      {/* KR-11.5 — the board's tray is glass now, not a grey well. It still
+          reads as recessed (the tiles inside are raised against it), but the
+          page's weather passes through instead of being covered by a slab. */}
+      <div className="kr-glass-well overflow-x-auto p-4" data-testid="workflow-board">
         <div className="flex min-w-max items-stretch gap-4">
           {stages.map((stg) => {
             const cards = (data || []).filter((w) => w.stage === stg.key);

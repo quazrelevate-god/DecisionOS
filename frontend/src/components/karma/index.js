@@ -17,3 +17,5 @@ export { DecisionBento } from "./DecisionBento";
 export { InsightWell } from "./InsightWell";
 // KR-9 additions
 export { ScoreMeter } from "./ScoreMeter";
+// KR-10 additions
+export { DonutBreak } from "./DonutBreak";

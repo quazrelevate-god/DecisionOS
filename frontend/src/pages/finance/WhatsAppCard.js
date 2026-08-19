@@ -14,8 +14,8 @@ const WA_STATUS_STYLE = {
   received: "bg-caution-50 text-caution-800",
   draft: "bg-nm-sunken text-muted-foreground",
   attention: "bg-caution-100 text-caution-800",
-  filed: "bg-success-600 text-white",
-  structured: "bg-success-600 text-white",
+  filed: "bg-kr-ink text-white",
+  structured: "bg-kr-ink text-white",
   ignored: "bg-nm-sunken text-muted-foreground",
   rejected: "bg-danger-600 text-white",
   signature_mismatch: "bg-danger-600 text-white",
@@ -35,7 +35,12 @@ export default function WhatsAppCard() {
   const waLink = waNum ? `https://wa.me/${waNum}?text=${encodeURIComponent("Hi DecisionOS")}` : null;
 
   return (
-    <div className="card-brutal p-5 mb-8" data-testid="whatsapp-card">
+    /* KR-10 — glass, EXCEPT the QR. A frosted panel is the right material for a
+   status card, and the wrong one for a machine-readable code: backdrop-blur
+   plus a translucent ground destroys the contrast a camera needs to lock on.
+   So the shell is glass and the code sits on an opaque white plate inside
+   it. (See the QR block below.) */
+    <div className="kr-frost p-5 mb-8" data-testid="whatsapp-card">
       {!st?.configured && (
         <div className="flex items-center gap-2 mb-4">
           <Chip value="not connected" className="bg-nm-sunken text-muted-foreground" />
@@ -46,7 +51,11 @@ export default function WhatsAppCard() {
         <div className="flex flex-col items-center text-center">
           {waLink ? (
             <a href={waLink} target="_blank" rel="noreferrer" data-testid="whatsapp-qr-link"
-              className="rounded-cardlg nm-raised p-2.5 transition-shadow hover:shadow-nm-lg">
+              /* OPAQUE white plate — the one thing in this card that must not
+                 be glass. A camera needs the code's own black-on-white
+                 contrast, and a translucent ground with a blur behind it
+                 hands it a moving background instead. */
+              className="kr-lift rounded-cardlg bg-white p-3">
               <QRCodeSVG value={waLink} size={132} level="M" />
             </a>
           ) : (
@@ -68,8 +77,8 @@ export default function WhatsAppCard() {
           {isOwner ? (
             <>
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <p className="label-mono font-bold text-success-600 flex items-center gap-1.5">
-                  <WhatsappLogo size={16} weight="bold" className="text-success-600" /> Recent WhatsApp activity
+                <p className="label-mono font-bold flex items-center gap-1.5">
+                  <WhatsappLogo size={16} weight="bold" aria-hidden="true" /> Recent WhatsApp activity
                 </p>
                 <button data-testid="whatsapp-logs-refresh" onClick={() => qc.invalidateQueries({ queryKey: ["wa-logs"] })}
                   className="flex items-center gap-1 text-xs font-medium nm-btn px-2 py-1 hover:bg-accent transition-colors">

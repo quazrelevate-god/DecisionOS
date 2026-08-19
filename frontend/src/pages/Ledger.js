@@ -3,8 +3,6 @@ import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "../lib/api";
-import { useIsMobile } from "../hooks/useIsMobile";
-import FinanceMobile from "./mobile/FinanceMobile";
 import { lex } from "../lib/lexicon";
 import { useAuth } from "../context/AuthContext";
 import { PageHeader, Chip, EmptyState } from "../components/common";
@@ -27,11 +25,16 @@ import WhatsAppCard from "./finance/WhatsAppCard";
 import { hasPerm } from "../lib/perms";
 import { formatApiError } from "../lib/api";
 import {
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell,
-} from "recharts";
+  StatTile, ScoreMeter, DonutBreak, HistoryBand, DarkBand, IconChip,
+} from "../components/karma";
 
-const PALETTE = ["#E63946", "#1E1E24", "#F4A261", "#457B9D", "#2A9D8F", "#E76F51", "#8D99AE", "#A8DADC", "#6D6875", "#B5838D", "#264653", "#E9C46A"];
-const CHART_MARGIN = { top: 5, right: 5, left: 5, bottom: 5 };
+// KR-10 — THE TWELVE HEXES ARE GONE.
+// Ledger carried `PALETTE`, a hand-picked twelve-colour list dealt to
+// categories and vendors BY INDEX. It came from nowhere the token file knows
+// about, it re-coloured a category the moment a bigger one appeared above it,
+// and twelve hues on a page about cash made spend read as a subway map.
+// Colour now comes from lib/chartTheme (which reads the tokens) and from
+// DonutBreak's single-hue opacity ramp, where the ORDER is the encoding.
 const inp = "w-full nm-field px-3 py-2 text-sm";
 const label = "text-xs text-muted-foreground";
 
@@ -40,9 +43,19 @@ const fmt = (cur) => (n) => {
   catch { return `${cur || ""} ${Math.round(n || 0).toLocaleString()}`; }
 };
 
-const SOURCE_CHIP = { manual: "bg-nm-sunken text-muted-foreground", whatsapp: "bg-success-50 text-success-800", ingest: "bg-brand-50 text-brand-700", document: "bg-brand-50 text-brand-700" };
-const LEVEL_DOT = { high: "bg-danger-600", medium: "bg-caution-500", low: "bg-brand-600" };
-const LEVEL_ACCENT = { high: "border-l-danger-600", medium: "border-l-caution-500", low: "border-l-brand-600" };
+// KR-10 — the provenance chip stops being a colour code. Where a capture came
+// from is metadata, not a status, and four tinted variants of it competed with
+// the money on the same row.
+const SOURCE_CHIP = {
+  manual: "bg-nm-sunken text-muted-foreground",
+  whatsapp: "bg-nm-sunken text-muted-foreground",
+  ingest: "bg-nm-sunken text-muted-foreground",
+  document: "bg-nm-sunken text-muted-foreground",
+};
+// Only `high` keeps the accent — that is the alert. Medium and low are
+// weight, not hue.
+const LEVEL_DOT = { high: "bg-kr-accent", medium: "bg-foreground/45", low: "bg-foreground/20" };
+const LEVEL_ACCENT = { high: "border-l-kr-accent", medium: "border-l-foreground/35", low: "border-l-foreground/15" };
 
 function Field({ label: l, children }) {
   return <div><label className={label}>{l}</label><div className="mt-1">{children}</div></div>;
@@ -62,7 +75,7 @@ function FileField({ file, setFile }) {
           setFile(sel);
         }} />
       </label>
-      {file && <button type="button" onClick={() => setFile(null)} className="mt-1 text-xs text-danger-600 hover:underline">{t("finance.remove_attach")}</button>}
+      {file && <button type="button" onClick={() => setFile(null)} className="mt-1 text-xs text-kr-accent hover:underline">{t("finance.remove_attach")}</button>}
     </Field>
   );
 }
@@ -114,7 +127,7 @@ function AddExpenseDialog({ categories, onDone }) {
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
       <DialogTrigger asChild>
-        <button data-testid="add-expense-btn" className="flex items-center justify-center gap-2 w-full sm:w-auto bg-primary text-primary-foreground px-4 py-2 text-sm font-medium nm-tile transition-all">
+        <button data-testid="add-expense-btn" className="kr-lift flex w-full items-center justify-center gap-2 rounded-pill bg-kr-ink px-4 py-2.5 text-sm font-medium text-white transition-all sm:w-auto">
           <Plus size={16} weight="bold" /> {t("finance.add_expense")}
         </button>
       </DialogTrigger>
@@ -135,7 +148,7 @@ function AddExpenseDialog({ categories, onDone }) {
           <div>
             <div className="flex items-center justify-between">
               <label className={label}>{t("finance.c_category")}</label>
-              <button type="button" onClick={suggest} disabled={suggesting} data-testid="expense-suggest-category" className="flex items-center gap-1 text-xs font-semibold text-brand-600 hover:underline disabled:opacity-50">
+              <button type="button" onClick={suggest} disabled={suggesting} data-testid="expense-suggest-category" className="flex items-center gap-1 text-xs font-semibold hover:underline disabled:opacity-50">
                 <Sparkle size={13} weight="bold" /> {suggesting ? t("finance.thinking") : t("finance.ai_suggest")}
               </button>
             </div>
@@ -148,7 +161,7 @@ function AddExpenseDialog({ categories, onDone }) {
             <Field label={t("finance.c_date")}><input type="date" className={inp} value={f.date} onChange={(e) => set("date", e.target.value)} /></Field>
           </div>
           <Field label={t("finance.f_notes")}><textarea className={inp} rows={2} value={f.notes} onChange={(e) => set("notes", e.target.value)} /></Field>
-          <button onClick={save} disabled={busy} data-testid="expense-save" className="w-full bg-brand-600 text-white py-2.5 text-sm font-medium nm-tile transition-all disabled:opacity-60">
+          <button onClick={save} disabled={busy} data-testid="expense-save" className="w-full kr-lift rounded-control bg-kr-ink py-2.5 text-sm font-medium text-white transition-all disabled:opacity-60">
             {busy ? (file ? t("finance.ai_reading") : t("finance.saving")) : t("finance.save_expense")}
           </button>
         </div>
@@ -180,7 +193,7 @@ function AddAssetDialog({ categories, onDone }) {
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
       <DialogTrigger asChild>
-        <button data-testid="add-asset-btn" className="flex items-center justify-center gap-2 w-full sm:w-auto bg-primary text-primary-foreground px-4 py-2 text-sm font-medium nm-tile transition-all">
+        <button data-testid="add-asset-btn" className="kr-lift flex w-full items-center justify-center gap-2 rounded-pill bg-kr-ink px-4 py-2.5 text-sm font-medium text-white transition-all sm:w-auto">
           <Plus size={16} weight="bold" /> {t("finance.add_asset")}
         </button>
       </DialogTrigger>
@@ -206,7 +219,7 @@ function AddAssetDialog({ categories, onDone }) {
               </select>
             </Field>
           </div>
-          <button onClick={save} disabled={busy} data-testid="asset-save" className="w-full bg-brand-600 text-white py-2.5 text-sm font-medium nm-tile transition-all disabled:opacity-60">
+          <button onClick={save} disabled={busy} data-testid="asset-save" className="w-full kr-lift rounded-control bg-kr-ink py-2.5 text-sm font-medium text-white transition-all disabled:opacity-60">
             {busy ? (file ? t("finance.ai_reading") : t("finance.saving")) : t("finance.save_asset")}
           </button>
         </div>
@@ -238,7 +251,7 @@ function AddInventoryDialog({ onDone }) {
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
       <DialogTrigger asChild>
-        <button data-testid="add-inventory-btn" className="flex items-center justify-center gap-2 w-full sm:w-auto bg-primary text-primary-foreground px-4 py-2 text-sm font-medium nm-tile transition-all">
+        <button data-testid="add-inventory-btn" className="kr-lift flex w-full items-center justify-center gap-2 rounded-pill bg-kr-ink px-4 py-2.5 text-sm font-medium text-white transition-all sm:w-auto">
           <Plus size={16} weight="bold" /> {t("finance.add_item")}
         </button>
       </DialogTrigger>
@@ -259,7 +272,7 @@ function AddInventoryDialog({ onDone }) {
             <Field label={t("finance.c_category")}><input className={inp} value={f.category} onChange={(e) => set("category", e.target.value)} /></Field>
             <Field label={t("finance.c_vendor")}><input className={inp} value={f.vendor_name} onChange={(e) => set("vendor_name", e.target.value)} /></Field>
           </div>
-          <button onClick={save} disabled={busy} data-testid="inv-save" className="w-full bg-brand-600 text-white py-2.5 text-sm font-medium nm-tile transition-all disabled:opacity-60">
+          <button onClick={save} disabled={busy} data-testid="inv-save" className="w-full kr-lift rounded-control bg-kr-ink py-2.5 text-sm font-medium text-white transition-all disabled:opacity-60">
             {busy ? (file ? t("finance.ai_reading") : t("finance.saving")) : t("finance.save_item")}
           </button>
         </div>
@@ -292,7 +305,7 @@ function AddIncomeDialog({ onDone }) {
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
       <DialogTrigger asChild>
-        <button data-testid="add-income-btn" className="flex items-center justify-center gap-2 w-full sm:w-auto bg-primary text-primary-foreground px-4 py-2 text-sm font-medium nm-tile transition-all">
+        <button data-testid="add-income-btn" className="kr-lift flex w-full items-center justify-center gap-2 rounded-pill bg-kr-ink px-4 py-2.5 text-sm font-medium text-white transition-all sm:w-auto">
           <Plus size={16} weight="bold" /> Add income
         </button>
       </DialogTrigger>
@@ -319,7 +332,7 @@ function AddIncomeDialog({ onDone }) {
             <Field label="Date"><input type="date" className={inp} value={f.date} onChange={(e) => set("date", e.target.value)} /></Field>
             <Field label="Due date"><input type="date" className={inp} value={f.due_date} onChange={(e) => set("due_date", e.target.value)} /></Field>
           </div>
-          <button onClick={save} disabled={busy} data-testid="income-save" className="w-full bg-brand-600 text-white py-2.5 text-sm font-medium nm-tile transition-all disabled:opacity-60">
+          <button onClick={save} disabled={busy} data-testid="income-save" className="w-full kr-lift rounded-control bg-kr-ink py-2.5 text-sm font-medium text-white transition-all disabled:opacity-60">
             {busy ? (file ? "AI reading…" : "Saving…") : "Save income"}
           </button>
         </div>
@@ -358,7 +371,7 @@ function CreateTaskFromInsight({ insight, members, roleOptions }) {
 
   return (
     <>
-      <button onClick={openDialog} data-testid="insight-create-task" className="flex items-center gap-1.5 text-xs font-medium nm-tile bg-brand-600 text-white px-3 py-1.5 transition-all">
+      <button onClick={openDialog} data-testid="insight-create-task" className="flex items-center gap-1.5 text-xs font-medium kr-lift rounded-pill bg-kr-ink px-3 py-1.5 text-white transition-all">
         <ListPlus size={13} weight="bold" /> {t("finance.create_task")}
       </button>
       <Dialog open={open} onOpenChange={setOpen}>
@@ -381,7 +394,7 @@ function CreateTaskFromInsight({ insight, members, roleOptions }) {
                 </select>
               </Field>
             </div>
-            <button onClick={save} disabled={busy} data-testid="insight-task-save" className="w-full bg-brand-600 text-white py-2.5 text-sm font-medium nm-tile transition-all disabled:opacity-60">
+            <button onClick={save} disabled={busy} data-testid="insight-task-save" className="w-full kr-lift rounded-control bg-kr-ink py-2.5 text-sm font-medium text-white transition-all disabled:opacity-60">
               {busy ? t("finance.creating") : t("finance.create_task")}
             </button>
           </div>
@@ -458,16 +471,20 @@ function AiPanel({ scope, variant = "inline" }) {
   const onAsk = (title) => ask(`Tell me more and what should I do about: ${title}`);
 
   return (
-    <div className={`card-brutal ${isBrief ? "p-6" : "p-5"} space-y-5`} data-testid={`ai-panel-${scope}`}>
+    /* KR-10 — a .kr-well, not a card. Finance's AI panel is something to
+       READ; the pit is the material this system now uses to say so, matching
+       /inbox's insight well and Ops's "Do these first". */
+    <div className="kr-well" data-testid={`ai-panel-${scope}`}>
+    <div className={`kr-well__pane ${isBrief ? "p-6" : "p-5"} space-y-5`}>
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Sparkle size={isBrief ? 22 : 18} weight="fill" className="text-brand-600" />
+          <Sparkle size={isBrief ? 20 : 17} weight="regular" aria-hidden="true" />
           <h3 className={`font-medium ${isBrief ? "text-base" : "text-sm"}`}>{isBrief ? t("finance.finance_brief") : t("finance.ai_analysis")}</h3>
         </div>
         <div className="flex items-center gap-2">
           {data?.generated_at && <span className="text-[11px] text-muted-foreground hidden sm:inline">{t("finance.updated", { time: new Date(data.generated_at).toLocaleString() })}</span>}
-          <button onClick={refresh} disabled={refreshing} data-testid={`ai-refresh-${scope}`} className="flex items-center gap-1 text-xs font-semibold nm-tile px-2.5 py-1.5 hover:bg-accent transition-colors disabled:opacity-50">
-            <ArrowClockwise size={13} weight="bold" className={refreshing ? "animate-spin" : ""} /> {refreshing ? t("finance.analysing") : t("finance.refresh")}
+          <button onClick={refresh} disabled={refreshing} data-testid={`ai-refresh-${scope}`} className="kr-pop flex items-center gap-1 rounded-pill px-3 py-2 text-xs font-semibold disabled:opacity-50">
+            <ArrowClockwise size={13} weight="bold" aria-hidden="true" className={refreshing ? "animate-spin" : ""} /> {refreshing ? t("finance.analysing") : t("finance.refresh")}
           </button>
         </div>
       </div>
@@ -491,43 +508,65 @@ function AiPanel({ scope, variant = "inline" }) {
         </>
       )}
 
-      <div className="border-t border-nm-edge/40 pt-4">
+      <div className="border-t border-foreground/12 pt-4">
         <div className="flex items-center gap-1.5 mb-2 text-muted-foreground"><Brain size={15} weight="bold" /><span className="label-mono text-xs">{scope === "brief" ? t("finance.ask_about_fin") : t("finance.ask_about", { scope })}</span></div>
         <div className="flex gap-2">
           <input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && ask()} data-testid={`ai-ask-input-${scope}`} placeholder={t("finance.ask_ph")} className={inp} />
-          <button onClick={() => ask()} disabled={asking} data-testid={`ai-ask-btn-${scope}`} className="flex items-center gap-1 bg-primary text-primary-foreground px-3 py-2 text-sm font-semibold nm-tile transition-all disabled:opacity-50 shrink-0">
-            <PaperPlaneRight size={15} weight="bold" /> {asking ? "…" : t("finance.ask_btn")}
+          <button onClick={() => ask()} disabled={asking} data-testid={`ai-ask-btn-${scope}`} className="kr-lift flex shrink-0 items-center gap-1.5 rounded-pill bg-kr-ink px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+            <PaperPlaneRight size={15} weight="bold" aria-hidden="true" /> {asking ? "…" : t("finance.ask_btn")}
           </button>
         </div>
-        {answer && <div className="mt-3 nm-inset p-3 text-sm leading-relaxed" data-testid={`ai-answer-${scope}`}>{answer}</div>}
+        {answer && <div className="mt-3 rounded-control bg-white/45 p-3 text-sm leading-relaxed" data-testid={`ai-answer-${scope}`}>{answer}</div>}
       </div>
+    </div>
     </div>
   );
 }
 
 // ---------- Sub-views ----------
-function KPI({ icon: Icon, label: l, value, accent }) {
-  return (
-    <div className="card-brutal p-4" data-testid={`kpi-${l.toLowerCase().replace(/\s/g, "-")}`}>
-      <div className="flex items-center gap-1.5 text-muted-foreground"><Icon size={14} /><span className="text-xs">{l}</span></div>
-      <p className={`text-2xl font-medium tabular-nums mt-1.5 ${accent || ""}`}>{value}</p>
-    </div>
-  );
-}
-
+/**
+ * KR-10 — the money KPIs become Karma StatTiles.
+ *
+ * The old ones painted revenue green, spend indigo and net profit green-or-
+ * indigo. Six tiles, four hues, and the hue said nothing the number did not:
+ * revenue is always revenue. Colour now appears ONLY when net profit is
+ * negative or receivables are overdue, which is the one moment a finance page
+ * genuinely needs to raise its voice.
+ */
 function KpiRow({ summary }) {
   const { t } = useTranslation();
   const f = fmt(summary.currency);
   const tt = summary.totals;
   const net = tt.net_profit ?? ((tt.revenue_billed || 0) - (tt.total_spend || 0));
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-      <KPI icon={CurrencyDollar} label="Revenue" value={f(tt.revenue_billed || 0)} accent="text-success-600" />
-      <KPI icon={TrendUp} label={t("finance.k_spend")} value={f(tt.total_spend)} accent="text-brand-600" />
-      <KPI icon={Coins} label="Net Profit" value={f(net)} accent={net >= 0 ? "text-success-600" : "text-brand-600"} />
-      <KPI icon={Receipt} label="Received" value={f(tt.revenue_received || 0)} />
-      <KPI icon={Buildings} label={t("finance.k_asset")} value={f(tt.asset_value)} />
-      <KPI icon={Package} label={t("finance.k_inv")} value={f(tt.inventory_value)} />
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-3" data-testid="ledger-kpis">
+      <StatTile icon={CurrencyDollar} label="Revenue billed" value={f(tt.revenue_billed || 0)} to="/finance?tab=revenue" testid="kpi-revenue" />
+      <StatTile icon={Receipt} label="Received" value={f(tt.revenue_received || 0)} to="/finance?tab=revenue" testid="kpi-received" />
+      <StatTile
+        icon={Coins}
+        label="Net profit"
+        value={f(net)}
+        urgent={net < 0}
+        alert={net < 0}
+        to="/finance?tab=expenses"
+        testid="kpi-net-profit"
+      />
+      <StatTile icon={TrendUp} label={t("finance.k_spend")} value={f(tt.total_spend)} to="/finance?tab=expenses" testid="kpi-spend" />
+      <StatTile icon={Buildings} label={t("finance.k_asset")} value={f(tt.asset_value)} to="/finance?tab=assets" testid="kpi-assets" />
+      <StatTile icon={Package} label={t("finance.k_inv")} value={f(tt.inventory_value)} to="/finance?tab=inventory" testid="kpi-inventory" />
+    </div>
+  );
+}
+
+/** The compact tile the Revenue tab uses — same material, no destination. */
+function MoneyTile({ icon, label: l, value, urgent = false, testid }) {
+  return (
+    <div className="nm-tile p-4 sm:p-5" data-testid={testid}>
+      <div className="flex items-start justify-between gap-3">
+        <IconChip icon={icon} size={34} alert={urgent} />
+      </div>
+      <p className="mt-3 text-sm text-muted-foreground">{l}</p>
+      <p className={`mt-1 font-mono text-2xl font-semibold tabular-nums ${urgent ? "text-kr-ink/80" : ""}`}>{value}</p>
     </div>
   );
 }
@@ -555,7 +594,7 @@ function InvoicePicker({ open, value, onChange, cur, testid }) {
             {filtered.map((o) => (
               <button key={o.id} type="button" data-testid={`${testid}-opt-${o.id}`}
                 onClick={() => { onChange(o.id); setShow(false); setQ(""); }}
-                className="block w-full text-left px-3 py-2 text-sm hover:bg-brand-600 hover:text-white transition-colors border-b border-nm-edge/40/50">
+                className="block w-full text-left px-3 py-2 text-sm hover:bg-kr-ink hover:text-white transition-colors border-b border-nm-edge/40/50">
                 {label(o)}
               </button>
             ))}
@@ -589,9 +628,9 @@ function NeedsMatchingPanel({ title, hint, unmatched, open, cur, endpoint, stand
   };
 
   return (
-    <div className="card-brutal p-4 border-2 border-brand-600 bg-brand-600/5" data-testid={testid}>
+    <div className="nm-tile border-l-[3px] border-l-foreground/45 p-4" data-testid={testid}>
       <div className="flex items-center gap-2 mb-1">
-        <WarningCircle size={18} weight="bold" className="text-brand-600" />
+        <WarningCircle size={18} weight="regular" aria-hidden="true" className="text-muted-foreground" />
         <h3 className="text-sm font-medium">{title} ({unmatched.length})</h3>
       </div>
       <p className="text-xs text-muted-foreground mb-3">{hint}</p>
@@ -601,7 +640,7 @@ function NeedsMatchingPanel({ title, hint, unmatched, open, cur, endpoint, stand
             <span className="text-sm font-semibold">{f(p.remaining ?? p.amount)}</span>
             <span className="text-xs text-muted-foreground flex-1 min-w-0 truncate">{p.contact_name || "Unknown"}{p.date ? ` · ${p.date}` : ""}{p.invoice_number ? ` · ref ${p.invoice_number}` : ""}{p.applied > 0 ? ` · ${f(p.applied)} already applied` : ""}</span>
             <InvoicePicker open={open} value={picks[p.id] || ""} onChange={(v) => setPicks((s) => ({ ...s, [p.id]: v }))} cur={cur} testid={`match-picker-${p.id}`} />
-            <button onClick={() => match(p.id)} disabled={busy === p.id} data-testid={`match-btn-${p.id}`} className="px-3 py-1.5 text-xs font-medium nm-tile bg-success-600 text-white transition-all disabled:opacity-50">Match</button>
+            <button onClick={() => match(p.id)} disabled={busy === p.id} data-testid={`match-btn-${p.id}`} className="px-3 py-1.5 text-xs font-medium kr-lift rounded-pill bg-kr-ink text-white transition-all disabled:opacity-50">Match</button>
             <button onClick={() => standalone(p.id)} disabled={busy === p.id} data-testid={`standalone-btn-${p.id}`} className="px-3 py-1.5 text-xs font-medium nm-tile hover:bg-accent transition-all disabled:opacity-50">{standaloneLabel.btn}</button>
           </div>
         ))}
@@ -625,7 +664,7 @@ function daysSinceIso(iso) {
   return d < 0 ? null : d;
 }
 
-function RevenueTab({ data, cur, onDelete, onChange }) {
+function RevenueTab({ data, cur, onDelete, onChange, initialFilter = "all" }) {
   const f = fmt(cur);
   const tt = data?.totals || {};
   const invoices = data?.invoices || [];
@@ -635,12 +674,16 @@ function RevenueTab({ data, cur, onDelete, onChange }) {
   // invoices UI/UX. A 5-invoice tenant is fine flat, but the moment
   // they cross ~20 open invoices the flat table loses. Filters land now
   // so the pattern scales with the tenant, not later.
-  const [statusFilter, setStatusFilter] = useState("all");  // all | awaiting | partial | paid | overdue
+  const [statusFilter, setStatusFilter] = useState(initialFilter);  // all | awaiting | partial | paid | overdue
   const [sortKey, setSortKey] = useState("date-desc");       // date-desc | date-asc | amount-desc | overdue
 
-  const invStatus = (s) => s.status === "paid" ? { label: "received", cls: "bg-success-600 text-white" }
-    : s.status === "partial" ? { label: "partial", cls: "bg-caution-100 text-caution-800" }
-    : { label: "awaiting", cls: "bg-caution-50 text-caution-800" };
+  // KR-10 — three tints for three states put a traffic light on every row of
+  // a table the founder scans for AMOUNTS. Received is the settled state and
+  // wears the solid ink; the two unsettled states are outlines, distinguished
+  // by their label. Overdue keeps the accent — see the badge below.
+  const invStatus = (s) => s.status === "paid" ? { label: "received", cls: "bg-kr-ink text-white" }
+    : s.status === "partial" ? { label: "partial", cls: "border-[0.5px] border-kr-ink text-foreground" }
+    : { label: "awaiting", cls: "border-[0.5px] border-kr-ink/55 text-foreground/70" };
 
   const isOverdue = (s) => s.status !== "paid" && (daysSinceIso(s.date) || 0) > REVENUE_OVERDUE_DAYS;
   const overdueCount = invoices.filter(isOverdue).length;
@@ -682,14 +725,15 @@ function RevenueTab({ data, cur, onDelete, onChange }) {
 
   return (
     <div className="space-y-6" data-testid="ledger-revenue">
-      {/* U7-08.1: Received is money-in -- give it the green accent to
-          match Billed. Outstanding stays brand-600 (attention). If any
-          invoice is overdue, add a callout under Outstanding so the
-          summary strip itself carries the alarm, not just the table. */}
+      {/* KR-10 — the three tiles are monochrome. Money-in is not "good" and
+          outstanding is not "attention"; they are both just amounts, and
+          tinting them made the row compete with the overdue callout directly
+          below, which IS the alarm. Outstanding wears the alert chip only
+          when something is actually overdue. */}
       <div className="grid grid-cols-3 gap-3">
-        <KPI icon={CurrencyDollar} label="Billed" value={f(tt.billed || 0)} accent="text-success-600" />
-        <KPI icon={Receipt} label="Received" value={f(tt.received || 0)} accent="text-success-600" />
-        <KPI icon={WarningCircle} label="Outstanding" value={f(tt.outstanding || 0)} accent="text-brand-600" />
+        <MoneyTile icon={CurrencyDollar} label="Billed" value={f(tt.billed || 0)} testid="kpi-billed" />
+        <MoneyTile icon={Receipt} label="Received" value={f(tt.received || 0)} testid="kpi-received-rev" />
+        <MoneyTile icon={WarningCircle} label="Outstanding" value={f(tt.outstanding || 0)} urgent={overdueCount > 0} testid="kpi-outstanding" />
       </div>
 
       {overdueCount > 0 && (
@@ -697,7 +741,7 @@ function RevenueTab({ data, cur, onDelete, onChange }) {
           type="button"
           onClick={() => setStatusFilter("overdue")}
           data-testid="revenue-overdue-callout"
-          className="w-full flex items-center gap-2 border-2 border-danger-600 bg-danger-600/5 text-danger-600 px-4 py-2.5 text-sm font-medium hover:bg-danger-600/10 transition-colors"
+          className="w-full flex items-center gap-2 rounded-control border-l-[3px] border-kr-accent bg-kr-accent/10 px-4 py-2.5 text-sm font-medium transition-colors hover:bg-kr-accent/15"
         >
           <WarningCircle size={16} weight="bold" />
           {overdueCount} invoice{overdueCount === 1 ? "" : "s"} overdue &gt; {REVENUE_OVERDUE_DAYS} days
@@ -750,8 +794,8 @@ function RevenueTab({ data, cur, onDelete, onChange }) {
                   data-testid={`revenue-filter-${f.key}`}
                   className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium border transition-colors ${
                     active
-                      ? (dangerActive ? "border-danger-600 bg-danger-600 text-white" : "border-transparent bg-primary text-primary-foreground")
-                      : (dangerActive ? "border-danger-600 text-danger-600 hover:bg-danger-600/5" : "border-nm-edge/40 text-muted-foreground hover:text-foreground")
+                      ? (dangerActive ? "border-kr-accent bg-kr-accent text-white" : "border-transparent bg-kr-ink text-white")
+                      : (dangerActive ? "border-kr-accent text-kr-accent hover:bg-kr-accent/5" : "border-kr-ink/55 text-foreground/65 hover:text-foreground")
                   } ${zero && !active ? "opacity-50" : ""}`}
                 >
                   {f.label}
@@ -780,7 +824,7 @@ function RevenueTab({ data, cur, onDelete, onChange }) {
                   return (
                   <tr
                     key={s.id}
-                    className={`border-b border-nm-edge/40/60 hover:bg-accent/50 ${overdue ? "bg-danger-600/[0.03]" : ""}`}
+                    className={`border-b border-nm-edge/40/60 hover:bg-accent/50 ${overdue ? "bg-kr-accent/[0.04]" : ""}`}
                     data-testid={`revenue-invoice-row-${s.id}`}
                   >
                     <td className="p-3 font-medium">
@@ -801,7 +845,7 @@ function RevenueTab({ data, cur, onDelete, onChange }) {
                       {s.status === "partial" && <span className="ml-2 text-xs text-muted-foreground">bal {f(s.balance)}</span>}
                       {overdue && (
                         <span
-                          className="ml-2 inline-flex items-center gap-1 label-mono px-1.5 py-0.5 bg-danger-600 text-white"
+                          className="ml-2 inline-flex items-center gap-1 rounded-pill bg-kr-accent px-2 py-0.5 text-[10px] font-bold text-white"
                           data-testid={`revenue-overdue-${s.id}`}
                         >
                           <WarningCircle size={11} weight="bold" /> {days}d overdue
@@ -809,7 +853,7 @@ function RevenueTab({ data, cur, onDelete, onChange }) {
                       )}
                     </td>
                     <td className="p-3 text-right font-mono font-semibold">{f(s.amount)}</td>
-                    <td className="p-3 text-right"><button onClick={() => onDelete("invoice", s.id)} data-testid={`revenue-invoice-delete-${s.id}`} className="text-muted-foreground hover:text-danger-600"><Trash size={15} /></button></td>
+                    <td className="p-3 text-right"><button onClick={() => onDelete("invoice", s.id)} data-testid={`revenue-invoice-delete-${s.id}`} className="text-muted-foreground hover:text-kr-accent"><Trash size={15} /></button></td>
                   </tr>
                 );})}
               </tbody>
@@ -846,8 +890,8 @@ function RevenueTab({ data, cur, onDelete, onChange }) {
                     <td className="p-3 font-medium">{p.contact_name || "—"}{p.source && p.source !== "manual" && <Chip value={p.source} className={`ml-2 ${SOURCE_CHIP[p.source] || "bg-nm-sunken"}`} />}</td>
                     <td className="p-3 text-muted-foreground">{p.method || "—"}</td>
                     <td className="p-3 text-muted-foreground">{p.reference || p.invoice_number || "—"}</td>
-                    <td className="p-3 text-right font-mono font-semibold text-success-600">{f(p.amount)}</td>
-                    <td className="p-3 text-right"><button onClick={() => onDelete("payment", p.id)} data-testid={`revenue-payment-delete-${p.id}`} className="text-muted-foreground hover:text-danger-600"><Trash size={15} /></button></td>
+                    <td className="p-3 text-right font-mono font-semibold">{f(p.amount)}</td>
+                    <td className="p-3 text-right"><button onClick={() => onDelete("payment", p.id)} data-testid={`revenue-payment-delete-${p.id}`} className="text-muted-foreground hover:text-kr-accent"><Trash size={15} /></button></td>
                   </tr>
                 ))}
               </tbody>
@@ -859,73 +903,71 @@ function RevenueTab({ data, cur, onDelete, onChange }) {
   );
 }
 
+/**
+ * OverviewTab — KR-10.
+ *
+ * THE SPEND CHART IS A LINE, ON THE DARK BAND. It was a red bar chart on a
+ * white card. The founder called the line during KR-8.2 and HistoryBand was
+ * built for it then — but the plan had put it on /inbox, where a money chart
+ * does not belong. This is the home it was written for, and it means the
+ * dated series the backend actually owns (by_month, six months of real
+ * expenses) is drawn once, in one component, in one place.
+ *
+ * CATEGORIES ARE ONE HUE. See DonutBreak — order is the encoding.
+ *
+ * VENDORS REUSE ScoreMeter, the primitive KR-9 minted for Ops categories. A
+ * vendor bar and a category score are the same shape of claim: one value
+ * against a fixed ceiling. Sharing the primitive is what keeps them reading
+ * as one system across two pages.
+ */
 function OverviewTab({ summary }) {
   const { t } = useTranslation();
   const f = fmt(summary.currency);
+  const vendorMax = summary.by_vendor?.[0]?.amount || 1;
+  const categories = (summary.by_category || []).map((c) => ({ label: c.category, amount: c.amount }));
+
   return (
     <div className="space-y-6" data-testid="ledger-overview">
       <KpiRow summary={summary} />
       <AiPanel scope="brief" variant="brief" />
 
-      <div className="grid lg:grid-cols-2 gap-4">
-        <div className="card-brutal p-5">
-          <h3 className="text-sm font-medium mb-4">{t("finance.monthly_spend")}</h3>
-          {summary.by_month.length ? (
-            <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={summary.by_month} margin={CHART_MARGIN}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#00000010" vertical={false} />
-                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} width={48} tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />
-                <Tooltip formatter={(v) => f(v)} />
-                <Bar dataKey="amount" fill="#E63946" radius={[3, 3, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : <p className="text-sm text-muted-foreground">{t("finance.no_spend")}</p>}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="nm-tile p-5">
+          <h3 className="text-sm font-medium">{t("finance.by_category")}</h3>
+          {categories.length ? (
+            <DonutBreak data={categories} format={f} className="mt-4" testid="ledger-category-donut" />
+          ) : (
+            <p className="mt-3 text-sm text-muted-foreground">{t("finance.no_categories")}</p>
+          )}
         </div>
 
-        <div className="card-brutal p-5">
-          <h3 className="text-sm font-medium mb-4">{t("finance.by_category")}</h3>
-          {summary.by_category.length ? (
-            <div className="flex items-center gap-4">
-              <ResponsiveContainer width="55%" height={220}>
-                <PieChart>
-                  <Pie data={summary.by_category} dataKey="amount" nameKey="category" cx="50%" cy="50%" outerRadius={80} innerRadius={45}>
-                    {summary.by_category.map((c, i) => <Cell key={c.category || i} fill={PALETTE[i % PALETTE.length]} />)}
-                  </Pie>
-                  <Tooltip formatter={(v) => f(v)} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="flex-1 space-y-1.5 min-w-0">
-                {summary.by_category.slice(0, 6).map((c, i) => (
-                  <div key={c.category} className="flex items-center gap-2 text-xs">
-                    <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: PALETTE[i % PALETTE.length] }} />
-                    <span className="truncate flex-1">{c.category}</span>
-                    <span className="font-mono font-semibold">{f(c.amount)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : <p className="text-sm text-muted-foreground">{t("finance.no_categories")}</p>}
+        <div className="nm-tile p-5">
+          <h3 className="text-sm font-medium">{t("finance.top_vendors")}</h3>
+          {summary.by_vendor.length ? (
+            <ul className="mt-4 space-y-3" data-testid="ledger-vendors">
+              {summary.by_vendor.map((v) => (
+                <li key={v.vendor} className="flex items-center gap-3">
+                  <span className="w-28 shrink-0 truncate text-sm sm:w-36">{v.vendor}</span>
+                  <ScoreMeter value={(v.amount / vendorMax) * 100} size="sm" className="flex-1" />
+                  <span className="w-24 shrink-0 text-right font-mono text-sm font-semibold tabular-nums">{f(v.amount)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-3 text-sm text-muted-foreground">{t("finance.no_vendor")}</p>
+          )}
         </div>
       </div>
 
-      <div className="card-brutal p-5">
-        <h3 className="text-sm font-medium mb-4">{t("finance.top_vendors")}</h3>
-        {summary.by_vendor.length ? (
-          <div className="space-y-2">
-            {summary.by_vendor.map((v, i) => {
-              const max = summary.by_vendor[0].amount || 1;
-              return (
-                <div key={v.vendor} className="flex items-center gap-3">
-                  <span className="w-32 sm:w-48 truncate text-sm">{v.vendor}</span>
-                  <div className="flex-1 bg-nm-sunken h-5 rounded-sm overflow-hidden"><div className="h-full rounded-sm" style={{ width: `${(v.amount / max) * 100}%`, background: PALETTE[i % PALETTE.length] }} /></div>
-                  <span className="font-mono text-sm font-semibold w-24 text-right">{f(v.amount)}</span>
-                </div>
-              );
-            })}
-          </div>
-        ) : <p className="text-sm text-muted-foreground">{t("finance.no_vendor")}</p>}
-      </div>
+      {/* The band: one dark zone per page, and on Finance it belongs to the
+          only real time series in the product. */}
+      <DarkBand testid="ledger-band" className="mt-8 pt-8 pb-10">
+        <HistoryBand
+          series={summary.by_month || []}
+          title={t("finance.monthly_spend")}
+          testid="ledger-history"
+        />
+      </DarkBand>
     </div>
   );
 }
@@ -947,9 +989,9 @@ function ExpensesTable({ rows, cur, onDelete }) {
               <td className="p-3"><Chip value={e.category} className="bg-nm-sunken text-foreground" /></td>
               <td className="p-3 text-muted-foreground">{e.vendor_name || "—"}</td>
               <td className="p-3 text-muted-foreground">{e.date || "—"}</td>
-              <td className="p-3"><Chip value={e.status} className={e.status === "paid" ? "bg-success-50 text-success-800" : "bg-caution-50 text-caution-800"} /></td>
+              <td className="p-3"><Chip value={e.status} className={e.status === "paid" ? "bg-kr-ink text-white" : "border-[0.5px] border-kr-ink/55 text-foreground/70"} /></td>
               <td className="p-3 text-right font-mono font-semibold">{f(e.amount)}</td>
-              <td className="p-3 text-right"><button onClick={() => onDelete(e.id)} data-testid={`expense-delete-${e.id}`} className="text-muted-foreground hover:text-danger-600"><Trash size={15} /></button></td>
+              <td className="p-3 text-right"><button onClick={() => onDelete(e.id)} data-testid={`expense-delete-${e.id}`} className="text-muted-foreground hover:text-kr-accent"><Trash size={15} /></button></td>
             </tr>
           ))}
         </tbody>
@@ -975,9 +1017,9 @@ function AssetsTable({ rows, cur, onDelete }) {
               <td className="p-3"><Chip value={a.category} className="bg-nm-sunken text-foreground" /></td>
               <td className="p-3 text-muted-foreground">{a.vendor_name || "—"}</td>
               <td className="p-3 text-muted-foreground">{a.purchase_date || "—"}</td>
-              <td className="p-3"><Chip value={a.status} className={a.status === "active" ? "bg-primary text-primary-foreground" : "bg-nm-sunken text-foreground"} /></td>
+              <td className="p-3"><Chip value={a.status} className={a.status === "active" ? "bg-kr-ink text-white" : "bg-nm-sunken text-foreground"} /></td>
               <td className="p-3 text-right font-mono font-semibold">{f(a.purchase_amount)}</td>
-              <td className="p-3 text-right"><button onClick={() => onDelete(a.id)} className="text-muted-foreground hover:text-danger-600"><Trash size={15} /></button></td>
+              <td className="p-3 text-right"><button onClick={() => onDelete(a.id)} className="text-muted-foreground hover:text-kr-accent"><Trash size={15} /></button></td>
             </tr>
           ))}
         </tbody>
@@ -1005,7 +1047,7 @@ function InventoryTable({ rows, cur, onDelete }) {
               <td className="p-3 font-mono">{f(i.unit_cost)}</td>
               <td className="p-3 text-muted-foreground">{i.vendor_name || "—"}</td>
               <td className="p-3 text-right font-mono font-semibold">{f(i.value)}</td>
-              <td className="p-3 text-right"><button onClick={() => onDelete(i.id)} className="text-muted-foreground hover:text-danger-600"><Trash size={15} /></button></td>
+              <td className="p-3 text-right"><button onClick={() => onDelete(i.id)} className="text-muted-foreground hover:text-kr-accent"><Trash size={15} /></button></td>
             </tr>
           ))}
         </tbody>
@@ -1077,7 +1119,7 @@ function CaptureHero({ pendingCount, onIngested, onOpenInbox }) {
         </span>
         <label
           data-testid="finance-hero-doc"
-          className={`flex items-center gap-2 nm-tile px-3 py-2 text-xs font-medium hover:bg-brand-600 hover:text-white transition-colors cursor-pointer ${uploading ? "opacity-60 pointer-events-none" : ""}`}
+          className={`flex items-center gap-2 nm-tile px-3 py-2 text-xs font-medium hover:bg-kr-ink hover:text-white transition-colors cursor-pointer ${uploading ? "opacity-60 pointer-events-none" : ""}`}
           title="Upload a bill or receipt (PDF or photo)"
         >
           <FilePdf size={14} weight="bold" />
@@ -1106,7 +1148,7 @@ function CaptureHero({ pendingCount, onIngested, onOpenInbox }) {
           <button
             data-testid="finance-hero-inbox-badge"
             onClick={onOpenInbox}
-            className="flex items-center gap-2 nm-tile bg-brand-600 text-white px-3 py-2 text-xs font-medium transition-all"
+            className="flex items-center gap-2 kr-lift rounded-pill bg-kr-ink px-3.5 py-2 text-xs font-medium text-white transition-all"
           >
             <Tray size={14} weight="bold" />
             {pendingCount} in Inbox →
@@ -1126,13 +1168,22 @@ function CaptureHero({ pendingCount, onIngested, onOpenInbox }) {
 }
 
 export default function Ledger() {
-  // MPWA-09: rebuilt below lg (§8). Above lg the original tree is untouched.
-  const isMobile = useIsMobile();
+  // KR-10 — FinanceMobile.jsx is deleted and the isMobile early-return with
+  // it, on the founder's mid-build directive ("don't use any old mobile view
+  // port uiux design layout"). This tree is the one tree: the KPI grid goes
+  // 2-up, the charts stack, the tables scroll, and the band spans the phone
+  // exactly as it does the desktop.
   const { t } = useTranslation();
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const initialTab = TABS.some((tb) => tb.key === searchParams.get("tab")) ? searchParams.get("tab") : "overview";
   const [tab, setTab] = useState(initialTab);
+  // KR-10 — the ?filter= fix the plan flagged. /inbox's "To collect (overdue)"
+  // tile and Ops's overdue action have both linked to
+  // ?tab=revenue&filter=overdue since KR-8; nothing has ever read the second
+  // half, so the founder landed on the full invoice list and had to re-find
+  // the overdue ones by hand.
+  const initialFilter = searchParams.get("filter") || "all";
   const qc = useQueryClient();
   const invalidate = () => ["ledger-summary", "expenses", "assets", "inventory", "revenue", "payables"].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
   // U7-08.2 (2026-08-17): "Fix old purchases" button removed from the
@@ -1179,12 +1230,14 @@ export default function Ledger() {
     return null;
   }, [tab, categories, assetCategories]);
 
-  if (isMobile) return <FinanceMobile />;
-
   return (
     <div>
-      <PageHeader eyebrow={t("finance.eyebrow")} title={t("finance.title")}>
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto" data-testid="ledger-controls">
+      <header className="mb-7 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{t("finance.eyebrow")}</p>
+          <h1 className="mt-1.5 font-display text-3xl sm:text-4xl">{t("finance.title")}</h1>
+        </div>
+        <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center lg:w-auto" data-testid="ledger-controls">
           {/* RD-4 (2026-08-17): the six tabs were a welded segmented block of
               uppercase slabs, and the active one inverted to solid dark — the
               loudest element on a page whose job is showing money. Now the
@@ -1195,16 +1248,24 @@ export default function Ledger() {
             {TABS.map((tb) => {
               const active = tab === tb.key;
               return (
+                /* KR-10 — the same pill the scope toggle and the nav wear:
+                   no fill either way, a black hairline, and the selected one
+                   at full strength against a faded neighbour. */
                 <button key={tb.key} onClick={() => setTab(tb.key)} data-testid={`ledger-tab-${tb.key}`}
-                  className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full text-xs sm:text-sm transition-colors ${active ? "bg-brand-50 text-brand-700 font-medium" : "text-muted-foreground hover:bg-accent hover:text-foreground"}`}>
-                  <tb.icon size={15} weight={active ? "fill" : "regular"} /> {t(tb.tkey)}
+                  aria-pressed={active}
+                  className={`flex h-9 items-center justify-center gap-1.5 rounded-pill border-[0.5px] px-3.5 text-xs transition-colors sm:text-sm ${
+                    active
+                      ? "border-kr-ink font-medium text-foreground"
+                      : "border-kr-ink/55 text-foreground/65 hover:text-foreground/85"
+                  }`}>
+                  <tb.icon size={15} weight="regular" aria-hidden="true" /> {t(tb.tkey)}
                 </button>
               );
             })}
           </div>
           {addBtn}
         </div>
-      </PageHeader>
+      </header>
 
       {/* Epic 2 Sprint 4 (E2-25): hero capture bar above every tab. */}
       <CaptureHero
@@ -1224,7 +1285,7 @@ export default function Ledger() {
               <div className="lg:sticky lg:top-6 self-start"><WhatsAppCard /></div>
             </div>
           )}
-          {tab === "revenue" && <RevenueTab data={revenueQ.data} cur={cur} onDelete={delRevenue} onChange={invalidate} />}
+          {tab === "revenue" && <RevenueTab data={revenueQ.data} cur={cur} onDelete={delRevenue} onChange={invalidate} initialFilter={initialFilter} />}
           {tab === "expenses" && <div className="space-y-6"><NeedsMatchingPanel title="Supplier payments to match" testid="payables-needs-matching" hint="These payments to suppliers couldn’t be auto-linked to a purchase bill. Pick the bill they settle, or mark as a standalone expense." unmatched={payablesQ.data?.unmatched_payments} open={payablesQ.data?.open_invoices || []} cur={cur} endpoint="/payables/payment" standaloneLabel={{ btn: "Standalone expense", done: "Booked as a standalone expense" }} onChange={invalidate} /><AiPanel scope="expenses" /><ExpensesTable rows={expensesQ.data || []} cur={cur} onDelete={(id) => del("expenses", id)} /></div>}
           {tab === "assets" && <div className="space-y-6"><AiPanel scope="assets" /><AssetsTable rows={assetsQ.data || []} cur={cur} onDelete={(id) => del("assets", id)} /></div>}
           {tab === "inventory" && <div className="space-y-6"><AiPanel scope="inventory" /><InventoryTable rows={inventoryQ.data || []} cur={cur} onDelete={(id) => del("inventory", id)} /></div>}

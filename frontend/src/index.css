@@ -1225,7 +1225,59 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
         border: 1px solid rgb(255 255 255 / .16);
         border-radius: var(--radius-tile);
         color: hsl(40 20% 97%);
+
+        /* KR-10 — THE ALIAS TRAP, THIRD TIME. Setting `color` alone only
+           fixes text that INHERITS it. Anything inside reaching for a token —
+           text-muted-foreground, border-nm-edge, a Chip's badge triple — kept
+           resolving against :root's light values, because a custom property
+           substitutes its var() refs at the element where it is DECLARED and
+           then inherits frozen. Measured on the Finance WhatsApp card before
+           this block: muted body copy at 1.92:1 on the olive glass.
+           .kr-dark-band learned this in KR-8; the fix belongs here too, and
+           doing it on the recipe fixes every glass surface at once (decision
+           boxes, the Ops leaderboard, workflow cards) rather than one card. */
+        --text-primary:     40 20% 97%;
+        --text-secondary:   40 14% 88%;
+        --text-tertiary:    40 10% 78%;
+        --hairline:         0 0% 100%;
+        --hairline-strong:  0 0% 100%;
+        --surface:          0 0% 100%;
+        --surface-sunken:   0 0% 100%;
+        --nm-edge:          0 0% 100%;
+        --kr-outline:       0 0% 88%;
+        --kr-chip-line:     40 12% 85%;
+
+        /* …and the aliases, re-declared so they re-substitute HERE. */
+        --foreground:         var(--text-primary);
+        --muted-foreground:   var(--text-secondary);
+        --card-foreground:    var(--text-primary);
+        --popover-foreground: var(--text-primary);
+        --border:             var(--hairline);
+        --input:              var(--hairline);
+        --accent-foreground:  var(--text-primary);
     }
+    /* KR-10 · .kr-frost — GLASS FOR THE LIGHT ZONE.
+       .kr-glass above is an INK-ZONE material: it tints dark and prints
+       near-white text, which works because what composites behind it is the
+       black band. Put the same class on the light zone and the tint lands on
+       cream instead — measured on Finance's WhatsApp card, near-white body
+       copy came out at 2.98:1 even after the token re-scope, because the
+       ground itself was ~[161,175,119].
+       So the light zone gets its own frost: the same white wash and blur the
+       insight well uses, but RAISED rather than sunken, and printing ink.
+       One rule of thumb now covers it — glass on ink is .kr-glass, glass on
+       the page is .kr-frost. */
+    .kr-frost {
+        background: linear-gradient(160deg,
+            hsl(0 0% 100% / .52),
+            hsl(0 0% 100% / .30));
+        -webkit-backdrop-filter: blur(20px) saturate(1.5);
+        backdrop-filter: blur(20px) saturate(1.5);
+        border: 1px solid hsl(0 0% 100% / .55);
+        border-radius: var(--radius-tile);
+        color: hsl(var(--text-primary));
+    }
+
     .kr-glass--blue  { --kr-glass-from: 214 45% 58%; --kr-glass-to: 28 55% 50%; }
     .kr-glass--olive { --kr-glass-from: 85 34% 42%;  --kr-glass-to: 75 32% 22%; }
     .kr-glass--warm  { --kr-glass-from: 36 18% 48%;  --kr-glass-to: 225 12% 38%; }

@@ -1362,6 +1362,59 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
        insight well uses, but RAISED rather than sunken, and printing ink.
        One rule of thumb now covers it — glass on ink is .kr-glass, glass on
        the page is .kr-frost. */
+    /* KR-11.2 · .kr-bento — the My Work grid tile.
+       Founder: "glassmorphism and neumorphism and materialism mixed… a
+       colour that complements the background blue glow, but it should be
+       SEEN AS A SEPARATED VIEW, not get blended with the background."
+
+       All three materials, each doing one job:
+       · glass        a translucent wash + backdrop blur, so the steel-blue
+                      sky is present inside the tile rather than stopping at
+                      its edge
+       · neumorphic   a raised shadow pair from the same top-left light the
+                      well and .kr-pop use, so the tile sits ON the page
+       · material     a real 1px edge. This is the part that answers
+                      "separated, not blended": glass alone dissolves into a
+                      soft ground, and the founder specifically did not want
+                      that. The edge is what draws the boundary.
+
+       The tint is cool (215°) to sit WITH the my-work sky rather than fight
+       it, but it is carried at high opacity so the tile still reads as an
+       object on the weather, not a hole in it. */
+    .kr-bento {
+        position: relative;
+        border-radius: var(--radius-tile);
+        background: linear-gradient(152deg,
+            hsl(214 44% 99% / .90),
+            hsl(214 26% 95% / .76));
+        -webkit-backdrop-filter: blur(18px) saturate(1.3);
+        backdrop-filter: blur(18px) saturate(1.3);
+        border: 1px solid hsl(214 34% 100% / .95);
+        box-shadow:
+            -6px -6px 14px hsl(0 0% 100% / .70),
+             7px  8px 20px hsl(216 30% 40% / .15);
+        transition: box-shadow 220ms cubic-bezier(.22,1,.36,1),
+                    transform 220ms cubic-bezier(.22,1,.36,1);
+    }
+    .kr-bento:hover {
+        transform: translateY(-3px);
+        box-shadow:
+            -7px -7px 16px hsl(0 0% 100% / .80),
+             9px 11px 26px hsl(216 30% 40% / .19);
+    }
+    /* Opened: the tile stops hovering and settles, so an expanded card reads
+       as a surface you are inside rather than one more thing to click. */
+    .kr-bento[data-open="true"],
+    .kr-bento[data-open="true"]:hover {
+        transform: none;
+        background: linear-gradient(152deg,
+            hsl(214 44% 100% / .96),
+            hsl(214 24% 97% / .90));
+        box-shadow:
+            inset 0 1px 0 hsl(0 0% 100% / .9),
+            4px 5px 16px hsl(216 30% 40% / .13);
+    }
+
     .kr-frost {
         background: linear-gradient(160deg,
             hsl(0 0% 100% / .52),

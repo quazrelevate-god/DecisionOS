@@ -708,7 +708,21 @@ function BulkActionBar({ selectedIds, tasks = [], busy, onClear, onComplete, ope
   );
 }
 
-function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAssignee = false, highlight = false, selected = false, onToggleSelect }) {
+/**
+ * KR-11.2 — `expanded` is now CONTROLLED by the grid.
+ *
+ * It used to be TaskCard's own useState, which was fine for a stack of rows
+ * and impossible for a bento: the grid has to know which tile is open so it
+ * can hand that tile the whole row (col-span-full) and let auto-placement
+ * push everything else underneath. A child cannot tell its siblings to move.
+ * `open`/`onToggleOpen` are optional — omit them and the card falls back to
+ * local state, so any future call site outside the grid still works.
+ *
+ * `tier` ("high" | "medium" | "low") scales the title only. The founder's
+ * rule: bigger for high, smaller after, but "don't reduce too much" — so the
+ * floor is 14px, not 12.
+ */
+function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAssignee = false, highlight = false, selected = false, onToggleSelect, open, onToggleOpen, tier }) {
   const { user } = useAuth();
   const [uploading, setUploading] = useState(false);
   const [recording, setRecording] = useState(false);
@@ -719,7 +733,10 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
   // actions). Expand-on-click reveals description, op-meta, stage chip,
   // status band, progress, attachments, updates, action buttons, plan,
   // trail. Highlighted cards (deep-link focus) auto-expand.
-  const [expanded, setExpanded] = useState(highlight);
+  const [selfExpanded, setSelfExpanded] = useState(highlight);
+  const controlled = open !== undefined;
+  const expanded = controlled ? open : selfExpanded;
+  const setExpanded = controlled ? () => onToggleOpen?.() : setSelfExpanded;
   // U7-05 polish: replaced window.prompt() for reject + clarify with real
   // dialogs -- prompt is anti-pattern that blocks browser thread and
   // returns null in embed contexts (FUP-49 hit this pattern for confirm).
@@ -865,20 +882,21 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
   const selCls = "nm-field px-2 py-1 text-xs font-mono";
 
   return (
+    /* KR-11.2 — the red left stripe is GONE on the founder's call ("don't
+       copy the old red strip… just use the overdue pill, that's it"). The
+       pill in the summary row below already says Overdue, and a full-height
+       colour bar on every late card turned a grid of them into a barcode. */
     <div id={`task-card-${t.id}`} data-testid={`mywork-task-${t.id}`}
-      className={`card-brutal transition-all overflow-hidden ${highlight ? "ring-2 ring-kr-ink ring-offset-2 ring-offset-background" : ""}`}>
-      {/* U7-05.10: overdue severity spike -- red left stripe on the whole
-          card, immediately readable as "urgent" without reading a chip. */}
-      <div className="flex">
-        {overdue && !terminal && (
-          <div className="w-1.5 shrink-0 bg-kr-accent" aria-hidden="true" />
-        )}
-        <div className="flex-1 min-w-0">
+      data-open={expanded ? "true" : "false"}
+      data-tier={tier || "medium"}
+      className={`kr-bento flex h-full min-w-0 flex-col overflow-hidden ${highlight ? "ring-2 ring-kr-ink ring-offset-2 ring-offset-background" : ""}`}>
+      <div className="flex flex-1 min-h-0">
+        <div className="flex-1 min-w-0 flex flex-col">
 
       {/* U7-05.2: SUMMARY ROW -- the only thing shown when card is collapsed.
           Click-target on the whole row toggles expand. Right-side quick actions
           stopPropagation so they don't collapse when clicked. */}
-      <div className={`w-full flex items-stretch group ${selected ? "bg-nm-sunken/60" : "hover:bg-nm-sunken/30"} transition-colors`}>
+      <div className={`group flex w-full flex-1 items-stretch transition-colors ${selected ? "bg-kr-ink/[0.05]" : ""}`}>
         {/* U7-05.3: bulk-select checkbox. Sits outside the expand button
             so clicking it doesn't toggle the card. Only rendered when
             onToggleSelect is passed (skip in TaskDetailDialog and other
@@ -901,8 +919,8 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
         )}
       <button
         type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className="w-full text-left p-4 flex-1 min-w-0"
+        onClick={() => (controlled ? onToggleOpen?.() : setSelfExpanded((v) => !v))}
+        className="w-full flex-1 min-w-0 p-4 text-left"
         aria-expanded={expanded}
         aria-controls={`task-card-body-${t.id}`}
         data-testid={`task-summary-${t.id}`}
@@ -916,12 +934,20 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
           />
           <div className="flex-1 min-w-0">
             <div className="flex items-start gap-2 flex-wrap">
-              <p className="font-heading font-bold text-base leading-tight flex-1 min-w-[200px]">
+              <p className={`min-w-[180px] flex-1 font-heading font-bold leading-snug ${
+                tier === "high" ? "text-lg xl:text-xl" : tier === "low" ? "text-sm" : "text-base"
+              }`}>
                 {t.title}
               </p>
-              <div className="flex items-center gap-1.5 shrink-0" aria-hidden="true">
-                <Chip value={t.priority} />
-              </div>
+              {/* KR-11.2 — the priority chip goes monochrome. The tile's
+                  SIZE now says high/medium/low, so a red "High" beside it was
+                  the same signal twice, and the louder of the two. It stays
+                  as a word because size is a relative cue and a lone card in
+                  a filtered view has nothing to be relative to. */}
+              <span data-testid={`priority-chip-${t.id}`}
+                className="shrink-0 rounded-pill border-[0.5px] border-kr-ink/55 px-2 py-0.5 text-[11px] font-medium capitalize text-foreground/70">
+                {t.priority || "medium"}
+              </span>
             </div>
             <div className="flex items-center flex-wrap gap-2 mt-1.5 text-xs">
               {/* Status pill -- muted when normal, red when overdue/rejected */}
@@ -1310,6 +1336,114 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
   );
 }
 
+/* ═══ KR-11.2 · the two layouts ════════════════════════════════════════════
+   The founder asked for the LIST to become a bento, and for the AI-priority
+   toggle to re-form it into a three-way split. The data and the ordering are
+   untouched — only the arrangement changes.
+
+   TIER = t.priority. Size is earned from the field the tenant actually sets,
+   not from the AI score: with the ranker off, the ordering is still "most
+   recent", and a big tile has to mean something the founder chose.
+
+   SPANS. A 6-column grid, not 4, because 4 cannot make a rectangle out of a
+   third. Every tile is wider than it is tall at every breakpoint, which was
+   an explicit ask ("more rectangular, not a pure square… grow lengthwise").
+     high    4 of 6  ≈ 2/3 width, 210px tall  → ~3.4 : 1
+     medium  2 of 6  ≈ 1/3 width, 182px tall  → ~1.9 : 1
+     low     2 of 6  ≈ 1/3 width, 156px tall  → ~2.2 : 1
+   4 + 2 fills a row; 2 + 2 + 2 fills the next. That alternation is what
+   produces the "big box with small ones around it" rhythm without anyone
+   hand-placing a tile. auto-flow dense lets a small tile backfill a hole a
+   wide one could not use.
+
+   EXPANDED TAKES THE WHOLE ROW. col-span-full, so nothing can sit beside it
+   — the founder's "no boxes at the left or right once it expands". Grid
+   auto-placement then pushes every later tile below it for free. This is the
+   reason `expanded` had to be lifted out of TaskCard. */
+const TIER_OF = (t) => (t?.priority === "high" || t?.priority === "low") ? t.priority : "medium";
+
+const TIER_SPAN = {
+  high:   "col-span-6 lg:col-span-4",
+  medium: "col-span-6 sm:col-span-3 lg:col-span-2",
+  low:    "col-span-6 sm:col-span-3 lg:col-span-2",
+};
+const TIER_MINH = { high: "min-h-[210px]", medium: "min-h-[182px]", low: "min-h-[156px]" };
+
+function TaskBento({ list, openId, setOpenId, cardProps }) {
+  return (
+    <div className="grid grid-flow-row-dense grid-cols-6 gap-4" data-testid="mywork-bento">
+      {list.map((t) => {
+        const tier = TIER_OF(t);
+        const isOpen = openId === t.id;
+        return (
+          <div
+            key={t.id}
+            data-tier={tier}
+            className={isOpen ? "col-span-6" : `${TIER_SPAN[tier]} ${TIER_MINH[tier]}`}
+          >
+            <TaskCard
+              t={t}
+              tier={tier}
+              open={isOpen}
+              onToggleOpen={() => setOpenId(isOpen ? null : t.id)}
+              {...cardProps(t)}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* AI PRIORITY ON → three columns, high | medium | low.
+   The ranker already sorts the whole list by score; splitting it by the
+   priority band turns "a long sorted list" into "how much is on fire, how
+   much is next, how much can wait" — which is the question the toggle is
+   asked. Within a column the ranker's order is preserved.
+   A tile opened here still takes its column's full width, so the same
+   nothing-beside-it rule holds. */
+const BANDS = [
+  { key: "high", label: "High priority" },
+  { key: "medium", label: "Medium" },
+  { key: "low", label: "Low" },
+];
+
+function TaskPriorityColumns({ list, openId, setOpenId, cardProps }) {
+  const grouped = BANDS.map((b) => ({ ...b, items: list.filter((t) => TIER_OF(t) === b.key) }));
+  return (
+    <div className="grid gap-4 lg:grid-cols-3" data-testid="mywork-priority-columns">
+      {grouped.map((col) => (
+        <section key={col.key} data-testid={`priority-col-${col.key}`} className="min-w-0">
+          <div className="mb-3 flex items-baseline gap-2">
+            <h3 className="text-sm font-semibold">{col.label}</h3>
+            <span className="font-mono text-xs tabular-nums opacity-55">{col.items.length}</span>
+          </div>
+          <div className="flex flex-col gap-3">
+            {col.items.length === 0 && (
+              <div className="rounded-tile border border-dashed border-foreground/15 p-5">
+                <p className="text-center text-xs text-muted-foreground">Nothing here</p>
+              </div>
+            )}
+            {col.items.map((t) => {
+              const isOpen = openId === t.id;
+              return (
+                <TaskCard
+                  key={t.id}
+                  t={t}
+                  tier={col.key}
+                  open={isOpen}
+                  onToggleOpen={() => setOpenId(isOpen ? null : t.id)}
+                  {...cardProps(t)}
+                />
+              );
+            })}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
 export default function MyWork() {
   // MPWA-08: rebuilt below lg (§8). Above lg the original tree renders
   // unchanged, keeping §9.2's desktop diff empty by construction.
@@ -1330,6 +1464,10 @@ export default function MyWork() {
   const initialView = rawView === "board" ? "workflows"
     : (rawView === "workflows" ? "workflows" : rawView === "leave" ? "leave" : "mywork");
   const [view, setView] = useState(focusTaskId ? "mywork" : initialView);
+  // KR-11.2 — which tile is expanded. Lifted out of TaskCard so the grid can
+  // give it the whole row; see TaskBento. Seeded from ?task= so a deep link
+  // still lands on an opened card.
+  const [openId, setOpenId] = useState(focusTaskId || null);
   // WE-14 (2026-08-16): wfTab state retired -- Board sub-tab is gone,
   // only the pipelines view remains. Retained a no-op reference to
   // rawView so eslint's no-unused-vars doesn't fire on line above.
@@ -1617,9 +1755,22 @@ export default function MyWork() {
               openReassign={() => { setBulkAssigneeId(""); setBulkAssigneeRole(""); setBulkReassignOpen(true); }}
             />
           )}
-          <div className="space-y-4">
-            {list.map((t) => <TaskCard key={t.id} t={t} onChange={refresh} members={members} roleOptions={roleOptions} showAssignee={showAssignee} highlight={t.id === focusTaskId} scores={aiPriority && tab !== "completed" ? scoreMap[t.id] : undefined} selected={selected.has(t.id)} onToggleSelect={() => toggleSelected(t.id)} />)}
-          </div>
+          {(() => {
+            const cardProps = (t) => ({
+              onChange: refresh,
+              members,
+              roleOptions,
+              showAssignee,
+              highlight: t.id === focusTaskId,
+              scores: aiPriority && tab !== "completed" ? scoreMap[t.id] : undefined,
+              selected: selected.has(t.id),
+              onToggleSelect: () => toggleSelected(t.id),
+            });
+            const shared = { list, openId, setOpenId, cardProps };
+            return aiPriority && tab !== "completed"
+              ? <TaskPriorityColumns {...shared} />
+              : <TaskBento {...shared} />;
+          })()}
 
           {/* U7-05.3 dialog: bulk-reassign target picker. */}
           <Dialog open={bulkReassignOpen} onOpenChange={(o) => !o && !bulkBusy && setBulkReassignOpen(false)}>

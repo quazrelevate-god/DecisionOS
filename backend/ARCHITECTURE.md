@@ -89,5 +89,43 @@ For each PR:
 - **Every read of financial/HR/sales data** goes through `brain_rbac` before returning.
 - **Use `now_iso()` and `new_id()`** — never `datetime.utcnow()` or bare `uuid4()`.
 - **Fire-and-forget audit writes** (`brain_context.record_context`, `log_activity`) go inside `try/except` so a Brain write can't 500 the parent request.
-ow()` or bare `uuid4()`.
-- **Fire-and-forget audit writes** (`brain_context.record_context`, `log_activity`) go inside `try/except` so a Brain write can't 500 the parent request.
+
+## Epic 8 — Backend optimization & modularization (in progress)
+
+Finishes the Phase A/B migration. The target stays a **flat `backend/` root**
+(not a nested `app/`), so `server:app` and every `from core import ... /
+from services import ...` keep working — no big-bang import rename. New
+organizing packages are added as siblings of the existing `routers/`,
+`services/`, `models/`, `utils/`:
+
+```
+backend/
+├── server.py         # entry (server:app). Shrinks toward ~0 as domains move out.
+├── bootstrap/        # ✅ S1: app assembly (routing, middleware); later: lifespan, seed, migrations
+├── integrations/     # ⏳ S6: one adapter per external provider
+├── workers/          # ⏳ S7: background jobs (schedulers, follow-ups)
+├── shared/           # ⏳ S5: tiny stateless helpers (ids, json, normalizers)
+├── core/             # ⏳ S2: core.py split into config / db / security / deps / ...
+├── routers/  services/  models/  utils/    # existing (Phase A/B)
+```
+
+Layering (enforced from Sprint 8):
+
+```
+integrations  ->  (external SDKs only)
+core          ->  config, integrations
+shared        ->  core
+routers / services / modules  ->  core, shared, integrations   (never each other's internals)
+workers       ->  core, shared, integrations, service fns
+bootstrap     ->  anything ;  nothing imports bootstrap except server.py
+```
+
+### Sprint 1 — modular foundation (DONE)
+
+- Stood up `bootstrap/`, `integrations/`, `workers/`, `shared/` package skeletons.
+- Extracted app assembly out of `server.py`:
+  - `bootstrap/routing.py` → `register_api_routers(app, api)` (the `include_router` block).
+  - `bootstrap/middleware.py` → `register_middleware(app)` (CORS + CSRF, order-preserving).
+  - `server.py` now calls these two; the entry point stays `server:app`.
+- **Verified byte-identical**: route table = 260 routes, same SHA-256 fingerprint; middleware stack `[CSRF, CORS]` unchanged.
+- **Not touched this sprint** (deliberately): the 86 in-file `api` endpoints (Sprint 3), the `@app.on_event` startup/shutdown and `_bootstrap` (Sprint 7).

@@ -7316,83 +7316,14 @@ async def root():
     return {"message": "DecisionOS API"}
 
 
-app.include_router(api)
-# Extracted route modules (import foundation from core; no circular dependency).
-from routers.onboarding import router as onboarding_router  # noqa: E402
-app.include_router(onboarding_router)
-from routers.ledger import router as ledger_router  # noqa: E402
-app.include_router(ledger_router)
-from routers.admin import router as admin_router  # noqa: E402
-app.include_router(admin_router)
-from routers.brain import router as brain_router  # noqa: E402
-app.include_router(brain_router)
-from routers.brain_docs import router as brain_docs_router  # noqa: E402
-app.include_router(brain_docs_router)
-from routers.brain_context_api import router as brain_context_router  # noqa: E402
-app.include_router(brain_context_router)
-from routers.brain_router import router as brain_agent_router  # noqa: E402
-app.include_router(brain_agent_router)
-from routers.signup import router as signup_router  # noqa: E402
-app.include_router(signup_router)
-from routers.auth import router as auth_router  # noqa: E402
-app.include_router(auth_router)
-from routers.tasks import router as tasks_router  # noqa: E402
-app.include_router(tasks_router)
-from routers.decisions import router as decisions_router  # noqa: E402
-app.include_router(decisions_router)
-from routers.inbox import router as inbox_router  # noqa: E402
-app.include_router(inbox_router)
-# Epic 2 Sprint 2 (E2-17 / E2-22): Decision Desk aggregation + nudge action.
-from routers.desk import router as desk_router  # noqa: E402
-app.include_router(desk_router)
-from routers.brief import router as brief_router  # noqa: E402
-app.include_router(brief_router)
-from routers.team import router as team_router  # noqa: E402
-app.include_router(team_router)
-# Epic 2 Sprint 8 (E2-67): per-contact outstanding aggregation for CRM pills.
-from routers.crm import router as crm_router  # noqa: E402
-app.include_router(crm_router)
-# Epic 2 Sprint 5 (E2-35 + E2-41): Dex persona endpoints (in-flight
-# capture count + unified capture proxy).
-from routers.dex import router as dex_router  # noqa: E402
-app.include_router(dex_router)
-# Epic 1 Batch 2 (RBAC-26 + RBAC-27): acting-as delegation + time-
-# bounded elevated permissions.
-from routers.access import router as access_router  # noqa: E402
-app.include_router(access_router)
-# Epic 1 (S3-01, 2026-08-16): Razorpay billing module -- redirect to
-# marketing landing page for the actual Checkout; webhook handler on
-# our side upgrades tenant.plan on payment.captured.
-from routers.billing import router as billing_router  # noqa: E402
-app.include_router(billing_router)
-# FIX-006-B (S0-02): strict CORS allow-list — no more `allow_origin_regex=".*"`.
-# The old default of `*` combined with `allow_credentials=True` was echoed
-# back per-origin via `allow_origin_regex='.*'`, which sidesteps the CORS
-# spec's ban on wildcard-with-credentials and effectively lets any site
-# the user visits make credentialed cross-origin calls carrying their
-# auth cookie. Origins now come from CORS_ORIGINS env; in prod (ENV=prod)
-# an unset or wildcard list makes config.py refuse to boot.
-from config import CORS_ORIGINS as _cors_origins  # noqa: E402
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=_cors_origins,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
-    allow_headers=["*"],
-    expose_headers=[],
-    max_age=600,
-)
-logger.info(f"CORS allow-list ({len(_cors_origins)} origins): {_cors_origins}")
+# App assembly (Epic 8 Sprint 1): router + middleware wiring extracted to
+# bootstrap/. server.py remains the entry (server:app) and still owns the
+# in-file `api` router; only the plumbing moved. Behaviour unchanged.
+from bootstrap.routing import register_api_routers  # noqa: E402
+register_api_routers(app, api)
 
-# FIX-006-B (S0-02): CSRF double-submit cookie enforcement. Middleware
-# is always installed so we mint the cookie + log match/mismatch on
-# every mutating cookie-authed request. Actual 403 enforcement is
-# gated by CSRF_ENFORCE env — defaults OFF this batch so the frontend
-# can adopt the X-CSRF-Token header before we start rejecting.
-from services.csrf import CSRFMiddleware  # noqa: E402
-app.add_middleware(CSRFMiddleware)
-from config import CSRF_ENFORCE as _csrf_enforce  # noqa: E402
-logger.info(f"CSRF middleware installed (enforce={_csrf_enforce})")
+from bootstrap.middleware import register_middleware  # noqa: E402
+register_middleware(app)
 
 
 @app.on_event("shutdown")

@@ -222,278 +222,13 @@ async def add_inbox_item(tenant_id, created_by, source, classification, title,
 # ---------------------------------------------------------------------------
 # AI helpers
 # ---------------------------------------------------------------------------
-async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[list] = None, members: Optional[list] = None,
-                     pipelines: Optional[list] = None, task_categories: Optional[list] = None, extra_context: str = "") -> dict:
-    roles = allowed_roles or ["owner", "sales", "operations", "finance"]
-    roles_str = ",".join(roles)
-    pipelines = pipelines or DEFAULT_OPERATING_MODEL["pipelines"]
-    task_categories = task_categories or DEFAULT_OPERATING_MODEL["task_categories"]
-    pipe_keys = [p["key"] for p in pipelines]
-    pipe_keys_str = ",".join(pipe_keys)
-    cat_keys_str = ",".join([c["key"] for c in task_categories])
-    pipe_desc = " ".join(
-        f"'{p['key']}' = the '{p['label']}' pipeline ({' → '.join(s['label'] for s in p['stages'])});"
-        for p in pipelines
-    )
-    cat_desc = ", ".join(f"'{c['key']}' ({c['label']})" for c in task_categories)
-    names = [m.get("name") for m in (members or []) if m.get("name")]
-    members_line = (
-        "Team members you can assign to by name: " + ", ".join(names) + ". "
-        "If the directive explicitly names a person (e.g. 'tell Priya to...', 'ask Rajesh...'), set that task's "
-        "\"assignee_name\" to the closest matching team member name above. Otherwise leave \"assignee_name\" empty "
-        "and just pick a sensible \"assignee_role\". "
-    ) if names else ""
-    system = (
-        "You are the extraction engine of DecisionOS, an operating brain for small businesses. "
-        "Convert a founder's spoken/written directive into structured operational data. "
-        "Return ONLY valid JSON, no prose. Schema: "
-        "{\"summary\": string, \"confidence\": number between 0 and 1, "
-        "\"decisions\": [{\"title\": string, \"detail\": string, \"category\": string, "
-        "\"type\": one of [directive,approval,policy,observation]}], "
-        "\"tasks\": [{\"title\": string, \"description\": string, \"assignee_role\": one of [" + roles_str + "], "
-        "\"assignee_name\": string (a specific team member's name if one is explicitly mentioned, else empty), "
-        "\"task_category\": one of [" + cat_keys_str + "] (the department this task belongs to), "
-        "\"priority\": one of [low,medium,high], \"due_in_days\": integer or null}], "
-        "\"workflow_events\": [{\"type\": one of [" + pipe_keys_str + "], \"title\": string, \"detail\": string, \"counterparty\": string, \"amount\": number or null}], "
-        "\"reminders\": [{\"title\": string, \"due_in_days\": integer or null}], "
-        "\"meeting_events\": [{\"title\": string, \"when\": string, \"due_in_days\": integer or null}], "
-        "\"memory_notes\": [{\"text\": string, \"tag\": string}]}. "
-        + members_line +
-        "Use 'reminders' for simple personal follow-ups (e.g. 'call Kumar tomorrow', 'follow up with Toyota next Monday'). "
-        "Use 'meeting_events' for meetings/reviews/calls to be scheduled (e.g. 'arrange a sales review on Friday', 'set up a vendor call Monday'). Keep meetings OUT of reminders. "
-        "Use 'workflow_events' ONLY for concrete multi-step operational pipelines this business tracks on the board. "
-        "Pick the \"type\" from the business's ACTUAL pipelines: " + pipe_desc + " "
-        "Create a workflow_event only when the directive clearly starts/advances one of these pipelines; "
-        "include the counterparty (customer/vendor name) and amount when mentioned. "
-        "For every task, set \"task_category\" to the single best-fitting department from: " + cat_desc + ". "
-        "IMPORTANT: Following up on, chasing, or collecting PAYMENT for an invoice (money a customer owes us) is NOT a workflow — create a TASK for it instead (assignee_role 'finance' or the named accountant if one exists), e.g. 'uploaded an invoice, ask the accountant to follow up on payment' -> a finance task titled 'Follow up on invoice payment' with the customer in the description. "
-        "Do NOT put general rules/policies here — those belong in memory_notes. "
-        "Use 'memory_notes' for lasting facts/policies the company should remember (e.g. 'don't purchase from XYZ again', 'salary increment for Arun from August'). "
-        "The transcript may be in English, Tamil, or Tanglish (casual Tamil-English code-mix). Fully understand it regardless "
-        "of language, and produce ALL output field values in clear English. "
-        "TASK GRANULARITY (important): create exactly ONE task per distinct assignee (person or role). Do NOT split one "
-        "person's single goal into several task cards — a directive like 'install and onboard all users using Ramesh's list' "
-        "is ONE task for the responsible person, not one task per sub-step. The individual sub-steps (install, get the list, "
-        "onboard each user, etc.) are handled later inside that task's AI execution guide, so keep them OUT of separate tasks. "
-        "Only create multiple tasks when the work genuinely goes to DIFFERENT people/roles, or is a clearly separate deliverable "
-        "for the same person that cannot be part of the same guided checklist. Put the fuller scope in the task's \"description\". "
-        "Pick assignee_role ONLY from the provided role list. Infer sensible owners and due dates. If nothing applies, use empty arrays."
-    )
-    prompt = f"Founder directive transcript:\n\"\"\"\n{transcript}\n\"\"\"\n"
-    if extra_context:
-        prompt += (
-            "\nThe founder also attached reference material (a photo/PDF/Word/Excel — e.g. a business card, "
-            "a list, an order, a screenshot). Its full contents have already been read for you below. Use it "
-            "TOGETHER with the directive: pull the concrete facts out of it (names, phone numbers, emails, "
-            "company, addresses, dates, amounts, items) and put the relevant ones INTO the task description(s) so "
-            "the assignee has everything they need. If the directive names a person (e.g. 'fix the appointment, "
-            "Priya'), delegate the task to that person and include the attachment's details (e.g. the contact's "
-            "name, phone and email from a business card) in that task's description. If the directive is empty, "
-            "treat the attached document as the PRIMARY input and derive the decision and tasks from it.\n"
-            f"ATTACHED REFERENCE CONTENT:\n\"\"\"\n{extra_context[:6000]}\n\"\"\"\n"
-        )
-    prompt += "Extract the structured JSON now."
-    chat = claude_chat(session_id=session_id, system_message=system).with_model(*LLM_MODEL)
-    resp = await chat.send_message(UserMessage(text=prompt))
-    try:
-        data = _extract_json(resp)
-    except Exception as e:
-        logger.error(f"AI extract parse error: {e} :: {resp[:400]}")
-        data = {"summary": transcript[:200], "decisions": [], "tasks": [], "workflow_events": []}
-    data.setdefault("summary", "")
-    for k in ("decisions", "tasks", "workflow_events", "reminders", "meeting_events", "memory_notes"):
-        if not isinstance(data.get(k), list):
-            data[k] = []
-    return data
-
-
-async def ai_score_tasks(tasks: list, currency: str, session_id: str) -> dict:
-    """Score open tasks on 4 axes (0-100) + a blended priority score. Returns {task_id: scores}."""
-    if not tasks:
-        return {}
-    today = datetime.now(timezone.utc).date().isoformat()
-    lines = []
-    for t in tasks:
-        lines.append({
-            "id": t["id"], "title": t.get("title", ""), "description": (t.get("description") or "")[:200],
-            "priority": t.get("priority", "medium"), "due_date": (t.get("due_date") or "")[:10],
-            "assignee_role": t.get("assignee_role") or "unassigned", "status": t.get("status"),
-        })
-    system = (
-        "You are the prioritization engine of DecisionOS, an operating brain for a small business. "
-        f"Today is {today}. Currency is {currency}. "
-        "For EACH task, rate 0-100 on four axes: "
-        "business_impact (effect on operations/customers), revenue (direct money at stake / upside), "
-        "risk (cost of NOT doing it — penalties, churn, compliance), and urgency (time pressure vs due date). "
-        "Then give a blended priority_score 0-100 (higher = do sooner) and a one-line reason. "
-        "Return ONLY valid JSON: {\"scores\":[{\"id\":string,\"business_impact\":int,\"revenue\":int,"
-        "\"risk\":int,\"urgency\":int,\"priority_score\":int,\"reason\":string}]}. "
-        "Include every task id exactly once."
-    )
-    prompt = "Tasks:\n" + json.dumps(lines, ensure_ascii=False) + "\nScore them now."
-    chat = claude_chat(session_id=session_id, system_message=system).with_model(*LLM_MODEL)
-    resp = await chat.send_message(UserMessage(text=prompt))
-    out = {}
-    try:
-        data = _extract_json(resp)
-        for s in data.get("scores", []):
-            tid = s.get("id")
-            if not tid:
-                continue
-            def clamp(v):
-                try:
-                    return max(0, min(100, int(round(float(v)))))
-                except Exception:
-                    return 0
-            out[tid] = {
-                "business_impact": clamp(s.get("business_impact")),
-                "revenue": clamp(s.get("revenue")),
-                "risk": clamp(s.get("risk")),
-                "urgency": clamp(s.get("urgency")),
-                "priority_score": clamp(s.get("priority_score")),
-                "reason": str(s.get("reason") or "")[:200],
-            }
-    except Exception as e:
-        logger.error(f"AI score parse error: {e} :: {resp[:300]}")
-    return out
-
-
-async def ai_score_contact(contact: dict, metrics: dict, currency: str, session_id: str) -> dict:
-    """Score a customer/supplier relationship. Returns {relationship_score, risk_score, reason, signals}."""
-    ctype = contact.get("type") or "customer"
-    payload = {
-        "name": contact.get("name"), "type": ctype,
-        "status": contact.get("status"), "tags": contact.get("tags"),
-        "outstanding": metrics.get("outstanding"), "total_billed": metrics.get("total_billed"),
-        "total_paid": metrics.get("total_paid"), "last_payment": metrics.get("last_payment"),
-        "open_complaints": metrics.get("open_complaints"),
-        "pending_deliveries": metrics.get("pending_deliveries"),
-        "invoice_count": metrics.get("invoice_count"), "payment_count": metrics.get("payment_count"),
-    }
-    system = (
-        "You are the relationship-intelligence engine of DecisionOS for a small business. "
-        f"Currency is {currency}. Given a {ctype}'s financial & interaction history, rate two things 0-100: "
-        "relationship_score (overall health/value of the relationship — high = strong, loyal, profitable), and "
-        "risk_score (likelihood of a problem — non-payment, churn, complaints, supply risk; high = risky). "
-        "Give a one-line reason and up to 3 short signal phrases. "
-        "Return ONLY valid JSON: {\"relationship_score\":int,\"risk_score\":int,\"reason\":string,\"signals\":[string]}."
-    )
-    prompt = json.dumps(payload, ensure_ascii=False, default=str) + "\nScore this relationship now."
-    chat = claude_chat(session_id=session_id, system_message=system).with_model(*LLM_MODEL)
-    resp = await chat.send_message(UserMessage(text=prompt))
-    def clamp(v):
-        try:
-            return max(0, min(100, int(round(float(v)))))
-        except Exception:
-            return 0
-    try:
-        d = _extract_json(resp)
-        return {
-            "relationship_score": clamp(d.get("relationship_score")),
-            "risk_score": clamp(d.get("risk_score")),
-            "reason": str(d.get("reason") or "")[:200],
-            "signals": [str(s)[:60] for s in (d.get("signals") or [])][:3],
-        }
-    except Exception as e:
-        logger.error(f"AI contact score parse error: {e} :: {resp[:300]}")
-        return {}
-
-
-async def ai_meeting_notes(transcript: str, members: list, session_id: str) -> dict:
-    """Turn a raw meeting transcript into structured minutes + action items."""
-    names = [m.get("name") for m in (members or []) if m.get("name")]
-    members_line = ("Team members you may assign action items to by name: " + ", ".join(names) + ". "
-                    "Set action_items[].assignee_name to the closest matching name when a person is named, else empty. ") if names else ""
-    system = (
-        "You are the meeting-notes engine of DecisionOS for a small business. "
-        "Convert a raw meeting transcript into concise, structured minutes. Return ONLY valid JSON: "
-        "{\"title\": string (short meeting title), \"summary\": string (2-4 sentences), "
-        "\"key_points\": [string], \"decisions\": [string], "
-        "\"action_items\": [{\"title\": string, \"assignee_name\": string, \"due_in_days\": integer or null}]}. "
-        + members_line +
-        "ACTION-ITEM GRANULARITY (important): create exactly ONE action item per distinct assignee for a single goal. "
-        "Do NOT split one person's task into several items — the sub-steps are handled inside that task's execution guide later. "
-        "Only create multiple items when they go to DIFFERENT people or are clearly separate deliverables. "
-        "The transcript may be English, Tamil or Tanglish — understand it and output all values in clear English."
-    )
-    prompt = f"Meeting transcript:\n\"\"\"\n{(transcript or '')[:40000]}\n\"\"\"\nExtract the structured minutes now."
-    chat = claude_chat(session_id=session_id, system_message=system).with_model(*LLM_MODEL)
-    resp = await chat.send_message(UserMessage(text=prompt))
-    try:
-        d = _extract_json(resp)
-    except Exception as e:
-        logger.error(f"AI meeting parse error: {e} :: {resp[:300]}")
-        d = {}
-    d.setdefault("title", "Meeting")
-    d.setdefault("summary", (transcript or "")[:200])
-    for k in ("key_points", "decisions", "action_items"):
-        if not isinstance(d.get(k), list):
-            d[k] = []
-    return d
-
-
-async def ai_execution_plan(task: dict, industry: str, currency: str, session_id: str) -> dict:
-    """Generate a context-aware execution checklist for a task. Returns {task_type, steps:[str]}."""
-    system = (
-        "You are the execution-planning engine of DecisionOS for a small business. "
-        f"Industry: {industry or 'general'}. Currency: {currency}. "
-        "Given a task an employee must do, first classify it into one of "
-        "[collection, quotation, complaint, supplier_payment, sales_followup, delivery, generic], "
-        "then produce a concise, practical, ordered checklist of execution steps the employee should follow "
-        "to complete it well. 5-9 short action steps, each a single imperative line (no numbering, no sub-bullets). "
-        "Tailor steps to the specific task. Return ONLY valid JSON: "
-        "{\"task_type\": string, \"steps\": [string]}."
-    )
-    prompt = (f"Task title: {task.get('title','')}\n"
-              f"Description: {task.get('description','') or '(none)'}\n"
-              f"Assigned role: {task.get('assignee_role') or 'team'}\n"
-              f"Priority: {task.get('priority','medium')}\n"
-              "Generate the execution checklist now.")
-    chat = claude_chat(session_id=session_id, system_message=system).with_model(*LLM_MODEL)
-    resp = await chat.send_message(UserMessage(text=prompt))
-    try:
-        d = _extract_json(resp)
-    except Exception as e:
-        logger.error(f"AI execution plan parse error: {e} :: {resp[:300]}")
-        d = {}
-    steps = [str(s).strip() for s in (d.get("steps") or []) if str(s).strip()][:12]
-    if not steps:
-        steps = ["Review the task details", "Do the work", "Upload proof / notes", "Close the task"]
-    return {"task_type": d.get("task_type") or "generic", "steps": steps}
-
-
-async def ai_step_assist(task: dict, step_text: str, industry: str, session_id: str) -> dict:
-    """Suggest a script/guidance for a single execution step + likely objections and responses."""
-    system = (
-        "You are DecisionOS's execution assistant helping a small-business employee complete one step of a task. "
-        f"Industry: {industry or 'general'}. "
-        "Give a short, ready-to-use suggestion (a phone/message script or concrete guidance, 1-3 sentences) for the step, "
-        "and 2-4 likely objections the other party may raise with a crisp suggested response for each. "
-        "Be practical and polite. Return ONLY valid JSON: "
-        "{\"suggestion\": string, \"objections\": [{\"objection\": string, \"response\": string}]}."
-    )
-    prompt = (f"Task: {task.get('title','')}\n"
-              f"Context: {task.get('description','') or '(none)'}\n"
-              f"Current step: {step_text}\n"
-              "Give the suggestion and objection handling now.")
-    chat = claude_chat(session_id=session_id, system_message=system).with_model(*LLM_MODEL)
-    resp = await chat.send_message(UserMessage(text=prompt))
-    try:
-        d = _extract_json(resp)
-    except Exception as e:
-        logger.error(f"AI step assist parse error: {e} :: {resp[:300]}")
-        d = {}
-    objs = []
-    for o in (d.get("objections") or [])[:4]:
-        if isinstance(o, dict) and o.get("objection"):
-            objs.append({"objection": str(o["objection"])[:160], "response": str(o.get("response") or "")[:280]})
-    return {"suggestion": str(d.get("suggestion") or "")[:600], "objections": objs}
-
-
-
-
-
-
+# AI text-extraction + scoring engines moved to services/ai/extraction.py
+# (Epic 8 Sprint 4). Re-exported below so deferred `from server import ai_*`
+# call sites keep resolving.
+from services.ai.extraction import (  # noqa: E402
+    ai_extract, ai_score_tasks, ai_score_contact,
+    ai_meeting_notes, ai_execution_plan, ai_step_assist,
+)
 
 
 OPENAI_STT_MODEL = os.environ.get("OPENAI_STT_MODEL", "gpt-4o-transcribe").strip() or "gpt-4o-transcribe"
@@ -1471,15 +1206,8 @@ async def _issue_otp(norm: str, display_phone: str, tenant_id: str,
     return resp
 
 
-async def enrich_contacts(contacts: list) -> list:
-    ids = list({c.get("assigned_id") for c in contacts if c.get("assigned_id")})
-    umap = {}
-    if ids:
-        for u in await db.users.find({"id": {"$in": ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(500):
-            umap[u["id"]] = u["name"]
-    for c in contacts:
-        c["assigned_name"] = umap.get(c.get("assigned_id"))
-    return contacts
+# enrich_contacts moved to services/enrich.py (Epic 8 Sprint 4); see the
+# consolidated `from services.enrich import ...` re-export below.
 
 
 # ---------------------------------------------------------------------------
@@ -1816,63 +1544,9 @@ async def _resolve_coach_target(user: dict, user_id: Optional[str]) -> dict:
 
 # Decisions
 # ---------------------------------------------------------------------------
-async def enrich_decision(d: dict, tenant_id: Optional[str] = None) -> dict:
-    # FIX-003-B (S2-05): defense-in-depth tenant filter. In today's flow,
-    # a decision's task_ids and created_by are always same-tenant (the
-    # decision itself came from a tenant-scoped query), but the bare
-    # {"id": {"$in": ...}} lookup would happily return cross-tenant
-    # matches if any bug or corrupted document ever slipped a foreign
-    # id into task_ids. Filter defensively.
-    tid = tenant_id if tenant_id is not None else d.get("tenant_id")
-    task_q = {"id": {"$in": d.get("task_ids", [])}}
-    if tid:
-        task_q["tenant_id"] = tid
-    tasks = await db.tasks.find(task_q, {"_id": 0}).to_list(200)
-    user_q = {"id": d.get("created_by")}
-    if tid:
-        user_q["tenant_id"] = tid
-    creator = await db.users.find_one(user_q, {"_id": 0, "name": 1})
-    d["tasks"] = await enrich_tasks(tasks)
-    d["created_by_name"] = creator["name"] if creator else "Unknown"
-    return d
-
-
-async def enrich_decisions(decisions: list, tenant_id: Optional[str] = None) -> list:
-    # FIX-003-B (S2-05): defense-in-depth tenant filter — see
-    # enrich_decision above. Same tenancy invariant applies at the
-    # batch level. The `tenant_id` argument is optional so existing
-    # callers keep working; when supplied it filters the id-lookups.
-    # If not supplied AND every decision has the same tenant_id, we
-    # infer it (the common case for a per-tenant caller). Only when
-    # the input mixes tenants (never happens in practice today, but a
-    # future admin cross-tenant sweep might) do we skip the filter.
-    task_ids = list({tid for d in decisions for tid in d.get("task_ids", [])})
-    creator_ids = list({d.get("created_by") for d in decisions if d.get("created_by")})
-    scope_tid = tenant_id
-    if scope_tid is None:
-        tids_in_batch = {d.get("tenant_id") for d in decisions if d.get("tenant_id")}
-        if len(tids_in_batch) == 1:
-            scope_tid = next(iter(tids_in_batch))
-    tasks_map = {}
-    if task_ids:
-        task_q = {"id": {"$in": task_ids}}
-        if scope_tid:
-            task_q["tenant_id"] = scope_tid
-        for t in await enrich_tasks(await db.tasks.find(task_q, {"_id": 0}).to_list(2000)):
-            tasks_map[t["id"]] = t
-    users_map = {}
-    if creator_ids:
-        user_q = {"id": {"$in": creator_ids}}
-        if scope_tid:
-            user_q["tenant_id"] = scope_tid
-        for u in await db.users.find(user_q, {"_id": 0, "id": 1, "name": 1}).to_list(500):
-            users_map[u["id"]] = u["name"]
-    for d in decisions:
-        d["tasks"] = [tasks_map[t] for t in d.get("task_ids", []) if t in tasks_map]
-        d["created_by_name"] = users_map.get(d.get("created_by"), "Unknown")
-        d.setdefault("dtype", "directive")
-        d.setdefault("confidence", None)
-    return decisions
+# enrich_decision / enrich_decisions moved to services/enrich.py (Epic 8
+# Sprint 4). Re-exported here (after services.tasks.enrich_tasks is imported
+# below) so deferred + module-top `from server import enrich_*` keep resolving.
 
 
 # Decisions endpoints moved to routers/decisions.py in Phase B step 3.
@@ -1899,6 +1573,10 @@ from services.tasks import (  # noqa: E402, F401
 # _tenant_industry, _attach_reference_ids re-exported here because a few
 # non-task endpoints (POST /capture/*, decision-capture) still call them.
 from services.tasks import _tenant_industry, _attach_reference_ids  # noqa: E402, F401
+
+
+# Read-model enrichment moved to services/enrich.py (Epic 8 Sprint 4).
+from services.enrich import enrich_contacts, enrich_decision, enrich_decisions  # noqa: E402, F401
 
 
 
@@ -1997,66 +1675,13 @@ async def _ask_ai_legacy(inp: AskInput, user: dict):
 # Dashboard / daily brief
 # ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
-# Email delivery — Gmail SMTP (primary), Resend (fallback), else mock.
-# Sender/host/creds all come from .env so the account can be swapped anytime.
+# Email delivery moved to services/email.py (Epic 8 Sprint 4). Re-exported
+# here so deferred `from server import send_email` call sites keep resolving.
 # ---------------------------------------------------------------------------
-SMTP_HOST = os.environ.get("SMTP_HOST", "")
-SMTP_PORT = int(os.environ.get("SMTP_PORT", "465") or "465")
-SMTP_USER = os.environ.get("SMTP_USER", "")
-SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
-SMTP_FROM = os.environ.get("SMTP_FROM") or SMTP_USER
-SMTP_ENABLED = bool(SMTP_HOST and SMTP_USER and SMTP_PASSWORD)
-
-
-def _smtp_send_sync(to_list: list, subject: str, html: str) -> None:
-    msg = EmailMessage()
-    msg["Subject"] = subject
-    msg["From"] = SMTP_FROM
-    msg["To"] = ", ".join(to_list)
-    msg.set_content("This message requires an HTML-capable email client.")
-    msg.add_alternative(html, subtype="html")
-    ctx = ssl.create_default_context()
-    if SMTP_PORT == 465:
-        with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, context=ctx, timeout=25) as s:
-            s.login(SMTP_USER, SMTP_PASSWORD)
-            s.send_message(msg)
-    else:
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=25) as s:
-            s.starttls(context=ctx)
-            s.login(SMTP_USER, SMTP_PASSWORD)
-            s.send_message(msg)
-
-
-async def send_email(to, subject: str, html: str) -> dict:
-    """Send an HTML email. Returns {sent, provider|mocked, to, [error]}."""
-    to_list = [to] if isinstance(to, str) else [t for t in to if t]
-    if not to_list:
-        return {"sent": False, "to": [], "error": "no recipients"}
-    if SMTP_ENABLED:
-        try:
-            await asyncio.to_thread(_smtp_send_sync, to_list, subject, html)
-            return {"sent": True, "provider": "gmail_smtp", "to": to_list}
-        except smtplib.SMTPAuthenticationError as e:
-            logger.error(f"SMTP auth failed (need a Gmail App Password?): {e}")
-            return {"sent": False, "to": to_list, "error": "smtp_auth_failed"}
-        except Exception as e:
-            logger.error(f"SMTP send failed: {e}")
-            return {"sent": False, "to": to_list, "error": "smtp_error"}
-    resend_key = os.environ.get("RESEND_API_KEY", "")
-    if resend_key:
-        try:
-            import resend
-            resend.api_key = resend_key
-            resend.Emails.send({
-                "from": os.environ.get("RESEND_FROM_EMAIL", "DecisionOS <onboarding@resend.dev>"),
-                "to": to_list, "subject": subject, "html": html,
-            })
-            return {"sent": True, "provider": "resend", "to": to_list}
-        except Exception as e:
-            logger.error(f"Resend send failed: {e}")
-            return {"sent": False, "to": to_list, "error": "resend_error"}
-    logger.info(f"[EMAIL MOCK] To {to_list}: {subject}")
-    return {"sent": False, "mocked": True, "to": to_list}
+from services.email import (  # noqa: E402
+    send_email, _smtp_send_sync,
+    SMTP_ENABLED, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM,
+)
 
 
 # E2-63 (2026-08-15): DIGEST_I18N deleted along with the send-digest
@@ -2069,60 +1694,18 @@ async def send_email(to, subject: str, html: str) -> dict:
 # ---------------------------------------------------------------------------
 # Follow-up engine, notifications, attendance, complaints, memory, CEO brief
 # ---------------------------------------------------------------------------
-NOTIF_LEVELS = {1: "reminder", 2: "urgency", 3: "manager", 4: "owner"}
+# Notifications + audience resolution moved to services/notifications.py
+# (Epic 8 Sprint 4). Re-exported so deferred `from server import ...` resolves.
+from services.notifications import (  # noqa: E402
+    NOTIF_LEVELS, push_notification, dispatch_owner_alert,
+    _owner_ids, _approver_ids, _finance_user_ids,
+)
 
 
 class AttendanceInput(BaseModel):
     user_id: str
     status: str = "absent"
     date: Optional[str] = None
-
-
-
-async def _owner_ids(tenant_id: str) -> list:
-    return [u["id"] for u in await db.users.find({"tenant_id": tenant_id, "role": "owner"}, {"_id": 0, "id": 1}).to_list(50)]
-
-
-async def _approver_ids(tenant_id: str) -> list:
-    """Owners plus any user granted the 'approvals' access — they can approve unassigned items."""
-    ids = set(await _owner_ids(tenant_id))
-    async for u in db.users.find({"tenant_id": tenant_id, "permissions": "approvals"}, {"_id": 0, "id": 1}):
-        ids.add(u["id"])
-    return list(ids)
-
-
-async def _finance_user_ids(tenant_id: str) -> list:
-    """Users who should be notified about a bill needing upload: owners, plus
-    anyone with the 'finance' or 'ledger' module permission. Introduced by
-    FIX-001-B for the workflow→Finance handoff on procurement completion."""
-    ids = set(await _owner_ids(tenant_id))
-    async for u in db.users.find(
-        {"tenant_id": tenant_id, "permissions": {"$in": ["finance", "ledger"]}},
-        {"_id": 0, "id": 1},
-    ):
-        ids.add(u["id"])
-    return list(ids)
-
-
-async def push_notification(tenant_id, user_ids, level, message, entity_type=None, entity_id=None,
-                            ntype=None, title=None, sender=None):
-    for uid in set(u for u in user_ids if u):
-        await db.notifications.insert_one({
-            "id": new_id(), "tenant_id": tenant_id, "user_id": uid, "level": NOTIF_LEVELS.get(level, "reminder"),
-            "message": message, "entity_type": entity_type, "entity_id": entity_id,
-            "type": ntype or "reminder", "work_title": title, "sender_name": sender,
-            "read": False, "created_at": now_iso(),
-        })
-
-
-async def dispatch_owner_alert(tenant_id, message):
-    owners = await db.users.find({"tenant_id": tenant_id, "role": "owner"}, {"_id": 0, "email": 1}).to_list(10)
-    emails = [o["email"] for o in owners if o.get("email")]
-    if emails:
-        await send_email(emails, "DecisionOS — Owner Alert", f"<p>{message}</p>")
-    # WhatsApp: ready-to-plug (requires WHATSAPP_API_KEY / provider)
-    if not os.environ.get("WHATSAPP_API_KEY", ""):
-        logger.info(f"[WHATSAPP MOCK] Owner alert: {message}")
 
 
 _followup_last_run: dict = {}

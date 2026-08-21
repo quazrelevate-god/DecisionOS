@@ -39,6 +39,7 @@ from routers.calendar import router as calendar_router
 from routers.voice_notes import router as voice_notes_router
 from routers.dashboard import router as dashboard_router
 from routers.auth_otp import router as auth_otp_router
+from routers.tenant_settings import router as tenant_settings_router
 
 # Every extracted domain router, in the exact order server.py mounted them.
 _DOMAIN_ROUTERS = (
@@ -72,6 +73,7 @@ _DOMAIN_ROUTERS = (
     voice_notes_router, # Epic 8 S3: voice/dictation capture extracted
     dashboard_router,  # Epic 8 S3: dashboard/daily-brief extracted
     auth_otp_router,   # Epic 8 S3: phone-OTP login + invite flow extracted
+    tenant_settings_router, # Epic 8 S3: tenant settings surface extracted
 )
 
 

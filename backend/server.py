@@ -262,12 +262,8 @@ from services.vision import (  # noqa: E402
 
 
 
-def wa_token() -> str:
-    return get_ai_key("wa_access_token")
 
 
-def wa_phone_id() -> str:
-    return get_ai_key("wa_phone_number_id")
 
 
 
@@ -325,6 +321,24 @@ def wa_phone_id() -> str:
 # ---------------------------------------------------------------------------
 # Auth routes
 # ---------------------------------------------------------------------------
+# Document ingestion (AI extract + purchase classify + commit engine) moved to
+# services/ingestion.py (Epic 8 Sprint 4). Re-exported so deferred `from server
+# import ...` call sites keep resolving.
+from services.ingestion import (  # noqa: E402
+    ai_extract_document, ai_map_spreadsheet, ai_classify_purchase,
+    commit_ingestion_records, _classify_ingestion, _find_duplicate_invoice,
+    _has_unclassified_purchase, _normalise_records, _norm_company,
+    _tenant_currency, _tenant_name, _purchase_class_sys, DOC_MIME,
+)
+# WhatsApp infra + inbound pipeline moved to services/whatsapp.py (Epic 8
+# Sprint 4). Re-exported so deferred `from server import ...` resolves
+# (whatsapp router + team._norm_phone + captures/finance wa helpers).
+from services.whatsapp import (  # noqa: E402
+    wa_token, wa_phone_id, log_wa_event, update_wa_event, _norm_phone,
+    resolve_wa_tenant, download_wa_media, send_wa_reply, process_whatsapp_message,
+)
+
+
 # AI generators (lexicon/operating-model/finance-cats) + lang_directive moved to
 # services/ai/generators.py (Epic 8 Sprint 4). Re-exported so deferred + bare
 # `from server import ...` call sites keep resolving.
@@ -699,183 +713,37 @@ class AttendanceInput(BaseModel):
     date: Optional[str] = None
 
 
-_followup_last_run: dict = {}
 
 
-async def run_followup(tenant_id: str):
-    now = datetime.now(timezone.utc)
-    # Throttle: this scan runs on every notifications poll — cap it to once per 60s per tenant.
-    last = _followup_last_run.get(tenant_id)
-    if last and (now - last).total_seconds() < 60:
-        return
-    _followup_last_run[tenant_id] = now
-    # RBAC-27 (2026-08-15): sweep expired temp perms so contractor
-    # grants auto-revoke without a separate cron. Cheap query -- only
-    # touches memberships that HAVE a temp_grants entry past expiry.
-    try:
-        from routers.access import sweep_expired_temp_grants
-        revoked = await sweep_expired_temp_grants(tenant_id)
-        if revoked:
-            logger.info(f"[rbac-27] auto-revoked {revoked} expired temp grant(s) in tenant {tenant_id[:8]}...")
-    except Exception as e:
-        logger.warning(f"[rbac-27] temp-grant sweep failed: {e}")
-    tasks = await db.tasks.find(
-        {"tenant_id": tenant_id, "status": {"$in": ["todo", "in_progress"]}, "due_date": {"$ne": None, "$lt": now.isoformat()}},
-        {"_id": 0}
-    ).to_list(500)
-    owners = await _owner_ids(tenant_id)
-    for t in tasks:
-        try:
-            due = datetime.fromisoformat(t["due_date"])
-            if due.tzinfo is None:
-                due = due.replace(tzinfo=timezone.utc)
-        except Exception:
-            continue
-        days = (now - due).days
-        target = 1 if days < 1 else 2 if days < 2 else 3 if days < 3 else 4
-        if target <= t.get("escalation_level", 0):
-            continue
-        if t.get("assignee_id"):
-            recipients = [t["assignee_id"]]
-        elif t.get("assignee_role"):
-            recipients = [u["id"] for u in await db.users.find({"tenant_id": tenant_id, "role": t["assignee_role"]}, {"_id": 0, "id": 1}).to_list(50)]
-        else:
-            recipients = owners
-        msg = f"Task '{t['title']}' is overdue by {days} day(s)."
-        if target in (1, 2):
-            await push_notification(tenant_id, recipients, target, msg, "task", t["id"])
-        elif target == 3:
-            await push_notification(tenant_id, owners, 3, f"[Manager escalation] {msg}", "task", t["id"])
-        else:
-            await push_notification(tenant_id, owners, 4, f"[OWNER ALERT] {msg}", "task", t["id"])
-            await dispatch_owner_alert(tenant_id, msg)
-        await db.tasks.update_one({"id": t["id"]}, {"$set": {"escalation_level": target, "last_escalated": now_iso()}})
-    try:
-        await run_finance_actions(tenant_id)
-    except Exception as e:
-        logger.warning(f"[finance-actions] tenant {tenant_id} failed: {e}")
 
 
 # --- Finance → operations signals (A: money becomes tasks, C: money in the CEO brief) ------
-FINANCE_CHASE_DAYS = int(os.environ.get("FINANCE_CHASE_DAYS", "7"))          # chase a receivable once 7+ days overdue
-FINANCE_BILL_DUE_SOON_DAYS = int(os.environ.get("FINANCE_BILL_DUE_SOON_DAYS", "3"))  # act on a bill due within 3 days or overdue
-_CUR_SYM = {"INR": "₹", "USD": "$", "EUR": "€", "GBP": "£", "AED": "AED ", "AUD": "A$", "CAD": "C$"}
 
 
-def _inv_remaining(inv: dict) -> float:
-    return round(float(inv.get("amount") or 0) - float(inv.get("amount_paid") or 0), 2)
 
 
-def _pay_remaining_amt(p: dict) -> float:
-    return round(float(p.get("amount") or 0) - float(p.get("applied") or 0), 2)
 
 
-def _fmt_amt(a, cur="INR") -> str:
-    sym = _CUR_SYM.get(str(cur or "INR").upper(), "")
-    return f"{sym}{float(a or 0):,.0f}"
 
 
-async def _overdue_receivables(tenant_id: str) -> list:
-    """Sales invoices unpaid and overdue by at least FINANCE_CHASE_DAYS days."""
-    now = datetime.now(timezone.utc)
-    cutoff = (now - timedelta(days=FINANCE_CHASE_DAYS)).strftime("%Y-%m-%d")
-    rows = await db.invoices.find(
-        {"tenant_id": tenant_id, "type": "sales_invoice", "status": {"$ne": "paid"}}, {"_id": 0}).to_list(3000)
-    out = []
-    for r in rows:
-        if _inv_remaining(r) <= 0.01:
-            continue
-        due = str(r.get("due_date") or "")[:10]
-        if due and due <= cutoff:
-            out.append(r)
-    return out
 
 
-async def _bills_due_or_overdue(tenant_id: str) -> list:
-    """Purchase bills unpaid and due within FINANCE_BILL_DUE_SOON_DAYS days (or already overdue)."""
-    now = datetime.now(timezone.utc)
-    soon = (now + timedelta(days=FINANCE_BILL_DUE_SOON_DAYS)).strftime("%Y-%m-%d")
-    rows = await db.invoices.find(
-        {"tenant_id": tenant_id, "type": "purchase_bill", "status": {"$ne": "paid"}}, {"_id": 0}).to_list(3000)
-    out = []
-    for r in rows:
-        if _inv_remaining(r) <= 0.01:
-            continue
-        due = str(r.get("due_date") or "")[:10]
-        if due and due <= soon:
-            out.append(r)
-    return out
 
 
-async def _unmatched_payments(tenant_id: str) -> list:
-    """Payments that couldn't be auto-linked to an invoice/bill and still have an unallocated balance."""
-    rows = await db.payments.find(
-        {"tenant_id": tenant_id, "match_status": {"$in": ["unmatched", "partial"]}}, {"_id": 0}).to_list(3000)
-    return [p for p in rows if _pay_remaining_amt(p) > 0.01 and p.get("match_status") != "standalone"]
 
 
-async def _finance_assignee(tenant_id: str):
-    """Route finance action tasks to the Finance/Accounts department; if none exists, to the owner."""
-    troles = await tenant_role_keys(tenant_id)
-    fin_role = await _finance_role_key(tenant_id, troles)
-    if fin_role:
-        return await pick_least_loaded_member(tenant_id, fin_role), fin_role
-    owners = await _owner_ids(tenant_id)
-    return (owners[0] if owners else None), "owner"
 
 
-async def run_finance_actions(tenant_id: str):
-    """A: turn overdue receivables + due/overdue supplier bills into accountable, idempotent tasks."""
-    assignee_id, assignee_role = await _finance_assignee(tenant_id)
-    now = datetime.now(timezone.utc)
-    today = now.strftime("%Y-%m-%d")
 
-    async def _spawn(inv, title, desc, priority, due):
-        tid = new_id()
-        await db.tasks.insert_one({
-            "id": tid, "tenant_id": tenant_id, "title": title, "description": desc,
-            "assignee_role": assignee_role, "assignee_id": assignee_id, "priority": priority,
-            "status": "todo", "due_date": due, "decision_id": None,
-            "source": "finance", "task_type": "finance", "op_category": None,
-            "finance_ref": {"invoice_id": inv["id"], "invoice_type": inv.get("type")},
-            "progress": 0, "created_by": "system", "created_at": now_iso(),
-            "updated_at": now_iso(), "last_action": "Auto-created from Finance",
-        })
-        await db.invoices.update_one({"id": inv["id"], "tenant_id": tenant_id},
-                                     {"$set": {"action_task_id": tid}})
-        if assignee_id:
-            await push_notification(tenant_id, [assignee_id], 2, title, "task", tid,
-                                    ntype="assigned", title=title, sender="Finance")
 
-    # A1: chase overdue customer invoices (7+ days overdue)
-    for inv in await _overdue_receivables(tenant_id):
-        if inv.get("action_task_id"):
-            continue
-        cust = (inv.get("contact_name") or "the customer").strip()
-        num = str(inv.get("number") or "").strip()
-        rem = _inv_remaining(inv)
-        amt = _fmt_amt(rem, inv.get("currency"))
-        due = str(inv.get("due_date") or "")[:10]
-        title = f"Chase {cust} for {amt}" + (f" (Invoice {num})" if num else "")
-        desc = (f"Invoice {num or '(no number)'} for {amt} to {cust} is overdue"
-                + (f" since {due}" if due else "") + ". Follow up and collect payment.")
-        await _spawn(inv, title, desc, "high", now_iso())
 
-    # A2: approve & pay supplier bills due within 3 days or overdue
-    for inv in await _bills_due_or_overdue(tenant_id):
-        if inv.get("action_task_id"):
-            continue
-        vend = (inv.get("contact_name") or "the supplier").strip()
-        num = str(inv.get("number") or "").strip()
-        rem = _inv_remaining(inv)
-        amt = _fmt_amt(rem, inv.get("currency"))
-        due = str(inv.get("due_date") or "")[:10]
-        overdue = bool(due and due < today)
-        title = f"Approve & pay {vend} {amt}" + (f" by {due}" if due else "")
-        desc = (f"Supplier bill {num or '(no number)'} for {amt} from {vend} is "
-                + ("overdue" if overdue else f"due by {due}") + ". Approve and schedule payment.")
-        await _spawn(inv, title, desc, "high" if overdue else "medium", due and f"{due}T09:00:00" or now_iso())
-
+# Follow-up + finance-action engine moved to services/finance_signals.py
+# (Epic 8 Sprint 4). Re-exported so deferred `from server import ...` resolves
+# (desk router + brief/dashboard/complaints + the scheduler loop below).
+from services.finance_signals import (  # noqa: E402
+    run_followup, run_finance_actions, _overdue_receivables, _bills_due_or_overdue,
+    _unmatched_payments, _inv_remaining, _pay_remaining_amt, _fmt_amt, _finance_assignee,
+)
 
 
 # Background scheduler: run follow-up/escalation for EVERY tenant on a timer, so overdue
@@ -961,523 +829,57 @@ async def _notify_provider_outages():
 
 
 
-ATTACH_ALLOWED_EXT = {"jpg", "jpeg", "png", "gif", "webp", "heic", "pdf", "doc", "docx", "xls", "xlsx", "csv", "txt"}
-ATTACH_MAX_BYTES = 25 * 1024 * 1024  # 25 MB
 
 
-async def _store_file(tenant_id, user_id, upload, kind, task_id=None):
-    """Persist an uploaded file to Object Storage + a `files` DB record. Returns the record."""
-    ext = (upload.filename or "file.bin").rsplit(".", 1)[-1].lower() if "." in (upload.filename or "") else "bin"
-    if ext not in ATTACH_ALLOWED_EXT:
-        raise HTTPException(status_code=400, detail=f"Unsupported file type .{ext}")
-    data = await upload.read()
-    if len(data) > ATTACH_MAX_BYTES:
-        raise HTTPException(status_code=400, detail="File too large (max 25MB)")
-    fid = new_id()
-    path = f"{obj_store.APP_NAME}/{tenant_id}/{fid}.{ext}"
-    content_type = upload.content_type or obj_store.guess_mime(upload.filename)
-    result = await obj_store.put_object(path, data, content_type)
-    rec = {
-        "id": fid, "tenant_id": tenant_id, "storage_path": result.get("path", path),
-        "original_filename": upload.filename or f"{fid}.{ext}", "content_type": content_type,
-        "size": result.get("size", len(data)), "kind": kind, "task_id": task_id,
-        "uploaded_by": user_id, "is_deleted": False, "created_at": now_iso(),
-    }
-    await db.files.insert_one(dict(rec))
-    rec.pop("_id", None)
-    return rec
 
 
-def _file_public(rec):
-    return {"id": rec["id"], "kind": rec.get("kind"), "filename": rec.get("original_filename"),
-            "content_type": rec.get("content_type"), "size": rec.get("size"),
-            "url": f"/api/files/{rec['id']}/download", "at": rec.get("created_at"), "by": rec.get("uploaded_by")}
 
 
-async def _analyze_reference_file(tenant_id, task_id, rec):
-    """AI-analyse an attached reference (image/PDF) and enrich the task with context."""
-    try:
-        ctype = rec.get("content_type", "")
-        if not (ctype.startswith("image/") or ctype == "application/pdf"):
-            return  # Phase 1: analyse images & PDFs only
-        data, _ = await obj_store.get_object(rec["storage_path"])
-        import tempfile, os as _os
-        ext = rec.get("original_filename", "f.bin").rsplit(".", 1)[-1]
-        tmp = _os.path.join(tempfile.gettempdir(), f"ref_{rec['id']}.{ext}")
-        with open(tmp, "wb") as f:
-            f.write(data)
-        raw = await ai_read_image_general(tmp, ctype, session_id=f"ref-{task_id}")
-        try:
-            _os.remove(tmp)
-        except OSError:
-            pass
-        text = (raw if isinstance(raw, str) else str(raw))[:4000]
-        if not text.strip():
-            return
-        task = await db.tasks.find_one({"id": task_id}, {"_id": 0, "title": 1, "description": 1})
-        if not task:
-            return
-        system = ("You help a team understand a reference file attached to a task. In 1-2 sentences, "
-                  "explain what the file contains and how it informs the task. Then list up to 3 concrete "
-                  'action points. Return JSON: {"summary": "...", "points": ["..."]}')
-        prompt = f"TASK: {task.get('title')}\n\nREFERENCE FILE CONTENT:\n{text}"
-        chat = claude_chat(session_id=f"ref-insight-{task_id}", system_message=system,
-                           tenant_id=tenant_id).with_model(*LLM_MODEL)
-        resp = await chat.send_message(UserMessage(text=prompt))
-        parsed = _extract_json(resp) or {}
-        summary = (parsed.get("summary") or "").strip()
-        points = [p for p in (parsed.get("points") or []) if p][:3]
-        if not summary:
-            return
-        note = {"file_id": rec["id"], "filename": rec.get("original_filename"),
-                "summary": summary, "points": points, "at": now_iso()}
-        await db.tasks.update_one({"id": task_id}, {"$push": {"reference_insights": note},
-                                  "$set": {"updated_at": now_iso()}})
-        logger.info(f"[reference-ai] enriched task {task_id} from {rec.get('original_filename')}")
-    except Exception as e:
-        logger.warning(f"[reference-ai] analysis failed for task {task_id}: {e}")
 
 
-async def _read_reference_text(rec: dict, tenant_id: str = "") -> str:
-    """Read an attached reference file into plain text so the AI can factor it into a directive.
-    Images/PDFs -> Gemini OCR summary; Excel/CSV -> parsed rows; Word/txt -> extracted text."""
-    try:
-        ctype = (rec.get("content_type") or "").lower()
-        fname = rec.get("original_filename", "file")
-        data, _ = await obj_store.get_object(rec["storage_path"])
-    except Exception as e:
-        logger.warning(f"[capture-ref] could not fetch {rec.get('id')}: {e}")
-        return ""
-    try:
-        # Images & PDFs -> general vision reader (business cards, lists, notes, invoices — anything).
-        if ctype.startswith("image/") or ctype == "application/pdf":
-            import tempfile, os as _os
-            ext = fname.rsplit(".", 1)[-1] if "." in fname else "bin"
-            tmp = _os.path.join(tempfile.gettempdir(), f"capref_{rec['id']}.{ext}")
-            with open(tmp, "wb") as f:
-                f.write(data)
-            try:
-                text = await ai_read_image_general(tmp, ctype, session_id=f"capref-{tenant_id}")
-            finally:
-                try: _os.remove(tmp)
-                except OSError: pass
-            return f"[{fname}]\n" + (text or "")
-        # Excel / CSV -> parse to a compact text table.
-        if ctype in ("text/csv",) or fname.lower().endswith(".csv"):
-            import pandas as pd, io as _io
-            df = pd.read_csv(_io.BytesIO(data), nrows=200)
-            return f"[{fname}]\n" + df.to_csv(index=False)[:6000]
-        if fname.lower().endswith((".xlsx", ".xls")) or "spreadsheet" in ctype or "excel" in ctype:
-            import pandas as pd, io as _io
-            df = pd.read_excel(_io.BytesIO(data), nrows=200)
-            return f"[{fname}]\n" + df.to_csv(index=False)[:6000]
-        # Word.
-        if fname.lower().endswith(".docx") or "wordprocessingml" in ctype:
-            import docx, io as _io
-            doc = docx.Document(_io.BytesIO(data))
-            text = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
-            return f"[{fname}]\n" + text[:6000]
-        # Plain text.
-        if ctype.startswith("text/") or fname.lower().endswith(".txt"):
-            return f"[{fname}]\n" + data.decode("utf-8", errors="ignore")[:6000]
-    except Exception as e:
-        logger.warning(f"[capture-ref] read failed for {fname}: {e}")
-    return ""
 
 
 
 INGEST_ROLES = ("owner", "sales", "finance")
 
-_DOC_SYSTEM = (
-    "You are the document ingestion engine of DecisionOS, an operating brain for small businesses. "
-    "Read the attached business document (a sales invoice, purchase bill, payment receipt, purchase order, "
-    "or a photo/WhatsApp screenshot of one) and extract structured operational data. Return ONLY valid JSON, no prose. "
-    "Schema: {"
-    "\"summary\": string (one short line describing the document), "
-    "\"doc_type\": one of [sales_invoice, purchase_bill, payment, purchase_order, other], "
-    "\"confidence\": number between 0 and 1, "
-    "\"contacts\": [{\"type\": one of [customer, vendor], \"name\": string, \"company\": string, \"phone\": string, \"email\": string, \"address\": string, \"tax_id\": string}], "
-    "\"invoices\": [{\"type\": one of [sales_invoice, purchase_bill], \"purchase_type\": one of [expense, asset, inventory, unknown] (only for purchase_bill; else empty), \"asset_name\": string (for asset purchases), \"inventory_qty\": number, \"inventory_unit\": string, \"number\": string, \"contact_name\": string, \"date\": string, \"due_date\": string, \"amount\": number, \"currency\": string, \"line_items\": [{\"description\": string, \"qty\": number, \"rate\": number, \"amount\": number}]}], "
-    "\"payments\": [{\"direction\": one of [in, out], \"amount\": number, \"date\": string, \"method\": string, \"reference\": string, \"contact_name\": string, \"invoice_number\": string}], "
-    "\"tasks\": [{\"title\": string, \"priority\": one of [low,medium,high], \"due_in_days\": integer or null}]}. "
-    "Rules: Our own company (the DecisionOS user filing this) is \"{company}\". "
-    "NEVER create a contact for our own company — only ever extract the OTHER party (the counterparty). "
-    "Decide direction by WHO ISSUED the document: if our company is the seller/issuer (the 'from'/'billed by' party), it is a sales_invoice and the counterparty is the buyer (type=customer); "
-    "if our company is the buyer/recipient (the 'bill to'/'ship to' party), it is a purchase_bill and the counterparty is the issuer/seller (type=vendor). "
-    "The contact_name on every invoice and payment MUST be the counterparty, never our own company. "
-    "A sales invoice is money owed TO us by a customer (party type=customer). "
-    "A purchase bill is money we owe a vendor/supplier (party type=vendor). "
-    "For each purchase_bill, ALSO set purchase_type by WHAT was bought: "
-    "\"asset\" for capital/fixed goods that last over a year (machinery, equipment, tools, vehicles, furniture, computers/IT hardware, buildings) — put the item in asset_name; "
-    "\"inventory\" for stock, raw materials, trading goods or components bought to resell or consume in production — put quantity in inventory_qty and its unit (kg, pcs, box, litre) in inventory_unit; "
-    "\"expense\" for everything else (rent, salaries, utilities, transport, services, consumables, subscriptions, taxes). When unsure, use \"expense\". "
-    "sales_invoice must have purchase_type empty. "
-    "For every unpaid invoice or bill, add ONE follow-up task (e.g. 'Collect payment for invoice #123 from Acme' or 'Pay vendor bill #45 to XYZ'). "
-    "A payment 'in' reduces a customer receivable; 'out' settles a vendor bill. "
-    "Dates as YYYY-MM-DD when readable else empty string. Amounts are plain numbers without currency symbols. "
-    "Default currency to {currency}. Documents may be in English, Tamil or Tanglish — understand them and output all values in English. "
-    "Use empty arrays where nothing applies."
+
+# Reference-file storage/analysis moved to services/files.py and the leave
+# engine to services/leave.py (Epic 8 Sprint 4). Re-exported so deferred
+# `from server import ...` call sites keep resolving (files/tasks/team routers,
+# voice._read_reference_text, services.tasks).
+from services.files import (  # noqa: E402
+    _store_file, _file_public, _analyze_reference_file, _read_reference_text,
+    ATTACH_ALLOWED_EXT, ATTACH_MAX_BYTES,
 )
-
-_CSV_SYSTEM = (
-    "You classify and map spreadsheet data for DecisionOS. Given the column headers and rows of a business spreadsheet, "
-    "decide which entity it represents and map EVERY row to structured records. Return ONLY valid JSON, no prose. "
-    "Schema: {\"entity\": one of [customers, vendors, invoices, payments], \"summary\": string, "
-    "\"contacts\": [{\"type\": one of [customer, vendor], \"name\": string, \"company\": string, \"phone\": string, \"email\": string, \"address\": string, \"tax_id\": string}], "
-    "\"invoices\": [{\"type\": one of [sales_invoice, purchase_bill], \"number\": string, \"contact_name\": string, \"date\": string, \"due_date\": string, \"amount\": number, \"currency\": string}], "
-    "\"payments\": [{\"direction\": one of [in, out], \"amount\": number, \"date\": string, \"method\": string, \"reference\": string, \"contact_name\": string, \"invoice_number\": string}], "
-    "\"tasks\": [{\"title\": string, \"priority\": one of [low,medium,high], \"due_in_days\": integer or null}]}. "
-    "If the file is a customer/vendor list, fill 'contacts'. If it lists invoices/bills, fill 'invoices' (and add a follow-up task per unpaid row). "
-    "Our own company is \"{company}\" — NEVER map our own company as a contact; only extract the other parties. "
-    "If it lists payments/receipts, fill 'payments'. Map each spreadsheet row to exactly one record. Amounts are plain numbers. "
-    "Default currency to {currency}. Use empty arrays for the entities that do not apply."
-)
+from services.leave import _resolve_leave_approver, _create_leave, ai_leave_impact  # noqa: E402
 
 
-def _normalise_records(data: dict) -> dict:
-    out = {}
-    for k in ("contacts", "invoices", "payments", "tasks"):
-        out[k] = data.get(k) if isinstance(data.get(k), list) else []
-    return out
 
 
-async def ai_extract_document(file_path: str, mime_type: str, session_id: str, currency: str = "INR", company: str = "") -> dict:
-    system = _DOC_SYSTEM.replace("{currency}", currency).replace("{company}", company or "our company")
-    user_text = "Extract the structured JSON from this document now."
-    resp = None
-    # Prefer the user's own Gemini key via the official google-genai SDK.
-    if get_gemini_client() is not None:
-        try:
-            resp, _gti, _gto = await asyncio.to_thread(_gemini_doc_sync, file_path, mime_type, system, user_text)
-            await log_usage((session_id or "ocr").split("-")[0], "gemini", model=VISION_MODEL[1],
-                            tokens_in=_gti, tokens_out=_gto, units=1, unit_type="document")
-        except Exception as e:
-            logger.warning(f"Gemini OCR (user key) failed; falling back to Emergent key: {e}")
-            resp = None
-    # Fallback: Gemini via the Emergent universal key (keeps document capture working).
-    if not resp:
-        fc = FileContentWithMimeType(file_path=file_path, mime_type=mime_type)
-        chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=session_id,
-                       system_message=system).with_model(*VISION_MODEL)
-        # FIX-002-B: guard.
-        from services.ai.llm_limits import guarded_llm
-        resp = await guarded_llm(chat.send_message(UserMessage(text=user_text, file_contents=[fc])),
-                                  label="gemini:ocr-fallback")
-        await log_usage((session_id or "ocr").split("-")[0], "gemini", model=VISION_MODEL[1],
-                        tokens_in=_est_tokens(system + user_text), tokens_out=_est_tokens(resp or ""),
-                        units=1, unit_type="document")
-    data = _extract_json(resp)
-    return {
-        "summary": data.get("summary", ""),
-        "doc_type": data.get("doc_type", "other"),
-        "confidence": data.get("confidence", 0.7),
-        "records": _normalise_records(data),
-    }
 
 
-async def ai_map_spreadsheet(headers: list, rows: list, session_id: str, currency: str = "INR", company: str = "") -> dict:
-    payload = {"headers": headers, "rows": rows[:300]}
-    system = _CSV_SYSTEM.replace("{currency}", currency).replace("{company}", company or "our company")
-    chat = claude_chat(session_id=session_id,
-                   system_message=system).with_model(*LLM_MODEL)
-    resp = await chat.send_message(UserMessage(text=f"Spreadsheet data:\n{json.dumps(payload)}\n\nClassify and map to JSON now."))
-    data = _extract_json(resp)
-    return {
-        "summary": data.get("summary", ""),
-        "entity": data.get("entity", ""),
-        "records": _normalise_records(data),
-    }
 
 
-async def _tenant_currency(tenant_id: str) -> str:
-    t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "currency": 1})
-    return (t or {}).get("currency", "INR")
 
 
-async def _tenant_name(tenant_id: str) -> str:
-    t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "name": 1})
-    return (t or {}).get("name", "") or ""
 
 
-_CO_SUFFIXES = ("private limited", "pvt ltd", "pvt. ltd.", "pvt", "private ltd", "limited",
-                "ltd", "llp", "inc", "incorporated", "corporation", "corp", "co", "company",
-                "technologies", "enterprises", "industries", "and sons", "traders")
 
 
-def _norm_company(s: str) -> str:
-    s = re.sub(r"[^a-z0-9 ]", " ", (s or "").lower())
-    tokens = [t for t in s.split() if t]
-    while tokens and " ".join(tokens[-1:]) in _CO_SUFFIXES:
-        tokens.pop()
-    # also drop 2-word suffixes like "private limited"
-    joined = " ".join(tokens)
-    for suf in _CO_SUFFIXES:
-        if joined.endswith(" " + suf):
-            joined = joined[: -(len(suf) + 1)]
-    return joined.strip()
 
 
-def _purchase_class_sys(expense_cats=None, asset_cats=None) -> str:
-    asset_list = ", ".join(asset_cats) if asset_cats else "Machinery, Equipment, Vehicle, Furniture, IT & Electronics, Building, Other"
-    expense_list = ", ".join(expense_cats) if expense_cats else "Raw Material, Salary & Wages, Rent, Utilities, Logistics & Freight, Marketing, Professional Services, Asset Purchase, Maintenance & Repairs, Taxes & Duties, Office Supplies, Other"
-    return (
-        "You classify a single business PURCHASE (a bill we received from a supplier) into exactly one bucket. "
-        "Return ONLY JSON: {\"purchase_type\": one of [expense, asset, inventory, unknown], "
-        "\"asset_name\": string, \"inventory_qty\": number, \"inventory_unit\": string, "
-        f"\"asset_category\": one of [{asset_list}], "
-        f"\"expense_category\": one of [{expense_list}]}}. "
-        "Rules: \"asset\" = capital/fixed goods that last over a year (machinery, equipment, tools, vehicles, "
-        "furniture, computers/IT hardware/networking, buildings) — put the item in asset_name and pick the best asset_category "
-        "from the allowed list (e.g. servers/switches/firewalls/CCTV/computers → an IT/electronics category); "
-        "\"inventory\" = stock, raw materials, trading goods or components bought to resell or consume in production "
-        "— put quantity in inventory_qty and its unit (kg, pcs, box, litre) in inventory_unit; "
-        "\"expense\" = everything else (rent, salaries, utilities, transport, services, consumables, subscriptions, taxes) "
-        "— pick the best expense_category from the allowed list. Categories MUST be chosen from the lists above. "
-        "Use \"unknown\" ONLY when the description is too vague to tell which of the three it is — do NOT guess."
-    )
 
 
-async def ai_classify_purchase(text: str, expense_categories=None, asset_categories=None) -> dict:
-    """Classify one purchase bill's WHAT-was-bought bucket from its text, using the company's own
-    category lists when provided. Returns
-    {purchase_type, asset_name, inventory_qty, inventory_unit, asset_category, expense_category}. Never raises."""
-    text = (text or "").strip()
-    if not text:
-        return {"purchase_type": "unknown"}
-    try:
-        chat = claude_chat(session_id=f"purchase-class-{new_id()}",
-                           system_message=_purchase_class_sys(expense_categories, asset_categories)).with_model(*LLM_MODEL)
-        resp = await chat.send_message(UserMessage(text=text[:1500]))
-        d = _extract_json(resp) or {}
-    except Exception as e:  # noqa: BLE001
-        logger.warning(f"ai_classify_purchase failed: {e}")
-        d = {}
-    pt = (d.get("purchase_type") or "").strip().lower()
-    if pt not in ("expense", "asset", "inventory", "unknown"):
-        pt = "unknown"
-    return {"purchase_type": pt, "asset_name": (d.get("asset_name") or "").strip(),
-            "inventory_qty": d.get("inventory_qty"), "inventory_unit": (d.get("inventory_unit") or "").strip(),
-            "asset_category": (d.get("asset_category") or "").strip(),
-            "expense_category": (d.get("expense_category") or "").strip()}
 
 
-def _has_unclassified_purchase(records: dict, doc_type: str = "") -> bool:
-    """True if any purchase bill in the records lacks a confident expense/asset/inventory bucket."""
-    for inv in (records or {}).get("invoices", []):
-        itype = inv.get("type") or ("purchase_bill" if doc_type == "purchase_bill" else "")
-        if itype == "purchase_bill":
-            pt = (inv.get("purchase_type") or "").strip().lower()
-            if pt not in ("expense", "asset", "inventory"):
-                return True
-    return False
 
 
-async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, ingestion_id: str, source: str) -> dict:
-    from routers.ledger import create_expense, create_asset, create_inventory, guess_asset_category
-    # Validate BEFORE writing anything — an unclassified purchase must be classified first,
-    # otherwise we'd leave orphaned contacts committed before the 400 fires.
-    if _has_unclassified_purchase(records):
-        raise HTTPException(
-            status_code=400,
-            detail="Please classify each purchase bill as Expense, Asset, or Inventory before filing.")
-    created = {"contacts": 0, "invoices": 0, "payments": 0, "tasks": 0, "expenses": 0, "assets": 0, "inventory": 0}
-    currency = await _tenant_currency(tenant_id)
-    own_norm = _norm_company(await _tenant_name(tenant_id))
-    troles = await tenant_role_keys(tenant_id)
-    followup_role = "finance" if "finance" in troles else ("sales" if "sales" in troles else None)
-    name_to_id = {}
-
-    def _is_own(name: str) -> bool:
-        n = _norm_company(name)
-        return bool(own_norm) and bool(n) and (n == own_norm or n in own_norm or own_norm in n)
-
-    async def resolve_contact(name: str, ctype: str = "customer"):
-        name = (name or "").strip()
-        if not name or _is_own(name):
-            return None
-        key = name.lower()
-        if key in name_to_id:
-            return name_to_id[key]
-        existing = await db.contacts.find_one(
-            {"tenant_id": tenant_id, "name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}},
-            {"_id": 0, "id": 1})
-        if existing:
-            name_to_id[key] = existing["id"]
-            return existing["id"]
-        cid = new_id()
-        ctype = ctype if ctype in CONTACT_TYPES else ("vendor" if ctype in ("vendor", "supplier") else "customer")
-        await db.contacts.insert_one({
-            "id": cid, "tenant_id": tenant_id, "type": ctype, "name": name,
-            "company": "", "phone": "", "email": "", "address": "", "tax_id": "",
-            "tags": ["imported"], "status": "active", "assigned_id": None, "notes": "",
-            "created_by": user_id, "created_at": now_iso(), "source": source, "ingestion_id": ingestion_id,
-        })
-        name_to_id[key] = cid
-        created["contacts"] += 1
-        return cid
-
-    for c in records.get("contacts", []):
-        name = (c.get("name") or "").strip()
-        if not name or _is_own(name):
-            continue
-        ctype = c.get("type") if c.get("type") in CONTACT_TYPES else ("vendor" if c.get("type") == "supplier" else "customer")
-        key = name.lower()
-        existing = await db.contacts.find_one(
-            {"tenant_id": tenant_id, "name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}}, {"_id": 0, "id": 1})
-        if existing:
-            name_to_id[key] = existing["id"]
-            continue
-        cid = new_id()
-        await db.contacts.insert_one({
-            "id": cid, "tenant_id": tenant_id, "type": ctype, "name": name,
-            "company": c.get("company", "") or "", "phone": c.get("phone", "") or "",
-            "email": c.get("email", "") or "", "address": c.get("address", "") or "",
-            "tax_id": c.get("tax_id", "") or "", "tags": ["imported"], "status": "active",
-            "assigned_id": None, "notes": "", "created_by": user_id, "created_at": now_iso(),
-            "source": source, "ingestion_id": ingestion_id,
-        })
-        name_to_id[key] = cid
-        created["contacts"] += 1
-
-    for inv in records.get("invoices", []):
-        itype = inv.get("type") if inv.get("type") in ("sales_invoice", "purchase_bill") else "sales_invoice"
-        ctype = "customer" if itype == "sales_invoice" else "vendor"
-        cid = await resolve_contact(inv.get("contact_name"), ctype)
-        try:
-            amount = float(inv.get("amount") or 0)
-        except (TypeError, ValueError):
-            amount = 0.0
-        inv_id = new_id()
-        purchase_type = (inv.get("purchase_type") or "").strip().lower()
-        if itype == "purchase_bill" and purchase_type not in ("expense", "asset", "inventory"):
-            # No silent fallback: an unclassified purchase must be reviewed & classified by a human first.
-            raise HTTPException(
-                status_code=400,
-                detail="Please classify this purchase bill as Expense, Asset, or Inventory before filing.")
-        await db.invoices.insert_one({
-            "id": inv_id, "tenant_id": tenant_id, "type": itype,
-            "number": str(inv.get("number") or ""), "contact_id": cid,
-            "contact_name": (inv.get("contact_name") or "").strip(),
-            "date": inv.get("date", "") or "", "due_date": inv.get("due_date", "") or "",
-            "amount": amount, "currency": inv.get("currency") or currency,
-            "status": "unpaid", "line_items": inv.get("line_items") if isinstance(inv.get("line_items"), list) else [],
-            "purchase_type": purchase_type if itype == "purchase_bill" else "",
-            "source": source, "ingestion_id": ingestion_id, "created_by": user_id, "created_at": now_iso(),
-        })
-        created["invoices"] += 1
-        # A purchase bill (money we OWE) is segregated by WHAT was bought: asset, inventory, or expense.
-        if itype == "purchase_bill":
-            vend = (inv.get("contact_name") or "Vendor").strip()
-            li_text = " ".join(str(li.get("description", "")) for li in (inv.get("line_items") or []) if isinstance(li, dict))
-            inv_cur = inv.get("currency") or currency
-            if purchase_type == "asset":
-                _aname = (inv.get("asset_name") or li_text[:60] or f"Asset from {vend}").strip()
-                await create_asset(tenant_id, user_id, {
-                    "name": _aname,
-                    "category": inv.get("asset_category") or guess_asset_category(f"{_aname} {li_text}"),
-                    "purchase_amount": amount, "currency": inv_cur,
-                    "purchase_date": inv.get("date") or "", "vendor_name": vend,
-                    "notes": f"From bill {inv.get('number') or ''} · {li_text[:150]}".strip(),
-                }, source=source)
-                created["assets"] = created.get("assets", 0) + 1
-            elif purchase_type == "inventory":
-                try:
-                    qty = float(inv.get("inventory_qty") or 0) or 1
-                except (TypeError, ValueError):
-                    qty = 1
-                await create_inventory(tenant_id, user_id, {
-                    "item": (li_text[:60] or f"Stock from {vend}").strip(),
-                    "quantity": qty, "unit": (inv.get("inventory_unit") or "unit").strip(),
-                    "unit_cost": round(amount / qty, 2) if qty else amount,
-                    "currency": inv_cur, "vendor_name": vend,
-                    "notes": f"From bill {inv.get('number') or ''}".strip(),
-                }, source=source)
-                created["inventory"] = created.get("inventory", 0) + 1
-            else:
-                await create_expense(tenant_id, user_id, {
-                    "title": f"{vend} — Bill {inv.get('number') or ''}".strip(),
-                    "amount": amount, "currency": inv_cur,
-                    "vendor_name": vend, "vendor_id": cid,
-                    "date": inv.get("date") or "", "status": "unpaid",
-                    "invoice_id": inv_id, "ingestion_id": ingestion_id, "notes": li_text[:200],
-                }, source=source)
-                created["expenses"] += 1
-
-    for p in records.get("payments", []):
-        _raw_dir = str(p.get("direction") or "").strip().lower()
-        direction = "out" if _raw_dir in ("out", "outgoing", "outbound", "debit", "paid", "sent") else "in"
-        ctype = "customer" if direction == "in" else "vendor"
-        cid = await resolve_contact(p.get("contact_name"), ctype)
-        try:
-            amount = float(p.get("amount") or 0)
-        except (TypeError, ValueError):
-            amount = 0.0
-        pay_id = new_id()
-        await db.payments.insert_one({
-            "id": pay_id, "tenant_id": tenant_id, "direction": direction, "amount": amount,
-            "date": p.get("date", "") or "", "method": p.get("method", "") or "",
-            "reference": p.get("reference", "") or "", "contact_id": cid,
-            "contact_name": (p.get("contact_name") or "").strip(),
-            "invoice_number": str(p.get("invoice_number") or ""), "currency": currency,
-            "source": source, "ingestion_id": ingestion_id, "created_by": user_id, "created_at": now_iso(),
-        })
-        created["payments"] += 1
-        pay_doc = {"id": pay_id, "direction": direction, "amount": amount, "applied": 0, "applications": [],
-                   "date": p.get("date") or "", "contact_name": (p.get("contact_name") or "").strip(),
-                   "invoice_number": str(p.get("invoice_number") or ""), "reference": p.get("reference") or ""}
-        from routers.ledger import reconcile_payment
-        # Auto-allocate against an open invoice/bill. Anything left unlinked (either direction)
-        # waits in the Needs-matching queue — supplier payments no longer silently create an expense.
-        await reconcile_payment(tenant_id, pay_doc, matched_by="auto")
-
-    for t in records.get("tasks", []):
-        title = (t.get("title") or "").strip()
-        if not title:
-            continue
-        due = None
-        if isinstance(t.get("due_in_days"), int):
-            due = (datetime.now(timezone.utc) + timedelta(days=t["due_in_days"])).isoformat()
-        await db.tasks.insert_one({
-            "id": new_id(), "tenant_id": tenant_id, "title": title, "description": "",
-            "assignee_role": followup_role, "assignee_id": None,
-            "priority": t.get("priority", "medium") if t.get("priority") in ("low", "medium", "high") else "medium",
-            "status": "todo", "due_date": due, "decision_id": None,
-            "source": "ingest", "created_at": now_iso(),
-        })
-        created["tasks"] += 1
-
-    return created
 
 
-DOC_MIME = {"pdf": "application/pdf", "png": "image/png", "jpg": "image/jpeg",
-            "jpeg": "image/jpeg", "webp": "image/webp"}
 
 
-def _classify_ingestion(doc: dict) -> str:
-    dt = doc.get("doc_type")
-    if dt in ("sales_invoice", "purchase_bill"):
-        return "invoice"
-    if dt == "payment":
-        return "payment"
-    if dt == "purchase_order":
-        return "task"
-    ent = doc.get("entity")
-    if ent == "customers":
-        return "customer"
-    if ent == "vendors":
-        return "supplier"
-    if ent == "invoices":
-        return "invoice"
-    if ent == "payments":
-        return "payment"
-    recs = doc.get("records") or {}
-    if recs.get("invoices"):
-        return "invoice"
-    if recs.get("payments"):
-        return "payment"
-    if recs.get("contacts"):
-        return "customer"
-    return "task"
+
+
 
 
 # ---------------------------------------------------------------------------
@@ -1494,48 +896,8 @@ from models.team import LEAVE_TYPES, ABSENCE_REASONS  # noqa: F401
 
 
 
-async def _resolve_leave_approver(tenant_id: str, requester: dict):
-    """Approver priority: reporting manager → department/role mapping → owner."""
-    rm = requester.get("reporting_manager_id")
-    if rm:
-        m = await db.users.find_one({"id": rm, "tenant_id": tenant_id}, {"_id": 0, "id": 1, "name": 1})
-        if m:
-            return m["id"], m.get("name")
-    t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "leave_approvers": 1})
-    mapping = (t or {}).get("leave_approvers") or {}
-    aid = mapping.get(requester.get("role"))
-    if aid:
-        m = await db.users.find_one({"id": aid, "tenant_id": tenant_id}, {"_id": 0, "id": 1, "name": 1})
-        if m:
-            return m["id"], m.get("name")
-    owner = await db.users.find_one({"tenant_id": tenant_id, "role": "owner"}, {"_id": 0, "id": 1, "name": 1})
-    if owner:
-        return owner["id"], owner.get("name")
-    return None, None
 
 
-async def _create_leave(tenant_id, requester, leave_type, from_date, to_date, day_portion, reason, is_emergency):
-    approver_id, approver_name = await _resolve_leave_approver(tenant_id, requester)
-    lid = new_id()
-    doc = {
-        "id": lid, "tenant_id": tenant_id, "user_id": requester["id"],
-        "user_name": requester.get("name"), "user_role": requester.get("role"),
-        "leave_type": leave_type, "from_date": from_date[:10], "to_date": to_date[:10],
-        "day_portion": day_portion if day_portion in ("full", "half") else "full",
-        "reason": reason or "", "is_emergency": bool(is_emergency),
-        "status": "pending", "approver_id": approver_id, "approver_name": approver_name,
-        "info_note": None, "created_at": now_iso(), "decided_at": None, "decided_by": None,
-        "history": [{"action": "submitted", "by": requester["id"], "by_name": requester.get("name"), "note": reason or "", "at": now_iso()}],
-    }
-    await db.leaves.insert_one(doc)
-    label = "Emergency absence" if is_emergency else f"{leave_type.title()} leave"
-    msg = f"{requester.get('name')} — {label} ({doc['from_date']}" + (f" → {doc['to_date']}" if doc['to_date'] != doc['from_date'] else "") + ")"
-    await push_notification(tenant_id, [approver_id], 3 if is_emergency else 2, msg,
-                            entity_type="leave", entity_id=lid, ntype="approval",
-                            title=label, sender=requester.get("name"))
-    await log_activity(tenant_id, requester["id"], "leave_requested", msg, "leave", lid)
-    doc.pop("_id", None)
-    return doc
 
 
 
@@ -1545,641 +907,64 @@ async def _create_leave(tenant_id, requester, leave_type, from_date, to_date, da
 
 
 # --- Leave & Absence Phase 2: AI Impact Analysis on approval ---
-async def ai_leave_impact(person_name: str, from_date: str, to_date: str, tasks: list, members: list) -> dict:
-    if not tasks:
-        return {"summary": "No active tasks are affected by this leave.", "suggestions": []}
-    system = (
-        "You are an operations manager for an Indian SME. A team member is going on leave and their active tasks are "
-        "at risk. For EACH task, recommend exactly ONE action to keep work on track:\n"
-        "- 'reassign': hand it to an available teammate — prefer someone with the same or adjacent role and the LOWEST "
-        "current workload (active_task_count). Only choose an assignee_id from the available_members list.\n"
-        "- 'extend': push the due date to shortly AFTER the person returns (a day or two after leave_to), only when the "
-        "task can safely wait and shouldn't move to someone else.\n"
-        "- 'monitor': leave as-is (low priority, almost done, or nothing to do now).\n"
-        "Return STRICT JSON: {\"summary\": string (one plain-English sentence), \"suggestions\": [{\"task_id\": string, "
-        "\"action\": \"reassign\"|\"extend\"|\"monitor\", \"assignee_id\": string (required only if reassign, must be from "
-        "available_members), \"assignee_name\": string, \"due_date\": \"YYYY-MM-DD\" (required only if extend), "
-        "\"reason\": string (short)}]}. Every input task_id MUST appear exactly once. If there are no available_members, "
-        "do not use 'reassign'."
-    )
-    payload = {
-        "person_on_leave": person_name, "leave_from": from_date, "leave_to": to_date,
-        "at_risk_tasks": [{"task_id": t["id"], "title": t.get("title"), "priority": t.get("priority"),
-                           "status": t.get("status"), "due_date": (t.get("due_date") or "")[:10]} for t in tasks],
-        "available_members": [{"id": m["id"], "name": m["name"], "role": m["role"],
-                               "active_task_count": m["load"]} for m in members],
-    }
-    chat = claude_chat(session_id=f"leave-impact-{new_id()}", system_message=system).with_model(*LLM_MODEL)
-    resp = await chat.send_message(UserMessage(text=json.dumps(payload)))
-    data = _extract_json(resp)
-    return data if isinstance(data, dict) else {"summary": "", "suggestions": []}
 
 
 
 
-async def log_wa_event(from_phone: str, mtype: str, status: str, reason: str = "", tenant_id=None, summary: str = ""):
-    ev_id = new_id()
-    try:
-        await db.wa_events.insert_one({
-            "id": ev_id, "direction": "inbound", "from": from_phone or "", "mtype": mtype or "",
-            "status": status, "reason": reason, "tenant_id": tenant_id, "summary": summary,
-            "created_at": now_iso(),
-        })
-    except Exception:
-        logger.exception("wa event log failed")
-    return ev_id
 
 
-async def update_wa_event(ev_id: str, **fields):
-    if not ev_id:
-        return
-    try:
-        await db.wa_events.update_one({"id": ev_id}, {"$set": {**fields, "updated_at": now_iso()}})
-    except Exception:
-        pass
 
 
-def _norm_phone(p: str) -> str:
-    return re.sub(r"\D", "", p or "")[-10:]
 
 
-async def resolve_wa_tenant(sender: str):
-    """Route an inbound WhatsApp sender's phone to a tenant workspace.
-
-    Ordering:
-      1. Sender phone matches exactly one tenant (across non-obsolete
-         users) — route there. If that tenant has a within-tenant
-         duplicate (same phone on 2+ users in the SAME workspace),
-         resolve it by marking older duplicates obsolete inside that
-         tenant only — that's a legitimate cleanup because the
-         workspace itself has redundant records.
-      2. Sender phone matches users in MULTIPLE tenants — a legitimate
-         SME scenario (accountant/consultant serves multiple client
-         workspaces on one phone). We CANNOT silently pick a winner:
-         picking one and marking the other's user obsolete orphans
-         that workspace's WhatsApp routing until an admin notices.
-         Instead: log a warning, notify each affected tenant's owner
-         so both know the collision exists, and fall through to the
-         WA_TENANT_ID fallback (or drop if no fallback is set).
-      3. Legacy: sender matches an invited_employees entry on a tenant
-         doc that predates the users-first flow. Kept for back-compat
-         with pre-v0.8 tenants.
-      4. WA_TENANT_ID env fallback (or None → message is dropped).
-
-    FIX-003-A (S2-03) changed step 2. The prior code silently promoted
-    the newest user and marked ALL other cross-tenant users obsolete,
-    which was a hard multi-tenant safety break: the "losing" tenant's
-    WhatsApp routing was severed with no visible signal to their owner.
-    """
-    sp = _norm_phone(sender)
-    if not sp:
-        return os.environ.get("WA_TENANT_ID") or None
-    # FIX-002-A: indexed exact-match lookup + exclude obsolete records at the
-    # DB level. Was a full-collection scan of every user across every tenant
-    # (silently capped at 5000, so user #5001+ never got matched).
-    matches = await db.users.find(
-        {"phone_norm": sp, "wa_phone_obsolete": {"$ne": True}},
-        {"_id": 0, "id": 1, "tenant_id": 1, "phone": 1, "name": 1, "created_at": 1},
-    ).to_list(50)
-    if matches:
-        distinct_tenants = {m["tenant_id"] for m in matches}
-        if len(distinct_tenants) > 1:
-            # FIX-003-A: cross-tenant collision. Alert BOTH tenants and
-            # fall back to WA_TENANT_ID — never orphan any workspace's
-            # WhatsApp routing implicitly.
-            fallback = os.environ.get("WA_TENANT_ID") or None
-            logger.warning(
-                "[WHATSAPP] Sender %s matches users across %d tenants (%s); "
-                "routing to WA_TENANT_ID=%s (fallback). No user was marked obsolete.",
-                sender, len(distinct_tenants), sorted(distinct_tenants), fallback,
-            )
-            for tid in distinct_tenants:
-                try:
-                    await push_notification(
-                        tid, await _owner_ids(tid), 2,
-                        f"Incoming WhatsApp from {sender} could not be routed to your workspace unambiguously — "
-                        f"this number is also registered in another workspace. Ask the sender to remove one "
-                        f"registration, or configure a dedicated WhatsApp number per workspace.",
-                        "whatsapp", None, ntype="reminder",
-                        title="WhatsApp cross-workspace conflict", sender="System",
-                    )
-                except Exception:
-                    # Notification failure must not break routing — the
-                    # log line above is the durable record.
-                    logger.exception("[WHATSAPP] cross-tenant collision notify failed for %s", tid)
-            return fallback
-        tenant_id = matches[0]["tenant_id"]
-        # WITHIN-tenant duplicates: the same workspace has 2+ users on
-        # this phone. That's a workspace-internal cleanup — the tenant
-        # guard on update_many makes sure we CANNOT accidentally touch
-        # another tenant's user rows.
-        same_tenant = [m for m in matches if m["tenant_id"] == tenant_id]
-        if len(same_tenant) > 1:
-            same_tenant.sort(key=lambda u: u.get("created_at") or "", reverse=True)
-            latest, older = same_tenant[0], same_tenant[1:]
-            await db.users.update_many(
-                # tenant_id filter is defensive: at this point all rows
-                # share the same tenant, but if the query ever grows a
-                # cross-tenant leak we want update_many to fail closed.
-                {"id": {"$in": [u["id"] for u in older]}, "tenant_id": tenant_id},
-                {"$set": {"wa_phone_obsolete": True, "updated_at": now_iso()}},
-            )
-            await push_notification(
-                tenant_id, await _owner_ids(tenant_id), 2,
-                f"WhatsApp number {sender} was linked to {len(same_tenant)} people in this workspace. "
-                f"Routing to the most recent — {latest.get('name')}. {len(older)} older record(s) marked "
-                f"obsolete; please review in People.",
-                "user", latest["id"], ntype="reminder",
-                title="Duplicate WhatsApp number resolved", sender="System")
-        return tenant_id
-    # Secondary: legacy invited_employees list on the tenant document.
-    # Same cross-tenant concern applies — collect all matches first,
-    # then decide. In practice this list is small (pre-v0.8 tenants).
-    invited_hits = []
-    async for t in db.tenants.find({"invited_employees.0": {"$exists": True}}, {"_id": 0, "id": 1, "invited_employees": 1}):
-        for inv in t.get("invited_employees", []):
-            if _norm_phone(inv.get("phone")) == sp:
-                invited_hits.append(t["id"])
-                break
-    if len(invited_hits) == 1:
-        return invited_hits[0]
-    if len(invited_hits) > 1:
-        logger.warning(
-            "[WHATSAPP] Sender %s matches invited_employees entries in %d tenants (%s); "
-            "falling back to WA_TENANT_ID.",
-            sender, len(invited_hits), invited_hits,
-        )
-    return os.environ.get("WA_TENANT_ID") or None
 
 
-async def download_wa_media(media_id: str) -> bytes:
-    token = wa_token()
-    ver = os.environ.get("GRAPH_API_VERSION", "v21.0")
-    headers = {"Authorization": f"Bearer {token}"}
-    async with httpx.AsyncClient(timeout=60) as c:
-        meta = (await c.get(f"https://graph.facebook.com/{ver}/{media_id}", headers=headers)).json()
-        url = meta.get("url")
-        if not url:
-            raise Exception("media url unavailable")
-        return (await c.get(url, headers=headers)).content
 
 
-async def send_wa_reply(to_phone: str, text: str):
-    token = wa_token()
-    pnid = wa_phone_id()
-    ver = os.environ.get("GRAPH_API_VERSION", "v21.0")
-    if not (token and pnid):
-        return
-    try:
-        async with httpx.AsyncClient(timeout=30) as c:
-            await c.post(f"https://graph.facebook.com/{ver}/{pnid}/messages",
-                         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-                         json={"messaging_product": "whatsapp", "to": to_phone, "type": "text", "text": {"body": text}})
-    except Exception:
-        logger.exception("WhatsApp reply failed")
 
 
-WA_MIME_EXT = {"application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
 
 
-async def process_whatsapp_message(message: dict):
-    sender = message.get("from", "")
-    mtype = message.get("type")
-    ev_id = await log_wa_event(sender, mtype, "received")
-    try:
-        tenant_id = await resolve_wa_tenant(sender)
-        if not tenant_id:
-            await update_wa_event(ev_id, status="ignored", reason="Sender not registered in any workspace and no fallback (WA_TENANT_ID) is set")
-            logger.info(f"[WHATSAPP] no tenant for {sender}; ignoring")
-            return
-        await update_wa_event(ev_id, tenant_id=tenant_id)
-        set_usage_tenant(tenant_id)
-        owner = await db.users.find_one({"tenant_id": tenant_id, "role": "owner"}, {"_id": 0, "id": 1})
-        owner_id = owner["id"] if owner else "whatsapp"
-        troles = await tenant_role_keys(tenant_id)
-        cap_threshold, _cap_signoff = await _capture_settings(tenant_id)
-
-        if mtype in ("image", "document"):
-            media = message[mtype]
-            mime = media.get("mime_type", "application/pdf" if mtype == "document" else "image/jpeg").split(";")[0]
-            if mime not in WA_MIME_EXT:
-                await update_wa_event(ev_id, status="ignored", reason=f"Unsupported media type: {mime}")
-                await send_wa_reply(sender, "Sorry, I can only read PDF or image invoices/receipts.")
-                return
-            ext = WA_MIME_EXT[mime]
-            data = await download_wa_media(media["id"])
-            ing_id = new_id()
-            # FIX-002-E: obj_store with tenant prefix. `ai_extract_document`
-            # accepts a local path; we materialize to a temp file for it
-            # then clean up. Storage_path is saved in the capture draft so
-            # the review UI can render it via the auth-gated /api/files
-            # endpoint.
-            from services.uploads import store_upload, download_to_temp
-            import tempfile
-            stored = await store_upload(tenant_id, "ingestions", data, ext,
-                                         content_type=mime, file_id=ing_id)
-            fname = f"ingest_{ing_id}.{ext}"  # kept for capture_draft display
-            tmp_local = await download_to_temp(stored["storage_path"])
-            currency = await _tenant_currency(tenant_id)
-            company = await _tenant_name(tenant_id)
-            try:
-                result = await ai_extract_document(str(tmp_local), mime, f"ingest-{ing_id}", currency, company)
-            finally:
-                try:
-                    os.unlink(tmp_local)
-                except Exception:
-                    pass
-            recs = result.get("records", {})
-            amt = 0
-            for it in (recs.get("invoices", []) + recs.get("payments", [])):
-                try:
-                    amt = max(amt, float(it.get("amount") or 0))
-                except Exception:
-                    pass
-            cls = DOC_CLASS.get(result.get("doc_type"), "invoice")
-            dept = "finance" if cls in ("invoice", "payment") else ("purchase" if cls == "purchase" else "sales")
-            confidence = float(result.get("confidence") or 0.7)
-            policy = cls in ("approval", "decision")
-            needs_owner = _needs_owner_review(cls, amt or None, policy, cap_threshold)
-            has_records = bool(recs.get("invoices") or recs.get("payments"))
-            dup = await _find_duplicate_invoice(tenant_id, recs)
-            unknown_purchase = _has_unclassified_purchase(recs, result.get("doc_type", ""))
-            level, reason = _decide_processing_level(cls, confidence, amt or None, needs_owner,
-                                                     bool(dup), has_records, is_document=True,
-                                                     has_unknown_purchase=unknown_purchase)
-            tri = {"classification": cls, "intent": result.get("doc_type", "document"),
-                   "summary": result.get("summary", ""), "department": dept,
-                   "priority": "medium", "amount": amt or None}
-            status = "needs_attention" if level == "attention" else "pending_review"
-            did = await persist_capture_draft(
-                tenant_id, sender, ("pdf" if ext == "pdf" else "image"),
-                {"file_url": f"/api/files/{fname}", "filename": media.get("filename") or fname,
-                 "storage_path": stored["storage_path"]},  # FIX-002-E: real obj_store key
-                tri, troles, records=recs, status=status, confidence=confidence,
-                processing_level=level, duplicate_of=(dup["id"] if dup else None), attention_reason=reason)
-            summary = result.get("summary") or fname
-            if level == "auto":
-                draft = await db.capture_drafts.find_one({"id": did}, {"_id": 0})
-                res = await execute_capture(draft, {"id": owner_id, "tenant_id": tenant_id, "role": "owner"})
-                await db.capture_drafts.update_one({"id": did}, {"$set": {
-                    "status": "executed", "review_action": "auto", "auto_processed": True,
-                    "reviewed_at": now_iso(), "result_ref": res}})
-                await update_wa_event(ev_id, status="filed", summary=summary)
-                await send_wa_reply(sender, "✅ Filed automatically — high confidence, low risk. Reply here if anything looks off and the team will fix it.")
-            elif level == "attention":
-                await update_wa_event(ev_id, status="attention", summary=summary)
-                await send_wa_reply(sender, "📎 Received — this one needs a quick check by the team before it's filed. We'll follow up if anything's unclear.")
-            else:
-                await update_wa_event(ev_id, status="draft", summary=summary)
-                await send_wa_reply(sender, "📎 Received — your document is being reviewed by the right team before it's filed.")
-
-        elif mtype == "text":
-            # S5-05 audit fix (2026-08-16): guarded key access. WA
-            # webhooks are public; a malformed text message (Meta bug,
-            # deep-link handler, template response) would crash this
-            # handler with KeyError -> 500 back to Meta -> they retry
-            # -> we crash again. Missing body is treated as an empty
-            # message and short-circuited to the "unrelated" path.
-            text = ((message.get("text") or {}).get("body") or "").strip()
-            if not text:
-                await update_wa_event(ev_id, status="ignored", reason="Empty text body")
-                return
-            tri = await ai_capture_triage(text, sorted(troles))
-            if tri.get("unrelated"):
-                await update_wa_event(ev_id, status="ignored", reason="Unrelated / not a business instruction")
-                await send_wa_reply(sender, "🤔 I couldn't tell what to do with this. If it's a task, invoice or a note for your team, send it again with a short instruction and I'll route it to the right department.")
-                return
-            confidence = tri.get("confidence", 0.7)
-            amount = tri.get("amount") if isinstance(tri.get("amount"), (int, float)) else None
-            cls = tri.get("classification", "other")
-            needs_owner = _needs_owner_review(cls, amount, tri.get("policy_or_high_risk"), cap_threshold)
-            level, reason = _decide_processing_level(cls, confidence, amount, needs_owner,
-                                                     False, False, is_document=False)
-            status = "needs_attention" if level == "attention" else "pending_review"
-            did = await persist_capture_draft(tenant_id, sender, "text", {"text": text}, tri, troles,
-                                              status=status, confidence=confidence,
-                                              processing_level=level, attention_reason=reason)
-            if level == "attention":
-                await update_wa_event(ev_id, status="attention", summary=text[:140])
-                await send_wa_reply(sender, "📎 Received — this needs a quick check by the team before we action it.")
-            else:
-                await update_wa_event(ev_id, status="draft", summary=text[:140])
-                await send_wa_reply(sender, "✅ Received — your message is being reviewed by the right team before action.")
-        elif mtype in ("audio", "voice"):
-            media = message[mtype]
-            data = await download_wa_media(media["id"])
-            ext = (media.get("mime_type", "audio/ogg").split(";")[0].split("/")[-1]) or "ogg"
-            # FIX-002-E: obj_store with tenant prefix. transcribe_audio_full
-            # accepts obj_store keys directly (downloads to temp internally).
-            from services.uploads import store_upload
-            _wa_stored = await store_upload(tenant_id, "ingestions", data, ext,
-                                             content_type=media.get("mime_type"))
-            stt = await transcribe_audio_full(_wa_stored["storage_path"], "auto")
-            text = (stt.get("transcript") or "").strip()
-            lang_name = stt.get("language_name") or ""
-            if not text:
-                await update_wa_event(ev_id, status="ignored", reason="Voice note could not be transcribed")
-                await send_wa_reply(sender, "🎙️ I couldn't make out your voice note. Please try again in a quieter spot or send it as text.")
-                return
-            tri = await ai_capture_triage(text, sorted(troles))
-            if tri.get("unrelated"):
-                await update_wa_event(ev_id, status="ignored", reason="Unrelated / not a business instruction")
-                await send_wa_reply(sender, "🤔 I couldn't tell what to do with this voice note. Try again with a short instruction for your team.")
-                return
-            confidence = tri.get("confidence", 0.7)
-            amount = tri.get("amount") if isinstance(tri.get("amount"), (int, float)) else None
-            cls = tri.get("classification", "other")
-            needs_owner = _needs_owner_review(cls, amount, tri.get("policy_or_high_risk"), cap_threshold)
-            level, reason = _decide_processing_level(cls, confidence, amount, needs_owner,
-                                                     False, False, is_document=False)
-            status = "needs_attention" if level == "attention" else "pending_review"
-            did = await persist_capture_draft(tenant_id, sender, "voice",
-                                              {"text": text, "detected_language_name": lang_name, "stt_engine": stt.get("engine")},
-                                              tri, troles, status=status, confidence=confidence,
-                                              processing_level=level, attention_reason=reason)
-            lang_tag = f" (heard in {lang_name})" if lang_name and lang_name != "English" else ""
-            if level == "attention":
-                await update_wa_event(ev_id, status="attention", summary=text[:140])
-                await send_wa_reply(sender, f"🎙️ Voice note received{lang_tag} — this needs a quick check by the team before we action it.")
-            else:
-                await update_wa_event(ev_id, status="draft", summary=text[:140])
-                await send_wa_reply(sender, f"🎙️ Voice note received{lang_tag} — your message is being reviewed by the right team before action.")
-        else:
-            await update_wa_event(ev_id, status="ignored", reason=f"Unsupported message type: {mtype}")
-    except Exception as e:
-        await update_wa_event(ev_id, status="error", reason=str(e)[:200])
-        logger.exception("process_whatsapp_message failed")
-        await send_wa_reply(sender, "Sorry, I couldn't process that. Please try again.")
 
 
 # ---------------------------------------------------------------------------
 # WhatsApp Smart Capture — AI triage → Capture Draft → role review → execute
 # ---------------------------------------------------------------------------
-CAPTURE_CLASSES = ["operational_task", "invoice", "payment", "purchase", "sales", "hr", "meeting", "decision", "approval", "workflow", "other"]
 # Classification → department "intent". invoice/payment are handled as money items (finance).
 # operational_task/workflow/meeting/other fall back to the AI-suggested department.
-INTENT_BY_CLASS = {
-    "sales": "sales", "purchase": "purchase", "hr": "hr",
-}
 # Hint substrings used to map a department intent to a tenant's ACTUAL role key
 # (role names vary by industry, e.g. finance may be keyed 'accounts_and_admin').
-DEPT_HINTS = {
-    "finance": ("financ", "account", "accts", "treasur", "billing", "audit", "insurance"),
-    "sales": ("sales", "estimat", "quotation", "quote", "business_development", "customer_relation", "boutique", "retail", "consultant", "customer"),
-    "purchase": ("purchas", "procure", "buying", "supply_chain", "vendor", "inventory", "merchandis", "acquisition"),
-    "hr": ("human_resource", "talent", "recruit", "payroll", "administrator"),
-    "operations": ("operation", "logistics", "warehouse", "workshop", "fulfillment", "supply", "office_manager", "admin"),
-    "marketing": ("marketing", "content", "communication", "events", "listings"),
-    "production": ("production", "kitchen", "manufactur", "quality", "detailing", "technician", "back_of_house", "assembly"),
-}
-FINANCE_ROLE_HINTS = ("financ", "account", "accts", "treasur", "billing", "audit")
 
 
-async def _finance_role_key(tenant_id: str, troles: set) -> Optional[str]:
-    """Find the tenant's finance/accounts role key (role names vary by industry)."""
-    if "finance" in troles:
-        return "finance"
-    t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "roles": 1})
-    for r in ((t.get("roles") if t else None) or []):
-        blob = f"{r.get('key', '')} {r.get('label', '')}".lower()
-        if any(h in blob for h in FINANCE_ROLE_HINTS):
-            return r.get("key")
-    return None
 
 
-async def _resolve_reviewer_role(tenant_id: str, troles: set, intent: Optional[str]) -> Optional[str]:
-    """Map a department 'intent' (finance/sales/purchase/hr/operations/marketing/production, or a
-    literal role name) to the tenant's ACTUAL role key. Returns None when nothing matches (so the
-    caller can decide the fallback). This is what keeps departmental captures OUT of the owner queue."""
-    intent = (intent or "").strip().lower()
-    if not intent or intent == "owner":
-        return None
-    if intent in troles:
-        return intent
-    t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "roles": 1})
-    roles = (t.get("roles") if t else None) or []
-    for r in roles:  # exact key match first
-        if r.get("key") == intent:
-            return r.get("key")
-    hints = DEPT_HINTS.get(intent, (intent,))
-    for r in roles:  # then fuzzy hint match against key + label
-        blob = f"{r.get('key', '')} {r.get('label', '')}".lower()
-        if any(h in blob for h in hints):
-            return r.get("key")
-    return None
-DOC_CLASS = {"sales_invoice": "invoice", "purchase_bill": "purchase", "payment": "payment",
-             "purchase_order": "purchase", "quotation": "sales", "receipt": "payment"}
-CAPTURE_THRESHOLD = float(os.environ.get("CAPTURE_OWNER_THRESHOLD", "50000"))
 # Confidence gating for the WhatsApp Smart Capture processing-level decision.
-AUTO_CONFIDENCE = float(os.environ.get("CAPTURE_AUTO_CONFIDENCE", "0.90"))
-ATTENTION_CONFIDENCE = float(os.environ.get("CAPTURE_ATTENTION_CONFIDENCE", "0.60"))
 
 
-def _needs_owner_review(cls: str, amount, policy: bool, threshold: float = CAPTURE_THRESHOLD) -> bool:
-    return bool(policy) or cls in ("approval", "decision") or (amount is not None and amount >= threshold)
 
 
-async def _capture_settings(tenant_id: str):
-    """Owner-configurable capture settings: (high_value_threshold, require_owner_signoff)."""
-    t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "high_value_threshold": 1, "require_owner_signoff": 1})
-    thr = (t or {}).get("high_value_threshold")
-    thr = float(thr) if isinstance(thr, (int, float)) and thr > 0 else CAPTURE_THRESHOLD
-    return thr, bool((t or {}).get("require_owner_signoff"))
 
 
-async def _find_duplicate_invoice(tenant_id: str, records: dict):
-    """Return an already-filed invoice that looks like a duplicate of one in `records`, else None."""
-    for inv in (records or {}).get("invoices", []):
-        num = str(inv.get("number") or "").strip()
-        if num:
-            hit = await db.invoices.find_one(
-                {"tenant_id": tenant_id, "number": {"$regex": f"^{re.escape(num)}$", "$options": "i"}},
-                {"_id": 0, "id": 1, "number": 1})
-            if hit:
-                return hit
-        try:
-            amt = float(inv.get("amount") or 0)
-        except (TypeError, ValueError):
-            amt = 0.0
-        cname = (inv.get("contact_name") or "").strip()
-        if amt and cname:
-            hit = await db.invoices.find_one(
-                {"tenant_id": tenant_id, "amount": amt,
-                 "contact_name": {"$regex": f"^{re.escape(cname)}$", "$options": "i"}},
-                {"_id": 0, "id": 1, "number": 1})
-            if hit:
-                return hit
-    return None
 
 
-def _decide_processing_level(cls, confidence, amount, needs_owner, is_duplicate, has_records, is_document, has_unknown_purchase=False):
-    """Map an AI-triaged capture to one of: auto | confirm | attention.
-    Returns (level, reason)."""
-    if is_duplicate:
-        return "attention", "Possible duplicate of an already-filed invoice — please verify before saving."
-    if has_unknown_purchase:
-        return "attention", "AI couldn't confidently tell if this purchase is an expense, an asset, or inventory — please classify and approve."
-    if confidence is not None and confidence < ATTENTION_CONFIDENCE:
-        return "attention", "Low confidence extraction — please double-check the details."
-    if is_document and not has_records:
-        return "attention", "Couldn't read clear structured data from this document — please review."
-    if needs_owner:
-        return "confirm", ""
-    if (is_document and confidence is not None and confidence >= AUTO_CONFIDENCE
-            and amount is not None and 0 < amount < CAPTURE_THRESHOLD
-            and cls in ("purchase", "sales")):
-        return "auto", ""
-    return "confirm", ""
 
-_CAPTURE_SYS = (
-    "You are an operations triage AI for a business that receives instructions on WhatsApp. "
-    "Classify ONE incoming message and return ONLY JSON with keys: "
-    "classification (one of [operational_task, invoice, payment, purchase, sales, hr, meeting, decision, approval, workflow, other]), "
-    "intent (short phrase), summary (one clear sentence), "
-    "department (one of [sales, finance, purchase, hr, operations, production, marketing, owner]) — pick the department that should OWN and act on this. "
-    "Use 'owner' ONLY for company-wide policy changes, formal approvals/decisions, or big/high-value commitments; routine work (estimates, quotations, follow-ups, operational tasks) goes to the relevant department, NOT owner. "
-    "priority (one of [low, medium, high]), due_in_days (integer or null), "
-    "amount (number if a monetary value is mentioned, else null), "
-    "confidence (number between 0 and 1 — how sure you are this is a genuine, clearly actionable business instruction), "
-    "unrelated (boolean — true if this is NOT a business instruction, e.g. a greeting, spam, or personal chit-chat), "
-    "policy_or_high_risk (boolean — true for policy changes, contracts, legal, layoffs, big commitments). "
-    "Choose the department that should review this. Available team roles: {roles}."
+
+
+
+
+
+
+
+
+# WhatsApp Smart-Capture triage + review engine moved to services/captures.py
+# (Epic 8 Sprint 4). Re-exported so deferred `from server import ...` resolves
+# (captures router + whatsapp + finance_signals._finance_role_key).
+from services.captures import (  # noqa: E402
+    ai_capture_triage, persist_capture_draft, execute_capture,
+    _finance_role_key, _resolve_reviewer_role, _needs_owner_review,
+    _capture_settings, _decide_processing_level, CAPTURE_THRESHOLD,
+    CAPTURE_CLASSES, DOC_CLASS,
 )
-
-
-async def ai_capture_triage(text: str, roles: list) -> dict:
-    system = _CAPTURE_SYS.replace("{roles}", ", ".join(roles) or "owner")
-    chat = claude_chat(session_id=f"capture-{new_id()}", system_message=system).with_model(*LLM_MODEL)
-    resp = await chat.send_message(UserMessage(text=(text or "")[:4000]))
-    try:
-        d = _extract_json(resp)
-    except Exception:
-        d = {}
-    if d.get("classification") not in CAPTURE_CLASSES:
-        d["classification"] = "other"
-    d.setdefault("intent", "")
-    d.setdefault("summary", (text or "")[:160])
-    if d.get("priority") not in ("low", "medium", "high"):
-        d["priority"] = "medium"
-    d.setdefault("department", "owner")
-    try:
-        d["confidence"] = max(0.0, min(1.0, float(d.get("confidence"))))
-    except (TypeError, ValueError):
-        d["confidence"] = 0.7
-    d["unrelated"] = bool(d.get("unrelated"))
-    return d
-
-
-async def persist_capture_draft(tenant_id, wa_from, kind, payload, tri, troles, records=None,
-                                status="pending_review", confidence=None, processing_level="confirm",
-                                duplicate_of=None, attention_reason=""):
-    cls = tri.get("classification", "other")
-    amount = tri.get("amount") if isinstance(tri.get("amount"), (int, float)) else None
-    dept = tri.get("department")
-    money_item = cls in ("invoice", "payment")
-    reviewer_perm = "finance" if money_item else None
-    threshold, require_signoff = await _capture_settings(tenant_id)
-    high_value = amount is not None and amount >= threshold
-    escalate_reason = ""
-    needs_owner = False
-    # Department intent: money items → finance; sales/purchase/hr fixed; everything else uses
-    # the AI-suggested department. Resolved against the tenant's REAL role keys below.
-    intent = INTENT_BY_CLASS.get(cls) or dept
-
-    if money_item:
-        # Invoice/payment always flow to finance directly — routed to the tenant's actual
-        # finance/accounts role. reviewer_perm ensures anyone with the finance permission sees it.
-        reviewer = await _finance_role_key(tenant_id, troles) or "owner"
-        if high_value:
-            escalate_reason = f"High value ({amount:,.0f}) — verify before approving"
-            if require_signoff:
-                # Owner sign-off required above the configured threshold.
-                needs_owner = True
-                reviewer = "owner"
-                escalate_reason = f"High value ({amount:,.0f}) — owner sign-off required"
-    elif cls in ("approval", "decision") or bool(tri.get("policy_or_high_risk")) or high_value:
-        # Genuinely owner-level: formal approvals/decisions, policy/high-risk, or high-value commitments.
-        needs_owner = True
-        reviewer = "owner"
-        if high_value:
-            escalate_reason = f"High-value item ({amount:,.0f})"
-        elif cls in ("approval", "decision"):
-            escalate_reason = f"{cls.title()}-level item"
-        else:
-            escalate_reason = "Policy / high-risk"
-    else:
-        # Routine departmental work (tasks, sales, purchase, hr, meetings, workflows) → the
-        # relevant department's Review Queue, NOT the owner. Owner still sees all captures.
-        reviewer = await _resolve_reviewer_role(tenant_id, troles, intent) or "owner"
-    if not reviewer:
-        reviewer = "owner"
-    due = None
-    if isinstance(tri.get("due_in_days"), int):
-        due = (datetime.now(timezone.utc) + timedelta(days=tri["due_in_days"])).isoformat()
-    did = new_id()
-    await db.capture_drafts.insert_one({
-        "id": did, "tenant_id": tenant_id, "source": "whatsapp", "wa_from": wa_from, "kind": kind,
-        "text": payload.get("text", ""), "file_url": payload.get("file_url"), "filename": payload.get("filename"),
-        "classification": cls, "intent": tri.get("intent", ""), "summary": tri.get("summary", ""),
-        "department": dept, "reviewer_role": reviewer, "reviewer_perm": reviewer_perm, "assignee_id": None,
-        "priority": tri.get("priority", "medium"), "due_date": due, "amount": amount, "records": records,
-        "needs_owner": needs_owner, "escalate_reason": escalate_reason,
-        "confidence": confidence, "processing_level": processing_level,
-        "duplicate_of": duplicate_of, "attention_reason": attention_reason, "auto_processed": False,
-        "status": status, "review_action": None, "clarification_note": None,
-        "created_at": now_iso(), "reviewed_by": None, "reviewed_at": None, "result_ref": None,
-    })
-    return did
-
-
-async def execute_capture(d: dict, user: dict):
-    tenant_id = d["tenant_id"]
-    # Document-based drafts → file the extracted financial records.
-    if d.get("records") and d.get("kind") in ("pdf", "image", "document"):
-        ing_id = new_id()
-        created = await commit_ingestion_records(tenant_id, user["id"], d["records"], ing_id, "whatsapp")
-        doc = {
-            "id": ing_id, "tenant_id": tenant_id, "created_by": user["id"], "source": "whatsapp",
-            "kind": d.get("kind"), "filename": d.get("filename") or f"{ing_id}", "file_url": d.get("file_url"),
-            "status": "filed", "created_at": now_iso(), "summary": d.get("summary", ""),
-            "doc_type": d.get("classification"), "records": d["records"], "created_counts": created,
-            "filed_at": now_iso(), "wa_from": d.get("wa_from"),
-        }
-        await db.ingestions.insert_one(dict(doc))
-        inbox_id = await add_inbox_item(tenant_id, user["id"], "whatsapp", _classify_ingestion(doc),
-                                        doc["summary"] or doc["filename"], doc["filename"], "ingestion", ing_id, status="done")
-        await db.ingestions.update_one({"id": ing_id, "tenant_id": tenant_id}, {"$set": {"inbox_id": inbox_id}})  # FIX-001-C
-        return {"type": "ingestion", "id": ing_id, "created": created}
-    # Text / instruction drafts → run the structuring pipeline, then apply reviewer overrides + release.
-    note_id = new_id()
-    await db.voice_notes.insert_one({
-        "id": note_id, "tenant_id": tenant_id, "created_by": user["id"], "kind": "text",
-        "audio_path": None, "transcript": d.get("text") or d.get("summary") or "", "language": "auto",
-        "status": "queued", "source": "whatsapp", "wa_from": d.get("wa_from"),
-        "raised_by_name": d.get("wa_from"), "created_at": now_iso(),
-    })
-    await process_voice_note(note_id)
-    vn = await db.voice_notes.find_one({"id": note_id}, {"_id": 0, "decision_id": 1})
-    decision_id = (vn or {}).get("decision_id")
-    if decision_id:
-        overrides = {}
-        if d.get("assignee_id"):
-            overrides["assignee_id"] = d["assignee_id"]
-        if d.get("priority"):
-            overrides["priority"] = d["priority"]
-        if d.get("due_date"):
-            overrides["due_date"] = d["due_date"]
-        if overrides:
-            overrides["updated_at"] = now_iso()
-            overrides["last_action"] = "Set by reviewer"
-            # FIX-001-C: all writes below scope by tenant_id so a leaked/guessed
-            # decision_id can never touch another tenant's tasks or decision.
-            await db.tasks.update_many({"tenant_id": tenant_id, "decision_id": decision_id}, {"$set": overrides})
-        # Reviewer approved the capture → release the decision's blocked tasks.
-        await db.decisions.update_one({"id": decision_id, "tenant_id": tenant_id}, {"$set": {"status": "approved"}})
-        await db.tasks.update_many({"tenant_id": tenant_id, "decision_id": decision_id, "status": "blocked"},
-                                   {"$set": {"status": "todo", "updated_at": now_iso(), "last_action": "Approved via capture"}})
-    return {"type": "decision", "id": decision_id}
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,441 @@
+"""Document ingestion: AI extraction + purchase classification + commit engine
+(Epic 8 Sprint 4 -- from server.py).
+
+Reads a bill/receipt/spreadsheet into structured records (Gemini/Claude),
+classifies purchase bills into expense/asset/inventory, and commits contacts/
+invoices/payments/tasks + ledger rows. routers.ledger writers, server's
+CONTACT_TYPES, and llm_limits are imported deferred to avoid a cycle.
+"""
+import re
+import json
+import asyncio
+from datetime import datetime, timezone, timedelta
+
+from fastapi import HTTPException
+from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
+
+from core import (
+    db, logger, new_id, now_iso, tenant_role_keys,
+    claude_chat, LLM_MODEL, _extract_json, _est_tokens, log_usage,
+    EMERGENT_LLM_KEY, VISION_MODEL,
+)
+from services.vision import get_gemini_client, _gemini_doc_sync
+
+
+_DOC_SYSTEM = (
+    "You are the document ingestion engine of DecisionOS, an operating brain for small businesses. "
+    "Read the attached business document (a sales invoice, purchase bill, payment receipt, purchase order, "
+    "or a photo/WhatsApp screenshot of one) and extract structured operational data. Return ONLY valid JSON, no prose. "
+    "Schema: {"
+    "\"summary\": string (one short line describing the document), "
+    "\"doc_type\": one of [sales_invoice, purchase_bill, payment, purchase_order, other], "
+    "\"confidence\": number between 0 and 1, "
+    "\"contacts\": [{\"type\": one of [customer, vendor], \"name\": string, \"company\": string, \"phone\": string, \"email\": string, \"address\": string, \"tax_id\": string}], "
+    "\"invoices\": [{\"type\": one of [sales_invoice, purchase_bill], \"purchase_type\": one of [expense, asset, inventory, unknown] (only for purchase_bill; else empty), \"asset_name\": string (for asset purchases), \"inventory_qty\": number, \"inventory_unit\": string, \"number\": string, \"contact_name\": string, \"date\": string, \"due_date\": string, \"amount\": number, \"currency\": string, \"line_items\": [{\"description\": string, \"qty\": number, \"rate\": number, \"amount\": number}]}], "
+    "\"payments\": [{\"direction\": one of [in, out], \"amount\": number, \"date\": string, \"method\": string, \"reference\": string, \"contact_name\": string, \"invoice_number\": string}], "
+    "\"tasks\": [{\"title\": string, \"priority\": one of [low,medium,high], \"due_in_days\": integer or null}]}. "
+    "Rules: Our own company (the DecisionOS user filing this) is \"{company}\". "
+    "NEVER create a contact for our own company — only ever extract the OTHER party (the counterparty). "
+    "Decide direction by WHO ISSUED the document: if our company is the seller/issuer (the 'from'/'billed by' party), it is a sales_invoice and the counterparty is the buyer (type=customer); "
+    "if our company is the buyer/recipient (the 'bill to'/'ship to' party), it is a purchase_bill and the counterparty is the issuer/seller (type=vendor). "
+    "The contact_name on every invoice and payment MUST be the counterparty, never our own company. "
+    "A sales invoice is money owed TO us by a customer (party type=customer). "
+    "A purchase bill is money we owe a vendor/supplier (party type=vendor). "
+    "For each purchase_bill, ALSO set purchase_type by WHAT was bought: "
+    "\"asset\" for capital/fixed goods that last over a year (machinery, equipment, tools, vehicles, furniture, computers/IT hardware, buildings) — put the item in asset_name; "
+    "\"inventory\" for stock, raw materials, trading goods or components bought to resell or consume in production — put quantity in inventory_qty and its unit (kg, pcs, box, litre) in inventory_unit; "
+    "\"expense\" for everything else (rent, salaries, utilities, transport, services, consumables, subscriptions, taxes). When unsure, use \"expense\". "
+    "sales_invoice must have purchase_type empty. "
+    "For every unpaid invoice or bill, add ONE follow-up task (e.g. 'Collect payment for invoice #123 from Acme' or 'Pay vendor bill #45 to XYZ'). "
+    "A payment 'in' reduces a customer receivable; 'out' settles a vendor bill. "
+    "Dates as YYYY-MM-DD when readable else empty string. Amounts are plain numbers without currency symbols. "
+    "Default currency to {currency}. Documents may be in English, Tamil or Tanglish — understand them and output all values in English. "
+    "Use empty arrays where nothing applies."
+)
+
+
+_CSV_SYSTEM = (
+    "You classify and map spreadsheet data for DecisionOS. Given the column headers and rows of a business spreadsheet, "
+    "decide which entity it represents and map EVERY row to structured records. Return ONLY valid JSON, no prose. "
+    "Schema: {\"entity\": one of [customers, vendors, invoices, payments], \"summary\": string, "
+    "\"contacts\": [{\"type\": one of [customer, vendor], \"name\": string, \"company\": string, \"phone\": string, \"email\": string, \"address\": string, \"tax_id\": string}], "
+    "\"invoices\": [{\"type\": one of [sales_invoice, purchase_bill], \"number\": string, \"contact_name\": string, \"date\": string, \"due_date\": string, \"amount\": number, \"currency\": string}], "
+    "\"payments\": [{\"direction\": one of [in, out], \"amount\": number, \"date\": string, \"method\": string, \"reference\": string, \"contact_name\": string, \"invoice_number\": string}], "
+    "\"tasks\": [{\"title\": string, \"priority\": one of [low,medium,high], \"due_in_days\": integer or null}]}. "
+    "If the file is a customer/vendor list, fill 'contacts'. If it lists invoices/bills, fill 'invoices' (and add a follow-up task per unpaid row). "
+    "Our own company is \"{company}\" — NEVER map our own company as a contact; only extract the other parties. "
+    "If it lists payments/receipts, fill 'payments'. Map each spreadsheet row to exactly one record. Amounts are plain numbers. "
+    "Default currency to {currency}. Use empty arrays for the entities that do not apply."
+)
+
+
+def _normalise_records(data: dict) -> dict:
+    out = {}
+    for k in ("contacts", "invoices", "payments", "tasks"):
+        out[k] = data.get(k) if isinstance(data.get(k), list) else []
+    return out
+
+
+async def ai_extract_document(file_path: str, mime_type: str, session_id: str, currency: str = "INR", company: str = "") -> dict:
+    system = _DOC_SYSTEM.replace("{currency}", currency).replace("{company}", company or "our company")
+    user_text = "Extract the structured JSON from this document now."
+    resp = None
+    # Prefer the user's own Gemini key via the official google-genai SDK.
+    if get_gemini_client() is not None:
+        try:
+            resp, _gti, _gto = await asyncio.to_thread(_gemini_doc_sync, file_path, mime_type, system, user_text)
+            await log_usage((session_id or "ocr").split("-")[0], "gemini", model=VISION_MODEL[1],
+                            tokens_in=_gti, tokens_out=_gto, units=1, unit_type="document")
+        except Exception as e:
+            logger.warning(f"Gemini OCR (user key) failed; falling back to Emergent key: {e}")
+            resp = None
+    # Fallback: Gemini via the Emergent universal key (keeps document capture working).
+    if not resp:
+        fc = FileContentWithMimeType(file_path=file_path, mime_type=mime_type)
+        chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=session_id,
+                       system_message=system).with_model(*VISION_MODEL)
+        # FIX-002-B: guard.
+        from services.ai.llm_limits import guarded_llm
+        resp = await guarded_llm(chat.send_message(UserMessage(text=user_text, file_contents=[fc])),
+                                  label="gemini:ocr-fallback")
+        await log_usage((session_id or "ocr").split("-")[0], "gemini", model=VISION_MODEL[1],
+                        tokens_in=_est_tokens(system + user_text), tokens_out=_est_tokens(resp or ""),
+                        units=1, unit_type="document")
+    data = _extract_json(resp)
+    return {
+        "summary": data.get("summary", ""),
+        "doc_type": data.get("doc_type", "other"),
+        "confidence": data.get("confidence", 0.7),
+        "records": _normalise_records(data),
+    }
+
+
+async def ai_map_spreadsheet(headers: list, rows: list, session_id: str, currency: str = "INR", company: str = "") -> dict:
+    payload = {"headers": headers, "rows": rows[:300]}
+    system = _CSV_SYSTEM.replace("{currency}", currency).replace("{company}", company or "our company")
+    chat = claude_chat(session_id=session_id,
+                   system_message=system).with_model(*LLM_MODEL)
+    resp = await chat.send_message(UserMessage(text=f"Spreadsheet data:\n{json.dumps(payload)}\n\nClassify and map to JSON now."))
+    data = _extract_json(resp)
+    return {
+        "summary": data.get("summary", ""),
+        "entity": data.get("entity", ""),
+        "records": _normalise_records(data),
+    }
+
+
+async def _tenant_currency(tenant_id: str) -> str:
+    t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "currency": 1})
+    return (t or {}).get("currency", "INR")
+
+
+async def _tenant_name(tenant_id: str) -> str:
+    t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "name": 1})
+    return (t or {}).get("name", "") or ""
+
+
+_CO_SUFFIXES = ("private limited", "pvt ltd", "pvt. ltd.", "pvt", "private ltd", "limited",
+                "ltd", "llp", "inc", "incorporated", "corporation", "corp", "co", "company",
+                "technologies", "enterprises", "industries", "and sons", "traders")
+
+
+def _norm_company(s: str) -> str:
+    s = re.sub(r"[^a-z0-9 ]", " ", (s or "").lower())
+    tokens = [t for t in s.split() if t]
+    while tokens and " ".join(tokens[-1:]) in _CO_SUFFIXES:
+        tokens.pop()
+    # also drop 2-word suffixes like "private limited"
+    joined = " ".join(tokens)
+    for suf in _CO_SUFFIXES:
+        if joined.endswith(" " + suf):
+            joined = joined[: -(len(suf) + 1)]
+    return joined.strip()
+
+
+def _purchase_class_sys(expense_cats=None, asset_cats=None) -> str:
+    asset_list = ", ".join(asset_cats) if asset_cats else "Machinery, Equipment, Vehicle, Furniture, IT & Electronics, Building, Other"
+    expense_list = ", ".join(expense_cats) if expense_cats else "Raw Material, Salary & Wages, Rent, Utilities, Logistics & Freight, Marketing, Professional Services, Asset Purchase, Maintenance & Repairs, Taxes & Duties, Office Supplies, Other"
+    return (
+        "You classify a single business PURCHASE (a bill we received from a supplier) into exactly one bucket. "
+        "Return ONLY JSON: {\"purchase_type\": one of [expense, asset, inventory, unknown], "
+        "\"asset_name\": string, \"inventory_qty\": number, \"inventory_unit\": string, "
+        f"\"asset_category\": one of [{asset_list}], "
+        f"\"expense_category\": one of [{expense_list}]}}. "
+        "Rules: \"asset\" = capital/fixed goods that last over a year (machinery, equipment, tools, vehicles, "
+        "furniture, computers/IT hardware/networking, buildings) — put the item in asset_name and pick the best asset_category "
+        "from the allowed list (e.g. servers/switches/firewalls/CCTV/computers → an IT/electronics category); "
+        "\"inventory\" = stock, raw materials, trading goods or components bought to resell or consume in production "
+        "— put quantity in inventory_qty and its unit (kg, pcs, box, litre) in inventory_unit; "
+        "\"expense\" = everything else (rent, salaries, utilities, transport, services, consumables, subscriptions, taxes) "
+        "— pick the best expense_category from the allowed list. Categories MUST be chosen from the lists above. "
+        "Use \"unknown\" ONLY when the description is too vague to tell which of the three it is — do NOT guess."
+    )
+
+
+async def ai_classify_purchase(text: str, expense_categories=None, asset_categories=None) -> dict:
+    """Classify one purchase bill's WHAT-was-bought bucket from its text, using the company's own
+    category lists when provided. Returns
+    {purchase_type, asset_name, inventory_qty, inventory_unit, asset_category, expense_category}. Never raises."""
+    text = (text or "").strip()
+    if not text:
+        return {"purchase_type": "unknown"}
+    try:
+        chat = claude_chat(session_id=f"purchase-class-{new_id()}",
+                           system_message=_purchase_class_sys(expense_categories, asset_categories)).with_model(*LLM_MODEL)
+        resp = await chat.send_message(UserMessage(text=text[:1500]))
+        d = _extract_json(resp) or {}
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"ai_classify_purchase failed: {e}")
+        d = {}
+    pt = (d.get("purchase_type") or "").strip().lower()
+    if pt not in ("expense", "asset", "inventory", "unknown"):
+        pt = "unknown"
+    return {"purchase_type": pt, "asset_name": (d.get("asset_name") or "").strip(),
+            "inventory_qty": d.get("inventory_qty"), "inventory_unit": (d.get("inventory_unit") or "").strip(),
+            "asset_category": (d.get("asset_category") or "").strip(),
+            "expense_category": (d.get("expense_category") or "").strip()}
+
+
+def _has_unclassified_purchase(records: dict, doc_type: str = "") -> bool:
+    """True if any purchase bill in the records lacks a confident expense/asset/inventory bucket."""
+    for inv in (records or {}).get("invoices", []):
+        itype = inv.get("type") or ("purchase_bill" if doc_type == "purchase_bill" else "")
+        if itype == "purchase_bill":
+            pt = (inv.get("purchase_type") or "").strip().lower()
+            if pt not in ("expense", "asset", "inventory"):
+                return True
+    return False
+
+
+async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, ingestion_id: str, source: str) -> dict:
+    from routers.ledger import create_expense, create_asset, create_inventory, guess_asset_category
+    from server import CONTACT_TYPES  # shared constant; stays in server
+    # Validate BEFORE writing anything — an unclassified purchase must be classified first,
+    # otherwise we'd leave orphaned contacts committed before the 400 fires.
+    if _has_unclassified_purchase(records):
+        raise HTTPException(
+            status_code=400,
+            detail="Please classify each purchase bill as Expense, Asset, or Inventory before filing.")
+    created = {"contacts": 0, "invoices": 0, "payments": 0, "tasks": 0, "expenses": 0, "assets": 0, "inventory": 0}
+    currency = await _tenant_currency(tenant_id)
+    own_norm = _norm_company(await _tenant_name(tenant_id))
+    troles = await tenant_role_keys(tenant_id)
+    followup_role = "finance" if "finance" in troles else ("sales" if "sales" in troles else None)
+    name_to_id = {}
+
+    def _is_own(name: str) -> bool:
+        n = _norm_company(name)
+        return bool(own_norm) and bool(n) and (n == own_norm or n in own_norm or own_norm in n)
+
+    async def resolve_contact(name: str, ctype: str = "customer"):
+        name = (name or "").strip()
+        if not name or _is_own(name):
+            return None
+        key = name.lower()
+        if key in name_to_id:
+            return name_to_id[key]
+        existing = await db.contacts.find_one(
+            {"tenant_id": tenant_id, "name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}},
+            {"_id": 0, "id": 1})
+        if existing:
+            name_to_id[key] = existing["id"]
+            return existing["id"]
+        cid = new_id()
+        ctype = ctype if ctype in CONTACT_TYPES else ("vendor" if ctype in ("vendor", "supplier") else "customer")
+        await db.contacts.insert_one({
+            "id": cid, "tenant_id": tenant_id, "type": ctype, "name": name,
+            "company": "", "phone": "", "email": "", "address": "", "tax_id": "",
+            "tags": ["imported"], "status": "active", "assigned_id": None, "notes": "",
+            "created_by": user_id, "created_at": now_iso(), "source": source, "ingestion_id": ingestion_id,
+        })
+        name_to_id[key] = cid
+        created["contacts"] += 1
+        return cid
+
+    for c in records.get("contacts", []):
+        name = (c.get("name") or "").strip()
+        if not name or _is_own(name):
+            continue
+        ctype = c.get("type") if c.get("type") in CONTACT_TYPES else ("vendor" if c.get("type") == "supplier" else "customer")
+        key = name.lower()
+        existing = await db.contacts.find_one(
+            {"tenant_id": tenant_id, "name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}}, {"_id": 0, "id": 1})
+        if existing:
+            name_to_id[key] = existing["id"]
+            continue
+        cid = new_id()
+        await db.contacts.insert_one({
+            "id": cid, "tenant_id": tenant_id, "type": ctype, "name": name,
+            "company": c.get("company", "") or "", "phone": c.get("phone", "") or "",
+            "email": c.get("email", "") or "", "address": c.get("address", "") or "",
+            "tax_id": c.get("tax_id", "") or "", "tags": ["imported"], "status": "active",
+            "assigned_id": None, "notes": "", "created_by": user_id, "created_at": now_iso(),
+            "source": source, "ingestion_id": ingestion_id,
+        })
+        name_to_id[key] = cid
+        created["contacts"] += 1
+
+    for inv in records.get("invoices", []):
+        itype = inv.get("type") if inv.get("type") in ("sales_invoice", "purchase_bill") else "sales_invoice"
+        ctype = "customer" if itype == "sales_invoice" else "vendor"
+        cid = await resolve_contact(inv.get("contact_name"), ctype)
+        try:
+            amount = float(inv.get("amount") or 0)
+        except (TypeError, ValueError):
+            amount = 0.0
+        inv_id = new_id()
+        purchase_type = (inv.get("purchase_type") or "").strip().lower()
+        if itype == "purchase_bill" and purchase_type not in ("expense", "asset", "inventory"):
+            # No silent fallback: an unclassified purchase must be reviewed & classified by a human first.
+            raise HTTPException(
+                status_code=400,
+                detail="Please classify this purchase bill as Expense, Asset, or Inventory before filing.")
+        await db.invoices.insert_one({
+            "id": inv_id, "tenant_id": tenant_id, "type": itype,
+            "number": str(inv.get("number") or ""), "contact_id": cid,
+            "contact_name": (inv.get("contact_name") or "").strip(),
+            "date": inv.get("date", "") or "", "due_date": inv.get("due_date", "") or "",
+            "amount": amount, "currency": inv.get("currency") or currency,
+            "status": "unpaid", "line_items": inv.get("line_items") if isinstance(inv.get("line_items"), list) else [],
+            "purchase_type": purchase_type if itype == "purchase_bill" else "",
+            "source": source, "ingestion_id": ingestion_id, "created_by": user_id, "created_at": now_iso(),
+        })
+        created["invoices"] += 1
+        # A purchase bill (money we OWE) is segregated by WHAT was bought: asset, inventory, or expense.
+        if itype == "purchase_bill":
+            vend = (inv.get("contact_name") or "Vendor").strip()
+            li_text = " ".join(str(li.get("description", "")) for li in (inv.get("line_items") or []) if isinstance(li, dict))
+            inv_cur = inv.get("currency") or currency
+            if purchase_type == "asset":
+                _aname = (inv.get("asset_name") or li_text[:60] or f"Asset from {vend}").strip()
+                await create_asset(tenant_id, user_id, {
+                    "name": _aname,
+                    "category": inv.get("asset_category") or guess_asset_category(f"{_aname} {li_text}"),
+                    "purchase_amount": amount, "currency": inv_cur,
+                    "purchase_date": inv.get("date") or "", "vendor_name": vend,
+                    "notes": f"From bill {inv.get('number') or ''} · {li_text[:150]}".strip(),
+                }, source=source)
+                created["assets"] = created.get("assets", 0) + 1
+            elif purchase_type == "inventory":
+                try:
+                    qty = float(inv.get("inventory_qty") or 0) or 1
+                except (TypeError, ValueError):
+                    qty = 1
+                await create_inventory(tenant_id, user_id, {
+                    "item": (li_text[:60] or f"Stock from {vend}").strip(),
+                    "quantity": qty, "unit": (inv.get("inventory_unit") or "unit").strip(),
+                    "unit_cost": round(amount / qty, 2) if qty else amount,
+                    "currency": inv_cur, "vendor_name": vend,
+                    "notes": f"From bill {inv.get('number') or ''}".strip(),
+                }, source=source)
+                created["inventory"] = created.get("inventory", 0) + 1
+            else:
+                await create_expense(tenant_id, user_id, {
+                    "title": f"{vend} — Bill {inv.get('number') or ''}".strip(),
+                    "amount": amount, "currency": inv_cur,
+                    "vendor_name": vend, "vendor_id": cid,
+                    "date": inv.get("date") or "", "status": "unpaid",
+                    "invoice_id": inv_id, "ingestion_id": ingestion_id, "notes": li_text[:200],
+                }, source=source)
+                created["expenses"] += 1
+
+    for p in records.get("payments", []):
+        _raw_dir = str(p.get("direction") or "").strip().lower()
+        direction = "out" if _raw_dir in ("out", "outgoing", "outbound", "debit", "paid", "sent") else "in"
+        ctype = "customer" if direction == "in" else "vendor"
+        cid = await resolve_contact(p.get("contact_name"), ctype)
+        try:
+            amount = float(p.get("amount") or 0)
+        except (TypeError, ValueError):
+            amount = 0.0
+        pay_id = new_id()
+        await db.payments.insert_one({
+            "id": pay_id, "tenant_id": tenant_id, "direction": direction, "amount": amount,
+            "date": p.get("date", "") or "", "method": p.get("method", "") or "",
+            "reference": p.get("reference", "") or "", "contact_id": cid,
+            "contact_name": (p.get("contact_name") or "").strip(),
+            "invoice_number": str(p.get("invoice_number") or ""), "currency": currency,
+            "source": source, "ingestion_id": ingestion_id, "created_by": user_id, "created_at": now_iso(),
+        })
+        created["payments"] += 1
+        pay_doc = {"id": pay_id, "direction": direction, "amount": amount, "applied": 0, "applications": [],
+                   "date": p.get("date") or "", "contact_name": (p.get("contact_name") or "").strip(),
+                   "invoice_number": str(p.get("invoice_number") or ""), "reference": p.get("reference") or ""}
+        from routers.ledger import reconcile_payment
+        # Auto-allocate against an open invoice/bill. Anything left unlinked (either direction)
+        # waits in the Needs-matching queue — supplier payments no longer silently create an expense.
+        await reconcile_payment(tenant_id, pay_doc, matched_by="auto")
+
+    for t in records.get("tasks", []):
+        title = (t.get("title") or "").strip()
+        if not title:
+            continue
+        due = None
+        if isinstance(t.get("due_in_days"), int):
+            due = (datetime.now(timezone.utc) + timedelta(days=t["due_in_days"])).isoformat()
+        await db.tasks.insert_one({
+            "id": new_id(), "tenant_id": tenant_id, "title": title, "description": "",
+            "assignee_role": followup_role, "assignee_id": None,
+            "priority": t.get("priority", "medium") if t.get("priority") in ("low", "medium", "high") else "medium",
+            "status": "todo", "due_date": due, "decision_id": None,
+            "source": "ingest", "created_at": now_iso(),
+        })
+        created["tasks"] += 1
+
+    return created
+
+
+DOC_MIME = {"pdf": "application/pdf", "png": "image/png", "jpg": "image/jpeg",
+            "jpeg": "image/jpeg", "webp": "image/webp"}
+
+
+def _classify_ingestion(doc: dict) -> str:
+    dt = doc.get("doc_type")
+    if dt in ("sales_invoice", "purchase_bill"):
+        return "invoice"
+    if dt == "payment":
+        return "payment"
+    if dt == "purchase_order":
+        return "task"
+    ent = doc.get("entity")
+    if ent == "customers":
+        return "customer"
+    if ent == "vendors":
+        return "supplier"
+    if ent == "invoices":
+        return "invoice"
+    if ent == "payments":
+        return "payment"
+    recs = doc.get("records") or {}
+    if recs.get("invoices"):
+        return "invoice"
+    if recs.get("payments"):
+        return "payment"
+    if recs.get("contacts"):
+        return "customer"
+    return "task"
+
+
+async def _find_duplicate_invoice(tenant_id: str, records: dict):
+    """Return an already-filed invoice that looks like a duplicate of one in `records`, else None."""
+    for inv in (records or {}).get("invoices", []):
+        num = str(inv.get("number") or "").strip()
+        if num:
+            hit = await db.invoices.find_one(
+                {"tenant_id": tenant_id, "number": {"$regex": f"^{re.escape(num)}$", "$options": "i"}},
+                {"_id": 0, "id": 1, "number": 1})
+            if hit:
+                return hit
+        try:
+            amt = float(inv.get("amount") or 0)
+        except (TypeError, ValueError):
+            amt = 0.0
+        cname = (inv.get("contact_name") or "").strip()
+        if amt and cname:
+            hit = await db.invoices.find_one(
+                {"tenant_id": tenant_id, "amount": amt,
+                 "contact_name": {"$regex": f"^{re.escape(cname)}$", "$options": "i"}},
+                {"_id": 0, "id": 1, "number": 1})
+            if hit:
+                return hit
+    return None

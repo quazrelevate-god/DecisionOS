@@ -16,7 +16,7 @@ from database import db
 from config import AUTH_COOKIE_NAME, JWT_SECRET, JWT_ALGORITHM
 from core.security import bearer_scheme
 from core.permissions import user_perms
-from core import set_usage_tenant  # defined before this module is imported
+from core.usage import set_usage_tenant
 
 
 async def get_current_user(

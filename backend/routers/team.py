@@ -280,7 +280,7 @@ async def create_user(inp: UserCreateInput, user: dict = Depends(require_perm("t
     uid = new_id()
     invite_token = None
     # FIX-002-A: also write phone_norm for indexed OTP + WhatsApp lookup.
-    from services.phone import norm_phone as _np
+    from services.auth.phone import norm_phone as _np
     doc = {
         "id": uid, "tenant_id": user["tenant_id"], "name": inp.name, "email": email,
         "phone": phone, "phone_norm": _np(phone), "passwordless": passwordless,
@@ -381,7 +381,7 @@ async def update_user(user_id: str, inp: UserUpdateInput, user: dict = Depends(r
     if inp.phone is not None:
         # FIX-002-A: keep phone_norm in sync so OTP + WhatsApp still finds
         # the user after an admin updates their phone.
-        from services.phone import norm_phone as _np
+        from services.auth.phone import norm_phone as _np
         _p = inp.phone.strip()
         updates["phone"] = _p
         updates["phone_norm"] = _np(_p)

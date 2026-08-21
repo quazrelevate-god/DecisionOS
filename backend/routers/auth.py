@@ -224,8 +224,8 @@ async def register(inp: RegisterInput, request: Request, response: Response):
     from server import normalize_os_blueprint
     from core import DEFAULT_ROLES
     # FIX-001-D imports — status-aware AI + draft merge/complete
-    from services import ai_setup as ai_setup_svc
-    from services import onboarding_drafts as drafts_svc
+    from services.ai import ai_setup as ai_setup_svc
+    from services.auth import onboarding_drafts as drafts_svc
 
     # FIX-001-D: if a draft_id was passed, merge saved wizard state
     # underneath the request body. Client-provided values still win.
@@ -363,7 +363,7 @@ async def register(inp: RegisterInput, request: Request, response: Response):
     user_id = new_id()
     # FIX-002-A: also write phone_norm so OTP login + WhatsApp routing
     # can query by exact-match on the indexed field.
-    from services.phone import norm_phone
+    from services.auth.phone import norm_phone
     _raw_phone = (inp.phone or "").strip()
     # FIX-003-B (S2-10): DuplicateKeyError-safe insert. If a concurrent
     # request slipped past the pre-check, this insert loses the race
@@ -443,7 +443,7 @@ async def register(inp: RegisterInput, request: Request, response: Response):
     # still succeeds. The user can re-request from Settings later
     # (POST /auth/email/send-verification).
     try:
-        from services import auth_emails
+        from services.auth import auth_emails
         from server import send_email
         _row = await auth_emails.issue(
             db, kind=auth_emails.KIND_EMAIL_VERIFY,
@@ -822,7 +822,7 @@ async def logout(request: Request, response: Response):
     # signal — same behavior as before the fix.
     import jwt
     from core import JWT_SECRET, JWT_ALGORITHM, AUTH_COOKIE_NAME
-    from services.session_revocation import revoke as _revoke
+    from services.auth.session_revocation import revoke as _revoke
     token = request.cookies.get(AUTH_COOKIE_NAME)
     if not token:
         # No cookie -> maybe Bearer. Read from Authorization header
@@ -900,7 +900,7 @@ async def update_profile(inp: ProfileUpdateInput, user: dict = Depends(get_curre
         updates["name"] = inp.name.strip()
     if inp.phone is not None:
         # Changing your number should re-enable WhatsApp matching for it.
-        from services.phone import norm_phone  # FIX-002-A
+        from services.auth.phone import norm_phone  # FIX-002-A
         _new_phone = inp.phone.strip()
         updates["phone"] = _new_phone
         updates["phone_norm"] = norm_phone(_new_phone)  # keep index-searchable form in sync
@@ -951,7 +951,7 @@ async def send_verification_email(user: dict = Depends(get_current_user)):
     """Issue (or reuse) an email-verification token and email it to
     the current user. Idempotent — hitting this twice in the cooldown
     window returns the same token and does NOT re-send."""
-    from services import auth_emails
+    from services.auth import auth_emails
     from server import send_email  # deferred: server.py owns the SMTP helper
     email = (user.get("email") or "").strip().lower()
     if not email:
@@ -974,7 +974,7 @@ async def send_verification_email(user: dict = Depends(get_current_user)):
 async def verify_email(token: str):
     """Consume an email-verification token and mark the user's email
     verified. Single-use, TTL-bounded (3 days)."""
-    from services import auth_emails
+    from services.auth import auth_emails
     row = await auth_emails.consume(
         db, token=token, kind=auth_emails.KIND_EMAIL_VERIFY,
     )
@@ -997,7 +997,7 @@ async def password_forgot(inp: PasswordForgotInput):
     Callers should always show the same "if that email exists, we
     sent a reset link" message.
     """
-    from services import auth_emails
+    from services.auth import auth_emails
     from server import send_email
     email = inp.email.lower().strip()
     # Same response shape regardless of what we find below.
@@ -1033,7 +1033,7 @@ async def password_reset(inp: PasswordResetInput):
     compromised inbox becomes useless after the first successful
     reset.
     """
-    from services import auth_emails
+    from services.auth import auth_emails
     row = await auth_emails.consume(
         db, token=inp.token, kind=auth_emails.KIND_PASSWORD_RESET,
     )

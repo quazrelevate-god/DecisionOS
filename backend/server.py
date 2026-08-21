@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field, EmailStr
 from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
 from emergentintegrations.llm.openai import OpenAISpeechToText
 from services import obj_store
-from services import brain_context
+from services.ai import brain_context
 
 from core import (
     db, client, logger, DEFAULT_ROLES,
@@ -666,7 +666,7 @@ async def ai_read_image_general(file_path: str, mime_type: str, session_id: str)
         chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=session_id or "read",
                        system_message=_IMAGE_READ_SYSTEM).with_model(*VISION_MODEL)
         # FIX-002-B: semaphore + timeout guard shared across all LLM calls.
-        from services.llm_limits import guarded_llm
+        from services.ai.llm_limits import guarded_llm
         resp = await guarded_llm(chat.send_message(UserMessage(text=user_text, file_contents=[fc])),
                                   label="gemini:doc-read")
         await log_usage((session_id or "read").split("-")[0], "gemini", model=VISION_MODEL[1],
@@ -1534,7 +1534,7 @@ async def request_otp(inp: OtpRequestInput):
     # entry per DISTINCT tenant that has this phone on a non-obsolete
     # user. See services/phone.find_tenant_choices_for_phone for why
     # calling db.users.find_one({"phone_norm": ...}) directly is a bug.
-    from services.phone import find_tenant_choices_for_phone
+    from services.auth.phone import find_tenant_choices_for_phone
     choices = await find_tenant_choices_for_phone(db, norm)
     if not choices:
         raise HTTPException(status_code=404, detail="No account is registered with this mobile number")
@@ -1620,7 +1620,7 @@ async def verify_otp(inp: OtpVerifyInput, response: Response):
     # BEFORE looking up the code — the same phone can hold live OTPs in
     # multiple tenants simultaneously and each is a distinct row keyed
     # by (phone, tenant_id).
-    from services.phone import find_tenant_choices_for_phone
+    from services.auth.phone import find_tenant_choices_for_phone
     choices = await find_tenant_choices_for_phone(db, norm)
     if not choices:
         raise HTTPException(status_code=404, detail="Account not found")
@@ -1761,7 +1761,7 @@ async def regenerate_operating_model(user: dict = Depends(require_perm("team_man
     # and the same-looking board. Now we route through the status-
     # aware wrapper and update ai_setup_status.operating_model so the
     # frontend can surface "AI setup incomplete — click to retry."
-    from services import ai_setup as ai_setup_svc
+    from services.ai import ai_setup as ai_setup_svc
     om, om_status = await ai_setup_svc.ai_generate_operating_model_with_status(
         tenant.get("industry") or "General",
         tenant.get("company_size") or "",
@@ -1812,7 +1812,7 @@ async def regenerate_finance_categories(user: dict = Depends(require_perm("team_
     # FIX-003-C (S2-11): use the status-tracking wrapper so a defaulted
     # AI result updates ai_setup_status.finance_categories instead of
     # silently clobbering the existing categories with a default map.
-    from services import ai_setup as ai_setup_svc
+    from services.ai import ai_setup as ai_setup_svc
     fc, fc_status = await ai_setup_svc.ai_generate_finance_categories_with_status(
         tenant.get("industry") or "General",
         tenant.get("company_size") or "",
@@ -4310,7 +4310,7 @@ async def ai_extract_document(file_path: str, mime_type: str, session_id: str, c
         chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=session_id,
                        system_message=system).with_model(*VISION_MODEL)
         # FIX-002-B: guard.
-        from services.llm_limits import guarded_llm
+        from services.ai.llm_limits import guarded_llm
         resp = await guarded_llm(chat.send_message(UserMessage(text=user_text, file_contents=[fc])),
                                   label="gemini:ocr-fallback")
         await log_usage((session_id or "ocr").split("-")[0], "gemini", model=VISION_MODEL[1],
@@ -6909,7 +6909,7 @@ async def _bootstrap():
         # (2026-08-16: import hoisted to _bootstrap top -- see comment there.)
 
         async def _backfill_phone_norm(_db):
-            from services.phone import norm_phone as _np
+            from services.auth.phone import norm_phone as _np
             async for _u in _db.users.find(
                 {"phone": {"$type": "string", "$gt": ""}, "phone_norm": {"$exists": False}},
                 {"_id": 0, "id": 1, "phone": 1},

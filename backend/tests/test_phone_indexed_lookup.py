@@ -29,7 +29,7 @@ if str(ROOT) not in sys.path:
 
 import pytest
 
-from services.phone import norm_phone
+from services.auth.phone import norm_phone
 
 
 # ---------------------------------------------------------------------------

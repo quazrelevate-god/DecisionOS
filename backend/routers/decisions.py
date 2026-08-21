@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field
 
 from core import db, get_current_user, require_perm, new_id, now_iso
 from models.tasks import TaskCreateInput
-from services import brain_context
+from services.ai import brain_context
 from services.tenancy import ensure_owned, tenant_filter  # FIX-001-C
 
 

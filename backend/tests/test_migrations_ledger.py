@@ -254,7 +254,7 @@ class TestRealisticMigrations:
         ])
 
         async def backfill(_db):
-            from services.phone import norm_phone
+            from services.auth.phone import norm_phone
             async for u in _db.users.find(
                 {"phone": {"$type": "string", "$gt": ""},
                  "phone_norm": {"$exists": False}}):

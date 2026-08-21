@@ -15,8 +15,8 @@ from core import (
     normalize_os_blueprint, require_perm, require_role, log_activity,
     get_current_user,
 )
-from services import onboarding_drafts as drafts_svc  # FIX-001-D
-from services import ai_setup as ai_setup_svc          # FIX-001-D
+from services.auth import onboarding_drafts as drafts_svc  # FIX-001-D
+from services.ai import ai_setup as ai_setup_svc          # FIX-001-D
 # FIX-004-A (RBAC Wave 1)
 from services.auth.draft_tokens import sign_draft_id, verify_draft_token
 from services.rate_limit import (

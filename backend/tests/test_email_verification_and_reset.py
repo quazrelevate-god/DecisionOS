@@ -102,7 +102,7 @@ def _run(coro):
 # ===========================================================================
 class TestIssueContract:
     def test_issue_returns_token_with_kind_and_email(self):
-        from services import auth_emails
+        from services.auth import auth_emails
         db = _FakeDB()
         row = _run(auth_emails.issue(
             db, kind=auth_emails.KIND_EMAIL_VERIFY,
@@ -119,7 +119,7 @@ class TestIssueContract:
     def test_issue_is_idempotent_within_window(self):
         """Re-issuing before the first token expires returns the same
         token — prevents inbox flood on a jittery 'resend' click."""
-        from services import auth_emails
+        from services.auth import auth_emails
         db = _FakeDB()
         a = _run(auth_emails.issue(
             db, kind=auth_emails.KIND_PASSWORD_RESET,
@@ -133,7 +133,7 @@ class TestIssueContract:
         assert len(db.auth_email_tokens.docs) == 1
 
     def test_issue_different_kinds_get_separate_tokens(self):
-        from services import auth_emails
+        from services.auth import auth_emails
         db = _FakeDB()
         a = _run(auth_emails.issue(
             db, kind=auth_emails.KIND_EMAIL_VERIFY,
@@ -146,7 +146,7 @@ class TestIssueContract:
         assert a["token"] != b["token"]
 
     def test_issue_ttl_password_reset_is_1_hour(self):
-        from services import auth_emails
+        from services.auth import auth_emails
         db = _FakeDB()
         row = _run(auth_emails.issue(
             db, kind=auth_emails.KIND_PASSWORD_RESET,
@@ -156,7 +156,7 @@ class TestIssueContract:
         assert timedelta(minutes=59) < delta < timedelta(hours=1, minutes=1)
 
     def test_issue_ttl_email_verify_is_3_days(self):
-        from services import auth_emails
+        from services.auth import auth_emails
         db = _FakeDB()
         row = _run(auth_emails.issue(
             db, kind=auth_emails.KIND_EMAIL_VERIFY,
@@ -166,7 +166,7 @@ class TestIssueContract:
         assert timedelta(days=2, hours=23) < delta < timedelta(days=3, hours=1)
 
     def test_issue_normalizes_email(self):
-        from services import auth_emails
+        from services.auth import auth_emails
         db = _FakeDB()
         row = _run(auth_emails.issue(
             db, kind=auth_emails.KIND_EMAIL_VERIFY,
@@ -175,7 +175,7 @@ class TestIssueContract:
         assert row["email"] == "alice@example.com"
 
     def test_issue_rejects_invalid_kind(self):
-        from services import auth_emails
+        from services.auth import auth_emails
         db = _FakeDB()
         with pytest.raises(ValueError):
             _run(auth_emails.issue(
@@ -184,7 +184,7 @@ class TestIssueContract:
             ))
 
     def test_issue_rejects_empty_email(self):
-        from services import auth_emails
+        from services.auth import auth_emails
         db = _FakeDB()
         with pytest.raises(ValueError):
             _run(auth_emails.issue(
@@ -195,13 +195,13 @@ class TestIssueContract:
 
 class TestConsumeContract:
     def _issue(self, db, kind="password_reset"):
-        from services import auth_emails
+        from services.auth import auth_emails
         return _run(auth_emails.issue(
             db, kind=kind, user_id="u1", tenant_id="t1", email="a@x.com",
         ))
 
     def test_consume_marks_used(self):
-        from services import auth_emails
+        from services.auth import auth_emails
         db = _FakeDB()
         row = self._issue(db)
         out = _run(auth_emails.consume(
@@ -216,7 +216,7 @@ class TestConsumeContract:
         assert again is None
 
     def test_consume_wrong_kind_fails(self):
-        from services import auth_emails
+        from services.auth import auth_emails
         db = _FakeDB()
         row = self._issue(db, kind="password_reset")
         # Trying to consume a reset token as a verify token must fail.
@@ -226,7 +226,7 @@ class TestConsumeContract:
         assert out is None
 
     def test_consume_unknown_token_returns_none(self):
-        from services import auth_emails
+        from services.auth import auth_emails
         db = _FakeDB()
         out = _run(auth_emails.consume(
             db, token="does-not-exist", kind="password_reset",
@@ -234,13 +234,13 @@ class TestConsumeContract:
         assert out is None
 
     def test_consume_empty_token_returns_none(self):
-        from services import auth_emails
+        from services.auth import auth_emails
         db = _FakeDB()
         assert _run(auth_emails.consume(db, token="", kind="password_reset")) is None
         assert _run(auth_emails.consume(db, token=None, kind="password_reset")) is None
 
     def test_consume_expired_token_fails(self):
-        from services import auth_emails
+        from services.auth import auth_emails
         db = _FakeDB()
         row = self._issue(db)
         # Force-expire the stored row.
@@ -255,7 +255,7 @@ class TestConsumeContract:
 
 class TestInvalidateActiveTokens:
     def test_invalidates_only_matching_kind_and_email(self):
-        from services import auth_emails
+        from services.auth import auth_emails
         db = _FakeDB()
         # Two live reset tokens for a@x.com, one for b@x.com,
         # and one live verify token for a@x.com.
@@ -361,13 +361,13 @@ class TestBootstrapAuthEmailTokensIndexes:
 # ===========================================================================
 class TestEmailTemplates:
     def test_verify_template_includes_url(self):
-        from services.auth_emails import render_verify_email
+        from services.auth.auth_emails import render_verify_email
         html = render_verify_email("Anita", "https://app.example.com/verify-email?token=abc")
         assert "https://app.example.com/verify-email?token=abc" in html
         assert "Anita" in html
 
     def test_reset_template_includes_url(self):
-        from services.auth_emails import render_reset_email
+        from services.auth.auth_emails import render_reset_email
         html = render_reset_email("Anita", "https://app.example.com/reset-password?token=xyz")
         assert "https://app.example.com/reset-password?token=xyz" in html
         assert "1 hour" in html

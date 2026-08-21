@@ -37,7 +37,7 @@ class _ResilientChat:
         # FIX-002-B: bound in-flight LLM calls + per-call timeout so a burst
         # of 50 concurrent voice captures can't pile up on the single shared
         # Anthropic key and cascade into 429s / unbounded latency.
-        from services.llm_limits import guarded_llm
+        from services.ai.llm_limits import guarded_llm
         anthropic = get_ai_key("anthropic")
         keys, seen = [], set()
         for k in (anthropic, EMERGENT_LLM_KEY):

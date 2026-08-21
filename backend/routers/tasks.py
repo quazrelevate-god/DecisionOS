@@ -64,7 +64,7 @@ from models.tasks import (
     TaskUpdateNoteInput,
     RespondInput,
 )
-from services import brain_context
+from services.ai import brain_context
 from services.tenancy import tenant_filter  # FIX-001-C
 from services.tasks import (
     TASK_STATUSES,

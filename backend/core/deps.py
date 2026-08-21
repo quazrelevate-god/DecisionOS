@@ -40,7 +40,7 @@ async def get_current_user(
     # services/session_revocation.py for the fail-open contract.
     jti = payload.get("jti")
     if jti:
-        from services.session_revocation import is_revoked as _is_revoked
+        from services.auth.session_revocation import is_revoked as _is_revoked
         if await _is_revoked(db, jti):
             raise HTTPException(status_code=401, detail="Session ended, please log in again")
         # FIX-004-G (RBAC-21): bump last_seen_at so /me/sessions

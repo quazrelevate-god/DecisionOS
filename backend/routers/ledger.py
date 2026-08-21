@@ -22,7 +22,7 @@ from core import (
 )
 # FIX-007-B (S4-10): Brain-context writes for finance events so
 # "how did we settle the Kapoor invoice?" queries can find the answer.
-from services import brain_context
+from services.ai import brain_context
 
 router = APIRouter(prefix="/api")
 
@@ -216,7 +216,7 @@ async def ai_extract_ledger_file(file_path: str, mime_type: str, kind: str, curr
         fc = FileContentWithMimeType(file_path=file_path, mime_type=mime_type)
         chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=f"ledger-ocr-{kind}-{new_id()}",
                        system_message=system).with_model(*VISION_MODEL)
-        from services.llm_limits import guarded_llm  # FIX-002-B
+        from services.ai.llm_limits import guarded_llm  # FIX-002-B
         resp = await guarded_llm(
             chat.send_message(UserMessage(text="Extract the JSON now.", file_contents=[fc])),
             label=f"gemini:ledger-ocr-{kind}")

@@ -86,7 +86,7 @@ def _run(coro):
 # ---------------------------------------------------------------------------
 class TestSessionRevocationContract:
     def test_revoke_and_is_revoked_roundtrip(self):
-        from services.session_revocation import revoke, is_revoked
+        from services.auth.session_revocation import revoke, is_revoked
         db = _FakeDB()
         exp = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
         assert _run(is_revoked(db, "jti-1")) is False
@@ -95,7 +95,7 @@ class TestSessionRevocationContract:
 
     def test_revoke_is_idempotent(self):
         """Double-clicking logout must not accumulate duplicate rows."""
-        from services.session_revocation import revoke
+        from services.auth.session_revocation import revoke
         db = _FakeDB()
         _run(revoke(db, "jti-2", exp=1_800_000_000))  # numeric exp
         _run(revoke(db, "jti-2", exp=1_800_000_000))
@@ -103,14 +103,14 @@ class TestSessionRevocationContract:
 
     def test_revoke_missing_jti_is_noop(self):
         """Legacy pre-jti tokens land here; must not crash /logout."""
-        from services.session_revocation import revoke
+        from services.auth.session_revocation import revoke
         db = _FakeDB()
         _run(revoke(db, "", exp=None))
         _run(revoke(db, None, exp=None))
         assert db.revoked_tokens.docs == []
 
     def test_is_revoked_empty_jti_is_false(self):
-        from services.session_revocation import is_revoked
+        from services.auth.session_revocation import is_revoked
         db = _FakeDB()
         assert _run(is_revoked(db, "")) is False
         assert _run(is_revoked(db, None)) is False
@@ -120,7 +120,7 @@ class TestSessionRevocationContract:
         through (session revocation is a bonus safety layer; the JWT
         itself is still crypto-valid until exp). Fail-closed would lock
         every user out on a Mongo blip — worse."""
-        from services.session_revocation import is_revoked
+        from services.auth.session_revocation import is_revoked
 
         class _BustedDB:
             def __getitem__(self, name):
@@ -131,7 +131,7 @@ class TestSessionRevocationContract:
         """A garbage exp claim must still result in a row with a valid
         future exp — else the TTL index would purge it immediately and
         the token would be un-revoked before it expires."""
-        from services.session_revocation import revoke
+        from services.auth.session_revocation import revoke
         db = _FakeDB()
         _run(revoke(db, "jti-x", exp="not-a-date"))
         row = db.revoked_tokens.docs[0]

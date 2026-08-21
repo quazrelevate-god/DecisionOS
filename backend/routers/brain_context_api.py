@@ -10,7 +10,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 
 from core import get_current_user
-from services import brain_context
+from services.ai import brain_context
 
 
 router = APIRouter(prefix="/api/brain/context")

@@ -760,7 +760,7 @@ async def ask(inp: AskRequest, user: dict = Depends(require_perm("ask"))):
 
     # RBAC gate — fail closed on intent BEFORE we plan/retrieve/compute so a
     # random employee cannot ask "what are our sales?" and get a real answer.
-    from services import brain_rbac
+    from services.ai import brain_rbac
     intent = brain_rbac.classify_intent(q)
     allowed = brain_rbac.allowed_intents(user)
     if intent not in allowed:

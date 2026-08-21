@@ -2664,72 +2664,6 @@ async def _self_operating_view(tid: str, viewer: dict, now: str) -> dict:
     }
 
 
-@api.get("/operating-score")
-async def operating_score(
-    user_id: Optional[str] = None,
-    user: dict = Depends(get_current_user),
-):
-    """Viewer-aware operating dashboard.
-
-    Epic 7 Sprint 1 Phase A (2026-08-17): opened this endpoint from
-    owner-only to any authenticated user. Owner keeps the company view;
-    every other role gets a personal contributor view.
-
-    Epic 7 Sprint 1 batch 4 (2026-08-17): added owner-only view-as.
-    Founder ask: 'from the owner side if i click the team member is it
-    working better or not will show their tasks all the things the
-    individual ops has right'. Answer was no -- clicks went to WorkCoach
-    which shows only stats + AI review, not the person's open work or
-    active workflows. Now: /api/operating-score?user_id=X returns X's
-    full self-view (open work, active workflows, peer context, rich
-    stats) so the owner sees exactly what the teammate sees. Non-owners
-    passing user_id get 403 -- privacy holds.
-
-    Payloads carry a `view` discriminator so the frontend dispatcher
-    can render OwnerView vs SelfView cleanly without probing shape.
-    Owner viewing someone else's payload has view='self' plus
-    view_as: {id, name, role} so the frontend can show a breadcrumb.
-    """
-    tid = user["tenant_id"]
-    now = datetime.now(timezone.utc).isoformat()
-    is_owner = user.get("role") == "owner"
-
-    # Owner-only view-as: return target's self-view instead of the
-    # owner's company view.
-    if user_id and user_id != user["id"]:
-        if not is_owner:
-            raise HTTPException(
-                status_code=403,
-                detail="Only the owner can view another user's operating page",
-            )
-        target = await db.users.find_one(
-            {"id": user_id, "tenant_id": tid},
-            {"_id": 0, "id": 1, "name": 1, "role": 1, "email": 1},
-        )
-        if not target:
-            raise HTTPException(status_code=404, detail="Team member not found")
-        payload = await _self_operating_view(tid, target, now)
-        payload["view"] = "self"
-        payload["view_as"] = {
-            "id": target["id"],
-            "name": target.get("name"),
-            "role": target.get("role"),
-        }
-        return payload
-
-    if is_owner:
-        payload = await _company_operating_view(tid, user, now)
-        # Owner is also an IC -- give them their own snapshot so they can
-        # see how their personal work stacks up without switching views.
-        payload["my_snapshot"] = await compute_employee_stats(tid, user)
-        payload["view"] = "owner"
-        return payload
-
-    payload = await _self_operating_view(tid, user, now)
-    payload["view"] = "self"
-    return payload
-
-
 # ---------------------------------------------------------------------------
 # Personal AI Work Coach
 # ---------------------------------------------------------------------------
@@ -2802,29 +2736,6 @@ async def _resolve_coach_target(user: dict, user_id: Optional[str]) -> dict:
             raise HTTPException(status_code=404, detail="Employee not found")
         return target
     return user
-
-
-@api.get("/work-coach")
-async def get_work_coach(user_id: Optional[str] = None, user: dict = Depends(get_current_user)):
-    target = await _resolve_coach_target(user, user_id)
-    stats = await compute_employee_stats(user["tenant_id"], target)
-    cached = target.get("coach_summary")
-    return {"target": {"id": target["id"], "name": target.get("name"), "role": target.get("role")},
-            "stats": stats, "summary": cached}
-
-
-@api.post("/work-coach/refresh")
-async def refresh_work_coach(user_id: Optional[str] = None, user: dict = Depends(get_current_user)):
-    target = await _resolve_coach_target(user, user_id)
-    stats = await compute_employee_stats(user["tenant_id"], target)
-    summary = await ai_work_coach(target, stats, session_id=f"coach-{target['id']}")
-    summary["generated_at"] = now_iso()
-    summary["stats_snapshot"] = stats
-    await db.users.update_one({"id": target["id"]}, {"$set": {"coach_summary": summary}})
-    return {"target": {"id": target["id"], "name": target.get("name"), "role": target.get("role")},
-            "stats": stats, "summary": summary}
-
-
 
 
 # Decisions
@@ -4392,12 +4303,6 @@ from models.team import LEAVE_TYPES, ABSENCE_REASONS  # noqa: F401
 
 
 
-class LeaveApproverMapInput(BaseModel):
-    approvers: dict  # { role_key: approver_user_id }
-
-
-
-
 async def _resolve_leave_approver(tenant_id: str, requester: dict):
     """Approver priority: reporting manager → department/role mapping → owner."""
     rm = requester.get("reporting_manager_id")
@@ -4416,20 +4321,6 @@ async def _resolve_leave_approver(tenant_id: str, requester: dict):
     if owner:
         return owner["id"], owner.get("name")
     return None, None
-
-
-@api.patch("/tenant/leave-approvers")
-async def update_leave_approvers(inp: LeaveApproverMapInput, user: dict = Depends(require_perm("team_manage"))):
-    role_keys = await tenant_role_keys(user["tenant_id"])
-    clean = {}
-    for role, aid in (inp.approvers or {}).items():
-        if role not in role_keys or not aid:
-            continue
-        m = await db.users.find_one({"id": aid, "tenant_id": user["tenant_id"]}, {"_id": 0, "id": 1})
-        if m:
-            clean[role] = aid
-    await db.tenants.update_one({"id": user["tenant_id"]}, {"$set": {"leave_approvers": clean}})
-    return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
 
 
 async def _create_leave(tenant_id, requester, leave_type, from_date, to_date, day_portion, reason, is_emergency):
@@ -4491,106 +4382,6 @@ async def ai_leave_impact(person_name: str, from_date: str, to_date: str, tasks:
     resp = await chat.send_message(UserMessage(text=json.dumps(payload)))
     data = _extract_json(resp)
     return data if isinstance(data, dict) else {"summary": "", "suggestions": []}
-
-
-
-
-@api.get("/calendar")
-async def business_calendar(days: int = 45, user: dict = Depends(get_current_user)):
-    """Unified business calendar: upcoming payments due, task deadlines, deliveries, complaints, birthdays."""
-    tid = user["tenant_id"]
-    can_finance = user.get("role") == "owner" or "finance" in user_perms(user)
-    now = datetime.now(timezone.utc)
-    start = (now - timedelta(days=14)).date().isoformat()
-    end = (now + timedelta(days=days)).date().isoformat()
-    events = []
-
-    def add(date, etype, title, subtitle="", contact_id=None, entity_id=None, amount=None):
-        d = (date or "")[:10]
-        if not d:
-            return
-        events.append({"date": d, "type": etype, "title": title, "subtitle": subtitle,
-                       "contact_id": contact_id, "entity_id": entity_id, "amount": amount,
-                       "overdue": d < now.date().isoformat()})
-
-    # Payments due (unpaid sales invoices) — finance only
-    if can_finance:
-        invs = await db.invoices.find(
-            {"tenant_id": tid, "type": "sales_invoice", "status": {"$ne": "paid"}, "due_date": {"$ne": None}},
-            {"_id": 0}).to_list(500)
-        for i in invs:
-            add(i.get("due_date"), "payment_due",
-                f"Payment due: {i.get('contact_name') or 'Customer'}",
-                f"{i.get('currency') or ''} {i.get('amount')}", i.get("contact_id"), i.get("id"), i.get("amount"))
-
-    # Task deadlines (open)
-    tasks = await db.tasks.find(
-        {"tenant_id": tid, "status": {"$in": ["todo", "in_progress", "blocked"]}, "due_date": {"$ne": None}},
-        {"_id": 0}).to_list(500)
-    for t in tasks:
-        add(t.get("due_date"), "task", t.get("title", "Task"),
-            (t.get("assignee_role") or "team"), None, t.get("id"))
-
-    # Deliveries (open distribution workflows; includes legacy sales_dispatch cards)
-    # FIX-001-F: dynamic terminal stages (leave the type hardcode as a
-    # follow-up: needs a tenant_sales_pipeline resolver similar to the one
-    # tenant_procurement_pipeline provides — logged separately).
-    from services.workflows import tenant_terminal_stages as _tts
-    _cal_term = await _tts(tid)
-    wfs = await db.workflows.find(
-        {"tenant_id": tid, "type": {"$in": ["distribution", "sales_dispatch"]}, "stage": {"$nin": _cal_term}},
-        {"_id": 0}).to_list(300)
-    for w in wfs:
-        dt = w.get("expected_date") or w.get("due_date")
-        if dt:
-            add(dt, "delivery", f"Delivery: {w.get('title') or w.get('counterparty') or 'Order'}",
-                (w.get("stage") or "").replace("_", " "), w.get("contact_id"), w.get("id"))
-
-    # Complaints (recent)
-    comps = await db.complaints.find({"tenant_id": tid}, {"_id": 0}).sort("created_at", -1).to_list(200)
-    for c in comps:
-        add(c.get("created_at"), "complaint", f"Complaint: {(c.get('text') or '')[:50]}",
-            c.get("severity") or "", c.get("customer_id"), c.get("id"))
-
-    # Birthdays (this year, from contact.birthday MM-DD or YYYY-MM-DD)
-    contacts = await db.contacts.find({"tenant_id": tid, "birthday": {"$nin": [None, ""]}},
-                                      {"_id": 0, "id": 1, "name": 1, "birthday": 1}).to_list(500)
-    for c in contacts:
-        b = (c.get("birthday") or "").strip()
-        md = b[-5:] if len(b) >= 5 else ""
-        if len(md) == 5 and "-" in md:
-            add(f"{now.year}-{md}", "birthday", f"Birthday: {c.get('name')}", "", c.get("id"))
-
-    # Meetings scheduled from directives
-    mevs = await db.calendar_events.find({"tenant_id": tid}, {"_id": 0}).to_list(300)
-    for ev in mevs:
-        add(ev.get("date"), "meeting", ev.get("title", "Meeting"), ev.get("when_text", ""), None, ev.get("id"))
-
-    # Approved leaves (team availability)
-    lvs = await db.leaves.find({"tenant_id": tid, "status": "approved"}, {"_id": 0}).to_list(300)
-    for lv in lvs:
-        fd, td = (lv.get("from_date") or "")[:10], (lv.get("to_date") or "")[:10]
-        if not fd:
-            continue
-        portion = " (half day)" if lv.get("day_portion") == "half" else ""
-        sub = f"{(lv.get('leave_type') or 'leave').title()}{portion}"
-        add(fd, "leave", f"On leave: {lv.get('user_name')}", sub, None, lv.get("id"))
-        if td and td != fd:
-            add(td, "leave", f"Leave ends: {lv.get('user_name')}", sub, None, lv.get("id"))
-
-    events = [e for e in events if start <= e["date"] <= end]
-    for e in events:
-        if e["type"] in ("birthday", "leave"):
-            e["overdue"] = False
-    events.sort(key=lambda e: e["date"])
-    days_map = {}
-    for e in events:
-        days_map.setdefault(e["date"], []).append(e)
-    grouped = [{"date": d, "events": evs} for d, evs in sorted(days_map.items())]
-    counts = {}
-    for e in events:
-        counts[e["type"]] = counts.get(e["type"], 0) + 1
-    return {"days": grouped, "counts": counts, "total": len(events)}
 
 
 

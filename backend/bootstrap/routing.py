@@ -34,6 +34,8 @@ from routers.captures import router as captures_router
 from routers.contacts import router as contacts_router
 from routers.complaints import router as complaints_router
 from routers.brain_search import router as brain_search_router
+from routers.operating_score import router as operating_score_router
+from routers.calendar import router as calendar_router
 
 # Every extracted domain router, in the exact order server.py mounted them.
 _DOMAIN_ROUTERS = (
@@ -62,6 +64,8 @@ _DOMAIN_ROUTERS = (
     contacts_router,   # Epic 8 S3: contacts CRUD extracted from server.py
     complaints_router, # Epic 8 S3: complaints + memory extracted from server.py
     brain_search_router, # Epic 8 S3: Company Brain search extracted from server.py
+    operating_score_router, # Epic 8 S3: operating-score + work-coach extracted
+    calendar_router,   # Epic 8 S3: business calendar + leave-approvers extracted
 )
 
 

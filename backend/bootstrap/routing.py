@@ -30,6 +30,7 @@ from routers.access import router as access_router
 from routers.billing import router as billing_router
 from routers.workflows import router as workflows_router
 from routers.meetings import router as meetings_router
+from routers.captures import router as captures_router
 
 # Every extracted domain router, in the exact order server.py mounted them.
 _DOMAIN_ROUTERS = (
@@ -54,6 +55,7 @@ _DOMAIN_ROUTERS = (
     billing_router,    # Epic 1 (S3-01): Razorpay billing module.
     workflows_router,  # Epic 8 S3: workflows domain extracted from server.py
     meetings_router,   # Epic 8 S3: meetings domain extracted from server.py
+    captures_router,   # Epic 8 S3: captures review-queue extracted from server.py
 )
 
 

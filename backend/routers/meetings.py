@@ -10,7 +10,8 @@ from fastapi import (
 )
 
 from core import db, get_current_user, require_perm, new_id, now_iso
-from server import process_meeting, TextNoteInput  # cross-domain; move in Sprints 4/5
+from server import TextNoteInput  # model still in server (S5)
+from services.meetings import process_meeting
 
 router = APIRouter(prefix="/api")
 

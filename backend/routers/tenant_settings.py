@@ -17,10 +17,10 @@ from core import (
     tenant_role_keys, PERMISSION_KEYS, DEFAULT_ROLES, now_iso, log_activity, logger,
     normalize_lexicon, normalize_operating_model,
 )
-from server import (  # cross-region helpers + models; move in Sprints 4/5
+from server import TenantUpdateInput, InviteInput  # models still in server (S5)
+from services.ai.generators import (
     ai_generate_lexicon, ai_generate_operating_model, ai_generate_finance_categories,
     backfill_operating_model, normalize_finance_categories,
-    TenantUpdateInput, InviteInput,
 )
 
 router = APIRouter(prefix="/api")

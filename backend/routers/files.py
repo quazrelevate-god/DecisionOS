@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 
 from core import db, get_current_user, logger
 from services import obj_store
-from server import _store_file, _file_public  # cross-domain
+from services.files import _store_file, _file_public
 
 router = APIRouter(prefix="/api")
 

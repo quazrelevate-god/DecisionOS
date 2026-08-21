@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 
 from core import db, get_current_user, now_iso
-from server import (  # cross-domain helpers; move in Sprint 4
+from services.operating_score import (
     _company_operating_view, _self_operating_view, compute_employee_stats,
     _resolve_coach_target, ai_work_coach,
 )

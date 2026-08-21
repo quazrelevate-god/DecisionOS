@@ -10,7 +10,8 @@ from fastapi import APIRouter, Depends
 
 from core import db, get_current_user
 from services.tasks import enrich_tasks
-from server import run_followup, enrich_decisions  # cross-domain; move in Sprint 4
+from services.finance_signals import run_followup
+from services.enrich import enrich_decisions
 
 router = APIRouter(prefix="/api")
 

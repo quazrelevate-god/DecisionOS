@@ -14,7 +14,10 @@ from core import (
     claude_chat, LLM_MODEL, _extract_json,
 )
 from emergentintegrations.llm.chat import UserMessage
-from server import process_voice_note, transcribe_audio, _tenant_industry, TextNoteInput  # cross-domain
+from server import TextNoteInput  # model still in server (S5)
+from services.voice import process_voice_note
+from services.transcription import transcribe_audio
+from services.tasks import _tenant_industry
 
 router = APIRouter(prefix="/api")
 

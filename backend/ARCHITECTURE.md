@@ -142,11 +142,29 @@ Splitting the 775→ `core.py` kitchen sink. Done as small, individually-verifie
 
 All **86 inline `@api` endpoints** moved out of `server.py`'s God router into 21 focused modules under `routers/` (workflows, meetings, captures, contacts, complaints, brain_search, operating_score, calendar, voice_notes, dashboard, auth_otp, tenant_settings, finance, whatsapp, files, health). The in-file `api = APIRouter(...)` object and its `include_router` were deleted; `register_api_routers(app)` now mounts only the domain routers. `server.py` went 7333 → ~4938 lines with **zero `@api` endpoints** left. Route fingerprint held at **260** across every single extraction; each router live-smoked. Handlers still reach shared business logic via **deferred `from server import ...`** — those helpers move to `services/` in Sprint 4.
 
-### Sprint 4 — service-layer isolation (in progress)
+### Sprint 4 — service-layer isolation (COMPLETE)
 
-Pull the business logic still living in `server.py` into domain **services**, so routers (and future workers/CLIs) call a service instead of importing from `server`. Strangler-safe: each helper is moved verbatim to a `services/*` module that imports only `core` / `shared` / other leaf services at module top (any residual `from server import ...` stays **deferred** inside functions to avoid an import cycle), and `server.py` **re-exports** the moved names so every existing call site keeps resolving. Route fingerprint asserted **260** before/after each slice; each slice import-resolution-checked and live-smoked.
+Pulled the business logic that still lived in `server.py` into **16 domain services**, so routers (and future workers/CLIs) call a service instead of importing from `server`. Strangler-safe: each helper was moved verbatim to a `services/*` module importing only `core` / `shared` / other leaf services at module top (any residual `from server import ...` stays **deferred** inside functions to avoid an import cycle), and `server.py` **re-exports** the moved names so every existing call site keeps resolving. Route fingerprint asserted **260** before/after every slice; each slice was import-resolution-checked and live-smoked (including the full voice pipeline end-to-end).
 
-- **Slice 1 (done):** `services/email.py` (SMTP/Resend/mock `send_email`, `_smtp_send_sync`, `SMTP_*`) + `services/notifications.py` (`push_notification`, `dispatch_owner_alert`, `_owner_ids`/`_approver_ids`/`_finance_user_ids`, `NOTIF_LEVELS`). Live: `/api/brief`, `/api/dashboard`, `/api/notifications` 200.
-- **Slice 2 (done):** `services/enrich.py` (`enrich_contacts`, `enrich_decision`, `enrich_decisions`; imports `enrich_tasks` from `services.tasks`). Live: `/api/decisions`, `/api/contacts` 200.
-- **Slice 3 (done):** `services/ai/extraction.py` — the six pure LLM engines (`ai_extract`, `ai_score_tasks`, `ai_score_contact`, `ai_meeting_notes`, `ai_execution_plan`, `ai_step_assist`). `server.py` ~4938 → ~4521 lines.
-- **Next:** STT/transcription, the voice-note pipeline, meeting notes, document ingestion, capture/triage engine, finance signals, operating-score/coach, WhatsApp, AI setup/vision/classify, files + leave, then a router-import repoint sweep (`from server import` → `from services...`).
+Services created (in dependency order, leaf-first):
+
+| Module | Contents |
+|---|---|
+| `services/email.py` | `send_email`, `_smtp_send_sync`, `SMTP_*` |
+| `services/notifications.py` | `push_notification`, `dispatch_owner_alert`, `_owner_ids`/`_approver_ids`/`_finance_user_ids`, `NOTIF_LEVELS` |
+| `services/enrich.py` | `enrich_contacts`, `enrich_decision`, `enrich_decisions` |
+| `services/ai/extraction.py` | `ai_extract`, `ai_score_tasks`, `ai_score_contact`, `ai_meeting_notes`, `ai_execution_plan`, `ai_step_assist` |
+| `services/transcription.py` | Sarvam/OpenAI/Whisper STT, lang helpers, `_log_stt_usage`, STT client factory |
+| `services/vision.py` | Gemini OCR client, `_gemini_doc_sync`/`_gemini_read_sync`, `ai_read_image_general` |
+| `services/operating_score.py` | company/self operating views, `compute_employee_stats`, `ai_work_coach`, `_score_*` |
+| `services/meetings.py` | `process_meeting` |
+| `services/voice.py` | `process_voice_note` + `_create_*` + member matching/assignment |
+| `services/ai/generators.py` | lexicon / operating-model / finance-cat generators, `tenant_operating_model`, `backfill_operating_model`, `lang_directive` |
+| `services/ingestion.py` | document AI extract + purchase classify + `commit_ingestion_records` engine |
+| `services/finance_signals.py` | `run_followup` escalation + `run_finance_actions` engine + money helpers |
+| `services/captures.py` | WhatsApp Smart-Capture triage + review-draft engine |
+| `services/whatsapp.py` | WA Cloud API infra + inbound image/doc/text/voice pipeline |
+| `services/files.py` | reference-file store + AI analysis + text extraction |
+| `services/leave.py` | leave approver resolution + request + AI impact |
+
+`server.py` **4,938 → 2,297 lines**. What remains there is genuinely not S4: shared constants (`WORKFLOW_STAGES`, `CONTACT_TYPES`, …), inline Pydantic models (→ S5), `add_inbox_item`, the OTP infra, and `_bootstrap`/seed/migrations/lifecycle + the scheduler loops (→ S7). Routers were repointed: every module-top `from server import <business helper>` now imports from the owning service; the only module-top `from server import` left in routers are models (S5), shared constants, OTP infra, and `add_inbox_item`. Deferred in-function imports remain the sanctioned lazy pattern and now resolve through `server`'s re-exports, which delegate to the services.

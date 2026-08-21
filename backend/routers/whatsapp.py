@@ -15,7 +15,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, BackgroundTasks
 
 from core import db, get_current_user, logger
-from server import log_wa_event, process_whatsapp_message, wa_token, wa_phone_id  # cross-domain
+from services.whatsapp import log_wa_event, process_whatsapp_message, wa_token, wa_phone_id
 
 router = APIRouter(prefix="/api")
 

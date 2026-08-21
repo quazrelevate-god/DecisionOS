@@ -11,7 +11,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from core import db, get_current_user, require_perm, user_perms, now_iso
-from server import _norm_phone, send_wa_reply, execute_capture  # cross-domain; move in Sprint 4
+from services.whatsapp import _norm_phone, send_wa_reply
+from services.captures import execute_capture
 
 router = APIRouter(prefix="/api")
 

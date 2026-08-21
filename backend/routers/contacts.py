@@ -10,7 +10,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from core import db, logger, new_id, now_iso, log_activity, require_perm, require_role
-from server import CONTACT_TYPES, CONTACT_STATUS, LIFECYCLE_STAGES, enrich_contacts  # shared; server-side for now
+from server import CONTACT_TYPES, CONTACT_STATUS, LIFECYCLE_STAGES  # shared constants (S5)
+from services.enrich import enrich_contacts
 
 router = APIRouter(prefix="/api")
 

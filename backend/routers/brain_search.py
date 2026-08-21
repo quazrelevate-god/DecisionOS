@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends
 
 from core import db, require_perm, user_perms
 from services.tasks import enrich_tasks
-from server import enrich_decisions, enrich_contacts  # shared; server-side for now
+from services.enrich import enrich_decisions, enrich_contacts
 
 router = APIRouter(prefix="/api")
 

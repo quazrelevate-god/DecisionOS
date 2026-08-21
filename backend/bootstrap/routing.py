@@ -43,6 +43,7 @@ from routers.tenant_settings import router as tenant_settings_router
 from routers.finance import router as finance_router
 from routers.whatsapp import router as whatsapp_router
 from routers.files import router as files_router
+from routers.health import router as health_router
 
 # Every extracted domain router, in the exact order server.py mounted them.
 _DOMAIN_ROUTERS = (
@@ -80,11 +81,15 @@ _DOMAIN_ROUTERS = (
     finance_router,    # Epic 8 S3: finance + document ingestion extracted
     whatsapp_router,   # Epic 8 S3: WhatsApp webhook + status/logs extracted
     files_router,      # Epic 8 S3: file upload/download extracted
+    health_router,     # Epic 8 S3: /api/health + /api/ root (last off the api router)
 )
 
 
-def register_api_routers(app, api) -> None:
-    """Mount the in-file ``api`` router and all extracted domain routers."""
-    app.include_router(api)
+def register_api_routers(app) -> None:
+    """Mount every extracted domain router.
+
+    As of Epic 8 Sprint 3 the in-file ``api`` router is fully retired -- all
+    endpoints now live under routers/, so there is no in-file router to mount.
+    """
     for router in _DOMAIN_ROUTERS:
         app.include_router(router)

@@ -48,7 +48,6 @@ from core import (
 # imported explicitly at the top of this module.
 # ---------------------------------------------------------------------------
 app = FastAPI(title="DecisionOS")
-api = APIRouter(prefix="/api")
 
 
 # ---------------------------------------------------------------------------
@@ -2383,14 +2382,7 @@ async def _notify_provider_outages():
 
 
 
-@api.post("/follow-up/run")
-async def followup_run(user: dict = Depends(require_perm("team_manage"))):
-    # FIX-004-C (RBAC-06): manual follow-up sweep runs the full tenant-
-    # wide overdue-task chase (LLM cost + notification spam potential).
-    # Restrict to team_manage (owner + designated team admins). Was
-    # auth-only which meant any employee could trigger it on-demand.
-    await run_followup(user["tenant_id"])
-    return {"ok": True}
+
 
 
 
@@ -4927,21 +4919,14 @@ async def health():
     return {"status": "ok"}
 
 
-@api.get("/health")
-async def api_health():
-    return {"status": "ok"}
 
-
-@api.get("/")
-async def root():
-    return {"message": "DecisionOS API"}
 
 
 # App assembly (Epic 8 Sprint 1): router + middleware wiring extracted to
-# bootstrap/. server.py remains the entry (server:app) and still owns the
-# in-file `api` router; only the plumbing moved. Behaviour unchanged.
+# bootstrap/. server.py remains the entry (server:app). As of Sprint 3 the
+# in-file `api` router is fully retired -- every endpoint lives in routers/.
 from bootstrap.routing import register_api_routers  # noqa: E402
-register_api_routers(app, api)
+register_api_routers(app)
 
 from bootstrap.middleware import register_middleware  # noqa: E402
 register_middleware(app)

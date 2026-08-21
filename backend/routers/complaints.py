@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from core import db, new_id, now_iso, log_activity, get_current_user, require_role, require_perm
 from services.ai import brain_context
-from server import add_inbox_item  # cross-domain; move in Sprint 4
+from server import add_inbox_item, run_followup  # cross-domain; move in Sprint 4
 
 router = APIRouter(prefix="/api")
 
@@ -90,3 +90,13 @@ async def add_memory(inp: MemoryInput, user: dict = Depends(require_perm("brain"
     await db.memory.insert_one(doc)
     doc.pop("_id", None)
     return doc
+
+
+@router.post("/follow-up/run")
+async def followup_run(user: dict = Depends(require_perm("team_manage"))):
+    # FIX-004-C (RBAC-06): manual follow-up sweep runs the full tenant-
+    # wide overdue-task chase (LLM cost + notification spam potential).
+    # Restrict to team_manage (owner + designated team admins). Was
+    # auth-only which meant any employee could trigger it on-demand.
+    await run_followup(user["tenant_id"])
+    return {"ok": True}

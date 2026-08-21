@@ -41,6 +41,8 @@ from routers.dashboard import router as dashboard_router
 from routers.auth_otp import router as auth_otp_router
 from routers.tenant_settings import router as tenant_settings_router
 from routers.finance import router as finance_router
+from routers.whatsapp import router as whatsapp_router
+from routers.files import router as files_router
 
 # Every extracted domain router, in the exact order server.py mounted them.
 _DOMAIN_ROUTERS = (
@@ -76,6 +78,8 @@ _DOMAIN_ROUTERS = (
     auth_otp_router,   # Epic 8 S3: phone-OTP login + invite flow extracted
     tenant_settings_router, # Epic 8 S3: tenant settings surface extracted
     finance_router,    # Epic 8 S3: finance + document ingestion extracted
+    whatsapp_router,   # Epic 8 S3: WhatsApp webhook + status/logs extracted
+    files_router,      # Epic 8 S3: file upload/download extracted
 )
 
 

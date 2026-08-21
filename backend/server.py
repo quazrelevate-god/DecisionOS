@@ -231,48 +231,35 @@ from services.ai.extraction import (  # noqa: E402
 )
 
 
-OPENAI_STT_MODEL = os.environ.get("OPENAI_STT_MODEL", "gpt-4o-transcribe").strip() or "gpt-4o-transcribe"
-SARVAM_API_KEY = os.environ.get("SARVAM_API_KEY", "").strip()
-SARVAM_STT_MODEL = os.environ.get("SARVAM_STT_MODEL", "saaras:v3").strip() or "saaras:v3"
+# Voice-note pipeline moved to services/voice.py (Epic 8 Sprint 4). Re-exported
+# so deferred `from server import ...` call sites keep resolving.
+from services.voice import (  # noqa: E402
+    process_voice_note, match_member_by_name, pick_least_loaded_member,
+    _resolve_meeting_date, _create_decision_tasks, _create_reminders_and_memory,
+    _create_meetings, _create_workflows,
+)
+
+# STT/transcription moved to services/transcription.py and Gemini/vision to
+# services/vision.py (Epic 8 Sprint 4). Re-exported so deferred + module-top
+# `from server import ...` call sites keep resolving.
+from services.transcription import (  # noqa: E402
+    get_openai_stt_client, transcribe_audio, transcribe_audio_full,
+    _transcribe_audio_full_local, _log_stt_usage, _stt_lang_prompt,
+    _lang_name, _sarvam_mime, _sarvam_stt_sync, _sarvam_batch_sync,
+    OPENAI_STT_MODEL, SARVAM_API_KEY, SARVAM_STT_MODEL,
+)
+from services.vision import (  # noqa: E402
+    get_gemini_client, _gemini_doc_sync, _gemini_read_sync, ai_read_image_general,
+)
+
+
 
 # OpenAI STT + Gemini OCR clients are created lazily from the CURRENT runtime key
 # (so a platform-admin key update takes effect without a restart).
-_openai_stt_state = {"key": None, "client": None}
-_gemini_state = {"key": None, "client": None}
 
 
-def get_openai_stt_client():
-    key = get_ai_key("openai")
-    if not key:
-        _openai_stt_state.update(key=None, client=None)
-        return None
-    if _openai_stt_state["key"] != key:
-        try:
-            from openai import AsyncOpenAI
-            _openai_stt_state["client"] = AsyncOpenAI(api_key=key)
-            _openai_stt_state["key"] = key
-            logger.info(f"OpenAI transcription client ready (model '{OPENAI_STT_MODEL}').")
-        except Exception as _e:
-            logger.warning(f"Could not init OpenAI client, will fall back to Whisper (Emergent key): {_e}")
-            _openai_stt_state.update(key=None, client=None)
-    return _openai_stt_state["client"]
 
 
-def get_gemini_client():
-    key = get_ai_key("gemini")
-    if not key:
-        _gemini_state.update(key=None, client=None)
-        return None
-    if _gemini_state["key"] != key:
-        try:
-            from google import genai as _genai
-            _gemini_state["client"] = _genai.Client(api_key=key)
-            _gemini_state["key"] = key
-            logger.info(f"Gemini document-OCR client ready (model '{VISION_MODEL[1]}').")
-        except Exception as _e:
-            logger.warning(f"Could not init Gemini client, will fall back to Emergent key: {_e}")
-            _gemini_state.update(key=None, client=None)
-    return _gemini_state["client"]
 
 
 def wa_token() -> str:
@@ -283,798 +270,87 @@ def wa_phone_id() -> str:
     return get_ai_key("wa_phone_number_id")
 
 
-def _gemini_doc_sync(file_path: str, mime_type: str, system: str, user_text: str):
-    """Returns (text, tokens_in, tokens_out) so callers can log usage."""
-    import pathlib
-    from google.genai import types as _gtypes
-    resp = get_gemini_client().models.generate_content(
-        model=VISION_MODEL[1],
-        contents=[
-            _gtypes.Part.from_bytes(data=pathlib.Path(file_path).read_bytes(), mime_type=mime_type),
-            user_text,
-        ],
-        config=_gtypes.GenerateContentConfig(system_instruction=system, response_mime_type="application/json"),
-    )
-    um = getattr(resp, "usage_metadata", None)
-    ti = getattr(um, "prompt_token_count", 0) or 0
-    to = getattr(um, "candidates_token_count", 0) or 0
-    return (resp.text or "", ti, to)
-
-
-
-def _gemini_read_sync(file_path: str, mime_type: str, system: str, user_text: str):
-    """General plain-text vision read (no JSON constraint). Returns (text, tokens_in, tokens_out)."""
-    import pathlib
-    from google.genai import types as _gtypes
-    resp = get_gemini_client().models.generate_content(
-        model=VISION_MODEL[1],
-        contents=[
-            _gtypes.Part.from_bytes(data=pathlib.Path(file_path).read_bytes(), mime_type=mime_type),
-            user_text,
-        ],
-        config=_gtypes.GenerateContentConfig(system_instruction=system),
-    )
-    um = getattr(resp, "usage_metadata", None)
-    ti = getattr(um, "prompt_token_count", 0) or 0
-    to = getattr(um, "candidates_token_count", 0) or 0
-    return (resp.text or "", ti, to)
-
-
-_IMAGE_READ_SYSTEM = (
-    "You are a vision reader. Look at the attached image or document and TRANSCRIBE and DESCRIBE everything "
-    "a person would need, verbatim. Capture ALL readable content: names, job titles, company names, phone "
-    "numbers, emails, websites, addresses, dates, amounts, line items, table rows, headings and any handwritten "
-    "or printed text. If it is a business/visiting card, clearly list the person's name, title, company, phone(s), "
-    "email, website and address. If it is a list or table, preserve the rows. Never invent anything not in the image. "
-    "Return a concise PLAIN-TEXT extraction — no JSON, no commentary."
-)
-
-
-async def ai_read_image_general(file_path: str, mime_type: str, session_id: str) -> str:
-    """Read ANY image/PDF into plain text (business cards, notes, lists, screenshots, documents)."""
-    user_text = "Read this file and output all of its content as plain text."
-    if get_gemini_client() is not None:
-        try:
-            text, ti, to = await asyncio.to_thread(_gemini_read_sync, file_path, mime_type, _IMAGE_READ_SYSTEM, user_text)
-            await log_usage((session_id or "read").split("-")[0], "gemini", model=VISION_MODEL[1],
-                            tokens_in=ti, tokens_out=to, units=1, unit_type="document")
-            if (text or "").strip():
-                return text.strip()
-        except Exception as e:
-            logger.warning(f"Gemini general-read (user key) failed; falling back: {e}")
-    try:
-        fc = FileContentWithMimeType(file_path=file_path, mime_type=mime_type)
-        chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=session_id or "read",
-                       system_message=_IMAGE_READ_SYSTEM).with_model(*VISION_MODEL)
-        # FIX-002-B: semaphore + timeout guard shared across all LLM calls.
-        from services.ai.llm_limits import guarded_llm
-        resp = await guarded_llm(chat.send_message(UserMessage(text=user_text, file_contents=[fc])),
-                                  label="gemini:doc-read")
-        await log_usage((session_id or "read").split("-")[0], "gemini", model=VISION_MODEL[1],
-                        tokens_in=_est_tokens(_IMAGE_READ_SYSTEM + user_text), tokens_out=_est_tokens(resp or ""),
-                        units=1, unit_type="document")
-        return (resp or "").strip()
-    except Exception as e:
-        logger.warning(f"general image read failed: {e}")
-        return ""
 
 
 
 
-def _stt_lang_prompt(language: str):
-    lang, prompt = None, None
-    if language == "en":
-        lang = "en"
-    elif language == "ta":
-        lang = "ta"
-    elif language == "tanglish":
-        prompt = ("This is Tanglish — casual code-mixed Tamil and English speech from an Indian "
-                  "small-business owner. Keep English words in English.")
-    return lang, prompt
 
 
-_LANG_NAMES = {
-    "en-IN": "English", "en-US": "English", "hi-IN": "Hindi", "ta-IN": "Tamil",
-    "te-IN": "Telugu", "kn-IN": "Kannada", "ml-IN": "Malayalam", "mr-IN": "Marathi",
-    "gu-IN": "Gujarati", "bn-IN": "Bengali", "pa-IN": "Punjabi", "od-IN": "Odia",
-    "or-IN": "Odia", "as-IN": "Assamese", "ur-IN": "Urdu", "unknown": "Unknown",
-}
 
 
-def _lang_name(code: str) -> str:
-    if not code:
-        return ""
-    return _LANG_NAMES.get(code) or code.split("-")[0].upper()
 
 
-def _sarvam_mime(path: str) -> str:
-    ext = (path.rsplit(".", 1)[-1] if "." in path else "").lower()
-    return {"webm": "audio/webm", "ogg": "audio/ogg", "oga": "audio/ogg", "opus": "audio/ogg",
-            "wav": "audio/wav", "mp3": "audio/mpeg", "m4a": "audio/mp4", "mp4": "audio/mp4",
-            "aac": "audio/aac", "flac": "audio/flac"}.get(ext, "audio/webm")
 
 
-def _sarvam_stt_sync(path: str) -> dict:
-    """Sarvam REST speech-to-text (saaras:v3): auto-detect language + translate to English.
-    REST handles audio under ~30s; raises on error so the caller can fall back to batch/OpenAI."""
-    import requests
-    with open(path, "rb") as f:
-        r = requests.post(
-            "https://api.sarvam.ai/speech-to-text",
-            headers={"api-subscription-key": get_ai_key("sarvam")},
-            files={"file": (os.path.basename(path), f, _sarvam_mime(path))},
-            data={"model": SARVAM_STT_MODEL, "mode": "translate", "language_code": "unknown"},
-            timeout=90,
-        )
-    r.raise_for_status()
-    return r.json()
 
 
-def _sarvam_batch_sync(path: str) -> dict:
-    """Sarvam Batch STT (async job) for long recordings (>30s, up to 2h). Blocking — run in a thread."""
-    import tempfile, glob, json as _json
-    from sarvamai import SarvamAI
-    client = SarvamAI(api_subscription_key=get_ai_key("sarvam"))
-    job = client.speech_to_text_job.create_job(model=SARVAM_STT_MODEL, mode="translate", language_code="unknown")
-    job.upload_files(file_paths=[path])
-    job.start()
-    job.wait_until_complete(poll_interval=5, timeout=1500)
-    outdir = tempfile.mkdtemp(prefix="sarvam_batch_")
-    job.download_outputs(output_dir=outdir)
-    transcript, lang = "", ""
-    for jf in glob.glob(os.path.join(outdir, "*.json")):
-        try:
-            with open(jf) as fh:
-                d = _json.load(fh)
-            transcript = (transcript + " " + (d.get("transcript") or "")).strip()
-            lang = lang or (d.get("language_code") or "")
-        except Exception:
-            pass
-    return {"transcript": transcript, "language_code": lang, "language_probability": None}
 
 
-async def transcribe_audio_full(path: str, language: str = "auto") -> dict:
-    """Returns {transcript, language_code, language_name, language_probability, engine}.
-    Sarvam is primary (auto-detect + translate-to-English); batch handles long clips; OpenAI/Whisper backstop.
-
-    FIX-002-E: `path` may now be either a legacy local filesystem path OR an
-    obj_store key. If it's an obj_store key we download it to a temp file
-    first so the STT libs (which expect a real path) work unchanged.
-    """
-    from services.uploads import is_legacy_path, download_to_temp
-    _tmp_to_cleanup = None
-    if not is_legacy_path(path):
-        _tmp_to_cleanup = await download_to_temp(path)
-        path = str(_tmp_to_cleanup)
-    try:
-        return await _transcribe_audio_full_local(path, language)
-    finally:
-        if _tmp_to_cleanup is not None:
-            try:
-                os.unlink(_tmp_to_cleanup)
-            except Exception:
-                pass
 
 
-async def _transcribe_audio_full_local(path: str, language: str = "auto") -> dict:
-    """Internal: expects `path` to be a local filesystem path. All STT
-    engines are invoked from here. Split out from transcribe_audio_full
-    so the obj_store-download wrapper can wrap the whole thing without
-    duplicating engine-selection logic."""
-    if get_ai_key("sarvam"):
-        # 1) REST (fast, <30s)
-        try:
-            out = await asyncio.to_thread(_sarvam_stt_sync, path)
-            transcript = (out.get("transcript") or "").strip()
-            if transcript:
-                code = out.get("language_code") or ""
-                await _log_stt_usage(transcript, f"sarvam:{SARVAM_STT_MODEL}", provider="sarvam")
-                return {"transcript": transcript, "language_code": code, "language_name": _lang_name(code),
-                        "language_probability": out.get("language_probability"), "engine": "sarvam"}
-        except Exception as e:
-            logger.warning(f"Sarvam REST STT failed (likely >30s); trying Sarvam batch: {e}")
-        # 2) Batch (long audio)
-        try:
-            out = await asyncio.to_thread(_sarvam_batch_sync, path)
-            transcript = (out.get("transcript") or "").strip()
-            if transcript:
-                code = out.get("language_code") or ""
-                await _log_stt_usage(transcript, f"sarvam-batch:{SARVAM_STT_MODEL}", provider="sarvam")
-                return {"transcript": transcript, "language_code": code, "language_name": _lang_name(code),
-                        "language_probability": None, "engine": "sarvam-batch"}
-            logger.warning("Sarvam batch returned empty transcript; falling back to OpenAI.")
-        except Exception as e:
-            logger.warning(f"Sarvam batch STT failed; falling back to OpenAI: {e}")
-    # 3) OpenAI gpt-4o-transcribe
-    lang, prompt = _stt_lang_prompt(language)
-    _openai_stt_client = get_openai_stt_client()
-    if _openai_stt_client is not None:
-        try:
-            kwargs = {"model": OPENAI_STT_MODEL, "response_format": "json"}
-            if lang:
-                kwargs["language"] = lang
-            if prompt:
-                kwargs["prompt"] = prompt
-            with open(path, "rb") as f:
-                resp = await _openai_stt_client.audio.transcriptions.create(file=f, **kwargs)
-            await _log_stt_usage(resp.text, OPENAI_STT_MODEL)
-            return {"transcript": resp.text, "language_code": "", "language_name": "",
-                    "language_probability": None, "engine": "openai"}
-        except Exception as e:
-            logger.warning(f"OpenAI STT ({OPENAI_STT_MODEL}) failed; falling back to Whisper (Emergent key): {e}")
-    # 4) Whisper via Emergent key
-    stt = OpenAISpeechToText(api_key=EMERGENT_LLM_KEY)
-    kwargs = {"model": "whisper-1", "response_format": "json"}
-    if lang:
-        kwargs["language"] = lang
-    if prompt:
-        kwargs["prompt"] = prompt
-    with open(path, "rb") as f:
-        resp = await stt.transcribe(file=f, **kwargs)
-    await _log_stt_usage(resp.text, "whisper-1")
-    return {"transcript": resp.text, "language_code": "", "language_name": "",
-            "language_probability": None, "engine": "whisper"}
 
 
-async def transcribe_audio(path: str, language: str = "auto") -> str:
-    return (await transcribe_audio_full(path, language)).get("transcript", "")
 
 
-async def _log_stt_usage(transcript: str, model: str, provider: str = "openai"):
-    # STT bills by audio duration; estimate ~15 chars/sec of speech from the transcript.
-    secs = max(1, len(transcript or "") / 15)
-    per_min = _SARVAM_STT_PER_MIN if provider == "sarvam" else _OPENAI_STT_PER_MIN
-    await log_usage("transcribe", provider, model=model,
-                    units=round(secs), unit_type="audio_sec",
-                    cost=secs / 60 * per_min)
 
 
-def match_member_by_name(members: list, name: str):
-    n = re.sub(r"[^a-z ]", "", (name or "").lower()).strip()
-    if not n or not members:
-        return None
-    for m in members:  # exact (case-insensitive) full-name match
-        if (m.get("name") or "").lower().strip() == n:
-            return m
-    tokens = set(n.split())
-    best = None
-    for m in members:  # first-name / token overlap
-        mtoks = set((m.get("name") or "").lower().split())
-        if tokens & mtoks:
-            best = m
-            break
-    return best
+
+
+
+
+
+
+
 
 
 # ---------------------------------------------------------------------------
 # Voice note processing pipeline
 # ---------------------------------------------------------------------------
-_WEEKDAYS = {"monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3, "friday": 4, "saturday": 5, "sunday": 6}
 
 
-def _resolve_meeting_date(when: str, due_in_days) -> str:
-    """Resolve a meeting's natural-language timing into an ISO date (YYYY-MM-DD).
-    Explicit day references in `when` take priority over the LLM's due_in_days heuristic."""
-    now = datetime.now(timezone.utc)
-    w = (when or "").lower()
-    if "today" in w:
-        return now.date().isoformat()
-    if "tomorrow" in w:
-        return (now + timedelta(days=1)).date().isoformat()
-    for name, idx in _WEEKDAYS.items():
-        if name in w:
-            ahead = (idx - now.weekday()) % 7 or 7  # next occurrence, not today
-            if "next" in w:
-                ahead += 7
-            return (now + timedelta(days=ahead)).date().isoformat()
-    if isinstance(due_in_days, int):
-        return (now + timedelta(days=due_in_days)).date().isoformat()
-    if "next week" in w:
-        return (now + timedelta(days=7)).date().isoformat()
-    return (now + timedelta(days=2)).date().isoformat()
 
 
-async def pick_least_loaded_member(tenant_id: str, role: str) -> Optional[str]:
-    """Smart assignment: return the id of the role member with the fewest open
-    (not done/cancelled) tasks, or None if the role has no members."""
-    if not role:
-        return None
-    members = await db.users.find({"tenant_id": tenant_id, "role": role}, {"_id": 0, "id": 1}).to_list(200)
-    if not members:
-        return None
-    best_id, best_load = None, None
-    for m in members:
-        load = await db.tasks.count_documents({
-            "tenant_id": tenant_id, "assignee_id": m["id"],
-            "status": {"$nin": ["done", "cancelled"]},
-        })
-        if best_load is None or load < best_load:
-            best_load, best_id = load, m["id"]
-    return best_id
 
 
-async def _create_decision_tasks(tenant_id, note, decision_id, extracted, troles, members, cat_keys=None):
-    """Create the blocked tasks for a decision; returns (task_ids, assignee_keys)."""
-    cat_keys = cat_keys or set()
-    task_ids = []
-    assignee_keys = set()
-    for t in extracted.get("tasks", []):
-        tid = new_id()
-        due = None
-        if isinstance(t.get("due_in_days"), int):
-            due = (datetime.now(timezone.utc) + timedelta(days=t["due_in_days"])).isoformat()
-        role = t.get("assignee_role") if t.get("assignee_role") in troles else None
-        assignee_id = None
-        member = match_member_by_name(members, t.get("assignee_name", ""))
-        if member:
-            assignee_id = member["id"]
-            role = member["role"]
-        elif role:
-            # Smart assignment: distribute role-level tasks to the least-loaded member.
-            assignee_id = await pick_least_loaded_member(tenant_id, role)
-        if assignee_id:
-            assignee_keys.add(f"u:{assignee_id}")
-        elif role:
-            assignee_keys.add(f"r:{role}")
-        task_cat = t.get("task_category") if t.get("task_category") in cat_keys else None
-        await db.tasks.insert_one({
-            "id": tid, "tenant_id": tenant_id, "title": t.get("title", "Untitled task"),
-            "description": t.get("description", ""), "assignee_role": role, "assignee_id": assignee_id,
-            "priority": t.get("priority", "medium") if t.get("priority") in ("low", "medium", "high") else "medium",
-            "status": "blocked", "due_date": due, "decision_id": decision_id,
-            "task_type": task_cat,
-            "source": "voice", "created_at": now_iso(),
-            # WE-01: null placeholders. The process_voice_note post-pass
-            # fills these in AFTER _create_workflows runs, once we know
-            # which workflow this decision spawned.
-            "workflow_id": None, "stage_key": None,
-            "updated_at": now_iso(), "last_action": "Created",
-        })
-        task_ids.append(tid)
-    return task_ids, assignee_keys
 
 
-async def _create_reminders_and_memory(tenant_id, note, extracted):
-    """Voice shortcuts: lightweight personal reminders + lasting company memory."""
-    for r in (extracted.get("reminders") or []):
-        due = None
-        if isinstance(r.get("due_in_days"), int):
-            due = (datetime.now(timezone.utc) + timedelta(days=r["due_in_days"])).isoformat()
-        await db.tasks.insert_one({
-            "id": new_id(), "tenant_id": tenant_id, "title": r.get("title", "Reminder"),
-            "description": "", "assignee_role": None, "assignee_id": note["created_by"],
-            "priority": "medium", "status": "todo", "due_date": due, "decision_id": None,
-            "source": "reminder", "created_at": now_iso(),
-        })
-    for m in (extracted.get("memory_notes") or []):
-        if m.get("text"):
-            await db.memory.insert_one({
-                "id": new_id(), "tenant_id": tenant_id, "text": m["text"],
-                "tag": m.get("tag", "note"), "created_by": note["created_by"], "created_at": now_iso(),
-            })
 
 
-async def _create_meetings(tenant_id, note, decision_id, extracted):
-    """Schedule a real calendar event + a lightweight to-do per detected meeting; returns the list."""
-    meetings = extracted.get("meeting_events") or []
-    for mt in meetings:
-        when = (mt.get("when") or "").strip()
-        title = (mt.get("title") or "Meeting").strip()
-        mdate = _resolve_meeting_date(when, mt.get("due_in_days"))
-        await db.calendar_events.insert_one({
-            "id": new_id(), "tenant_id": tenant_id, "date": mdate, "title": title,
-            "when_text": when, "decision_id": decision_id, "source": "voice",
-            "created_by": note["created_by"], "created_at": now_iso(),
-        })
-        await db.tasks.insert_one({
-            "id": new_id(), "tenant_id": tenant_id,
-            "title": title + (f" ({when})" if when else ""),
-            "description": "", "assignee_role": None, "assignee_id": note["created_by"],
-            "priority": "medium", "status": "todo", "due_date": None, "decision_id": None,
-            "source": "meeting", "created_at": now_iso(),
-        })
-    return meetings
 
 
-async def _create_workflows(tenant_id, note, decision_id, extracted):
-    """Materialize each detected workflow_event into a real board card; returns the created ids."""
-    wf_ids = []
-    om = await tenant_operating_model(tenant_id)
-    pmap = {p["key"]: p for p in om["pipelines"]}
-    for ev in (extracted.get("workflow_events") or []):
-        wtype = ev.get("type")
-        pipeline = pmap.get(wtype)
-        if not pipeline:
-            continue
-        stages = [s["key"] for s in pipeline["stages"]]
-        title = (ev.get("title") or ev.get("action") or pipeline["label"]).strip()
-        cp = (ev.get("counterparty") or "").strip()
-        contact_id = None
-        if cp:
-            c = await db.contacts.find_one({"tenant_id": tenant_id, "$or": [
-                {"name": {"$regex": f"^{re.escape(cp)}$", "$options": "i"}},
-                {"company": {"$regex": f"^{re.escape(cp)}$", "$options": "i"}}]}, {"_id": 0, "id": 1, "name": 1, "company": 1})
-            if c:
-                contact_id = c["id"]
-                cp = cp or c.get("company") or c.get("name") or ""
-        amount = ev.get("amount") if isinstance(ev.get("amount"), (int, float)) else None
-        wid = new_id()
-        await db.workflows.insert_one({
-            "id": wid, "tenant_id": tenant_id, "type": wtype, "title": title,
-            "detail": ev.get("detail", ""), "amount": amount, "counterparty": cp, "contact_id": contact_id,
-            "stage": stages[0], "stages": stages,
-            "stage_version": 0,
-            "history": [{"stage": stages[0], "note": "Auto-created from directive", "by": note["created_by"], "at": now_iso()}],
-            "source": "voice", "decision_id": decision_id,
-            "created_by": note["created_by"], "created_at": now_iso(),
-        })
-        wf_ids.append(wid)
-    return wf_ids
 
 
-async def process_voice_note(note_id: str):
-    note = await db.voice_notes.find_one({"id": note_id})
-    if not note:
-        return
-    tenant_id = note["tenant_id"]
-    set_usage_tenant(tenant_id)
-    try:
-        await db.voice_notes.update_one({"id": note_id}, {"$set": {"status": "transcribing"}})
-        transcript = note.get("transcript")
-        detected_code = note.get("detected_language")
-        detected_name = note.get("detected_language_name")
-        if not transcript and note.get("audio_path"):
-            stt = await transcribe_audio_full(note["audio_path"], note.get("language", "auto"))
-            transcript = stt.get("transcript")
-            detected_code = stt.get("language_code") or ""
-            detected_name = stt.get("language_name") or ""
-            await db.voice_notes.update_one({"id": note_id}, {"$set": {
-                "transcript": transcript, "detected_language": detected_code,
-                "detected_language_name": detected_name,
-                "language_probability": stt.get("language_probability"), "stt_engine": stt.get("engine")}})
-
-        await db.voice_notes.update_one({"id": note_id}, {"$set": {"status": "structuring"}})
-        troles = await tenant_role_keys(tenant_id)
-        members = await db.users.find({"tenant_id": tenant_id}, {"_id": 0, "id": 1, "name": 1, "role": 1}).to_list(200)
-        om = await tenant_operating_model(tenant_id)
-        cat_keys = {c["key"] for c in om["task_categories"]}
-        # Read any attached reference files so the AI factors them into the decision.
-        ref_ids = note.get("reference_file_ids") or []
-        extra_context = ""
-        if ref_ids:
-            chunks = []
-            for fid in ref_ids:
-                frec = await db.files.find_one({"id": fid, "tenant_id": tenant_id, "is_deleted": False}, {"_id": 0})
-                if frec:
-                    txt = await _read_reference_text(frec, tenant_id)
-                    if txt:
-                        chunks.append(txt)
-            extra_context = "\n\n".join(chunks)
-        extracted = await ai_extract(transcript or "", session_id=f"extract-{note_id}", allowed_roles=sorted(troles),
-                                     members=members, pipelines=om["pipelines"], task_categories=om["task_categories"],
-                                     extra_context=extra_context)
-
-        decision_id = new_id()
-        dlist = extracted.get("decisions", [])
-        first = dlist[0] if dlist else {}
-        dtype = first.get("type") if first.get("type") in ("directive", "approval", "policy", "observation") else "directive"
-        conf = extracted.get("confidence", 0.8)
-        conf = float(conf) if isinstance(conf, (int, float)) else 0.8
-        decision = {
-            "id": decision_id, "tenant_id": tenant_id, "voice_note_id": note_id,
-            "title": (extracted.get("decisions") or [{}])[0].get("title") or (extracted.get("summary") or "New decision")[:80],
-            "summary": extracted.get("summary", ""),
-            "items": extracted.get("decisions", []),
-            "workflow_events": extracted.get("workflow_events", []),
-            "dtype": dtype, "confidence": round(max(0.0, min(1.0, conf)), 2),
-            "status": "pending_approval",
-            "created_by": note["created_by"], "created_at": now_iso(),
-            "source": note.get("source") or ("voice" if note.get("kind") == "audio" else "text"),
-            "wa_from": note.get("wa_from"), "raised_by_name": note.get("raised_by_name"),
-            "detected_language": detected_code or None,
-            "detected_language_name": detected_name or None,
-            "task_ids": [],
-        }
-        task_ids, assignee_keys = await _create_decision_tasks(tenant_id, note, decision_id, extracted, troles, members, cat_keys)
-        # Attach the uploaded reference file(s) to every task this directive produced (context for assignees).
-        if ref_ids and task_ids:
-            for tid in task_ids:
-                await _attach_reference_ids(tenant_id, note["created_by"], tid, ref_ids)
-        decision["task_ids"] = task_ids
-        decision["timeline"] = [{"ts": now_iso(), "label": f"Decision captured via {note.get('source') or note.get('kind') or 'voice'}", "actor": note.get("raised_by_name") or "Owner", "kind": "created"}]
-        await db.decisions.insert_one(decision)
-        _icls = "approval" if dtype == "approval" else ("task" if task_ids else "reminder")
-        await add_inbox_item(tenant_id, note["created_by"],
-                             "voice" if note.get("kind") == "audio" else "text",
-                             _icls, decision["title"], (decision.get("summary") or "")[:180],
-                             "decision", decision_id, status="open")
-        await _create_reminders_and_memory(tenant_id, note, extracted)
-        meetings = await _create_meetings(tenant_id, note, decision_id, extracted)
-        wf_ids = await _create_workflows(tenant_id, note, decision_id, extracted)
-        # WE-01 (2026-08-16): post-pass to link the decision's tasks to
-        # their workflow.
-        #
-        # WE-01.5 (2026-08-16): each task is routed to the stage its
-        # ROLE owns -- not the workflow's initial stage. A Kapoor
-        # decision with sales/finance/ops tasks lands them at
-        # order_received/confirmed/in_production respectively, so the
-        # engine's auto-advance chain covers the full workflow instead
-        # of stalling after the first stage.
-        #
-        # WE-01.5.1 (2026-08-16, live bug fix): the AI often generates
-        # MULTIPLE workflows for one decision (e.g. Delhi Retail order
-        # gets both a Production and a Distribution card). Original
-        # guard len(wf_ids)==1 left every task unlinked in that case.
-        # Now we iterate each workflow's pipeline and let the role
-        # decide OWNERSHIP: each task is linked to the workflow whose
-        # pipeline has a stage matching the task's role. Tasks whose
-        # role doesn't match ANY workflow fall back to the first
-        # workflow's current stage. Prevents the "all tasks stranded"
-        # regression while keeping ambiguity-safe (we never pick a
-        # workflow at random).
-        if wf_ids and task_ids:
-            from services.workflows import stage_owned_by  # WE-01.5
-            # Batch-fetch tasks + all candidate workflows.
-            _tk_rows = await db.tasks.find(
-                {"id": {"$in": task_ids}, "tenant_id": tenant_id},
-                {"_id": 0, "id": 1, "assignee_role": 1},
-            ).to_list(len(task_ids))
-            _wfs = await db.workflows.find(
-                {"id": {"$in": wf_ids}, "tenant_id": tenant_id},
-                {"_id": 0, "id": 1, "type": 1, "stage": 1},
-            ).to_list(len(wf_ids))
-            # Resolve the pipeline object per workflow (needed for
-            # stage_owned_by).
-            _om = await tenant_operating_model(tenant_id)
-            _om_pipelines = {p.get("key"): p
-                             for p in (_om or {}).get("pipelines") or []
-                             if p.get("key")}
-            _wf_map = []
-            for _wf in _wfs:
-                _wf_map.append({
-                    "wf": _wf,
-                    "pipeline": _om_pipelines.get(_wf.get("type") or ""),
-                })
-
-            # Fallback if a task doesn't match any pipeline's role stages
-            _fallback_wf = _wf_map[0] if _wf_map else None
-
-            for _tk in _tk_rows:
-                _role = (_tk.get("assignee_role") or "").strip()
-                _chosen_wf_id = None
-                _chosen_stage = None
-                # Pass 1: find the workflow whose pipeline owns this role
-                for _entry in _wf_map:
-                    _sk = stage_owned_by(_entry["pipeline"], _role) if _entry["pipeline"] else None
-                    if _sk:
-                        _chosen_wf_id = _entry["wf"]["id"]
-                        _chosen_stage = _sk
-                        break
-                # Fallback: first workflow's current stage
-                if not _chosen_wf_id and _fallback_wf:
-                    _chosen_wf_id = _fallback_wf["wf"]["id"]
-                    _chosen_stage = _fallback_wf["wf"].get("stage")
-                if _chosen_wf_id:
-                    await db.tasks.update_one(
-                        {"id": _tk["id"], "tenant_id": tenant_id},
-                        {"$set": {"workflow_id": _chosen_wf_id,
-                                  "stage_key": _chosen_stage}},
-                    )
-        # Execution summary — real counts of what this directive produced
-        execution_summary = {
-            "tasks": len(task_ids),
-            "assignees": len(assignee_keys),
-            "approvals": 1 if (task_ids and decision["status"] == "pending_approval") else 0,
-            "workflows": len(wf_ids),
-            "meetings": len(meetings),
-            "reminders": len(extracted.get("reminders") or []),
-        }
-        await db.decisions.update_one({"id": decision_id}, {"$set": {"execution_summary": execution_summary, "workflow_ids": wf_ids}})
-        await db.voice_notes.update_one({"id": note_id}, {"$set": {"status": "done", "decision_id": decision_id, "execution_summary": execution_summary, "processed_at": now_iso()}})
-        await log_activity(tenant_id, note["created_by"], "decision_extracted",
-                           f"Extracted decision '{decision['title']}' with {len(task_ids)} task(s)", "decision", decision_id)
-    except Exception as e:
-        logger.exception("process_voice_note failed")
-        await db.voice_notes.update_one({"id": note_id}, {"$set": {"status": "failed", "error": str(e)}})
 
 
 # ---------------------------------------------------------------------------
 # Auth routes
 # ---------------------------------------------------------------------------
-LANG_NAMES = {"en": "English", "hi": "Hindi", "ta": "Tamil"}
-
-
-def lang_directive(lang: str) -> str:
-    """Instruct an AI to write its human-readable answer in the user's language."""
-    name = LANG_NAMES.get((lang or "en"))
-    if not name or name == "English":
-        return ""
-    return (f"IMPORTANT: Write the human-readable text (the 'answer'/'summary'/message body) in {name}. "
-            "Keep proper nouns, names, company/product names, numbers and JSON keys exactly as-is; only translate the prose.")
-
-
-
-async def ai_generate_lexicon(industry: str, company_size: str = "", roles=None, description: str = "") -> dict:
-    """AI-localize the app's fixed vocabulary to the tenant's industry."""
-    role_labels = ", ".join([r.get("label") for r in (roles or []) if r.get("label")]) or "not specified"
-    system = (
-        "You localize the vocabulary of DecisionOS (a business operations app) to a specific industry. "
-        "The app has fixed internal concepts; give the MOST NATURAL word a business in this industry actually uses for each. "
-        "Return ONLY valid JSON, no prose, EXACTLY this shape: "
-        "{\"customer_singular\": str, \"customer_plural\": str, \"vendor_singular\": str, \"vendor_plural\": str, "
-        "\"workflows\": {\"production\": {\"label\": str, \"sub\": str}, \"distribution\": {\"label\": str, \"sub\": str}, "
-        "\"purchase_payment\": {\"label\": str, \"sub\": str}}, "
-        "\"task_types\": {\"operational\": str, \"sales\": str, \"purchase\": str, \"production\": str, \"finance\": str, \"hr\": str}}. "
-        "Concept meanings: customer = the people/orgs who buy or receive your product/service "
-        "(e.g. a coaching institute → 'Student'/'Students', a clinic → 'Patient'/'Patients'). "
-        "vendor = who you buy/source from (e.g. 'Partner', 'Supplier', 'Publisher'). "
-        "workflows.production = your CORE delivery/fulfilment pipeline (turning an order/enrollment into a delivered outcome, "
-        "e.g. 'Enrollment', 'Course Delivery', 'Case'); "
-        "workflows.distribution = handing over / dispatching the finished outcome to the customer "
-        "(e.g. 'Onboarding', 'Handover', 'Delivery'); "
-        "workflows.purchase_payment = procuring goods/services and paying vendors (e.g. 'Procurement'). "
-        "task_types are the department buckets tasks fall into — keep them relevant to the industry. "
-        "'sub' is a short 2-4 word arrow subtitle like 'Order → Ready'. Keep every label 1-2 words, Title Case. "
-        "Use the industry's real terminology; never invent nonsense."
-    )
-    prompt = (
-        f"Industry: {industry or 'general business'}\n"
-        f"Company size: {company_size or 'unspecified'}\n"
-        f"What the business actually does: {description.strip() or 'not specified'}\n"
-        f"Departments: {role_labels}\n"
-        "Localize the vocabulary now."
-    )
-    chat = claude_chat(session_id=f"lexicon-{new_id()}", system_message=system).with_model(*LLM_MODEL)
-    try:
-        resp = await chat.send_message(UserMessage(text=prompt))
-        data = _extract_json(resp)
-    except Exception as e:
-        logger.error(f"ai_generate_lexicon failed: {e}")
-        data = {}
-    return normalize_lexicon(data or {})
-
-
-async def ai_generate_operating_model(industry: str, company_size: str = "", roles=None, description: str = "") -> dict:
-    """AI-design the industry's operating model: workflow pipelines (with stages) + task categories."""
-    role_labels = ", ".join([r.get("label") for r in (roles or []) if r.get("label")]) or "not specified"
-    system = (
-        "You design the OPERATING MODEL for a business inside DecisionOS. The model has two parts and MUST fit "
-        "the specific industry — a salon has NO 'production' or 'dispatch'; it has a service/appointment flow. "
-        "Return ONLY valid JSON, no prose, EXACTLY this shape: "
-        "{\"pipelines\": [{\"key\": lowercase_snake_case, \"label\": str, \"sub\": short 'A → B' subtitle, "
-        "\"stages\": [{\"key\": lowercase_snake_case, \"label\": str, \"role\": role_slug_or_empty}], "
-        "\"approval_stage\": key of the stage that needs owner sign-off or null}], "
-        "\"task_categories\": [{\"key\": lowercase_snake_case, \"label\": str}]}. "
-        "PIPELINES = the core multi-step operational flows this business tracks on a kanban board, from start to finish. "
-        "Design 2-4 pipelines that genuinely match how THIS industry operates. Each pipeline has 3-6 ordered stages "
-        "(the real steps work moves through). Examples: a SALON → 'Appointments' (Booked→Confirmed→In Service→Completed) "
-        "and 'Procurement' (Requested→Approved→Received→Paid); a COACHING INSTITUTE → 'Enrollment' "
-        "(Inquiry→Counselling→Enrolled→Onboarded) and 'Course Delivery' (Scheduled→Ongoing→Completed); a RESTAURANT → "
-        "'Orders' and 'Procurement'. Set approval_stage only where an owner must sign off (e.g. procurement 'approved'), else null. "
-        "WE-01.5: For each stage set \"role\" to the ONE department that primarily owns work at that stage -- must be a slug "
-        "matching one of the tenant's departments (lowercase, e.g. 'sales', 'finance', 'operations', 'owner'). This is what "
-        "routes decision-spawned tasks to the correct stage. Examples: procurement.requested → 'operations', "
-        "procurement.approved → 'owner', procurement.paid → 'finance'; sales.order_received → 'sales', "
-        "sales.confirmed → 'finance' (they raise the invoice), sales.ready → 'operations'. Set role='' only if truly "
-        "no single department owns the stage. "
-        "TASK_CATEGORIES = 4-7 department buckets that a task in this business belongs to (e.g. salon → Front Desk, Service, "
-        "Inventory, Finance, HR; coaching → Admissions, Academic, Operations, Finance, HR). Always keep the categories relevant to the industry. "
-        "Keep every label 1-3 words, Title Case. Use the industry's real terminology; never force manufacturing terms onto a service business."
-    )
-    prompt = (
-        f"Industry: {industry or 'general business'}\n"
-        f"Company size: {company_size or 'unspecified'}\n"
-        f"What the business actually does (use this to tailor precisely): {description.strip() or 'not specified'}\n"
-        f"Departments: {role_labels}\n"
-        "Design the operating model now."
-    )
-    chat = claude_chat(session_id=f"opmodel-{new_id()}", system_message=system).with_model(*LLM_MODEL)
-    try:
-        resp = await chat.send_message(UserMessage(text=prompt))
-        data = _extract_json(resp)
-    except Exception as e:
-        logger.error(f"ai_generate_operating_model failed: {e}")
-        data = {}
-    return normalize_operating_model(data or {})
-
-
-async def tenant_operating_model(tenant_id: str) -> dict:
-    t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "operating_model": 1})
-    om = (t or {}).get("operating_model")
-    return om if om and om.get("pipelines") else DEFAULT_OPERATING_MODEL
-
-
-def normalize_finance_categories(d: dict) -> dict:
-    """Clean AI-generated finance categories: dedupe, cap, always end with 'Other'."""
-    def clean(lst, cap):
-        out = []
-        for x in (lst or []):
-            s = str(x).strip()
-            if s and s.lower() != "other" and s.lower() not in [o.lower() for o in out]:
-                out.append(s)
-        return out[:cap] + ["Other"]
-    from routers.ledger import EXPENSE_CATEGORIES, ASSET_CATEGORIES
-    exp = clean((d or {}).get("expense"), 14)
-    ast = clean((d or {}).get("asset"), 10)
-    if len(exp) <= 1:
-        exp = list(EXPENSE_CATEGORIES)
-    if len(ast) <= 1:
-        ast = list(ASSET_CATEGORIES)
-    return {"expense": exp, "asset": ast}
-
-
-async def ai_generate_finance_categories(industry: str, company_size: str = "", roles=None, description: str = "") -> dict:
-    """AI-generate the finance bookkeeping categories (expense + fixed-asset) tailored to this business."""
-    role_labels = ", ".join([r.get("label") for r in (roles or []) if r.get("label")]) or "not specified"
-    system = (
-        "You define the finance bookkeeping CATEGORIES a specific business uses to tag its money. "
-        "Return ONLY valid JSON, no prose, EXACTLY: {\"expense\": [array of strings], \"asset\": [array of strings]}. "
-        "expense = the recurring operating cost buckets THIS business actually incurs — be industry-specific "
-        "(a salon → 'Salon Consumables','Stylist Commissions','Rent'; a restaurant → 'Ingredients','Kitchen Fuel','Delivery Fees'; "
-        "a software firm → 'Cloud Hosting','Software Subscriptions','Contractor Fees'; a textile mill → 'Raw Cotton','Dyeing & Finishing','Power'). "
-        "asset = the types of long-life capital items this business buys (e.g. 'Salon Equipment','Kitchen Equipment','Computers & IT','Vehicles','Machinery'). "
-        "Give 8-12 expense and 5-8 asset categories. Keep each 1-3 words, Title Case, no duplicates. Do NOT include 'Other' (it is added automatically). "
-        "Use the industry's real terminology; never invent nonsense."
-    )
-    prompt = (
-        f"Industry: {industry or 'general business'}\n"
-        f"Company size: {company_size or 'unspecified'}\n"
-        f"What the business actually does: {(description or '').strip() or 'not specified'}\n"
-        f"Departments: {role_labels}\n"
-        "Generate the finance categories now."
-    )
-    data = {}
-    try:
-        chat = claude_chat(session_id=f"fincats-{new_id()}", system_message=system).with_model(*LLM_MODEL)
-        resp = await chat.send_message(UserMessage(text=prompt))
-        data = _extract_json(resp) or {}
-    except Exception as e:  # noqa: BLE001
-        logger.error(f"ai_generate_finance_categories failed: {e}")
-    return normalize_finance_categories(data)
+# AI generators (lexicon/operating-model/finance-cats) + lang_directive moved to
+# services/ai/generators.py (Epic 8 Sprint 4). Re-exported so deferred + bare
+# `from server import ...` call sites keep resolving.
+from services.ai.generators import (  # noqa: E402
+    lang_directive, LANG_NAMES, ai_generate_lexicon, ai_generate_operating_model,
+    tenant_operating_model, normalize_finance_categories,
+    ai_generate_finance_categories, backfill_operating_model,
+)
 
 
 
-LEGACY_WF_LABELS = {"production": "Production", "distribution": "Distribution", "purchase_payment": "Procurement", "sales_dispatch": "Sales & Dispatch"}
 
 
-async def backfill_operating_model(tenant: dict) -> dict:
-    """Generate the industry operating model for an existing tenant AND preserve any
-    pipeline/category that already has data (non-destructive migration)."""
-    tenant_id = tenant["id"]
-    om = await ai_generate_operating_model(tenant.get("industry"), tenant.get("company_size"), tenant.get("roles"), tenant.get("description") or "")
 
-    # Keep legacy pipelines that already have workflow cards, so nothing is orphaned.
-    ai_keys = {p["key"] for p in om["pipelines"]}
-    legacy_pipelines = []
-    for wt in await db.workflows.distinct("type", {"tenant_id": tenant_id}):
-        if not wt or wt in ai_keys:
-            continue
-        stages = WORKFLOW_STAGES.get(wt)
-        if not stages:
-            sample = await db.workflows.find_one({"tenant_id": tenant_id, "type": wt}, {"_id": 0, "stages": 1})
-            stages = (sample or {}).get("stages") or []
-        if not stages:
-            continue
-        appr = "approved" if (wt == "purchase_payment" and "approved" in stages) else None
-        legacy_pipelines.append({
-            "key": wt, "label": LEGACY_WF_LABELS.get(wt, wt.replace("_", " ").title()),
-            "sub": f"{stages[0].replace('_', ' ').title()} → {stages[-1].replace('_', ' ').title()}",
-            "approval_stage": appr,
-            "stages": [{"key": s, "label": s.replace("_", " ").title()} for s in stages],
-        })
 
-    # Keep any task category already used by existing tasks.
-    ai_cat_keys = {c["key"] for c in om["task_categories"]}
-    legacy_cats = []
-    for tt in await db.tasks.distinct("task_type", {"tenant_id": tenant_id}):
-        if tt and tt != "other" and tt not in ai_cat_keys:
-            legacy_cats.append({"key": tt, "label": tt.replace("_", " ").title()})
 
-    # Legacy (data-bearing) items first so existing cards/tasks stay visible.
-    return normalize_operating_model({
-        "pipelines": legacy_pipelines + om["pipelines"],
-        "task_categories": om["task_categories"] + legacy_cats,
-    })
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1220,326 +496,41 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 # ---------------------------------------------------------------------------
 # Meeting Notes
 # ---------------------------------------------------------------------------
-async def process_meeting(meeting_id: str):
-    m = await db.meetings.find_one({"id": meeting_id})
-    if not m:
-        return
-    tid = m["tenant_id"]
-    try:
-        await db.meetings.update_one({"id": meeting_id}, {"$set": {"status": "transcribing"}})
-        transcript = m.get("transcript")
-        if not transcript and m.get("audio_path"):
-            transcript = await transcribe_audio(m["audio_path"], m.get("language", "auto"))
-            await db.meetings.update_one({"id": meeting_id}, {"$set": {"transcript": transcript}})
-        await db.meetings.update_one({"id": meeting_id}, {"$set": {"status": "structuring"}})
-        members = await db.users.find({"tenant_id": tid}, {"_id": 0, "id": 1, "name": 1, "role": 1}).to_list(200)
-        notes = await ai_meeting_notes(transcript or "", members, session_id=f"meeting-{meeting_id}")
-        task_ids = []
-        for a in notes.get("action_items", []):
-            if not a.get("title"):
-                continue
-            due = None
-            if isinstance(a.get("due_in_days"), int):
-                due = (datetime.now(timezone.utc) + timedelta(days=a["due_in_days"])).isoformat()
-            member = match_member_by_name(members, a.get("assignee_name", ""))
-            tid_task = new_id()
-            await db.tasks.insert_one({
-                "id": tid_task, "tenant_id": tid, "title": a["title"], "description": "From meeting notes",
-                "assignee_role": member["role"] if member else None, "assignee_id": member["id"] if member else None,
-                "priority": "medium", "status": "todo", "due_date": due, "decision_id": None,
-                "source": "meeting", "created_at": now_iso(),
-            })
-            task_ids.append(tid_task)
-        await db.meetings.update_one({"id": meeting_id}, {"$set": {
-            "title": notes.get("title"), "summary": notes.get("summary"),
-            "key_points": notes.get("key_points", []), "decisions": notes.get("decisions", []),
-            "action_items": notes.get("action_items", []), "task_ids": task_ids,
-            "status": "done", "processed_at": now_iso(),
-        }})
-        await log_activity(tid, m["created_by"], "meeting_processed",
-                           f"Meeting notes ready: '{notes.get('title')}' — {len(task_ids)} action item(s)", "meeting", meeting_id)
-        # FIX-007-B (S4-10): every finalized meeting is now a queryable
-        # Brain event — "what did we agree at the Sharma vendor call?"
-        # used to be answerable only by scrolling meetings; now the
-        # summary + decisions + action-item count land as one
-        # brain_context row that /ask + brain_router can retrieve.
-        try:
-            _key_pts = notes.get("key_points") or []
-            _decs = notes.get("decisions") or []
-            _why_bits = []
-            if _decs:
-                _why_bits.append("Decisions: " + " | ".join(str(d) for d in _decs[:5]))
-            if _key_pts:
-                _why_bits.append("Key points: " + " | ".join(str(k) for k in _key_pts[:5]))
-            await brain_context.record_context(
-                tenant_id=tid, kind="meeting",
-                title=notes.get("title") or "Meeting",
-                outcome=f"{len(task_ids)} action item(s)" if task_ids else "notes",
-                why=(notes.get("summary") or "\n".join(_why_bits))[:800],
-                tags=["meeting"],
-                source_type="meeting", source_id=meeting_id,
-                related_ids={"task_ids_count": str(len(task_ids))},
-                actor_id=m.get("created_by") or "",
-                actor_name="",
-                department="", visibility="public",
-            )
-        except Exception as _e:
-            logger.warning(f"S4-10 meeting brain_context failed for {meeting_id}: {_e}")
-    except Exception as e:
-        logger.exception("process_meeting failed")
-        await db.meetings.update_one({"id": meeting_id}, {"$set": {"status": "failed", "error": str(e)}})
+# process_meeting moved to services/meetings.py; operating-score/coach engine
+# moved to services/operating_score.py (Epic 8 Sprint 4). Re-exported so
+# deferred `from server import ...` call sites keep resolving.
+from services.meetings import process_meeting  # noqa: E402
+from services.operating_score import (  # noqa: E402
+    _company_operating_view, _self_operating_view, compute_employee_stats,
+    ai_work_coach, _resolve_coach_target, _score_execution, _score_sales,
+    _score_employees, _clamp100, _is_open_task,
+)
 
 
 # ---------------------------------------------------------------------------
 # Operating Score
 # ---------------------------------------------------------------------------
-def _clamp100(v):
-    return max(0, min(100, int(round(v))))
 
 
-def _is_open_task(t):
-    return t.get("status") in ("todo", "in_progress", "blocked")
 
 
-def _score_execution(tasks, now):
-    """Task-execution score; returns (execution, done, open_tasks, overdue, actionable)."""
-    done = sum(1 for t in tasks if t.get("status") == "done")
-    open_tasks = [t for t in tasks if _is_open_task(t)]
-    overdue = sum(1 for t in open_tasks if t.get("due_date") and t["due_date"] < now)
-    actionable = done + len(open_tasks)
-    completion = (done / actionable) if actionable else 0.7
-    overdue_ratio = (overdue / len(open_tasks)) if open_tasks else 0
-    return _clamp100(completion * 100 - overdue_ratio * 40), done, open_tasks, overdue, actionable
 
 
-def _score_sales(decisions):
-    """Decision-approval score; returns (sales, total_dec, approved)."""
-    total_dec = len(decisions)
-    approved = sum(1 for d in decisions if d.get("status") == "approved")
-    approved_rate = (approved / total_dec) if total_dec else 0.7
-    return _clamp100(approved_rate * 100), total_dec, approved
 
 
-def _score_employees(tasks, members, now):
-    """Per-employee execution scores, sorted high to low."""
-    employees = []
-    for mbr in members:
-        mine = [t for t in tasks if t.get("assignee_id") == mbr["id"] or (not t.get("assignee_id") and t.get("assignee_role") == mbr["role"])]
-        m_done = sum(1 for t in mine if t.get("status") == "done")
-        m_open = [t for t in mine if _is_open_task(t)]
-        m_overdue = sum(1 for t in m_open if t.get("due_date") and t["due_date"] < now)
-        m_action = m_done + len(m_open)
-        m_comp = (m_done / m_action) if m_action else 0
-        m_score = _clamp100(m_comp * 100 - (m_overdue / len(m_open) if m_open else 0) * 40) if m_action else None
-        employees.append({"id": mbr["id"], "name": mbr["name"], "role": mbr["role"],
-                          "score": m_score, "done": m_done, "open": len(m_open), "overdue": m_overdue})
-    employees.sort(key=lambda e: (e["score"] if e["score"] is not None else -1), reverse=True)
-    return employees
 
 
-async def _company_operating_view(tid: str, viewer: dict, now: str) -> dict:
-    """Compute the owner-facing company payload. Extracted so /operating-score
-    can dispatch by role (Epic 7 Sprint 1 Phase A -- role split)."""
-    can_finance = viewer.get("role") == "owner" or "finance" in user_perms(viewer)
-
-    tasks = await db.tasks.find({"tenant_id": tid}, {"_id": 0}).to_list(2000)
-    decisions = await db.decisions.find({"tenant_id": tid}, {"_id": 0, "status": 1}).to_list(2000)
-    complaints = await db.complaints.find({"tenant_id": tid}, {"_id": 0, "status": 1}).to_list(500)
-
-    execution, done, open_tasks, overdue, actionable = _score_execution(tasks, now)
-
-    total_billed = total_paid = 0.0
-    overdue_inv = 0
-    inv_count = 0
-    if can_finance:
-        invs = await db.invoices.find({"tenant_id": tid}, {"_id": 0, "amount": 1, "type": 1, "status": 1, "due_date": 1}).to_list(2000)
-        pays = await db.payments.find({"tenant_id": tid}, {"_id": 0, "amount": 1}).to_list(2000)
-        inv_count = len(invs)
-        total_billed = sum(float(i.get("amount") or 0) for i in invs if i.get("type") == "sales_invoice")
-        total_paid = sum(float(p.get("amount") or 0) for p in pays)
-        overdue_inv = sum(1 for i in invs if i.get("type") == "sales_invoice" and i.get("status") != "paid" and i.get("due_date") and i["due_date"] < now)
-    collected = (min(total_paid, total_billed) / total_billed) if total_billed else 0.7
-    finance = _clamp100(collected * 100 - overdue_inv * 5) if can_finance else None
-
-    sales, total_dec, approved = _score_sales(decisions)
-
-    open_complaints = sum(1 for c in complaints if c.get("status") != "resolved")
-    responsiveness = _clamp100(100 - open_complaints * 12 - overdue * 3)
-
-    categories = {"execution": execution, "finance": finance, "sales": sales, "responsiveness": responsiveness}
-    weights = {"execution": 0.35, "finance": 0.25, "sales": 0.2, "responsiveness": 0.2}
-    avail = {k: v for k, v in categories.items() if v is not None}
-    wsum = sum(weights[k] for k in avail) or 1
-    overall = _clamp100(sum(avail[k] * weights[k] for k in avail) / wsum)
-
-    enough_data = actionable >= 3 or inv_count > 0
-
-    members = await db.users.find({"tenant_id": tid}, {"_id": 0, "id": 1, "name": 1, "role": 1}).to_list(200)
-    employees = _score_employees(tasks, members, now)
-
-    return {
-        "company": {"overall": overall if enough_data else None, "categories": categories, "enough_data": enough_data},
-        "stats": {"done": done, "open": len(open_tasks), "overdue": overdue,
-                  "total_decisions": total_dec, "approved": approved, "open_complaints": open_complaints,
-                  "outstanding": round(total_billed - total_paid, 2) if can_finance else None},
-        "employees": employees,
-        "can_finance": can_finance,
-    }
 
 
-async def _self_operating_view(tid: str, viewer: dict, now: str) -> dict:
-    """Compute a personal, contributor-facing operating view for any
-    non-owner team member (Epic 7 Sprint 1 Phase A -- founder ask 2026-08-17:
-    'if the team person login and go the ops it have to show the individuals
-    person metrics').
-
-    Reuses compute_employee_stats for the richer signals (proof upload rate,
-    plan adoption, streak-friendly counts) that the company view discards.
-    Adds two purely-viewer surfaces the owner leaderboard never carried:
-    my open work (top 5 by due date) and my active workflows (current-stage
-    owner). Peer context is computed but the frontend keeps it behind an
-    opt-in per privacy default (open decision #1 in the analysis doc).
-    """
-    uid = viewer["id"]
-    urole = viewer.get("role") or ""
-    stats = await compute_employee_stats(tid, viewer)
-
-    # Top 5 open tasks by due date -- the surface a contributor actually acts on.
-    my_open = await db.tasks.find(
-        {"tenant_id": tid,
-         "$or": [{"assignee_id": uid},
-                 {"assignee_id": None, "assignee_role": urole}],
-         "status": {"$in": ["todo", "in_progress", "blocked"]}},
-        {"_id": 0, "id": 1, "title": 1, "due_date": 1, "priority": 1,
-         "status": 1, "workflow_id": 1, "stage_key": 1, "category": 1}
-    ).sort([("due_date", 1)]).to_list(5)
-    for t in my_open:
-        due = t.get("due_date")
-        t["is_overdue"] = bool(due and due < now)
-
-    # Active workflows where the viewer owns the CURRENT stage -- pull via
-    # tasks (workflow_id + stage_key == wf.current_stage). Cheap dedupe.
-    wf_ids_seen = set()
-    for t in my_open:
-        wid = t.get("workflow_id")
-        if wid:
-            wf_ids_seen.add(wid)
-    my_workflows = []
-    if wf_ids_seen:
-        wfs = await db.workflows.find(
-            {"id": {"$in": list(wf_ids_seen)}, "tenant_id": tid},
-            {"_id": 0, "id": 1, "title": 1, "type": 1, "stage": 1,
-             "counterparty": 1, "amount": 1}
-        ).to_list(len(wf_ids_seen))
-        my_workflows = wfs
-
-    # Peer context: rank in role. Frontend hides behind an opt-in toggle
-    # until we ship the per-user privacy preference (Phase B follow-up).
-    peer_context = None
-    if urole and urole != "owner":
-        role_members = await db.users.find(
-            {"tenant_id": tid, "role": urole},
-            {"_id": 0, "id": 1, "name": 1, "role": 1}
-        ).to_list(200)
-        if len(role_members) > 1:
-            all_tasks = await db.tasks.find(
-                {"tenant_id": tid}, {"_id": 0}).to_list(2000)
-            ranked = _score_employees(all_tasks, role_members, now)
-            ranked = [r for r in ranked if r["score"] is not None]
-            if ranked:
-                # rank of viewer within their role
-                try:
-                    my_rank = next(i for i, r in enumerate(ranked) if r["id"] == uid) + 1
-                except StopIteration:
-                    my_rank = None
-                peer_context = {
-                    "role": urole,
-                    "role_peer_count": len(role_members),
-                    "my_rank_in_role": my_rank,
-                    "role_ranked_size": len(ranked),
-                }
-
-    return {
-        "self": {"id": uid, "name": viewer.get("name"), "role": urole},
-        "stats": stats,
-        "my_open_work": my_open,
-        "my_active_workflows": my_workflows,
-        "peer_context": peer_context,
-    }
 
 
 # ---------------------------------------------------------------------------
 # Personal AI Work Coach
 # ---------------------------------------------------------------------------
-async def compute_employee_stats(tenant_id: str, target: dict) -> dict:
-    uid, role = target["id"], target.get("role")
-    now = datetime.now(timezone.utc).isoformat()
-    tasks = await db.tasks.find(
-        {"tenant_id": tenant_id, "$or": [{"assignee_id": uid}, {"assignee_id": None, "assignee_role": role}]},
-        {"_id": 0}).to_list(3000)
-    done = [t for t in tasks if t.get("status") == "done"]
-    open_tasks = [t for t in tasks if t.get("status") in ("todo", "in_progress", "blocked")]
-    overdue = [t for t in open_tasks if t.get("due_date") and t["due_date"] < now]
-    actionable = len(done) + len(open_tasks)
-
-    def has_attach(t, kind=None):
-        atts = t.get("attachments") or []
-        return any((kind is None or a.get("kind") == kind) for a in atts) if atts else False
-
-    done_with_proof = sum(1 for t in done if has_attach(t))
-    with_plan = sum(1 for t in tasks if (t.get("execution_plan") or {}).get("status") == "accepted")
-    plans_completed = sum(1 for t in tasks if (t.get("execution_plan") or {}).get("progress") == 100)
-    photos = sum(len([a for a in (t.get("attachments") or []) if a.get("kind") == "photo"]) for t in tasks)
-    voices = sum(len([a for a in (t.get("attachments") or []) if a.get("kind") == "voice"]) for t in tasks)
-    return {
-        "completed": len(done),
-        "open": len(open_tasks),
-        "overdue": len(overdue),
-        "actionable": actionable,
-        "completion_rate": round(len(done) / actionable * 100) if actionable else 0,
-        "proof_upload_rate": round(done_with_proof / len(done) * 100) if done else 0,
-        "plans_used": with_plan,
-        "plans_completed": plans_completed,
-        "photos_uploaded": photos,
-        "voice_updates": voices,
-    }
 
 
-async def ai_work_coach(target: dict, stats: dict, session_id: str) -> dict:
-    system = (
-        "You are a supportive but honest performance coach inside DecisionOS, an operating system for a small business. "
-        "Given one employee's work statistics, write a short performance review. Be specific and reference the numbers. "
-        "Return ONLY valid JSON: {\"headline\": string (one encouraging sentence), "
-        "\"strengths\": [string] (2-4 concrete strengths), \"improvements\": [string] (1-3 gentle, actionable areas), "
-        "\"recommendation\": string (one concrete habit to adopt next). Keep every item under 18 words.}"
-    )
-    prompt = (f"Employee: {target.get('name')} (role: {target.get('role')})\n"
-              f"Stats: {json.dumps(stats)}\n"
-              "Write the review now.")
-    chat = claude_chat(session_id=session_id, system_message=system).with_model(*LLM_MODEL)
-    resp = await chat.send_message(UserMessage(text=prompt))
-    try:
-        d = _extract_json(resp)
-    except Exception as e:
-        logger.error(f"AI work coach parse error: {e} :: {resp[:300]}")
-        d = {}
-    return {
-        "headline": str(d.get("headline") or "")[:200],
-        "strengths": [str(s)[:120] for s in (d.get("strengths") or [])][:4],
-        "improvements": [str(s)[:120] for s in (d.get("improvements") or [])][:3],
-        "recommendation": str(d.get("recommendation") or "")[:240],
-    }
 
 
-async def _resolve_coach_target(user: dict, user_id: Optional[str]) -> dict:
-    if user_id and user_id != user["id"]:
-        if user.get("role") != "owner":
-            raise HTTPException(status_code=403, detail="Only the owner can view others' coaching")
-        target = await db.users.find_one({"id": user_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
-        if not target:
-            raise HTTPException(status_code=404, detail="Employee not found")
-        return target
-    return user
 
 
 # Decisions

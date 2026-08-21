@@ -44,6 +44,11 @@ from database import client, db  # noqa: F401 — re-exports
 
 mongo_url = MONGO_URL  # legacy alias kept for anything reading `core.mongo_url`
 
+# Generic pure helpers moved to shared/ (Epic 8 Sprint 2). Re-exported so every
+# `from core import now_iso, new_id, _extract_json` keeps working.
+from shared.ids import now_iso, new_id  # noqa: F401,E402
+from shared.json_utils import _extract_json  # noqa: F401,E402
+
 # --- Runtime AI provider keys (mutable at runtime by platform admin) --------
 _ai_keys = dict(_AI_KEY_ENV)
 
@@ -347,14 +352,6 @@ async def get_platform_admin(
     return admin
 
 
-def now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
-def new_id() -> str:
-    return str(uuid.uuid4())
-
-
 # --- Auth helpers -----------------------------------------------------------
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
@@ -604,19 +601,6 @@ async def add_decision_event(decision_id: str, label: str, actor: str = "System"
     await db.decisions.update_one(
         {"id": decision_id},
         {"$push": {"timeline": {"ts": now_iso(), "label": label, "actor": actor, "kind": kind}}})
-
-
-def _extract_json(text: str):
-    text = text.strip()
-    if text.startswith("```"):
-        text = text.split("```", 2)[1] if text.count("```") >= 2 else text.strip("`")
-        if text.lstrip().startswith("json"):
-            text = text.lstrip()[4:]
-    start = text.find("{")
-    end = text.rfind("}")
-    if start != -1 and end != -1:
-        text = text[start:end + 1]
-    return json.loads(text)
 
 
 # --- Normalizers moved to shared/normalizers.py (Epic 8 Sprint 2) -----------

@@ -175,38 +175,6 @@ SUPPLIER_STAGES = ["prospect", "active", "preferred", "on_hold", "retired"]
 LIFECYCLE_STAGES = list({*CUSTOMER_STAGES, *SUPPLIER_STAGES}) + [""]
 
 
-class ContactInput(BaseModel):
-    type: str = "customer"
-    name: str
-    company: Optional[str] = ""
-    phone: Optional[str] = ""
-    email: Optional[str] = ""
-    address: Optional[str] = ""
-    tax_id: Optional[str] = ""
-    tags: Optional[List[str]] = None
-    status: Optional[str] = "lead"
-    assigned_id: Optional[str] = None
-    notes: Optional[str] = ""
-    birthday: Optional[str] = ""
-    lifecycle_stage: Optional[str] = ""  # E2-03
-
-
-class ContactUpdateInput(BaseModel):
-    type: Optional[str] = None
-    name: Optional[str] = None
-    company: Optional[str] = None
-    phone: Optional[str] = None
-    email: Optional[str] = None
-    address: Optional[str] = None
-    tax_id: Optional[str] = None
-    tags: Optional[List[str]] = None
-    status: Optional[str] = None
-    assigned_id: Optional[str] = None
-    notes: Optional[str] = None
-    birthday: Optional[str] = None
-    lifecycle_stage: Optional[str] = None  # E2-03
-
-
 # ---------------------------------------------------------------------------
 # Workflow definitions
 # ---------------------------------------------------------------------------
@@ -2298,9 +2266,6 @@ async def add_invites(inp: InviteInput, user: dict = Depends(require_perm("team_
 # ---------------------------------------------------------------------------
 
 
-# ---------------------------------------------------------------------------
-# Contacts (customers & vendors)
-# ---------------------------------------------------------------------------
 async def enrich_contacts(contacts: list) -> list:
     ids = list({c.get("assigned_id") for c in contacts if c.get("assigned_id")})
     umap = {}
@@ -2310,121 +2275,6 @@ async def enrich_contacts(contacts: list) -> list:
     for c in contacts:
         c["assigned_name"] = umap.get(c.get("assigned_id"))
     return contacts
-
-
-@api.get("/contacts")
-async def list_contacts(type: Optional[str] = None, status: Optional[str] = None, q: Optional[str] = None,
-                        user: dict = Depends(require_perm("people"))):
-    query = {"tenant_id": user["tenant_id"]}
-    if type:
-        query["type"] = type
-    if status:
-        query["status"] = status
-    if q:
-        rx = {"$regex": q, "$options": "i"}
-        query["$or"] = [{"name": rx}, {"company": rx}, {"email": rx}, {"phone": rx}]
-    contacts = await db.contacts.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
-    return await enrich_contacts(contacts)
-
-
-@api.post("/contacts")
-async def create_contact(inp: ContactInput, user: dict = Depends(require_role("owner", "sales"))):
-    if inp.type not in CONTACT_TYPES:
-        raise HTTPException(status_code=400, detail="Invalid contact type")
-    status = inp.status if inp.status in CONTACT_STATUS else "lead"
-    cid = new_id()
-    # E2-03: accept lifecycle_stage from the union of customer +
-    # supplier stages. Empty string means unset (unfamiliar contact).
-    stage = (inp.lifecycle_stage or "").strip().lower()
-    if stage and stage not in LIFECYCLE_STAGES:
-        stage = ""
-    doc = {
-        "id": cid, "tenant_id": user["tenant_id"], "type": inp.type, "name": inp.name,
-        "company": inp.company or "", "phone": inp.phone or "", "email": inp.email or "",
-        "address": inp.address or "", "tax_id": inp.tax_id or "", "tags": inp.tags or [],
-        "status": status, "assigned_id": inp.assigned_id, "notes": inp.notes or "",
-        "birthday": inp.birthday or "", "lifecycle_stage": stage,
-        "created_by": user["id"], "created_at": now_iso(),
-    }
-    await db.contacts.insert_one(doc)
-    await log_activity(user["tenant_id"], user["id"], "contact_added", f"Added {inp.type} '{inp.name}'", "contact", cid)
-    doc.pop("_id", None)
-    return (await enrich_contacts([doc]))[0]
-
-
-@api.patch("/contacts/{contact_id}")
-async def update_contact(contact_id: str, inp: ContactUpdateInput, user: dict = Depends(require_role("owner", "sales"))):
-    c = await db.contacts.find_one({"id": contact_id, "tenant_id": user["tenant_id"]})
-    if not c:
-        raise HTTPException(status_code=404, detail="Not found")
-    updates = {k: v for k, v in inp.model_dump().items() if v is not None}
-    if "type" in updates and updates["type"] not in CONTACT_TYPES:
-        updates.pop("type")
-    if "status" in updates and updates["status"] not in CONTACT_STATUS:
-        updates.pop("status")
-    # E2-03: normalise + validate lifecycle_stage against the union.
-    # Empty string is a legit value (means "unset" / no stage yet).
-    if "lifecycle_stage" in updates:
-        s = (updates["lifecycle_stage"] or "").strip().lower()
-        updates["lifecycle_stage"] = s if s in LIFECYCLE_STAGES else ""
-    # FIX-003-C (S2-09): denormalized-name cascade. `contact_name` is
-    # copied at write time into invoices, payments, and workflows
-    # (workflows.counterparty). Without a cascade, renaming a contact
-    # only updates the contacts collection — every existing invoice /
-    # payment / workflow keeps the old name in its display column,
-    # search index, and any exported report. Cascade on the rename to
-    # keep the reads consistent.
-    old_name = (c.get("name") or "").strip()
-    new_name = str(updates.get("name") or "").strip()
-    name_changed = ("name" in updates and new_name and new_name != old_name)
-    if updates:
-        await db.contacts.update_one({"id": contact_id}, {"$set": updates})
-    if name_changed:
-        tid = user["tenant_id"]
-        # Match by contact_id where present (recent rows) and by exact
-        # old_name where contact_id is missing (legacy rows written
-        # before contact_id backfill). Every update is tenant-scoped
-        # so nothing crosses workspaces.
-        cascade_query_by_id = {"tenant_id": tid, "contact_id": contact_id}
-        cascade_query_by_name = {"tenant_id": tid, "contact_id": {"$in": [None, ""]},
-                                  "contact_name": old_name} if old_name else None
-        for coll_name, name_field in (
-            ("invoices", "contact_name"),
-            ("payments", "contact_name"),
-        ):
-            try:
-                await db[coll_name].update_many(cascade_query_by_id,
-                                                {"$set": {name_field: new_name}})
-                if cascade_query_by_name:
-                    await db[coll_name].update_many(cascade_query_by_name,
-                                                    {"$set": {name_field: new_name}})
-            except Exception:
-                logger.exception(f"[FIX-003-C] contact_name cascade failed on {coll_name}")
-        # workflows.counterparty is the denormalized display for the
-        # linked contact. Same match strategy.
-        try:
-            await db.workflows.update_many(
-                {"tenant_id": tid, "contact_id": contact_id},
-                {"$set": {"counterparty": new_name}},
-            )
-            if old_name:
-                await db.workflows.update_many(
-                    {"tenant_id": tid, "contact_id": {"$in": [None, ""]},
-                     "counterparty": old_name},
-                    {"$set": {"counterparty": new_name}},
-                )
-        except Exception:
-            logger.exception("[FIX-003-C] counterparty cascade failed on workflows")
-    c = await db.contacts.find_one({"id": contact_id}, {"_id": 0})
-    return (await enrich_contacts([c]))[0]
-
-
-@api.delete("/contacts/{contact_id}")
-async def delete_contact(contact_id: str, user: dict = Depends(require_role("owner", "sales"))):
-    res = await db.contacts.delete_one({"id": contact_id, "tenant_id": user["tenant_id"]})
-    if res.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Not found")
-    return {"deleted": True}
 
 
 # ---------------------------------------------------------------------------
@@ -3066,70 +2916,6 @@ from services.tasks import _tenant_industry, _attach_reference_ids  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
-# Company Brain search
-# ---------------------------------------------------------------------------
-def _brain_can_finance(user: dict) -> bool:
-    """Whether a user may see financial records in Company Brain (Search + Ask)."""
-    return bool({"finance", "ledger"} & user_perms(user))
-
-
-def _brain_privileged(user: dict) -> bool:
-    """Owners / team managers see all departments' operational records."""
-    return user.get("role") == "owner" or "team_manage" in user_perms(user)
-
-
-@api.get("/brain/search")
-async def brain_search(q: str = "", user: dict = Depends(require_perm("brain"))):
-    tid = user["tenant_id"]
-    uid = user.get("id")
-    urole = user.get("role")
-    can_finance = _brain_can_finance(user)
-    privileged = _brain_privileged(user)
-    tokens = [re.escape(t) for t in q.split() if len(t) >= 2]
-    rx = {"$regex": "|".join(tokens), "$options": "i"} if tokens else {"$exists": True}
-
-    # Tasks: non-privileged users only see tasks in their own department (own / their role / created by them).
-    task_q = {"tenant_id": tid, "$and": [{"$or": [{"title": rx}, {"description": rx}]}]}
-    if not privileged:
-        task_q["$and"].append({"$or": [{"assignee_id": uid}, {"assignee_role": urole}, {"created_by": uid}]})
-
-    decisions = await db.decisions.find({"tenant_id": tid, "$or": [{"title": rx}, {"summary": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
-    tasks = await db.tasks.find(task_q, {"_id": 0}).sort("created_at", -1).to_list(50)
-    workflows = await db.workflows.find({"tenant_id": tid, "$or": [{"title": rx}, {"detail": rx}, {"counterparty": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
-    contacts = await db.contacts.find({"tenant_id": tid, "$or": [{"name": rx}, {"company": rx}, {"email": rx}, {"phone": rx}, {"notes": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
-    memory = await db.memory.find({"tenant_id": tid, "text": rx}, {"_id": 0}).sort("created_at", -1).to_list(50)
-
-    # Financial records: department-restricted to Owner / Finance / Ledger roles only.
-    if can_finance:
-        invoices = await db.invoices.find({"tenant_id": tid, "$or": [{"number": rx}, {"contact_name": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
-        expenses = await db.expenses.find({"tenant_id": tid, "$or": [{"title": rx}, {"vendor_name": rx}, {"category": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
-        assets = await db.assets.find({"tenant_id": tid, "$or": [{"name": rx}, {"vendor_name": rx}, {"category": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
-        inventory = await db.inventory.find({"tenant_id": tid, "$or": [{"item": rx}, {"sku": rx}, {"vendor_name": rx}, {"category": rx}]}, {"_id": 0}).sort("created_at", -1).to_list(50)
-    else:
-        invoices = expenses = assets = inventory = []
-        # Hide the money figure on operational workflow cards from non-finance roles.
-        for w in workflows:
-            if "amount" in w:
-                w["amount"] = None
-    return {
-        # FIX-003-B (S2-05): explicit tenant_id makes the tenant filter
-        # unconditional (auto-inference in enrich_decisions works, but
-        # explicit reads better and survives future refactors that may
-        # widen the query).
-        "decisions": await enrich_decisions(decisions, tenant_id=tid),
-        "tasks": await enrich_tasks(tasks),
-        "workflows": workflows,
-        "contacts": await enrich_contacts(contacts),
-        "memory": memory,
-        "invoices": invoices,
-        "expenses": expenses,
-        "assets": assets,
-        "inventory": inventory,
-        "scope": {"finance_visible": can_finance, "all_departments": privileged},
-    }
-
-
-# ---------------------------------------------------------------------------
 # Ask AI  →  superseded by routers/brain.py (Company Brain Phase-1 pipeline).
 # Kept un-registered (no route) for reference; /api/ask is now served by brain.py.
 # ---------------------------------------------------------------------------
@@ -3354,16 +3140,6 @@ class AttendanceInput(BaseModel):
     status: str = "absent"
     date: Optional[str] = None
 
-
-class ComplaintInput(BaseModel):
-    customer_id: Optional[str] = None
-    text: str
-    severity: Optional[str] = "medium"
-
-
-class MemoryInput(BaseModel):
-    text: str
-    tag: Optional[str] = "note"
 
 
 async def _owner_ids(tenant_id: str) -> list:
@@ -3677,75 +3453,6 @@ async def followup_run(user: dict = Depends(require_perm("team_manage"))):
     # auth-only which meant any employee could trigger it on-demand.
     await run_followup(user["tenant_id"])
     return {"ok": True}
-
-
-
-
-@api.post("/complaints")
-async def create_complaint(inp: ComplaintInput, user: dict = Depends(require_role("owner", "sales"))):
-    name = None
-    if inp.customer_id:
-        c = await db.contacts.find_one({"id": inp.customer_id, "tenant_id": user["tenant_id"]}, {"_id": 0, "name": 1, "company": 1})
-        if c:
-            name = c.get("company") or c.get("name")
-    cid = new_id()
-    doc = {"id": cid, "tenant_id": user["tenant_id"], "customer_id": inp.customer_id, "customer_name": name,
-           "text": inp.text, "severity": inp.severity or "medium", "status": "open",
-           "created_by": user["id"], "created_at": now_iso()}
-    await db.complaints.insert_one(doc)
-    await add_inbox_item(user["tenant_id"], user["id"], "manual", "complaint",
-                         f"Complaint: {(name or 'customer')}", inp.text[:180],
-                         "complaint", cid, contact_id=inp.customer_id, status="open")
-    await log_activity(user["tenant_id"], user["id"], "complaint_logged", f"Complaint logged: {inp.text[:60]}", "complaint", cid)
-    doc.pop("_id", None)
-    return doc
-
-
-@api.get("/complaints")
-async def list_complaints(status: Optional[str] = None, user: dict = Depends(get_current_user)):
-    q = {"tenant_id": user["tenant_id"]}
-    if status:
-        q["status"] = status
-    return await db.complaints.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
-
-
-@api.patch("/complaints/{cid}/resolve")
-async def resolve_complaint(cid: str, user: dict = Depends(require_role("owner", "sales"))):
-    c = await db.complaints.find_one({"id": cid, "tenant_id": user["tenant_id"]}, {"_id": 0})
-    res = await db.complaints.update_one({"id": cid, "tenant_id": user["tenant_id"]}, {"$set": {"status": "resolved", "resolved_at": now_iso()}})
-    if res.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Not found")
-    if c:
-        await brain_context.record_context(
-            tenant_id=user["tenant_id"], kind="resolution",
-            title=f"Resolved complaint: {(c.get('text') or '')[:120]}",
-            outcome="resolved", why=c.get("text") or "",
-            tags=["complaint"], source_type="complaint", source_id=cid,
-            actor_id=user["id"], actor_name=user.get("name") or "",
-            department=user.get("role") or "", visibility="public",
-        )
-    return {"ok": True}
-
-
-@api.get("/memory")
-async def list_memory(user: dict = Depends(get_current_user)):
-    return await db.memory.find({"tenant_id": user["tenant_id"]}, {"_id": 0}).sort("created_at", -1).to_list(200)
-
-
-@api.post("/memory")
-async def add_memory(inp: MemoryInput, user: dict = Depends(require_perm("brain"))):
-    # FIX-004-C (RBAC-11): writing to shared tenant memory (persistent
-    # facts the AI later cites) is a brain-permission action, not a
-    # read anyone can do. Read of memory stays open via /memory GET
-    # (no perm), only WRITE is gated.
-    mid = new_id()
-    doc = {"id": mid, "tenant_id": user["tenant_id"], "text": inp.text, "tag": inp.tag or "note",
-           "created_by": user["id"], "created_at": now_iso()}
-    await db.memory.insert_one(doc)
-    doc.pop("_id", None)
-    return doc
-
-
 
 
 

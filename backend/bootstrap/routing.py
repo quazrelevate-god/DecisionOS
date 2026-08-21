@@ -31,6 +31,9 @@ from routers.billing import router as billing_router
 from routers.workflows import router as workflows_router
 from routers.meetings import router as meetings_router
 from routers.captures import router as captures_router
+from routers.contacts import router as contacts_router
+from routers.complaints import router as complaints_router
+from routers.brain_search import router as brain_search_router
 
 # Every extracted domain router, in the exact order server.py mounted them.
 _DOMAIN_ROUTERS = (
@@ -56,6 +59,9 @@ _DOMAIN_ROUTERS = (
     workflows_router,  # Epic 8 S3: workflows domain extracted from server.py
     meetings_router,   # Epic 8 S3: meetings domain extracted from server.py
     captures_router,   # Epic 8 S3: captures review-queue extracted from server.py
+    contacts_router,   # Epic 8 S3: contacts CRUD extracted from server.py
+    complaints_router, # Epic 8 S3: complaints + memory extracted from server.py
+    brain_search_router, # Epic 8 S3: Company Brain search extracted from server.py
 )
 
 

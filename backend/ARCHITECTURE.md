@@ -129,3 +129,10 @@ bootstrap     ->  anything ;  nothing imports bootstrap except server.py
   - `server.py` now calls these two; the entry point stays `server:app`.
 - **Verified byte-identical**: route table = 260 routes, same SHA-256 fingerprint; middleware stack `[CSRF, CORS]` unchanged.
 - **Not touched this sprint** (deliberately): the 86 in-file `api` endpoints (Sprint 3), the `@app.on_event` startup/shutdown and `_bootstrap` (Sprint 7).
+
+### Sprint 2 — core decomposition (in progress)
+
+Splitting the 775→ `core.py` kitchen sink. Done as small, individually-verified slices; `core` keeps re-exporting every symbol so no caller changes.
+
+- **Slice 1 (done):** pure normalizers → `shared/normalizers.py` (`normalize_os_blueprint` / `normalize_lexicon` / `normalize_operating_model` + helpers, `DEFAULT_OPERATING_MODEL` / `DEFAULT_LEXICON`). `core.py` 917 → 628 lines. Verified byte-identical: normalizer golden hash + 260-route fingerprint unchanged. Pure functions, no db/auth — safe without the integration suite.
+- **Deferred until the full regression suite is runnable** (auth/security/db-critical): `security.py` (hashing/JWT/cookies), `deps.py` + `permissions.py` (`get_current_user` / `require_perm` / `user_perms`), `usage.py` + `integrations/llm.py` (telemetry + resilient chat), then `core.py` → `core/` package and shim retirement.

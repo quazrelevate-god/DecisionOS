@@ -1,20 +1,26 @@
-"""External-provider adapters (Epic 8 — populated in Sprint 6).
+"""External-provider adapters (Epic 8 Sprint 6).
 
-One module per outside service, each wrapping a single provider behind a small
-interface so callers depend on the adapter, not the SDK. Centralizes timeouts,
-retries, and SSRF guarding, and gives tests one seam to mock.
+One module per external service — each owns the raw SDK/HTTP transport for that
+provider and nothing else. Business orchestration (fallback chains, usage
+logging, tenant context) stays in ``services/``, which calls these adapters.
 
-Planned modules (moved out of server.py / services in Sprint 6):
-    llm.py          claude_chat / resilient chat wrapper + provider keys
-    openai_stt.py   OpenAI speech-to-text
-    gemini.py       Gemini vision / document reads
-    sarvam.py       Sarvam STT
-    whatsapp_api.py WhatsApp send / receive / media
-    razorpay.py     Razorpay billing
-    email_smtp.py   SMTP email
-    obj_store.py    object storage (today: services/obj_store.py)
-    ssrf_guard.py   outbound-URL SSRF checks (today: services/ssrf_guard.py)
+  base.py       ProviderError + with_retry / arun (timeout+backoff) + a mock hook
+  llm.py        resilient Claude chat (user Anthropic key -> Emergent fallback)   [S2]
+  stt.py        speech-to-text transport: Sarvam REST + batch, OpenAI, Whisper
+  gemini.py     Gemini vision client + doc/plain-text generate_content
+  whatsapp.py   WhatsApp Cloud API: token/phone-id, media download, text reply
+  email.py      email transport: Gmail SMTP -> Resend -> mock
+  razorpay.py   Razorpay webhook HMAC verify (no SDK; hosted checkout)
+  storage.py    Emergent Object Storage wrapper (put/get/delete)
 
-Import rule: integrations import only external SDKs + config. Never routers,
-services, or bootstrap.
+Layering: adapters import only ``config`` / ``core`` / external SDKs + ``base``;
+never ``services`` or ``server`` at module load. The one shared cross-cutting
+LLM guard (concurrency + timeout + tenant quota/consent) is ``services.ai.
+llm_limits.guarded_llm`` — it is policy, not transport, so it stays in services.
+
+Compat: several services keep thin re-export shims (``services/email.py``,
+``services/obj_store.py``, and re-exports inside ``services/whatsapp.py`` /
+``services/transcription.py`` / ``services/vision.py``) so existing
+``from services.X import Y`` call sites keep resolving while call sites migrate
+to ``integrations.X`` over time.
 """

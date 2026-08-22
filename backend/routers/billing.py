@@ -66,17 +66,8 @@ def _sign_handoff(tenant_id: str, plan_key: str, expires_iso: str) -> str:
     ).hexdigest()
 
 
-def _verify_razorpay_signature(body: bytes, signature: str) -> bool:
-    """Standard Razorpay webhook verification -- HMAC-SHA256 of the
-    raw request body using RAZORPAY_WEBHOOK_SECRET."""
-    if not (signature and RAZORPAY_WEBHOOK_SECRET):
-        return False
-    expected = hmac.new(
-        RAZORPAY_WEBHOOK_SECRET.encode("utf-8"),
-        body,
-        hashlib.sha256,
-    ).hexdigest()
-    return hmac.compare_digest(expected, signature)
+# Razorpay webhook verification moved to integrations/razorpay.py (Epic 8 S6).
+from integrations.razorpay import verify_webhook_signature as _verify_razorpay_signature  # noqa: E402
 
 
 def _plan_from_amount_paise(amount: int) -> Optional[str]:

@@ -10,9 +10,13 @@ ingestion, transcription, notifications; nothing imports it back.
 import os
 import re
 
-import httpx
-
 from core import db, logger, new_id, now_iso, get_ai_key, set_usage_tenant, tenant_role_keys
+# Graph API transport moved to integrations/whatsapp.py (Epic 8 Sprint 6);
+# imported here + re-exported so `from services.whatsapp import wa_token, ...`
+# call sites (whatsapp router, captures, finance) keep working.
+from integrations.whatsapp import (  # noqa: F401
+    wa_token, wa_phone_id, download_wa_media, send_wa_reply,
+)
 from services.notifications import push_notification, _owner_ids
 from services.transcription import transcribe_audio_full
 from services.ingestion import (
@@ -23,14 +27,6 @@ from services.captures import (
     _capture_settings, persist_capture_draft, execute_capture, ai_capture_triage,
     _needs_owner_review, _decide_processing_level, DOC_CLASS,
 )
-
-
-def wa_token() -> str:
-    return get_ai_key("wa_access_token")
-
-
-def wa_phone_id() -> str:
-    return get_ai_key("wa_phone_number_id")
 
 
 async def log_wa_event(from_phone: str, mtype: str, status: str, reason: str = "", tenant_id=None, summary: str = ""):
@@ -168,31 +164,8 @@ async def resolve_wa_tenant(sender: str):
     return os.environ.get("WA_TENANT_ID") or None
 
 
-async def download_wa_media(media_id: str) -> bytes:
-    token = wa_token()
-    ver = os.environ.get("GRAPH_API_VERSION", "v21.0")
-    headers = {"Authorization": f"Bearer {token}"}
-    async with httpx.AsyncClient(timeout=60) as c:
-        meta = (await c.get(f"https://graph.facebook.com/{ver}/{media_id}", headers=headers)).json()
-        url = meta.get("url")
-        if not url:
-            raise Exception("media url unavailable")
-        return (await c.get(url, headers=headers)).content
-
-
-async def send_wa_reply(to_phone: str, text: str):
-    token = wa_token()
-    pnid = wa_phone_id()
-    ver = os.environ.get("GRAPH_API_VERSION", "v21.0")
-    if not (token and pnid):
-        return
-    try:
-        async with httpx.AsyncClient(timeout=30) as c:
-            await c.post(f"https://graph.facebook.com/{ver}/{pnid}/messages",
-                         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-                         json={"messaging_product": "whatsapp", "to": to_phone, "type": "text", "text": {"body": text}})
-    except Exception:
-        logger.exception("WhatsApp reply failed")
+# download_wa_media + send_wa_reply moved to integrations/whatsapp.py (S6);
+# imported at the top of this module.
 
 
 WA_MIME_EXT = {"application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}

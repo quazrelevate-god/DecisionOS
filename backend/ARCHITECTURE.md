@@ -179,3 +179,25 @@ Gathered **all 88 request/response Pydantic models** — 13 inline in `server.py
 - `server.py` **2,297 → 2,209 lines** and defines **zero** models; it re-exports the handful of moved shapes that tests still import via `from server import <Model>`. Every router imports from `models.<domain>`; no model is defined inline anywhere.
 
 What remains in `server.py` is now purely Sprint 7 territory: shared constants, `add_inbox_item`, the OTP infra, `_bootstrap` / seed / migrations / lifecycle, and the scheduler loops.
+
+### Sprint 6 — integration adapters (COMPLETE)
+
+Every external provider now sits behind **one adapter in `integrations/`**, over a shared base — the single seam to mock a vendor, swap one, or enforce timeouts/retries. Services keep the orchestration (fallback chains, usage logging, tenant context) and call the adapters.
+
+```
+integrations/
+├── base.py       ProviderError(provider, op, cause) + with_retry (sync, exp-backoff)
+│                 + arun (async timeout+retry) + a mock hook (INTEGRATIONS_MOCK)
+├── llm.py        resilient Claude chat: user Anthropic key → Emergent fallback   [built S2]
+├── stt.py        Sarvam REST + Sarvam batch + OpenAI gpt-4o-transcribe + Whisper
+├── gemini.py     google-genai client + JSON / plain-text generate_content
+├── whatsapp.py   Graph API: token/phone-id, media download, text reply
+├── email.py      Gmail SMTP (primary) → Resend → mock
+├── razorpay.py   webhook HMAC-SHA256 verify (no SDK; hosted checkout)
+└── storage.py    Emergent Object Storage (init/put/get/delete)
+```
+
+- **Adapter layering** is now clean: adapters import only `config` / `core` / external SDKs / `base` — never `services` or `server` at load time.
+- **Compat shims** keep call sites working while they migrate: `services/email.py` and `services/obj_store.py` are thin re-export shims; `services/whatsapp.py`, `services/transcription.py`, and `services/vision.py` re-export the transport names they moved out.
+- The one cross-cutting **LLM guard** (`services.ai.llm_limits.guarded_llm` — concurrency + timeout + tenant quota/consent) intentionally stays in `services/`: it's shared policy, not provider transport.
+- Verified with live adapter round-trips (object-store put→get, WhatsApp status/logs, Razorpay bad-signature rejection, email via password-reset) plus the 260-route fingerprint held throughout.

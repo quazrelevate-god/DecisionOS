@@ -10,10 +10,8 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Response
 
 from core import db, now_iso, create_token, set_auth_cookie, login_response
-from server import (  # OTP infra + models still in server (S5/S7)
-    _issue_otp, _hash_otp, OTP_MAX_ATTEMPTS,
-    OtpRequestInput, OtpVerifyInput,
-)
+from server import _issue_otp, _hash_otp, OTP_MAX_ATTEMPTS  # OTP infra still in server (S7)
+from models.auth import OtpRequestInput, OtpVerifyInput
 from services.whatsapp import _norm_phone
 
 router = APIRouter(prefix="/api")

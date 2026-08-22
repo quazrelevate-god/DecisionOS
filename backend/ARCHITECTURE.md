@@ -168,3 +168,14 @@ Services created (in dependency order, leaf-first):
 | `services/leave.py` | leave approver resolution + request + AI impact |
 
 `server.py` **4,938 → 2,297 lines**. What remains there is genuinely not S4: shared constants (`WORKFLOW_STAGES`, `CONTACT_TYPES`, …), inline Pydantic models (→ S5), `add_inbox_item`, the OTP infra, and `_bootstrap`/seed/migrations/lifecycle + the scheduler loops (→ S7). Routers were repointed: every module-top `from server import <business helper>` now imports from the owning service; the only module-top `from server import` left in routers are models (S5), shared constants, OTP infra, and `add_inbox_item`. Deferred in-function imports remain the sanctioned lazy pattern and now resolve through `server`'s re-exports, which delegate to the services.
+
+### Sprint 5 — schema & model consolidation (COMPLETE)
+
+Gathered **all 88 request/response Pydantic models** — 13 inline in `server.py` and 68 scattered across routers — into a **per-domain `models/` package (20 files)**. A detection pass first proved every inline model was self-contained (no references to module-level constants, no `re`, no custom validators), so the moves were pure text relocation; the route fingerprint stayed **260** automatically (models don't touch routing) and behaviour was confirmed with an HTTP validation smoke (bad payload → 422, valid → 200) across ten domains.
+
+- **Dead duplicates deleted** from `server.py`: `RegisterInput`, `LoginInput` (the live versions live in `routers/auth.py` → now `models/auth.py`), `UserCreateInput`, `UserUpdateInput`, `AttendanceInput` (live in `models/team.py`).
+- **Deduped shared shapes**: `RoleItem` / `ProductItem` live once in `models/tenant.py` and are re-used by `models/auth.py`; `ProfileUpdateInput` / `ChangePasswordInput` live once in `models/auth.py` and are imported by `tenant_settings`.
+- **`models/__init__.py`** is now the domain index (was stale "empty scaffolding").
+- `server.py` **2,297 → 2,209 lines** and defines **zero** models; it re-exports the handful of moved shapes that tests still import via `from server import <Model>`. Every router imports from `models.<domain>`; no model is defined inline anywhere.
+
+What remains in `server.py` is now purely Sprint 7 territory: shared constants, `add_inbox_item`, the OTP infra, `_bootstrap` / seed / migrations / lifecycle, and the scheduler loops.

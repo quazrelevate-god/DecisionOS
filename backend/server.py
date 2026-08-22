@@ -53,98 +53,15 @@ app = FastAPI(title="DecisionOS")
 # ---------------------------------------------------------------------------
 # Models
 # ---------------------------------------------------------------------------
-class RoleItem(BaseModel):
-    key: str
-    label: str
-
-
-class ProductItem(BaseModel):
-    name: str
-    description: Optional[str] = ""
-
-
-class RegisterInput(BaseModel):
-    company_name: str
-    name: str
-    email: EmailStr
-    password: str = Field(min_length=6)
-    phone: Optional[str] = None
-    industry: Optional[str] = None
-    description: Optional[str] = None
-    company_size: Optional[str] = None
-    region: Optional[str] = None
-    currency: Optional[str] = "INR"
-    gst: Optional[str] = None
-    branches: Optional[str] = None
-    business_scale: Optional[dict] = None
-    current_software: Optional[List[str]] = None
-    roles: Optional[List[RoleItem]] = None
-    products: Optional[List[ProductItem]] = None
-    os_blueprint: Optional[dict] = None
-
-
-class TenantUpdateInput(BaseModel):
-    name: Optional[str] = None
-    industry: Optional[str] = None
-    company_size: Optional[str] = None
-    region: Optional[str] = None
-    currency: Optional[str] = None
-    gst: Optional[str] = None
-    phone: Optional[str] = None
-    branches: Optional[str] = None
-    products: Optional[List[ProductItem]] = None
-
-
-class InviteInput(BaseModel):
-    phones: List[str]
-
-
-class LoginInput(BaseModel):
-    email: EmailStr
-    password: str
-
-
-class OtpRequestInput(BaseModel):
-    phone: str
-    # FIX-003-A (S2-03): tenant hint. Optional so the single-tenant fast
-    # path stays backward-compatible; required when the phone is
-    # registered in more than one workspace (the request returns
-    # {"ambiguous": true, "choices": [...]} in that case and the
-    # frontend re-sends with tenant_id filled in).
-    tenant_id: Optional[str] = None
-
-
-class OtpVerifyInput(BaseModel):
-    phone: str
-    code: str
-    # FIX-003-A (S2-03): tenant hint. Same rules as OtpRequestInput —
-    # the OTP code is keyed by (phone, tenant_id) so verifying without
-    # a tenant on a multi-tenant phone is a 409.
-    tenant_id: Optional[str] = None
-
-
-class UserCreateInput(BaseModel):
-    name: str
-    email: EmailStr
-    password: Optional[str] = None  # optional — omit for passwordless (mobile OTP) members
-    role: str
-    phone: Optional[str] = None
-    permissions: Optional[List[str]] = None
-    reporting_manager_id: Optional[str] = None
-
-
-class UserUpdateInput(BaseModel):
-    role: Optional[str] = None
-    phone: Optional[str] = None
-    permissions: Optional[List[str]] = None
-    reporting_manager_id: Optional[str] = None
-
-
-class TextNoteInput(BaseModel):
-    text: str
-    title: Optional[str] = None
-    language: Optional[str] = "auto"
-    file_ids: Optional[List[str]] = None
+# Request models consolidated into the models/ package (Epic 8 Sprint 5).
+# Re-exported here so tests + server's own legacy helpers keep resolving
+# `from server import <Model>`; routers now import from models/ directly.
+# RegisterInput / LoginInput / UserCreateInput / UserUpdateInput / AttendanceInput
+# were dead duplicates (routers/auth.py + models/team.py own the live versions)
+# and were removed in Sprint 5.
+from models.tenant import RoleItem, ProductItem, TenantUpdateInput, InviteInput  # noqa: F401
+from models.auth import OtpRequestInput, OtpVerifyInput  # noqa: F401
+from models.voice import TextNoteInput  # noqa: F401
 
 
 TASK_TYPES = {"operational", "sales", "purchase", "production", "finance", "hr", "other"}
@@ -156,8 +73,7 @@ from services.tasks import TASK_STATUSES  # noqa: F401
 from models.tasks import TaskCreateInput, TaskUpdateInput  # noqa: F401
 
 
-class AskInput(BaseModel):
-    question: str
+from models.brain import AskInput  # noqa: F401  (Epic 8 S5; used by _ask_ai_legacy below)
 
 
 CONTACT_TYPES = ("customer", "dealer", "vendor")
@@ -705,12 +621,8 @@ from services.notifications import (  # noqa: E402
     NOTIF_LEVELS, push_notification, dispatch_owner_alert,
     _owner_ids, _approver_ids, _finance_user_ids,
 )
-
-
-class AttendanceInput(BaseModel):
-    user_id: str
-    status: str = "absent"
-    date: Optional[str] = None
+# AttendanceInput removed in Epic 8 Sprint 5 — the live model is models/team.py
+# (imported by routers/team.py); server's copy was a dead duplicate.
 
 
 

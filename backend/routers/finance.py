@@ -24,6 +24,12 @@ from services.ai.extraction import ai_score_contact
 router = APIRouter(prefix="/api")
 
 
+# Request models consolidated into models/ (Epic 8 Sprint 5).
+from models.finance import (
+    IngestCommitInput,
+)
+
+
 @router.post("/ingest/document")
 async def ingest_document(file: UploadFile = File(...), source: str = Form("upload"),
                           user: dict = Depends(require_perm("data_input"))):
@@ -128,8 +134,6 @@ async def ingest_csv(file: UploadFile = File(...), user: dict = Depends(require_
     return doc
 
 
-class IngestCommitInput(BaseModel):
-    records: dict
 
 
 @router.post("/ingest/{ingestion_id}/commit")

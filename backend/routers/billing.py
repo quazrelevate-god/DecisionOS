@@ -93,6 +93,12 @@ def _plan_from_amount_paise(amount: int) -> Optional[str]:
 # ---------------------------------------------------------------------------
 # GET /api/billing/plans -- catalogue for the frontend/landing page
 # ---------------------------------------------------------------------------
+# Request models consolidated into models/ (Epic 8 Sprint 5).
+from models.billing import (
+    CheckoutInput,
+)
+
+
 @router.get("/plans")
 async def list_plans(user: dict = Depends(get_current_user)):
     """Public plan catalogue. Merges services/plans PLAN_DEFINITIONS
@@ -135,10 +141,6 @@ async def billing_status(user: dict = Depends(get_current_user)):
 # ---------------------------------------------------------------------------
 # POST /api/billing/checkout -- handoff to landing page
 # ---------------------------------------------------------------------------
-class CheckoutInput(BaseModel):
-    plan_key: str = Field(..., description="One of starter, business")
-    return_to: Optional[str] = Field(
-        None, description="Path in this app to redirect back to after payment. Defaults to BILLING_RETURN_URL.")
 
 
 @router.post("/checkout")

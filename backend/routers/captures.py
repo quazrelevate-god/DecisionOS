@@ -17,22 +17,8 @@ from services.captures import execute_capture
 router = APIRouter(prefix="/api")
 
 
-class CaptureEditInput(BaseModel):
-    classification: Optional[str] = None
-    reviewer_role: Optional[str] = None
-    assignee_id: Optional[str] = None
-    priority: Optional[str] = None
-    due_date: Optional[str] = None
-    summary: Optional[str] = None
-    text: Optional[str] = None
-    records: Optional[dict] = None
 
 
-class CaptureActionInput(BaseModel):
-    note: Optional[str] = ""
-    reason: Optional[str] = ""
-    reviewer_role: Optional[str] = None
-    assignee_id: Optional[str] = None
 
 
 async def _get_draft(cid, user):
@@ -42,6 +28,13 @@ async def _get_draft(cid, user):
     if user["role"] != "owner" and d["reviewer_role"] != user["role"]:
         raise HTTPException(status_code=403, detail="Not your review queue")
     return d
+
+
+# Request models consolidated into models/ (Epic 8 Sprint 5).
+from models.captures import (
+    CaptureEditInput,
+    CaptureActionInput,
+)
 
 
 @router.get("/captures")

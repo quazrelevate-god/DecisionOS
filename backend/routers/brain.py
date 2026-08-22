@@ -736,17 +736,18 @@ async def _answer(question, kpis, table, lang,
 # ---------------------------------------------------------------------------
 # API
 # ---------------------------------------------------------------------------
-class AskRequest(BaseModel):
-    question: str
-    context_id: Optional[str] = None
 
 
-class ExportRequest(BaseModel):
-    context_id: str
-    format: str = "csv"
 
 
 _PERM_DENIED_MSG = "You do not have permission to access financial or profitability information. Ask your workspace owner for Finance access."
+
+
+# Request models consolidated into models/ (Epic 8 Sprint 5).
+from models.brain import (
+    AskRequest,
+    ExportRequest,
+)
 
 
 @router.post("/ask")

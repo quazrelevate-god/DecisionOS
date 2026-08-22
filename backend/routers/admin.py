@@ -37,21 +37,18 @@ async def log_admin_action(admin: dict, action: str, message: str,
     })
 
 
-class AdminLoginInput(BaseModel):
-    email: str
-    password: str
 
 
-class AiKeysInput(BaseModel):
-    anthropic: Optional[str] = None
-    openai: Optional[str] = None
-    gemini: Optional[str] = None
-    sarvam: Optional[str] = None
-    wa_access_token: Optional[str] = None
-    wa_phone_number_id: Optional[str] = None
 
 
 # --- Auth -------------------------------------------------------------------
+# Request models consolidated into models/ (Epic 8 Sprint 5).
+from models.admin import (
+    AdminLoginInput,
+    AiKeysInput,
+)
+
+
 @router.post("/login")
 async def admin_login(payload: AdminLoginInput, request: Request, response: Response):
     email = payload.email.strip().lower()

@@ -347,20 +347,15 @@ async def _synthesize(question: str, tool_outputs: List[dict], lang: Optional[st
 # ---------------------------------------------------------------------------
 # Public endpoint
 # ---------------------------------------------------------------------------
-class AgentRequest(BaseModel):
-    question: str = Field(max_length=800)
 
 
-class SuggestedTaskInput(BaseModel):
-    """Shape returned by the synthesizer's `suggested_tasks` list — plus optional
-    source refs so we can close the loop back into `brain_context`."""
-    title: str = Field(max_length=200)
-    why: str = Field(default="", max_length=500)
-    priority: Optional[str] = Field(default="medium", max_length=20)
-    source_kind: Optional[str] = Field(default=None, max_length=40)   # e.g. "document" / "context"
-    source_ref: Optional[str] = Field(default=None, max_length=64)    # doc_id or context_id
-    source_label: Optional[str] = Field(default=None, max_length=200)
-    question: Optional[str] = Field(default=None, max_length=400)     # what founder asked
+
+
+# Request models consolidated into models/ (Epic 8 Sprint 5).
+from models.brain import (
+    AgentRequest,
+    SuggestedTaskInput,
+)
 
 
 @router.post("/create-task")

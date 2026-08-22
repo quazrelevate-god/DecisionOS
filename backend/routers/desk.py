@@ -248,6 +248,12 @@ def _narrative(*, delayed: int, completed_yday: int, pending_decisions: int,
     return prose
 
 
+# Request models consolidated into models/ (Epic 8 Sprint 5).
+from models.desk import (
+    NudgeInput,
+)
+
+
 @router.get("/desk/summary")
 async def desk_summary(user: dict = Depends(get_current_user)):
     tid = user["tenant_id"]
@@ -607,8 +613,6 @@ async def desk_chip(chip: str = "needs_decision", user: dict = Depends(get_curre
     return {"chip": chip, "counters": counters, "cards": cards}
 
 
-class NudgeInput(BaseModel):
-    channel: Optional[str] = "auto"  # future: 'whatsapp' | 'email' | 'auto'
 
 
 @router.post("/desk/nudge/{item_id}")

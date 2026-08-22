@@ -10,7 +10,7 @@ from fastapi import (
 )
 
 from core import db, get_current_user, require_perm, new_id, now_iso
-from server import TextNoteInput  # model still in server (S5)
+from models.voice import TextNoteInput
 from services.meetings import process_meeting
 
 router = APIRouter(prefix="/api")

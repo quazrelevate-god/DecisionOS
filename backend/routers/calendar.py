@@ -14,8 +14,12 @@ from core import db, get_current_user, require_perm, tenant_role_keys, user_perm
 router = APIRouter(prefix="/api")
 
 
-class LeaveApproverMapInput(BaseModel):
-    approvers: dict  # { role_key: approver_user_id }
+
+
+# Request models consolidated into models/ (Epic 8 Sprint 5).
+from models.calendar import (
+    LeaveApproverMapInput,
+)
 
 
 @router.patch("/tenant/leave-approvers")

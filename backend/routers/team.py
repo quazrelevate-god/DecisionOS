@@ -122,6 +122,12 @@ async def _decide_leave(leave_id, user, new_status, note, ntype, employee_msg):
 # ---------------------------------------------------------------------------
 # Users
 # ---------------------------------------------------------------------------
+# Request models consolidated into models/ (Epic 8 Sprint 5).
+from models.team import (
+    DeprovisionInput,
+)
+
+
 @router.get("/users")
 async def list_users(user: dict = Depends(get_current_user)):
     """List every user in the current tenant.
@@ -158,8 +164,6 @@ async def list_users(user: dict = Depends(get_current_user)):
     return out
 
 
-class DeprovisionInput(BaseModel):
-    reassign_to_user_id: Optional[str] = None
 
 
 @router.post("/users/{user_id}/deprovision")

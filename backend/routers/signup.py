@@ -158,8 +158,18 @@ BUSINESS_MODELS = ["B2B", "B2C", "B2B & B2C", "D2C", "Marketplace", "Services"]
 # --------------------------------------------------------------------------
 # Email availability
 # --------------------------------------------------------------------------
-class EmailCheckInput(BaseModel):
-    email: str = Field(max_length=200)
+
+
+# Request models consolidated into models/ (Epic 8 Sprint 5).
+from models.signup import (
+    EmailCheckInput,
+    WebsiteIntelInput,
+    InterviewStartInput,
+    InterviewAnswerInput,
+    InterviewSessionInput,
+    InterviewRefineInput,
+    TTSInput,
+)
 
 
 @router.post("/check-email")
@@ -178,9 +188,6 @@ async def check_email(inp: EmailCheckInput, request: Request):
 # --------------------------------------------------------------------------
 # Website intelligence
 # --------------------------------------------------------------------------
-class WebsiteIntelInput(BaseModel):
-    url: str = Field(max_length=500)
-    company_name: Optional[str] = Field(default="", max_length=200)
 
 
 def _clean_html(html: str) -> str:
@@ -259,27 +266,10 @@ async def website_intel(inp: WebsiteIntelInput, request: Request):
 # --------------------------------------------------------------------------
 # Adaptive interview
 # --------------------------------------------------------------------------
-class InterviewStartInput(BaseModel):
-    company_name: str = Field(max_length=200)
-    founder_name: Optional[str] = Field(default="", max_length=120)
-    team_size: Optional[str] = Field(default="", max_length=40)
-    industry: Optional[str] = Field(default="", max_length=120)
-    business_model: Optional[str] = Field(default="", max_length=40)
-    description: Optional[str] = Field(default="", max_length=2000)
-    website_summary: Optional[str] = Field(default="", max_length=2000)
-    products: Optional[List[dict]] = None
-    language_code: Optional[str] = Field(default="en-IN", max_length=16)
 
 
-class InterviewAnswerInput(BaseModel):
-    session_id: str = Field(max_length=64)
-    answer: str = Field(max_length=4000)
-    language_code: Optional[str] = Field(default="", max_length=16)
 
 
-class InterviewSessionInput(BaseModel):
-    session_id: str = Field(max_length=64)
-    language_code: Optional[str] = Field(default="", max_length=16)
 
 
 def _profile_block(s: dict) -> str:
@@ -534,10 +524,6 @@ async def interview_blueprint(inp: InterviewSessionInput, request: Request):
     return {**bp, "products": products, "welcome_line": (data.get("welcome_line") or "").strip()}
 
 
-class InterviewRefineInput(BaseModel):
-    session_id: str = Field(max_length=64)
-    refinement: str = Field(max_length=4000)
-    language_code: Optional[str] = Field(default="", max_length=16)
 
 
 @router.post("/interview/refine")
@@ -566,9 +552,6 @@ async def interview_refine(inp: InterviewRefineInput, request: Request):
 # --------------------------------------------------------------------------
 # Sarvam voice: TTS (bulbul:v3) + STT (saaras:v3, short clips)
 # --------------------------------------------------------------------------
-class TTSInput(BaseModel):
-    text: str = Field(max_length=1200)
-    language_code: Optional[str] = Field(default="en-IN", max_length=16)
 
 
 @router.post("/tts")

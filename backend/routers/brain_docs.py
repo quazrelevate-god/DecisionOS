@@ -145,6 +145,12 @@ def _public(doc: dict) -> dict:
 # ---------------------------------------------------------------------------
 # Upload
 # ---------------------------------------------------------------------------
+# Request models consolidated into models/ (Epic 8 Sprint 5).
+from models.brain import (
+    PatchInput,
+)
+
+
 @router.post("")
 async def upload_document(
     file: UploadFile = File(...),
@@ -269,14 +275,6 @@ async def list_documents(
 # ---------------------------------------------------------------------------
 # Read / update / delete / download
 # ---------------------------------------------------------------------------
-class PatchInput(BaseModel):
-    title: Optional[str] = Field(default=None, max_length=200)
-    kind: Optional[str] = Field(default=None, max_length=40)
-    tags: Optional[str] = Field(default=None, max_length=400)
-    department: Optional[str] = Field(default=None, max_length=60)
-    visibility: Optional[str] = Field(default=None, max_length=40)
-    roles_allowed: Optional[str] = Field(default=None, max_length=400)
-    summary: Optional[str] = Field(default=None, max_length=800)
 
 
 async def _fetch(doc_id: str, tenant_id: str) -> dict:

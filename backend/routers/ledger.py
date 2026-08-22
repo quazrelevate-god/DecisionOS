@@ -558,56 +558,29 @@ async def require_ledger(user: dict = Depends(get_current_user)) -> dict:
 
 
 # --- Input models -----------------------------------------------------------
-class ExpenseInput(BaseModel):
-    title: str
-    amount: float
-    category: Optional[str] = None
-    vendor_name: Optional[str] = ""
-    vendor_id: Optional[str] = None
-    date: Optional[str] = None
-    status: Optional[str] = "unpaid"
-    currency: Optional[str] = None
-    notes: Optional[str] = ""
 
 
-class AssetInput(BaseModel):
-    name: str
-    category: Optional[str] = "Other"
-    purchase_amount: float = 0
-    currency: Optional[str] = None
-    purchase_date: Optional[str] = None
-    vendor_name: Optional[str] = ""
-    status: Optional[str] = "active"
-    notes: Optional[str] = ""
 
 
-class InventoryInput(BaseModel):
-    item: str
-    sku: Optional[str] = ""
-    quantity: float = 0
-    unit: Optional[str] = "unit"
-    unit_cost: float = 0
-    currency: Optional[str] = None
-    category: Optional[str] = ""
-    vendor_name: Optional[str] = ""
-    notes: Optional[str] = ""
 
 
-class SuggestCategoryInput(BaseModel):
-    text: str
 
 
-class ExpensePatch(BaseModel):
-    title: Optional[str] = None
-    amount: Optional[float] = None
-    category: Optional[str] = None
-    vendor_name: Optional[str] = None
-    date: Optional[str] = None
-    status: Optional[str] = None
-    notes: Optional[str] = None
 
 
 # --- Expenses ---------------------------------------------------------------
+# Request models consolidated into models/ (Epic 8 Sprint 5).
+from models.finance import (
+    ExpenseInput,
+    AssetInput,
+    InventoryInput,
+    SuggestCategoryInput,
+    ExpensePatch,
+    IncomeInput,
+    LedgerAskInput,
+)
+
+
 @router.get("/expenses")
 async def list_expenses(user: dict = Depends(require_ledger)):
     return await db.expenses.find({"tenant_id": user["tenant_id"]}, {"_id": 0}).sort("created_at", -1).to_list(1000)
@@ -810,17 +783,6 @@ async def delete_inventory(iid: str, user: dict = Depends(require_ledger)):
 
 
 # --- Revenue (sale/service income — money coming IN) ------------------------
-class IncomeInput(BaseModel):
-    title: Optional[str] = ""
-    customer_name: Optional[str] = ""
-    amount: float = 0
-    number: Optional[str] = ""
-    date: Optional[str] = None
-    due_date: Optional[str] = None
-    status: Optional[str] = "unpaid"
-    currency: Optional[str] = None
-    notes: Optional[str] = ""
-    received: Optional[bool] = False
 
 
 @router.get("/revenue")
@@ -1357,9 +1319,6 @@ async def refresh_ledger_ai(scope: str, user: dict = Depends(require_ledger)):
     return await _generate_analysis(user["tenant_id"], scope)
 
 
-class LedgerAskInput(BaseModel):
-    question: str
-    scope: Optional[str] = "brief"
 
 
 @router.post("/ledger/ask")

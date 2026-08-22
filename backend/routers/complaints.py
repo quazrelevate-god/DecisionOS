@@ -17,15 +17,15 @@ from services.finance_signals import run_followup
 router = APIRouter(prefix="/api")
 
 
-class ComplaintInput(BaseModel):
-    customer_id: Optional[str] = None
-    text: str
-    severity: Optional[str] = "medium"
 
 
-class MemoryInput(BaseModel):
-    text: str
-    tag: Optional[str] = "note"
+
+
+# Request models consolidated into models/ (Epic 8 Sprint 5).
+from models.complaints import (
+    ComplaintInput,
+    MemoryInput,
+)
 
 
 @router.post("/complaints")

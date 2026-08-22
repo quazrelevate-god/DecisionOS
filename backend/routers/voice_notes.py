@@ -14,12 +14,18 @@ from core import (
     claude_chat, LLM_MODEL, _extract_json,
 )
 from emergentintegrations.llm.chat import UserMessage
-from server import TextNoteInput  # model still in server (S5)
+from models.voice import TextNoteInput
 from services.voice import process_voice_note
 from services.transcription import transcribe_audio
 from services.tasks import _tenant_industry
 
 router = APIRouter(prefix="/api")
+
+
+# Request models consolidated into models/ (Epic 8 Sprint 5).
+from models.voice import (
+    ClarifyInput,
+)
 
 
 @router.post("/voice-notes")
@@ -92,8 +98,6 @@ async def create_text_note(inp: TextNoteInput, background: BackgroundTasks, user
     return {"id": note_id, "status": "queued"}
 
 
-class ClarifyInput(BaseModel):
-    text: str
 
 
 async def ai_clarify_directive(text: str, industry: str, session_id: str) -> dict:

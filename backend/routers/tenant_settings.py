@@ -17,7 +17,7 @@ from core import (
     tenant_role_keys, PERMISSION_KEYS, DEFAULT_ROLES, now_iso, log_activity, logger,
     normalize_lexicon, normalize_operating_model,
 )
-from server import TenantUpdateInput, InviteInput  # models still in server (S5)
+from models.tenant import TenantUpdateInput, InviteInput
 from services.ai.generators import (
     ai_generate_lexicon, ai_generate_operating_model, ai_generate_finance_categories,
     backfill_operating_model, normalize_finance_categories,
@@ -26,8 +26,21 @@ from services.ai.generators import (
 router = APIRouter(prefix="/api")
 
 
-class LexiconInput(BaseModel):
-    lexicon: dict
+
+
+# Request models consolidated into models/ (Epic 8 Sprint 5).
+from models.tenant import (
+    LexiconInput,
+    OperatingModelInput,
+    FinanceCategoriesInput,
+    TenantSettingsInput,
+    RoleLabelInput,
+    RolePermissionsInput,
+    AiConsentGrantInput,
+    TenantAIKeysInput,
+    OwnerExclusionsInput,
+)
+from models.auth import ProfileUpdateInput, ChangePasswordInput  # deduped (S5)
 
 
 @router.patch("/tenant/lexicon")
@@ -51,8 +64,6 @@ async def regenerate_lexicon(user: dict = Depends(require_perm("team_manage"))):
     return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
 
 
-class OperatingModelInput(BaseModel):
-    operating_model: dict
 
 
 @router.patch("/tenant/operating-model")
@@ -107,8 +118,6 @@ async def regenerate_operating_model(user: dict = Depends(require_perm("team_man
     return out
 
 
-class FinanceCategoriesInput(BaseModel):
-    finance_categories: dict
 
 
 @router.patch("/tenant/finance-categories")
@@ -151,15 +160,8 @@ async def regenerate_finance_categories(user: dict = Depends(require_perm("team_
 
 
 
-class ProfileUpdateInput(BaseModel):
-    name: Optional[str] = None
-    phone: Optional[str] = None
-    language: Optional[str] = None
 
 
-class ChangePasswordInput(BaseModel):
-    current_password: str
-    new_password: str = Field(min_length=6)
 
 
 
@@ -182,10 +184,6 @@ async def update_tenant(inp: TenantUpdateInput, user: dict = Depends(require_per
     return await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
 
 
-class TenantSettingsInput(BaseModel):
-    high_value_threshold: Optional[float] = None
-    require_owner_signoff: Optional[bool] = None
-    currency: Optional[str] = None
 
 
 @router.patch("/tenant/settings")
@@ -211,8 +209,6 @@ def _slug_role(label: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", (label or "").strip().lower()).strip("_")
 
 
-class RoleLabelInput(BaseModel):
-    label: str
 
 
 @router.post("/tenant/roles")
@@ -273,8 +269,6 @@ async def delete_role(key: str, user: dict = Depends(require_perm("team_manage")
 # creating a 'warehouse_manager' role gave every member _BASE_PERMS
 # only, and the only way to add e.g. 'finance' was editing each user
 # individually.
-class RolePermissionsInput(BaseModel):
-    permissions: List[str]
 
 
 @router.patch("/tenant/roles/{key}/permissions")
@@ -306,11 +300,6 @@ async def update_role_permissions(key: str, inp: RolePermissionsInput,
 
 
 # FIX-005-C (RBAC-25): DPDP AI-consent tracking endpoints.
-class AiConsentGrantInput(BaseModel):
-    version: Optional[str] = None
-    # Optional acknowledgment fields — not persisted, just make the
-    # frontend contract explicit that the user was shown the doc.
-    acknowledged: Optional[bool] = None
 
 
 @router.get("/tenant/ai-consent")
@@ -436,9 +425,6 @@ async def get_tenant_plan(user: dict = Depends(get_current_user)):
 
 
 # FIX-005-A (S3-03): per-tenant AI key endpoints.
-class TenantAIKeysInput(BaseModel):
-    # Provider -> key. Empty / missing = fall back to platform pool.
-    keys: dict
 
 
 @router.get("/tenant/ai-keys")
@@ -529,8 +515,6 @@ async def delete_tenant_ai_key(provider: str, request: Request,
 # owner OUT of specific permissions. Solves the "co-founder with
 # everything EXCEPT finance visibility" ask that early-stage founders
 # make. Empty list = classic all-perms owner (backward compat).
-class OwnerExclusionsInput(BaseModel):
-    exclusions: List[str]
 
 
 @router.put("/tenant/owner-exclusions")

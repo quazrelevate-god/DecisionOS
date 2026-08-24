@@ -53,13 +53,56 @@ register(EvalCase(
     task="extraction.extract", name="garbage_response_falls_back",
     fn=ai_extract,
     kwargs={"transcript": "some directive text here", "session_id": "eval-extract-2"},
+    # single string => returned for BOTH the initial call and the repair re-ask
     golden="I could not produce JSON for this request, sorry.",
     checks=[
         key_present("summary"),
         is_list("tasks"), is_list("decisions"), is_list("workflow_events"),
         predicate("tasks empty on parse-fail", lambda r: r["tasks"] == []),
     ],
-    note="Parse-fail resilience: a non-JSON model reply must yield the safe fallback shape, not crash.",
+    note="Parse-fail resilience: non-JSON on both the first call and the repair re-ask still yields the safe fallback.",
+))
+
+register(EvalCase(
+    task="extraction.extract", name="auto_repair_recovers",
+    fn=ai_extract,
+    kwargs={"transcript": "Tell Priya to call the supplier about the delayed order.",
+            "session_id": "eval-extract-repair-1"},
+    # call 1: a task is missing its required 'title' (schema violation) -> repair.
+    # call 2: the corrected JSON. E3-02.1 should return the repaired result.
+    golden=[
+        """{"summary": "Follow up with supplier on delayed order.",
+            "tasks": [{"description": "supplier delay", "assignee_role": "operations", "priority": "high"}]}""",
+        """{"summary": "Follow up with supplier on delayed order.",
+            "tasks": [{"title": "Call supplier about delayed order", "description": "for Priya",
+                       "assignee_role": "operations", "assignee_name": "Priya", "priority": "high"}],
+            "decisions": [], "workflow_events": [], "reminders": [], "meeting_events": [], "memory_notes": []}""",
+    ],
+    checks=[
+        nonempty_list("tasks"),
+        each_item("tasks", nonempty_str("title"), key_present("assignee_role")),
+        predicate("repaired title present", lambda r: r["tasks"][0]["title"].strip() != ""),
+    ],
+    note="Auto-repair: a first response missing a required field triggers one bounded re-ask; the corrected result is used.",
+))
+
+register(EvalCase(
+    task="extraction.extract", name="auto_repair_exhausted_coerces",
+    fn=ai_extract,
+    kwargs={"transcript": "do the needful", "session_id": "eval-extract-repair-2"},
+    # both attempts violate the schema (task with no title) -> after the single
+    # bounded repair, coercion clamps/keeps a safe shape rather than crashing.
+    golden=[
+        """{"summary": "", "tasks": [{"assignee_role": "sales", "priority": "urgent"}]}""",
+        """{"summary": "", "tasks": [{"assignee_role": "sales", "priority": "urgent"}]}""",
+    ],
+    checks=[
+        key_present("summary"),
+        is_list("tasks"), is_list("decisions"),
+        predicate("bad priority clamped to medium",
+                  lambda r: all(t.get("priority") == "medium" for t in r["tasks"])),
+    ],
+    note="Repair-exhausted: after the one re-ask still fails, coercion guarantees the contract (enum clamped), no crash.",
 ))
 
 

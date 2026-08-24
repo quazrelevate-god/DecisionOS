@@ -144,15 +144,43 @@ def all_cases() -> list[EvalCase]:
 
 # --- LLM stub (replay mode) -------------------------------------------------
 @contextlib.contextmanager
-def _stub_llm(response_text: str):
+def _stub_llm(response):
     """Replace _ResilientChat.send_message with a coroutine returning the recorded
     response -- so replay never touches the network, a key, or the DB. Everything
     the function does BEFORE and AFTER the call (render, model_for, _extract_json,
-    normalization) still runs for real."""
+    normalization) still runs for real.
+
+    ``response`` may be a single string (returned for every send_message call) or a
+    list of strings returned in sequence -- the latter drives multi-call functions
+    like ai_extract's validate-then-repair loop (call 1 = bad, call 2 = corrected).
+    The last item is repeated if the function calls more times than provided."""
     from integrations import llm
 
+    seq = list(response) if isinstance(response, (list, tuple)) else [response]
+    state = {"i": 0}
+
     async def _fake_send(self, message):
-        return response_text
+        i = min(state["i"], len(seq) - 1)
+        state["i"] += 1
+        # keep telemetry-owning callers (record=False) working: they read last_call
+        self.last_call = {"task": self.task, "model": (self.model[1] if self.model else None),
+                          "engine": "replay", "prompt_version": None, "tokens_in": 0,
+                          "tokens_out": 0, "latency_ms": 0, "tenant_id": None,
+                          "session_id": self.session_id, "ok": True}
+        return seq[i]
+
+    async def _noop_record(*a, **k):  # keep replay DB-free even for record=False callers
+        return None
+
+    # Neutralize telemetry across the modules that hold a bound record_ai_call
+    # reference (adapter is bypassed, but callers like ai_extract call it directly).
+    import importlib
+    patched = []
+    for modname in ("core.usage", "core", "integrations.llm", "services.ai.extraction"):
+        mod = importlib.import_module(modname)
+        if hasattr(mod, "record_ai_call"):
+            patched.append((mod, mod.record_ai_call))
+            mod.record_ai_call = _noop_record
 
     orig = llm._ResilientChat.send_message
     llm._ResilientChat.send_message = _fake_send
@@ -160,6 +188,8 @@ def _stub_llm(response_text: str):
         yield
     finally:
         llm._ResilientChat.send_message = orig
+        for mod, fn in patched:
+            mod.record_ai_call = fn
 
 
 # --- Results ----------------------------------------------------------------

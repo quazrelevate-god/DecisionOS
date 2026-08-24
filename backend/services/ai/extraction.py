@@ -13,8 +13,9 @@ from typing import Optional
 from emergentintegrations.llm.chat import UserMessage
 
 from core import claude_chat, LLM_MODEL, _extract_json, logger, DEFAULT_OPERATING_MODEL
-from core import model_for
+from core import model_for, record_ai_call
 from prompts import render
+from services.ai.validation import validate_extract, coerce_extract, repair_instruction
 
 
 async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[list] = None, members: Optional[list] = None,
@@ -57,18 +58,46 @@ async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[l
             f"ATTACHED REFERENCE CONTENT:\n\"\"\"\n{extra_context[:6000]}\n\"\"\"\n"
         )
     prompt += "Extract the structured JSON now."
-    chat = claude_chat(task="extraction.extract", session_id=session_id, system_message=system).with_model(*model_for("extraction.extract"))
-    resp = await chat.send_message(UserMessage(text=prompt))
+    # record=False: we own telemetry here so parse_ok reflects schema validation,
+    # not just whether the HTTP call returned. See E3-02.1.
+    chat = claude_chat(task="extraction.extract", session_id=session_id,
+                       system_message=system, record=False).with_model(*model_for("extraction.extract"))
+
+    def _parse_validate(resp: str):
+        """(-> data|None, violations). data is None only when JSON won't parse."""
+        try:
+            parsed = _extract_json(resp)
+        except Exception as e:
+            return None, [f"response is not valid JSON ({e})"]
+        return parsed, validate_extract(parsed)
+
+    async def _attempt(msg_text: str):
+        resp = await chat.send_message(UserMessage(text=msg_text))
+        data, violations = _parse_validate(resp)
+        ok = data is not None and not violations
+        # one telemetry row per model call, carrying the schema-validation outcome
+        if chat.last_call:
+            await record_ai_call(**{k: chat.last_call[k] for k in
+                                    ("task", "model", "engine", "prompt_version", "tokens_in",
+                                     "tokens_out", "latency_ms", "tenant_id", "session_id")},
+                                 ok=chat.last_call.get("ok", True), parse_ok=ok,
+                                 error=("; ".join(violations)[:300] if violations else None))
+        return data, violations, ok
+
+    data, violations = None, ["no response"]
     try:
-        data = _extract_json(resp)
-    except Exception as e:
-        logger.error(f"AI extract parse error: {e} :: {resp[:400]}")
-        data = {"summary": transcript[:200], "decisions": [], "tasks": [], "workflow_events": []}
-    data.setdefault("summary", "")
-    for k in ("decisions", "tasks", "workflow_events", "reminders", "meeting_events", "memory_notes"):
-        if not isinstance(data.get(k), list):
-            data[k] = []
-    return data
+        data, violations, ok = await _attempt(prompt)
+        # Auto-repair: one bounded re-ask on parse-fail or missing/invalid fields,
+        # instead of dropping straight to the empty fallback (E3-02.1).
+        if not ok:
+            logger.warning(f"AI extract schema issues, attempting one repair: {violations[:4]}")
+            data2, violations2, ok2 = await _attempt(repair_instruction(violations))
+            if data2 is not None and (ok2 or len(violations2) < len(violations)):
+                data, violations = data2, violations2  # accept if fixed or strictly better
+    except Exception as e:  # total LLM failure self-records in the adapter; degrade safely
+        logger.error(f"AI extract call failed: {e}")
+
+    return coerce_extract(data, transcript)
 
 
 async def ai_score_tasks(tasks: list, currency: str, session_id: str) -> dict:

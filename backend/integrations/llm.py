@@ -40,13 +40,19 @@ class _ResilientChat:
     claude_chat(..., task=...) so telemetry can group calls by what they do."""
 
     def __init__(self, session_id: str, system_message: str, tenant_id=None,
-                 task=None, prompt_version=None):
+                 task=None, prompt_version=None, record=True):
         self.session_id = session_id
         self.system_message = system_message
         self.tenant_id = tenant_id
         self.model = LLM_MODEL
         self.task = task
         self.prompt_version = prompt_version
+        # record=False: the caller owns telemetry (e.g. to attach parse_ok after
+        # it has parsed the response). We still stash the successful call's metrics
+        # on self.last_call so the caller can record_ai_call(**last_call, parse_ok=..).
+        # Failures are ALWAYS recorded regardless of this flag.
+        self.record = record
+        self.last_call = None
 
     def with_model(self, *model):
         if model:
@@ -84,11 +90,13 @@ class _ResilientChat:
                     await _resolve_provider_alert("anthropic")
                 await _record_usage(tenant_id, self.session_id, provider, self.system_message, message, resp)
                 _in = f"{self.system_message or ''} {getattr(message, 'text', '') or ''}"
-                await record_ai_call(
-                    task=self.task, model=model_id, engine=provider, prompt_version=pv,
-                    tokens_in=_est_tokens(_in), tokens_out=_est_tokens(resp or ""),
-                    latency_ms=(time.perf_counter() - _t0) * 1000, ok=True,
-                    tenant_id=tenant_id, session_id=self.session_id)
+                tel = dict(task=self.task, model=model_id, engine=provider, prompt_version=pv,
+                           tokens_in=_est_tokens(_in), tokens_out=_est_tokens(resp or ""),
+                           latency_ms=(time.perf_counter() - _t0) * 1000,
+                           tenant_id=tenant_id, session_id=self.session_id)
+                self.last_call = {**tel, "ok": True}
+                if self.record:
+                    await record_ai_call(**tel, ok=True)
                 return resp
             except Exception as e:
                 last_err = e
@@ -106,8 +114,10 @@ class _ResilientChat:
 
 
 def claude_chat(session_id: str = None, system_message: str = None, tenant_id=None,
-                task=None, prompt_version=None, **_ignored) -> _ResilientChat:
+                task=None, prompt_version=None, record=True, **_ignored) -> _ResilientChat:
     """Factory matching the old LlmChat(api_key=..., session_id=..., system_message=...) call shape.
-    Pass ``task`` (a prompt-registry name) so AI telemetry can group calls by purpose."""
+    Pass ``task`` (a prompt-registry name) so AI telemetry can group calls by purpose.
+    Pass ``record=False`` to own telemetry yourself (e.g. to attach parse_ok) -- read
+    the successful call's metrics from ``chat.last_call``; failures self-record regardless."""
     return _ResilientChat(session_id, system_message, tenant_id=tenant_id,
-                          task=task, prompt_version=prompt_version)
+                          task=task, prompt_version=prompt_version, record=record)

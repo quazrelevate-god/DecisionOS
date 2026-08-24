@@ -175,8 +175,74 @@ EMERGENT_LLM_KEY = os.environ['EMERGENT_LLM_KEY']
 # All Claude Sonnet 4.6 calls use the user's own Anthropic key when set,
 # else the Emergent universal key.
 CLAUDE_KEY = os.environ.get('ANTHROPIC_API_KEY', '').strip() or EMERGENT_LLM_KEY
-LLM_MODEL = ("anthropic", "claude-sonnet-4-6")
-VISION_MODEL = ("gemini", "gemini-2.5-flash")
+
+# ---------------------------------------------------------------------------
+# Model routing (Epic 3 Sprint 1, E3-01.2) -- ONE source of truth for which
+# model does which AI job. AI call sites resolve their model via
+# `model_for(task)` (task names match the prompt registry) instead of hardcoding
+# a tuple, so a model can be swapped per-task in ONE place, or overridden per
+# task via env `MODEL_ROUTE_<TASK>` (e.g. MODEL_ROUTE_CAPTURES_TRIAGE=...).
+# ---------------------------------------------------------------------------
+# Catalog: logical name -> (provider, model_id). The ONLY place a model id lives.
+# UPGRADE PATH: models here run through emergentintegrations, so before adding a
+# new id (e.g. a Claude 5 / newer Gemini), verify that wrapper accepts it. Do NOT
+# edit an id in place -- add the new model + repoint the route(s), so the AI
+# telemetry (E3-01.3) and eval/benchmark harness (E3-01.4 / E3-10.3) can A/B it.
+MODELS = {
+    "claude-sonnet": ("anthropic", "claude-sonnet-4-6"),  # default text / reasoning model
+    "gemini-flash":  ("gemini", "gemini-2.5-flash"),      # default vision / OCR model
+}
+DEFAULT_LLM_MODEL = "claude-sonnet"
+DEFAULT_VISION_MODEL = "gemini-flash"
+
+# Back-compat: the historical default tuples, now DERIVED from the catalog so
+# there is still one source of truth. Existing `from core import LLM_MODEL` and
+# `.with_model(*LLM_MODEL)` keep working unchanged.
+LLM_MODEL = MODELS[DEFAULT_LLM_MODEL]
+VISION_MODEL = MODELS[DEFAULT_VISION_MODEL]
+
+# Routes: task name (= prompt-registry name) -> catalog model. A complete map of
+# "every AI task -> its model". All point at the default today; change ONE line
+# to route a task (e.g. a cheap triage) to a different model. Unlisted tasks fall
+# back to the per-kind default.
+MODEL_ROUTES = {
+    # extraction / structuring (text)
+    "extraction.extract": "claude-sonnet", "extraction.score_tasks": "claude-sonnet",
+    "extraction.score_contact": "claude-sonnet", "extraction.meeting_notes": "claude-sonnet",
+    "extraction.execution_plan": "claude-sonnet", "extraction.step_assist": "claude-sonnet",
+    "extraction.clarify": "claude-sonnet",
+    # onboarding generators + wizard (text)
+    "generators.lexicon": "claude-sonnet", "generators.operating_model": "claude-sonnet",
+    "generators.finance_categories": "claude-sonnet",
+    "onboarding.suggest": "claude-sonnet", "onboarding.os_blueprint": "claude-sonnet",
+    "onboarding.web_intel": "claude-sonnet", "onboarding.interview": "claude-sonnet",
+    "onboarding.blueprint": "claude-sonnet",
+    # captures / coaching / people (text)
+    "captures.triage": "claude-sonnet", "coaching.work_coach": "claude-sonnet",
+    "coaching.leave_impact": "claude-sonnet", "coaching.file_reference": "claude-sonnet",
+    # company brain (text)
+    "brain.planner": "claude-sonnet", "brain.answer": "claude-sonnet",
+    "brain.agent_planner": "claude-sonnet", "brain.agent_synth": "claude-sonnet",
+    # finance / ledger (text)
+    "ledger.expense_cat": "claude-sonnet", "ledger.analysis": "claude-sonnet",
+    "ledger.ask": "claude-sonnet", "documents.csv_map": "claude-sonnet",
+    "documents.purchase_class": "claude-sonnet",
+    # vision / OCR (Gemini)
+    "documents.doc_extract": "gemini-flash", "vision.read_image": "gemini-flash",
+    "ledger.ocr": "gemini-flash",
+}
+
+
+def model_for(task, kind="llm"):
+    """Resolve the (provider, model_id) tuple for an AI task.
+
+    Order: env override (MODEL_ROUTE_<TASK>) -> MODEL_ROUTES -> per-kind default.
+    `kind` ('llm' | 'vision') only selects the fallback when a task is unlisted.
+    """
+    default = DEFAULT_LLM_MODEL if kind == "llm" else DEFAULT_VISION_MODEL
+    env_key = "MODEL_ROUTE_" + task.replace(".", "_").replace("-", "_").upper()
+    name = os.environ.get(env_key, "").strip() or MODEL_ROUTES.get(task) or default
+    return MODELS.get(name, MODELS[default])
 
 # --- Roles & permissions ----------------------------------------------------
 # FIX-004-D (RBAC-16): canonical role list. Prior code had ROLES list

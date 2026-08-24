@@ -36,6 +36,7 @@ from core import (
 )
 from routers.brain_docs import _visibility_filter as _docs_visibility_filter
 from routers.brain_docs import _keywords as _docs_keywords
+from core import model_for
 from prompts import render
 
 
@@ -58,7 +59,7 @@ _PLANNER_SYSTEM = render("brain.agent_planner")  # prompt in prompts/brain.py
 async def _plan(question: str) -> dict:
     prompt = f"Question: {question!r}\nClassify intent and pick tool(s)."
     try:
-        chat = claude_chat(session_id=f"brain-agent-plan-{new_id()}", system_message=_PLANNER_SYSTEM).with_model(*LLM_MODEL)
+        chat = claude_chat(session_id=f"brain-agent-plan-{new_id()}", system_message=_PLANNER_SYSTEM).with_model(*model_for("brain.agent_planner"))
         data = _extract_json(await chat.send_message(UserMessage(text=prompt))) or {}
     except Exception as e:
         logger.warning(f"brain agent planner failed: {e}")
@@ -280,7 +281,7 @@ async def _synthesize(question: str, tool_outputs: List[dict], lang: Optional[st
         "Write the final answer JSON now."
     )
     try:
-        chat = claude_chat(session_id=f"brain-agent-synth-{new_id()}", system_message=_SYNTH_SYSTEM + hint).with_model(*LLM_MODEL)
+        chat = claude_chat(session_id=f"brain-agent-synth-{new_id()}", system_message=_SYNTH_SYSTEM + hint).with_model(*model_for("brain.agent_synth"))
         data = _extract_json(await chat.send_message(UserMessage(text=prompt))) or {}
     except Exception as e:
         logger.warning(f"brain agent synth failed: {e}")

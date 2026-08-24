@@ -13,6 +13,7 @@ from typing import Optional
 from emergentintegrations.llm.chat import UserMessage
 
 from core import claude_chat, LLM_MODEL, _extract_json, logger, DEFAULT_OPERATING_MODEL
+from core import model_for
 from prompts import render
 
 
@@ -56,7 +57,7 @@ async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[l
             f"ATTACHED REFERENCE CONTENT:\n\"\"\"\n{extra_context[:6000]}\n\"\"\"\n"
         )
     prompt += "Extract the structured JSON now."
-    chat = claude_chat(session_id=session_id, system_message=system).with_model(*LLM_MODEL)
+    chat = claude_chat(session_id=session_id, system_message=system).with_model(*model_for("extraction.extract"))
     resp = await chat.send_message(UserMessage(text=prompt))
     try:
         data = _extract_json(resp)
@@ -84,7 +85,7 @@ async def ai_score_tasks(tasks: list, currency: str, session_id: str) -> dict:
         })
     system = render("extraction.score_tasks", today=today, currency=currency)
     prompt = "Tasks:\n" + json.dumps(lines, ensure_ascii=False) + "\nScore them now."
-    chat = claude_chat(session_id=session_id, system_message=system).with_model(*LLM_MODEL)
+    chat = claude_chat(session_id=session_id, system_message=system).with_model(*model_for("extraction.score_tasks"))
     resp = await chat.send_message(UserMessage(text=prompt))
     out = {}
     try:
@@ -125,7 +126,7 @@ async def ai_score_contact(contact: dict, metrics: dict, currency: str, session_
     }
     system = render("extraction.score_contact", currency=currency, ctype=ctype)
     prompt = json.dumps(payload, ensure_ascii=False, default=str) + "\nScore this relationship now."
-    chat = claude_chat(session_id=session_id, system_message=system).with_model(*LLM_MODEL)
+    chat = claude_chat(session_id=session_id, system_message=system).with_model(*model_for("extraction.score_contact"))
     resp = await chat.send_message(UserMessage(text=prompt))
     def clamp(v):
         try:
@@ -152,7 +153,7 @@ async def ai_meeting_notes(transcript: str, members: list, session_id: str) -> d
                     "Set action_items[].assignee_name to the closest matching name when a person is named, else empty. ") if names else ""
     system = render("extraction.meeting_notes", members_line=members_line)
     prompt = f"Meeting transcript:\n\"\"\"\n{(transcript or '')[:40000]}\n\"\"\"\nExtract the structured minutes now."
-    chat = claude_chat(session_id=session_id, system_message=system).with_model(*LLM_MODEL)
+    chat = claude_chat(session_id=session_id, system_message=system).with_model(*model_for("extraction.meeting_notes"))
     resp = await chat.send_message(UserMessage(text=prompt))
     try:
         d = _extract_json(resp)
@@ -175,7 +176,7 @@ async def ai_execution_plan(task: dict, industry: str, currency: str, session_id
               f"Assigned role: {task.get('assignee_role') or 'team'}\n"
               f"Priority: {task.get('priority','medium')}\n"
               "Generate the execution checklist now.")
-    chat = claude_chat(session_id=session_id, system_message=system).with_model(*LLM_MODEL)
+    chat = claude_chat(session_id=session_id, system_message=system).with_model(*model_for("extraction.execution_plan"))
     resp = await chat.send_message(UserMessage(text=prompt))
     try:
         d = _extract_json(resp)
@@ -195,7 +196,7 @@ async def ai_step_assist(task: dict, step_text: str, industry: str, session_id: 
               f"Context: {task.get('description','') or '(none)'}\n"
               f"Current step: {step_text}\n"
               "Give the suggestion and objection handling now.")
-    chat = claude_chat(session_id=session_id, system_message=system).with_model(*LLM_MODEL)
+    chat = claude_chat(session_id=session_id, system_message=system).with_model(*model_for("extraction.step_assist"))
     resp = await chat.send_message(UserMessage(text=prompt))
     try:
         d = _extract_json(resp)

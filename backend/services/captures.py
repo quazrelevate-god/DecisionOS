@@ -14,6 +14,7 @@ from typing import Optional
 from emergentintegrations.llm.chat import UserMessage
 
 from core import db, logger, new_id, now_iso, claude_chat, LLM_MODEL, _extract_json
+from core import model_for
 from prompts import render
 from services.ingestion import commit_ingestion_records, _classify_ingestion
 from services.voice import process_voice_note
@@ -125,7 +126,7 @@ _CAPTURE_SYS = render("captures.triage")  # prompt in prompts/captures.py; {role
 
 async def ai_capture_triage(text: str, roles: list) -> dict:
     system = _CAPTURE_SYS.replace("{roles}", ", ".join(roles) or "owner")
-    chat = claude_chat(session_id=f"capture-{new_id()}", system_message=system).with_model(*LLM_MODEL)
+    chat = claude_chat(session_id=f"capture-{new_id()}", system_message=system).with_model(*model_for("captures.triage"))
     resp = await chat.send_message(UserMessage(text=(text or "")[:4000]))
     try:
         d = _extract_json(resp)

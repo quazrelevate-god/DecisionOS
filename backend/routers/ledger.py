@@ -23,6 +23,7 @@ from core import (
 # FIX-007-B (S4-10): Brain-context writes for finance events so
 # "how did we settle the Kapoor invoice?" queries can find the answer.
 from services.ai import brain_context
+from core import model_for
 from prompts import render
 
 router = APIRouter(prefix="/api")
@@ -108,7 +109,7 @@ async def ai_suggest_expense_category(text: str, tenant_id: str) -> str:
     cats = (await get_finance_categories(tenant_id))["expense"]
     try:
         system = render("ledger.expense_cat", cats=", ".join(cats))
-        chat = claude_chat(session_id=f"expcat-{tenant_id}", system_message=system).with_model(*LLM_MODEL)
+        chat = claude_chat(session_id=f"expcat-{tenant_id}", system_message=system).with_model(*model_for("ledger.expense_cat"))
         resp = await chat.send_message(UserMessage(text=text[:600]))
         data = _extract_json(resp) or {}
         matched = _match_category(data.get("category"), cats, "")
@@ -206,7 +207,7 @@ async def ai_extract_ledger_file(file_path: str, mime_type: str, kind: str, curr
     if not resp:
         fc = FileContentWithMimeType(file_path=file_path, mime_type=mime_type)
         chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=f"ledger-ocr-{kind}-{new_id()}",
-                       system_message=system).with_model(*VISION_MODEL)
+                       system_message=system).with_model(*model_for("ledger.ocr", "vision"))
         from services.ai.llm_limits import guarded_llm  # FIX-002-B
         resp = await guarded_llm(
             chat.send_message(UserMessage(text="Extract the JSON now.", file_contents=[fc])),
@@ -1260,7 +1261,7 @@ async def _generate_analysis(tid: str, scope: str) -> dict:
     system = render("ledger.analysis", focus=focus, currency=ctx['currency'], today=ctx['today'])
     data = {}
     try:
-        chat = claude_chat(session_id=f"ledger-ai-{scope}-{new_id()}", system_message=system).with_model(*LLM_MODEL)
+        chat = claude_chat(session_id=f"ledger-ai-{scope}-{new_id()}", system_message=system).with_model(*model_for("ledger.analysis"))
         resp = await chat.send_message(UserMessage(text=f"Finance data:\n{json.dumps(ctx)}\n\nProduce the JSON now."))
         data = _extract_json(resp) or {}
     except Exception as e:  # noqa: BLE001
@@ -1312,7 +1313,7 @@ async def ledger_ask(inp: LedgerAskInput, user: dict = Depends(require_ledger)):
     ctx = await _finance_context(user["tenant_id"], scope)
     system = render("ledger.ask", currency=ctx['currency'], today=ctx['today'])
     try:
-        chat = claude_chat(session_id=f"ledger-ask-{user['tenant_id']}-{new_id()}", system_message=system).with_model(*LLM_MODEL)
+        chat = claude_chat(session_id=f"ledger-ask-{user['tenant_id']}-{new_id()}", system_message=system).with_model(*model_for("ledger.ask"))
         resp = await chat.send_message(UserMessage(text=f"Finance data:\n{json.dumps(ctx)}\n\nQuestion: {q}"))
         answer = (resp or "").strip()
     except Exception as e:  # noqa: BLE001

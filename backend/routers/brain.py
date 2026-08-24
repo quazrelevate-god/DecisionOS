@@ -29,6 +29,7 @@ from core import (
 # (uploaded policies / contracts). Before this, /ask was blind to
 # both and Dex was the only surface with provenance answers.
 from services.ai import brain_retrieval
+from core import model_for
 from prompts import render
 
 router = APIRouter(prefix="/api")
@@ -127,7 +128,7 @@ async def _plan(question: str, prev: Optional[dict], lang) -> dict:
     ctx = ""
     if prev:
         ctx = f"\nPrevious query plan (the user may be refining it):\n{json.dumps(prev)}\n"
-    chat = claude_chat(session_id=f"brain-plan-{new_id()}", system_message=_PLANNER_SYSTEM).with_model(*LLM_MODEL)
+    chat = claude_chat(session_id=f"brain-plan-{new_id()}", system_message=_PLANNER_SYSTEM).with_model(*model_for("brain.planner"))
     raw = await chat.send_message(UserMessage(text=f"{ctx}\nQuestion: {question}"))
     plan = _extract_json(raw) or {}
     plan.setdefault("intent", "LIST_REQUEST")
@@ -689,7 +690,7 @@ async def _answer(question, kpis, table, lang,
             for h in document_hits[:5]
         ]
     chat = claude_chat(session_id=f"brain-ans-{new_id()}",
-                       system_message=_ANSWER_SYSTEM + _lang_directive(lang)).with_model(*LLM_MODEL)
+                       system_message=_ANSWER_SYSTEM + _lang_directive(lang)).with_model(*model_for("brain.answer"))
     try:
         raw = await chat.send_message(UserMessage(text=f"Question: {question}\n\nComputed data:\n{json.dumps(sample, default=str)}"))
         data = _extract_json(raw) or {}

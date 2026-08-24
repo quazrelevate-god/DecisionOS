@@ -15,6 +15,7 @@ from core import (
     normalize_os_blueprint, require_perm, require_role, log_activity,
     get_current_user,
 )
+from core import model_for
 from prompts import render
 from services.auth import onboarding_drafts as drafts_svc  # FIX-001-D
 from services.ai import ai_setup as ai_setup_svc          # FIX-001-D
@@ -93,7 +94,7 @@ async def onboarding_suggest(inp: OnboardingSuggestInput, request: Request):
     await guard_unauth_ai_endpoint(request, service="onboarding", kind="suggest")
     system = render("onboarding.suggest")
     prompt = f"Industry: {inp.industry}\nCompany size: {inp.company_size or 'unspecified'}\nExtra notes: {inp.description or 'none'}\nSuggest roles and example products/services now."
-    chat = claude_chat(session_id=f"onboard-{new_id()}", system_message=system).with_model(*LLM_MODEL)
+    chat = claude_chat(session_id=f"onboard-{new_id()}", system_message=system).with_model(*model_for("onboarding.suggest"))
     try:
         resp = await chat.send_message(UserMessage(text=prompt))
         data = _extract_json(resp)
@@ -124,7 +125,7 @@ async def onboarding_os_blueprint(inp: OSBlueprintGenInput, request: Request):
     await guard_unauth_ai_endpoint(request, service="onboarding", kind="os_blueprint")
     system = render("onboarding.os_blueprint")
     prompt = f"Industry: {inp.industry}\nCompany size: {inp.company_size or 'unspecified'}\nWhat the business actually does: {inp.description or 'not specified'}\nDesign the operating system now."
-    chat = claude_chat(session_id=f"osbp-{new_id()}", system_message=system).with_model(*LLM_MODEL)
+    chat = claude_chat(session_id=f"osbp-{new_id()}", system_message=system).with_model(*model_for("onboarding.os_blueprint"))
     try:
         resp = await chat.send_message(UserMessage(text=prompt))
         data = _extract_json(resp)

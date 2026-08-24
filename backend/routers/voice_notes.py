@@ -15,6 +15,7 @@ from core import (
 )
 from emergentintegrations.llm.chat import UserMessage
 from models.voice import TextNoteInput
+from core import model_for
 from prompts import render
 from services.voice import process_voice_note
 from services.transcription import transcribe_audio
@@ -105,7 +106,7 @@ async def ai_clarify_directive(text: str, industry: str, session_id: str) -> dic
     """Decide if an owner's directive has enough info to act on; if not, ask up to 4 short questions."""
     system = render("extraction.clarify", industry=industry or "general")
     prompt = f"Owner instruction: \"{text}\"\nAnalyze it now."
-    chat = claude_chat(session_id=session_id, system_message=system).with_model(*LLM_MODEL)
+    chat = claude_chat(session_id=session_id, system_message=system).with_model(*model_for("extraction.clarify"))
     resp = await chat.send_message(UserMessage(text=prompt))
     try:
         d = _extract_json(resp)

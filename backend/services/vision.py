@@ -14,6 +14,7 @@ from core import logger, log_usage, _est_tokens, EMERGENT_LLM_KEY, VISION_MODEL
 from integrations.gemini import (  # noqa: F401  (re-exported for ingestion.py)
     get_gemini_client, _gemini_doc_sync, _gemini_read_sync,
 )
+from core import model_for
 from prompts import render
 
 
@@ -35,7 +36,7 @@ async def ai_read_image_general(file_path: str, mime_type: str, session_id: str)
     try:
         fc = FileContentWithMimeType(file_path=file_path, mime_type=mime_type)
         chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=session_id or "read",
-                       system_message=_IMAGE_READ_SYSTEM).with_model(*VISION_MODEL)
+                       system_message=_IMAGE_READ_SYSTEM).with_model(*model_for("vision.read_image", "vision"))
         # FIX-002-B: semaphore + timeout guard shared across all LLM calls.
         from services.ai.llm_limits import guarded_llm
         resp = await guarded_llm(chat.send_message(UserMessage(text=user_text, file_contents=[fc])),

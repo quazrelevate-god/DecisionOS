@@ -16,6 +16,7 @@ from typing import List, Optional
 import httpx
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
+from core import model_for
 from prompts import render
 from emergentintegrations.llm.chat import UserMessage
 
@@ -237,7 +238,7 @@ async def website_intel(inp: WebsiteIntelInput, request: Request):
                     industries=", ".join(INDUSTRIES), business_models=", ".join(BUSINESS_MODELS))
     prompt = f"Company: {inp.company_name or 'unknown'}\nWebsite text:\n{text}"
     try:
-        chat = claude_chat(session_id=f"webintel-{new_id()}", system_message=system).with_model(*LLM_MODEL)
+        chat = claude_chat(session_id=f"webintel-{new_id()}", system_message=system).with_model(*model_for("onboarding.web_intel"))
         data = _extract_json(await chat.send_message(UserMessage(text=prompt))) or {}
     except Exception as e:
         logger.error(f"website-intel analysis failed: {e}")
@@ -408,7 +409,7 @@ async def interview_answer(inp: InterviewAnswerInput, request: Request):
     )
     system = INTERVIEW_SYSTEM + _lang_directive(lang)
     try:
-        chat = claude_chat(session_id=f"interview-{s['id']}-{len(qa)}", system_message=system).with_model(*LLM_MODEL)
+        chat = claude_chat(session_id=f"interview-{s['id']}-{len(qa)}", system_message=system).with_model(*model_for("onboarding.interview"))
         data = _extract_json(await chat.send_message(UserMessage(text=prompt))) or {}
     except Exception as e:
         logger.error(f"interview answer failed: {e}")
@@ -450,7 +451,7 @@ async def interview_blueprint(inp: InterviewSessionInput, request: Request):
         "Design this company's operating system now — sized to their team band, worded in their industry."
     )
     try:
-        chat = claude_chat(session_id=f"bp-{s['id']}-{len(refinement)}", system_message=BLUEPRINT_SYSTEM + welcome_note).with_model(*LLM_MODEL)
+        chat = claude_chat(session_id=f"bp-{s['id']}-{len(refinement)}", system_message=BLUEPRINT_SYSTEM + welcome_note).with_model(*model_for("onboarding.blueprint"))
         data = _extract_json(await chat.send_message(UserMessage(text=prompt))) or {}
     except Exception as e:
         logger.error(f"interview blueprint failed: {e}")

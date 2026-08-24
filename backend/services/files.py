@@ -11,6 +11,7 @@ from emergentintegrations.llm.chat import UserMessage
 from core import db, logger, new_id, now_iso, claude_chat, LLM_MODEL, _extract_json
 from services import obj_store
 from services.vision import ai_read_image_general
+from core import model_for
 from prompts import render
 
 
@@ -75,7 +76,7 @@ async def _analyze_reference_file(tenant_id, task_id, rec):
         system = render("coaching.file_reference")
         prompt = f"TASK: {task.get('title')}\n\nREFERENCE FILE CONTENT:\n{text}"
         chat = claude_chat(session_id=f"ref-insight-{task_id}", system_message=system,
-                           tenant_id=tenant_id).with_model(*LLM_MODEL)
+                           tenant_id=tenant_id).with_model(*model_for("coaching.file_reference"))
         resp = await chat.send_message(UserMessage(text=prompt))
         parsed = _extract_json(resp) or {}
         summary = (parsed.get("summary") or "").strip()

@@ -11,6 +11,7 @@ from core import (
     normalize_lexicon, normalize_operating_model, DEFAULT_OPERATING_MODEL,
 )
 from emergentintegrations.llm.chat import UserMessage
+from core import model_for
 from prompts import render
 
 
@@ -37,7 +38,7 @@ async def ai_generate_lexicon(industry: str, company_size: str = "", roles=None,
         f"Departments: {role_labels}\n"
         "Localize the vocabulary now."
     )
-    chat = claude_chat(session_id=f"lexicon-{new_id()}", system_message=system).with_model(*LLM_MODEL)
+    chat = claude_chat(session_id=f"lexicon-{new_id()}", system_message=system).with_model(*model_for("generators.lexicon"))
     try:
         resp = await chat.send_message(UserMessage(text=prompt))
         data = _extract_json(resp)
@@ -58,7 +59,7 @@ async def ai_generate_operating_model(industry: str, company_size: str = "", rol
         f"Departments: {role_labels}\n"
         "Design the operating model now."
     )
-    chat = claude_chat(session_id=f"opmodel-{new_id()}", system_message=system).with_model(*LLM_MODEL)
+    chat = claude_chat(session_id=f"opmodel-{new_id()}", system_message=system).with_model(*model_for("generators.operating_model"))
     try:
         resp = await chat.send_message(UserMessage(text=prompt))
         data = _extract_json(resp)
@@ -106,7 +107,7 @@ async def ai_generate_finance_categories(industry: str, company_size: str = "", 
     )
     data = {}
     try:
-        chat = claude_chat(session_id=f"fincats-{new_id()}", system_message=system).with_model(*LLM_MODEL)
+        chat = claude_chat(session_id=f"fincats-{new_id()}", system_message=system).with_model(*model_for("generators.finance_categories"))
         resp = await chat.send_message(UserMessage(text=prompt))
         data = _extract_json(resp) or {}
     except Exception as e:  # noqa: BLE001

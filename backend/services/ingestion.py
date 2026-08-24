@@ -20,6 +20,7 @@ from core import (
     EMERGENT_LLM_KEY, VISION_MODEL,
 )
 from services.vision import get_gemini_client, _gemini_doc_sync
+from core import model_for
 from prompts import render
 
 
@@ -53,7 +54,7 @@ async def ai_extract_document(file_path: str, mime_type: str, session_id: str, c
     if not resp:
         fc = FileContentWithMimeType(file_path=file_path, mime_type=mime_type)
         chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=session_id,
-                       system_message=system).with_model(*VISION_MODEL)
+                       system_message=system).with_model(*model_for("documents.doc_extract", "vision"))
         # FIX-002-B: guard.
         from services.ai.llm_limits import guarded_llm
         resp = await guarded_llm(chat.send_message(UserMessage(text=user_text, file_contents=[fc])),
@@ -74,7 +75,7 @@ async def ai_map_spreadsheet(headers: list, rows: list, session_id: str, currenc
     payload = {"headers": headers, "rows": rows[:300]}
     system = _CSV_SYSTEM.replace("{currency}", currency).replace("{company}", company or "our company")
     chat = claude_chat(session_id=session_id,
-                   system_message=system).with_model(*LLM_MODEL)
+                   system_message=system).with_model(*model_for("documents.csv_map"))
     resp = await chat.send_message(UserMessage(text=f"Spreadsheet data:\n{json.dumps(payload)}\n\nClassify and map to JSON now."))
     data = _extract_json(resp)
     return {
@@ -127,7 +128,7 @@ async def ai_classify_purchase(text: str, expense_categories=None, asset_categor
         return {"purchase_type": "unknown"}
     try:
         chat = claude_chat(session_id=f"purchase-class-{new_id()}",
-                           system_message=_purchase_class_sys(expense_categories, asset_categories)).with_model(*LLM_MODEL)
+                           system_message=_purchase_class_sys(expense_categories, asset_categories)).with_model(*model_for("documents.purchase_class"))
         resp = await chat.send_message(UserMessage(text=text[:1500]))
         d = _extract_json(resp) or {}
     except Exception as e:  # noqa: BLE001

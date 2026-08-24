@@ -24,6 +24,22 @@ register(EvalCase(
 ))
 
 register(EvalCase(
+    task="captures.triage", name="terse_instruction_not_unrelated",
+    fn=ai_capture_triage,
+    kwargs={"text": "send quotation to Kumar", "roles": ["sales", "finance", "operations"]},
+    # E3-07.2: a terse (or Tanglish) instruction is a REAL task -> unrelated must stay
+    # false and it routes to a department. Live-validated against the v1.1 prompt.
+    golden="""{"classification": "sales", "intent": "send quotation", "summary": "Send a quotation to Kumar",
+      "department": "sales", "priority": "medium", "confidence": 0.92, "unrelated": false}""",
+    checks=[
+        predicate("terse instruction not dropped as unrelated", lambda r: r["unrelated"] is False),
+        one_of("classification", CAPTURE_CLASSES),
+        nonempty_str("summary"),
+    ],
+    note="E3-07.2 precision: a brief genuine instruction is kept (unrelated=false), not dropped.",
+))
+
+register(EvalCase(
     task="captures.triage", name="bad_values_coerced",
     fn=ai_capture_triage,
     kwargs={"text": "random chatter with no clear intent", "roles": ["sales"]},

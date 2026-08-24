@@ -23,6 +23,7 @@ from core import (
 # FIX-007-B (S4-10): Brain-context writes for finance events so
 # "how did we settle the Kapoor invoice?" queries can find the answer.
 from services.ai import brain_context
+from prompts import render
 
 router = APIRouter(prefix="/api")
 
@@ -106,11 +107,7 @@ async def ai_suggest_expense_category(text: str, tenant_id: str) -> str:
         return "Other"
     cats = (await get_finance_categories(tenant_id))["expense"]
     try:
-        system = (
-            "You categorize a single business expense into EXACTLY one category from this list: "
-            + ", ".join(cats) + ". "
-            "Reply with ONLY JSON: {\"category\": \"<one of the categories>\"}."
-        )
+        system = render("ledger.expense_cat", cats=", ".join(cats))
         chat = claude_chat(session_id=f"expcat-{tenant_id}", system_message=system).with_model(*LLM_MODEL)
         resp = await chat.send_message(UserMessage(text=text[:600]))
         data = _extract_json(resp) or {}
@@ -193,14 +190,8 @@ async def ai_extract_ledger_file(file_path: str, mime_type: str, kind: str, curr
     cat_rule = ""
     if kind in ("expense", "asset") and categories:
         cat_rule = f'The "category" MUST be exactly one of: [{", ".join(categories)}]. Pick the closest fit. '
-    system = (
-        f"You read a business document (image or PDF) and extract the details of {desc}. "
-        f"Amounts are in {currency}. The user already typed these values: {json.dumps(typed_clean)}. "
-        "PREFER the user's typed values when present and non-empty; fill every MISSING field from the document. "
-        f"{cat_rule}"
-        f"Reply with ONLY compact JSON in exactly this shape: {shape}. "
-        "Use an empty string or 0 for anything you cannot determine. Never invent data."
-    )
+    system = render("ledger.ocr", desc=desc, currency=currency,
+                    typed=json.dumps(typed_clean), cat_rule=cat_rule, shape=shape)
     resp = None
     # Prefer the user's own Gemini key (same client server.py configures), else the Emergent vision key.
     try:
@@ -1266,16 +1257,7 @@ async def _finance_context(tid: str, scope: str) -> dict:
 async def _generate_analysis(tid: str, scope: str) -> dict:
     ctx = await _finance_context(tid, scope)
     focus = _SCOPE_FOCUS.get(scope, _SCOPE_FOCUS["overview"])
-    system = (
-        "You are a sharp CFO advisor for a small business. Analyse the finance data and focus on " + focus + " "
-        f"All amounts are in {ctx['currency']}; today is {ctx['today']}. Be specific — cite real numbers, vendors and categories. "
-        'Return ONLY JSON: {"headline": "ONE short punchy line, max 12 words, summarising the finance state", '
-        '"insights": [{"level": "high|medium|low", "title": "punchy one-liner, max 10 words, include the key number", '
-        '"detail": "1-2 sentences: why it matters + what to check", '
-        '"action": "a short imperative task title to act on it, max 10 words"}]}. '
-        "Blend the most urgent problems AND recommended actions into this ONE list, ranked most-urgent-first, MAX 6 items. "
-        "Every insight MUST have a concrete `action`. If data is thin, say so in the headline and keep the list short."
-    )
+    system = render("ledger.analysis", focus=focus, currency=ctx['currency'], today=ctx['today'])
     data = {}
     try:
         chat = claude_chat(session_id=f"ledger-ai-{scope}-{new_id()}", system_message=system).with_model(*LLM_MODEL)
@@ -1328,11 +1310,7 @@ async def ledger_ask(inp: LedgerAskInput, user: dict = Depends(require_ledger)):
         raise HTTPException(status_code=400, detail="Ask a question")
     scope = inp.scope if inp.scope in SCOPES else "brief"
     ctx = await _finance_context(user["tenant_id"], scope)
-    system = (
-        "You are a finance assistant for a small business owner. Answer ONLY from the finance data provided, "
-        f"concisely (1-4 sentences), citing real numbers and vendors. Amounts are in {ctx['currency']}, today is {ctx['today']}. "
-        "If the data doesn't contain the answer, say so plainly."
-    )
+    system = render("ledger.ask", currency=ctx['currency'], today=ctx['today'])
     try:
         chat = claude_chat(session_id=f"ledger-ask-{user['tenant_id']}-{new_id()}", system_message=system).with_model(*LLM_MODEL)
         resp = await chat.send_message(UserMessage(text=f"Finance data:\n{json.dumps(ctx)}\n\nQuestion: {q}"))

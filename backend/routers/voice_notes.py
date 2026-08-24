@@ -15,6 +15,7 @@ from core import (
 )
 from emergentintegrations.llm.chat import UserMessage
 from models.voice import TextNoteInput
+from prompts import render
 from services.voice import process_voice_note
 from services.transcription import transcribe_audio
 from services.tasks import _tenant_industry
@@ -102,17 +103,7 @@ async def create_text_note(inp: TextNoteInput, background: BackgroundTasks, user
 
 async def ai_clarify_directive(text: str, industry: str, session_id: str) -> dict:
     """Decide if an owner's directive has enough info to act on; if not, ask up to 4 short questions."""
-    system = (
-        "You are the intake assistant of DecisionOS for a small business. "
-        f"Industry: {industry or 'general'}. "
-        "The owner just gave a short instruction. Decide whether it contains enough information to create a clear, "
-        "actionable task/decision. Critical details that are often missing: WHO (which customer/supplier/person), "
-        "amounts, dates/deadlines, which invoice/order, and any specific instructions. "
-        "If the instruction is already actionable, return complete=true with an empty questions list. "
-        "If key details are missing, return complete=false and up to 4 SHORT clarifying questions "
-        "(each with a tiny hint/example). Do NOT ask about things already stated. "
-        "Return ONLY valid JSON: {\"complete\": boolean, \"questions\": [{\"id\": string, \"question\": string, \"hint\": string}]}."
-    )
+    system = render("extraction.clarify", industry=industry or "general")
     prompt = f"Owner instruction: \"{text}\"\nAnalyze it now."
     chat = claude_chat(session_id=session_id, system_message=system).with_model(*LLM_MODEL)
     resp = await chat.send_message(UserMessage(text=prompt))

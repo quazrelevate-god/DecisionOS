@@ -15,6 +15,7 @@ from core import (
     normalize_os_blueprint, require_perm, require_role, log_activity,
     get_current_user,
 )
+from prompts import render
 from services.auth import onboarding_drafts as drafts_svc  # FIX-001-D
 from services.ai import ai_setup as ai_setup_svc          # FIX-001-D
 # FIX-004-A (RBAC Wave 1)
@@ -90,14 +91,7 @@ async def onboarding_suggest(inp: OnboardingSuggestInput, request: Request):
     # FIX-006-D (S0-06): unauth endpoint that calls Claude — every hit
     # burns LLM credit. Rate-limit + captcha stop drive-by cost drain.
     await guard_unauth_ai_endpoint(request, service="onboarding", kind="suggest")
-    system = (
-        "You are an onboarding assistant for DecisionOS, a business operations app. "
-        "Given an industry, propose the team roles/departments and example products or services a small business in that "
-        "industry would have. Return ONLY valid JSON, no prose: "
-        "{\"roles\": [{\"key\": lowercase_snake_case_slug, \"label\": Human Readable}], "
-        "\"products\": [{\"name\": string, \"description\": short string}]}. "
-        "Provide 3-6 roles (do NOT include 'owner' — it is implicit) and 3-5 example products/services. Keep it specific to the industry."
-    )
+    system = render("onboarding.suggest")
     prompt = f"Industry: {inp.industry}\nCompany size: {inp.company_size or 'unspecified'}\nExtra notes: {inp.description or 'none'}\nSuggest roles and example products/services now."
     chat = claude_chat(session_id=f"onboard-{new_id()}", system_message=system).with_model(*LLM_MODEL)
     try:
@@ -128,18 +122,7 @@ async def onboarding_os_blueprint(inp: OSBlueprintGenInput, request: Request):
     # unauth AI call in the codebase (large system + long response).
     # Same 3-check guard as the rest of the pre-auth AI surface.
     await guard_unauth_ai_endpoint(request, service="onboarding", kind="os_blueprint")
-    system = (
-        "You are the onboarding architect for DecisionOS, an operating system for founder-led SMEs. "
-        "Given an industry, design a ready-to-use Business Operating System for a small/mid business. "
-        "Return ONLY valid JSON, no prose, with exactly these keys: "
-        "{\"departments\": [string department name], "
-        "\"workflows\": [{\"name\": string}], "
-        "\"operational_tasks\": [{\"title\": string, \"category\": one of "
-        "[Presentation,Meeting,Documentation,Proposal,Planning,Review,Administration,Compliance,Marketing,HR Activity,Travel,Event,IT Support,Other]}], "
-        "\"approval_rules\": [{\"name\": string, \"description\": short string}]}. "
-        "Provide 6-9 departments, 6-12 workflows, 10-15 recurring operational tasks, and 4-8 approval rules. "
-        "Make everything concrete and specific to the industry (use its real terminology). Do NOT include an 'Owner' department."
-    )
+    system = render("onboarding.os_blueprint")
     prompt = f"Industry: {inp.industry}\nCompany size: {inp.company_size or 'unspecified'}\nWhat the business actually does: {inp.description or 'not specified'}\nDesign the operating system now."
     chat = claude_chat(session_id=f"osbp-{new_id()}", system_message=system).with_model(*LLM_MODEL)
     try:

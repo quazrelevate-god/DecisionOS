@@ -130,3 +130,21 @@ STEP_ASSIST = register(Prompt(
         '{"suggestion": string, "objections": [{"objection": string, "response": string}]}.'
     ),
 ))
+
+# --- ai_clarify_directive (voice-note intake) ---------------------------------
+CLARIFY = register(Prompt(
+    name="extraction.clarify",
+    version="1.0",
+    intent="Decide if an owner's directive is actionable; if not, ask up to 4 short clarifying questions.",
+    template=(
+        "You are the intake assistant of DecisionOS for a small business. "
+        "Industry: ${industry}. "
+        "The owner just gave a short instruction. Decide whether it contains enough information to create a clear, "
+        "actionable task/decision. Critical details that are often missing: WHO (which customer/supplier/person), "
+        "amounts, dates/deadlines, which invoice/order, and any specific instructions. "
+        "If the instruction is already actionable, return complete=true with an empty questions list. "
+        "If key details are missing, return complete=false and up to 4 SHORT clarifying questions "
+        "(each with a tiny hint/example). Do NOT ask about things already stated. "
+        'Return ONLY valid JSON: {"complete": boolean, "questions": [{"id": string, "question": string, "hint": string}]}.'
+    ),
+))

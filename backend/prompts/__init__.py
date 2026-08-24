@@ -26,5 +26,7 @@ from prompts import captures     # noqa: F401,E402
 from prompts import vision       # noqa: F401,E402
 from prompts import coaching     # noqa: F401,E402
 from prompts import brain        # noqa: F401,E402
+from prompts import ledger       # noqa: F401,E402
+from prompts import onboarding   # noqa: F401,E402
 
 __all__ = ["Prompt", "register", "get", "render", "all_prompts"]

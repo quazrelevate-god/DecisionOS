@@ -13,6 +13,7 @@ from typing import Optional
 from emergentintegrations.llm.chat import UserMessage
 
 from core import claude_chat, LLM_MODEL, _extract_json, logger, DEFAULT_OPERATING_MODEL
+from prompts import render
 
 
 async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[list] = None, members: Optional[list] = None,
@@ -36,41 +37,10 @@ async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[l
         "\"assignee_name\" to the closest matching team member name above. Otherwise leave \"assignee_name\" empty "
         "and just pick a sensible \"assignee_role\". "
     ) if names else ""
-    system = (
-        "You are the extraction engine of DecisionOS, an operating brain for small businesses. "
-        "Convert a founder's spoken/written directive into structured operational data. "
-        "Return ONLY valid JSON, no prose. Schema: "
-        "{\"summary\": string, \"confidence\": number between 0 and 1, "
-        "\"decisions\": [{\"title\": string, \"detail\": string, \"category\": string, "
-        "\"type\": one of [directive,approval,policy,observation]}], "
-        "\"tasks\": [{\"title\": string, \"description\": string, \"assignee_role\": one of [" + roles_str + "], "
-        "\"assignee_name\": string (a specific team member's name if one is explicitly mentioned, else empty), "
-        "\"task_category\": one of [" + cat_keys_str + "] (the department this task belongs to), "
-        "\"priority\": one of [low,medium,high], \"due_in_days\": integer or null}], "
-        "\"workflow_events\": [{\"type\": one of [" + pipe_keys_str + "], \"title\": string, \"detail\": string, \"counterparty\": string, \"amount\": number or null}], "
-        "\"reminders\": [{\"title\": string, \"due_in_days\": integer or null}], "
-        "\"meeting_events\": [{\"title\": string, \"when\": string, \"due_in_days\": integer or null}], "
-        "\"memory_notes\": [{\"text\": string, \"tag\": string}]}. "
-        + members_line +
-        "Use 'reminders' for simple personal follow-ups (e.g. 'call Kumar tomorrow', 'follow up with Toyota next Monday'). "
-        "Use 'meeting_events' for meetings/reviews/calls to be scheduled (e.g. 'arrange a sales review on Friday', 'set up a vendor call Monday'). Keep meetings OUT of reminders. "
-        "Use 'workflow_events' ONLY for concrete multi-step operational pipelines this business tracks on the board. "
-        "Pick the \"type\" from the business's ACTUAL pipelines: " + pipe_desc + " "
-        "Create a workflow_event only when the directive clearly starts/advances one of these pipelines; "
-        "include the counterparty (customer/vendor name) and amount when mentioned. "
-        "For every task, set \"task_category\" to the single best-fitting department from: " + cat_desc + ". "
-        "IMPORTANT: Following up on, chasing, or collecting PAYMENT for an invoice (money a customer owes us) is NOT a workflow — create a TASK for it instead (assignee_role 'finance' or the named accountant if one exists), e.g. 'uploaded an invoice, ask the accountant to follow up on payment' -> a finance task titled 'Follow up on invoice payment' with the customer in the description. "
-        "Do NOT put general rules/policies here — those belong in memory_notes. "
-        "Use 'memory_notes' for lasting facts/policies the company should remember (e.g. 'don't purchase from XYZ again', 'salary increment for Arun from August'). "
-        "The transcript may be in English, Tamil, or Tanglish (casual Tamil-English code-mix). Fully understand it regardless "
-        "of language, and produce ALL output field values in clear English. "
-        "TASK GRANULARITY (important): create exactly ONE task per distinct assignee (person or role). Do NOT split one "
-        "person's single goal into several task cards — a directive like 'install and onboard all users using Ramesh's list' "
-        "is ONE task for the responsible person, not one task per sub-step. The individual sub-steps (install, get the list, "
-        "onboard each user, etc.) are handled later inside that task's AI execution guide, so keep them OUT of separate tasks. "
-        "Only create multiple tasks when the work genuinely goes to DIFFERENT people/roles, or is a clearly separate deliverable "
-        "for the same person that cannot be part of the same guided checklist. Put the fuller scope in the task's \"description\". "
-        "Pick assignee_role ONLY from the provided role list. Infer sensible owners and due dates. If nothing applies, use empty arrays."
+    system = render(
+        "extraction.extract",
+        roles_str=roles_str, cat_keys_str=cat_keys_str, pipe_keys_str=pipe_keys_str,
+        members_line=members_line, pipe_desc=pipe_desc, cat_desc=cat_desc,
     )
     prompt = f"Founder directive transcript:\n\"\"\"\n{transcript}\n\"\"\"\n"
     if extra_context:
@@ -112,17 +82,7 @@ async def ai_score_tasks(tasks: list, currency: str, session_id: str) -> dict:
             "priority": t.get("priority", "medium"), "due_date": (t.get("due_date") or "")[:10],
             "assignee_role": t.get("assignee_role") or "unassigned", "status": t.get("status"),
         })
-    system = (
-        "You are the prioritization engine of DecisionOS, an operating brain for a small business. "
-        f"Today is {today}. Currency is {currency}. "
-        "For EACH task, rate 0-100 on four axes: "
-        "business_impact (effect on operations/customers), revenue (direct money at stake / upside), "
-        "risk (cost of NOT doing it — penalties, churn, compliance), and urgency (time pressure vs due date). "
-        "Then give a blended priority_score 0-100 (higher = do sooner) and a one-line reason. "
-        "Return ONLY valid JSON: {\"scores\":[{\"id\":string,\"business_impact\":int,\"revenue\":int,"
-        "\"risk\":int,\"urgency\":int,\"priority_score\":int,\"reason\":string}]}. "
-        "Include every task id exactly once."
-    )
+    system = render("extraction.score_tasks", today=today, currency=currency)
     prompt = "Tasks:\n" + json.dumps(lines, ensure_ascii=False) + "\nScore them now."
     chat = claude_chat(session_id=session_id, system_message=system).with_model(*LLM_MODEL)
     resp = await chat.send_message(UserMessage(text=prompt))
@@ -163,14 +123,7 @@ async def ai_score_contact(contact: dict, metrics: dict, currency: str, session_
         "pending_deliveries": metrics.get("pending_deliveries"),
         "invoice_count": metrics.get("invoice_count"), "payment_count": metrics.get("payment_count"),
     }
-    system = (
-        "You are the relationship-intelligence engine of DecisionOS for a small business. "
-        f"Currency is {currency}. Given a {ctype}'s financial & interaction history, rate two things 0-100: "
-        "relationship_score (overall health/value of the relationship — high = strong, loyal, profitable), and "
-        "risk_score (likelihood of a problem — non-payment, churn, complaints, supply risk; high = risky). "
-        "Give a one-line reason and up to 3 short signal phrases. "
-        "Return ONLY valid JSON: {\"relationship_score\":int,\"risk_score\":int,\"reason\":string,\"signals\":[string]}."
-    )
+    system = render("extraction.score_contact", currency=currency, ctype=ctype)
     prompt = json.dumps(payload, ensure_ascii=False, default=str) + "\nScore this relationship now."
     chat = claude_chat(session_id=session_id, system_message=system).with_model(*LLM_MODEL)
     resp = await chat.send_message(UserMessage(text=prompt))
@@ -197,18 +150,7 @@ async def ai_meeting_notes(transcript: str, members: list, session_id: str) -> d
     names = [m.get("name") for m in (members or []) if m.get("name")]
     members_line = ("Team members you may assign action items to by name: " + ", ".join(names) + ". "
                     "Set action_items[].assignee_name to the closest matching name when a person is named, else empty. ") if names else ""
-    system = (
-        "You are the meeting-notes engine of DecisionOS for a small business. "
-        "Convert a raw meeting transcript into concise, structured minutes. Return ONLY valid JSON: "
-        "{\"title\": string (short meeting title), \"summary\": string (2-4 sentences), "
-        "\"key_points\": [string], \"decisions\": [string], "
-        "\"action_items\": [{\"title\": string, \"assignee_name\": string, \"due_in_days\": integer or null}]}. "
-        + members_line +
-        "ACTION-ITEM GRANULARITY (important): create exactly ONE action item per distinct assignee for a single goal. "
-        "Do NOT split one person's task into several items — the sub-steps are handled inside that task's execution guide later. "
-        "Only create multiple items when they go to DIFFERENT people or are clearly separate deliverables. "
-        "The transcript may be English, Tamil or Tanglish — understand it and output all values in clear English."
-    )
+    system = render("extraction.meeting_notes", members_line=members_line)
     prompt = f"Meeting transcript:\n\"\"\"\n{(transcript or '')[:40000]}\n\"\"\"\nExtract the structured minutes now."
     chat = claude_chat(session_id=session_id, system_message=system).with_model(*LLM_MODEL)
     resp = await chat.send_message(UserMessage(text=prompt))
@@ -227,16 +169,7 @@ async def ai_meeting_notes(transcript: str, members: list, session_id: str) -> d
 
 async def ai_execution_plan(task: dict, industry: str, currency: str, session_id: str) -> dict:
     """Generate a context-aware execution checklist for a task. Returns {task_type, steps:[str]}."""
-    system = (
-        "You are the execution-planning engine of DecisionOS for a small business. "
-        f"Industry: {industry or 'general'}. Currency: {currency}. "
-        "Given a task an employee must do, first classify it into one of "
-        "[collection, quotation, complaint, supplier_payment, sales_followup, delivery, generic], "
-        "then produce a concise, practical, ordered checklist of execution steps the employee should follow "
-        "to complete it well. 5-9 short action steps, each a single imperative line (no numbering, no sub-bullets). "
-        "Tailor steps to the specific task. Return ONLY valid JSON: "
-        "{\"task_type\": string, \"steps\": [string]}."
-    )
+    system = render("extraction.execution_plan", industry=industry or "general", currency=currency)
     prompt = (f"Task title: {task.get('title','')}\n"
               f"Description: {task.get('description','') or '(none)'}\n"
               f"Assigned role: {task.get('assignee_role') or 'team'}\n"
@@ -257,14 +190,7 @@ async def ai_execution_plan(task: dict, industry: str, currency: str, session_id
 
 async def ai_step_assist(task: dict, step_text: str, industry: str, session_id: str) -> dict:
     """Suggest a script/guidance for a single execution step + likely objections and responses."""
-    system = (
-        "You are DecisionOS's execution assistant helping a small-business employee complete one step of a task. "
-        f"Industry: {industry or 'general'}. "
-        "Give a short, ready-to-use suggestion (a phone/message script or concrete guidance, 1-3 sentences) for the step, "
-        "and 2-4 likely objections the other party may raise with a crisp suggested response for each. "
-        "Be practical and polite. Return ONLY valid JSON: "
-        "{\"suggestion\": string, \"objections\": [{\"objection\": string, \"response\": string}]}."
-    )
+    system = render("extraction.step_assist", industry=industry or "general")
     prompt = (f"Task: {task.get('title','')}\n"
               f"Context: {task.get('description','') or '(none)'}\n"
               f"Current step: {step_text}\n"

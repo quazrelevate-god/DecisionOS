@@ -101,6 +101,48 @@ def coerce_extract(data, transcript: str = "") -> dict:
     return out
 
 
+# Below this calibrated confidence an extraction is flagged for review priority
+# (env-overridable so ops can tune it without a redeploy).
+import os  # noqa: E402
+REVIEW_CONFIDENCE = float(os.environ.get("EXTRACT_REVIEW_CONFIDENCE", "0.55"))
+
+
+def calibrate_confidence(extracted: dict, *, raw, repaired: bool,
+                         violations_remaining: int, transcript: str = "") -> tuple[float, list[str], bool]:
+    """Turn the model's self-reported confidence into a calibrated one (E3-02.2).
+
+    Models are systematically over-confident, so instead of trusting the raw number
+    we down-weight it by OBSERVABLE signals of a shaky extraction -- a repair was
+    needed, schema issues remained, or a non-empty directive produced nothing
+    actionable. Returns (calibrated in [0,1], review_reasons, needs_review).
+
+    This is signal-based calibration, not learned calibration against a labelled set
+    -- that belongs in the evals track (E3-10) once thumbs/outcome data exists."""
+    c = float(raw) if isinstance(raw, (int, float)) and 0 <= raw <= 1 else 0.7
+    reasons: list[str] = []
+
+    if repaired:
+        c *= 0.75
+        reasons.append("output needed an auto-repair pass")
+    if violations_remaining:
+        c *= 0.55
+        reasons.append(f"{violations_remaining} schema issue(s) remained after repair")
+
+    buckets = ("tasks", "decisions", "reminders", "meeting_events", "workflow_events")
+    nothing = not any((extracted.get(b) or []) for b in buckets)
+    if (transcript or "").strip() and nothing:
+        c *= 0.5
+        reasons.append("nothing actionable extracted from a non-empty directive")
+
+    if len((extracted.get("summary") or "").strip()) < 8:
+        c *= 0.85
+        reasons.append("summary is very short")
+
+    c = round(max(0.0, min(1.0, c)), 2)
+    needs_review = c < REVIEW_CONFIDENCE or bool(violations_remaining)
+    return c, reasons[:4], needs_review
+
+
 def repair_instruction(violations: list[str]) -> str:
     """Build the bounded re-ask sent back to the model after a bad response."""
     bullets = "\n".join(f"- {x}" for x in violations[:_MAX_VIOLATIONS])

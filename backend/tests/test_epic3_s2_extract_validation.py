@@ -5,7 +5,10 @@ loop inside ai_extract is exercised by the golden-set eval cases
 (extraction.extract::auto_repair_recovers / auto_repair_exhausted_coerces), which
 run green in CI via test_epic3_s1_evals.py.
 """
-from services.ai.validation import validate_extract, coerce_extract, repair_instruction
+from services.ai.validation import (
+    validate_extract, coerce_extract, repair_instruction, calibrate_confidence,
+    REVIEW_CONFIDENCE,
+)
 
 
 _GOOD = {
@@ -108,3 +111,50 @@ def test_coerce_never_raises_on_junk():
 def test_repair_instruction_lists_violations():
     msg = repair_instruction(["tasks[0]: missing 'title'", "missing 'summary'"])
     assert "tasks[0]: missing 'title'" in msg and "ONLY the JSON" in msg
+
+
+# --- calibrate_confidence (E3-02.2) -----------------------------------------
+_CLEAN = {"summary": "Chase the overdue invoice from Sharma Textiles.",
+          "tasks": [{"title": "Call Priya", "assignee_role": "finance"}]}
+
+
+def test_clean_extraction_keeps_confidence_and_no_review():
+    cal, reasons, needs = calibrate_confidence(_CLEAN, raw=0.9, repaired=False,
+                                               violations_remaining=0, transcript="chase invoice")
+    assert cal == 0.9 and reasons == [] and needs is False
+
+
+def test_repair_lowers_confidence_with_reason():
+    cal, reasons, needs = calibrate_confidence(_CLEAN, raw=0.9, repaired=True,
+                                               violations_remaining=0, transcript="chase invoice")
+    assert cal < 0.9 and any("repair" in r for r in reasons)
+
+
+def test_residual_violations_force_review():
+    cal, reasons, needs = calibrate_confidence(_CLEAN, raw=0.9, repaired=True,
+                                               violations_remaining=2, transcript="chase invoice")
+    assert needs is True and any("schema issue" in r for r in reasons)
+
+
+def test_nothing_extracted_from_real_directive_is_low():
+    empty = {"summary": "ok", "tasks": [], "decisions": [], "reminders": [],
+             "meeting_events": [], "workflow_events": []}
+    cal, reasons, needs = calibrate_confidence(empty, raw=0.9, repaired=False,
+                                               violations_remaining=0, transcript="please handle the Kumar order today")
+    assert cal < 0.9 and any("nothing actionable" in r for r in reasons)
+
+
+def test_calibrated_confidence_stays_in_range():
+    cal, _, _ = calibrate_confidence({"summary": ""}, raw=1.0, repaired=True,
+                                     violations_remaining=5, transcript="x")
+    assert 0.0 <= cal <= 1.0
+
+
+def test_bad_raw_confidence_defaults():
+    cal, _, _ = calibrate_confidence(_CLEAN, raw="high", repaired=False,
+                                     violations_remaining=0, transcript="chase invoice")
+    assert 0.0 <= cal <= 1.0  # non-numeric raw -> safe default, never crashes
+
+
+def test_review_threshold_is_sane():
+    assert 0.0 < REVIEW_CONFIDENCE < 1.0

@@ -45,8 +45,9 @@ register(EvalCase(
         is_list("decisions"), is_list("workflow_events"),
         is_list("reminders"), is_list("meeting_events"), is_list("memory_notes"),
         each_item("tasks", nonempty_str("title"), key_present("assignee_role")),
+        predicate("clean extraction not flagged for review", lambda r: r.get("needs_review") is False),
     ],
-    note="Core directive extraction: summary + tasks + the six list buckets always present.",
+    note="Core directive extraction: summary + tasks + the six list buckets always present; clean output not review-flagged.",
 ))
 
 register(EvalCase(
@@ -101,8 +102,9 @@ register(EvalCase(
         is_list("tasks"), is_list("decisions"),
         predicate("bad priority clamped to medium",
                   lambda r: all(t.get("priority") == "medium" for t in r["tasks"])),
+        predicate("flagged for review after failed repair", lambda r: r.get("needs_review") is True),
     ],
-    note="Repair-exhausted: after the one re-ask still fails, coercion guarantees the contract (enum clamped), no crash.",
+    note="Repair-exhausted: after the one re-ask still fails, coercion guarantees the contract (enum clamped), no crash, and it's flagged for review.",
 ))
 
 

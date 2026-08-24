@@ -15,7 +15,9 @@ from emergentintegrations.llm.chat import UserMessage
 from core import claude_chat, LLM_MODEL, _extract_json, logger, DEFAULT_OPERATING_MODEL
 from core import model_for, record_ai_call
 from prompts import render
-from services.ai.validation import validate_extract, coerce_extract, repair_instruction
+from services.ai.validation import (
+    validate_extract, coerce_extract, repair_instruction, calibrate_confidence,
+)
 
 
 async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[list] = None, members: Optional[list] = None,
@@ -84,20 +86,31 @@ async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[l
                                  error=("; ".join(violations)[:300] if violations else None))
         return data, violations, ok
 
-    data, violations = None, ["no response"]
+    data, violations, repaired = None, ["no response"], False
     try:
         data, violations, ok = await _attempt(prompt)
         # Auto-repair: one bounded re-ask on parse-fail or missing/invalid fields,
         # instead of dropping straight to the empty fallback (E3-02.1).
         if not ok:
             logger.warning(f"AI extract schema issues, attempting one repair: {violations[:4]}")
+            repaired = True
             data2, violations2, ok2 = await _attempt(repair_instruction(violations))
             if data2 is not None and (ok2 or len(violations2) < len(violations)):
                 data, violations = data2, violations2  # accept if fixed or strictly better
     except Exception as e:  # total LLM failure self-records in the adapter; degrade safely
         logger.error(f"AI extract call failed: {e}")
 
-    return coerce_extract(data, transcript)
+    clean = coerce_extract(data, transcript)
+    # E3-02.2: replace the model's raw self-reported confidence with a calibrated
+    # one and flag low-confidence extractions so the review queue can prioritize.
+    cal, reasons, needs_review = calibrate_confidence(
+        clean, raw=clean.get("confidence"), repaired=repaired,
+        violations_remaining=len(violations or []), transcript=transcript)
+    clean["confidence_raw"] = clean.get("confidence")
+    clean["confidence"] = cal
+    clean["review_reasons"] = reasons
+    clean["needs_review"] = needs_review
+    return clean
 
 
 async def ai_score_tasks(tasks: list, currency: str, session_id: str) -> dict:

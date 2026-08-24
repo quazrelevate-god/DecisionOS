@@ -255,6 +255,12 @@ async def process_voice_note(note_id: str):
             "items": extracted.get("decisions", []),
             "workflow_events": extracted.get("workflow_events", []),
             "dtype": dtype, "confidence": round(max(0.0, min(1.0, conf)), 2),
+            # E3-02.2: calibrated confidence + review flag. The reviewer already
+            # approves every decision; needs_review lets the queue surface the
+            # shaky ones (repair needed / residual schema issues / nothing extracted).
+            "confidence_raw": extracted.get("confidence_raw"),
+            "needs_review": bool(extracted.get("needs_review")),
+            "review_reasons": extracted.get("review_reasons") or [],
             "status": "pending_approval",
             "created_by": note["created_by"], "created_at": now_iso(),
             "source": note.get("source") or ("voice" if note.get("kind") == "audio" else "text"),

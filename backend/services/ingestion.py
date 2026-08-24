@@ -6,6 +6,7 @@ classifies purchase bills into expense/asset/inventory, and commits contacts/
 invoices/payments/tasks + ledger rows. routers.ledger writers, server's
 CONTACT_TYPES, and llm_limits are imported deferred to avoid a cycle.
 """
+import os
 import re
 import json
 import asyncio
@@ -371,26 +372,83 @@ def _classify_ingestion(doc: dict) -> str:
     return "task"
 
 
+# A re-uploaded bill keeps its own invoice date; a recurring identical bill (rent,
+# subscriptions) lands weeks/months later. Only the former is a duplicate, so the
+# amount+contact signal is gated to this window. Env-overridable.
+INVOICE_DUP_WINDOW_DAYS = int(os.environ.get("INVOICE_DUP_WINDOW_DAYS", "7"))
+
+
+def _norm_inv_num(n) -> str:
+    """Normalize an invoice number for duplicate comparison: casefold + drop every
+    non-alphanumeric, so 'INV-001', 'INV 001', 'inv/001' and 'inv001' all match
+    (OCR and manual entry vary the separators)."""
+    return re.sub(r"[^a-z0-9]", "", str(n or "").lower())
+
+
+def _norm_contact(n) -> str:
+    return re.sub(r"\s+", " ", str(n or "").strip().lower())
+
+
+def _days_between(d1: str, d2: str):
+    """Absolute day gap between two YYYY-MM-DD strings, or None if either won't parse."""
+    try:
+        a = datetime.strptime((d1 or "")[:10], "%Y-%m-%d")
+        b = datetime.strptime((d2 or "")[:10], "%Y-%m-%d")
+        return abs((a - b).days)
+    except (ValueError, TypeError):
+        return None
+
+
+def _dup_reason(inv: dict, cand: dict, window_days: int = INVOICE_DUP_WINDOW_DAYS):
+    """Pure duplicate decision between an incoming invoice and one already on file.
+    Returns 'number' | 'amount_window' | None. Kept pure (no DB) so the false-positive
+    traps -- cross-vendor number reuse and recurring identical bills -- are exhaustively
+    unit-testable. E3-06.2."""
+    inum, cnum = _norm_inv_num(inv.get("number")), _norm_inv_num(cand.get("number"))
+    iname, cname = _norm_contact(inv.get("contact_name")), _norm_contact(cand.get("contact_name"))
+    # Rule 1 -- same normalized number, unique only per vendor: require the same contact
+    # (or an unknown contact on either side, where we can't scope and accept the weaker match).
+    if inum and inum == cnum and (not iname or not cname or iname == cname):
+        return "number"
+    # Rule 2 -- same amount + same vendor within a short window: a re-upload, not a recurring bill.
+    try:
+        iamt, camt = float(inv.get("amount") or 0), float(cand.get("amount") or 0)
+    except (TypeError, ValueError):
+        iamt = camt = 0.0
+    if iamt and iamt == camt and iname and iname == cname:
+        gap = _days_between((inv.get("date") or "")[:10], (cand.get("date") or "")[:10])
+        if gap is None or gap <= window_days:
+            return "amount_window"
+    return None
+
+
+async def _candidate_invoices(tenant_id: str, inv: dict):
+    """Fetch the small pool of already-filed invoices worth comparing against `inv`:
+    the same vendor's invoices when the vendor is known, else (number-only case) a
+    capped tenant-wide pool. Bounded so the Python-side comparison stays cheap."""
+    proj = {"_id": 0, "id": 1, "number": 1, "amount": 1, "contact_name": 1, "date": 1}
+    cname_raw = (inv.get("contact_name") or "").strip()
+    if cname_raw:
+        return await db.invoices.find(
+            {"tenant_id": tenant_id, "contact_name": {"$regex": f"^{re.escape(cname_raw)}$", "$options": "i"}},
+            proj).to_list(500)
+    if _norm_inv_num(inv.get("number")):  # no vendor -> number rule only, over a capped pool
+        return await db.invoices.find({"tenant_id": tenant_id}, proj).to_list(500)
+    return []
+
+
 async def _find_duplicate_invoice(tenant_id: str, records: dict):
-    """Return an already-filed invoice that looks like a duplicate of one in `records`, else None."""
+    """Return an already-filed invoice that looks like a duplicate of one in `records`, else None.
+
+    E3-06.2 hardening. A duplicate is the SAME bill filed twice (double-entry risk). We match
+    on what a re-upload preserves (normalized number, or amount+vendor+near-date) while dodging
+    two false-positive traps handled in _dup_reason: per-vendor number reuse and recurring
+    identical bills. Never raises -- a failed check must not break the ingest/capture flow."""
     for inv in (records or {}).get("invoices", []):
-        num = str(inv.get("number") or "").strip()
-        if num:
-            hit = await db.invoices.find_one(
-                {"tenant_id": tenant_id, "number": {"$regex": f"^{re.escape(num)}$", "$options": "i"}},
-                {"_id": 0, "id": 1, "number": 1})
-            if hit:
-                return hit
         try:
-            amt = float(inv.get("amount") or 0)
-        except (TypeError, ValueError):
-            amt = 0.0
-        cname = (inv.get("contact_name") or "").strip()
-        if amt and cname:
-            hit = await db.invoices.find_one(
-                {"tenant_id": tenant_id, "amount": amt,
-                 "contact_name": {"$regex": f"^{re.escape(cname)}$", "$options": "i"}},
-                {"_id": 0, "id": 1, "number": 1})
-            if hit:
-                return hit
+            for cand in await _candidate_invoices(tenant_id, inv):
+                if _dup_reason(inv, cand):
+                    return cand
+        except Exception as e:  # never break the capture/ingest flow
+            logger.warning(f"_find_duplicate_invoice check failed: {e}")
     return None

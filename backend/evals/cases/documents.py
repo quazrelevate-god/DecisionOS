@@ -33,3 +33,37 @@ register(EvalCase(
     ],
     note="An out-of-enum purchase_type is coerced to 'unknown' so the ledger asks the user.",
 ))
+
+register(EvalCase(
+    task="documents.purchase_class", name="expense_purchase",
+    fn=ai_classify_purchase,
+    kwargs={
+        "text": "Electricity bill - TNEB, billing period Aug 2026, amount Rs 8,450. Consumer no 123.",
+        "expense_categories": ["Utilities", "Rent", "Repairs"],
+        "asset_categories": ["Machinery", "Vehicles"],
+    },
+    golden="""{"purchase_type": "expense", "expense_category": "Utilities",
+      "asset_name": "", "asset_category": ""}""",
+    checks=[
+        predicate("classified as expense", lambda r: r["purchase_type"] == "expense"),
+        predicate("expense_category is str", lambda r: isinstance(r["expense_category"], str)),
+    ],
+    note="Labeled set: a recurring utility bill is an expense, not an asset/inventory.",
+))
+
+register(EvalCase(
+    task="documents.purchase_class", name="inventory_purchase",
+    fn=ai_classify_purchase,
+    kwargs={
+        "text": "Purchase bill: 500 kg raw cotton @ Rs 90/kg from Fibre Mills, for production stock.",
+        "expense_categories": ["Utilities", "Repairs"],
+        "asset_categories": ["Machinery"],
+    },
+    golden="""{"purchase_type": "inventory", "inventory_qty": 500, "inventory_unit": "kg",
+      "asset_name": "", "asset_category": "", "expense_category": ""}""",
+    checks=[
+        predicate("classified as inventory", lambda r: r["purchase_type"] == "inventory"),
+        predicate("qty carried through", lambda r: r.get("inventory_qty") in (500, 500.0)),
+    ],
+    note="Labeled set: raw material bought as stock is inventory, with quantity/unit preserved.",
+))

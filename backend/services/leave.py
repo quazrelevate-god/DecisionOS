@@ -10,6 +10,7 @@ from emergentintegrations.llm.chat import UserMessage
 
 from core import db, logger, new_id, now_iso, log_activity, claude_chat, LLM_MODEL, _extract_json
 from services.notifications import push_notification
+from prompts import render
 
 
 async def _resolve_leave_approver(tenant_id: str, requester: dict):
@@ -59,20 +60,7 @@ async def _create_leave(tenant_id, requester, leave_type, from_date, to_date, da
 async def ai_leave_impact(person_name: str, from_date: str, to_date: str, tasks: list, members: list) -> dict:
     if not tasks:
         return {"summary": "No active tasks are affected by this leave.", "suggestions": []}
-    system = (
-        "You are an operations manager for an Indian SME. A team member is going on leave and their active tasks are "
-        "at risk. For EACH task, recommend exactly ONE action to keep work on track:\n"
-        "- 'reassign': hand it to an available teammate — prefer someone with the same or adjacent role and the LOWEST "
-        "current workload (active_task_count). Only choose an assignee_id from the available_members list.\n"
-        "- 'extend': push the due date to shortly AFTER the person returns (a day or two after leave_to), only when the "
-        "task can safely wait and shouldn't move to someone else.\n"
-        "- 'monitor': leave as-is (low priority, almost done, or nothing to do now).\n"
-        "Return STRICT JSON: {\"summary\": string (one plain-English sentence), \"suggestions\": [{\"task_id\": string, "
-        "\"action\": \"reassign\"|\"extend\"|\"monitor\", \"assignee_id\": string (required only if reassign, must be from "
-        "available_members), \"assignee_name\": string, \"due_date\": \"YYYY-MM-DD\" (required only if extend), "
-        "\"reason\": string (short)}]}. Every input task_id MUST appear exactly once. If there are no available_members, "
-        "do not use 'reassign'."
-    )
+    system = render("coaching.leave_impact")
     payload = {
         "person_on_leave": person_name, "leave_from": from_date, "leave_to": to_date,
         "at_risk_tasks": [{"task_id": t["id"], "title": t.get("title"), "priority": t.get("priority"),

@@ -14,16 +14,10 @@ from core import logger, log_usage, _est_tokens, EMERGENT_LLM_KEY, VISION_MODEL
 from integrations.gemini import (  # noqa: F401  (re-exported for ingestion.py)
     get_gemini_client, _gemini_doc_sync, _gemini_read_sync,
 )
+from prompts import render
 
 
-_IMAGE_READ_SYSTEM = (
-    "You are a vision reader. Look at the attached image or document and TRANSCRIBE and DESCRIBE everything "
-    "a person would need, verbatim. Capture ALL readable content: names, job titles, company names, phone "
-    "numbers, emails, websites, addresses, dates, amounts, line items, table rows, headings and any handwritten "
-    "or printed text. If it is a business/visiting card, clearly list the person's name, title, company, phone(s), "
-    "email, website and address. If it is a list or table, preserve the rows. Never invent anything not in the image. "
-    "Return a concise PLAIN-TEXT extraction — no JSON, no commentary."
-)
+_IMAGE_READ_SYSTEM = render("vision.read_image")  # prompt in prompts/vision.py
 
 
 async def ai_read_image_general(file_path: str, mime_type: str, session_id: str) -> str:

@@ -12,6 +12,7 @@ from fastapi import HTTPException
 from emergentintegrations.llm.chat import UserMessage
 
 from core import db, logger, user_perms, claude_chat, LLM_MODEL, _extract_json
+from prompts import render
 
 
 def _clamp100(v):
@@ -224,13 +225,7 @@ async def compute_employee_stats(tenant_id: str, target: dict) -> dict:
 
 
 async def ai_work_coach(target: dict, stats: dict, session_id: str) -> dict:
-    system = (
-        "You are a supportive but honest performance coach inside DecisionOS, an operating system for a small business. "
-        "Given one employee's work statistics, write a short performance review. Be specific and reference the numbers. "
-        "Return ONLY valid JSON: {\"headline\": string (one encouraging sentence), "
-        "\"strengths\": [string] (2-4 concrete strengths), \"improvements\": [string] (1-3 gentle, actionable areas), "
-        "\"recommendation\": string (one concrete habit to adopt next). Keep every item under 18 words.}"
-    )
+    system = render("coaching.work_coach")
     prompt = (f"Employee: {target.get('name')} (role: {target.get('role')})\n"
               f"Stats: {json.dumps(stats)}\n"
               "Write the review now.")

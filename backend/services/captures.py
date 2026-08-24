@@ -14,6 +14,7 @@ from typing import Optional
 from emergentintegrations.llm.chat import UserMessage
 
 from core import db, logger, new_id, now_iso, claude_chat, LLM_MODEL, _extract_json
+from prompts import render
 from services.ingestion import commit_ingestion_records, _classify_ingestion
 from services.voice import process_voice_note
 
@@ -119,20 +120,7 @@ def _decide_processing_level(cls, confidence, amount, needs_owner, is_duplicate,
     return "confirm", ""
 
 
-_CAPTURE_SYS = (
-    "You are an operations triage AI for a business that receives instructions on WhatsApp. "
-    "Classify ONE incoming message and return ONLY JSON with keys: "
-    "classification (one of [operational_task, invoice, payment, purchase, sales, hr, meeting, decision, approval, workflow, other]), "
-    "intent (short phrase), summary (one clear sentence), "
-    "department (one of [sales, finance, purchase, hr, operations, production, marketing, owner]) — pick the department that should OWN and act on this. "
-    "Use 'owner' ONLY for company-wide policy changes, formal approvals/decisions, or big/high-value commitments; routine work (estimates, quotations, follow-ups, operational tasks) goes to the relevant department, NOT owner. "
-    "priority (one of [low, medium, high]), due_in_days (integer or null), "
-    "amount (number if a monetary value is mentioned, else null), "
-    "confidence (number between 0 and 1 — how sure you are this is a genuine, clearly actionable business instruction), "
-    "unrelated (boolean — true if this is NOT a business instruction, e.g. a greeting, spam, or personal chit-chat), "
-    "policy_or_high_risk (boolean — true for policy changes, contracts, legal, layoffs, big commitments). "
-    "Choose the department that should review this. Available team roles: {roles}."
-)
+_CAPTURE_SYS = render("captures.triage")  # prompt in prompts/captures.py; {roles} filled by .replace()
 
 
 async def ai_capture_triage(text: str, roles: list) -> dict:

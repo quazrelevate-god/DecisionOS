@@ -11,6 +11,7 @@ from emergentintegrations.llm.chat import UserMessage
 from core import db, logger, new_id, now_iso, claude_chat, LLM_MODEL, _extract_json
 from services import obj_store
 from services.vision import ai_read_image_general
+from prompts import render
 
 
 ATTACH_ALLOWED_EXT = {"jpg", "jpeg", "png", "gif", "webp", "heic", "pdf", "doc", "docx", "xls", "xlsx", "csv", "txt"}
@@ -71,9 +72,7 @@ async def _analyze_reference_file(tenant_id, task_id, rec):
         task = await db.tasks.find_one({"id": task_id}, {"_id": 0, "title": 1, "description": 1})
         if not task:
             return
-        system = ("You help a team understand a reference file attached to a task. In 1-2 sentences, "
-                  "explain what the file contains and how it informs the task. Then list up to 3 concrete "
-                  'action points. Return JSON: {"summary": "...", "points": ["..."]}')
+        system = render("coaching.file_reference")
         prompt = f"TASK: {task.get('title')}\n\nREFERENCE FILE CONTENT:\n{text}"
         chat = claude_chat(session_id=f"ref-insight-{task_id}", system_message=system,
                            tenant_id=tenant_id).with_model(*LLM_MODEL)

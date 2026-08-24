@@ -36,6 +36,7 @@ from core import (
 )
 from routers.brain_docs import _visibility_filter as _docs_visibility_filter
 from routers.brain_docs import _keywords as _docs_keywords
+from prompts import render
 
 
 router = APIRouter(prefix="/api/brain/agent")
@@ -51,42 +52,7 @@ _ALL_TOOLS = ("metadata_search", "mongo_query", "knowledge_lookup", "file_open")
 # ---------------------------------------------------------------------------
 # Planner — Claude picks which tools to run for this question.
 # ---------------------------------------------------------------------------
-_PLANNER_SYSTEM = (
-    "You are Dex's Router — you classify a founder/employee question and pick "
-    "which of four specialist tools should run. Return ONLY valid JSON: "
-    "{\"intent\": one of "
-    "[finance, sales, hr, procurement, operations, org_analytics, "
-    "policy, personal, general], "
-    "\"tools\": [{\"name\": one of "
-    "[metadata_search, mongo_query, knowledge_lookup, file_open], "
-    "\"query\": string (what to search — 1-6 words, keep the founder's own nouns), "
-    "\"doc_id\": string (ONLY for file_open, otherwise omit)}], "
-    "\"reasoning\": string (under 20 words, why this intent and these tools)}\n\n"
-
-    "INTENT PICKING GUIDE (be strict — it drives access control):\n"
-    "  • finance      — money, invoices, GST, tax, revenue, cash flow, payments, banking, expenses.\n"
-    "  • sales        — pipeline, deals, leads, discounts, customer revenue targets.\n"
-    "  • hr           — hiring, resignations, salary, appraisal, attendance, leaves of others.\n"
-    "  • procurement  — vendors, purchase orders, RFQs, supplier terms.\n"
-    "  • operations   — production, inventory, delivery, quality, workflows.\n"
-    "  • org_analytics — cross-department KPIs, company-wide health.\n"
-    "  • policy       — reading a company policy/SOP/filing/contract document.\n"
-    "  • personal     — the ASKER'S OWN tasks, activity, leaves.\n"
-    "  • general      — greetings, help, non-sensitive small talk.\n\n"
-
-    "TOOL PICKING GUIDE:\n"
-    "  • metadata_search — documents (policies, filings, contracts, SOPs).\n"
-    "  • mongo_query    — live analytics over operational data (tasks, invoices, activity).\n"
-    "  • knowledge_lookup — past decisions/approvals/resolutions.\n"
-    "  • file_open      — ONLY when a specific document was already named.\n\n"
-
-    "COUNT + AGGREGATION RULE: For any question containing 'how many', 'count', "
-    "'total', 'overdue', 'this week', 'this month', 'top N', 'average', "
-    "'unpaid', 'pending' — ALWAYS include mongo_query as one of the picks. "
-    "That tool is the ONLY one that runs live aggregations.\n\n"
-
-    "Pick 1-3 tools; prefer the minimum. Never guess a doc_id."
-)
+_PLANNER_SYSTEM = render("brain.agent_planner")  # prompt in prompts/brain.py
 
 
 async def _plan(question: str) -> dict:
@@ -261,24 +227,7 @@ async def _run_tools(picks: List[dict], user: dict) -> List[dict]:
 # ---------------------------------------------------------------------------
 # Synthesizer — Claude writes the final answer from the tools' outputs.
 # ---------------------------------------------------------------------------
-_SYNTH_SYSTEM = (
-    "You are Dex — the founder's business co-pilot. You've just gathered facts "
-    "from up to three specialist tools (documents, live database analytics, "
-    "past decisions). Write a CRISP answer to the founder's question using ONLY "
-    "these facts. If the facts don't answer it, say so plainly — never guess.\n\n"
-
-    "OUTPUT — return ONLY valid JSON: "
-    "{\"answer\": string (2-5 sentences, warm and specific, no bullet lists in "
-    "the answer body), "
-    "\"citations\": [{\"kind\": one of "
-    "[document, mongo, context, file], "
-    "\"label\": short human name, \"ref\": string id or short reference}] (max 5), "
-    "\"suggested_tasks\": [{\"title\": string (under 12 words, action verb), "
-    "\"why\": string (under 12 words, ties to the found evidence)}] "
-    "(0-3 tasks — only if the past decisions or numbers strongly suggest a "
-    "concrete next action; empty list is fine), "
-    "\"follow_ups\": [string] (0-3 short questions the founder might ask next)}"
-)
+_SYNTH_SYSTEM = render("brain.agent_synth")  # prompt in prompts/brain.py
 
 
 def _sanitize_tool_output(t: dict) -> dict:

@@ -29,6 +29,7 @@ from core import (
 # (uploaded policies / contracts). Before this, /ask was blind to
 # both and Dex was the only surface with provenance answers.
 from services.ai import brain_retrieval
+from prompts import render
 
 router = APIRouter(prefix="/api")
 
@@ -119,25 +120,7 @@ def _in_range(iso_str, start, end) -> bool:
 # ---------------------------------------------------------------------------
 # 1) Query planner (LLM → controlled plan)
 # ---------------------------------------------------------------------------
-_PLANNER_SYSTEM = (
-    "You are the query planner of DecisionOS Company Brain. Convert the user's question into a "
-    "STRICT JSON plan. Never write SQL or code. Return ONLY this JSON:\n"
-    "{\n"
-    '  "intent": one of ["FACT_QUESTION","LIST_REQUEST","AGGREGATION","COMPARISON","TREND_ANALYSIS","ROOT_CAUSE_ANALYSIS","REPORT_GENERATION","MEMORY_RETRIEVAL","RECORD_SEARCH"],\n'
-    '  "primary_entity": one of ["tasks","decisions","workflows","contacts","invoices","payments","expenses","leaves","employees","memory"],\n'
-    '  "needs_finance": boolean,  // true if it needs money, cost, price, margin, profit, invoice, payment, expense, outstanding, or revenue data\n'
-    '  "keywords": [string],      // salient nouns to match (names, products, suppliers). [] if none\n'
-    '  "status": string|null,     // completed | todo | in_progress | overdue | pending | paid | unpaid | approved\n'
-    '  "date_field": string|null, // created_at | due_date | completed | date\n'
-    '  "date_preset": one of ["today","yesterday","this_week","this_month","last_month","last_7_days","last_30_days","all"]|null,\n'
-    '  "group_by": one of ["assignee","role","status","type","category","contact","priority"]|null,\n'
-    '  "on_time_analysis": boolean, // true when asking about on-time / late / overdue task completion\n'
-    '  "output": one of ["TEXT","TABLE","KPI_TABLE","BAR_CHART","TIMELINE"]\n'
-    "}\n"
-    "Rules: pick the single most relevant primary_entity. Set needs_finance=true for ANY money question. "
-    "If the user says 'them'/'these'/'those' or refers to a previous result, keep the SAME primary_entity and "
-    "carry forward the previous filters, only adding the new refinement."
-)
+_PLANNER_SYSTEM = render("brain.planner")  # prompt in prompts/brain.py
 
 
 async def _plan(question: str, prev: Optional[dict], lang) -> dict:
@@ -672,13 +655,7 @@ _COMPUTE_HANDLERS = {
 # ---------------------------------------------------------------------------
 # 4) Answer prose (LLM writes words, NOT numbers)
 # ---------------------------------------------------------------------------
-_ANSWER_SYSTEM = (
-    "You are DecisionOS Company Brain. You are given a user question plus PRE-COMPUTED, VERIFIED metrics "
-    "(KPIs) and a sample of the result table for the user's own company workspace. Write a concise, "
-    "professional answer in markdown (2-5 sentences). Use ONLY the numbers provided — never invent or "
-    "recompute figures. If the data looks empty, say so plainly. Then propose 3 natural follow-up questions. "
-    "Return ONLY JSON: {\"answer\": string, \"suggested_questions\": [string, string, string]}."
-)
+_ANSWER_SYSTEM = render("brain.answer")  # prompt in prompts/brain.py
 
 
 async def _answer(question, kpis, table, lang,

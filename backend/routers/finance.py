@@ -16,7 +16,7 @@ from core import db, get_current_user, require_perm, new_id, now_iso, log_activi
 from services.tasks import enrich_tasks
 from server import add_inbox_item  # inbox helper still in server
 from services.ingestion import (
-    ai_extract_document, ai_map_spreadsheet, _normalise_records, commit_ingestion_records,
+    ai_extract_document, ai_map_spreadsheet, combine_sheets, _normalise_records, commit_ingestion_records,
     _classify_ingestion, _tenant_currency, _tenant_name,
 )
 from services.ai.extraction import ai_score_contact
@@ -94,10 +94,22 @@ async def ingest_csv(file: UploadFile = File(...), user: dict = Depends(require_
                                  content_type=file.content_type, file_id=ing_id)
     tmp_local = await download_to_temp(stored["storage_path"])
     try:
-        df = pd.read_excel(tmp_local) if ext in ("xlsx", "xls") else pd.read_csv(tmp_local)
-        df = df.fillna("")
-        headers = [str(c) for c in df.columns]
-        rows = df.astype(str).values.tolist()
+        if ext in ("xlsx", "xls"):
+            # E3-06.3: read EVERY sheet (pandas defaults to only the first) and
+            # combine same-schema sheets, so multi-sheet workbooks aren't silently
+            # truncated to one tab.
+            book = pd.read_excel(tmp_local, sheet_name=None)
+            sheets = []
+            for sname, sdf in book.items():
+                sdf = sdf.fillna("")
+                sheets.append((sname, [str(c) for c in sdf.columns], sdf.astype(str).values.tolist()))
+            headers, rows = combine_sheets(sheets)
+            if len(book) > 1:
+                logger.info(f"ingest_csv: workbook has {len(book)} sheets -> combined to {len(rows)} rows")
+        else:
+            df = pd.read_csv(tmp_local).fillna("")
+            headers = [str(c) for c in df.columns]
+            rows = df.astype(str).values.tolist()
     except Exception as e:
         try:
             os.unlink(tmp_local)

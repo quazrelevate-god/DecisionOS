@@ -80,13 +80,77 @@ async def ai_extract_document(file_path: str, mime_type: str, session_id: str, c
     }
 
 
+def _cell_empty(v) -> bool:
+    s = str(v).strip().lower()
+    return s == "" or s == "nan"
+
+
+def sanitize_table(headers: list, rows: list) -> tuple:
+    """Clean a raw (headers, rows) table before the AI maps it (E3-06.3).
+
+    Handles the mess real spreadsheets arrive in: pads ragged rows; relabels
+    blank / pandas 'Unnamed: N' headers to column_N and de-dupes repeats; drops
+    columns that are BOTH unlabelled and entirely empty; drops fully-empty rows.
+    Pure + deterministic so it's unit-testable without a file. Returns (headers, rows)."""
+    headers = list(headers or [])
+    rows = [list(r) for r in (rows or [])]
+    ncol = max([len(headers)] + [len(r) for r in rows]) if (headers or rows) else 0
+    headers += [""] * (ncol - len(headers))
+    rows = [r + [""] * (ncol - len(r)) for r in rows]
+
+    col_empty = [all(_cell_empty(r[c]) for r in rows) if rows else True for c in range(ncol)]
+    keep, clean, seen = [], [], {}
+    for c in range(ncol):
+        h = str(headers[c] or "").strip()
+        auto = (h == "" or bool(re.match(r"^unnamed", h, re.I)))
+        if auto and col_empty[c]:
+            continue  # a truly empty, unlabelled column -> noise, drop it
+        h = f"column_{c + 1}" if auto else h
+        n = seen.get(h.lower(), 0)
+        seen[h.lower()] = n + 1
+        clean.append(f"{h}_{n + 1}" if n else h)
+        keep.append(c)
+
+    out_rows = []
+    for r in rows:
+        vals = [str(r[c]).strip() for c in keep]
+        if any(not _cell_empty(v) for v in vals):
+            out_rows.append(vals)
+    return clean, out_rows
+
+
+def combine_sheets(sheets: list) -> tuple:
+    """Reduce a multi-sheet workbook to one (headers, rows) (E3-06.3).
+
+    sheets = [(name, headers, rows), ...]. Sanitizes each, groups sheets that share
+    the same header signature and concatenates them (so Jan/Feb/Mar tabs merge), then
+    returns the largest group -- which drops cover/summary tabs while keeping the real
+    data. Pure + testable."""
+    groups = {}
+    for _name, headers, rows in sheets:
+        h, r = sanitize_table(headers, rows)
+        if not r:
+            continue
+        g = groups.setdefault(tuple(h), [h, []])
+        g[1].extend(r)
+    if not groups:
+        return [], []
+    best = max(groups.values(), key=lambda g: len(g[1]))
+    return best[0], best[1]
+
+
 async def ai_map_spreadsheet(headers: list, rows: list, session_id: str, currency: str = "INR", company: str = "") -> dict:
+    headers, rows = sanitize_table(headers, rows)  # E3-06.3: clean messy/unlabelled headers first
     payload = {"headers": headers, "rows": rows[:300]}
     system = _CSV_SYSTEM.replace("{currency}", currency).replace("{company}", company or "our company")
     chat = claude_chat(task="documents.csv_map", session_id=session_id,
                    system_message=system).with_model(*model_for("documents.csv_map"))
     resp = await chat.send_message(UserMessage(text=f"Spreadsheet data:\n{json.dumps(payload)}\n\nClassify and map to JSON now."))
-    data = _extract_json(resp)
+    try:
+        data = _extract_json(resp)
+    except Exception as e:  # degrade like the other extractors instead of raising
+        logger.warning(f"ai_map_spreadsheet parse failed: {e}")
+        data = {}
     return {
         "summary": data.get("summary", ""),
         "entity": data.get("entity", ""),

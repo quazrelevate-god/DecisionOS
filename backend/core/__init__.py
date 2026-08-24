@@ -59,6 +59,7 @@ from core.ai_keys import (  # noqa: F401,E402
 )
 from core.usage import (  # noqa: F401,E402
     _ctx_tenant, set_usage_tenant, _est_tokens, _est_cost, log_usage,
+    record_ai_call, ai_call_stats,  # E3-01.3 AI telemetry
     _record_usage, _record_provider_alert, _resolve_provider_alert,
 )
 from integrations.llm import _ResilientChat, claude_chat  # noqa: F401,E402

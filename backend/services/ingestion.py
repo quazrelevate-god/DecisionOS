@@ -14,10 +14,11 @@ from datetime import datetime, timezone, timedelta
 from fastapi import HTTPException
 from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
 
+import time
 from core import (
     db, logger, new_id, now_iso, tenant_role_keys,
     claude_chat, LLM_MODEL, _extract_json, _est_tokens, log_usage,
-    EMERGENT_LLM_KEY, VISION_MODEL,
+    EMERGENT_LLM_KEY, VISION_MODEL, record_ai_call,
 )
 from services.vision import get_gemini_client, _gemini_doc_sync
 from core import model_for
@@ -41,12 +42,15 @@ async def ai_extract_document(file_path: str, mime_type: str, session_id: str, c
     system = _DOC_SYSTEM.replace("{currency}", currency).replace("{company}", company or "our company")
     user_text = "Extract the structured JSON from this document now."
     resp = None
+    _t0 = time.perf_counter()
+    _eng, _ti, _to = None, 0, 0
     # Prefer the user's own Gemini key via the official google-genai SDK.
     if get_gemini_client() is not None:
         try:
             resp, _gti, _gto = await asyncio.to_thread(_gemini_doc_sync, file_path, mime_type, system, user_text)
             await log_usage((session_id or "ocr").split("-")[0], "gemini", model=VISION_MODEL[1],
                             tokens_in=_gti, tokens_out=_gto, units=1, unit_type="document")
+            _eng, _ti, _to = "gemini", _gti, _gto
         except Exception as e:
             logger.warning(f"Gemini OCR (user key) failed; falling back to Emergent key: {e}")
             resp = None
@@ -62,6 +66,10 @@ async def ai_extract_document(file_path: str, mime_type: str, session_id: str, c
         await log_usage((session_id or "ocr").split("-")[0], "gemini", model=VISION_MODEL[1],
                         tokens_in=_est_tokens(system + user_text), tokens_out=_est_tokens(resp or ""),
                         units=1, unit_type="document")
+        _eng, _ti, _to = "emergent", _est_tokens(system + user_text), _est_tokens(resp or "")
+    await record_ai_call(task="documents.doc_extract", model=VISION_MODEL[1], engine=_eng,
+                         tokens_in=_ti, tokens_out=_to,
+                         latency_ms=(time.perf_counter() - _t0) * 1000, ok=True, session_id=session_id)
     data = _extract_json(resp)
     return {
         "summary": data.get("summary", ""),
@@ -74,7 +82,7 @@ async def ai_extract_document(file_path: str, mime_type: str, session_id: str, c
 async def ai_map_spreadsheet(headers: list, rows: list, session_id: str, currency: str = "INR", company: str = "") -> dict:
     payload = {"headers": headers, "rows": rows[:300]}
     system = _CSV_SYSTEM.replace("{currency}", currency).replace("{company}", company or "our company")
-    chat = claude_chat(session_id=session_id,
+    chat = claude_chat(task="documents.csv_map", session_id=session_id,
                    system_message=system).with_model(*model_for("documents.csv_map"))
     resp = await chat.send_message(UserMessage(text=f"Spreadsheet data:\n{json.dumps(payload)}\n\nClassify and map to JSON now."))
     data = _extract_json(resp)
@@ -127,7 +135,7 @@ async def ai_classify_purchase(text: str, expense_categories=None, asset_categor
     if not text:
         return {"purchase_type": "unknown"}
     try:
-        chat = claude_chat(session_id=f"purchase-class-{new_id()}",
+        chat = claude_chat(task="documents.purchase_class", session_id=f"purchase-class-{new_id()}",
                            system_message=_purchase_class_sys(expense_categories, asset_categories)).with_model(*model_for("documents.purchase_class"))
         resp = await chat.send_message(UserMessage(text=text[:1500]))
         d = _extract_json(resp) or {}

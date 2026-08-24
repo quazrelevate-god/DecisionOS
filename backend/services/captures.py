@@ -126,7 +126,7 @@ _CAPTURE_SYS = render("captures.triage")  # prompt in prompts/captures.py; {role
 
 async def ai_capture_triage(text: str, roles: list) -> dict:
     system = _CAPTURE_SYS.replace("{roles}", ", ".join(roles) or "owner")
-    chat = claude_chat(session_id=f"capture-{new_id()}", system_message=system).with_model(*model_for("captures.triage"))
+    chat = claude_chat(task="captures.triage", session_id=f"capture-{new_id()}", system_message=system).with_model(*model_for("captures.triage"))
     resp = await chat.send_message(UserMessage(text=(text or "")[:4000]))
     try:
         d = _extract_json(resp)

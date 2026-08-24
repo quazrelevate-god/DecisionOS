@@ -4,28 +4,49 @@ Tries the tenant's Anthropic key, falls back to the Emergent universal key,
 records usage, and raises/clears provider-outage alerts. Extracted from
 core.py into integrations/; core re-exports claude_chat + _ResilientChat.
 """
+import time
 import logging
 
 from config import LLM_MODEL, EMERGENT_LLM_KEY
 from core.ai_keys import get_ai_key
 from core.usage import (
-    _ctx_tenant, _record_usage, _record_provider_alert, _resolve_provider_alert,
+    _ctx_tenant, _est_tokens, record_ai_call,
+    _record_usage, _record_provider_alert, _resolve_provider_alert,
 )
 
 logger = logging.getLogger("decisionos")
+
+
+def _resolve_prompt_version(task):
+    """Best-effort: pull the registered prompt's version so telemetry can attribute
+    an output to the exact prompt that produced it. None if task isn't a prompt name."""
+    if not task:
+        return None
+    try:
+        from prompts import get
+        return get(task).version
+    except Exception:
+        return None
 
 
 class _ResilientChat:
     """Drop-in for LlmChat(api_key=claude_key(), ...) that tries the user's Anthropic
     key first and automatically falls back to the Emergent universal key if the call
     fails (e.g. Anthropic credit balance too low / invalid key), so AI never hard-breaks.
-    Also records per-workspace usage and raises/clears provider outage alerts."""
+    Also records per-workspace usage, rich per-call AI telemetry (E3-01.3), and
+    raises/clears provider outage alerts.
 
-    def __init__(self, session_id: str, system_message: str, tenant_id=None):
+    ``task`` is the prompt-registry name (e.g. 'extraction.extract'); pass it via
+    claude_chat(..., task=...) so telemetry can group calls by what they do."""
+
+    def __init__(self, session_id: str, system_message: str, tenant_id=None,
+                 task=None, prompt_version=None):
         self.session_id = session_id
         self.system_message = system_message
         self.tenant_id = tenant_id
         self.model = LLM_MODEL
+        self.task = task
+        self.prompt_version = prompt_version
 
     def with_model(self, *model):
         if model:
@@ -45,7 +66,10 @@ class _ResilientChat:
                 seen.add(k)
                 keys.append(k)
         tenant_id = self.tenant_id or _ctx_tenant.get()
+        model_id = self.model[1] if self.model and len(self.model) > 1 else None
+        pv = self.prompt_version or _resolve_prompt_version(self.task)
         last_err = None
+        _t0 = time.perf_counter()
         for i, key in enumerate(keys):
             try:
                 chat = LlmChat(api_key=key, session_id=self.session_id,
@@ -59,6 +83,12 @@ class _ResilientChat:
                 if provider == "anthropic":
                     await _resolve_provider_alert("anthropic")
                 await _record_usage(tenant_id, self.session_id, provider, self.system_message, message, resp)
+                _in = f"{self.system_message or ''} {getattr(message, 'text', '') or ''}"
+                await record_ai_call(
+                    task=self.task, model=model_id, engine=provider, prompt_version=pv,
+                    tokens_in=_est_tokens(_in), tokens_out=_est_tokens(resp or ""),
+                    latency_ms=(time.perf_counter() - _t0) * 1000, ok=True,
+                    tenant_id=tenant_id, session_id=self.session_id)
                 return resp
             except Exception as e:
                 last_err = e
@@ -68,9 +98,16 @@ class _ResilientChat:
                 logger.warning(
                     f"Claude call failed on key {i + 1}/{len(keys)}"
                     f"{' — retrying with Emergent universal key' if using_fallback else ''}: {e}")
+        await record_ai_call(
+            task=self.task, model=model_id, engine="none", prompt_version=pv,
+            latency_ms=(time.perf_counter() - _t0) * 1000, ok=False, error=last_err,
+            tenant_id=tenant_id, session_id=self.session_id)
         raise last_err if last_err else RuntimeError("No LLM key configured")
 
 
-def claude_chat(session_id: str = None, system_message: str = None, tenant_id=None, **_ignored) -> _ResilientChat:
-    """Factory matching the old LlmChat(api_key=..., session_id=..., system_message=...) call shape."""
-    return _ResilientChat(session_id, system_message, tenant_id=tenant_id)
+def claude_chat(session_id: str = None, system_message: str = None, tenant_id=None,
+                task=None, prompt_version=None, **_ignored) -> _ResilientChat:
+    """Factory matching the old LlmChat(api_key=..., session_id=..., system_message=...) call shape.
+    Pass ``task`` (a prompt-registry name) so AI telemetry can group calls by purpose."""
+    return _ResilientChat(session_id, system_message, tenant_id=tenant_id,
+                          task=task, prompt_version=prompt_version)

@@ -230,7 +230,7 @@ async def ai_work_coach(target: dict, stats: dict, session_id: str) -> dict:
     prompt = (f"Employee: {target.get('name')} (role: {target.get('role')})\n"
               f"Stats: {json.dumps(stats)}\n"
               "Write the review now.")
-    chat = claude_chat(session_id=session_id, system_message=system).with_model(*model_for("coaching.work_coach"))
+    chat = claude_chat(task="coaching.work_coach", session_id=session_id, system_message=system).with_model(*model_for("coaching.work_coach"))
     resp = await chat.send_message(UserMessage(text=prompt))
     try:
         d = _extract_json(resp)

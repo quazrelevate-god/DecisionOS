@@ -69,7 +69,7 @@ async def ai_leave_impact(person_name: str, from_date: str, to_date: str, tasks:
         "available_members": [{"id": m["id"], "name": m["name"], "role": m["role"],
                                "active_task_count": m["load"]} for m in members],
     }
-    chat = claude_chat(session_id=f"leave-impact-{new_id()}", system_message=system).with_model(*model_for("coaching.leave_impact"))
+    chat = claude_chat(task="coaching.leave_impact", session_id=f"leave-impact-{new_id()}", system_message=system).with_model(*model_for("coaching.leave_impact"))
     resp = await chat.send_message(UserMessage(text=json.dumps(payload)))
     data = _extract_json(resp)
     return data if isinstance(data, dict) else {"summary": "", "suggestions": []}

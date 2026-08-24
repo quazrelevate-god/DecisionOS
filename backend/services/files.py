@@ -75,7 +75,7 @@ async def _analyze_reference_file(tenant_id, task_id, rec):
             return
         system = render("coaching.file_reference")
         prompt = f"TASK: {task.get('title')}\n\nREFERENCE FILE CONTENT:\n{text}"
-        chat = claude_chat(session_id=f"ref-insight-{task_id}", system_message=system,
+        chat = claude_chat(task="coaching.file_reference", session_id=f"ref-insight-{task_id}", system_message=system,
                            tenant_id=tenant_id).with_model(*model_for("coaching.file_reference"))
         resp = await chat.send_message(UserMessage(text=prompt))
         parsed = _extract_json(resp) or {}

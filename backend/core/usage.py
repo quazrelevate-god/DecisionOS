@@ -51,6 +51,63 @@ async def log_usage(feature, provider, *, tenant_id=None, model=None,
         logger.debug(f"usage log failed: {e}")
 
 
+async def record_ai_call(*, task, model=None, engine=None, prompt_version=None,
+                         tokens_in=0, tokens_out=0, latency_ms=0, ok=True,
+                         parse_ok=None, error=None, tenant_id=None, session_id=None):
+    """Record one AI call's telemetry to db.ai_calls (Epic 3 E3-01.3). Never raises.
+
+    This is the observability spine for the AI layer: one row per LLM/vision call
+    with the dimensions we tune on -- task (prompt-registry name), prompt_version,
+    model, engine (which key/provider actually served it), tokens, latency, whether
+    the call succeeded, and (when the caller reports it) whether the JSON parsed.
+    """
+    try:
+        tid = tenant_id or _ctx_tenant.get()
+        ti, to = int(tokens_in or 0), int(tokens_out or 0)
+        await db.ai_calls.insert_one({
+            "id": new_id(), "tenant_id": tid or None,
+            "task": task or "unknown", "prompt_version": prompt_version,
+            "model": model, "engine": engine,
+            "tokens_in": ti, "tokens_out": to, "tokens_total": ti + to,
+            "latency_ms": int(latency_ms or 0),
+            "ok": bool(ok), "parse_ok": parse_ok,
+            "error": (str(error)[:300] if error else None),
+            "session_id": session_id, "created_at": now_iso(),
+        })
+    except Exception as e:  # telemetry must never break an AI call
+        logger.debug(f"ai_call telemetry failed: {e}")
+
+
+async def ai_call_stats(tenant_id=None, since_hours=24):
+    """Per-task rollup of db.ai_calls for observability (E3-01.3): calls, ok-rate,
+    avg latency, tokens, and which models served each task. Never raises. The full
+    admin dashboard over this data is E3-10.2."""
+    try:
+        from datetime import datetime, timezone, timedelta
+        match = {"created_at": {"$gte": (datetime.now(timezone.utc) - timedelta(hours=since_hours)).isoformat()}}
+        if tenant_id:
+            match["tenant_id"] = tenant_id
+        pipeline = [
+            {"$match": match},
+            {"$group": {"_id": "$task", "calls": {"$sum": 1},
+                        "ok": {"$sum": {"$cond": ["$ok", 1, 0]}},
+                        "avg_latency_ms": {"$avg": "$latency_ms"},
+                        "tokens": {"$sum": "$tokens_total"},
+                        "models": {"$addToSet": "$model"}}},
+            {"$sort": {"calls": -1}},
+        ]
+        cursor = await db.ai_calls.aggregate(pipeline)  # this driver's aggregate() is a coroutine
+        rows = await cursor.to_list(200)
+        return [{"task": r["_id"], "calls": r["calls"], "ok": r["ok"],
+                 "ok_rate": round(r["ok"] / r["calls"], 3) if r["calls"] else 0,
+                 "avg_latency_ms": round(r.get("avg_latency_ms") or 0),
+                 "tokens": r.get("tokens") or 0, "models": r.get("models") or []}
+                for r in rows]
+    except Exception as e:
+        logger.debug(f"ai_call_stats failed: {e}")
+        return []
+
+
 async def _record_usage(tenant_id, session_id, provider, system, message, resp):
     feature = (session_id or "misc").split("-")[0]
     in_text = f"{system or ''} {getattr(message, 'text', '') or ''}"

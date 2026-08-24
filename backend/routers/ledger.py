@@ -22,8 +22,9 @@ from core import (
 )
 # FIX-007-B (S4-10): Brain-context writes for finance events so
 # "how did we settle the Kapoor invoice?" queries can find the answer.
+import time
 from services.ai import brain_context
-from core import model_for
+from core import model_for, record_ai_call
 from prompts import render
 
 router = APIRouter(prefix="/api")
@@ -109,7 +110,7 @@ async def ai_suggest_expense_category(text: str, tenant_id: str) -> str:
     cats = (await get_finance_categories(tenant_id))["expense"]
     try:
         system = render("ledger.expense_cat", cats=", ".join(cats))
-        chat = claude_chat(session_id=f"expcat-{tenant_id}", system_message=system).with_model(*model_for("ledger.expense_cat"))
+        chat = claude_chat(task="ledger.expense_cat", session_id=f"expcat-{tenant_id}", system_message=system).with_model(*model_for("ledger.expense_cat"))
         resp = await chat.send_message(UserMessage(text=text[:600]))
         data = _extract_json(resp) or {}
         matched = _match_category(data.get("category"), cats, "")
@@ -194,6 +195,8 @@ async def ai_extract_ledger_file(file_path: str, mime_type: str, kind: str, curr
     system = render("ledger.ocr", desc=desc, currency=currency,
                     typed=json.dumps(typed_clean), cat_rule=cat_rule, shape=shape)
     resp = None
+    _t0 = time.perf_counter()
+    _eng, _ti, _to = None, 0, 0
     # Prefer the user's own Gemini key (same client server.py configures), else the Emergent vision key.
     try:
         from server import get_gemini_client, _gemini_doc_sync
@@ -201,6 +204,7 @@ async def ai_extract_ledger_file(file_path: str, mime_type: str, kind: str, curr
             resp, _gti, _gto = await asyncio.to_thread(_gemini_doc_sync, file_path, mime_type, system, "Extract the JSON now.")
             await log_usage(f"ledger-ocr-{kind}", "gemini", model=VISION_MODEL[1],
                             tokens_in=_gti, tokens_out=_gto, units=1, unit_type="document")
+            _eng, _ti, _to = "gemini", _gti, _gto
     except Exception as e:  # noqa: BLE001
         logger.warning(f"Ledger OCR (user gemini) failed, falling back to Emergent key: {e}")
         resp = None
@@ -215,6 +219,10 @@ async def ai_extract_ledger_file(file_path: str, mime_type: str, kind: str, curr
         await log_usage(f"ledger-ocr-{kind}", "gemini", model=VISION_MODEL[1],
                         tokens_in=_est_tokens(system), tokens_out=_est_tokens(resp or ""),
                         units=1, unit_type="document")
+        _eng, _ti, _to = "emergent", _est_tokens(system), _est_tokens(resp or "")
+    await record_ai_call(task="ledger.ocr", model=VISION_MODEL[1], engine=_eng,
+                         tokens_in=_ti, tokens_out=_to,
+                         latency_ms=(time.perf_counter() - _t0) * 1000, ok=True)
     return _extract_json(resp) or {}
 
 
@@ -1261,7 +1269,7 @@ async def _generate_analysis(tid: str, scope: str) -> dict:
     system = render("ledger.analysis", focus=focus, currency=ctx['currency'], today=ctx['today'])
     data = {}
     try:
-        chat = claude_chat(session_id=f"ledger-ai-{scope}-{new_id()}", system_message=system).with_model(*model_for("ledger.analysis"))
+        chat = claude_chat(task="ledger.analysis", session_id=f"ledger-ai-{scope}-{new_id()}", system_message=system).with_model(*model_for("ledger.analysis"))
         resp = await chat.send_message(UserMessage(text=f"Finance data:\n{json.dumps(ctx)}\n\nProduce the JSON now."))
         data = _extract_json(resp) or {}
     except Exception as e:  # noqa: BLE001
@@ -1313,7 +1321,7 @@ async def ledger_ask(inp: LedgerAskInput, user: dict = Depends(require_ledger)):
     ctx = await _finance_context(user["tenant_id"], scope)
     system = render("ledger.ask", currency=ctx['currency'], today=ctx['today'])
     try:
-        chat = claude_chat(session_id=f"ledger-ask-{user['tenant_id']}-{new_id()}", system_message=system).with_model(*model_for("ledger.ask"))
+        chat = claude_chat(task="ledger.ask", session_id=f"ledger-ask-{user['tenant_id']}-{new_id()}", system_message=system).with_model(*model_for("ledger.ask"))
         resp = await chat.send_message(UserMessage(text=f"Finance data:\n{json.dumps(ctx)}\n\nQuestion: {q}"))
         answer = (resp or "").strip()
     except Exception as e:  # noqa: BLE001

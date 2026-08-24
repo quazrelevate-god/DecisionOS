@@ -220,10 +220,16 @@ async def ai_extract_ledger_file(file_path: str, mime_type: str, kind: str, curr
                         tokens_in=_est_tokens(system), tokens_out=_est_tokens(resp or ""),
                         units=1, unit_type="document")
         _eng, _ti, _to = "emergent", _est_tokens(system), _est_tokens(resp or "")
+    try:  # E3-06 robustness: a malformed OCR response must degrade, not crash the ledger flow
+        data = _extract_json(resp) or {}
+        parse_ok = True
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"ai_extract_ledger_file parse failed: {e}")
+        data, parse_ok = {}, False
     await record_ai_call(task="ledger.ocr", model=VISION_MODEL[1], engine=_eng,
                          tokens_in=_ti, tokens_out=_to,
-                         latency_ms=(time.perf_counter() - _t0) * 1000, ok=True)
-    return _extract_json(resp) or {}
+                         latency_ms=(time.perf_counter() - _t0) * 1000, ok=True, parse_ok=parse_ok)
+    return data
 
 
 def _merge_typed(ai: dict, typed: dict) -> dict:

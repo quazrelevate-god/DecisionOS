@@ -68,10 +68,16 @@ async def ai_extract_document(file_path: str, mime_type: str, session_id: str, c
                         tokens_in=_est_tokens(system + user_text), tokens_out=_est_tokens(resp or ""),
                         units=1, unit_type="document")
         _eng, _ti, _to = "emergent", _est_tokens(system + user_text), _est_tokens(resp or "")
+    try:  # E3-06 robustness: a malformed OCR response must degrade, not crash the ingest
+        data = _extract_json(resp)
+        parse_ok = True
+    except Exception as e:
+        logger.warning(f"ai_extract_document parse failed: {e}")
+        data, parse_ok = {}, False
     await record_ai_call(task="documents.doc_extract", model=VISION_MODEL[1], engine=_eng,
                          tokens_in=_ti, tokens_out=_to,
-                         latency_ms=(time.perf_counter() - _t0) * 1000, ok=True, session_id=session_id)
-    data = _extract_json(resp)
+                         latency_ms=(time.perf_counter() - _t0) * 1000, ok=True, parse_ok=parse_ok,
+                         session_id=session_id)
     return {
         "summary": data.get("summary", ""),
         "doc_type": data.get("doc_type", "other"),

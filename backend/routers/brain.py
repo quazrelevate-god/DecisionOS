@@ -29,6 +29,7 @@ from core import (
 # (uploaded policies / contracts). Before this, /ask was blind to
 # both and Dex was the only surface with provenance answers.
 from services.ai import brain_retrieval
+from services.ai.safety import INJECTION_GUARD
 from core import model_for
 from prompts import render
 
@@ -689,8 +690,11 @@ async def _answer(question, kpis, table, lang,
              "tags": h.get("tags") or []}
             for h in document_hits[:5]
         ]
+    # E3-08.1: retrieved document summaries / past-context are user-authored content that
+    # could carry an injection -- arm the guard whenever the answer includes retrieved data.
+    _guard = INJECTION_GUARD if (knowledge_hits or document_hits) else ""
     chat = claude_chat(task="brain.answer", session_id=f"brain-ans-{new_id()}",
-                       system_message=_ANSWER_SYSTEM + _lang_directive(lang)).with_model(*model_for("brain.answer"))
+                       system_message=_ANSWER_SYSTEM + _lang_directive(lang) + _guard).with_model(*model_for("brain.answer"))
     try:
         raw = await chat.send_message(UserMessage(text=f"Question: {question}\n\nComputed data:\n{json.dumps(sample, default=str)}"))
         data = _extract_json(raw) or {}

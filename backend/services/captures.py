@@ -18,6 +18,7 @@ from core import model_for
 from prompts import render
 from services.ingestion import commit_ingestion_records, _classify_ingestion
 from services.voice import process_voice_note
+from services.ai.safety import INJECTION_GUARD, wrap_untrusted, detect_injection
 
 
 CAPTURE_CLASSES = ["operational_task", "invoice", "payment", "purchase", "sales", "hr", "meeting", "decision", "approval", "workflow", "other"]
@@ -125,9 +126,13 @@ _CAPTURE_SYS = render("captures.triage")  # prompt in prompts/captures.py; {role
 
 
 async def ai_capture_triage(text: str, roles: list) -> dict:
-    system = _CAPTURE_SYS.replace("{roles}", ", ".join(roles) or "owner")
+    # E3-08.1: an inbound WhatsApp message is UNTRUSTED -- guard the system prompt and
+    # neutralize + delimit the message so injected instructions are read as data.
+    for hit in detect_injection(text):
+        logger.warning(f"ai_capture_triage: possible prompt-injection in message ({hit})")
+    system = _CAPTURE_SYS.replace("{roles}", ", ".join(roles) or "owner") + INJECTION_GUARD
     chat = claude_chat(task="captures.triage", session_id=f"capture-{new_id()}", system_message=system).with_model(*model_for("captures.triage"))
-    resp = await chat.send_message(UserMessage(text=(text or "")[:4000]))
+    resp = await chat.send_message(UserMessage(text=wrap_untrusted(text, "message", limit=4000)))
     try:
         d = _extract_json(resp)
     except Exception:

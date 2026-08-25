@@ -18,6 +18,7 @@ from prompts import render
 from services.ai.validation import (
     validate_extract, coerce_extract, repair_instruction, calibrate_confidence,
 )
+from services.ai.safety import INJECTION_GUARD, wrap_untrusted, detect_injection
 
 
 async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[list] = None, members: Optional[list] = None,
@@ -48,6 +49,11 @@ async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[l
     )
     prompt = f"Founder directive transcript:\n\"\"\"\n{transcript}\n\"\"\"\n"
     if extra_context:
+        # E3-08.1: attached content is UNTRUSTED third-party text -- neutralize + delimit it and
+        # arm the system prompt with the injection guard so it's read as data, not instructions.
+        for hit in detect_injection(extra_context):
+            logger.warning(f"ai_extract: possible prompt-injection in attachment ({hit}) session={session_id}")
+        system += INJECTION_GUARD
         prompt += (
             "\nThe founder also attached reference material (a photo/PDF/Word/Excel — e.g. a business card, "
             "a list, an order, a screenshot). Its full contents have already been read for you below. Use it "
@@ -57,7 +63,7 @@ async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[l
             "Priya'), delegate the task to that person and include the attachment's details (e.g. the contact's "
             "name, phone and email from a business card) in that task's description. If the directive is empty, "
             "treat the attached document as the PRIMARY input and derive the decision and tasks from it.\n"
-            f"ATTACHED REFERENCE CONTENT:\n\"\"\"\n{extra_context[:6000]}\n\"\"\"\n"
+            f"ATTACHED REFERENCE CONTENT:\n{wrap_untrusted(extra_context, 'attachment', limit=6000)}\n"
         )
     prompt += "Extract the structured JSON now."
     # record=False: we own telemetry here so parse_ok reflects schema validation,

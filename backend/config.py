@@ -267,6 +267,30 @@ def fallback_models(model_tuple):
     return [MODELS[fb] for fb in MODEL_FALLBACKS.get(name, []) if fb in MODELS]
 
 
+# --- E3-09.1: embedding model routing (mirrors MODELS / model_for) -----------
+# The ONLY place an embedding model id + its vector dimension live. Provider is
+# abstracted so OpenAI (test now) -> Voyage (production, when VOYAGE_API_KEY lands)
+# is a config/env change, not code. Each value is (provider, model_id, dim).
+# NOTE: Anthropic has no native embedding model; Voyage is its official recommendation.
+EMBED_MODELS = {
+    "openai-3-small":   ("openai", "text-embedding-3-small", 1536),
+    "openai-3-large":   ("openai", "text-embedding-3-large", 3072),
+    "voyage-4":         ("voyage", "voyage-4", 1024),
+    "voyage-finance-2": ("voyage", "voyage-finance-2", 1024),
+}
+# The one-line swap: set EMBED_MODEL=voyage-4 in the env when the Voyage key is provided.
+DEFAULT_EMBED_MODEL = os.environ.get("EMBED_MODEL", "").strip() or "openai-3-small"
+EMBED_ROUTES: dict = {}  # optional per-task overrides (future); empty => all use the default
+
+
+def embed_model_for(task: str = "default"):
+    """Resolve the (provider, model_id, dim) for an embedding task.
+    Order: env override (EMBED_ROUTE_<TASK>) -> EMBED_ROUTES -> DEFAULT_EMBED_MODEL."""
+    env_key = "EMBED_ROUTE_" + str(task).replace(".", "_").replace("-", "_").upper()
+    name = os.environ.get(env_key, "").strip() or EMBED_ROUTES.get(task) or DEFAULT_EMBED_MODEL
+    return EMBED_MODELS.get(name, EMBED_MODELS.get(DEFAULT_EMBED_MODEL, EMBED_MODELS["openai-3-small"]))
+
+
 # --- Roles & permissions ----------------------------------------------------
 # FIX-004-D (RBAC-16): canonical role list. Prior code had ROLES list
 # with "production" but DEFAULT_ROLES with "operations" — silent
@@ -301,6 +325,7 @@ _AI_KEY_ENV = {
     "anthropic": os.environ.get('ANTHROPIC_API_KEY', '').strip(),
     "openai": os.environ.get('OPENAI_API_KEY', '').strip(),
     "gemini": os.environ.get('GEMINI_API_KEY', '').strip(),
+    "voyage": os.environ.get('VOYAGE_API_KEY', '').strip(),  # E3-09: embeddings (Anthropic-recommended)
     "sarvam": os.environ.get('SARVAM_API_KEY', '').strip(),
     "wa_access_token": os.environ.get('WA_ACCESS_TOKEN', '').strip(),
     "wa_phone_number_id": os.environ.get('WA_PHONE_NUMBER_ID', '').strip(),

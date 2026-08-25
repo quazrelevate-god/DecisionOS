@@ -106,10 +106,35 @@ class _ResilientChat:
                 logger.warning(
                     f"Claude call failed on key {i + 1}/{len(keys)}"
                     f"{' — retrying with Emergent universal key' if using_fallback else ''}: {e}")
+        # E3-08.4: the primary model failed on every key. Last-resort graceful degradation --
+        # try each fallback MODEL on the Emergent universal key, and record that we degraded.
+        from config import fallback_models
+        for fb in (fallback_models(self.model) if EMERGENT_LLM_KEY else []):
+            fb_id = fb[1] if fb and len(fb) > 1 else None
+            try:
+                fchat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=self.session_id,
+                                system_message=self.system_message).with_model(*fb)
+                resp = await guarded_llm(fchat.send_message(message),
+                                          label=f"degraded:{fb_id}:{self.session_id[:24]}")
+                logger.warning(f"AI degraded to fallback model {fb_id} for task {self.task} "
+                               f"(primary {model_id} failed on all keys)")
+                await _record_usage(tenant_id, self.session_id, "emergent", self.system_message, message, resp)
+                _in = f"{self.system_message or ''} {getattr(message, 'text', '') or ''}"
+                tel = dict(task=self.task, model=fb_id, engine="emergent", prompt_version=pv,
+                           tokens_in=_est_tokens(_in), tokens_out=_est_tokens(resp or ""),
+                           latency_ms=(time.perf_counter() - _t0) * 1000,
+                           tenant_id=tenant_id, session_id=self.session_id, degraded=True)
+                self.last_call = {**tel, "ok": True}
+                if self.record:
+                    await record_ai_call(**tel, ok=True)
+                return resp
+            except Exception as e:
+                last_err = e
+                logger.warning(f"Fallback model {fb_id} also failed: {e}")
         await record_ai_call(
             task=self.task, model=model_id, engine="none", prompt_version=pv,
             latency_ms=(time.perf_counter() - _t0) * 1000, ok=False, error=last_err,
-            tenant_id=tenant_id, session_id=self.session_id)
+            tenant_id=tenant_id, session_id=self.session_id, degraded=True)
         raise last_err if last_err else RuntimeError("No LLM key configured")
 
 

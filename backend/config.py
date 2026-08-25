@@ -244,6 +244,29 @@ def model_for(task, kind="llm"):
     name = os.environ.get(env_key, "").strip() or MODEL_ROUTES.get(task) or default
     return MODELS.get(name, MODELS[default])
 
+
+# --- E3-08.4: model-level fallback chains -----------------------------------
+# When the routed model fails on EVERY key (provider outage / rate-limit / timeout),
+# the resilient chat tries these fallback MODELS (on the Emergent universal key) as a
+# last-resort graceful degradation, recorded as degraded in telemetry. Only known
+# Emergent-routable models belong here. gemini-flash is already used for vision, so
+# it's the proven text fallback; vision has no cross-model fallback (key-fallback covers it).
+MODEL_FALLBACKS = {
+    "claude-sonnet": ["gemini-flash"],
+    "gemini-flash": [],
+}
+
+
+def fallback_models(model_tuple):
+    """Ordered list of (provider, model_id) fallbacks for a primary model tuple (E3-08.4).
+    Empty when the model is unknown or has no configured fallback."""
+    try:
+        name = next((n for n, t in MODELS.items() if tuple(t) == tuple(model_tuple)), None)
+    except TypeError:
+        return []
+    return [MODELS[fb] for fb in MODEL_FALLBACKS.get(name, []) if fb in MODELS]
+
+
 # --- Roles & permissions ----------------------------------------------------
 # FIX-004-D (RBAC-16): canonical role list. Prior code had ROLES list
 # with "production" but DEFAULT_ROLES with "operations" — silent

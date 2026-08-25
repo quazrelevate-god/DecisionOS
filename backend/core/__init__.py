@@ -34,6 +34,7 @@ from config import (  # noqa: F401 — re-exports
     EMERGENT_LLM_KEY, CLAUDE_KEY,
     LLM_MODEL, VISION_MODEL,
     MODELS, MODEL_ROUTES, model_for,  # E3-01.2 model routing
+    MODEL_FALLBACKS, fallback_models,  # E3-08.4 model fallback chains
     ROLES, PERMISSION_KEYS, DEFAULT_ROLES,
     AI_KEY_PROVIDERS, _AI_KEY_ENV,
     _PROVIDER_RATES, _OPENAI_STT_PER_MIN, _SARVAM_STT_PER_MIN,

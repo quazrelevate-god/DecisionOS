@@ -53,7 +53,8 @@ async def log_usage(feature, provider, *, tenant_id=None, model=None,
 
 async def record_ai_call(*, task, model=None, engine=None, prompt_version=None,
                          tokens_in=0, tokens_out=0, latency_ms=0, ok=True,
-                         parse_ok=None, error=None, tenant_id=None, session_id=None):
+                         parse_ok=None, error=None, tenant_id=None, session_id=None,
+                         degraded=False):
     """Record one AI call's telemetry to db.ai_calls (Epic 3 E3-01.3). Never raises.
 
     This is the observability spine for the AI layer: one row per LLM/vision call
@@ -71,7 +72,7 @@ async def record_ai_call(*, task, model=None, engine=None, prompt_version=None,
             "model": model, "engine": engine,
             "tokens_in": ti, "tokens_out": to, "tokens_total": ti + to,
             "latency_ms": int(latency_ms or 0),
-            "ok": bool(ok), "parse_ok": parse_ok,
+            "ok": bool(ok), "parse_ok": parse_ok, "degraded": bool(degraded),
             "error": (redact_pii(str(error))[:300] if error else None),
             "session_id": session_id, "created_at": now_iso(),
         })

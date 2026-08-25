@@ -19,6 +19,7 @@ from services.ai.validation import (
     validate_extract, coerce_extract, repair_instruction, calibrate_confidence,
 )
 from services.ai.safety import INJECTION_GUARD, wrap_untrusted, detect_injection
+from services.ai.pii import redact_pii
 
 
 async def ai_extract(transcript: str, session_id: str, allowed_roles: Optional[list] = None, members: Optional[list] = None,
@@ -156,7 +157,7 @@ async def ai_score_tasks(tasks: list, currency: str, session_id: str) -> dict:
                 "reason": str(s.get("reason") or "")[:200],
             }
     except Exception as e:
-        logger.error(f"AI score parse error: {e} :: {resp[:300]}")
+        logger.error(f"AI score parse error: {e} :: {redact_pii(resp)[:300]}")
     return out
 
 
@@ -190,7 +191,7 @@ async def ai_score_contact(contact: dict, metrics: dict, currency: str, session_
             "signals": [str(s)[:60] for s in (d.get("signals") or [])][:3],
         }
     except Exception as e:
-        logger.error(f"AI contact score parse error: {e} :: {resp[:300]}")
+        logger.error(f"AI contact score parse error: {e} :: {redact_pii(resp)[:300]}")
         return {}
 
 
@@ -206,7 +207,7 @@ async def ai_meeting_notes(transcript: str, members: list, session_id: str) -> d
     try:
         d = _extract_json(resp)
     except Exception as e:
-        logger.error(f"AI meeting parse error: {e} :: {resp[:300]}")
+        logger.error(f"AI meeting parse error: {e} :: {redact_pii(resp)[:300]}")
         d = {}
     d.setdefault("title", "Meeting")
     d.setdefault("summary", (transcript or "")[:200])
@@ -229,7 +230,7 @@ async def ai_execution_plan(task: dict, industry: str, currency: str, session_id
     try:
         d = _extract_json(resp)
     except Exception as e:
-        logger.error(f"AI execution plan parse error: {e} :: {resp[:300]}")
+        logger.error(f"AI execution plan parse error: {e} :: {redact_pii(resp)[:300]}")
         d = {}
     steps = [str(s).strip() for s in (d.get("steps") or []) if str(s).strip()][:12]
     if not steps:
@@ -249,7 +250,7 @@ async def ai_step_assist(task: dict, step_text: str, industry: str, session_id: 
     try:
         d = _extract_json(resp)
     except Exception as e:
-        logger.error(f"AI step assist parse error: {e} :: {resp[:300]}")
+        logger.error(f"AI step assist parse error: {e} :: {redact_pii(resp)[:300]}")
         d = {}
     objs = []
     for o in (d.get("objections") or [])[:4]:

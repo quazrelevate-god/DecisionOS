@@ -17,6 +17,7 @@ from emergentintegrations.llm.chat import UserMessage
 from models.voice import TextNoteInput
 from core import model_for
 from prompts import render
+from services.ai.pii import redact_pii
 from services.voice import process_voice_note
 from services.transcription import transcribe_audio
 from services.tasks import _tenant_industry
@@ -111,7 +112,7 @@ async def ai_clarify_directive(text: str, industry: str, session_id: str) -> dic
     try:
         d = _extract_json(resp)
     except Exception as e:
-        logger.error(f"AI clarify parse error: {e} :: {resp[:300]}")
+        logger.error(f"AI clarify parse error: {e} :: {redact_pii(resp)[:300]}")
         return {"complete": True, "questions": []}
     qs = []
     for q in (d.get("questions") or [])[:4]:

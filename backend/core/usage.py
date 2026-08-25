@@ -62,6 +62,7 @@ async def record_ai_call(*, task, model=None, engine=None, prompt_version=None,
     the call succeeded, and (when the caller reports it) whether the JSON parsed.
     """
     try:
+        from services.ai.pii import redact_pii  # E3-08.2: never persist raw PII in telemetry
         tid = tenant_id or _ctx_tenant.get()
         ti, to = int(tokens_in or 0), int(tokens_out or 0)
         await db.ai_calls.insert_one({
@@ -71,7 +72,7 @@ async def record_ai_call(*, task, model=None, engine=None, prompt_version=None,
             "tokens_in": ti, "tokens_out": to, "tokens_total": ti + to,
             "latency_ms": int(latency_ms or 0),
             "ok": bool(ok), "parse_ok": parse_ok,
-            "error": (str(error)[:300] if error else None),
+            "error": (redact_pii(str(error))[:300] if error else None),
             "session_id": session_id, "created_at": now_iso(),
         })
     except Exception as e:  # telemetry must never break an AI call

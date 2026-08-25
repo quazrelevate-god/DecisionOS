@@ -14,6 +14,7 @@ from emergentintegrations.llm.chat import UserMessage
 from core import db, logger, user_perms, claude_chat, LLM_MODEL, _extract_json
 from core import model_for
 from prompts import render
+from services.ai.pii import redact_pii
 
 
 def _clamp100(v):
@@ -235,7 +236,7 @@ async def ai_work_coach(target: dict, stats: dict, session_id: str) -> dict:
     try:
         d = _extract_json(resp)
     except Exception as e:
-        logger.error(f"AI work coach parse error: {e} :: {resp[:300]}")
+        logger.error(f"AI work coach parse error: {e} :: {redact_pii(resp)[:300]}")
         d = {}
     return {
         "headline": str(d.get("headline") or "")[:200],

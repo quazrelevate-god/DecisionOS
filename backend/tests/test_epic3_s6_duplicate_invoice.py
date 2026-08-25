@@ -5,7 +5,9 @@ Unit tests for the pure decision core (_dup_reason) -- the DB fetch is separated
 A duplicate = the same bill filed twice (double-entry). The two false-positive traps
 these guard against: per-vendor invoice-number reuse, and recurring identical bills.
 """
-from services.ingestion import _dup_reason, _norm_inv_num, _days_between, INVOICE_DUP_WINDOW_DAYS
+from services.ingestion import (
+    _dup_reason, _payment_dup_reason, _norm_inv_num, _days_between, INVOICE_DUP_WINDOW_DAYS,
+)
 
 
 def _inv(number="", contact="", amount=0, date=""):
@@ -82,6 +84,47 @@ def test_amount_mismatch_not_duplicate():
     a = _inv("", "Landlord LLC", 50000, "2026-08-01")
     b = _inv("", "Landlord LLC", 49999, "2026-08-01")
     assert _dup_reason(a, b) is None
+
+
+# --- payment duplicates (E3-06.5) -------------------------------------------
+def _pay(reference="", contact="", amount=0, date="", invoice_number=""):
+    return {"reference": reference, "contact_name": contact, "amount": amount,
+            "date": date, "invoice_number": invoice_number}
+
+
+def test_same_reference_is_duplicate_payment():
+    a = _pay(reference="UTR-12345", contact="Vendor A", amount=1000, date="2026-08-01")
+    b = _pay(reference="utr12345", contact="Vendor A", amount=1000, date="2026-08-01")  # normalized match
+    assert _payment_dup_reason(a, b) == "reference"
+
+
+def test_same_invoice_same_amount_is_duplicate_payment():
+    a = _pay(contact="Vendor A", amount=5000, date="2026-08-01", invoice_number="INV-9")
+    b = _pay(contact="Vendor A", amount=5000, date="2026-07-01", invoice_number="INV 9")
+    assert _payment_dup_reason(a, b) == "invoice_amount"
+
+
+def test_amount_party_window_is_duplicate_payment():
+    a = _pay(contact="Vendor A", amount=5000, date="2026-08-03")
+    b = _pay(contact="Vendor A", amount=5000, date="2026-08-01")  # 2 days
+    assert _payment_dup_reason(a, b) == "amount_window"
+
+
+def test_recurring_emi_is_NOT_duplicate_payment():
+    # same amount + party, ~30 days apart -> a recurring EMI/subscription, not a dup.
+    a = _pay(contact="Bank EMI", amount=15000, date="2026-09-01")
+    b = _pay(contact="Bank EMI", amount=15000, date="2026-08-01")
+    assert _payment_dup_reason(a, b) is None
+
+
+def test_same_amount_different_party_not_duplicate_payment():
+    a = _pay(contact="Vendor A", amount=5000, date="2026-08-01")
+    b = _pay(contact="Vendor B", amount=5000, date="2026-08-01")
+    assert _payment_dup_reason(a, b) is None
+
+
+def test_payment_no_signals_not_duplicate():
+    assert _payment_dup_reason(_pay(amount=100), _pay(amount=100)) is None
 
 
 # --- helpers ----------------------------------------------------------------

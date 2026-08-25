@@ -21,7 +21,7 @@ from services.notifications import push_notification, _owner_ids
 from services.transcription import transcribe_audio_full
 from services.ingestion import (
     _tenant_currency, _tenant_name, ai_extract_document,
-    _find_duplicate_invoice, _has_unclassified_purchase,
+    _find_duplicate_record, _has_unclassified_purchase,
 )
 from services.captures import (
     _capture_settings, persist_capture_draft, execute_capture, ai_capture_triage,
@@ -231,7 +231,7 @@ async def process_whatsapp_message(message: dict):
             policy = cls in ("approval", "decision")
             needs_owner = _needs_owner_review(cls, amt or None, policy, cap_threshold)
             has_records = bool(recs.get("invoices") or recs.get("payments"))
-            dup = await _find_duplicate_invoice(tenant_id, recs)
+            dup = await _find_duplicate_record(tenant_id, recs)  # E3-06.5: invoices AND payments
             unknown_purchase = _has_unclassified_purchase(recs, result.get("doc_type", ""))
             level, reason = _decide_processing_level(cls, confidence, amt or None, needs_owner,
                                                      bool(dup), has_records, is_document=True,

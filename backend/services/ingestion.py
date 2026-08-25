@@ -522,3 +522,63 @@ async def _find_duplicate_invoice(tenant_id: str, records: dict):
         except Exception as e:  # never break the capture/ingest flow
             logger.warning(f"_find_duplicate_invoice check failed: {e}")
     return None
+
+
+def _payment_dup_reason(pay: dict, cand: dict, window_days: int = INVOICE_DUP_WINDOW_DAYS):
+    """Pure duplicate decision between an incoming payment and one already on file (E3-06.5).
+    Returns 'reference' | 'invoice_amount' | 'amount_window' | None. Mirrors _dup_reason but for
+    payments: a transaction reference (UTR/cheque/txn id) is globally unique so it's the strongest
+    signal; else the same invoice paid the same amount; else amount+party within a window (a
+    re-upload, not a recurring EMI/subscription)."""
+    pref, cref = _norm_inv_num(pay.get("reference")), _norm_inv_num(cand.get("reference"))
+    if pref and pref == cref:
+        return "reference"
+    try:
+        pamt, camt = float(pay.get("amount") or 0), float(cand.get("amount") or 0)
+    except (TypeError, ValueError):
+        pamt = camt = 0.0
+    pinv, cinv = _norm_inv_num(pay.get("invoice_number")), _norm_inv_num(cand.get("invoice_number"))
+    if pinv and pinv == cinv and pamt and pamt == camt:
+        return "invoice_amount"
+    pname, cname = _norm_contact(pay.get("contact_name")), _norm_contact(cand.get("contact_name"))
+    if pamt and pamt == camt and pname and pname == cname:
+        gap = _days_between((pay.get("date") or "")[:10], (cand.get("date") or "")[:10])
+        if gap is None or gap <= window_days:
+            return "amount_window"
+    return None
+
+
+async def _candidate_payments(tenant_id: str, pay: dict):
+    """Fetch the small pool of filed payments worth comparing against `pay`: those sharing its
+    party or its transaction reference. Empty when neither is known (can't dedup reliably)."""
+    proj = {"_id": 0, "id": 1, "reference": 1, "amount": 1, "contact_name": 1, "date": 1, "invoice_number": 1}
+    clauses = []
+    cname = (pay.get("contact_name") or "").strip()
+    ref = (pay.get("reference") or "").strip()
+    if cname:
+        clauses.append({"contact_name": {"$regex": f"^{re.escape(cname)}$", "$options": "i"}})
+    if ref:
+        clauses.append({"reference": {"$regex": f"^{re.escape(ref)}$", "$options": "i"}})
+    if not clauses:
+        return []
+    return await db.payments.find({"tenant_id": tenant_id, "$or": clauses}, proj).to_list(500)
+
+
+async def _find_duplicate_payment(tenant_id: str, records: dict):
+    """Return an already-filed payment that looks like a duplicate of one in `records`, else None
+    (E3-06.5). Same double-entry protection as invoices, for money going out/in. Never raises."""
+    for pay in (records or {}).get("payments", []):
+        try:
+            for cand in await _candidate_payments(tenant_id, pay):
+                if _payment_dup_reason(pay, cand):
+                    return cand
+        except Exception as e:  # never break the capture/ingest flow
+            logger.warning(f"_find_duplicate_payment check failed: {e}")
+    return None
+
+
+async def _find_duplicate_record(tenant_id: str, records: dict):
+    """Duplicate check across BOTH money records in a capture: an invoice OR a payment filed
+    twice. Returns the first duplicate found (a dict with 'id'), else None. E3-06.5."""
+    return (await _find_duplicate_invoice(tenant_id, records)
+            or await _find_duplicate_payment(tenant_id, records))

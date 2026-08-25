@@ -143,6 +143,31 @@ def calibrate_confidence(extracted: dict, *, raw, repaired: bool,
     return c, reasons[:4], needs_review
 
 
+def calibrate_doc_confidence(records: dict, *, raw, parse_ok: bool,
+                             doc_type: str = "") -> tuple[float, list[str], bool]:
+    """Calibrate a DOCUMENT extraction's confidence + flag for review (E3-06.6).
+
+    The vision extractor reports its own confidence; this down-weights it by observable
+    signals of a shaky OCR read -- the JSON didn't parse, no structured records came out,
+    or the document type couldn't be identified. Because the capture flow routes on this
+    confidence (auto/confirm/attention thresholds), a low calibrated value automatically
+    sends a shaky scan to review instead of auto-filing. Returns (calibrated, reasons, needs_review)."""
+    c = float(raw) if isinstance(raw, (int, float)) and 0 <= raw <= 1 else 0.7
+    reasons: list[str] = []
+    if not parse_ok:
+        c *= 0.4
+        reasons.append("OCR output did not parse cleanly")
+    if not any((records or {}).get(b) for b in ("contacts", "invoices", "payments", "tasks")):
+        c *= 0.5
+        reasons.append("no structured records were read from the document")
+    if (doc_type or "").strip().lower() in ("", "other", "unknown"):
+        c *= 0.85
+        reasons.append("document type could not be identified")
+    c = round(max(0.0, min(1.0, c)), 2)
+    needs_review = c < REVIEW_CONFIDENCE or not parse_ok
+    return c, reasons[:4], needs_review
+
+
 def repair_instruction(violations: list[str]) -> str:
     """Build the bounded re-ask sent back to the model after a bad response."""
     bullets = "\n".join(f"- {x}" for x in violations[:_MAX_VIOLATIONS])

@@ -22,6 +22,7 @@ from core import (
     EMERGENT_LLM_KEY, VISION_MODEL, record_ai_call,
 )
 from services.vision import get_gemini_client, _gemini_doc_sync
+from services.ai.validation import calibrate_doc_confidence
 from core import model_for
 from prompts import render
 
@@ -78,11 +79,21 @@ async def ai_extract_document(file_path: str, mime_type: str, session_id: str, c
                          tokens_in=_ti, tokens_out=_to,
                          latency_ms=(time.perf_counter() - _t0) * 1000, ok=True, parse_ok=parse_ok,
                          session_id=session_id)
+    records = _normalise_records(data)
+    doc_type = data.get("doc_type", "other")
+    # E3-06.6: replace the model's raw OCR confidence with a calibrated one + review flag.
+    # The capture flow routes on this confidence, so a shaky scan auto-goes to review.
+    raw_conf = data.get("confidence", 0.7)
+    cal, reasons, needs_review = calibrate_doc_confidence(
+        records, raw=raw_conf, parse_ok=parse_ok, doc_type=doc_type)
     return {
         "summary": data.get("summary", ""),
-        "doc_type": data.get("doc_type", "other"),
-        "confidence": data.get("confidence", 0.7),
-        "records": _normalise_records(data),
+        "doc_type": doc_type,
+        "confidence": cal,
+        "confidence_raw": raw_conf,
+        "review_reasons": reasons,
+        "needs_review": needs_review,
+        "records": records,
     }
 
 

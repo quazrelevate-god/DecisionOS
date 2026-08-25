@@ -7,7 +7,7 @@ run green in CI via test_epic3_s1_evals.py.
 """
 from services.ai.validation import (
     validate_extract, coerce_extract, repair_instruction, calibrate_confidence,
-    REVIEW_CONFIDENCE,
+    calibrate_doc_confidence, REVIEW_CONFIDENCE,
 )
 
 
@@ -105,6 +105,28 @@ def test_coerce_never_raises_on_junk():
     for junk in (None, [], "str", 5, {"tasks": None}):
         out = coerce_extract(junk)
         assert isinstance(out, dict) and isinstance(out["tasks"], list)
+
+
+# --- calibrate_doc_confidence (E3-06.6) -------------------------------------
+def test_doc_clean_extraction_not_flagged():
+    cal, reasons, needs = calibrate_doc_confidence(
+        {"invoices": [{"amount": 100}]}, raw=0.9, parse_ok=True, doc_type="sales_invoice")
+    assert cal == 0.9 and reasons == [] and needs is False
+
+
+def test_doc_parse_fail_flagged():
+    cal, reasons, needs = calibrate_doc_confidence({}, raw=0.9, parse_ok=False, doc_type="other")
+    assert needs is True and cal < 0.9 and any("parse" in r for r in reasons)
+
+
+def test_doc_no_records_flagged():
+    cal, reasons, needs = calibrate_doc_confidence({}, raw=0.9, parse_ok=True, doc_type="invoice")
+    assert cal < 0.9 and any("no structured records" in r for r in reasons)
+
+
+def test_doc_confidence_in_range():
+    cal, _, _ = calibrate_doc_confidence({}, raw="bad", parse_ok=False, doc_type="")
+    assert 0.0 <= cal <= 1.0
 
 
 # --- repair_instruction -----------------------------------------------------

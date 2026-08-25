@@ -8,6 +8,7 @@ queryable alongside decisions.
 """
 import asyncio
 import json
+import re
 from pathlib import Path
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, File, Form, UploadFile
@@ -126,11 +127,38 @@ async def _currency(tenant_id: str) -> str:
     return (t or {}).get("currency") or "INR"
 
 
-def _num(x) -> float:
-    try:
-        return float(x or 0)
-    except (TypeError, ValueError):
+# Indian scale words -> multiplier. lakh = 1e5, crore = 1e7.
+_AMT_SCALE = {"lakh": 1e5, "lakhs": 1e5, "lac": 1e5, "lacs": 1e5,
+              "crore": 1e7, "crores": 1e7, "cr": 1e7}
+
+
+def parse_amount(x) -> float:
+    """Tolerant money/quantity parse (E3-06.7): plain numbers pass through; strings may carry
+    currency tokens (Rs / Rs. / ₹ / INR), Indian comma grouping (1,20,000), and scale words
+    (lakh / crore / cr) -- so an OCR'd or typed '₹2.5 lakh' becomes 250000.0. Never raises."""
+    if isinstance(x, (int, float)):
+        return float(x)
+    s = str(x or "").strip().lower()
+    if not s:
         return 0.0
+    s = re.sub(r"(₹|rs\.?|inr)", " ", s)          # drop currency tokens
+    mult = 1.0
+    m = re.search(r"\b(lakhs?|lacs?|crores?|cr)\b", s)  # detect + strip a scale word
+    if m:
+        mult = _AMT_SCALE.get(m.group(1), 1.0)
+        s = s[:m.start()] + s[m.end():]
+    s = s.replace(",", "")
+    m2 = re.search(r"-?\d+(?:\.\d+)?", s)          # first number in what's left
+    if not m2:
+        return 0.0
+    try:
+        return float(m2.group(0)) * mult
+    except ValueError:
+        return 0.0
+
+
+def _num(x) -> float:
+    return parse_amount(x)
 
 
 async def _write_brain(tenant_id: str, user_id: str, text: str, tag: str) -> None:

@@ -1,6 +1,6 @@
 {
-  "count": 268,
-  "sha": "a8a63484f9fb5bbad9d84ba221831ae2f735ed88bb40490b4886bb02a4b9a55e",
+  "count": 271,
+  "sha": "dc266ecfac6e32776fcd293924fedf67f334959cb936d31c443460100c856658",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware"
@@ -32,6 +32,7 @@
     "GET /api/admin/audit",
     "GET /api/admin/audit-log",
     "GET /api/admin/health",
+    "GET /api/admin/impersonation",
     "GET /api/admin/me",
     "GET /api/admin/metrics",
     "GET /api/admin/migrations",
@@ -148,9 +149,11 @@
     "PATCH /api/tenant/settings",
     "PATCH /api/users/{user_id}",
     "PATCH /api/workflows/{workflow_id}/advance",
+    "POST /api/admin/impersonation/{session_id}/revoke",
     "POST /api/admin/login",
     "POST /api/admin/logout",
     "POST /api/admin/reclassify-purchases",
+    "POST /api/admin/tenants/{tenant_id}/impersonate",
     "POST /api/admin/tenants/{tenant_id}/reactivate",
     "POST /api/admin/tenants/{tenant_id}/suspend",
     "POST /api/admin/users/{user_id}/reactivate",

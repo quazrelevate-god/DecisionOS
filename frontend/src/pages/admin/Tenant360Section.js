@@ -64,6 +64,17 @@ export function Tenant360Section() {
     } catch (e) { toast.error(formatApiError(e)); } finally { setLoading(false); }
   }, []);
 
+  const [impersonating, setImpersonating] = useState(false);
+  const startImpersonation = useCallback(async (tid) => {
+    const reason = window.prompt("Reason for read-only impersonation (audited):", "");
+    if (reason === null) return;
+    setImpersonating(true);
+    try {
+      const r = await api.post(`/admin/tenants/${tid}/impersonate`, { reason, read_only: true, minutes: 30 });
+      toast.success(`Read-only session started for ${r.data.session.target_name} — manage it in the Impersonation tab`);
+    } catch (e) { toast.error(formatApiError(e)); } finally { setImpersonating(false); }
+  }, []);
+
   const ts = (s) => (s ? String(s).slice(0, 16).replace("T", " ") : "—");
 
   return (
@@ -130,11 +141,20 @@ export function Tenant360Section() {
                 {sel.tenant.industry || "—"} · {sel.tenant.region || "—"} · {sel.tenant.currency || "—"} · {sel.tenant.id}
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
               <Badge ok={!sel.tenant.suspended} label={sel.tenant.suspended ? "suspended" : "active"} />
               <span className="inline-flex items-center font-mono text-[10px] uppercase tracking-wider px-2 py-1 border border-white/15 text-white/70">
                 {sel.tenant.plan || "no plan"}
               </span>
+              <button
+                onClick={() => startImpersonation(sel.tenant.id)}
+                disabled={impersonating}
+                data-testid="start-impersonation"
+                className={BTN + " border-[#d29922]/50 text-[#d29922] hover:bg-[#d29922]/10"}
+                title="Start a 30-minute read-only impersonation session (audited)"
+              >
+                {impersonating ? <Spinner size={13} className="animate-spin" /> : "View as tenant"}
+              </button>
             </div>
           </div>
 

@@ -14,6 +14,7 @@ from routers.onboarding import router as onboarding_router
 from routers.ledger import router as ledger_router
 from routers.admin import router as admin_router
 from routers.admin_tenant360 import router as admin_tenant360_router  # Epic 10 S1
+from routers.admin_impersonation import router as admin_impersonation_router  # Epic 10 S2
 from routers.brain import router as brain_router
 from routers.brain_docs import router as brain_docs_router
 from routers.brain_context_api import router as brain_context_router
@@ -53,6 +54,7 @@ _DOMAIN_ROUTERS = (
     ledger_router,
     admin_router,
     admin_tenant360_router,
+    admin_impersonation_router,
     brain_router,
     brain_docs_router,
     brain_context_router,

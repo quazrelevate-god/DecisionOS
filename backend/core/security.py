@@ -167,3 +167,22 @@ def create_token(user_id: str, tenant_id: str, role: str) -> str:
         "exp": datetime.now(timezone.utc) + timedelta(days=7), "type": "access",
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+def create_impersonation_token(*, target_user_id: str, tenant_id: str, role: str,
+                               admin_email: str, session_id: str,
+                               read_only: bool = True, minutes: int = 30) -> str:
+    """Mint a short-lived, session-bound impersonation token (Epic 10 S2 -- support
+    'view as tenant'). It is an ordinary target-user JWT plus an `imp` claim; a
+    super-admin uses it to see the tenant's data. get_current_user verifies the
+    impersonation_sessions record is still live and blocks writes when read_only,
+    and stamps `_impersonated_by` on the user so the app can banner + audit.
+    """
+    payload = {
+        "sub": target_user_id, "tenant_id": tenant_id, "role": role,
+        "jti": str(uuid.uuid4()),
+        "imp": {"admin": admin_email, "session_id": session_id, "read_only": bool(read_only)},
+        "exp": datetime.now(timezone.utc) + timedelta(minutes=max(1, min(minutes, 240))),
+        "type": "impersonation",
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)

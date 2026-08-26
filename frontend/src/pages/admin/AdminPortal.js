@@ -6,14 +6,16 @@ import {
   MaintenanceSection,
 } from "./AdminSections";
 import { Tenant360Section } from "./Tenant360Section";
+import { ImpersonationSection } from "./ImpersonationSection";
 import {
   ShieldStar, SquaresFour, Key, Buildings, Users, Pulse, SignOut, Spinner,
-  ClockCounterClockwise, ChartBar, WarningCircle, Wrench, MagnifyingGlass,
+  ClockCounterClockwise, ChartBar, WarningCircle, Wrench, MagnifyingGlass, UserSwitch,
 } from "@phosphor-icons/react";
 
 const TABS = [
   { key: "overview", label: "Overview", icon: SquaresFour, C: OverviewSection },
   { key: "tenant360", label: "Tenant 360", icon: MagnifyingGlass, C: Tenant360Section },
+  { key: "impersonation", label: "Impersonation", icon: UserSwitch, C: ImpersonationSection },
   { key: "usage", label: "Usage", icon: ChartBar, C: UsageSection },
   { key: "ai-keys", label: "AI Keys", icon: Key, C: AiKeysSection },
   { key: "tenants", label: "Workspaces", icon: Buildings, C: TenantsSection },

@@ -109,8 +109,10 @@ class TestLoginResponseHelper:
         """The whole point of S0-08: no `token` key at all when off. Not
         empty-string, not None — absent, so a stray XSS reading response
         JSON has nothing to grab."""
-        import core
-        monkeypatch.setattr(core, "AUTH_RETURN_TOKEN", False)
+        import core.security
+        # login_response lives in core/security.py (Epic 8 S2) and reads
+        # AUTH_RETURN_TOKEN from that module's scope -- patch it there.
+        monkeypatch.setattr(core.security, "AUTH_RETURN_TOKEN", False)
         out = core.login_response("JWT.TOKEN", user={"id": "u1"})
         assert "token" not in out
         assert out == {"user": {"id": "u1"}}
@@ -190,8 +192,12 @@ class TestPlatformAdminSecretSplit:
     def _swap_secret(self, monkeypatch, secret: str):
         import config
         import core
+        import core.security
         monkeypatch.setattr(config, "PLATFORM_ADMIN_JWT_SECRET", secret)
         monkeypatch.setattr(core, "PLATFORM_ADMIN_JWT_SECRET", secret)
+        # create_admin_token lives in core/security.py (Epic 8 S2) and reads the
+        # secret from that module's scope -- patch it there too or the swap is a no-op.
+        monkeypatch.setattr(core.security, "PLATFORM_ADMIN_JWT_SECRET", secret)
         return core, config
 
     def test_fallback_when_env_unset(self):
@@ -262,6 +268,13 @@ class TestSeedPlatformAdmin:
           * config.SUPERADMIN_ALLOW_HASH_REFRESH (deferred `from config
             import` inside the function fetches this attribute)
         """
+        # Import config BEFORE flipping ENV so it loads + caches with the ambient
+        # (dev) env. A fresh config import under ENV=prod would (a) run config's own
+        # prod guards (the CORS wildcard check) and (b) bake prod values
+        # (AUTH_RETURN_TOKEN=False, ...) into the module, polluting other tests on
+        # this xdist worker. seed_platform_admin reads os.environ at CALL time, so
+        # it still sees the prod flip below without config needing to reload.
+        import config
         monkeypatch.setenv("ENV", "prod" if prod else "dev")
         # NB: setenv("", "") not delenv — .env in the repo carries the
         # default SUPERADMIN_* pair, and dotenv.load_dotenv() re-populates
@@ -269,7 +282,6 @@ class TestSeedPlatformAdmin:
         for k, v in {"SUPERADMIN_EMAIL": email,
                       "SUPERADMIN_PASSWORD": password}.items():
             monkeypatch.setenv(k, "" if v is None else v)
-        import config
         monkeypatch.setattr(config, "SUPERADMIN_ALLOW_HASH_REFRESH",
                               bool(allow_refresh))
         return config
@@ -289,7 +301,7 @@ class TestSeedPlatformAdmin:
         # we monkeypatched without needing a module reload.
         import server
         db = _FakeDB()
-        monkeypatch.setattr(server, "db", db)
+        monkeypatch.setattr("bootstrap.migrations.db", db)  # seed_platform_admin moved here (Epic 8 S7)
         _run(server.seed_platform_admin())
         docs = db.platform_admins.docs
         assert len(docs) == 1
@@ -306,7 +318,7 @@ class TestSeedPlatformAdmin:
         # we monkeypatched without needing a module reload.
         import server
         db = _FakeDB()
-        monkeypatch.setattr(server, "db", db)
+        monkeypatch.setattr("bootstrap.migrations.db", db)  # seed_platform_admin moved here (Epic 8 S7)
         _run(server.seed_platform_admin())
         assert len(db.platform_admins.docs) == 1
         assert db.platform_admins.docs[0]["email"] == "ops@corp.com"
@@ -326,7 +338,7 @@ class TestSeedPlatformAdmin:
             "id": "existing", "email": "ops@corp.com",
             "password_hash": original_hash, "created_at": "2026-01-01T00:00:00+00:00",
         })
-        monkeypatch.setattr(server, "db", db)
+        monkeypatch.setattr("bootstrap.migrations.db", db)  # seed_platform_admin moved here (Epic 8 S7)
         _run(server.seed_platform_admin())
         # Hash preserved; env password did NOT take over.
         assert db.platform_admins.docs[0]["password_hash"] == original_hash
@@ -349,7 +361,7 @@ class TestSeedPlatformAdmin:
             "password_hash": core.hash_password("original-password-01"),
             "created_at": "2026-01-01T00:00:00+00:00",
         })
-        monkeypatch.setattr(server, "db", db)
+        monkeypatch.setattr("bootstrap.migrations.db", db)  # seed_platform_admin moved here (Epic 8 S7)
         _run(server.seed_platform_admin())
         assert core.verify_password("NEW-password-99",
                                       db.platform_admins.docs[0]["password_hash"])
@@ -368,7 +380,7 @@ class TestSeedPlatformAdmin:
             "id": "existing", "email": "ops@corp.com",
             "password_hash": h, "created_at": "2026-01-01T00:00:00+00:00",
         })
-        monkeypatch.setattr(server, "db", db)
+        monkeypatch.setattr("bootstrap.migrations.db", db)  # seed_platform_admin moved here (Epic 8 S7)
         _run(server.seed_platform_admin())
         assert db.platform_admins.docs[0]["password_hash"] == h  # untouched
 
@@ -383,8 +395,8 @@ class TestInviteTokenInvalidatedOnVerify:
     to None, (c) clears invite_expires_at, (d) stamps invite_consumed_at."""
 
     def test_source_has_invite_invalidation_block(self):
-        import server
-        src = inspect.getsource(server.verify_otp)
+        from routers import auth_otp  # verify_otp moved to routers/auth_otp.py (Epic 8 S3)
+        src = inspect.getsource(auth_otp.verify_otp)
         # Guards
         assert 'invite_token' in src
         assert 'invite_expires_at' in src
@@ -398,9 +410,9 @@ class TestInviteTokenInvalidatedOnVerify:
         """Structural check: the two public /auth/invite/* endpoints
         query by invite_token. Once we set the field to None on verify,
         those queries can never match again — that IS the invalidation."""
-        import server
+        from routers import auth_otp  # invite endpoints moved to routers/auth_otp.py (Epic 8 S3)
         for fn_name in ("invite_info", "invite_start"):
-            fn = getattr(server, fn_name)
+            fn = getattr(auth_otp, fn_name)
             src = inspect.getsource(fn)
             assert '"invite_token": token' in src, (
                 f"{fn_name} should look up by invite_token so setting it "
@@ -444,9 +456,9 @@ class TestNoRawTokenInBodyForKnownEndpoints:
             )
 
     def test_server_verify_otp_uses_login_response(self):
-        """The one endpoint on server.py (not a router) that mints
-        a tenant session — the invite-accept path."""
-        import server
-        src = inspect.getsource(server.verify_otp)
+        """The OTP-verify endpoint (routers/auth_otp.py since Epic 8 S3) that
+        mints a tenant session on the invite-accept path."""
+        from routers import auth_otp
+        src = inspect.getsource(auth_otp.verify_otp)
         assert "login_response(" in src
         assert '"token": token' not in src

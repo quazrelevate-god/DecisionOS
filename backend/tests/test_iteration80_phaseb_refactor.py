@@ -116,8 +116,10 @@ class TestImportSanity:
             "import services.obj_store as obj_store, services.ai.brain_context as brain_context, services.ai.brain_rbac as brain_rbac;"
             "assert obj_store.put_object and brain_context.record_context and brain_rbac.classify_intent"
         )
+        import sys
+        backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         res = subprocess.run(
-            ["python", "-c", code], cwd="/app/backend",
+            [sys.executable, "-c", code], cwd=backend_dir,
             capture_output=True, text=True, timeout=30,
         )
         assert res.returncode == 0, f"import failed: {res.stderr}"

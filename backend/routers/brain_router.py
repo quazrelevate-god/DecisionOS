@@ -207,17 +207,24 @@ async def _tool_mongo_query(query: str, user: dict) -> dict:
         return {"tool": "mongo_query", "query": query, "error": "analytics engine unavailable"}
 
 
+# Central agent-tool registry (Epic 1 S4-07) -- mirrors brain.py's _COMPUTE_HANDLERS.
+# Each entry maps a tool name to an adapter that unpacks the pick dict into the
+# handler's args. Add a new agent tool by defining `_tool_<name>` above and adding
+# one line here -- no edits to the dispatcher below.
+_TOOL_HANDLERS = {
+    "metadata_search": lambda t, u: _tool_metadata_search(t["query"], u),
+    "knowledge_lookup": lambda t, u: _tool_knowledge_lookup(t["query"], u),
+    "file_open": lambda t, u: _tool_file_open(t.get("doc_id"), t["query"], u),
+    "mongo_query": lambda t, u: _tool_mongo_query(t["query"], u),
+}
+
+
 async def _run_tools(picks: List[dict], user: dict) -> List[dict]:
     async def run(t):
-        if t["name"] == "metadata_search":
-            return await _tool_metadata_search(t["query"], user)
-        if t["name"] == "knowledge_lookup":
-            return await _tool_knowledge_lookup(t["query"], user)
-        if t["name"] == "file_open":
-            return await _tool_file_open(t.get("doc_id"), t["query"], user)
-        if t["name"] == "mongo_query":
-            return await _tool_mongo_query(t["query"], user)
-        return {"tool": t["name"], "error": "unknown tool"}
+        handler = _TOOL_HANDLERS.get(t["name"])
+        if handler is None:
+            return {"tool": t["name"], "error": "unknown tool"}
+        return await handler(t, user)
     return list(await asyncio.gather(*(run(t) for t in picks), return_exceptions=False))
 
 

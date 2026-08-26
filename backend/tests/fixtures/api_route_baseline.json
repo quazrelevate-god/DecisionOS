@@ -1,6 +1,6 @@
 {
-  "count": 288,
-  "sha": "67b8d4c1384c15365defc1eac65f0df6362246a5041899262f3650ced8421416",
+  "count": 296,
+  "sha": "587bfb8737b42972e7837f58419c8d6ac102275e4aa875923ac1de965b790821",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware"
@@ -35,6 +35,7 @@
     "GET /api/admin/billing/reconciliation",
     "GET /api/admin/billing/tenants",
     "GET /api/admin/billing/tenants/{tenant_id}/payments",
+    "GET /api/admin/config",
     "GET /api/admin/health",
     "GET /api/admin/impersonation",
     "GET /api/admin/me",
@@ -48,6 +49,7 @@
     "GET /api/admin/search",
     "GET /api/admin/tenants",
     "GET /api/admin/tenants/{tenant_id}/360",
+    "GET /api/admin/tenants/{tenant_id}/flags",
     "GET /api/admin/tickets",
     "GET /api/admin/tickets/{ticket_id}",
     "GET /api/admin/usage",
@@ -139,6 +141,12 @@
     "HEAD /openapi.json",
     "HEAD /redoc",
     "PATCH /api/admin/billing/tenants/{tenant_id}/plan",
+    "PATCH /api/admin/config/flags",
+    "PATCH /api/admin/config/models",
+    "PATCH /api/admin/config/plan-capabilities",
+    "PATCH /api/admin/config/runtime",
+    "PATCH /api/admin/config/sarvam",
+    "PATCH /api/admin/tenants/{tenant_id}/flags",
     "PATCH /api/admin/tickets/{ticket_id}",
     "PATCH /api/assets/{aid}",
     "PATCH /api/auth/profile",

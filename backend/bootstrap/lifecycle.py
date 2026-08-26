@@ -998,6 +998,9 @@ async def lifespan(app):
     asyncio.create_task(_bootstrap())
     # Timer-driven follow-up/escalation sweep (independent of user polling).
     asyncio.create_task(_followup_scheduler_loop())
+    # Epic 10 S6: apply runtime platform config (model routes, Sarvam) at boot.
+    from services.platform_config import load_all as _load_platform_config
+    asyncio.create_task(_load_platform_config())
     try:
         yield
     finally:

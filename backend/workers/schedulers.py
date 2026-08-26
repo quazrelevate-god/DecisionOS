@@ -44,6 +44,13 @@ async def _followup_scheduler_loop():
     while True:
         got_lock = False
         try:
+            # Epic 10 S6: refresh runtime platform config on every replica each tick
+            # so an admin model/Sarvam/flag change converges across the fleet (<=1 tick).
+            try:
+                from services.platform_config import refresh as _refresh_platform_config
+                await _refresh_platform_config()
+            except Exception as e:
+                logger.debug(f"[scheduler] platform_config refresh failed: {e}")
             got_lock = await try_acquire(db, "followup_sweep", holder_id, lease_seconds=lease_seconds)
             if not got_lock:
                 logger.debug("[followup-scheduler] another replica is leader this tick; skipping")

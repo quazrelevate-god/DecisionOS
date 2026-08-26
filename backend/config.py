@@ -241,15 +241,29 @@ MODEL_ROUTES = {
 }
 
 
+# Runtime, DB-backed model-route overrides (Epic 10 S6 -- admin model switcher).
+# platform_config.load_all() populates this from db.platform_config at boot + on write;
+# the scheduler refreshes it each tick so all replicas converge. Env still wins.
+_MODEL_OVERRIDES: dict = {}
+
+
+def set_model_overrides(overrides: dict) -> None:
+    """Replace the in-process model-route override map (called by services.platform_config)."""
+    global _MODEL_OVERRIDES
+    _MODEL_OVERRIDES = dict(overrides or {})
+
+
 def model_for(task, kind="llm"):
     """Resolve the (provider, model_id) tuple for an AI task.
 
-    Order: env override (MODEL_ROUTE_<TASK>) -> MODEL_ROUTES -> per-kind default.
-    `kind` ('llm' | 'vision') only selects the fallback when a task is unlisted.
+    Order: env override (MODEL_ROUTE_<TASK>) -> admin override -> MODEL_ROUTES ->
+    per-kind default. `kind` ('llm' | 'vision') only selects the fallback when unlisted.
     """
     default = DEFAULT_LLM_MODEL if kind == "llm" else DEFAULT_VISION_MODEL
     env_key = "MODEL_ROUTE_" + task.replace(".", "_").replace("-", "_").upper()
-    name = os.environ.get(env_key, "").strip() or MODEL_ROUTES.get(task) or default
+    name = (os.environ.get(env_key, "").strip()
+            or _MODEL_OVERRIDES.get(task)
+            or MODEL_ROUTES.get(task) or default)
     return MODELS.get(name, MODELS[default])
 
 

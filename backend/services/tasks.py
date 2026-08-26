@@ -170,7 +170,7 @@ async def _attach_reference_ids(tenant_id, user_id, task_id, file_ids, backgroun
     depend on obj_store + Claude + LLM_MODEL); imported here on demand to avoid
     the `server.py ↔ services.tasks` cycle.
     """
-    from server import _file_public, _analyze_reference_file  # deferred
+    from services.files import _analyze_reference_file, _file_public
     for fid in (file_ids or []):
         rec = await db.files.find_one({"id": fid, "tenant_id": tenant_id, "is_deleted": False}, {"_id": 0})
         if not rec:

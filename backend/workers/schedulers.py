@@ -5,8 +5,8 @@ actions for every tenant on a timer so overdue alerts fire even when nobody is
 polling /notifications; a Mongo leader-lock keeps it single-flight across
 replicas. Provider-outage alerts piggyback on the same tick.
 
-server.py re-exports these names so the deferred `from server import ...` call
-sites (and the lifespan wiring) keep resolving unchanged.
+The lifespan wiring (bootstrap/lifecycle.py) imports these directly; server.py
+also re-exports them for backward compatibility.
 """
 
 from __future__ import annotations

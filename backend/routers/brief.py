@@ -46,7 +46,7 @@ def _today_ist() -> str:
 # ---------------------------------------------------------------------------
 @router.get("/notifications")
 async def list_notifications(user: dict = Depends(get_current_user)):
-    from server import run_followup  # deferred
+    from services.finance_signals import run_followup
     await run_followup(user["tenant_id"])
     items = await db.notifications.find(
         {"tenant_id": user["tenant_id"], "user_id": user["id"]}, {"_id": 0}
@@ -77,7 +77,7 @@ async def read_all_notifications(user: dict = Depends(get_current_user)):
 # ---------------------------------------------------------------------------
 @router.get("/brief")
 async def ceo_brief(period: str = "morning", user: dict = Depends(get_current_user)):
-    from server import (  # deferred
+    from services.finance_signals import (
         run_followup, _overdue_receivables, _bills_due_or_overdue,
         _unmatched_payments, _inv_remaining, _pay_remaining_amt,
     )
@@ -158,10 +158,11 @@ async def ceo_brief(period: str = "morning", user: dict = Depends(get_current_us
 @router.get("/brief/details")
 async def brief_details(key: str, period: str = "morning", user: dict = Depends(get_current_user)):
     """Drill-down items behind a CEO Brief counter block."""
-    from server import (  # deferred
+    from services.finance_signals import (
         _overdue_receivables, _bills_due_or_overdue, _unmatched_payments,
-        _inv_remaining, _pay_remaining_amt, enrich_decisions,
+        _inv_remaining, _pay_remaining_amt,
     )
+    from services.enrich import enrich_decisions
     tid = user["tenant_id"]
     now = datetime.now(timezone.utc)
     midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)

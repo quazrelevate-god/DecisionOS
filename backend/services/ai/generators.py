@@ -121,7 +121,7 @@ LEGACY_WF_LABELS = {"production": "Production", "distribution": "Distribution", 
 async def backfill_operating_model(tenant: dict) -> dict:
     """Generate the industry operating model for an existing tenant AND preserve any
     pipeline/category that already has data (non-destructive migration)."""
-    from server import WORKFLOW_STAGES  # shared constant (also used by bootstrap); stays in server
+    from models.workflows import WORKFLOW_STAGES
     tenant_id = tenant["id"]
     om = await ai_generate_operating_model(tenant.get("industry"), tenant.get("company_size"), tenant.get("roles"), tenant.get("description") or "")
 

@@ -277,7 +277,8 @@ async def delete_task(task_id: str, user: dict = Depends(require_role("owner")))
 # ---------------------------------------------------------------------------
 @router.post("/tasks")
 async def create_task(inp: TaskCreateInput, background: BackgroundTasks, user: dict = Depends(get_current_user)):
-    from server import pick_least_loaded_member, push_notification, _approver_ids  # deferred
+    from services.notifications import _approver_ids, push_notification
+    from services.voice import pick_least_loaded_member
     from services.workflows import derive_task_workflow_link  # WE-01
     tid = new_id()
     # WE-01: resolve workflow linkage BEFORE the DB write. If the user
@@ -352,7 +353,7 @@ async def create_task(inp: TaskCreateInput, background: BackgroundTasks, user: d
 
 @router.patch("/tasks/{task_id}")
 async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(get_current_user)):
-    from server import push_notification, _owner_ids  # deferred
+    from services.notifications import _owner_ids, push_notification
     t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]})
     if not t:
         raise HTTPException(status_code=404, detail="Not found")
@@ -486,7 +487,7 @@ async def reassign_task(task_id: str, inp: TaskReassignInput, user: dict = Depen
     Previously any employee could reassign any task (auth-only), which
     let a disgruntled assignee dump their work back on the requester.
     """
-    from server import push_notification  # deferred
+    from services.notifications import push_notification
     perms = user_perms(user)
     if not (user["role"] == "owner" or "team_manage" in perms or "decisions_approve" in perms):
         raise HTTPException(status_code=403, detail="You can't reassign this task")
@@ -528,7 +529,7 @@ async def reassign_task(task_id: str, inp: TaskReassignInput, user: dict = Depen
 # ---------------------------------------------------------------------------
 @router.post("/tasks/{task_id}/approve")
 async def approve_task(task_id: str, user: dict = Depends(get_current_user)):
-    from server import push_notification  # deferred
+    from services.notifications import push_notification
     t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]})
     if not t:
         raise HTTPException(status_code=404, detail="Not found")
@@ -562,7 +563,7 @@ async def approve_task(task_id: str, user: dict = Depends(get_current_user)):
 
 @router.post("/tasks/{task_id}/reject")
 async def reject_task(task_id: str, inp: TaskRejectInput, user: dict = Depends(get_current_user)):
-    from server import push_notification  # deferred
+    from services.notifications import push_notification
     t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]})
     if not t:
         raise HTTPException(status_code=404, detail="Not found")
@@ -598,7 +599,7 @@ async def reject_task(task_id: str, inp: TaskRejectInput, user: dict = Depends(g
 @router.post("/tasks/{task_id}/clarify")
 async def clarify_task(task_id: str, inp: TaskRejectInput, user: dict = Depends(get_current_user)):
     """Approver/owner asks the assignee a clarifying question; the task stays locked until approved."""
-    from server import push_notification  # deferred
+    from services.notifications import push_notification
     t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]})
     if not t:
         raise HTTPException(status_code=404, detail="Not found")
@@ -627,7 +628,8 @@ async def clarify_task(task_id: str, inp: TaskRejectInput, user: dict = Depends(
 # ---------------------------------------------------------------------------
 @router.post("/tasks/{task_id}/execution-plan/generate")
 async def generate_execution_plan(task_id: str, user: dict = Depends(get_current_user)):
-    from server import ai_execution_plan, _tenant_currency  # deferred
+    from services.ai.extraction import ai_execution_plan
+    from services.ingestion import _tenant_currency
     t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
     if not t:
         raise HTTPException(status_code=404, detail="Not found")
@@ -714,7 +716,7 @@ async def delete_execution_plan(task_id: str, user: dict = Depends(require_perm(
 
 @router.post("/tasks/{task_id}/steps/ask")
 async def ask_step_ai(task_id: str, inp: StepAskInput, user: dict = Depends(get_current_user)):
-    from server import ai_step_assist  # deferred
+    from services.ai.extraction import ai_step_assist
     t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
     if not t:
         raise HTTPException(status_code=404, detail="Not found")
@@ -729,7 +731,7 @@ async def ask_step_ai(task_id: str, inp: StepAskInput, user: dict = Depends(get_
 # ---------------------------------------------------------------------------
 @router.post("/tasks/{task_id}/updates")
 async def add_task_update(task_id: str, inp: TaskUpdateNoteInput, user: dict = Depends(get_current_user)):
-    from server import push_notification  # deferred
+    from services.notifications import push_notification
     t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
     if not t:
         raise HTTPException(status_code=404, detail="Not found")
@@ -791,7 +793,7 @@ async def add_task_update(task_id: str, inp: TaskUpdateNoteInput, user: dict = D
 @router.post("/tasks/{task_id}/respond")
 async def respond_to_handoff(task_id: str, inp: RespondInput, user: dict = Depends(get_current_user)):
     """Reply to an escalation/handoff: sends feedback back to the person who raised it and resolves this follow-up."""
-    from server import push_notification  # deferred
+    from services.notifications import push_notification
     t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
     if not t:
         raise HTTPException(status_code=404, detail="Not found")
@@ -847,7 +849,8 @@ async def prioritize_tasks(force: bool = False, limit: int = 25, user: dict = De
     # FIX-004-C (RBAC-07): tenant-wide AI re-score of every open task.
     # Costs Claude tokens and rewrites priority ordering the whole
     # team sees — team-manage permission gates the action.
-    from server import ai_score_tasks, _tenant_currency  # deferred
+    from services.ai.extraction import ai_score_tasks
+    from services.ingestion import _tenant_currency
     tid = user["tenant_id"]
     q = {"tenant_id": tid, "status": {"$in": ["todo", "in_progress", "blocked"]}}
     if user["role"] != "owner":
@@ -879,7 +882,7 @@ async def prioritize_tasks(force: bool = False, limit: int = 25, user: dict = De
 @router.post("/tasks/{task_id}/attachment")
 async def upload_task_attachment(task_id: str, file: UploadFile = File(...), kind: str = Form("evidence"),
                                  background: BackgroundTasks = None, user: dict = Depends(get_current_user)):
-    from server import _store_file, _file_public, _analyze_reference_file  # deferred
+    from services.files import _analyze_reference_file, _file_public, _store_file
     t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]})
     if not t:
         raise HTTPException(status_code=404, detail="Not found")

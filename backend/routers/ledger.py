@@ -226,7 +226,7 @@ async def ai_extract_ledger_file(file_path: str, mime_type: str, kind: str, curr
     _eng, _ti, _to = None, 0, 0
     # Prefer the user's own Gemini key (same client server.py configures), else the Emergent vision key.
     try:
-        from server import get_gemini_client, _gemini_doc_sync
+        from services.vision import _gemini_doc_sync, get_gemini_client
         if get_gemini_client() is not None:
             resp, _gti, _gto = await asyncio.to_thread(_gemini_doc_sync, file_path, mime_type, system, "Extract the JSON now.")
             await log_usage(f"ledger-ocr-{kind}", "gemini", model=VISION_MODEL[1],
@@ -1084,7 +1084,7 @@ async def resync_finance(tid: str, uid: str, user_name: str = "System") -> dict:
     """The full 'Fix Mis-booked Purchases' engine: (1) re-classify purchase bills into the right
     bucket with company categories, (2) re-categorize expenses & assets onto the company categories,
     (3) recompute payment matching & outstanding balances."""
-    from server import ai_classify_purchase
+    from services.ingestion import ai_classify_purchase
     fc = await get_finance_categories(tid)
     bills = await db.invoices.find({"tenant_id": tid, "type": "purchase_bill"}, {"_id": 0}).to_list(5000)
     summary = {"reviewed": 0, "to_asset": 0, "to_inventory": 0, "kept_expense": 0, "unknown": 0, "unchanged": 0,

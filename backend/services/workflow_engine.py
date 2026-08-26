@@ -60,7 +60,7 @@ logger = logging.getLogger("decisionos.workflow_engine")
 # ---------------------------------------------------------------------------
 async def _load_pipeline(tenant_id: str, wf_type: str) -> Optional[dict]:
     """Return the tenant's pipeline definition for a workflow type, or None."""
-    from server import tenant_operating_model  # deferred
+    from services.ai.generators import tenant_operating_model
     om = await tenant_operating_model(tenant_id)
     for p in (om or {}).get("pipelines") or []:
         if p.get("key") == wf_type:
@@ -117,7 +117,7 @@ async def on_stage_enter(
     Returns:
       {task_ids: [...], side_effects_fired: [kind, ...], stage_key: str}
     """
-    from server import pick_least_loaded_member  # deferred
+    from services.voice import pick_least_loaded_member
     wf = await db.workflows.find_one(
         {"id": workflow_id, "tenant_id": tenant_id}, {"_id": 0})
     if not wf:
@@ -594,7 +594,7 @@ async def _side_effect_notify_role(
     role = (params.get("role") or "").strip()
     if not role:
         return {"skipped": "no_role"}
-    from server import push_notification  # deferred
+    from services.notifications import push_notification
     tenants_users = await db.users.find(
         {"tenant_id": tenant_id, "role": role},
         {"_id": 0, "id": 1},

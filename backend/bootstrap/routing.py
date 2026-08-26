@@ -5,9 +5,10 @@ Mounts the in-file ``api`` router (still defined in server.py — its endpoints
 move out in Sprint 3) plus every already-extracted domain router. Include
 order and prefixes are unchanged, so the mounted route table is identical.
 
-These router modules only import from ``core`` / ``services`` at module load
-time (their ``from server import ...`` calls are deferred inside functions),
-so importing them here introduces no import-time cycle.
+These router modules import only from ``core`` / ``services`` / ``models``, so
+importing them here introduces no import-time cycle. (As of Sprint 10 there are
+no ``from server import ...`` shims left in application code -- every cross-domain
+helper is imported from its real home.)
 """
 from routers.onboarding import router as onboarding_router
 from routers.ledger import router as ledger_router

@@ -153,7 +153,7 @@ async def _cash_flow_status(tid: str) -> dict:
     Brief show the same numbers. Also fixes the unmatched-payments
     query: real field is `match_status ∈ {unmatched, partial}` (not
     the boolean `matched` the old code checked, which never existed)."""
-    from server import _overdue_receivables, _inv_remaining, _unmatched_payments  # deferred
+    from services.finance_signals import _inv_remaining, _overdue_receivables, _unmatched_payments
     overdue_rows = await _overdue_receivables(tid)
     overdue_receivables = round(sum(_inv_remaining(r) for r in overdue_rows), 2)
     # Unmatched INBOUND payments only (out payments live on a separate

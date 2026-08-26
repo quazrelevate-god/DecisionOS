@@ -55,6 +55,17 @@ def _norm_phone(p: str) -> str:
     return re.sub(r"\D", "", p or "")[-10:]
 
 
+def _mask_phone(phone: str) -> str:
+    """Last-4-digits phone mask for display (e.g. "•••• 0001").
+
+    Sprint 10 (U8-10.3): consolidated here next to _norm_phone. routers/team.py
+    used to import this from server, which never actually re-exported it -- a
+    latent ImportError on the member-phone display path.
+    """
+    d = re.sub(r"\D", "", phone or "")
+    return ("•••• " + d[-4:]) if len(d) >= 4 else "••••"
+
+
 async def resolve_wa_tenant(sender: str):
     """Route an inbound WhatsApp sender's phone to a tenant workspace.
 

@@ -9,7 +9,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 
 from core import db, logger, new_id, now_iso, log_activity, require_perm, require_role
-from server import CONTACT_TYPES, CONTACT_STATUS, LIFECYCLE_STAGES  # shared constants (S5)
+from models.contacts import CONTACT_STATUS, CONTACT_TYPES, LIFECYCLE_STAGES
 from services.enrich import enrich_contacts
 
 router = APIRouter(prefix="/api")

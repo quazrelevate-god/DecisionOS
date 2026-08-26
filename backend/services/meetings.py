@@ -27,7 +27,7 @@ async def process_meeting(meeting_id: str):
         members = await db.users.find({"tenant_id": tid}, {"_id": 0, "id": 1, "name": 1, "role": 1}).to_list(200)
         notes = await ai_meeting_notes(transcript or "", members, session_id=f"meeting-{meeting_id}")
         task_ids = []
-        from server import match_member_by_name  # cross-domain (voice pipeline); moves in U8-04.5
+        from services.voice import match_member_by_name
         for a in notes.get("action_items", []):
             if not a.get("title"):
                 continue

@@ -8,9 +8,11 @@
 #     integrations          (external-provider adapters)
 #     core / shared / models  (foundation)
 #
-# `server` is deliberately unconstrained: it stays a backward-compat re-export hub
-# that routers/services reach via *deferred* (in-function) imports -- retiring those
-# shims is the Sprint 10 "0 shims" exit goal.
+# `server` is unconstrained here. As of Sprint 10 (U8-10.3) application code holds
+# ZERO `from server import` shims -- every cross-domain helper is imported from its
+# real home (locked by tests/test_epic8_s7_modules.py::test_no_server_import_shims_
+# in_app_code). server.py keeps a re-export surface only for the grandfathered
+# test_iteration* suite, to be retired when those tests are restructured.
 #
 # KNOWN DEBT (target layering not yet met; catalogued, to be paid down in S9/S10):
 #   * 5 services -> routers edges (cross-domain helpers still living in a router):

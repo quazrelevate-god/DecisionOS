@@ -100,7 +100,7 @@ async def ai_generate_lexicon_with_status(
 ) -> Tuple[dict, str]:
     """Wrap ai_generate_lexicon so callers see whether AI actually
     contributed. Returns (result, status). Result is always usable."""
-    from server import ai_generate_lexicon  # deferred: no import-time cycle
+    from services.ai.generators import ai_generate_lexicon
     try:
         result = await ai_generate_lexicon(industry, company_size, roles, description)
     except Exception:
@@ -116,7 +116,7 @@ async def ai_generate_operating_model_with_status(
     industry: str, company_size: str, roles: list, description: str,
 ) -> Tuple[dict, str]:
     """Wrap ai_generate_operating_model with success/failure status."""
-    from server import ai_generate_operating_model
+    from services.ai.generators import ai_generate_operating_model
     try:
         result = await ai_generate_operating_model(industry, company_size, roles, description)
     except Exception:
@@ -130,11 +130,11 @@ async def ai_generate_finance_categories_with_status(
     industry: str, company_size: str, roles: list, description: str,
 ) -> Tuple[dict, str]:
     """Wrap ai_generate_finance_categories with success/failure status."""
-    from server import ai_generate_finance_categories
+    from services.ai.generators import ai_generate_finance_categories
     try:
         result = await ai_generate_finance_categories(industry, company_size, roles, description)
     except Exception:
-        from server import normalize_finance_categories
+        from services.ai.generators import normalize_finance_categories
         return normalize_finance_categories({}), STATUS_FAILED
     status = STATUS_GENERATED if _is_meaningful_finance(result) else STATUS_DEFAULTED
     return result, status

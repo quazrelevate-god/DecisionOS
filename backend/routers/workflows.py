@@ -83,7 +83,7 @@ async def create_workflow(inp: WorkflowCreateInput, user: dict = Depends(require
     # (auth-only) while only owner could delete them. Now creation
     # requires the same `workflows` permission a person needs to
     # interact with the workflow board at all.
-    from server import tenant_operating_model  # deferred: helper still in server (Sprint 4)
+    from services.ai.generators import tenant_operating_model
     om = await tenant_operating_model(user["tenant_id"])
     pipeline = next((p for p in om["pipelines"] if p["key"] == inp.type), None)
     if not pipeline:

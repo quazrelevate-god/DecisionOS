@@ -11,7 +11,7 @@ import json
 import re
 from pathlib import Path
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, File, Form, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, File, Form, UploadFile, Query
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
 
@@ -615,8 +615,12 @@ from models.finance import (
 
 
 @router.get("/expenses")
-async def list_expenses(user: dict = Depends(require_ledger)):
-    return await db.expenses.find({"tenant_id": user["tenant_id"]}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+async def list_expenses(user: dict = Depends(require_ledger),
+                        limit: int = Query(1000, ge=1, le=2000), offset: int = Query(0, ge=0)):
+    # S9 (U8-09.4): optional pagination. Defaults reproduce the prior response
+    # (newest up to 1000); now index-backed by (tenant_id, created_at).
+    return await db.expenses.find({"tenant_id": user["tenant_id"]}, {"_id": 0}) \
+        .sort("created_at", -1).skip(offset).limit(limit).to_list(limit)
 
 
 @router.post("/expenses")
@@ -717,8 +721,10 @@ async def suggest_category(inp: SuggestCategoryInput, user: dict = Depends(requi
 
 # --- Assets -----------------------------------------------------------------
 @router.get("/assets")
-async def list_assets(user: dict = Depends(require_ledger)):
-    return await db.assets.find({"tenant_id": user["tenant_id"]}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+async def list_assets(user: dict = Depends(require_ledger),
+                      limit: int = Query(1000, ge=1, le=2000), offset: int = Query(0, ge=0)):
+    return await db.assets.find({"tenant_id": user["tenant_id"]}, {"_id": 0}) \
+        .sort("created_at", -1).skip(offset).limit(limit).to_list(limit)
 
 
 @router.post("/assets")
@@ -768,8 +774,10 @@ async def delete_asset(aid: str, user: dict = Depends(require_ledger)):
 
 # --- Inventory --------------------------------------------------------------
 @router.get("/inventory")
-async def list_inventory(user: dict = Depends(require_ledger)):
-    return await db.inventory.find({"tenant_id": user["tenant_id"]}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+async def list_inventory(user: dict = Depends(require_ledger),
+                         limit: int = Query(1000, ge=1, le=2000), offset: int = Query(0, ge=0)):
+    return await db.inventory.find({"tenant_id": user["tenant_id"]}, {"_id": 0}) \
+        .sort("created_at", -1).skip(offset).limit(limit).to_list(limit)
 
 
 @router.post("/inventory")

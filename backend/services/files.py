@@ -61,8 +61,8 @@ async def _analyze_reference_file(tenant_id, task_id, rec):
         import os as _os
         ext = rec.get("original_filename", "f.bin").rsplit(".", 1)[-1]
         tmp = _os.path.join(tempfile.gettempdir(), f"ref_{rec['id']}.{ext}")
-        with open(tmp, "wb") as f:
-            f.write(data)
+        from services.uploads import awrite_bytes
+        await awrite_bytes(tmp, data)
         raw = await ai_read_image_general(tmp, ctype, session_id=f"ref-{task_id}")
         try:
             _os.remove(tmp)
@@ -112,8 +112,8 @@ async def _read_reference_text(rec: dict, tenant_id: str = "", max_chars: int = 
             import os as _os
             ext = fname.rsplit(".", 1)[-1] if "." in fname else "bin"
             tmp = _os.path.join(tempfile.gettempdir(), f"capref_{rec['id']}.{ext}")
-            with open(tmp, "wb") as f:
-                f.write(data)
+            from services.uploads import awrite_bytes
+            await awrite_bytes(tmp, data)
             try:
                 text = await ai_read_image_general(tmp, ctype, session_id=f"capref-{tenant_id}")
             finally:

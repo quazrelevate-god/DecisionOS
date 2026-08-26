@@ -66,9 +66,10 @@ async def transcribe_only(file: UploadFile = File(...), language: str = Form("au
     ext = (file.filename or "audio.webm").split(".")[-1]
     data = await file.read()
     fd, tmp_path = tempfile.mkstemp(suffix=f".{ext}", prefix="dictation-")
+    os.close(fd)  # write off-thread via awrite_bytes (S9 -- U8-09.3)
     try:
-        with os.fdopen(fd, "wb") as f:
-            f.write(data)
+        from services.uploads import awrite_bytes
+        await awrite_bytes(tmp_path, data)
         try:
             text = await transcribe_audio(tmp_path, language)
         except Exception as e:

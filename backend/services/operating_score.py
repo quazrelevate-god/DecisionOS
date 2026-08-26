@@ -17,6 +17,27 @@ from prompts import render
 from services.ai.pii import redact_pii
 
 
+# S9 (U8-09.5): shared short-TTL cache for the company operating view. The view
+# runs several full-tenant collection scans (tasks/decisions/invoices/payments)
+# on every dashboard load; a derived score tolerates a few seconds of staleness.
+# Cache lives in Mongo (not process memory) so it stays consistent across
+# replicas and survives restarts -- the same pattern as the Desk narrative cache.
+# TTL-only invalidation (bump-on-write is a future option if fresher is needed).
+_OPS_CACHE_TTL_SECONDS = 90
+
+
+def _cache_fresh(computed_at: Optional[str], now: str, ttl: int) -> bool:
+    """True if a cache entry stamped ``computed_at`` is younger than ``ttl`` at ``now``."""
+    if not computed_at:
+        return False
+    try:
+        c = datetime.fromisoformat(computed_at)
+        n = datetime.fromisoformat(now)
+        return (n - c).total_seconds() < ttl
+    except (ValueError, TypeError):
+        return False
+
+
 def _clamp100(v):
     return max(0, min(100, int(round(v))))
 
@@ -66,6 +87,17 @@ async def _company_operating_view(tid: str, viewer: dict, now: str) -> dict:
     can dispatch by role (Epic 7 Sprint 1 Phase A -- role split)."""
     can_finance = viewer.get("role") == "owner" or "finance" in user_perms(viewer)
 
+    # S9 (U8-09.5): the view is identical for every viewer sharing the same
+    # can_finance flag, so cache on (tenant, can_finance). Best-effort: any cache
+    # error falls straight through to a live recompute.
+    cache_key = f"{tid}:{int(can_finance)}"
+    try:
+        cached = await db.operating_score_cache.find_one({"_id": cache_key}, {"_id": 0})
+        if cached and _cache_fresh(cached.get("computed_at"), now, _OPS_CACHE_TTL_SECONDS):
+            return cached["payload"]
+    except Exception as e:
+        logger.warning(f"operating_score cache read failed: {e}")
+
     tasks = await db.tasks.find({"tenant_id": tid}, {"_id": 0}).to_list(2000)
     decisions = await db.decisions.find({"tenant_id": tid}, {"_id": 0, "status": 1}).to_list(2000)
     complaints = await db.complaints.find({"tenant_id": tid}, {"_id": 0, "status": 1}).to_list(500)
@@ -101,7 +133,7 @@ async def _company_operating_view(tid: str, viewer: dict, now: str) -> dict:
     members = await db.users.find({"tenant_id": tid}, {"_id": 0, "id": 1, "name": 1, "role": 1}).to_list(200)
     employees = _score_employees(tasks, members, now)
 
-    return {
+    payload = {
         "company": {"overall": overall if enough_data else None, "categories": categories, "enough_data": enough_data},
         "stats": {"done": done, "open": len(open_tasks), "overdue": overdue,
                   "total_decisions": total_dec, "approved": approved, "open_complaints": open_complaints,
@@ -109,6 +141,15 @@ async def _company_operating_view(tid: str, viewer: dict, now: str) -> dict:
         "employees": employees,
         "can_finance": can_finance,
     }
+    try:
+        await db.operating_score_cache.update_one(
+            {"_id": cache_key},
+            {"$set": {"tenant_id": tid, "can_finance": can_finance, "payload": payload, "computed_at": now}},
+            upsert=True,
+        )
+    except Exception as e:
+        logger.warning(f"operating_score cache write failed: {e}")
+    return payload
 
 
 async def _self_operating_view(tid: str, viewer: dict, now: str) -> dict:

@@ -890,6 +890,16 @@ async def _bootstrap():
         await db.payments.create_index([("tenant_id", 1), ("invoice_id", 1)])
         await db.expenses.create_index([("tenant_id", 1), ("date", -1)])
         await db.complaints.create_index([("tenant_id", 1), ("status", 1), ("created_at", -1)])
+        # S9 (U8-09.2): index gap-fill. These list endpoints filter by tenant_id
+        # and sort by created_at, but had no supporting index (workflows had only
+        # a bare tenant_id; expenses was indexed on `date` not `created_at`;
+        # assets/inventory had none) -- so each list was a tenant scan + in-memory
+        # sort. Adding (tenant_id, created_at) makes the sort index-backed.
+        await db.workflows.create_index([("tenant_id", 1), ("created_at", -1)])
+        await db.workflows.create_index([("tenant_id", 1), ("type", 1), ("stage", 1)])
+        await db.expenses.create_index([("tenant_id", 1), ("created_at", -1)])
+        await db.assets.create_index([("tenant_id", 1), ("created_at", -1)])
+        await db.inventory.create_index([("tenant_id", 1), ("created_at", -1)])
         await db.calendar_events.create_index([("tenant_id", 1), ("date", 1)])
         await db.meetings.create_index([("tenant_id", 1), ("created_at", -1)])
         await db.platform_audit.create_index([("admin_id", 1), ("created_at", -1)])

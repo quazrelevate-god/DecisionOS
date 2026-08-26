@@ -320,6 +320,17 @@ async def admin_alerts(admin: dict = Depends(get_platform_admin)):
     return {"active": active, "recent": recent}
 
 
+@router.get("/ai-quality")
+async def admin_ai_quality(admin: dict = Depends(get_platform_admin),
+                           since_hours: int = 168, tenant_id: Optional[str] = None):
+    """E3-10.5: the AI layer's health over db.ai_calls -- overall ok-rate / parse-fail /
+    degraded / latency / tokens, a per-task rollup, the engine mix, and recent failures.
+    Cross-tenant by default; pass tenant_id to scope to one workspace."""
+    from core import ai_quality_report
+    since_hours = max(1, min(int(since_hours or 168), 24 * 90))
+    return await ai_quality_report(tenant_id=tenant_id, since_hours=since_hours)
+
+
 # --- Users ------------------------------------------------------------------
 @router.get("/users")
 async def admin_users(admin: dict = Depends(get_platform_admin), tenant_id: Optional[str] = None):

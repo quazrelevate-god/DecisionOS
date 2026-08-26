@@ -110,6 +110,73 @@ async def ai_call_stats(tenant_id=None, since_hours=24):
         return []
 
 
+async def ai_quality_report(tenant_id=None, since_hours=168):
+    """The AI layer's health at a glance (E3-10.5) -- a report over db.ai_calls:
+    overall totals + per-task rollup (ok-rate, parse-ok-rate, avg latency, tokens,
+    models, degraded count) + per-engine mix + recent failures (errors already
+    PII-redacted at write time). Never raises. Feeds the AI quality dashboard."""
+    try:
+        from datetime import datetime, timezone, timedelta
+        since = (datetime.now(timezone.utc) - timedelta(hours=since_hours)).isoformat()
+        match = {"created_at": {"$gte": since}}
+        if tenant_id:
+            match["tenant_id"] = tenant_id
+
+        cur = await db.ai_calls.aggregate([
+            {"$match": match},
+            {"$group": {"_id": "$task",
+                        "calls": {"$sum": 1},
+                        "ok": {"$sum": {"$cond": ["$ok", 1, 0]}},
+                        "parse_total": {"$sum": {"$cond": [{"$ne": ["$parse_ok", None]}, 1, 0]}},
+                        "parse_ok": {"$sum": {"$cond": [{"$eq": ["$parse_ok", True]}, 1, 0]}},
+                        "degraded": {"$sum": {"$cond": ["$degraded", 1, 0]}},
+                        "avg_latency": {"$avg": "$latency_ms"},
+                        "tokens": {"$sum": "$tokens_total"},
+                        "models": {"$addToSet": "$model"}}},
+            {"$sort": {"calls": -1}},
+        ])
+        rows = await cur.to_list(200)
+        by_task = [{
+            "task": r["_id"] or "unknown", "calls": r["calls"], "ok": r["ok"],
+            "ok_rate": round(r["ok"] / r["calls"], 3) if r["calls"] else 0,
+            "parse_total": r["parse_total"], "parse_ok": r["parse_ok"],
+            "parse_ok_rate": round(r["parse_ok"] / r["parse_total"], 3) if r["parse_total"] else None,
+            "degraded": r["degraded"], "avg_latency_ms": round(r.get("avg_latency") or 0),
+            "tokens": r.get("tokens") or 0, "models": [m for m in (r.get("models") or []) if m],
+        } for r in rows]
+
+        ecur = await db.ai_calls.aggregate([
+            {"$match": match},
+            {"$group": {"_id": "$engine", "calls": {"$sum": 1}, "tokens": {"$sum": "$tokens_total"}}},
+        ])
+        by_engine = [{"engine": e["_id"] or "unknown", "calls": e["calls"], "tokens": e.get("tokens") or 0}
+                     for e in await ecur.to_list(50)]
+
+        tc = sum(t["calls"] for t in by_task)
+        pt = sum(t["parse_total"] for t in by_task)
+        pok = sum(t["parse_ok"] for t in by_task)
+        wl = sum(t["avg_latency_ms"] * t["calls"] for t in by_task)
+        overall = {
+            "total_calls": tc,
+            "ok_rate": round(sum(t["ok"] for t in by_task) / tc, 3) if tc else 0,
+            "parse_ok_rate": round(pok / pt, 3) if pt else None,
+            "degraded": sum(t["degraded"] for t in by_task),
+            "total_tokens": sum(t["tokens"] for t in by_task),
+            "avg_latency_ms": round(wl / tc) if tc else 0,
+            "distinct_tasks": len(by_task), "since_hours": since_hours,
+        }
+
+        fcur = db.ai_calls.find(
+            {**match, "$or": [{"ok": False}, {"parse_ok": False}]},
+            {"_id": 0, "task": 1, "model": 1, "engine": 1, "error": 1,
+             "created_at": 1, "ok": 1, "parse_ok": 1}).sort("created_at", -1)
+        failures = await fcur.to_list(20)
+        return {"overall": overall, "by_task": by_task, "by_engine": by_engine, "recent_failures": failures}
+    except Exception as e:
+        logger.debug(f"ai_quality_report failed: {e}")
+        return {"overall": {}, "by_task": [], "by_engine": [], "recent_failures": []}
+
+
 async def _record_usage(tenant_id, session_id, provider, system, message, resp):
     feature = (session_id or "misc").split("-")[0]
     in_text = f"{system or ''} {getattr(message, 'text', '') or ''}"

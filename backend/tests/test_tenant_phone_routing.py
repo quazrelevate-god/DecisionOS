@@ -199,15 +199,15 @@ def db():
 # =============================================================================
 class TestFindTenantChoicesForPhone:
     def test_returns_empty_when_phone_too_short(self, db):
-        from services.phone import find_tenant_choices_for_phone
+        from services.auth.phone import find_tenant_choices_for_phone
         assert _run(find_tenant_choices_for_phone(db, "12345")) == []
 
     def test_returns_empty_when_no_matches(self, db):
-        from services.phone import find_tenant_choices_for_phone
+        from services.auth.phone import find_tenant_choices_for_phone
         assert _run(find_tenant_choices_for_phone(db, "9820010001")) == []
 
     def test_single_tenant_returns_one_choice(self, db):
-        from services.phone import find_tenant_choices_for_phone
+        from services.auth.phone import find_tenant_choices_for_phone
         _run(db.users.insert_one({
             "id": "u1", "tenant_id": "t1", "phone_norm": "9820010001",
             "name": "Anita", "role": "owner", "created_at": "2026-01-01T00:00:00+00:00",
@@ -223,7 +223,7 @@ class TestFindTenantChoicesForPhone:
 
     def test_multi_tenant_returns_distinct_tenants_newest_first(self, db):
         """Same phone in three tenants -> three choices, newest first."""
-        from services.phone import find_tenant_choices_for_phone
+        from services.auth.phone import find_tenant_choices_for_phone
         _run(db.users.insert_many([
             {"id": "u1", "tenant_id": "t_old", "phone_norm": "9820010001",
              "name": "Ravi (old)", "role": "employee",
@@ -246,7 +246,7 @@ class TestFindTenantChoicesForPhone:
     def test_wa_phone_obsolete_users_are_excluded(self, db):
         """A user marked obsolete by within-tenant dedup must not be
         offered as a login candidate."""
-        from services.phone import find_tenant_choices_for_phone
+        from services.auth.phone import find_tenant_choices_for_phone
         _run(db.users.insert_many([
             {"id": "u_obsolete", "tenant_id": "t1", "phone_norm": "9820010001",
              "name": "Old", "wa_phone_obsolete": True,
@@ -263,7 +263,7 @@ class TestFindTenantChoicesForPhone:
     def test_same_tenant_dupe_dedupes_to_newest_row(self, db):
         """If a tenant has two rows for the phone (rare, but seen), the
         newer one wins — matches how the WhatsApp path resolves it."""
-        from services.phone import find_tenant_choices_for_phone
+        from services.auth.phone import find_tenant_choices_for_phone
         _run(db.users.insert_many([
             {"id": "u_old", "tenant_id": "t1", "phone_norm": "9820010001",
              "name": "Old", "created_at": "2026-01-01T00:00:00+00:00"},
@@ -276,7 +276,7 @@ class TestFindTenantChoicesForPhone:
         assert out[0]["user_id"] == "u_new"
 
     def test_non_string_input_returns_empty(self, db):
-        from services.phone import find_tenant_choices_for_phone
+        from services.auth.phone import find_tenant_choices_for_phone
         assert _run(find_tenant_choices_for_phone(db, None)) == []
         assert _run(find_tenant_choices_for_phone(db, 12345)) == []
 

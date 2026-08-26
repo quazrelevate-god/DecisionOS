@@ -41,11 +41,6 @@ router = APIRouter(prefix="/api")
 # ---------------------------------------------------------------------------
 # RBAC-26 — acting_as (approval delegation)
 # ---------------------------------------------------------------------------
-class ActingAsInput(BaseModel):
-    delegate_user_id: str
-    from_date: str = Field(..., description="ISO date, YYYY-MM-DD or ISO datetime")
-    to_date: str
-    reason: Optional[str] = ""
 
 
 def _is_active_now(from_iso: str, to_iso: str) -> bool:
@@ -77,6 +72,13 @@ async def resolve_delegate(tenant_id: str, user_id: str) -> Optional[str]:
         {"_id": 0, "id": 1},
     )
     return ac["delegate_user_id"] if d else None
+
+
+# Request models consolidated into models/ (Epic 8 Sprint 5).
+from models.access import (
+    ActingAsInput,
+    TempGrantInput,
+)
 
 
 @router.get("/me/acting-as")
@@ -132,10 +134,6 @@ async def clear_my_acting_as(user: dict = Depends(get_current_user)):
 # ---------------------------------------------------------------------------
 # RBAC-27 — temp_grants (time-bounded elevated permissions)
 # ---------------------------------------------------------------------------
-class TempGrantInput(BaseModel):
-    perm: str
-    expires_at: str = Field(..., description="ISO datetime, e.g. 2026-09-15T00:00:00+00:00")
-    reason: Optional[str] = ""
 
 
 @router.post("/users/{uid}/temp-grant")

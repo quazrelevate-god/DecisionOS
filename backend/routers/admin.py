@@ -37,21 +37,18 @@ async def log_admin_action(admin: dict, action: str, message: str,
     })
 
 
-class AdminLoginInput(BaseModel):
-    email: str
-    password: str
 
 
-class AiKeysInput(BaseModel):
-    anthropic: Optional[str] = None
-    openai: Optional[str] = None
-    gemini: Optional[str] = None
-    sarvam: Optional[str] = None
-    wa_access_token: Optional[str] = None
-    wa_phone_number_id: Optional[str] = None
 
 
 # --- Auth -------------------------------------------------------------------
+# Request models consolidated into models/ (Epic 8 Sprint 5).
+from models.admin import (
+    AdminLoginInput,
+    AiKeysInput,
+)
+
+
 @router.post("/login")
 async def admin_login(payload: AdminLoginInput, request: Request, response: Response):
     email = payload.email.strip().lower()
@@ -323,6 +320,17 @@ async def admin_alerts(admin: dict = Depends(get_platform_admin)):
     return {"active": active, "recent": recent}
 
 
+@router.get("/ai-quality")
+async def admin_ai_quality(admin: dict = Depends(get_platform_admin),
+                           since_hours: int = 168, tenant_id: Optional[str] = None):
+    """E3-10.5: the AI layer's health over db.ai_calls -- overall ok-rate / parse-fail /
+    degraded / latency / tokens, a per-task rollup, the engine mix, and recent failures.
+    Cross-tenant by default; pass tenant_id to scope to one workspace."""
+    from core import ai_quality_report
+    since_hours = max(1, min(int(since_hours or 168), 24 * 90))
+    return await ai_quality_report(tenant_id=tenant_id, since_hours=since_hours)
+
+
 # --- Users ------------------------------------------------------------------
 @router.get("/users")
 async def admin_users(admin: dict = Depends(get_platform_admin), tenant_id: Optional[str] = None):
@@ -433,7 +441,7 @@ async def _probe_anthropic():
         return {"status": "fallback", "detail": "No key set — using Emergent universal key"}
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage
-        from services.llm_limits import guarded_llm  # FIX-002-B: share the semaphore
+        from services.ai.llm_limits import guarded_llm  # FIX-002-B: share the semaphore
         chat = LlmChat(api_key=key, session_id=f"admin-probe-{new_id()}",
                        system_message="Reply with OK.").with_model(*LLM_MODEL)
         # Keep the tighter 25s probe timeout — a bad key should surface

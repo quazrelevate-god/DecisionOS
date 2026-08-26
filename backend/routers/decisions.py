@@ -25,18 +25,13 @@ from pydantic import BaseModel, Field
 
 from core import db, get_current_user, require_perm, new_id, now_iso
 from models.tasks import TaskCreateInput
-from services import brain_context
+from services.ai import brain_context
 from services.tenancy import ensure_owned, tenant_filter  # FIX-001-C
 
 
 router = APIRouter(prefix="/api")
 
 
-class DecisionCommentInput(BaseModel):
-    # E2-60: cap at 4000 chars (~1 A4 page of prose). Was unbounded --
-    # a paste of a PDF-as-text bloated decisions.timeline[] AND every
-    # participant's notification body.
-    text: str = Field(..., min_length=1, max_length=4000)
 
 
 async def _decision_participants(tenant_id: str, d: dict) -> set:
@@ -49,6 +44,12 @@ async def _decision_participants(tenant_id: str, d: dict) -> set:
         if t.get("assignee_id"):
             ids.add(t["assignee_id"])
     return ids
+
+
+# Request models consolidated into models/ (Epic 8 Sprint 5).
+from models.decisions import (
+    DecisionCommentInput,
+)
 
 
 @router.get("/decisions")

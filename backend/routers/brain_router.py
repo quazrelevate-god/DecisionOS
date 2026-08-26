@@ -28,14 +28,16 @@ from pydantic import BaseModel, Field
 from emergentintegrations.llm.chat import UserMessage
 
 from services import obj_store
-from services import brain_context
-from services import brain_rbac
+from services.ai import brain_context
+from services.ai import brain_rbac
 from core import (
     db, claude_chat, LLM_MODEL, _extract_json, new_id, now_iso, logger,
     get_current_user, user_perms,
 )
 from routers.brain_docs import _visibility_filter as _docs_visibility_filter
 from routers.brain_docs import _keywords as _docs_keywords
+from core import model_for
+from prompts import render
 
 
 router = APIRouter(prefix="/api/brain/agent")
@@ -51,48 +53,13 @@ _ALL_TOOLS = ("metadata_search", "mongo_query", "knowledge_lookup", "file_open")
 # ---------------------------------------------------------------------------
 # Planner — Claude picks which tools to run for this question.
 # ---------------------------------------------------------------------------
-_PLANNER_SYSTEM = (
-    "You are Dex's Router — you classify a founder/employee question and pick "
-    "which of four specialist tools should run. Return ONLY valid JSON: "
-    "{\"intent\": one of "
-    "[finance, sales, hr, procurement, operations, org_analytics, "
-    "policy, personal, general], "
-    "\"tools\": [{\"name\": one of "
-    "[metadata_search, mongo_query, knowledge_lookup, file_open], "
-    "\"query\": string (what to search — 1-6 words, keep the founder's own nouns), "
-    "\"doc_id\": string (ONLY for file_open, otherwise omit)}], "
-    "\"reasoning\": string (under 20 words, why this intent and these tools)}\n\n"
-
-    "INTENT PICKING GUIDE (be strict — it drives access control):\n"
-    "  • finance      — money, invoices, GST, tax, revenue, cash flow, payments, banking, expenses.\n"
-    "  • sales        — pipeline, deals, leads, discounts, customer revenue targets.\n"
-    "  • hr           — hiring, resignations, salary, appraisal, attendance, leaves of others.\n"
-    "  • procurement  — vendors, purchase orders, RFQs, supplier terms.\n"
-    "  • operations   — production, inventory, delivery, quality, workflows.\n"
-    "  • org_analytics — cross-department KPIs, company-wide health.\n"
-    "  • policy       — reading a company policy/SOP/filing/contract document.\n"
-    "  • personal     — the ASKER'S OWN tasks, activity, leaves.\n"
-    "  • general      — greetings, help, non-sensitive small talk.\n\n"
-
-    "TOOL PICKING GUIDE:\n"
-    "  • metadata_search — documents (policies, filings, contracts, SOPs).\n"
-    "  • mongo_query    — live analytics over operational data (tasks, invoices, activity).\n"
-    "  • knowledge_lookup — past decisions/approvals/resolutions.\n"
-    "  • file_open      — ONLY when a specific document was already named.\n\n"
-
-    "COUNT + AGGREGATION RULE: For any question containing 'how many', 'count', "
-    "'total', 'overdue', 'this week', 'this month', 'top N', 'average', "
-    "'unpaid', 'pending' — ALWAYS include mongo_query as one of the picks. "
-    "That tool is the ONLY one that runs live aggregations.\n\n"
-
-    "Pick 1-3 tools; prefer the minimum. Never guess a doc_id."
-)
+_PLANNER_SYSTEM = render("brain.agent_planner")  # prompt in prompts/brain.py
 
 
 async def _plan(question: str) -> dict:
     prompt = f"Question: {question!r}\nClassify intent and pick tool(s)."
     try:
-        chat = claude_chat(session_id=f"brain-agent-plan-{new_id()}", system_message=_PLANNER_SYSTEM).with_model(*LLM_MODEL)
+        chat = claude_chat(task="brain.agent_planner", session_id=f"brain-agent-plan-{new_id()}", system_message=_PLANNER_SYSTEM).with_model(*model_for("brain.agent_planner"))
         data = _extract_json(await chat.send_message(UserMessage(text=prompt))) or {}
     except Exception as e:
         logger.warning(f"brain agent planner failed: {e}")
@@ -261,24 +228,7 @@ async def _run_tools(picks: List[dict], user: dict) -> List[dict]:
 # ---------------------------------------------------------------------------
 # Synthesizer — Claude writes the final answer from the tools' outputs.
 # ---------------------------------------------------------------------------
-_SYNTH_SYSTEM = (
-    "You are Dex — the founder's business co-pilot. You've just gathered facts "
-    "from up to three specialist tools (documents, live database analytics, "
-    "past decisions). Write a CRISP answer to the founder's question using ONLY "
-    "these facts. If the facts don't answer it, say so plainly — never guess.\n\n"
-
-    "OUTPUT — return ONLY valid JSON: "
-    "{\"answer\": string (2-5 sentences, warm and specific, no bullet lists in "
-    "the answer body), "
-    "\"citations\": [{\"kind\": one of "
-    "[document, mongo, context, file], "
-    "\"label\": short human name, \"ref\": string id or short reference}] (max 5), "
-    "\"suggested_tasks\": [{\"title\": string (under 12 words, action verb), "
-    "\"why\": string (under 12 words, ties to the found evidence)}] "
-    "(0-3 tasks — only if the past decisions or numbers strongly suggest a "
-    "concrete next action; empty list is fine), "
-    "\"follow_ups\": [string] (0-3 short questions the founder might ask next)}"
-)
+_SYNTH_SYSTEM = render("brain.agent_synth")  # prompt in prompts/brain.py
 
 
 def _sanitize_tool_output(t: dict) -> dict:
@@ -331,7 +281,7 @@ async def _synthesize(question: str, tool_outputs: List[dict], lang: Optional[st
         "Write the final answer JSON now."
     )
     try:
-        chat = claude_chat(session_id=f"brain-agent-synth-{new_id()}", system_message=_SYNTH_SYSTEM + hint).with_model(*LLM_MODEL)
+        chat = claude_chat(task="brain.agent_synth", session_id=f"brain-agent-synth-{new_id()}", system_message=_SYNTH_SYSTEM + hint).with_model(*model_for("brain.agent_synth"))
         data = _extract_json(await chat.send_message(UserMessage(text=prompt))) or {}
     except Exception as e:
         logger.warning(f"brain agent synth failed: {e}")
@@ -347,20 +297,15 @@ async def _synthesize(question: str, tool_outputs: List[dict], lang: Optional[st
 # ---------------------------------------------------------------------------
 # Public endpoint
 # ---------------------------------------------------------------------------
-class AgentRequest(BaseModel):
-    question: str = Field(max_length=800)
 
 
-class SuggestedTaskInput(BaseModel):
-    """Shape returned by the synthesizer's `suggested_tasks` list — plus optional
-    source refs so we can close the loop back into `brain_context`."""
-    title: str = Field(max_length=200)
-    why: str = Field(default="", max_length=500)
-    priority: Optional[str] = Field(default="medium", max_length=20)
-    source_kind: Optional[str] = Field(default=None, max_length=40)   # e.g. "document" / "context"
-    source_ref: Optional[str] = Field(default=None, max_length=64)    # doc_id or context_id
-    source_label: Optional[str] = Field(default=None, max_length=200)
-    question: Optional[str] = Field(default=None, max_length=400)     # what founder asked
+
+
+# Request models consolidated into models/ (Epic 8 Sprint 5).
+from models.brain import (
+    AgentRequest,
+    SuggestedTaskInput,
+)
 
 
 @router.post("/create-task")
@@ -412,6 +357,21 @@ async def create_task_from_suggestion(inp: SuggestedTaskInput, user: dict = Depe
         department=user.get("role") or "", visibility="dept",
     )
     return {"ok": True, "task": task_doc}
+
+
+@router.post("/run")
+async def run_bounded_agent(inp: AgentRequest, user: dict = Depends(get_current_user)):
+    """Sprint 4: the bounded, governed tool-calling agent (observe -> act -> re-plan).
+    Answers open-ended questions by calling RBAC-gated tools; propose_* actions land in
+    the pending_approval flow. Carries conversation_id for per-conversation memory."""
+    q = (inp.question or "").strip()
+    if not q:
+        raise HTTPException(status_code=400, detail="Ask me something about your company")
+    from services.ai.agent import run_agent, should_use_agent
+    result = await run_agent(q, user, conversation_id=inp.conversation_id)
+    # E3-11.5: surface the routing hint so the UX can send simple/numeric questions to /ask instead.
+    result["recommended_surface"] = "agent" if should_use_agent(q) else "ask"
+    return result
 
 
 @router.post("")

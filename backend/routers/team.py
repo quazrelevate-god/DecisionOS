@@ -122,6 +122,12 @@ async def _decide_leave(leave_id, user, new_status, note, ntype, employee_msg):
 # ---------------------------------------------------------------------------
 # Users
 # ---------------------------------------------------------------------------
+# Request models consolidated into models/ (Epic 8 Sprint 5).
+from models.team import (
+    DeprovisionInput,
+)
+
+
 @router.get("/users")
 async def list_users(user: dict = Depends(get_current_user)):
     """List every user in the current tenant.
@@ -158,8 +164,6 @@ async def list_users(user: dict = Depends(get_current_user)):
     return out
 
 
-class DeprovisionInput(BaseModel):
-    reassign_to_user_id: Optional[str] = None
 
 
 @router.post("/users/{user_id}/deprovision")
@@ -280,7 +284,7 @@ async def create_user(inp: UserCreateInput, user: dict = Depends(require_perm("t
     uid = new_id()
     invite_token = None
     # FIX-002-A: also write phone_norm for indexed OTP + WhatsApp lookup.
-    from services.phone import norm_phone as _np
+    from services.auth.phone import norm_phone as _np
     doc = {
         "id": uid, "tenant_id": user["tenant_id"], "name": inp.name, "email": email,
         "phone": phone, "phone_norm": _np(phone), "passwordless": passwordless,
@@ -381,7 +385,7 @@ async def update_user(user_id: str, inp: UserUpdateInput, user: dict = Depends(r
     if inp.phone is not None:
         # FIX-002-A: keep phone_norm in sync so OTP + WhatsApp still finds
         # the user after an admin updates their phone.
-        from services.phone import norm_phone as _np
+        from services.auth.phone import norm_phone as _np
         _p = inp.phone.strip()
         updates["phone"] = _p
         updates["phone_norm"] = _np(_p)

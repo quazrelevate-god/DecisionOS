@@ -248,6 +248,70 @@ def _narrative(*, delayed: int, completed_yday: int, pending_decisions: int,
     return prose
 
 
+# --- Sprint 5 (E3-06): LLM-generated Desk narrative with a per-tenant 15-min cache ---
+import json as _json
+import hashlib as _hashlib
+import logging as _logging
+
+_desk_log = _logging.getLogger("decisionos")
+DESK_NARRATIVE_TTL = 900  # seconds (15 min): identical counters within the window reuse the narrative
+
+
+async def ai_desk_narrative(*, delayed, completed_yday, pending_decisions, cash, is_owner, tenant_id) -> str:
+    """The Desk briefing, LLM-generated from the same counters the template used, cached per tenant
+    by a hash of those counters (so it only regenerates when the numbers actually change). Falls back
+    to the deterministic _narrative on any cache/LLM error -- the Desk must never break."""
+    counters = {"delayed": int(delayed or 0), "completed_yesterday": int(completed_yday or 0),
+                "pending_decisions": int(pending_decisions or 0) if is_owner else 0,
+                "cash_clear": bool(cash.get("clear")),
+                "overdue_receivables": int(cash.get("overdue_receivables_amount") or 0),
+                "payments_to_match": int(cash.get("unmatched_payments") or 0),
+                "is_owner": bool(is_owner)}
+    fallback = _narrative(delayed=delayed, completed_yday=completed_yday,
+                          pending_decisions=pending_decisions, cash=cash, is_owner=is_owner)
+    key = _hashlib.md5(_json.dumps(counters, sort_keys=True).encode()).hexdigest()
+    now = datetime.now(timezone.utc)
+    try:
+        cached = await db.desk_narrative_cache.find_one(
+            {"tenant_id": tenant_id, "key": key, "expires_at": {"$gt": now.isoformat()}},
+            {"_id": 0, "narrative": 1})
+        if cached and cached.get("narrative"):
+            return cached["narrative"]
+    except Exception as e:
+        _desk_log.debug(f"desk narrative cache read failed: {e}")
+
+    text = fallback
+    try:
+        from core import claude_chat, model_for
+        from prompts import render
+        from emergentintegrations.llm.chat import UserMessage
+        system = render("desk.narrative")
+        chat = claude_chat(task="desk.narrative", session_id=f"desk-{tenant_id}",
+                           system_message=system).with_model(*model_for("desk.narrative"))
+        resp = await chat.send_message(UserMessage(text=_json.dumps(counters)))
+        cleaned = (resp or "").strip().strip('"')[:600]
+        if cleaned:
+            text = cleaned
+    except Exception as e:
+        _desk_log.warning(f"ai_desk_narrative LLM failed, using template: {e}")
+
+    try:
+        await db.desk_narrative_cache.update_one(
+            {"tenant_id": tenant_id, "key": key},
+            {"$set": {"narrative": text, "created_at": now.isoformat(),
+                      "expires_at": (now + timedelta(seconds=DESK_NARRATIVE_TTL)).isoformat()}},
+            upsert=True)
+    except Exception as e:
+        _desk_log.debug(f"desk narrative cache write failed: {e}")
+    return text
+
+
+# Request models consolidated into models/ (Epic 8 Sprint 5).
+from models.desk import (
+    NudgeInput,
+)
+
+
 @router.get("/desk/summary")
 async def desk_summary(user: dict = Depends(get_current_user)):
     tid = user["tenant_id"]
@@ -260,10 +324,10 @@ async def desk_summary(user: dict = Depends(get_current_user)):
     weekly_completion = await _weekly_completion_rate(tid, user)
     complaints = await _complaints_trend(tid)
 
-    narrative = _narrative(
+    narrative = await ai_desk_narrative(
         delayed=delayed, completed_yday=completed_yday,
         pending_decisions=pending_decisions, cash=cash,
-        is_owner=is_owner,
+        is_owner=is_owner, tenant_id=tid,
     )
 
     # Shortcuts: which top-of-Desk quick-links to render.
@@ -607,8 +671,6 @@ async def desk_chip(chip: str = "needs_decision", user: dict = Depends(get_curre
     return {"chip": chip, "counters": counters, "cards": cards}
 
 
-class NudgeInput(BaseModel):
-    channel: Optional[str] = "auto"  # future: 'whatsapp' | 'email' | 'auto'
 
 
 @router.post("/desk/nudge/{item_id}")

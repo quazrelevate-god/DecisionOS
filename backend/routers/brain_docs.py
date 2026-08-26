@@ -18,6 +18,7 @@ Permission model:
                           OR whose role appears in doc.roles_allowed.
   - private            → only uploader + owner + team_manage + roles_allowed.
 """
+import asyncio
 import re
 from typing import List, Optional
 
@@ -31,6 +32,20 @@ from core import db, get_current_user, new_id, now_iso, logger, user_perms
 
 
 router = APIRouter(prefix="/api/brain/documents")
+
+# E3-09.3: fire-and-forget RAG indexing (extract+chunk+embed+upsert to Qdrant) so an
+# upload/edit returns immediately while OCR+embedding runs in the background. The task
+# set holds a reference so the loop doesn't GC the task mid-flight.
+_bg_index_tasks: set = set()
+
+
+def _spawn_index(coro) -> None:
+    try:
+        t = asyncio.create_task(coro)
+        _bg_index_tasks.add(t)
+        t.add_done_callback(_bg_index_tasks.discard)
+    except RuntimeError:  # no running loop (shouldn't happen in a request) -> skip
+        pass
 
 # Same allowlist / cap as the main /files endpoint so behaviour is consistent.
 ALLOWED_EXT = {
@@ -145,6 +160,12 @@ def _public(doc: dict) -> dict:
 # ---------------------------------------------------------------------------
 # Upload
 # ---------------------------------------------------------------------------
+# Request models consolidated into models/ (Epic 8 Sprint 5).
+from models.brain import (
+    PatchInput,
+)
+
+
 @router.post("")
 async def upload_document(
     file: UploadFile = File(...),
@@ -211,6 +232,9 @@ async def upload_document(
     }
     await db.brain_documents.insert_one(dict(doc))
     doc.pop("_id", None)
+    # E3-09.3: index the body text for semantic retrieval (background; keyword search works meanwhile).
+    from services.ai.brain_embed import index_document
+    _spawn_index(index_document(dict(doc)))
     return _public(doc)
 
 
@@ -269,14 +293,6 @@ async def list_documents(
 # ---------------------------------------------------------------------------
 # Read / update / delete / download
 # ---------------------------------------------------------------------------
-class PatchInput(BaseModel):
-    title: Optional[str] = Field(default=None, max_length=200)
-    kind: Optional[str] = Field(default=None, max_length=40)
-    tags: Optional[str] = Field(default=None, max_length=400)
-    department: Optional[str] = Field(default=None, max_length=60)
-    visibility: Optional[str] = Field(default=None, max_length=40)
-    roles_allowed: Optional[str] = Field(default=None, max_length=400)
-    summary: Optional[str] = Field(default=None, max_length=800)
 
 
 async def _fetch(doc_id: str, tenant_id: str) -> dict:
@@ -326,6 +342,9 @@ async def update_document(doc_id: str, inp: PatchInput, user: dict = Depends(get
                                   merged.get("original_filename") or "")
 
     await db.brain_documents.update_one(tenant_filter(doc_id, user["tenant_id"]), {"$set": patch})  # FIX-001-C
+    # E3-09.3: re-index so the chunks' RBAC payload (visibility/department/roles) stays in sync.
+    from services.ai.brain_embed import index_document
+    _spawn_index(index_document({**doc, **patch}))
     return _public({**doc, **patch})
 
 
@@ -335,6 +354,9 @@ async def delete_document(doc_id: str, user: dict = Depends(get_current_user)):
     if not (_can_manage(user) or doc.get("uploaded_by") == user["id"]):
         raise HTTPException(status_code=403, detail="Only the uploader or a manager can delete this document")
     await db.brain_documents.update_one(tenant_filter(doc_id, user["tenant_id"]), {"$set": {"is_deleted": True, "updated_at": now_iso()}})  # FIX-001-C
+    # E3-09.3: drop the document's chunks from the vector store.
+    from services.ai.brain_embed import deindex_document
+    _spawn_index(deindex_document(user["tenant_id"], doc_id))
     return {"ok": True, "deleted": doc_id}
 
 

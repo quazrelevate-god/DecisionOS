@@ -8,6 +8,7 @@ queryable alongside decisions.
 """
 import asyncio
 import json
+import re
 from pathlib import Path
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, File, Form, UploadFile
@@ -22,7 +23,10 @@ from core import (
 )
 # FIX-007-B (S4-10): Brain-context writes for finance events so
 # "how did we settle the Kapoor invoice?" queries can find the answer.
-from services import brain_context
+import time
+from services.ai import brain_context
+from core import model_for, record_ai_call
+from prompts import render
 
 router = APIRouter(prefix="/api")
 
@@ -106,12 +110,8 @@ async def ai_suggest_expense_category(text: str, tenant_id: str) -> str:
         return "Other"
     cats = (await get_finance_categories(tenant_id))["expense"]
     try:
-        system = (
-            "You categorize a single business expense into EXACTLY one category from this list: "
-            + ", ".join(cats) + ". "
-            "Reply with ONLY JSON: {\"category\": \"<one of the categories>\"}."
-        )
-        chat = claude_chat(session_id=f"expcat-{tenant_id}", system_message=system).with_model(*LLM_MODEL)
+        system = render("ledger.expense_cat", cats=", ".join(cats))
+        chat = claude_chat(task="ledger.expense_cat", session_id=f"expcat-{tenant_id}", system_message=system).with_model(*model_for("ledger.expense_cat"))
         resp = await chat.send_message(UserMessage(text=text[:600]))
         data = _extract_json(resp) or {}
         matched = _match_category(data.get("category"), cats, "")
@@ -127,11 +127,38 @@ async def _currency(tenant_id: str) -> str:
     return (t or {}).get("currency") or "INR"
 
 
-def _num(x) -> float:
-    try:
-        return float(x or 0)
-    except (TypeError, ValueError):
+# Indian scale words -> multiplier. lakh = 1e5, crore = 1e7.
+_AMT_SCALE = {"lakh": 1e5, "lakhs": 1e5, "lac": 1e5, "lacs": 1e5,
+              "crore": 1e7, "crores": 1e7, "cr": 1e7}
+
+
+def parse_amount(x) -> float:
+    """Tolerant money/quantity parse (E3-06.7): plain numbers pass through; strings may carry
+    currency tokens (Rs / Rs. / ₹ / INR), Indian comma grouping (1,20,000), and scale words
+    (lakh / crore / cr) -- so an OCR'd or typed '₹2.5 lakh' becomes 250000.0. Never raises."""
+    if isinstance(x, (int, float)):
+        return float(x)
+    s = str(x or "").strip().lower()
+    if not s:
         return 0.0
+    s = re.sub(r"(₹|rs\.?|inr)", " ", s)          # drop currency tokens
+    mult = 1.0
+    m = re.search(r"\b(lakhs?|lacs?|crores?|cr)\b", s)  # detect + strip a scale word
+    if m:
+        mult = _AMT_SCALE.get(m.group(1), 1.0)
+        s = s[:m.start()] + s[m.end():]
+    s = s.replace(",", "")
+    m2 = re.search(r"-?\d+(?:\.\d+)?", s)          # first number in what's left
+    if not m2:
+        return 0.0
+    try:
+        return float(m2.group(0)) * mult
+    except ValueError:
+        return 0.0
+
+
+def _num(x) -> float:
+    return parse_amount(x)
 
 
 async def _write_brain(tenant_id: str, user_id: str, text: str, tag: str) -> None:
@@ -193,15 +220,11 @@ async def ai_extract_ledger_file(file_path: str, mime_type: str, kind: str, curr
     cat_rule = ""
     if kind in ("expense", "asset") and categories:
         cat_rule = f'The "category" MUST be exactly one of: [{", ".join(categories)}]. Pick the closest fit. '
-    system = (
-        f"You read a business document (image or PDF) and extract the details of {desc}. "
-        f"Amounts are in {currency}. The user already typed these values: {json.dumps(typed_clean)}. "
-        "PREFER the user's typed values when present and non-empty; fill every MISSING field from the document. "
-        f"{cat_rule}"
-        f"Reply with ONLY compact JSON in exactly this shape: {shape}. "
-        "Use an empty string or 0 for anything you cannot determine. Never invent data."
-    )
+    system = render("ledger.ocr", desc=desc, currency=currency,
+                    typed=json.dumps(typed_clean), cat_rule=cat_rule, shape=shape)
     resp = None
+    _t0 = time.perf_counter()
+    _eng, _ti, _to = None, 0, 0
     # Prefer the user's own Gemini key (same client server.py configures), else the Emergent vision key.
     try:
         from server import get_gemini_client, _gemini_doc_sync
@@ -209,21 +232,32 @@ async def ai_extract_ledger_file(file_path: str, mime_type: str, kind: str, curr
             resp, _gti, _gto = await asyncio.to_thread(_gemini_doc_sync, file_path, mime_type, system, "Extract the JSON now.")
             await log_usage(f"ledger-ocr-{kind}", "gemini", model=VISION_MODEL[1],
                             tokens_in=_gti, tokens_out=_gto, units=1, unit_type="document")
+            _eng, _ti, _to = "gemini", _gti, _gto
     except Exception as e:  # noqa: BLE001
         logger.warning(f"Ledger OCR (user gemini) failed, falling back to Emergent key: {e}")
         resp = None
     if not resp:
         fc = FileContentWithMimeType(file_path=file_path, mime_type=mime_type)
         chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=f"ledger-ocr-{kind}-{new_id()}",
-                       system_message=system).with_model(*VISION_MODEL)
-        from services.llm_limits import guarded_llm  # FIX-002-B
+                       system_message=system).with_model(*model_for("ledger.ocr", "vision"))
+        from services.ai.llm_limits import guarded_llm  # FIX-002-B
         resp = await guarded_llm(
             chat.send_message(UserMessage(text="Extract the JSON now.", file_contents=[fc])),
             label=f"gemini:ledger-ocr-{kind}")
         await log_usage(f"ledger-ocr-{kind}", "gemini", model=VISION_MODEL[1],
                         tokens_in=_est_tokens(system), tokens_out=_est_tokens(resp or ""),
                         units=1, unit_type="document")
-    return _extract_json(resp) or {}
+        _eng, _ti, _to = "emergent", _est_tokens(system), _est_tokens(resp or "")
+    try:  # E3-06 robustness: a malformed OCR response must degrade, not crash the ledger flow
+        data = _extract_json(resp) or {}
+        parse_ok = True
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"ai_extract_ledger_file parse failed: {e}")
+        data, parse_ok = {}, False
+    await record_ai_call(task="ledger.ocr", model=VISION_MODEL[1], engine=_eng,
+                         tokens_in=_ti, tokens_out=_to,
+                         latency_ms=(time.perf_counter() - _t0) * 1000, ok=True, parse_ok=parse_ok)
+    return data
 
 
 def _merge_typed(ai: dict, typed: dict) -> dict:
@@ -558,56 +592,29 @@ async def require_ledger(user: dict = Depends(get_current_user)) -> dict:
 
 
 # --- Input models -----------------------------------------------------------
-class ExpenseInput(BaseModel):
-    title: str
-    amount: float
-    category: Optional[str] = None
-    vendor_name: Optional[str] = ""
-    vendor_id: Optional[str] = None
-    date: Optional[str] = None
-    status: Optional[str] = "unpaid"
-    currency: Optional[str] = None
-    notes: Optional[str] = ""
 
 
-class AssetInput(BaseModel):
-    name: str
-    category: Optional[str] = "Other"
-    purchase_amount: float = 0
-    currency: Optional[str] = None
-    purchase_date: Optional[str] = None
-    vendor_name: Optional[str] = ""
-    status: Optional[str] = "active"
-    notes: Optional[str] = ""
 
 
-class InventoryInput(BaseModel):
-    item: str
-    sku: Optional[str] = ""
-    quantity: float = 0
-    unit: Optional[str] = "unit"
-    unit_cost: float = 0
-    currency: Optional[str] = None
-    category: Optional[str] = ""
-    vendor_name: Optional[str] = ""
-    notes: Optional[str] = ""
 
 
-class SuggestCategoryInput(BaseModel):
-    text: str
 
 
-class ExpensePatch(BaseModel):
-    title: Optional[str] = None
-    amount: Optional[float] = None
-    category: Optional[str] = None
-    vendor_name: Optional[str] = None
-    date: Optional[str] = None
-    status: Optional[str] = None
-    notes: Optional[str] = None
 
 
 # --- Expenses ---------------------------------------------------------------
+# Request models consolidated into models/ (Epic 8 Sprint 5).
+from models.finance import (
+    ExpenseInput,
+    AssetInput,
+    InventoryInput,
+    SuggestCategoryInput,
+    ExpensePatch,
+    IncomeInput,
+    LedgerAskInput,
+)
+
+
 @router.get("/expenses")
 async def list_expenses(user: dict = Depends(require_ledger)):
     return await db.expenses.find({"tenant_id": user["tenant_id"]}, {"_id": 0}).sort("created_at", -1).to_list(1000)
@@ -810,17 +817,6 @@ async def delete_inventory(iid: str, user: dict = Depends(require_ledger)):
 
 
 # --- Revenue (sale/service income — money coming IN) ------------------------
-class IncomeInput(BaseModel):
-    title: Optional[str] = ""
-    customer_name: Optional[str] = ""
-    amount: float = 0
-    number: Optional[str] = ""
-    date: Optional[str] = None
-    due_date: Optional[str] = None
-    status: Optional[str] = "unpaid"
-    currency: Optional[str] = None
-    notes: Optional[str] = ""
-    received: Optional[bool] = False
 
 
 @router.get("/revenue")
@@ -1304,19 +1300,10 @@ async def _finance_context(tid: str, scope: str) -> dict:
 async def _generate_analysis(tid: str, scope: str) -> dict:
     ctx = await _finance_context(tid, scope)
     focus = _SCOPE_FOCUS.get(scope, _SCOPE_FOCUS["overview"])
-    system = (
-        "You are a sharp CFO advisor for a small business. Analyse the finance data and focus on " + focus + " "
-        f"All amounts are in {ctx['currency']}; today is {ctx['today']}. Be specific — cite real numbers, vendors and categories. "
-        'Return ONLY JSON: {"headline": "ONE short punchy line, max 12 words, summarising the finance state", '
-        '"insights": [{"level": "high|medium|low", "title": "punchy one-liner, max 10 words, include the key number", '
-        '"detail": "1-2 sentences: why it matters + what to check", '
-        '"action": "a short imperative task title to act on it, max 10 words"}]}. '
-        "Blend the most urgent problems AND recommended actions into this ONE list, ranked most-urgent-first, MAX 6 items. "
-        "Every insight MUST have a concrete `action`. If data is thin, say so in the headline and keep the list short."
-    )
+    system = render("ledger.analysis", focus=focus, currency=ctx['currency'], today=ctx['today'])
     data = {}
     try:
-        chat = claude_chat(session_id=f"ledger-ai-{scope}-{new_id()}", system_message=system).with_model(*LLM_MODEL)
+        chat = claude_chat(task="ledger.analysis", session_id=f"ledger-ai-{scope}-{new_id()}", system_message=system).with_model(*model_for("ledger.analysis"))
         resp = await chat.send_message(UserMessage(text=f"Finance data:\n{json.dumps(ctx)}\n\nProduce the JSON now."))
         data = _extract_json(resp) or {}
     except Exception as e:  # noqa: BLE001
@@ -1357,9 +1344,6 @@ async def refresh_ledger_ai(scope: str, user: dict = Depends(require_ledger)):
     return await _generate_analysis(user["tenant_id"], scope)
 
 
-class LedgerAskInput(BaseModel):
-    question: str
-    scope: Optional[str] = "brief"
 
 
 @router.post("/ledger/ask")
@@ -1369,13 +1353,9 @@ async def ledger_ask(inp: LedgerAskInput, user: dict = Depends(require_ledger)):
         raise HTTPException(status_code=400, detail="Ask a question")
     scope = inp.scope if inp.scope in SCOPES else "brief"
     ctx = await _finance_context(user["tenant_id"], scope)
-    system = (
-        "You are a finance assistant for a small business owner. Answer ONLY from the finance data provided, "
-        f"concisely (1-4 sentences), citing real numbers and vendors. Amounts are in {ctx['currency']}, today is {ctx['today']}. "
-        "If the data doesn't contain the answer, say so plainly."
-    )
+    system = render("ledger.ask", currency=ctx['currency'], today=ctx['today'])
     try:
-        chat = claude_chat(session_id=f"ledger-ask-{user['tenant_id']}-{new_id()}", system_message=system).with_model(*LLM_MODEL)
+        chat = claude_chat(task="ledger.ask", session_id=f"ledger-ask-{user['tenant_id']}-{new_id()}", system_message=system).with_model(*model_for("ledger.ask"))
         resp = await chat.send_message(UserMessage(text=f"Finance data:\n{json.dumps(ctx)}\n\nQuestion: {q}"))
         answer = (resp or "").strip()
     except Exception as e:  # noqa: BLE001

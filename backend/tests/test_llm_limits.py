@@ -30,7 +30,7 @@ if str(ROOT) not in sys.path:
 
 import pytest
 
-from services import llm_limits as ll
+from services.ai import llm_limits as ll
 
 
 class TestConfigParsing:

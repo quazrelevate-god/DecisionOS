@@ -175,8 +175,121 @@ EMERGENT_LLM_KEY = os.environ['EMERGENT_LLM_KEY']
 # All Claude Sonnet 4.6 calls use the user's own Anthropic key when set,
 # else the Emergent universal key.
 CLAUDE_KEY = os.environ.get('ANTHROPIC_API_KEY', '').strip() or EMERGENT_LLM_KEY
-LLM_MODEL = ("anthropic", "claude-sonnet-4-6")
-VISION_MODEL = ("gemini", "gemini-2.5-flash")
+
+# ---------------------------------------------------------------------------
+# Model routing (Epic 3 Sprint 1, E3-01.2) -- ONE source of truth for which
+# model does which AI job. AI call sites resolve their model via
+# `model_for(task)` (task names match the prompt registry) instead of hardcoding
+# a tuple, so a model can be swapped per-task in ONE place, or overridden per
+# task via env `MODEL_ROUTE_<TASK>` (e.g. MODEL_ROUTE_CAPTURES_TRIAGE=...).
+# ---------------------------------------------------------------------------
+# Catalog: logical name -> (provider, model_id). The ONLY place a model id lives.
+# UPGRADE PATH: models here run through emergentintegrations, so before adding a
+# new id (e.g. a Claude 5 / newer Gemini), verify that wrapper accepts it. Do NOT
+# edit an id in place -- add the new model + repoint the route(s), so the AI
+# telemetry (E3-01.3) and eval/benchmark harness (E3-01.4 / E3-10.3) can A/B it.
+MODELS = {
+    "claude-sonnet": ("anthropic", "claude-sonnet-4-6"),  # default text / reasoning model
+    "gemini-flash":  ("gemini", "gemini-2.5-flash"),      # default vision / OCR model
+}
+DEFAULT_LLM_MODEL = "claude-sonnet"
+DEFAULT_VISION_MODEL = "gemini-flash"
+
+# Back-compat: the historical default tuples, now DERIVED from the catalog so
+# there is still one source of truth. Existing `from core import LLM_MODEL` and
+# `.with_model(*LLM_MODEL)` keep working unchanged.
+LLM_MODEL = MODELS[DEFAULT_LLM_MODEL]
+VISION_MODEL = MODELS[DEFAULT_VISION_MODEL]
+
+# Routes: task name (= prompt-registry name) -> catalog model. A complete map of
+# "every AI task -> its model". All point at the default today; change ONE line
+# to route a task (e.g. a cheap triage) to a different model. Unlisted tasks fall
+# back to the per-kind default.
+MODEL_ROUTES = {
+    # extraction / structuring (text)
+    "extraction.extract": "claude-sonnet", "extraction.score_tasks": "claude-sonnet",
+    "extraction.score_contact": "claude-sonnet", "extraction.meeting_notes": "claude-sonnet",
+    "extraction.execution_plan": "claude-sonnet", "extraction.step_assist": "claude-sonnet",
+    "extraction.clarify": "claude-sonnet",
+    # onboarding generators + wizard (text)
+    "generators.lexicon": "claude-sonnet", "generators.operating_model": "claude-sonnet",
+    "generators.finance_categories": "claude-sonnet",
+    "onboarding.suggest": "claude-sonnet", "onboarding.os_blueprint": "claude-sonnet",
+    "onboarding.web_intel": "claude-sonnet", "onboarding.interview": "claude-sonnet",
+    "onboarding.blueprint": "claude-sonnet",
+    # captures / coaching / people (text)
+    "captures.triage": "claude-sonnet", "coaching.work_coach": "claude-sonnet",
+    "coaching.leave_impact": "claude-sonnet", "coaching.file_reference": "claude-sonnet",
+    # company brain (text)
+    "brain.planner": "claude-sonnet", "brain.answer": "claude-sonnet",
+    "brain.agent_planner": "claude-sonnet", "brain.agent_synth": "claude-sonnet",
+    # finance / ledger (text)
+    "ledger.expense_cat": "claude-sonnet", "ledger.analysis": "claude-sonnet",
+    "ledger.ask": "claude-sonnet", "documents.csv_map": "claude-sonnet",
+    "documents.purchase_class": "claude-sonnet",
+    # vision / OCR (Gemini)
+    "documents.doc_extract": "gemini-flash", "vision.read_image": "gemini-flash",
+    "ledger.ocr": "gemini-flash",
+}
+
+
+def model_for(task, kind="llm"):
+    """Resolve the (provider, model_id) tuple for an AI task.
+
+    Order: env override (MODEL_ROUTE_<TASK>) -> MODEL_ROUTES -> per-kind default.
+    `kind` ('llm' | 'vision') only selects the fallback when a task is unlisted.
+    """
+    default = DEFAULT_LLM_MODEL if kind == "llm" else DEFAULT_VISION_MODEL
+    env_key = "MODEL_ROUTE_" + task.replace(".", "_").replace("-", "_").upper()
+    name = os.environ.get(env_key, "").strip() or MODEL_ROUTES.get(task) or default
+    return MODELS.get(name, MODELS[default])
+
+
+# --- E3-08.4: model-level fallback chains -----------------------------------
+# When the routed model fails on EVERY key (provider outage / rate-limit / timeout),
+# the resilient chat tries these fallback MODELS (on the Emergent universal key) as a
+# last-resort graceful degradation, recorded as degraded in telemetry. Only known
+# Emergent-routable models belong here. gemini-flash is already used for vision, so
+# it's the proven text fallback; vision has no cross-model fallback (key-fallback covers it).
+MODEL_FALLBACKS = {
+    "claude-sonnet": ["gemini-flash"],
+    "gemini-flash": [],
+}
+
+
+def fallback_models(model_tuple):
+    """Ordered list of (provider, model_id) fallbacks for a primary model tuple (E3-08.4).
+    Empty when the model is unknown or has no configured fallback."""
+    try:
+        name = next((n for n, t in MODELS.items() if tuple(t) == tuple(model_tuple)), None)
+    except TypeError:
+        return []
+    return [MODELS[fb] for fb in MODEL_FALLBACKS.get(name, []) if fb in MODELS]
+
+
+# --- E3-09.1: embedding model routing (mirrors MODELS / model_for) -----------
+# The ONLY place an embedding model id + its vector dimension live. Provider is
+# abstracted so OpenAI (test now) -> Voyage (production, when VOYAGE_API_KEY lands)
+# is a config/env change, not code. Each value is (provider, model_id, dim).
+# NOTE: Anthropic has no native embedding model; Voyage is its official recommendation.
+EMBED_MODELS = {
+    "openai-3-small":   ("openai", "text-embedding-3-small", 1536),
+    "openai-3-large":   ("openai", "text-embedding-3-large", 3072),
+    "voyage-4":         ("voyage", "voyage-4", 1024),
+    "voyage-finance-2": ("voyage", "voyage-finance-2", 1024),
+}
+# The one-line swap: set EMBED_MODEL=voyage-4 in the env when the Voyage key is provided.
+DEFAULT_EMBED_MODEL = os.environ.get("EMBED_MODEL", "").strip() or "openai-3-small"
+EMBED_ROUTES: dict = {}  # optional per-task overrides (future); empty => all use the default
+
+
+def embed_model_for(task: str = "default"):
+    """Resolve the (provider, model_id, dim) for an embedding task.
+    Order: env override (EMBED_ROUTE_<TASK>) -> EMBED_ROUTES -> DEFAULT_EMBED_MODEL."""
+    env_key = "EMBED_ROUTE_" + str(task).replace(".", "_").replace("-", "_").upper()
+    name = os.environ.get(env_key, "").strip() or EMBED_ROUTES.get(task) or DEFAULT_EMBED_MODEL
+    return EMBED_MODELS.get(name, EMBED_MODELS.get(DEFAULT_EMBED_MODEL, EMBED_MODELS["openai-3-small"]))
+
 
 # --- Roles & permissions ----------------------------------------------------
 # FIX-004-D (RBAC-16): canonical role list. Prior code had ROLES list
@@ -212,6 +325,7 @@ _AI_KEY_ENV = {
     "anthropic": os.environ.get('ANTHROPIC_API_KEY', '').strip(),
     "openai": os.environ.get('OPENAI_API_KEY', '').strip(),
     "gemini": os.environ.get('GEMINI_API_KEY', '').strip(),
+    "voyage": os.environ.get('VOYAGE_API_KEY', '').strip(),  # E3-09: embeddings (Anthropic-recommended)
     "sarvam": os.environ.get('SARVAM_API_KEY', '').strip(),
     "wa_access_token": os.environ.get('WA_ACCESS_TOKEN', '').strip(),
     "wa_phone_number_id": os.environ.get('WA_PHONE_NUMBER_ID', '').strip(),

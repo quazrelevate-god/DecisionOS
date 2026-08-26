@@ -47,3 +47,8 @@ class AbsenceInput(BaseModel):
 
 class LeaveDecisionInput(BaseModel):
     note: Optional[str] = ""
+
+
+# ---- Consolidated in Epic 8 Sprint 5 ----
+class DeprovisionInput(BaseModel):
+    reassign_to_user_id: Optional[str] = None

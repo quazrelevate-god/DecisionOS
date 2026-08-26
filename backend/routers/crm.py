@@ -30,6 +30,12 @@ def _remaining(inv: dict) -> float:
                  - float(inv.get("amount_paid") or 0), 2)
 
 
+# Request models consolidated into models/ (Epic 8 Sprint 5).
+from models.crm import (
+    ActivityInput,
+)
+
+
 @router.get("/outstanding")
 async def outstanding_by_contact(user: dict = Depends(get_current_user)):
     """Per-contact outstanding totals. Returns:
@@ -102,9 +108,6 @@ async def outstanding_by_contact(user: dict = Depends(get_current_user)):
 # ---------------------------------------------------------------------------
 # Epic 2 Sprint 1 (E2-08): CRM activity timeline
 # ---------------------------------------------------------------------------
-class ActivityInput(BaseModel):
-    kind: str = Field(..., description="call | meeting | note | whatsapp | email | other")
-    text: str = Field(..., min_length=1, max_length=2000)
 
 
 @router.post("/activity/{contact_id}")

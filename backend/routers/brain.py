@@ -29,6 +29,9 @@ from core import (
 # (uploaded policies / contracts). Before this, /ask was blind to
 # both and Dex was the only surface with provenance answers.
 from services.ai import brain_retrieval
+from services.ai.safety import INJECTION_GUARD
+from core import model_for
+from prompts import render
 
 router = APIRouter(prefix="/api")
 
@@ -119,32 +122,14 @@ def _in_range(iso_str, start, end) -> bool:
 # ---------------------------------------------------------------------------
 # 1) Query planner (LLM → controlled plan)
 # ---------------------------------------------------------------------------
-_PLANNER_SYSTEM = (
-    "You are the query planner of DecisionOS Company Brain. Convert the user's question into a "
-    "STRICT JSON plan. Never write SQL or code. Return ONLY this JSON:\n"
-    "{\n"
-    '  "intent": one of ["FACT_QUESTION","LIST_REQUEST","AGGREGATION","COMPARISON","TREND_ANALYSIS","ROOT_CAUSE_ANALYSIS","REPORT_GENERATION","MEMORY_RETRIEVAL","RECORD_SEARCH"],\n'
-    '  "primary_entity": one of ["tasks","decisions","workflows","contacts","invoices","payments","expenses","leaves","employees","memory"],\n'
-    '  "needs_finance": boolean,  // true if it needs money, cost, price, margin, profit, invoice, payment, expense, outstanding, or revenue data\n'
-    '  "keywords": [string],      // salient nouns to match (names, products, suppliers). [] if none\n'
-    '  "status": string|null,     // completed | todo | in_progress | overdue | pending | paid | unpaid | approved\n'
-    '  "date_field": string|null, // created_at | due_date | completed | date\n'
-    '  "date_preset": one of ["today","yesterday","this_week","this_month","last_month","last_7_days","last_30_days","all"]|null,\n'
-    '  "group_by": one of ["assignee","role","status","type","category","contact","priority"]|null,\n'
-    '  "on_time_analysis": boolean, // true when asking about on-time / late / overdue task completion\n'
-    '  "output": one of ["TEXT","TABLE","KPI_TABLE","BAR_CHART","TIMELINE"]\n'
-    "}\n"
-    "Rules: pick the single most relevant primary_entity. Set needs_finance=true for ANY money question. "
-    "If the user says 'them'/'these'/'those' or refers to a previous result, keep the SAME primary_entity and "
-    "carry forward the previous filters, only adding the new refinement."
-)
+_PLANNER_SYSTEM = render("brain.planner")  # prompt in prompts/brain.py
 
 
 async def _plan(question: str, prev: Optional[dict], lang) -> dict:
     ctx = ""
     if prev:
         ctx = f"\nPrevious query plan (the user may be refining it):\n{json.dumps(prev)}\n"
-    chat = claude_chat(session_id=f"brain-plan-{new_id()}", system_message=_PLANNER_SYSTEM).with_model(*LLM_MODEL)
+    chat = claude_chat(task="brain.planner", session_id=f"brain-plan-{new_id()}", system_message=_PLANNER_SYSTEM).with_model(*model_for("brain.planner"))
     raw = await chat.send_message(UserMessage(text=f"{ctx}\nQuestion: {question}"))
     plan = _extract_json(raw) or {}
     plan.setdefault("intent", "LIST_REQUEST")
@@ -207,7 +192,7 @@ async def _users_map(tid):
     return {u["id"]: u for u in await db.users.find({"tenant_id": tid}, {"_id": 0, "id": 1, "name": 1, "role": 1}).to_list(500)}
 
 
-async def _enrich_with_brain(plan: dict, scope: dict, user: dict) -> dict:
+async def _enrich_with_brain(plan: dict, scope: dict, user: dict, question: str = "") -> dict:
     """FIX-007-C (S4-04): auxiliary retrieval pass — every /ask call
     now ALSO fetches top-N matching brain_context (provenance) and
     brain_documents (policies) rows using the plan's keywords, so
@@ -225,7 +210,33 @@ async def _enrich_with_brain(plan: dict, scope: dict, user: dict) -> dict:
     ctx_hits = await brain_retrieval.search_context(
         tenant_id=tid, user=user, query=q_txt,
     )
-    return {"document_hits": doc_hits, "knowledge_hits": ctx_hits}
+    # E3-10.2: semantic chunk retrieval on the RAW question (keyword search uses the
+    # plan keywords), RRF-fused with the keyword doc hits. Passages are the actual
+    # relevant text the answer quotes; the deterministic metrics path is untouched.
+    passages: list = []
+    chunk_hits = await brain_retrieval.search_chunks(user=user, query=(question or q_txt), limit=6)
+    if chunk_hits:
+        kw_ids = [d.get("id") for d in doc_hits]
+        vec_doc_ids: list = []
+        for c in chunk_hits:
+            if c.get("doc_id") and c["doc_id"] not in vec_doc_ids:
+                vec_doc_ids.append(c["doc_id"])
+        by_id = {d.get("id"): d for d in doc_hits}
+        missing = [i for i in vec_doc_ids if i not in by_id]
+        if missing:
+            try:
+                for row in await db.brain_documents.find(
+                    {"tenant_id": tid, "id": {"$in": missing}, "is_deleted": False},
+                    {"_id": 0, "keywords": 0, "storage_path": 0}).to_list(len(missing)):
+                    by_id[row["id"]] = row
+            except Exception:
+                pass
+        fused_ids = brain_retrieval.rrf_fuse([kw_ids, vec_doc_ids])
+        fused_docs = [by_id[i] for i in fused_ids if i in by_id]
+        doc_hits = fused_docs or doc_hits
+        passages = [{"title": c.get("title"), "doc_id": c.get("doc_id"),
+                     "text": (c.get("text") or "")[:600]} for c in chunk_hits[:5]]
+    return {"document_hits": doc_hits, "knowledge_hits": ctx_hits, "passages": passages}
 
 
 async def _retrieve(plan: dict, scope: dict, user: Optional[dict] = None):
@@ -672,18 +683,13 @@ _COMPUTE_HANDLERS = {
 # ---------------------------------------------------------------------------
 # 4) Answer prose (LLM writes words, NOT numbers)
 # ---------------------------------------------------------------------------
-_ANSWER_SYSTEM = (
-    "You are DecisionOS Company Brain. You are given a user question plus PRE-COMPUTED, VERIFIED metrics "
-    "(KPIs) and a sample of the result table for the user's own company workspace. Write a concise, "
-    "professional answer in markdown (2-5 sentences). Use ONLY the numbers provided — never invent or "
-    "recompute figures. If the data looks empty, say so plainly. Then propose 3 natural follow-up questions. "
-    "Return ONLY JSON: {\"answer\": string, \"suggested_questions\": [string, string, string]}."
-)
+_ANSWER_SYSTEM = render("brain.answer")  # prompt in prompts/brain.py
 
 
 async def _answer(question, kpis, table, lang,
                     knowledge_hits: Optional[list] = None,
-                    document_hits: Optional[list] = None):
+                    document_hits: Optional[list] = None,
+                    passages: Optional[list] = None):
     """FIX-007-C (S4-04): the LLM answer now sees three signal streams:
       * `kpis` + `table` (deterministic domain metrics, as before)
       * `knowledge_hits` — brain_context provenance rows (past decisions,
@@ -711,8 +717,17 @@ async def _answer(question, kpis, table, lang,
              "tags": h.get("tags") or []}
             for h in document_hits[:5]
         ]
-    chat = claude_chat(session_id=f"brain-ans-{new_id()}",
-                       system_message=_ANSWER_SYSTEM + _lang_directive(lang)).with_model(*LLM_MODEL)
+    # E3-10.2: the actual relevant passages retrieved by semantic search -- the RAG
+    # payoff, so the answer can quote the source text, not just the doc summary.
+    if passages:
+        sample["relevant_document_passages"] = [
+            {"title": p.get("title"), "text": (p.get("text") or "")[:600]} for p in passages[:5]
+        ]
+    # E3-08.1: retrieved document summaries / passages / past-context are user-authored
+    # content that could carry an injection -- arm the guard whenever we include retrieved data.
+    _guard = INJECTION_GUARD if (knowledge_hits or document_hits or passages) else ""
+    chat = claude_chat(task="brain.answer", session_id=f"brain-ans-{new_id()}",
+                       system_message=_ANSWER_SYSTEM + _lang_directive(lang) + _guard).with_model(*model_for("brain.answer"))
     try:
         raw = await chat.send_message(UserMessage(text=f"Question: {question}\n\nComputed data:\n{json.dumps(sample, default=str)}"))
         data = _extract_json(raw) or {}
@@ -736,17 +751,18 @@ async def _answer(question, kpis, table, lang,
 # ---------------------------------------------------------------------------
 # API
 # ---------------------------------------------------------------------------
-class AskRequest(BaseModel):
-    question: str
-    context_id: Optional[str] = None
 
 
-class ExportRequest(BaseModel):
-    context_id: str
-    format: str = "csv"
 
 
 _PERM_DENIED_MSG = "You do not have permission to access financial or profitability information. Ask your workspace owner for Finance access."
+
+
+# Request models consolidated into models/ (Epic 8 Sprint 5).
+from models.brain import (
+    AskRequest,
+    ExportRequest,
+)
 
 
 @router.post("/ask")
@@ -760,7 +776,7 @@ async def ask(inp: AskRequest, user: dict = Depends(require_perm("ask"))):
 
     # RBAC gate — fail closed on intent BEFORE we plan/retrieve/compute so a
     # random employee cannot ask "what are our sales?" and get a real answer.
-    from services import brain_rbac
+    from services.ai import brain_rbac
     intent = brain_rbac.classify_intent(q)
     allowed = brain_rbac.allowed_intents(user)
     if intent not in allowed:
@@ -799,7 +815,7 @@ async def ask(inp: AskRequest, user: dict = Depends(require_perm("ask"))):
     # (policies) hits keyed by the plan's keywords. Merged into the
     # citation list so /ask can point at "how we handled this last
     # time" and "what the contract says" — parity with /brain/agent.
-    brain_extras = await _enrich_with_brain(plan, scope, user)
+    brain_extras = await _enrich_with_brain(plan, scope, user, question=q)
     extra_cites = brain_retrieval.cites_from_hits(
         document_hits=brain_extras["document_hits"],
         context_hits=brain_extras["knowledge_hits"],
@@ -831,6 +847,7 @@ async def ask(inp: AskRequest, user: dict = Depends(require_perm("ask"))):
         q, kpis, table, user.get("language"),
         knowledge_hits=brain_extras["knowledge_hits"],
         document_hits=brain_extras["document_hits"],
+        passages=brain_extras.get("passages"),
     )
     ctx_id = new_id()
     plan["_currency"] = await _currency(tid)

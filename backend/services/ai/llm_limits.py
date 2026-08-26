@@ -126,10 +126,29 @@ async def guarded_llm(coro, *, label: str = "llm",
                 tenant_doc = await db.tenants.find_one(
                     {"id": tid}, {"_id": 0, "ai_consent": 1, "plan": 1,
                                    "seat_limit_override": 1, "usage_quotas": 1,
-                                   "feature_flags": 1},
+                                   "feature_flags": 1, "ai_budget_usd": 1},
                 )
                 from services.ai_consent import require_ai_consent
                 require_ai_consent(tenant_doc or {})
+                # E3-08.3: per-tenant AI cost budget (opt-in; default unlimited -> no-op).
+                from services.ai.budget import tenant_budget_usd, ai_budget_status
+                if tenant_budget_usd(tenant_doc or {}) > 0:
+                    _bs = await ai_budget_status(db, tid, tenant_doc or {})
+                    if _bs["state"] == "over":
+                        from fastapi import HTTPException
+                        raise HTTPException(
+                            status_code=402,
+                            detail={
+                                "code": "ai_budget_exceeded", "resource": "ai_cost",
+                                "message": (f"This month's AI budget of ${_bs['budget_usd']:.2f} has been "
+                                             f"reached (${_bs['spend_usd']:.2f} used). Raise the budget or "
+                                             "wait for the monthly reset."),
+                                "spend_usd": _bs["spend_usd"], "budget_usd": _bs["budget_usd"],
+                            },
+                        )
+                    if _bs["state"] == "near":
+                        logger.warning(f"[{label}] tenant {tid} AI budget near limit: "
+                                       f"${_bs['spend_usd']:.2f}/${_bs['budget_usd']:.2f}")
                 # Quota check
                 from services.quotas import check_quota
                 ok, detail = await check_quota(db, tid, "llm_tokens_total")

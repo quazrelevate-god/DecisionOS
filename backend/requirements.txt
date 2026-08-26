@@ -148,3 +148,4 @@ websockets==16.0
 yarl==1.24.2
 zipp==4.1.0
 zopfli==0.4.3
+qdrant-client==1.19.0

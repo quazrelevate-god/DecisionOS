@@ -85,110 +85,12 @@ async def _login_clear_attempts(ident: str) -> None:
     await db.user_login_attempts.delete_one({"identifier": ident})
 
 
-# ---------------------------------------------------------------------------
-# Request models (duplicated from server.py for now; will move to
-# `models/auth.py` in a later pass — kept local to keep this router
-# self-contained and importable without touching server.py).
-# ---------------------------------------------------------------------------
-class RoleItem(BaseModel):
-    key: str
-    label: str
-
-
-class ProductItem(BaseModel):
-    name: str
-    description: Optional[str] = ""
-
-
-class RegisterInput(BaseModel):
-    company_name: Optional[str] = None  # can be sourced from draft
-    name: Optional[str] = None
-    email: EmailStr
-    password: str = Field(min_length=6)
-    phone: Optional[str] = None
-    industry: Optional[str] = None
-    description: Optional[str] = None
-    company_size: Optional[str] = None
-    region: Optional[str] = None
-    currency: Optional[str] = "INR"
-    gst: Optional[str] = None
-    branches: Optional[str] = None
-    business_scale: Optional[dict] = None
-    current_software: Optional[List[str]] = None
-    roles: Optional[List[RoleItem]] = None
-    products: Optional[List[ProductItem]] = None
-    os_blueprint: Optional[dict] = None
-    # FIX-001-D: optional draft_id to source wizard data from server-side
-    # draft (prevents "user typed 7 steps then /register 500'd and lost
-    # everything"). Client-provided values still win over draft values.
-    draft_id: Optional[str] = None
-    # FIX-004-A (RBAC-02): Turnstile / hCaptcha proof-of-humanity token.
-    # Verified server-side against the vendor's siteverify endpoint.
-    # Optional in dev (see services/captcha.py); made hard-required in
-    # prod via CAPTCHA_REQUIRED=1 env.
-    captcha_token: Optional[str] = None
-
-
-class LoginInput(BaseModel):
-    email: EmailStr
-    password: str
-    # FIX-004-B (RBAC-12): when a user has multiple memberships, the
-    # frontend re-POSTs with tenant_id filled in from the choices
-    # returned in the ambiguity response. Optional — omitted for the
-    # single-workspace fast path.
-    tenant_id: Optional[str] = None
-
-
-class SwitchWorkspaceInput(BaseModel):
-    tenant_id: str
-
-
-# FIX-005-D (RBAC-23): 2FA input models
-class TotpConfirmInput(BaseModel):
-    code: str = Field(min_length=4, max_length=10)
-
-
-class TotpVerifyLoginInput(BaseModel):
-    # Short-lived 2fa-challenge token returned by /login when the
-    # account has 2FA enabled.
-    challenge_token: str
-    code: str = Field(min_length=4, max_length=10)
-
-
-class TotpDisableInput(BaseModel):
-    # Owner-only self-recovery: prove you own the account by
-    # supplying a current TOTP or a backup code before disabling.
-    code: str = Field(min_length=4, max_length=15)
-
-
-# FIX-005-D (RBAC-24): ownership transfer input
-class TransferOwnershipInput(BaseModel):
-    new_owner_user_id: str
-    # 2FA-confirmation code from the CURRENT owner if their account
-    # has 2FA enabled (else ignored). Prevents session-theft from
-    # trivially taking over the workspace.
-    totp_code: Optional[str] = None
-
-
-class ProfileUpdateInput(BaseModel):
-    name: Optional[str] = None
-    phone: Optional[str] = None
-    language: Optional[str] = None
-
-
-class ChangePasswordInput(BaseModel):
-    current_password: str
-    new_password: str = Field(min_length=6)
-
-
-# FIX-003-D (S2-07): email verification + password reset input models.
-class PasswordForgotInput(BaseModel):
-    email: EmailStr
-
-
-class PasswordResetInput(BaseModel):
-    token: str
-    new_password: str = Field(min_length=6)
+# Request models consolidated into models/auth.py (Epic 8 Sprint 5).
+from models.auth import (  # noqa: F401
+    RoleItem, ProductItem, RegisterInput, LoginInput, SwitchWorkspaceInput,
+    TotpConfirmInput, TotpVerifyLoginInput, TotpDisableInput, TransferOwnershipInput,
+    ProfileUpdateInput, ChangePasswordInput, PasswordForgotInput, PasswordResetInput,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -224,8 +126,8 @@ async def register(inp: RegisterInput, request: Request, response: Response):
     from server import normalize_os_blueprint
     from core import DEFAULT_ROLES
     # FIX-001-D imports — status-aware AI + draft merge/complete
-    from services import ai_setup as ai_setup_svc
-    from services import onboarding_drafts as drafts_svc
+    from services.ai import ai_setup as ai_setup_svc
+    from services.auth import onboarding_drafts as drafts_svc
 
     # FIX-001-D: if a draft_id was passed, merge saved wizard state
     # underneath the request body. Client-provided values still win.
@@ -363,7 +265,7 @@ async def register(inp: RegisterInput, request: Request, response: Response):
     user_id = new_id()
     # FIX-002-A: also write phone_norm so OTP login + WhatsApp routing
     # can query by exact-match on the indexed field.
-    from services.phone import norm_phone
+    from services.auth.phone import norm_phone
     _raw_phone = (inp.phone or "").strip()
     # FIX-003-B (S2-10): DuplicateKeyError-safe insert. If a concurrent
     # request slipped past the pre-check, this insert loses the race
@@ -443,7 +345,7 @@ async def register(inp: RegisterInput, request: Request, response: Response):
     # still succeeds. The user can re-request from Settings later
     # (POST /auth/email/send-verification).
     try:
-        from services import auth_emails
+        from services.auth import auth_emails
         from server import send_email
         _row = await auth_emails.issue(
             db, kind=auth_emails.KIND_EMAIL_VERIFY,
@@ -822,7 +724,7 @@ async def logout(request: Request, response: Response):
     # signal — same behavior as before the fix.
     import jwt
     from core import JWT_SECRET, JWT_ALGORITHM, AUTH_COOKIE_NAME
-    from services.session_revocation import revoke as _revoke
+    from services.auth.session_revocation import revoke as _revoke
     token = request.cookies.get(AUTH_COOKIE_NAME)
     if not token:
         # No cookie -> maybe Bearer. Read from Authorization header
@@ -900,7 +802,7 @@ async def update_profile(inp: ProfileUpdateInput, user: dict = Depends(get_curre
         updates["name"] = inp.name.strip()
     if inp.phone is not None:
         # Changing your number should re-enable WhatsApp matching for it.
-        from services.phone import norm_phone  # FIX-002-A
+        from services.auth.phone import norm_phone  # FIX-002-A
         _new_phone = inp.phone.strip()
         updates["phone"] = _new_phone
         updates["phone_norm"] = norm_phone(_new_phone)  # keep index-searchable form in sync
@@ -951,7 +853,7 @@ async def send_verification_email(user: dict = Depends(get_current_user)):
     """Issue (or reuse) an email-verification token and email it to
     the current user. Idempotent — hitting this twice in the cooldown
     window returns the same token and does NOT re-send."""
-    from services import auth_emails
+    from services.auth import auth_emails
     from server import send_email  # deferred: server.py owns the SMTP helper
     email = (user.get("email") or "").strip().lower()
     if not email:
@@ -974,7 +876,7 @@ async def send_verification_email(user: dict = Depends(get_current_user)):
 async def verify_email(token: str):
     """Consume an email-verification token and mark the user's email
     verified. Single-use, TTL-bounded (3 days)."""
-    from services import auth_emails
+    from services.auth import auth_emails
     row = await auth_emails.consume(
         db, token=token, kind=auth_emails.KIND_EMAIL_VERIFY,
     )
@@ -997,7 +899,7 @@ async def password_forgot(inp: PasswordForgotInput):
     Callers should always show the same "if that email exists, we
     sent a reset link" message.
     """
-    from services import auth_emails
+    from services.auth import auth_emails
     from server import send_email
     email = inp.email.lower().strip()
     # Same response shape regardless of what we find below.
@@ -1033,7 +935,7 @@ async def password_reset(inp: PasswordResetInput):
     compromised inbox becomes useless after the first successful
     reset.
     """
-    from services import auth_emails
+    from services.auth import auth_emails
     row = await auth_emails.consume(
         db, token=inp.token, kind=auth_emails.KIND_PASSWORD_RESET,
     )

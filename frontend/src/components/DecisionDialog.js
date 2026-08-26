@@ -343,7 +343,12 @@ export function DecisionDialog({ decisionId, open, onClose }) {
                     <div className="min-w-0 flex-1">
                       <p className="text-sm">{t.title}</p>
                       <p className="text-xs text-muted-foreground">
-                        Goes to {t.assignee_name || t.assignee_role || "unassigned"}
+                        {/* E3-13: auto-assigned to a person, else the role pool, else unassigned */}
+                        {t.assignee_name
+                          ? `Goes to ${t.assignee_name}`
+                          : t.assignee_role
+                            ? `Goes to the ${t.assignee_role} team`
+                            : "Unassigned"}
                       </p>
                     </div>
                   </li>

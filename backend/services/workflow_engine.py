@@ -513,7 +513,7 @@ async def advance(
     # Brain-context write -- preserved from the legacy endpoint (S4-10).
     # Fail-open: never let a Brain write break the advance.
     try:
-        from services import brain_context
+        from services.ai import brain_context
         await brain_context.record_context(
             tenant_id=tenant_id, kind="workflow",
             title=f"{wf.get('title') or 'Workflow'} -> {target_stage}",

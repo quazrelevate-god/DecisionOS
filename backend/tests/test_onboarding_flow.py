@@ -29,8 +29,8 @@ if str(ROOT) not in sys.path:
 
 import pytest
 
-from services import ai_setup as ai_setup_svc
-from services import onboarding_drafts as drafts_svc
+from services.ai import ai_setup as ai_setup_svc
+from services.auth import onboarding_drafts as drafts_svc
 
 
 # ---------------------------------------------------------------------------

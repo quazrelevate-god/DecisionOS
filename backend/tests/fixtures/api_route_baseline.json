@@ -1,11 +1,12 @@
 {
-  "count": 303,
-  "sha": "e4093d02bb7234aae2b73fda7fc201ccef740a0567c28c283eaa4dc3c9224a07",
+  "count": 309,
+  "sha": "cfdb3646c89ec5b7f42ffe27723feca94121efe3da119ed9f8f33eb0d14e2a70",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware"
   ],
   "routes": [
+    "DELETE /api/admin/announcements/{aid}",
     "DELETE /api/admin/tenants/{tenant_id}",
     "DELETE /api/assets/{aid}",
     "DELETE /api/auth/me/sessions",
@@ -31,6 +32,7 @@
     "GET /api/admin/ai-keys/status",
     "GET /api/admin/ai-quality",
     "GET /api/admin/alerts",
+    "GET /api/admin/announcements",
     "GET /api/admin/audit",
     "GET /api/admin/audit-log",
     "GET /api/admin/billing/overview",
@@ -56,6 +58,7 @@
     "GET /api/admin/tickets/{ticket_id}",
     "GET /api/admin/usage",
     "GET /api/admin/users",
+    "GET /api/announcements/active",
     "GET /api/assets",
     "GET /api/attendance",
     "GET /api/auth/email/verify/{token}",
@@ -143,6 +146,7 @@
     "HEAD /openapi.json",
     "HEAD /redoc",
     "PATCH /api/admin/admins/{admin_id}",
+    "PATCH /api/admin/announcements/{aid}",
     "PATCH /api/admin/billing/tenants/{tenant_id}/plan",
     "PATCH /api/admin/config/flags",
     "PATCH /api/admin/config/models",
@@ -177,6 +181,8 @@
     "POST /api/admin/2fa/disable",
     "POST /api/admin/2fa/enroll",
     "POST /api/admin/admins",
+    "POST /api/admin/announcements",
+    "POST /api/admin/announcements/{aid}/email",
     "POST /api/admin/impersonation/{session_id}/revoke",
     "POST /api/admin/login",
     "POST /api/admin/logout",

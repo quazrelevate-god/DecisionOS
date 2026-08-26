@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from core import db, new_id, now_iso, log_activity, get_current_user, require_role, require_perm
 from services.ai import brain_context
-from server import add_inbox_item  # inbox helper still in server
+from services.inbox import add_inbox_item
 from services.finance_signals import run_followup
 
 router = APIRouter(prefix="/api")

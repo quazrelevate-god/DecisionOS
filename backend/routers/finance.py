@@ -14,7 +14,7 @@ from pydantic import BaseModel
 
 from core import db, get_current_user, require_perm, new_id, now_iso, log_activity, logger
 from services.tasks import enrich_tasks
-from server import add_inbox_item  # inbox helper still in server
+from services.inbox import add_inbox_item
 from services.ingestion import (
     ai_extract_document, ai_map_spreadsheet, combine_sheets, _normalise_records, commit_ingestion_records,
     _classify_ingestion, _tenant_currency, _tenant_name,

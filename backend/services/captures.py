@@ -215,7 +215,7 @@ async def persist_capture_draft(tenant_id, wa_from, kind, payload, tri, troles, 
 
 
 async def execute_capture(d: dict, user: dict):
-    from server import add_inbox_item  # inbox helper still in server; deferred
+    from services.inbox import add_inbox_item
     tenant_id = d["tenant_id"]
     # Document-based drafts → file the extracted financial records.
     if d.get("records") and d.get("kind") in ("pdf", "image", "document"):

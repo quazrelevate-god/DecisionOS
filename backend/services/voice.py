@@ -244,7 +244,8 @@ async def process_voice_note(note_id: str):
         return
     tenant_id = note["tenant_id"]
     set_usage_tenant(tenant_id)
-    from server import tenant_operating_model, _read_reference_text, add_inbox_item  # cross-domain; move in U8-04.7/.12
+    from server import tenant_operating_model, _read_reference_text  # cross-domain; move in U8-04.7/.12
+    from services.inbox import add_inbox_item
     try:
         await db.voice_notes.update_one({"id": note_id}, {"$set": {"status": "transcribing"}})
         transcript = note.get("transcript")

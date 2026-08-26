@@ -36,6 +36,7 @@ class PatchInput(BaseModel):
 
 class AgentRequest(BaseModel):
     question: str = Field(max_length=800)
+    conversation_id: Optional[str] = Field(default=None, max_length=64)  # E3-12.1 agent memory
 
 
 class SuggestedTaskInput(BaseModel):

@@ -359,6 +359,21 @@ async def create_task_from_suggestion(inp: SuggestedTaskInput, user: dict = Depe
     return {"ok": True, "task": task_doc}
 
 
+@router.post("/run")
+async def run_bounded_agent(inp: AgentRequest, user: dict = Depends(get_current_user)):
+    """Sprint 4: the bounded, governed tool-calling agent (observe -> act -> re-plan).
+    Answers open-ended questions by calling RBAC-gated tools; propose_* actions land in
+    the pending_approval flow. Carries conversation_id for per-conversation memory."""
+    q = (inp.question or "").strip()
+    if not q:
+        raise HTTPException(status_code=400, detail="Ask me something about your company")
+    from services.ai.agent import run_agent, should_use_agent
+    result = await run_agent(q, user, conversation_id=inp.conversation_id)
+    # E3-11.5: surface the routing hint so the UX can send simple/numeric questions to /ask instead.
+    result["recommended_surface"] = "agent" if should_use_agent(q) else "ask"
+    return result
+
+
 @router.post("")
 async def ask_agent(inp: AgentRequest, user: dict = Depends(get_current_user)):
     q = (inp.question or "").strip()

@@ -92,9 +92,11 @@ async def _analyze_reference_file(tenant_id, task_id, rec):
         logger.warning(f"[reference-ai] analysis failed for task {task_id}: {e}")
 
 
-async def _read_reference_text(rec: dict, tenant_id: str = "") -> str:
+async def _read_reference_text(rec: dict, tenant_id: str = "", max_chars: int = 6000) -> str:
     """Read an attached reference file into plain text so the AI can factor it into a directive.
-    Images/PDFs -> Gemini OCR summary; Excel/CSV -> parsed rows; Word/txt -> extracted text."""
+    Images/PDFs -> Gemini OCR summary; Excel/CSV -> parsed rows; Word/txt -> extracted text.
+    ``max_chars`` caps the extracted body (default 6000 for voice attachments; the Company
+    Brain RAG ingest passes a larger value so long documents aren't truncated to a few chunks)."""
     try:
         ctype = (rec.get("content_type") or "").lower()
         fname = rec.get("original_filename", "file")
@@ -120,20 +122,20 @@ async def _read_reference_text(rec: dict, tenant_id: str = "") -> str:
         if ctype in ("text/csv",) or fname.lower().endswith(".csv"):
             import pandas as pd, io as _io
             df = pd.read_csv(_io.BytesIO(data), nrows=200)
-            return f"[{fname}]\n" + df.to_csv(index=False)[:6000]
+            return f"[{fname}]\n" + df.to_csv(index=False)[:max_chars]
         if fname.lower().endswith((".xlsx", ".xls")) or "spreadsheet" in ctype or "excel" in ctype:
             import pandas as pd, io as _io
             df = pd.read_excel(_io.BytesIO(data), nrows=200)
-            return f"[{fname}]\n" + df.to_csv(index=False)[:6000]
+            return f"[{fname}]\n" + df.to_csv(index=False)[:max_chars]
         # Word.
         if fname.lower().endswith(".docx") or "wordprocessingml" in ctype:
             import docx, io as _io
             doc = docx.Document(_io.BytesIO(data))
             text = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
-            return f"[{fname}]\n" + text[:6000]
+            return f"[{fname}]\n" + text[:max_chars]
         # Plain text.
         if ctype.startswith("text/") or fname.lower().endswith(".txt"):
-            return f"[{fname}]\n" + data.decode("utf-8", errors="ignore")[:6000]
+            return f"[{fname}]\n" + data.decode("utf-8", errors="ignore")[:max_chars]
     except Exception as e:
         logger.warning(f"[capture-ref] read failed for {fname}: {e}")
     return ""

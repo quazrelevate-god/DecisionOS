@@ -92,13 +92,14 @@ async def upsert_chunks(tenant_id: str, doc_id: str, chunks: list) -> int:
     points = []
     for ch in chunks:
         idx = ch["chunk_idx"]
+        # per-chunk extra payload (e.g. a document's department / roles_allowed / title for
+        # RBAC at retrieval); the reserved fields below always win.
+        payload = dict(ch.get("payload") or {})
+        payload.update({"tenant_id": tenant_id, "doc_id": doc_id, "chunk_idx": idx,
+                        "text": ch.get("text", ""), "visibility": ch.get("visibility", "tenant"),
+                        "tags": ch.get("tags") or []})
         points.append(models.PointStruct(
-            id=_point_id(tenant_id, doc_id, idx),
-            vector=list(ch["embedding"]),
-            payload={"tenant_id": tenant_id, "doc_id": doc_id, "chunk_idx": idx,
-                     "text": ch.get("text", ""), "visibility": ch.get("visibility", "tenant"),
-                     "tags": ch.get("tags") or []},
-        ))
+            id=_point_id(tenant_id, doc_id, idx), vector=list(ch["embedding"]), payload=payload))
     await get_client().upsert(COLLECTION, points=points)
     return len(points)
 

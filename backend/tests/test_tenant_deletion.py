@@ -231,7 +231,7 @@ class TestFullWipeCoverage:
         # File deletion happened.
         assert result["files_deleted"] == 1
         assert result["files_failed"] == 0
-        assert fake_store.deleted == [f"decisionos/ten-A/file-1.pdf"]
+        assert fake_store.deleted == ["decisionos/ten-A/file-1.pdf"]
 
     def test_other_tenant_data_untouched(self):
         """A neighboring tenant's data MUST survive a delete on ten-A."""

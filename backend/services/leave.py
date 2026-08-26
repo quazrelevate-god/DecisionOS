@@ -8,7 +8,7 @@ import json
 
 from emergentintegrations.llm.chat import UserMessage
 
-from core import db, logger, new_id, now_iso, log_activity, claude_chat, LLM_MODEL, _extract_json
+from core import db, new_id, now_iso, log_activity, claude_chat, _extract_json
 from services.notifications import push_notification
 from core import model_for
 from prompts import render

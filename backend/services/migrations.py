@@ -39,9 +39,8 @@ Design notes:
     MongoDB's create_index is already idempotent (creating an existing
     index is a no-op).
 """
-import asyncio
 import time
-from typing import Awaitable, Callable, Optional
+from typing import Awaitable, Callable
 
 from core import logger, now_iso
 

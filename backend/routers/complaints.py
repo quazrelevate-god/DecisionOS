@@ -7,7 +7,6 @@ stays in server for now.
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
 
 from core import db, new_id, now_iso, log_activity, get_current_user, require_role, require_perm
 from services.ai import brain_context

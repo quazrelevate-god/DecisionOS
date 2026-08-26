@@ -21,11 +21,10 @@ Server-level helpers deferred-imported inside handlers:
   `enrich_decisions`.
 """
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
-from core import db, get_current_user, require_role, new_id
+from core import db, get_current_user, new_id
 from services.tasks import enrich_tasks
 
 

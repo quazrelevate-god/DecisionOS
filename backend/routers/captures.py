@@ -5,10 +5,8 @@ reject, clarify, approve. Approving runs execute_capture (the capture engine,
 still in server.py until Sprint 4); _norm_phone + send_wa_reply are also
 server-side for now.
 """
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
 
 from core import db, get_current_user, require_perm, user_perms, now_iso
 from services.whatsapp import _norm_phone, send_wa_reply

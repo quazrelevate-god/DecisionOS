@@ -20,22 +20,18 @@ so the router can never leak content the caller shouldn't see.
 """
 import asyncio
 import io
-import re
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
 from emergentintegrations.llm.chat import UserMessage
 
 from services import obj_store
 from services.ai import brain_context
 from services.ai import brain_rbac
 from core import (
-    db, claude_chat, LLM_MODEL, _extract_json, new_id, now_iso, logger,
+    db, claude_chat, _extract_json, new_id, now_iso, logger,
     get_current_user, user_perms,
 )
-from routers.brain_docs import _visibility_filter as _docs_visibility_filter
-from routers.brain_docs import _keywords as _docs_keywords
 from core import model_for
 from prompts import render
 

@@ -7,7 +7,7 @@ plus the answer-language directive. Depend on core + normalizers; routers.ledger
 category defaults and server's WORKFLOW_STAGES are imported deferred.
 """
 from core import (
-    db, logger, claude_chat, LLM_MODEL, _extract_json, new_id,
+    db, logger, claude_chat, _extract_json, new_id,
     normalize_lexicon, normalize_operating_model, DEFAULT_OPERATING_MODEL,
 )
 from emergentintegrations.llm.chat import UserMessage

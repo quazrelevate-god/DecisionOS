@@ -188,7 +188,8 @@ class TestPlatformAdminSecretSplit:
     """
 
     def _swap_secret(self, monkeypatch, secret: str):
-        import config, core
+        import config
+        import core
         monkeypatch.setattr(config, "PLATFORM_ADMIN_JWT_SECRET", secret)
         monkeypatch.setattr(core, "PLATFORM_ADMIN_JWT_SECRET", secret)
         return core, config
@@ -316,7 +317,8 @@ class TestSeedPlatformAdmin:
         self._patch_bootstrap(monkeypatch, prod=True,
                                 email="ops@corp.com", password="NEW-password-99",
                                 allow_refresh=False)
-        import server, core
+        import server
+        import core
         db = _FakeDB()
         # Pre-existing admin with a DIFFERENT hash than the env password:
         original_hash = core.hash_password("original-password-01")
@@ -339,7 +341,8 @@ class TestSeedPlatformAdmin:
         self._patch_bootstrap(monkeypatch, prod=True,
                                 email="ops@corp.com", password="NEW-password-99",
                                 allow_refresh=True)
-        import server, core
+        import server
+        import core
         db = _FakeDB()
         db.platform_admins.docs.append({
             "id": "existing", "email": "ops@corp.com",
@@ -357,7 +360,8 @@ class TestSeedPlatformAdmin:
         self._patch_bootstrap(monkeypatch, prod=True,
                                 email="ops@corp.com", password="stable-password-77",
                                 allow_refresh=True)
-        import server, core
+        import server
+        import core
         db = _FakeDB()
         h = core.hash_password("stable-password-77")
         db.platform_admins.docs.append({

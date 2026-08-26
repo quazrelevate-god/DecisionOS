@@ -251,7 +251,7 @@ class TestWithFileImage:
         typed_vendor = f"TypedVendor_{uuid.uuid4().hex[:6]}"
         typed_title = f"TypedTitle_{uuid.uuid4().hex[:6]}"
         typed_amount = "999"  # different from bill's 336300
-        files = {"file": (f"bill.png", img, "image/png")}
+        files = {"file": ("bill.png", img, "image/png")}
         r = requests.post(
             f"{API}/expenses/with-file", headers=h,
             data={"title": typed_title, "amount": typed_amount,

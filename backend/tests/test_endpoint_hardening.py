@@ -111,7 +111,8 @@ class TestDevOtpLeak:
         """server.py must raise at import time when ENV=prod and neither
         APM_SMS_API_KEY nor TWILIO_* is set. Grep-style check because
         actually reloading server with prod env is heavy."""
-        import server, inspect
+        import server
+        import inspect
         src = inspect.getsource(server)
         # The check must reference both providers and the RuntimeError.
         assert "APM_ENABLED or TWILIO_ENABLED" in src

@@ -20,7 +20,7 @@ from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 
-from core import db, get_current_user, user_perms
+from core import db, get_current_user
 
 
 router = APIRouter(prefix="/api/dex")

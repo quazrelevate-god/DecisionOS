@@ -7,7 +7,7 @@ _apm_send_and_fetch_otp, OTP_MAX_ATTEMPTS) + _norm_phone stay in server.
 import re
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, HTTPException, Response
 
 from core import db, now_iso, create_token, set_auth_cookie, login_response
 from services.otp import _issue_otp, _hash_otp, OTP_MAX_ATTEMPTS

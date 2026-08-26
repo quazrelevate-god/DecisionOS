@@ -1,6 +1,5 @@
 """Decisions request schemas (Epic 8 Sprint 5 -- consolidated from routers).
 """
-from typing import Optional
 from pydantic import BaseModel, Field
 
 

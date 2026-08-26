@@ -7,11 +7,10 @@ process_voice_note / transcribe_audio / _tenant_industry stay in server.
 import os
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File, Form
-from pydantic import BaseModel
 
 from core import (
     db, get_current_user, require_perm, new_id, now_iso, logger,
-    claude_chat, LLM_MODEL, _extract_json,
+    claude_chat, _extract_json,
 )
 from emergentintegrations.llm.chat import UserMessage
 from models.voice import TextNoteInput

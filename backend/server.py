@@ -204,11 +204,8 @@ from services.otp import (  # noqa: E402,F401
 # consolidated `from services.enrich import ...` re-export below.
 
 
-# ---------------------------------------------------------------------------
-# Voice notes / ingestion
-# ---------------------------------------------------------------------------
-UPLOAD_DIR = ROOT_DIR / "uploads"
-UPLOAD_DIR.mkdir(exist_ok=True)
+# UPLOAD_DIR moved to config.py (single source, Epic 8 Sprint 8 -- U8-08.2);
+# no server.py code references it after the Sprint 7 extractions.
 
 
 # ---------------------------------------------------------------------------

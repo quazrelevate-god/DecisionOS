@@ -6,31 +6,39 @@ move of legacy disk uploads into object storage; seed_platform_admin provisions 
 super-admin from env. All are startup-only, orchestrated by
 bootstrap.lifecycle._bootstrap. server.py re-exports these names.
 """
+
 from __future__ import annotations
 
 import os
-from pathlib import Path
 
 from core import (
-    db, logger, now_iso, new_id, hash_password, verify_password, DEFAULT_ROLES,
+    db,
+    logger,
+    now_iso,
+    new_id,
+    hash_password,
+    verify_password,
+    DEFAULT_ROLES,
+    UPLOAD_DIR,
 )
-
-# Legacy local-disk upload root (backend/uploads). Derived from this file's
-# location so the migration does not import server. bootstrap/ -> backend/.
-UPLOAD_DIR = Path(__file__).resolve().parent.parent / "uploads"
 
 
 async def migrate_tenants():
     """Backfill onboarding fields for tenants created before industry-aware onboarding."""
     async for t in db.tenants.find({"roles": {"$exists": False}}):
-        await db.tenants.update_one({"id": t["id"]}, {"$set": {
-            "industry": t.get("industry", "General"),
-            "company_size": t.get("company_size", ""),
-            "region": t.get("region", ""),
-            "currency": t.get("currency", "INR"),
-            "roles": DEFAULT_ROLES,
-            "products": t.get("products", []),
-        }})
+        await db.tenants.update_one(
+            {"id": t["id"]},
+            {
+                "$set": {
+                    "industry": t.get("industry", "General"),
+                    "company_size": t.get("company_size", ""),
+                    "region": t.get("region", ""),
+                    "currency": t.get("currency", "INR"),
+                    "roles": DEFAULT_ROLES,
+                    "products": t.get("products", []),
+                }
+            },
+        )
 
 
 async def migrate_local_disk_uploads_to_obj_store(_db):
@@ -48,18 +56,19 @@ async def migrate_local_disk_uploads_to_obj_store(_db):
     'failed' (next boot retries only what wasn't migrated).
     """
     from services.uploads import store_upload, is_legacy_path
+
     stats = {"scanned": 0, "migrated": 0, "skipped_absent": 0, "already_new": 0, "failed": 0}
 
     # Map: collection -> (path_field, category, tenant_extractor)
     plan = [
         ("voice_notes", "audio_path", "voice-notes"),
-        ("meetings",    "audio_path", "meetings"),
-        ("ingestions",  "storage_path", "ingestions"),  # storage_path may already be new
+        ("meetings", "audio_path", "meetings"),
+        ("ingestions", "storage_path", "ingestions"),  # storage_path may already be new
     ]
 
     for coll_name, path_field, category in plan:
         cursor = _db[coll_name].find(
-            {path_field: {"$exists": True, "$ne": None, "$ne": ""}},
+            {path_field: {"$exists": True, "$nin": [None, ""]}},
             {"_id": 0, "id": 1, "tenant_id": 1, path_field: 1},
         )
         async for doc in cursor:
@@ -78,6 +87,7 @@ async def migrate_local_disk_uploads_to_obj_store(_db):
             # box (very common — the app moved to a new machine, files
             # left behind), skip and record.
             from pathlib import Path as _P
+
             legacy_p = _P(path) if _P(path).is_absolute() else UPLOAD_DIR / path
             if not legacy_p.exists():
                 stats["skipped_absent"] += 1
@@ -90,8 +100,7 @@ async def migrate_local_disk_uploads_to_obj_store(_db):
             try:
                 data = legacy_p.read_bytes()
                 ext = legacy_p.suffix.lstrip(".") or "bin"
-                stored = await store_upload(tenant_id, category, data, ext,
-                                             file_id=doc["id"])
+                stored = await store_upload(tenant_id, category, data, ext, file_id=doc["id"])
                 await _db[coll_name].update_one(
                     {"id": doc["id"]},
                     {"$set": {path_field: stored["storage_path"]}},
@@ -109,8 +118,7 @@ async def migrate_local_disk_uploads_to_obj_store(_db):
     # Also handle ledger attachments (nested field: attachment.storage_path)
     for coll_name in ("expenses", "assets", "inventory"):
         cursor = _db[coll_name].find(
-            {"attachment.url": {"$regex": "^/api/files/"},
-             "attachment.storage_path": {"$exists": False}},
+            {"attachment.url": {"$regex": "^/api/files/"}, "attachment.storage_path": {"$exists": False}},
             {"_id": 0, "id": 1, "tenant_id": 1, "attachment": 1},
         )
         async for doc in cursor:
@@ -132,9 +140,7 @@ async def migrate_local_disk_uploads_to_obj_store(_db):
                 ext = legacy_p.suffix.lstrip(".") or "bin"
                 stored = await store_upload(tenant_id, "ledger", data, ext)
                 new_att = {**att, "storage_path": stored["storage_path"]}
-                await _db[coll_name].update_one(
-                    {"id": doc["id"]}, {"$set": {"attachment": new_att}}
-                )
+                await _db[coll_name].update_one({"id": doc["id"]}, {"$set": {"attachment": new_att}})
                 try:
                     legacy_p.unlink()
                 except Exception:
@@ -169,6 +175,7 @@ async def seed_platform_admin():
         opt-in (one-off flag for the rare intended reset).
     """
     from config import PLATFORM_ADMIN_JWT_SECRET as _pjwt  # noqa: F401 (import triggers config warn)
+
     env_email = os.environ.get("SUPERADMIN_EMAIL", "").strip().lower()
     env_password = os.environ.get("SUPERADMIN_PASSWORD", "").strip()
     running_env = os.environ.get("ENV", "dev").strip().lower()
@@ -191,10 +198,15 @@ async def seed_platform_admin():
         password = env_password
     existing = await db.platform_admins.find_one({"email": email})
     if not existing:
-        await db.platform_admins.insert_one({
-            "id": new_id(), "email": email, "name": "Platform Admin",
-            "password_hash": hash_password(password), "created_at": now_iso(),
-        })
+        await db.platform_admins.insert_one(
+            {
+                "id": new_id(),
+                "email": email,
+                "name": "Platform Admin",
+                "password_hash": hash_password(password),
+                "created_at": now_iso(),
+            }
+        )
         logger.info(f"Platform super-admin seeded: {email}")
         return
     # From here on: an admin doc already exists. We NEVER silently
@@ -203,6 +215,7 @@ async def seed_platform_admin():
     # deployer explicitly opts in via SUPERADMIN_ALLOW_HASH_REFRESH=1,
     # which they should then unset on the following deploy.
     from config import SUPERADMIN_ALLOW_HASH_REFRESH as _refresh_ok
+
     if _refresh_ok and not verify_password(password, existing.get("password_hash", "")):
         await db.platform_admins.update_one(
             {"id": existing["id"]},

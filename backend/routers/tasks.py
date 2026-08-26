@@ -71,10 +71,11 @@ from services.tasks import (
     _attach_reference_ids,
     _can_work_task,
     _plan_progress,
-    _tenant_industry,
     enrich_task,
     enrich_tasks,
 )
+# NB: _tenant_industry is defined locally below (identical logic); the services.tasks
+# import was dead (immediately shadowed) -- removed in Epic 8 Sprint 8 (U8-08.2).
 
 
 router = APIRouter(prefix="/api")

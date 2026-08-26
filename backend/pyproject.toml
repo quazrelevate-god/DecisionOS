@@ -1,0 +1,37 @@
+# Backend tooling config (Epic 8 Sprint 8 -- U8-08.1).
+# Enforces the readability standard: ruff (lint) + black (format) + import-linter
+# (layering). Line length is 120 -- covers p99 of the existing tree, so black is a
+# light touch rather than a full reflow.
+
+[tool.black]
+line-length = 120
+target-version = ["py311"]
+extend-exclude = '(\.venv|uploads|__pycache__)'
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = [".venv", "uploads", "__pycache__", "scratchpad"]
+
+[tool.ruff.lint]
+# F = pyflakes (undefined names, unused imports, real bugs) -- the valuable set.
+# E/W = pycodestyle. We defer line-length (E501) to black, and E402 because this
+# codebase deliberately places re-export imports after app assembly (server.py) and
+# uses in-function imports to break cycles -- both flagged E402 but intentional.
+select = ["E", "W", "F"]
+# E501 -> black owns line length. E402 -> deliberate re-export-after-assembly +
+# cycle-breaking in-function imports. E701/E702 -> the codebase's compact one-liner
+# style (if x: return / a=1; b=2), pervasive and intentional. E741 -> a handful of
+# short loop vars. None are bugs; the valuable F-codes stay on.
+ignore = ["E501", "E402", "E701", "E702", "E741"]
+
+[tool.ruff.lint.per-file-ignores]
+# server.py is the backward-compat re-export hub: `from server import <helper>` must
+# keep resolving while routers/services migrate to real homes. Those re-exports read
+# as unused (F401) but are the module's public surface.
+"server.py" = ["F401"]
+# Package/foundation __init__ modules are re-export surfaces by design.
+"__init__.py" = ["F401"]
+"core/__init__.py" = ["F401"]
+# Tests carry fixture imports + intentional redefinitions.
+"tests/*" = ["F401", "F811", "F841", "E711", "E712"]

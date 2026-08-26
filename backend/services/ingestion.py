@@ -18,7 +18,7 @@ from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithM
 import time
 from core import (
     db, logger, new_id, now_iso, tenant_role_keys,
-    claude_chat, LLM_MODEL, _extract_json, _est_tokens, log_usage,
+    claude_chat, _extract_json, _est_tokens, log_usage,
     EMERGENT_LLM_KEY, VISION_MODEL, record_ai_call,
 )
 from services.vision import get_gemini_client, _gemini_doc_sync

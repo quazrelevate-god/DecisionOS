@@ -26,6 +26,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 # public surface of `core` unchanged for every existing consumer.
 from config import (  # noqa: F401 — re-exports
     MONGO_URL, DB_NAME,
+    ROOT_DIR, UPLOAD_DIR,  # E8 S8: single source for the legacy upload path
     JWT_SECRET, JWT_ALGORITHM,
     PLATFORM_ADMIN_JWT_SECRET, AUTH_RETURN_TOKEN, SUPERADMIN_ALLOW_HASH_REFRESH,
     AUTH_COOKIE_NAME, AUTH_COOKIE_MAX_AGE, ADMIN_COOKIE_NAME,

@@ -61,7 +61,9 @@ def sarvam_rest(path: str) -> dict:
 
 def sarvam_batch(path: str) -> dict:
     """Sarvam Batch STT (async job) for long recordings (>30s, up to 2h). Blocking — run in a thread."""
-    import tempfile, glob, json as _json
+    import tempfile
+    import glob
+    import json as _json
     from sarvamai import SarvamAI
     client = SarvamAI(api_subscription_key=get_ai_key("sarvam"))
     job = client.speech_to_text_job.create_job(model=SARVAM_STT_MODEL, mode="translate", language_code="unknown")

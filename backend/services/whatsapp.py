@@ -10,7 +10,7 @@ ingestion, transcription, notifications; nothing imports it back.
 import os
 import re
 
-from core import db, logger, new_id, now_iso, get_ai_key, set_usage_tenant, tenant_role_keys
+from core import db, logger, new_id, now_iso, set_usage_tenant, tenant_role_keys
 # Graph API transport moved to integrations/whatsapp.py (Epic 8 Sprint 6);
 # imported here + re-exported so `from services.whatsapp import wa_token, ...`
 # call sites (whatsapp router, captures, finance) keep working.
@@ -204,7 +204,6 @@ async def process_whatsapp_message(message: dict):
             # the review UI can render it via the auth-gated /api/files
             # endpoint.
             from services.uploads import store_upload, download_to_temp
-            import tempfile
             stored = await store_upload(tenant_id, "ingestions", data, ext,
                                          content_type=mime, file_id=ing_id)
             fname = f"ingest_{ing_id}.{ext}"  # kept for capture_draft display

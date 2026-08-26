@@ -24,7 +24,6 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import Response
-from pydantic import BaseModel, Field
 
 from services import obj_store
 from services.tenancy import tenant_filter  # FIX-001-C

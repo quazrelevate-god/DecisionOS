@@ -11,7 +11,7 @@ from typing import Optional
 from fastapi import HTTPException
 from emergentintegrations.llm.chat import UserMessage
 
-from core import db, logger, user_perms, claude_chat, LLM_MODEL, _extract_json
+from core import db, logger, user_perms, claude_chat, _extract_json
 from core import model_for
 from prompts import render
 from services.ai.pii import redact_pii

@@ -107,7 +107,8 @@ class TestTextIndexStemming:
     def test_bootstrap_uses_english_language_for_brain_context(self):
         """Source-inspection: brain_context text index must be built
         with default_language='english', not 'none'."""
-        import server, inspect
+        import server
+        import inspect
         src = inspect.getsource(server)
         # Find the brain_context text index create block.
         marker = 'name="brain_context_text_v1"'
@@ -122,7 +123,8 @@ class TestTextIndexStemming:
         assert 'default_language="none"' not in window
 
     def test_bootstrap_uses_english_language_for_brain_documents(self):
-        import server, inspect
+        import server
+        import inspect
         src = inspect.getsource(server)
         marker = 'name="brain_documents_text_v1"'
         assert marker in src
@@ -134,7 +136,8 @@ class TestTextIndexStemming:
     def test_bootstrap_creates_memory_text_index(self):
         """db.memory had no text index — /ask fell back to regex full
         scans. Verify the boot-time create_index call now exists."""
-        import server, inspect
+        import server
+        import inspect
         src = inspect.getsource(server)
         assert 'name="memory_text_v1"' in src, (
             "S4-01 regression: db.memory must gain a text index"
@@ -156,7 +159,8 @@ class TestDropStaleTextIndexMigration:
         exercising the bootstrap-time definition. Kept simple:
         re-declare the same logic here (source-of-truth check below)
         so we can unit-test its behaviour."""
-        import server, inspect
+        import server
+        import inspect
         src = inspect.getsource(server)
         # Assert the closure exists in bootstrap (regression guard).
         assert "_drop_none_language_text_indexes" in src
@@ -165,7 +169,8 @@ class TestDropStaleTextIndexMigration:
 
     def test_migration_registered_in_ledger(self):
         """Source-inspection: the migration wraps a name in _apply_migration."""
-        import server, inspect
+        import server
+        import inspect
         src = inspect.getsource(server)
         assert '"drop_none_language_text_indexes_v1"' in src
         # And it must run BEFORE the create_index calls that rebuild them.
@@ -188,7 +193,8 @@ class TestBrainQueryCacheRename:
         target brain_query_cache now, not brain_contexts. Comments
         mentioning the old name are fine (renamed-from narrative); we
         assert on actual DB call shapes only."""
-        import routers.brain as brain_router, inspect
+        import routers.brain as brain_router
+        import inspect
         src = inspect.getsource(brain_router)
         # The two writes and one read in this router must use the new name.
         assert "db.brain_query_cache.insert_one" in src
@@ -205,7 +211,8 @@ class TestBrainQueryCacheRename:
             )
 
     def test_bootstrap_creates_indexes_on_new_collection(self):
-        import server, inspect
+        import server
+        import inspect
         src = inspect.getsource(server)
         assert 'db.brain_query_cache.create_index' in src
 
@@ -256,7 +263,8 @@ class TestRenameMigrationBehaviour:
         create_index on a boot that saw the migration ledger reset),
         the migration must drop it before rename. Exercise the shape
         of the closure by asserting its source-inspection markers."""
-        import server, inspect
+        import server
+        import inspect
         src = inspect.getsource(server)
         assert "count_documents({})" in src, (
             "S4-03 rename migration must check target row count"

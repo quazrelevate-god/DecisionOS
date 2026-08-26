@@ -11,10 +11,8 @@ Server-local helpers (`ai_generate_lexicon`, `normalize_os_blueprint`,
 inside each handler to avoid the circular import between `server.py` and
 its own routers.
 """
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from pydantic import BaseModel, EmailStr, Field
 
 from core import (
     db, get_current_user, hash_password, verify_password, create_token,

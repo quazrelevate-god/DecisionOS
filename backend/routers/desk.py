@@ -30,7 +30,6 @@ from datetime import datetime, timezone, date, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
 
 from core import db, get_current_user, now_iso, new_id
 
@@ -398,7 +397,6 @@ def _format_amount(n) -> Optional[str]:
     s = f"{int(round(n)):,}"
     parts = s.split(",")
     if len(parts) > 2:
-        last = parts[-1]
         rest = parts[:-1]
         s = ",".join(rest[::-1][0:1] + [",".join(rest[::-1][1:][::-1])]) if len(rest) > 1 else ",".join(rest)
         # Simpler: reformat with Indian style manually

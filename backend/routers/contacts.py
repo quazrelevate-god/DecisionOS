@@ -4,10 +4,9 @@ Buyer/supplier contact CRUD with a denormalized-name cascade into invoices,
 payments and workflows on rename. enrich_contacts + CONTACT_TYPES/STATUS/
 LIFECYCLE_STAGES stay in server (shared with dashboard/ingestion) for now.
 """
-from typing import Optional, List
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
 
 from core import db, logger, new_id, now_iso, log_activity, require_perm, require_role
 from server import CONTACT_TYPES, CONTACT_STATUS, LIFECYCLE_STAGES  # shared constants (S5)

@@ -2,18 +2,15 @@
 (dos_admin_token), AI provider key management, platform metrics, tenant &
 user administration and health. Foundation imported from core.py."""
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime, timezone, timedelta
 import asyncio
 
 from core import (
     db, logger, now_iso, new_id,
-    hash_password, verify_password,
+    verify_password,
     create_admin_token, set_admin_cookie, clear_admin_cookie, get_platform_admin,
-    get_ai_key, set_ai_keys, ai_key_source, mask_key, AI_KEY_PROVIDERS, claude_key,
-    EMERGENT_LLM_KEY, LLM_MODEL, VISION_MODEL,
-    login_response,
+    get_ai_key, set_ai_keys, ai_key_source, mask_key, AI_KEY_PROVIDERS, EMERGENT_LLM_KEY, LLM_MODEL, login_response,
 )
 
 router = APIRouter(prefix="/api/admin")
@@ -495,7 +492,8 @@ async def _probe_whatsapp():
     if not token or not pnid:
         return {"status": "not_set", "detail": "Token or phone number ID missing"}
     try:
-        import httpx, os
+        import httpx
+        import os
         ver = os.environ.get("GRAPH_API_VERSION", "v21.0")
         async with httpx.AsyncClient(timeout=15) as c:
             r = await c.get(f"https://graph.facebook.com/{ver}/{pnid}",

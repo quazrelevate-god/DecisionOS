@@ -147,6 +147,14 @@ SERVE_LEGACY_LOCAL_DISK = (
     in ('1', 'true', 'yes', 'on')
 )
 
+# Legacy local-disk upload root (backend/uploads). Single source of truth
+# (Epic 8 Sprint 8 -- U8-08.2): server.py, bootstrap/migrations.py, and
+# routers/files.py all referenced this path; two of them had their own copy
+# and files.py had none (a latent NameError). Re-exported via core.
+ROOT_DIR = Path(__file__).resolve().parent
+UPLOAD_DIR = ROOT_DIR / "uploads"
+UPLOAD_DIR.mkdir(exist_ok=True)
+
 # S0-04: dev-OTP leak. The OTP request response used to include
 # `dev_otp` in the JSON body whenever no SMS provider was configured —
 # fine for dev, catastrophic for prod (any /auth/otp/request caller

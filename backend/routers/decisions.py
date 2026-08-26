@@ -21,7 +21,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
 
 from core import db, get_current_user, require_perm, new_id, now_iso
 from models.tasks import TaskCreateInput

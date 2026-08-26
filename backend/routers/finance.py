@@ -10,14 +10,13 @@ import re
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
-from pydantic import BaseModel
 
 from core import db, get_current_user, require_perm, new_id, now_iso, log_activity, logger
 from services.tasks import enrich_tasks
 from services.inbox import add_inbox_item
 from services.ingestion import (
     ai_extract_document, ai_map_spreadsheet, combine_sheets, _normalise_records, commit_ingestion_records,
-    _classify_ingestion, _tenant_currency, _tenant_name,
+    _classify_ingestion, _tenant_currency, _tenant_name, DOC_MIME,
 )
 from services.ai.extraction import ai_score_contact
 

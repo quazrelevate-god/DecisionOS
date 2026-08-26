@@ -27,7 +27,7 @@ When S4-05 (embeddings) + S4-06 (vector search) land, they add
 one code path here — both routers benefit automatically.
 """
 from __future__ import annotations
-from typing import Any, Optional
+from typing import Optional
 
 from core import db, logger
 

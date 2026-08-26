@@ -8,10 +8,8 @@ Ships (Sprint 1 Batch C):
   * GET  /api/crm/activity/{cid}  ->  activity timeline for a contact
 """
 from datetime import datetime, timezone
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
 
 from core import db, get_current_user, new_id, now_iso, require_role, require_perm
 
@@ -48,7 +46,6 @@ async def outstanding_by_contact(user: dict = Depends(get_current_user)):
     frontend logic). Grouping key is invoice.contact_id where present,
     else contact_name matched to contacts (denormalized-name fallback,
     same pattern /contacts/{id}/profile uses)."""
-    from datetime import datetime, timezone
     tid = user["tenant_id"]
 
     # Build a name -> id lookup so we can attribute name-only invoices.

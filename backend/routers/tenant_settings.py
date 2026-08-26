@@ -7,20 +7,17 @@ helpers (ai_generate_*, backfill_operating_model, normalize_finance_categories)
 and a few shared models stay in server; services are deferred-imported.
 """
 import re
-from typing import Optional, List
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from core import (
-    db, get_current_user, require_perm, require_role, user_perms, clean_perms,
-    tenant_role_keys, PERMISSION_KEYS, DEFAULT_ROLES, now_iso, log_activity, logger,
-    normalize_lexicon, normalize_operating_model,
+    db, get_current_user, require_perm, require_role, clean_perms,
+    DEFAULT_ROLES, now_iso, log_activity, normalize_lexicon, normalize_operating_model,
 )
 from models.tenant import TenantUpdateInput, InviteInput
 from services.ai.generators import (
-    ai_generate_lexicon, ai_generate_operating_model, ai_generate_finance_categories,
-    backfill_operating_model, normalize_finance_categories,
+    ai_generate_lexicon, backfill_operating_model, normalize_finance_categories,
 )
 
 router = APIRouter(prefix="/api")
@@ -40,7 +37,6 @@ from models.tenant import (
     TenantAIKeysInput,
     OwnerExclusionsInput,
 )
-from models.auth import ProfileUpdateInput, ChangePasswordInput  # deduped (S5)
 
 
 @router.patch("/tenant/lexicon")

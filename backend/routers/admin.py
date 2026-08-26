@@ -9,7 +9,7 @@ import asyncio
 from core import (
     db, logger, now_iso, new_id,
     verify_password,
-    create_admin_token, set_admin_cookie, clear_admin_cookie, get_platform_admin,
+    create_admin_token, set_admin_cookie, clear_admin_cookie, get_platform_admin, require_admin_role,
     get_ai_key, set_ai_keys, ai_key_source, mask_key, AI_KEY_PROVIDERS, EMERGENT_LLM_KEY, LLM_MODEL, login_response,
 )
 
@@ -68,7 +68,17 @@ async def admin_login(payload: AdminLoginInput, request: Request, response: Resp
             {"identifier": ident},
             {"$inc": {"count": 1}, "$set": {"last": now_iso()}}, upsert=True)
         raise HTTPException(status_code=401, detail="Invalid admin credentials")
+    # Epic 10 S7: 2FA gate. If the admin has TOTP on, require a valid code.
+    from services.auth import totp as _totp
+    if _totp.is_enabled(admin):
+        if not payload.code:
+            return {"requires_2fa": True}
+        if not _totp.verify_totp(admin, payload.code):
+            await db.platform_login_attempts.update_one(
+                {"identifier": ident}, {"$inc": {"count": 1}, "$set": {"last": now_iso()}}, upsert=True)
+            raise HTTPException(status_code=401, detail="Invalid 2FA code")
     await db.platform_login_attempts.delete_one({"identifier": ident})
+    await db.platform_admins.update_one({"id": admin["id"]}, {"$set": {"last_login": now_iso()}})
     token = create_admin_token(admin["id"])
     set_admin_cookie(response, token)
     await log_admin_action(admin, "login", "Signed in to the admin console")
@@ -88,7 +98,9 @@ async def admin_logout(response: Response, admin: dict = Depends(get_platform_ad
 
 @router.get("/me")
 async def admin_me(admin: dict = Depends(get_platform_admin)):
-    return {"id": admin["id"], "email": admin["email"], "name": admin.get("name")}
+    return {"id": admin["id"], "email": admin["email"], "name": admin.get("name"),
+            "role": admin.get("role") or "super_admin",
+            "two_factor": bool((admin.get("two_factor") or {}).get("enabled_secret"))}
 
 
 # --- Metrics ----------------------------------------------------------------
@@ -410,7 +422,7 @@ async def admin_get_ai_keys(admin: dict = Depends(get_platform_admin)):
 
 
 @router.put("/ai-keys")
-async def admin_put_ai_keys(payload: AiKeysInput, admin: dict = Depends(get_platform_admin)):
+async def admin_put_ai_keys(payload: AiKeysInput, admin: dict = Depends(require_admin_role("super_admin"))):
     values = {k: v for k, v in payload.model_dump().items() if v is not None}
     if not values:
         raise HTTPException(status_code=400, detail="No keys provided")

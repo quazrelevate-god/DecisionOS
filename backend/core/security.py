@@ -141,7 +141,27 @@ async def get_platform_admin(
     admin = await db.platform_admins.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0})
     if not admin:
         raise HTTPException(status_code=401, detail="Admin not found")
+    # Epic 10 S7: admin RBAC. Existing admins (no role) are super_admin.
+    if admin.get("active") is False:
+        raise HTTPException(status_code=403, detail="This admin account has been deactivated")
+    admin["role"] = admin.get("role") or "super_admin"
+    # A read-only admin can view everything but change nothing.
+    if admin["role"] == "read_only" and request.method not in ("GET", "HEAD", "OPTIONS"):
+        raise HTTPException(status_code=403, detail="Read-only admin: this action is not permitted")
     return admin
+
+
+ADMIN_ROLES = ("super_admin", "support", "billing", "read_only")
+
+
+def require_admin_role(*roles: str):
+    """Dependency factory (Epic 10 S7): gate an admin route to specific admin roles.
+    super_admin is always allowed; read-only writes are already blocked upstream."""
+    async def _dep(admin: dict = Depends(get_platform_admin)) -> dict:
+        if admin.get("role") == "super_admin" or admin.get("role") in roles:
+            return admin
+        raise HTTPException(status_code=403, detail=f"Requires admin role: {', '.join(roles)}")
+    return _dep
 
 
 def hash_password(password: str) -> str:

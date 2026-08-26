@@ -79,6 +79,7 @@ from core.security import (  # noqa: F401,E402
     bearer_scheme, _mint_csrf_token, set_csrf_cookie, clear_csrf_cookie,
     set_auth_cookie, clear_auth_cookie, login_response,
     create_admin_token, set_admin_cookie, clear_admin_cookie, get_platform_admin,
+    require_admin_role, ADMIN_ROLES,
     hash_password, verify_password, create_token, create_impersonation_token,
 )
 # --- Access permissions moved to core/permissions.py (Epic 8 Sprint 2) -----

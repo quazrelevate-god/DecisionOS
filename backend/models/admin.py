@@ -7,6 +7,7 @@ from pydantic import BaseModel
 class AdminLoginInput(BaseModel):
     email: str
     password: str
+    code: Optional[str] = None  # TOTP code (Epic 10 S7) when the admin has 2FA on
 
 
 class AiKeysInput(BaseModel):

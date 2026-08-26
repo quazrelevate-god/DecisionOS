@@ -20,6 +20,7 @@ from routers.support import router as support_router  # Epic 10 S3 (tenant-facin
 from routers.admin_billing import router as admin_billing_router  # Epic 10 S4
 from routers.admin_observability import router as admin_observability_router  # Epic 10 S5
 from routers.admin_config import router as admin_config_router  # Epic 10 S6
+from routers.admin_rbac import router as admin_rbac_router  # Epic 10 S7
 from routers.brain import router as brain_router
 from routers.brain_docs import router as brain_docs_router
 from routers.brain_context_api import router as brain_context_router
@@ -65,6 +66,7 @@ _DOMAIN_ROUTERS = (
     admin_billing_router,
     admin_observability_router,
     admin_config_router,
+    admin_rbac_router,
     brain_router,
     brain_docs_router,
     brain_context_router,

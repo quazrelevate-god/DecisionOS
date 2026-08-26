@@ -1,6 +1,6 @@
 {
-  "count": 296,
-  "sha": "587bfb8737b42972e7837f58419c8d6ac102275e4aa875923ac1de965b790821",
+  "count": 303,
+  "sha": "e4093d02bb7234aae2b73fda7fc201ccef740a0567c28c283eaa4dc3c9224a07",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware"
@@ -25,6 +25,8 @@
     "DELETE /api/users/{uid}/temp-grant/{perm}",
     "DELETE /api/workflows/{workflow_id}",
     "GET /api/",
+    "GET /api/admin/2fa/status",
+    "GET /api/admin/admins",
     "GET /api/admin/ai-keys",
     "GET /api/admin/ai-keys/status",
     "GET /api/admin/ai-quality",
@@ -140,6 +142,7 @@
     "HEAD /docs/oauth2-redirect",
     "HEAD /openapi.json",
     "HEAD /redoc",
+    "PATCH /api/admin/admins/{admin_id}",
     "PATCH /api/admin/billing/tenants/{tenant_id}/plan",
     "PATCH /api/admin/config/flags",
     "PATCH /api/admin/config/models",
@@ -170,6 +173,10 @@
     "PATCH /api/tenant/settings",
     "PATCH /api/users/{user_id}",
     "PATCH /api/workflows/{workflow_id}/advance",
+    "POST /api/admin/2fa/confirm",
+    "POST /api/admin/2fa/disable",
+    "POST /api/admin/2fa/enroll",
+    "POST /api/admin/admins",
     "POST /api/admin/impersonation/{session_id}/revoke",
     "POST /api/admin/login",
     "POST /api/admin/logout",

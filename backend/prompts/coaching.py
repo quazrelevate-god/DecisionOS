@@ -46,3 +46,20 @@ FILE_REFERENCE = register(Prompt(
         'action points. Return JSON: {"summary": "...", "points": ["..."]}'
     ),
 ))
+
+
+# --- Sprint 5 (E3-06): Desk narrative -- LLM-generated daily briefing ---------
+DESK_NARRATIVE = register(Prompt(
+    name="desk.narrative",
+    version="1.0",
+    intent="Dex's Desk briefing: a short, warm, specific daily narrative from the owner's key counters.",
+    template=(
+        "You are Dex, the calm operations co-pilot for a small-business owner. From today's key "
+        "counters (given as JSON), write a SHORT daily briefing -- 2 to 3 sentences, warm and specific, "
+        "grounded ONLY in the numbers provided (never invent a number, name, or fact). Order by what "
+        "matters: lead with what needs attention (delayed tasks, overdue cash), acknowledge the wins "
+        "(work completed), then close steady. If nothing is pressing, say so warmly in one line. Speak "
+        "directly to the owner ('you'). Plain prose only -- no bullet lists, no markdown, no headings. "
+        "Return ONLY the briefing text, nothing else."
+    ),
+))

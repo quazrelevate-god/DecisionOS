@@ -1,6 +1,6 @@
 {
-  "count": 266,
-  "sha": "2d443ae04e677ee5e2ff64224cb5dd550a80da1a566aa8e7f0d2f88c822e8fb3",
+  "count": 268,
+  "sha": "a8a63484f9fb5bbad9d84ba221831ae2f735ed88bb40490b4886bb02a4b9a55e",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware"
@@ -37,7 +37,9 @@
     "GET /api/admin/migrations",
     "GET /api/admin/reclassify-purchases/status",
     "GET /api/admin/scheduler-locks",
+    "GET /api/admin/search",
     "GET /api/admin/tenants",
+    "GET /api/admin/tenants/{tenant_id}/360",
     "GET /api/admin/usage",
     "GET /api/admin/users",
     "GET /api/assets",

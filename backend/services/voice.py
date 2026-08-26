@@ -61,22 +61,61 @@ def _resolve_meeting_date(when: str, due_in_days) -> str:
 
 
 async def pick_least_loaded_member(tenant_id: str, role: str) -> Optional[str]:
-    """Smart assignment: return the id of the role member with the fewest open
-    (not done/cancelled) tasks, or None if the role has no members."""
+    """Auto-assignment (E3-13): the ACTIVE role member with the fewest open (not
+    done/cancelled) tasks, with a DETERMINISTIC tiebreak (by id) when loads are equal.
+    Returns None when the role has no assignable member. Never raises."""
     if not role:
         return None
-    members = await db.users.find({"tenant_id": tenant_id, "role": role}, {"_id": 0, "id": 1}).to_list(200)
-    if not members:
+    try:
+        members = await db.users.find({"tenant_id": tenant_id, "role": role}, {"_id": 0, "id": 1}).to_list(200)
+        if not members:
+            return None
+        # Only auto-assign to ACTIVE members -- never to a suspended/removed/pending person.
+        # Honor membership data strictly when it exists; fail open for legacy tenants without it.
+        active_ids = {r.get("user_id") for r in await db.memberships.find(
+            {"tenant_id": tenant_id, "status": "active"}, {"_id": 0, "user_id": 1}).to_list(1000)}
+        if active_ids:
+            members = [m for m in members if m["id"] in active_ids]
+            if not members:
+                return None
+        if len(members) == 1:
+            return members[0]["id"]
+        loads = []
+        for m in members:
+            load = await db.tasks.count_documents({
+                "tenant_id": tenant_id, "assignee_id": m["id"],
+                "status": {"$nin": ["done", "cancelled"]},
+            })
+            loads.append((load, m["id"]))
+        loads.sort()  # (load asc, id asc) -> least-loaded, deterministic on ties
+        return loads[0][1]
+    except Exception as e:
+        logger.warning(f"pick_least_loaded_member failed: {e}")
         return None
-    best_id, best_load = None, None
-    for m in members:
-        load = await db.tasks.count_documents({
-            "tenant_id": tenant_id, "assignee_id": m["id"],
-            "status": {"$nin": ["done", "cancelled"]},
-        })
-        if best_load is None or load < best_load:
-            best_load, best_id = load, m["id"]
-    return best_id
+
+
+async def resolve_assignee(tenant_id: str, *, role: str = None, assignee_name: str = None,
+                           members: list = None) -> dict:
+    """The single entry point for auto-assigning an AI-generated task to a PERSON (E3-13).
+    Priority: an explicitly-named person -> the sole active member of the role -> the
+    least-loaded active member -> unassigned (role only). Returns
+    {assignee_id, role, how} where how is 'named' | 'load' | 'unassigned'. Never raises."""
+    role = (role or "").strip().lower() or None
+    try:
+        if assignee_name:
+            if members is None:
+                members = await db.users.find(
+                    {"tenant_id": tenant_id}, {"_id": 0, "id": 1, "name": 1, "role": 1}).to_list(500)
+            m = match_member_by_name(members, assignee_name)
+            if m:
+                return {"assignee_id": m["id"], "role": (m.get("role") or role), "how": "named"}
+        if role:
+            aid = await pick_least_loaded_member(tenant_id, role)
+            if aid:
+                return {"assignee_id": aid, "role": role, "how": "load"}
+    except Exception as e:
+        logger.warning(f"resolve_assignee failed: {e}")
+    return {"assignee_id": None, "role": role, "how": "unassigned"}
 
 
 async def _create_decision_tasks(tenant_id, note, decision_id, extracted, troles, members, cat_keys=None):

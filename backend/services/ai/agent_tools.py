@@ -128,15 +128,20 @@ async def _t_list_workflows(user: dict) -> dict:
 # PROPOSE tools (E3-11.4) -- file a pending_approval decision; never auto-execute
 # ---------------------------------------------------------------------------
 async def _t_propose_task(user: dict, title: str = "", description: str = "",
-                          assignee_role: str = "", priority: str = "medium") -> dict:
+                          assignee_role: str = "", assignee_name: str = "",
+                          priority: str = "medium") -> dict:
     """Propose a task for the human to approve. Creates a pending_approval decision with a
-    blocked task -- released only when the owner approves (reuses the existing approval flow)."""
+    blocked task -- released only when the owner approves (reuses the existing approval flow).
+    Auto-assigns to a PERSON via E3-13 (named person, else least-loaded role member)."""
     if not title.strip():
         return {"error": "title is required"}
     tid = user["tenant_id"]
     did, task_id = new_id(), new_id()
     prio = priority if priority in ("low", "medium", "high") else "medium"
-    role = (assignee_role or "").strip().lower()
+    # E3-13: resolve the assignee to an actual person (named -> least-loaded active role member).
+    from services.voice import resolve_assignee
+    assigned = await resolve_assignee(tid, role=(assignee_role or "operations"),
+                                      assignee_name=(assignee_name or ""))
     await db.decisions.insert_one({
         "id": did, "tenant_id": tid, "title": f"[AI proposed] {title.strip()[:80]}",
         "summary": description.strip()[:300], "items": [], "workflow_events": [],
@@ -146,11 +151,13 @@ async def _t_propose_task(user: dict, title: str = "", description: str = "",
     })
     await db.tasks.insert_one({
         "id": task_id, "tenant_id": tid, "decision_id": did, "title": title.strip()[:120],
-        "description": description.strip()[:500], "assignee_role": role or "operations",
+        "description": description.strip()[:500],
+        "assignee_role": assigned["role"] or "operations", "assignee_id": assigned["assignee_id"],
         "priority": prio, "status": "blocked", "created_at": now_iso(), "source": "agent",
     })
-    logger.info(f"agent proposed task '{title[:40]}' -> decision {did} (pending approval)")
+    logger.info(f"agent proposed task '{title[:40]}' -> decision {did} (pending; assignee {assigned['how']})")
     return {"proposed": True, "decision_id": did, "status": "pending_approval",
+            "assigned_to": assigned["assignee_id"], "assignment": assigned["how"],
             "message": "Task proposed. It will run once an owner approves the decision."}
 
 
@@ -181,7 +188,9 @@ def register_default_tools() -> None:
                   "Use when the user asks you to create/assign work.",
                   {"type": "object", "properties": {
                       "title": {"type": "string"}, "description": {"type": "string"},
-                      "assignee_role": {"type": "string"}, "priority": {"type": "string"}},
+                      "assignee_role": {"type": "string"},
+                      "assignee_name": {"type": "string", "description": "a specific person's name if the owner named one"},
+                      "priority": {"type": "string"}},
                    "required": ["title"]},
                   _t_propose_task, "propose", "voice_capture"))
 

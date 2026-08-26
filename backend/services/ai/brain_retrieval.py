@@ -170,3 +170,67 @@ def cites_from_hits(
             "created_at": h.get("created_at"),
         })
     return out
+
+
+# --- E3-10.1: semantic (vector) retrieval over embedded chunks --------------
+def _chunk_visible(chunk: dict, user: dict) -> bool:
+    """Mirror of brain_docs._user_can_see, applied to a chunk's inherited RBAC payload.
+    Owner/manager and the uploader see all; else public / dept-by-role / private-by-role."""
+    from core import user_perms
+    if user.get("role") == "owner" or "team_manage" in user_perms(user):
+        return True
+    if chunk.get("uploaded_by") and chunk.get("uploaded_by") == user.get("id"):
+        return True
+    role = user.get("role") or ""
+    vis = chunk.get("visibility") or "public"
+    roles_allowed = chunk.get("roles_allowed") or []
+    if vis == "public":
+        return True
+    if vis == "dept":
+        return chunk.get("department") == role or role in roles_allowed
+    if vis == "private":
+        return role in roles_allowed
+    return False
+
+
+async def search_chunks(*, user: dict, query: str, limit: int = 8) -> list[dict]:
+    """Semantic retrieval (E3-10.1): embed the question, search the tenant's Qdrant
+    chunks, and enforce the SAME per-document RBAC as keyword search. Over-fetches a
+    buffer then filters in Python (reusing the visibility rules), so access can never
+    leak. Returns [] on any error -- retrieval is best-effort auxiliary context."""
+    q = (query or "").strip()
+    tenant_id = user.get("tenant_id")
+    if not q or not tenant_id:
+        return []
+    try:
+        from integrations.embeddings import embed_query
+        from integrations import qdrant
+        vec = await embed_query(q, tenant_id=tenant_id)
+        if not vec:
+            return []
+        # Over-fetch so RBAC filtering still leaves enough visible hits.
+        buffer = max(limit * 5, 30)
+        candidates = await qdrant.search(tenant_id, vec, k=min(buffer, 100))
+        visible = [c for c in candidates if _chunk_visible(c, user)]
+        return visible[:limit]
+    except Exception as e:
+        logger.warning(f"brain_retrieval.search_chunks failed: {e}")
+        return []
+
+
+# --- E3-10.2: reciprocal-rank fusion of keyword + vector rankings -----------
+def rrf_fuse(rankings: list[list], *, k: int = 60) -> list:
+    """Reciprocal-rank fusion. Each `rankings` entry is an ordered list of ids (best
+    first). Returns ids ordered by fused score sum(1/(k+rank)). Deterministic, pure --
+    combines keyword and vector rankings without needing comparable score scales."""
+    scores: dict = {}
+    order: list = []
+    for ranking in rankings:
+        for rank, _id in enumerate(ranking):
+            if _id is None:
+                continue
+            if _id not in scores:
+                scores[_id] = 0.0
+                order.append(_id)
+            scores[_id] += 1.0 / (k + rank + 1)
+    return sorted(order, key=lambda i: scores[i], reverse=True)

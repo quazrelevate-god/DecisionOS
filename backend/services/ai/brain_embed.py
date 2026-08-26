@@ -58,6 +58,7 @@ def _doc_payload(doc: dict) -> dict:
         "visibility": doc.get("visibility") or "public",
         "department": doc.get("department") or "",
         "roles_allowed": doc.get("roles_allowed") or [],
+        "uploaded_by": doc.get("uploaded_by") or "",
         "title": doc.get("title") or doc.get("original_filename") or "",
     }
 

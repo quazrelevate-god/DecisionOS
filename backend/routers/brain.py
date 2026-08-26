@@ -192,7 +192,7 @@ async def _users_map(tid):
     return {u["id"]: u for u in await db.users.find({"tenant_id": tid}, {"_id": 0, "id": 1, "name": 1, "role": 1}).to_list(500)}
 
 
-async def _enrich_with_brain(plan: dict, scope: dict, user: dict) -> dict:
+async def _enrich_with_brain(plan: dict, scope: dict, user: dict, question: str = "") -> dict:
     """FIX-007-C (S4-04): auxiliary retrieval pass — every /ask call
     now ALSO fetches top-N matching brain_context (provenance) and
     brain_documents (policies) rows using the plan's keywords, so
@@ -210,7 +210,33 @@ async def _enrich_with_brain(plan: dict, scope: dict, user: dict) -> dict:
     ctx_hits = await brain_retrieval.search_context(
         tenant_id=tid, user=user, query=q_txt,
     )
-    return {"document_hits": doc_hits, "knowledge_hits": ctx_hits}
+    # E3-10.2: semantic chunk retrieval on the RAW question (keyword search uses the
+    # plan keywords), RRF-fused with the keyword doc hits. Passages are the actual
+    # relevant text the answer quotes; the deterministic metrics path is untouched.
+    passages: list = []
+    chunk_hits = await brain_retrieval.search_chunks(user=user, query=(question or q_txt), limit=6)
+    if chunk_hits:
+        kw_ids = [d.get("id") for d in doc_hits]
+        vec_doc_ids: list = []
+        for c in chunk_hits:
+            if c.get("doc_id") and c["doc_id"] not in vec_doc_ids:
+                vec_doc_ids.append(c["doc_id"])
+        by_id = {d.get("id"): d for d in doc_hits}
+        missing = [i for i in vec_doc_ids if i not in by_id]
+        if missing:
+            try:
+                for row in await db.brain_documents.find(
+                    {"tenant_id": tid, "id": {"$in": missing}, "is_deleted": False},
+                    {"_id": 0, "keywords": 0, "storage_path": 0}).to_list(len(missing)):
+                    by_id[row["id"]] = row
+            except Exception:
+                pass
+        fused_ids = brain_retrieval.rrf_fuse([kw_ids, vec_doc_ids])
+        fused_docs = [by_id[i] for i in fused_ids if i in by_id]
+        doc_hits = fused_docs or doc_hits
+        passages = [{"title": c.get("title"), "doc_id": c.get("doc_id"),
+                     "text": (c.get("text") or "")[:600]} for c in chunk_hits[:5]]
+    return {"document_hits": doc_hits, "knowledge_hits": ctx_hits, "passages": passages}
 
 
 async def _retrieve(plan: dict, scope: dict, user: Optional[dict] = None):
@@ -662,7 +688,8 @@ _ANSWER_SYSTEM = render("brain.answer")  # prompt in prompts/brain.py
 
 async def _answer(question, kpis, table, lang,
                     knowledge_hits: Optional[list] = None,
-                    document_hits: Optional[list] = None):
+                    document_hits: Optional[list] = None,
+                    passages: Optional[list] = None):
     """FIX-007-C (S4-04): the LLM answer now sees three signal streams:
       * `kpis` + `table` (deterministic domain metrics, as before)
       * `knowledge_hits` — brain_context provenance rows (past decisions,
@@ -690,9 +717,15 @@ async def _answer(question, kpis, table, lang,
              "tags": h.get("tags") or []}
             for h in document_hits[:5]
         ]
-    # E3-08.1: retrieved document summaries / past-context are user-authored content that
-    # could carry an injection -- arm the guard whenever the answer includes retrieved data.
-    _guard = INJECTION_GUARD if (knowledge_hits or document_hits) else ""
+    # E3-10.2: the actual relevant passages retrieved by semantic search -- the RAG
+    # payoff, so the answer can quote the source text, not just the doc summary.
+    if passages:
+        sample["relevant_document_passages"] = [
+            {"title": p.get("title"), "text": (p.get("text") or "")[:600]} for p in passages[:5]
+        ]
+    # E3-08.1: retrieved document summaries / passages / past-context are user-authored
+    # content that could carry an injection -- arm the guard whenever we include retrieved data.
+    _guard = INJECTION_GUARD if (knowledge_hits or document_hits or passages) else ""
     chat = claude_chat(task="brain.answer", session_id=f"brain-ans-{new_id()}",
                        system_message=_ANSWER_SYSTEM + _lang_directive(lang) + _guard).with_model(*model_for("brain.answer"))
     try:
@@ -782,7 +815,7 @@ async def ask(inp: AskRequest, user: dict = Depends(require_perm("ask"))):
     # (policies) hits keyed by the plan's keywords. Merged into the
     # citation list so /ask can point at "how we handled this last
     # time" and "what the contract says" — parity with /brain/agent.
-    brain_extras = await _enrich_with_brain(plan, scope, user)
+    brain_extras = await _enrich_with_brain(plan, scope, user, question=q)
     extra_cites = brain_retrieval.cites_from_hits(
         document_hits=brain_extras["document_hits"],
         context_hits=brain_extras["knowledge_hits"],
@@ -814,6 +847,7 @@ async def ask(inp: AskRequest, user: dict = Depends(require_perm("ask"))):
         q, kpis, table, user.get("language"),
         knowledge_hits=brain_extras["knowledge_hits"],
         document_hits=brain_extras["document_hits"],
+        passages=brain_extras.get("passages"),
     )
     ctx_id = new_id()
     plan["_currency"] = await _currency(tid)

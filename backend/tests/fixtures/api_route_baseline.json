@@ -1,6 +1,6 @@
 {
-  "count": 285,
-  "sha": "93ff50a80bfa7fa8099bddf152af0a932831d7594dc8eb953f149a6decd1acf2",
+  "count": 288,
+  "sha": "67b8d4c1384c15365defc1eac65f0df6362246a5041899262f3650ced8421416",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware"
@@ -40,6 +40,9 @@
     "GET /api/admin/me",
     "GET /api/admin/metrics",
     "GET /api/admin/migrations",
+    "GET /api/admin/observability/errors",
+    "GET /api/admin/observability/outages",
+    "GET /api/admin/observability/reliability",
     "GET /api/admin/reclassify-purchases/status",
     "GET /api/admin/scheduler-locks",
     "GET /api/admin/search",

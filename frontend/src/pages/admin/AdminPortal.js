@@ -9,9 +9,10 @@ import { Tenant360Section } from "./Tenant360Section";
 import { ImpersonationSection } from "./ImpersonationSection";
 import { SupportDeskSection } from "./SupportDeskSection";
 import { BillingSection } from "./BillingSection";
+import { ObservabilitySection } from "./ObservabilitySection";
 import {
   ShieldStar, SquaresFour, Key, Buildings, Users, Pulse, SignOut, Spinner,
-  ClockCounterClockwise, ChartBar, WarningCircle, Wrench, MagnifyingGlass, UserSwitch, Lifebuoy, CurrencyInr,
+  ClockCounterClockwise, ChartBar, WarningCircle, Wrench, MagnifyingGlass, UserSwitch, Lifebuoy, CurrencyInr, ChartLineUp,
 } from "@phosphor-icons/react";
 
 const TABS = [
@@ -20,6 +21,7 @@ const TABS = [
   { key: "impersonation", label: "Impersonation", icon: UserSwitch, C: ImpersonationSection },
   { key: "support", label: "Support", icon: Lifebuoy, C: SupportDeskSection },
   { key: "billing", label: "Billing", icon: CurrencyInr, C: BillingSection },
+  { key: "observability", label: "Observability", icon: ChartLineUp, C: ObservabilitySection },
   { key: "usage", label: "Usage", icon: ChartBar, C: UsageSection },
   { key: "ai-keys", label: "AI Keys", icon: Key, C: AiKeysSection },
   { key: "tenants", label: "Workspaces", icon: Buildings, C: TenantsSection },

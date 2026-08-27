@@ -8,7 +8,7 @@
 // mark. The name is carried by aria-label="Dex" so it is announced and learned
 // without spending a visible label on it.
 import * as React from "react";
-import { Microphone, Stop } from "@phosphor-icons/react";
+import { Sparkle, Stop } from "@phosphor-icons/react";
 import { useAuth } from "@/context/AuthContext";
 import { hasPerm } from "@/lib/perms";
 import { cn } from "@/lib/utils";
@@ -53,7 +53,13 @@ export function DexFab({ onOpen, recording = false, seconds = 0, onStop }) {
           </span>
         </span>
       ) : (
-        <Microphone size={28} weight="regular" aria-hidden="true" />
+        /* KM-5 — the AI sparkle, not a microphone. The sheet behind this
+           button is no longer a recorder with extras: it is Dex, and voice is
+           simply how you talk to it. A mic advertised the input method rather
+           than the thing, and it is the same glyph the sheet itself
+           deliberately stopped showing. Sparkle is already the app's Dex/AI
+           mark (AI priority, Ask Dex, the wordmark). */
+        <Sparkle size={28} weight="fill" aria-hidden="true" />
       )}
     </button>
   );

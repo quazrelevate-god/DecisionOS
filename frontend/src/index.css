@@ -1360,55 +1360,14 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
    recipes) just works on ink without a `dark:` variant in sight.
    ═════════════════════════════════════════════════════════════════════════ */
 @layer components {
-    /* KM-3 · .kr-cut-br — a real bite taken out of a card's bottom-right
-       corner, so an action button can sit IN the card's outline rather than on
-       top of it. Two mask layers composited with `exclude`: a rounded-rect the
-       size of the button plus its clearance, positioned bottom-right, and a
-       full-coverage layer. Exclude subtracts the overlap, which cuts an actual
-       hole — the bloom behind the ink band shows through it, exactly the way
-       the dark band's centre dip is cut (see .kr-dark-band).
-       The cut is 8px larger than the button on every side, which is the
-       "small space between the button and the card" the founder asked for:
-       the card's edge traces the button's shape at a constant offset instead
-       of the button overlapping a square corner.
-       Masking happens AFTER filtering, so this composes with the card's
-       backdrop-blur without fighting it. */
-    .kr-cut-br {
-        --cut-w: 118px;
-        --cut-h: 56px;
-        -webkit-mask-image:
-            url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="118" height="56" viewBox="0 0 118 56"><rect x="0" y="0" width="118" height="56" rx="28" ry="28" fill="black"/></svg>'),
-            linear-gradient(#000, #000);
-        -webkit-mask-size: var(--cut-w) var(--cut-h), auto;
-        -webkit-mask-position: right bottom, top left;
-        -webkit-mask-repeat: no-repeat, no-repeat;
-        -webkit-mask-composite: xor;
-        mask-image:
-            url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="118" height="56" viewBox="0 0 118 56"><rect x="0" y="0" width="118" height="56" rx="28" ry="28" fill="black"/></svg>'),
-            linear-gradient(#000, #000);
-        mask-size: var(--cut-w) var(--cut-h), auto;
-        mask-position: right bottom, top left;
-        mask-repeat: no-repeat, no-repeat;
-        mask-composite: exclude;
-    }
-    /* Desktop keeps the whole-card-is-the-button pattern, so no bite there. */
-    @media (min-width: 1024px) {
-        .kr-cut-br {
-            -webkit-mask-image: none;
-            mask-image: none;
-        }
-    }
-
     /* KM-3 — .kr-pop INSIDE AN INK SURFACE inverts its ground.
        .kr-pop is built for the light page: a 38%-white fill with a white
        inset lip. Dropped onto the ink More panel that reads as a pale grey
        blob, and the panel's own light-on-dark text then sat light-on-light —
        measured: the CRM, Operating Score, Calendar and utility-row labels
        were all but unreadable. Same material, same direction of light,
-       opposite ground: a low-alpha WHITE fill over the ink, a faint white
-       lip, and real black shadow doing the lifting. Scoped to .kr-glass.dark
-       so it only fires inside an ink container and the light-page recipe is
-       untouched everywhere else. */
+       opposite ground. Scoped to .kr-glass.dark so it only fires inside an
+       ink container and the light-page recipe is untouched elsewhere. */
     .kr-glass.dark .kr-pop {
         background: hsl(0 0% 100% / .08);
         box-shadow:
@@ -1421,13 +1380,19 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
         background: hsl(0 0% 100% / .12);
     }
 
-    /* KM-3 — the idle breath of the Dex waveform. Scale on the Y axis only,
-       from the bar's own centre, so the row keeps its silhouette while it
-       moves. Deliberately slow (2.6s) and shallow: this runs the whole time
-       the sheet is open, and anything faster reads as a loading spinner. */
-    .kr-dex-breathe {
-        animation: kr-dex-breathe 2600ms ease-in-out infinite;
-        transform-origin: center;
+    /* KM-5 — and the same inversion for .kr-pressed, which the decision
+       cards now use for their Review / Chase pill. .kr-pressed's dark inset
+       from the top-left plus a 72%-white inset from the bottom-right is tuned
+       for the light page; on an ink card the white inset blows out and the
+       "pressed" pill reads as a raised white blob. On ink the depression is
+       drawn the other way round: black doing the sinking, a faint white lip
+       on the far side. Descendant selector, not .dark — the decision cards
+       are .kr-glass without the token re-scope. */
+    .kr-glass .kr-pressed {
+        background: hsl(0 0% 0% / .22);
+        box-shadow:
+            inset 3px 3px 8px hsl(0 0% 0% / .45),
+            inset -2px -2px 6px hsl(0 0% 100% / .13);
     }
 
     /* KM-3 · .kr-snap — the horizontal section scroller on the Desk band.
@@ -1441,7 +1406,17 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
         scrollbar-width: none;
         margin-inline: calc(var(--page-pad, 1rem) * -1);
         padding-inline: var(--page-pad, 1rem);
-        gap: var(--page-pad, 1rem);
+        /* KM-5 — TWO gutters, not one. A panel is 100% of the padded content
+           box (343px at a 375px viewport), so with a single-gutter gap the
+           next panel began at 343 + 16 = 359 and 16px of it — the red On-fire
+           card — sat visible past the right edge. Two gutters puts its leading
+           edge at 391, cleanly off-screen, and one card is one card. */
+        gap: calc(var(--page-pad, 1rem) * 2);
+        /* And the snapport has to start at the GUTTER. Without this the snap
+           aligns a panel's start to the scroll container's padding edge, i.e.
+           x=0, so every card sat flush against the left of the screen with no
+           page margin while its right side kept one. */
+        scroll-padding-inline: var(--page-pad, 1rem);
     }
     .kr-snap::-webkit-scrollbar { display: none; }
     .kr-snap > * {

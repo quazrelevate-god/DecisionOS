@@ -22,7 +22,6 @@ import {
 import { CaptureReview } from "./Captures";
 // E2-30 (2026-08-15): extracted from Ingest.js so it could be retired.
 import ReviewPanel from "./finance/ReviewPanel";
-import WhatsAppCard from "./finance/WhatsAppCard";
 import { hasPerm } from "../lib/perms";
 import { formatApiError } from "../lib/api";
 import {
@@ -1563,11 +1562,15 @@ export default function Ledger() {
       ) : (
         <>
           {tab === "overview" && summary && (
-            <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-              <div><OverviewTab summary={summary} /></div>
-              {/* Epic 2 Sprint 4 (E2-26): WhatsApp status card moves here. */}
-              <div className="lg:sticky lg:top-6 self-start"><WhatsAppCard /></div>
-            </div>
+            /* KM-5 — the WhatsApp QR / status card is removed on the founder's
+               call: the pairing QR, its refresh control and the inbound
+               "recent WhatsApp activity" log all went with it. Overview is a
+               single column again rather than a 1fr/320px split with a
+               sidebar. The component file stays in the tree unreferenced
+               rather than being deleted in the same breath as a layout change
+               — if the pairing surface is wanted back it belongs somewhere
+               deliberate (Settings), not stapled to the money page. */
+            <OverviewTab summary={summary} />
           )}
           {tab === "revenue" && <RevenueTab data={revenueQ.data} cur={cur} onDelete={delRevenue} onChange={invalidate} initialFilter={initialFilter} />}
           {tab === "expenses" && <div className="space-y-6"><NeedsMatchingPanel title="Supplier payments to match" testid="payables-needs-matching" hint="These payments to suppliers couldn’t be auto-linked to a purchase bill. Pick the bill they settle, or mark as a standalone expense." unmatched={payablesQ.data?.unmatched_payments} open={payablesQ.data?.open_invoices || []} cur={cur} endpoint="/payables/payment" standaloneLabel={{ btn: "Standalone expense", done: "Booked as a standalone expense" }} onChange={invalidate} /><AiPanel scope="expenses" /><ExpensesTable rows={expensesQ.data || []} cur={cur} onDelete={(id) => del("expenses", id)} /></div>}

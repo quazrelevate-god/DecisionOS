@@ -119,7 +119,6 @@ function buildTiles({ user, t, counts, live }) {
       perm: "people",
       live: live.crm,
     },
-    { key: "notifications", to: "/notifications", label: t("nav.notifications", "Notifications"), icon: Bell, size: "small", badge: counts.notifications },
     { key: "team", to: "/team", label: t("nav.team", "Team"), icon: UsersThree, size: "small", perm: "team_manage" },
     {
       key: "operating-score",
@@ -157,11 +156,14 @@ function buildTiles({ user, t, counts, live }) {
 }
 
 function buildUtility({ user, isDark, t }) {
+  /* KM-5 — Language, Theme and Sign out are gone from here and live in
+     Settings -> Account. A nav menu is a list of PLACES; a theme switch and a
+     session-ending action are neither, and putting Sign out one mis-tap from
+     Theme in a 4-up strip was the arrangement that made it need a red colour
+     to feel safe. Settings is the only utility left, so it is the only one
+     listed. */
   return [
     { key: "settings", to: "/settings", label: t("nav.settings", "Settings"), icon: GearSix, ownerOnly: true },
-    { key: "language", action: "language", label: t("allapps.language", "Language"), icon: Translate },
-    { key: "theme", action: "theme", label: t("allapps.theme", "Theme"), icon: isDark ? Sun : MoonStars },
-    { key: "signout", action: "signout", label: t("header.sign_out", "Sign out"), icon: SignOut, danger: true },
   ].filter((x) => !x.ownerOnly || user?.role === "owner");
 }
 
@@ -371,8 +373,16 @@ export function AllAppsPanel({
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
           className={cn(
-            // inset 16px from every edge, max-height 80vh (§8)
-            "fixed inset-x-4 z-[10090] mx-auto flex max-h-[80vh] max-w-md flex-col overflow-hidden",
+            /* KM-5 — ANCHORED TO THE DOCK, not floating in the middle.
+               The founder's ask: rather than a card hovering over the screen,
+               the app bar should expand upward and reveal the menu. So the
+               panel sits directly above the dock, matches its inset and its
+               ink material, and slides up from it — it reads as the bar
+               growing rather than a separate object arriving. The bottom
+               offset is the dock's own anchor (1rem + safe inset) plus its
+               64px height plus a 12px seam. */
+            "fixed inset-x-4 z-[10090] mx-auto flex max-h-[68vh] max-w-md flex-col overflow-hidden",
+            "bottom-[calc(1rem+4rem+0.75rem+env(safe-area-inset-bottom,0px))]",
             /* KM-3 — THE PANEL BECOMES AN INK OBJECT.
                It was `bg-background` — the page's own greige — so More opened
                a copy of the page floating over the page, with a hard
@@ -385,12 +395,13 @@ export function AllAppsPanel({
                no `dark:` variant written anywhere. The thing More opens now
                looks like the ink pill you tapped to open it. */
             "dark kr-glass rounded-cardlg",
-            "top-1/2 -translate-y-1/2",
+
             // scale 0.92 -> 1 with opacity, ~180ms ease-out; reverse on close
             // [animation-duration:...] rather than duration-[180ms]: the
             // bare arbitrary value is ambiguous between transition- and
             // animation-duration, and Tailwind warns on it at build time.
             "[animation-duration:180ms] ease-out",
+            "data-[state=open]:slide-in-from-bottom-4 data-[state=closed]:slide-out-to-bottom-4",
             "data-[state=open]:animate-in data-[state=closed]:animate-out",
             "data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0",
             "data-[state=open]:zoom-in-[0.92] data-[state=closed]:zoom-out-[0.92]"

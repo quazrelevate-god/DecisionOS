@@ -120,81 +120,72 @@ function firstRowCount(tiers, bp) {
 function DecisionBox({ card, tier, tint, verb, icon: Icon, busy, done, onAction }) {
   const t = TIER[tier] || TIER.c;
   return (
-    /* KM-3 — THE CARD IS NO LONGER THE BUTTON, below lg.
-       The founder's ask: a dedicated action button living in a bite cut out of
-       the card's bottom-right corner — "Review" on Needs your decision, "Chase"
-       on On fire — so the action is taken deliberately rather than by tapping
-       anywhere on the card. That forces the outer element from <button> to
-       <div>: a button inside a button is invalid HTML and hands screen readers
-       two overlapping targets for one action.
-
-       WHY THE SURFACE IS ITS OWN LAYER. A CSS mask applies to the element AND
-       everything inside it, so with .kr-cut-br on the card the action button —
-       being a child, and sitting exactly in the cut — was masked away with the
-       corner. Measured: the bite rendered, the button did not. So the glass
-       surface is an absolutely-positioned sibling that carries the mask alone,
-       the content sits above it unmasked, and the button is a sibling of both.
-       Desktop is unchanged: .kr-cut-br drops its mask at lg and the button
-       becomes a normal static footer action. */
+    /* KM-5 — THE CUT IS GONE. KM-3 bit a notch out of the corner with a mask
+       and hung the pill in it; the founder's read is that it did not look
+       good, and he is right — the bite fought the card's own silhouette and
+       cost a mask layer plus a separately-positioned surface to achieve it.
+       The pill now simply sits ON the card, bottom-right, in the pressed
+       neumorphic state the AI-insights well uses on this same page. That also
+       lets the card go back to being one element instead of three.
+       The card stays a <div>: the pill is the action, and a button inside a
+       button is invalid regardless of how the corner is drawn. */
     <div
       data-testid={`desk-card-${card.id}`}
       data-tier={tier}
-      className={cn("group relative flex flex-col", t.span, t.minH)}
+      className={cn(
+        "kr-glass group relative flex flex-col p-4 text-left xl:p-5",
+        tint, t.span, t.minH,
+        done && "kr-done"
+      )}
     >
-      {/* The masked surface. aria-hidden: it is paint, not content. */}
-      <span
-        aria-hidden="true"
-        className={cn("kr-glass kr-cut-br absolute inset-0", tint, done && "kr-done")}
-      />
-
-      <div className="relative flex flex-1 flex-col p-4 text-left xl:p-5">
-        <div className="flex items-start justify-between gap-3">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-white/30">
-            {done
-              ? <CheckCircle size={17} weight="fill" aria-hidden="true" />
-              : <Icon size={16} weight="regular" aria-hidden="true" />}
+      <div className="flex items-start justify-between gap-3">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-white/30">
+          {done
+            ? <CheckCircle size={17} weight="fill" aria-hidden="true" />
+            : <Icon size={16} weight="regular" aria-hidden="true" />}
+        </span>
+        {card.amount_formatted && (
+          <span className={cn("font-mono font-medium", tier === "a" ? "text-base" : "text-sm")}>
+            {card.amount_formatted}
           </span>
-          {card.amount_formatted && (
-            <span className={cn("font-mono font-medium", tier === "a" ? "text-base" : "text-sm")}>
-              {card.amount_formatted}
-            </span>
-          )}
-        </div>
-
-        <p className={cn("mt-3.5", t.title, t.clamp)}>{card.title}</p>
-
-        {/* pr-28 keeps the context line clear of the cut: the bite is 118px
-            wide and text running under it would be sliced mid-word. */}
-        <p className="mt-auto pr-28 pt-3 text-xs leading-relaxed opacity-75 lg:pr-0">
-          {card.context_line}
-        </p>
+        )}
       </div>
 
-      {/* THE ACTION. 102x40 inside a 118x56 cut, leaving the 8px ring of
-          clearance that makes the card's edge read as tracing the button
-          rather than colliding with it. White on the ink band, because this
-          is the one thing on the card you are meant to hit. */}
-      <button
-        type="button"
-        onClick={onAction}
-        disabled={busy || done}
-        data-testid={`desk-card-action-${card.id}`}
-        aria-label={done ? `${card.title} — actioned` : `${verb}: ${card.title}`}
-        className={cn(
-          "absolute bottom-2 right-2 z-10 flex h-10 w-[102px] items-center justify-center gap-1.5",
-          "rounded-pill text-xs font-semibold",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70",
-          done ? "bg-white/15 text-white/70" : "bg-white text-kr-ink disabled:opacity-60",
-          "lg:static lg:mt-2 lg:mb-4 lg:ml-4 lg:w-fit lg:px-3.5"
-        )}
-      >
-        {busy && <Spinner size={12} className="animate-spin" aria-hidden="true" />}
-        {done ? "Done" : busy ? "Working…" : verb}
-        {!busy && !done && (
-          <CaretRight size={11} weight="bold" aria-hidden="true"
-            className="transition-transform group-hover:translate-x-0.5" />
-        )}
-      </button>
+      <p className={cn("mt-3.5", t.title, t.clamp)}>{card.title}</p>
+
+      {/* KM-5 — the context line and the action share the floor as a ROW, so
+          the text can never run under the pill. It previously relied on a
+          pr-28 reservation, which is the kind of thing that holds until a
+          longer string or a wider verb arrives; a flex row with min-w-0 and
+          its own truncation cannot overlap by construction. This is the
+          "wrapping misalignment" seen in the expanded state, where the taller
+          tier-c cards gave the text enough room to reach the corner. */}
+      <div className="mt-auto flex items-end justify-between gap-3 pt-3">
+        <p className="min-w-0 flex-1 text-xs leading-relaxed opacity-75 line-clamp-2">
+          {card.context_line}
+        </p>
+
+        <button
+          type="button"
+          onClick={onAction}
+          disabled={busy || done}
+          data-testid={`desk-card-action-${card.id}`}
+          aria-label={done ? `${card.title} — actioned` : `${verb}: ${card.title}`}
+          className={cn(
+            "kr-pressed flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-pill px-4",
+            "text-xs font-semibold text-white",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70",
+            (busy || done) && "opacity-60"
+          )}
+        >
+          {busy && <Spinner size={12} className="animate-spin" aria-hidden="true" />}
+          {done ? "Done" : busy ? "Working…" : verb}
+          {!busy && !done && (
+            <CaretRight size={11} weight="bold" aria-hidden="true"
+              className="transition-transform group-hover:translate-x-0.5" />
+          )}
+        </button>
+      </div>
     </div>
   );
 }

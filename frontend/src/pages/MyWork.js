@@ -19,7 +19,7 @@ import Workflows from "./Workflows";
 import Leave from "./Leave";
 import {
   CheckCircle, Camera, Microphone, Stop, ChatCircleText,
-  Sparkle, Plus, Trash, ArrowUp, ArrowDown, Robot, PencilSimple, ListChecks, CaretDown, ArrowsOutSimple,
+  Sparkle, Plus, Trash, Robot, PencilSimple, ListChecks, CaretDown,
   ArrowBendUpRight, WarningCircle, ChatText, ArrowRight, Kanban, ListChecks as ListIcon,
   Paperclip, UserCircle, ShieldCheck, Tag, ClockCounterClockwise,
   ArrowClockwise, XCircle, LockKey, X, AirplaneTakeoff, MagnifyingGlassPlus, Eye,
@@ -90,7 +90,7 @@ const STATUS_LABEL = {
 };
 const PROGRESS_OPTIONS = [0, 25, 50, 75, 100];
 
-/* KM-3 — the five settable states, in the order work actually moves through
+/* KM-5 — the four settable states, in the order work actually moves through
    them, with the founder's colour ramp: orange at the start of the work,
    warming through amber and lime, green when it lands, and red set apart for
    the one outcome that is not progress. "Not Started" is deliberately absent —
@@ -98,7 +98,6 @@ const PROGRESS_OPTIONS = [0, 25, 50, 75, 100];
    approver controls rather than a state the assignee sets. */
 const M_STATUS_PILLS = [
   { key: "in_progress", label: "In Progress", on: "bg-orange-500 text-white" },
-  { key: "waiting",     label: "Waiting",     on: "bg-amber-500 text-white" },
   { key: "review",      label: "Review",      on: "bg-lime-600 text-white" },
   { key: "done",        label: "Completed",   on: "bg-green-600 text-white" },
   { key: "cancelled",   label: "Cancelled",   on: "bg-red-600 text-white" },
@@ -238,6 +237,166 @@ function TaskTrail({ t, members, roleOptions, onChange }) {
   );
 }
 
+/* KM-5 · StepRow — one execution-plan step, and the four buttons that used to
+   sit beside it are gone. The founder's brief, point by point:
+
+   EXPAND BUTTON -> TAP THE FIELD. Collapsed, the textarea is exactly two lines
+   tall (--step-collapsed). Focus it and it grows to fit its content, capped so
+   a long step never swallows the screen. There is no separate "view full"
+   affordance because the field itself is the affordance.
+
+   UP/DOWN BUTTONS -> LONG-PRESS AND DRAG. Hold for 450ms and the row lifts;
+   drag it and the OTHER rows move out of the way live, while the finger is
+   still down, rather than snapping into place on release. That is what makes
+   it feel like moving a physical thing: onReorder is called during the move,
+   so the list under the finger is always the list you will get.
+
+   DELETE BUTTON -> SWIPE. Drag the row sideways past a third of its width and
+   it goes; a red ground bleeds in behind it proportionally to how far you
+   have gone, so the outcome is visible before you commit and abandoning the
+   swipe springs it back.
+
+   The two gestures are disambiguated on the FIRST significant movement, not
+   continuously: whichever axis wins by 8px owns the gesture until the pointer
+   lifts. Continuous re-evaluation is what makes a swipe fight a scroll. */
+function StepRow({
+  step, index, count, editing, inpClass,
+  onEdit, onRemove, onReorder, onDragStateChange, children,
+}) {
+  const rowRef = useRef(null);
+  const holdRef = useRef(null);
+  const start = useRef(null);
+  /* Gesture state lives in REFS, not state, and that is not a style choice.
+     Two pointermove events can land in the same frame; state read from the
+     closure is still the previous render's value, so the second move saw
+     `axis === null` and re-decided the axis instead of acting on it — the
+     swipe never moved. Refs read the value that was just written. `dx` is
+     mirrored into state only to drive the transform. */
+  const axisRef = useRef(null);
+  const dxRef = useRef(0);
+  const draggingRef = useRef(false);
+  const [dx, setDx] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  const cancelHold = () => { if (holdRef.current) { clearTimeout(holdRef.current); holdRef.current = null; } };
+
+  const onPointerDown = (e) => {
+    /* The gesture MUST be able to start on the textarea, because the textarea
+       IS the row — an earlier cut bailed out on `closest("textarea")`, which
+       left no surface to grab and made swipe and drag both impossible. A
+       plain tap still focuses and types: nothing below takes over until the
+       pointer has moved 8px or been held 450ms. Buttons keep their bail-out. */
+    if (e.target.closest("button")) return;
+    start.current = { x: e.clientX, y: e.clientY };
+    axisRef.current = null;
+    holdRef.current = setTimeout(() => {
+      // A focused, expanded textarea being dragged is two interactions at
+      // once, and the caret fights the move.
+      e.target.blur?.();
+      draggingRef.current = true;
+      setDragging(true);
+      onDragStateChange?.(true);
+      if (navigator.vibrate) navigator.vibrate(8);
+    }, 450);
+  };
+
+  const onPointerMove = (e) => {
+    if (!start.current) return;
+    const mx = e.clientX - start.current.x;
+    const my = e.clientY - start.current.y;
+
+    if (draggingRef.current) {
+      // Live reflow: whichever row the pointer is over becomes this row's
+      // new index, NOW, while the finger is still down.
+      const rows = [...(rowRef.current?.parentElement?.children || [])];
+      const over = rows.findIndex((r) => {
+        const b = r.getBoundingClientRect();
+        return e.clientY >= b.top && e.clientY <= b.bottom;
+      });
+      if (over !== -1 && over !== index) onReorder(index, over);
+      return;
+    }
+
+    if (!axisRef.current) {
+      if (Math.abs(mx) < 8 && Math.abs(my) < 8) return;
+      axisRef.current = Math.abs(mx) > Math.abs(my) ? "x" : "y";
+      cancelHold();                    // a moving pointer is not a long press
+      if (axisRef.current === "y") return;
+    }
+    if (axisRef.current === "x") {
+      e.preventDefault();              // don't drag a text selection along
+      dxRef.current = mx;
+      setDx(mx);
+    }
+  };
+
+  const endGesture = () => {
+    cancelHold();
+    if (draggingRef.current) {
+      draggingRef.current = false;
+      setDragging(false);
+      onDragStateChange?.(false);
+    } else if (Math.abs(dxRef.current) > (rowRef.current?.offsetWidth || 300) / 3) {
+      onRemove(index);
+    }
+    dxRef.current = 0;
+    setDx(0);
+    axisRef.current = null;
+    start.current = null;
+  };
+
+  if (!editing) return <>{children}</>;
+
+  const killPct = Math.min(1, Math.abs(dx) / ((rowRef.current?.offsetWidth || 300) / 3));
+
+  return (
+    <div ref={rowRef} className="relative" data-testid={`exec-step-row-${index}`}>
+      {/* The delete ground, revealed by the swipe rather than drawn on top of
+          it — it is what is behind the row, so it reads as removal. */}
+      {dx !== 0 && (
+        <div aria-hidden="true"
+          className="absolute inset-0 flex items-center justify-between rounded-control bg-red-600 px-4 text-white"
+          style={{ opacity: 0.25 + killPct * 0.75 }}>
+          <Trash size={16} weight="bold" />
+          <Trash size={16} weight="bold" />
+        </div>
+      )}
+
+      <div
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endGesture}
+        onPointerCancel={endGesture}
+        className={`relative rounded-control ${dragging ? "z-10 kr-pop scale-[1.02]" : ""}`}
+        style={{
+          transform: `translateX(${dx}px)`,
+          transition: dx === 0 && !dragging ? "transform 180ms cubic-bezier(.22,1,.36,1)" : "none",
+          touchAction: dragging ? "none" : "pan-y",
+        }}
+      >
+        <textarea
+          value={step.text}
+          onChange={(e) => onEdit(index, e.target.value)}
+          onFocus={() => setExpanded(true)}
+          onBlur={() => setExpanded(false)}
+          data-testid={`exec-step-input-${index}`}
+          aria-label={`Step ${index + 1} of ${count}`}
+          className={`${inpClass} w-full resize-none leading-snug`}
+          style={{
+            // Two lines collapsed; grows to the content when focused, capped
+            // so one long step cannot take the whole screen.
+            height: expanded ? "auto" : "3.9rem",
+            minHeight: "3.9rem",
+            maxHeight: expanded ? "12rem" : "3.9rem",
+            overflowY: expanded ? "auto" : "hidden",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
 function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
   const plan = t.execution_plan;
   const [steps, setSteps] = useState(plan?.steps || []);
@@ -314,13 +473,17 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
 
   const editStep = (i, v) => setSteps(steps.map((s, idx) => (idx === i ? { ...s, text: v } : s)));
   const removeStep = (i) => setSteps(steps.filter((_, idx) => idx !== i));
-  const moveStep = (i, dir) => {
-    const j = i + dir;
-    if (j < 0 || j >= steps.length) return;
+  /* KM-5 — a direct from->to move, called DURING a drag so the list reflows
+     under the finger. moveStep(i, ±1) only swaps neighbours, which cannot
+     express "the pointer is now over row 5". */
+  const reorderTo = (from, to) => {
+    if (from === to || to < 0 || to >= steps.length) return;
     const ns = [...steps];
-    [ns[i], ns[j]] = [ns[j], ns[i]];
+    const [moved] = ns.splice(from, 1);
+    ns.splice(to, 0, moved);
     setSteps(ns);
   };
+
   const addStep = () => {
     if (!newStep.trim()) return;
     setSteps([...steps, { id: `new-${Date.now()}`, text: newStep.trim(), done: false }]);
@@ -338,22 +501,22 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
   const inp = "flex-1 nm-field px-2.5 py-2 text-sm";
 
   if (!plan && !steps.length) {
-    // U7-05.EXP polish (2026-08-17): was two big dashed boxes taking
-    // full-width equal weight. When there is no plan yet, most tasks
-    // never need one -- so a whole visual band for the empty state was
-    // noise. Now: single one-line prompt with two small pill buttons
-    // ("Ask Dex" is the primary; manual is the escape hatch). Reads as
-    // an offer, not an unfilled requirement.
+    /* KM-5 — the two plan-building options SIDE BY SIDE with the "or" between
+       them, in the app's neumorphic material. The "Break this into steps?"
+       prompt is gone on the founder's call: two buttons labelled "Add
+       manually" and "Ask Dex" already state the question, and a line of prose
+       above them asked it twice. Equal width, same weight — they are two
+       routes to the same place, not a primary and a fallback. */
     return (
-      <div className="mt-4 flex items-center gap-2 flex-wrap" data-testid={`exec-plan-empty-${t.id}`}>
-        <span className="label-mono text-muted-foreground">Break this into steps?</span>
-        <button onClick={generate} disabled={busy} data-testid={`generate-plan-${t.id}`}
-          className="nm-btn inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium disabled:opacity-50">
-          <Sparkle size={13} weight="bold" /> {busy ? "Thinking…" : "Ask Dex"}
-        </button>
+      <div className="mt-4 flex items-center gap-3" data-testid={`exec-plan-empty-${t.id}`}>
         <button onClick={startManual} disabled={busy} data-testid={`manual-plan-${t.id}`}
-          className="inline-flex items-center gap-1.5 nm-btn px-3 py-1 text-xs font-medium hover:bg-accent transition-colors disabled:opacity-50">
-          <PencilSimple size={13} weight="bold" /> Add manually
+          className="kr-pop flex h-11 flex-1 items-center justify-center gap-1.5 rounded-pill px-3 text-xs font-medium text-foreground disabled:opacity-50">
+          <PencilSimple size={13} weight="bold" aria-hidden="true" /> Add manually
+        </button>
+        <span className="shrink-0 text-xs text-muted-foreground">or</span>
+        <button onClick={generate} disabled={busy} data-testid={`generate-plan-${t.id}`}
+          className="kr-pop flex h-11 flex-1 items-center justify-center gap-1.5 rounded-pill px-3 text-xs font-semibold text-foreground disabled:opacity-50">
+          <Sparkle size={13} weight="bold" aria-hidden="true" /> {busy ? "Thinking…" : "Ask Dex"}
         </button>
       </div>
     );
@@ -374,39 +537,66 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
       <div className="space-y-2">
         {steps.map((s, i) => (
           <div key={s.id} data-testid={`exec-step-${t.id}-${i}`}>
-            <div className={editing ? "flex flex-col sm:flex-row sm:items-start gap-2" : "flex items-start gap-2"}>
-              {editing ? (
-                <>
-                  <textarea value={s.text} onChange={(e) => editStep(i, e.target.value)} rows={2}
-                    className={`${inp} w-full resize-y leading-snug`} />
-                  <div className="flex gap-1 shrink-0 self-end sm:self-start">
-                    <button onClick={() => setViewStep(s)} data-testid={`exec-expand-${t.id}-${i}`} className="p-2 sm:p-1 nm-btn hover:bg-accent" title="View full"><ArrowsOutSimple size={14} weight="bold" /></button>
-                    <button onClick={() => moveStep(i, -1)} className="p-2 sm:p-1 nm-btn hover:bg-accent" title="Up"><ArrowUp size={14} weight="bold" /></button>
-                    <button onClick={() => moveStep(i, 1)} className="p-2 sm:p-1 nm-btn hover:bg-accent" title="Down"><ArrowDown size={14} weight="bold" /></button>
-                    <button onClick={() => removeStep(i)} data-testid={`exec-remove-${t.id}-${i}`} className="p-2 sm:p-1 nm-tile hover:bg-kr-accent hover:text-white" title="Remove"><Trash size={14} weight="bold" /></button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <button onClick={() => toggle(i)} data-testid={`exec-toggle-${t.id}-${i}`}
-                    className={`w-5 h-5 shrink-0 mt-0.5 nm-tile flex items-center justify-center ${s.done ? "bg-kr-ink text-white" : "bg-nm"}`}>
-                    {s.done && <CheckCircle size={13} weight="bold" />}
+            {editing ? (
+              /* KM-5 — the four buttons are gone; the row IS the control.
+                 Tap to expand and edit, long-press to drag-reorder with live
+                 reflow, swipe sideways to delete. See StepRow. */
+              <StepRow
+                step={s}
+                index={i}
+                count={steps.length}
+                editing
+                inpClass={inp}
+                onEdit={editStep}
+                onRemove={removeStep}
+                onReorder={reorderTo}
+              />
+            ) : (
+              /* KM-5 · ACCEPTED PLAN ROW — rebuilt.
+                 Was: a 20px square check, a bare text button that wrapped to
+                 as many lines as it liked, and two full-width worded buttons
+                 ("Ask AI", "Update") that dominated the row and pushed the
+                 text into a narrow column. The founder's shape instead — a
+                 two-line field carrying the step, a properly-sized circular
+                 check on the left, and the two actions reduced to small
+                 circular icon buttons whose expanded views open on tap. */
+              <div className="flex items-start gap-2.5">
+                <button onClick={() => toggle(i)} data-testid={`exec-toggle-${t.id}-${i}`}
+                  aria-pressed={s.done}
+                  aria-label={s.done ? "Mark step not done" : "Mark step done"}
+                  className={`mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-full ${
+                    s.done ? "bg-kr-ink text-white" : "kr-pop text-transparent"
+                  }`}>
+                  <CheckCircle size={15} weight="bold" aria-hidden="true" />
+                </button>
+
+                {/* The step text in the same two-line frame the editor uses,
+                    so accepting a plan does not change the shape of the list.
+                    Tapping opens the full view rather than truncating silently. */}
+                <button onClick={() => setViewStep(s)} data-testid={`exec-view-${t.id}-${i}`}
+                  className={`nm-inset min-w-0 flex-1 rounded-control px-3 py-2 text-left text-sm leading-snug line-clamp-2 ${
+                    s.done ? "text-muted-foreground line-through" : ""
+                  }`}>
+                  {s.text}
+                </button>
+
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <button onClick={() => askAI(s)} data-testid={`exec-ask-${t.id}-${i}`}
+                    aria-label="Ask AI about this step" title="Ask AI"
+                    className="kr-pop grid h-9 w-9 place-items-center rounded-full text-foreground">
+                    <Sparkle size={14} weight="bold" aria-hidden="true" />
                   </button>
-                  <button onClick={() => setViewStep(s)} data-testid={`exec-view-${t.id}-${i}`}
-                    className={`text-sm flex-1 min-w-0 text-left break-words hover:underline decoration-dotted ${s.done ? "line-through text-muted-foreground" : ""}`}>{s.text}</button>
-                  <div className="flex gap-1 shrink-0">
-                    <button onClick={() => askAI(s)} data-testid={`exec-ask-${t.id}-${i}`}
-                      className="flex items-center gap-1 text-xs font-medium nm-btn px-2 py-1 hover:bg-accent transition-colors">
-                      <Sparkle size={12} weight="bold" /> Ask AI
-                    </button>
-                    <button onClick={() => setUpdStep(updStep === s.id ? null : s.id)} data-testid={`exec-update-${t.id}-${i}`}
-                      className="flex items-center gap-1 text-xs font-medium nm-btn px-2 py-1 hover:bg-accent transition-colors">
-                      <ArrowBendUpRight size={12} weight="bold" /> Update
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
+                  <button onClick={() => setUpdStep(updStep === s.id ? null : s.id)} data-testid={`exec-update-${t.id}-${i}`}
+                    aria-label="Log an update or hand off" title="Update"
+                    aria-expanded={updStep === s.id}
+                    className={`grid h-9 w-9 place-items-center rounded-full text-foreground ${
+                      updStep === s.id ? "kr-pressed" : "kr-pop"
+                    }`}>
+                    <ArrowBendUpRight size={14} weight="bold" aria-hidden="true" />
+                  </button>
+                </div>
+              </div>
+            )}
             {updStep === s.id && (
               <div className="ml-7 mt-1.5 mb-2" data-testid={`exec-update-form-${t.id}-${i}`}>
                 <UpdateForm taskId={t.id} stepId={s.id} members={members} roleOptions={roleOptions}
@@ -1127,22 +1317,22 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
           );
         })()}
 
-        {/* KM-3 · STATUS PILLS — the founder's replacement for the native
-            <select> + the "Set % manually" percent picker, both of which are
-            gone. A dropdown hides four of five choices behind a tap and lands
-            an OS-drawn wheel on top of the app; five pills show the whole
-            state machine at once and set it in one tap.
-            NOT STARTED IS THE DEFAULT AND HAS NO PILL. It is the absence of a
-            choice, so giving it a chip would make "nothing has happened yet"
-            look like a thing you picked. `blocked` (pending approval) also
-            resolves to no selection — it is a gate, not a status you set.
-            The ramp is the founder's: orange at In Progress, warming through
-            amber and lime as the work advances, green at Completed, and red
-            standing apart for Cancelled — the one outcome that is not
-            progress. Solid fill when chosen; .kr-pop when not, so an unchosen
-            pill is still a raised control rather than a flat swatch. */}
+        {/* KM-5 · STATUS — ONE ROW, A SEGMENTED BAR.
+            KM-3 put five pills in a flex-wrap, which at 343px could not hold
+            them and broke onto a second line — and five states genuinely do
+            not fit one row, so "Waiting" goes on the founder's call. Four
+            remain and they are the states work actually moves through.
+            It is a segmented bar now rather than five loose chips: a single
+            .kr-pressed track with four equal segments, and the selected one
+            fills with ITS OWN status colour, so choosing a status visibly
+            moves the coloured pill along the track. Not Started stays the
+            default and has no segment — it is the absence of a choice, and
+            tapping the active segment returns to it.
+            No transition utility: the track's children swap fills, and the
+            selected segment also swaps against .kr-pressed's shadow, which is
+            not interpolable against an outset pair. */}
         {!terminal && !awaitingApproval && (
-          <div className="flex flex-wrap gap-1.5" role="group"
+          <div className="kr-pressed flex items-center gap-1 rounded-pill p-1" role="group"
                aria-label="Task status" data-testid={`status-pills-m-${t.id}`}>
             {M_STATUS_PILLS.map((sp) => {
               const on = t.status === sp.key;
@@ -1153,11 +1343,11 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
                   onClick={() => setStatus(on ? "todo" : sp.key)}
                   aria-pressed={on}
                   data-testid={`status-pill-m-${sp.key}-${t.id}`}
-                  className={`flex h-9 shrink-0 items-center rounded-pill px-3 text-xs ${
-                    on ? `${sp.on} font-semibold` : "kr-pop text-foreground/70"
+                  className={`flex h-9 min-w-0 flex-1 basis-0 items-center justify-center rounded-pill px-1 text-[11px] leading-tight ${
+                    on ? `${sp.on} font-semibold` : "text-foreground/60"
                   }`}
                 >
-                  {sp.label}
+                  <span className="truncate">{sp.label}</span>
                 </button>
               );
             })}

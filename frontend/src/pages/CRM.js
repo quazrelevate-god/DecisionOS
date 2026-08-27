@@ -748,19 +748,27 @@ export default function CRM() {
 
       {/* KR-14.14 · MOBILE — Buyers | Suppliers as a single segmented pill,
           the active half filled ink. Hidden from lg up. */}
-      <div className="mb-4 flex lg:hidden" data-testid="crm-scope-mobile">
-        {SCOPES.map((s, i) => {
+      {/* KM-5 — Buyers | Suppliers as a neumorphic segmented bar. Was a
+          welded pair of hairline pills with a solid ink fill on the active
+          one; every other page-level "pick one of these two" control in the
+          app is now a .kr-pressed track with a raised .kr-pop segment, and
+          this was the last one still painting selection as a fill.
+          No transition utility — the segments swap between an outset and an
+          inset shadow pair, which do not interpolate. */}
+      <div className="kr-pressed mb-4 flex items-center gap-1 rounded-pill p-1 lg:hidden"
+           role="group" aria-label="Contact type" data-testid="crm-scope-mobile">
+        {SCOPES.map((s) => {
           const active = scope === s.key;
-          const first = i === 0;
           return (
             <button
               key={s.key}
               type="button"
               onClick={() => setScope(s.key)}
+              aria-pressed={active}
               data-testid={`crm-scope-mobile-${s.key}`}
-              className={`flex h-11 flex-1 items-center justify-center gap-2 border-[0.5px] border-kr-ink/55 text-sm transition-colors ${
-                first ? "rounded-l-pill" : "rounded-r-pill border-l-0"
-              } ${active ? "bg-kr-ink text-white font-medium border-kr-ink" : "bg-transparent text-foreground/75"}`}
+              className={`flex h-10 flex-1 items-center justify-center gap-2 rounded-pill text-sm ${
+                active ? "kr-pop font-semibold text-foreground" : "text-foreground/60"
+              }`}
             >
               {s.label}
             </button>

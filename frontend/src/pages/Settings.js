@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../hooks/useTheme";
 import api from "../lib/api";
 import { hasPerm } from "../lib/perms";
 import { PageHeader } from "../components/common";
@@ -12,7 +13,7 @@ import { ProfileForm, ChangePasswordForm } from "../components/ProfileDialog";
 import { LanguageSwitcher } from "../components/LanguageSwitcher";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { CurrencyCircleDollar, ShieldCheck, FloppyDisk, Info, UserCircle, Translate, Lock, Buildings, FlowArrow, User } from "@phosphor-icons/react";
+import { CurrencyCircleDollar, ShieldCheck, FloppyDisk, Info, UserCircle, Translate, Lock, Buildings, FlowArrow, User, MoonStars, Sun, SignOut } from "@phosphor-icons/react";
 
 const CURRENCIES = ["INR", "USD", "EUR", "GBP", "AED", "SGD", "AUD"];
 const inp = "w-full nm-field px-3 py-2 text-sm";
@@ -158,6 +159,62 @@ const TABS = [
 ];
 const VALID_TAB_KEYS = new Set(TABS.map((t) => t.key));
 
+/* KM-5 — Theme and Sign out move here from the mobile "More" panel, on the
+   founder's call: a nav menu is a list of PLACES, and a theme switch and a
+   session-ending action are neither. Language already lived here, so Account
+   now holds the whole set — appearance, profile, password, session — and the
+   menu is left with destinations only. */
+function ThemeCard() {
+  const { isDark, toggle } = useTheme();
+  return (
+    <div className="kr-bento p-5 sm:p-6" data-testid="settings-theme-card">
+      <div className="flex items-center justify-between gap-4">
+        <div className="min-w-0">
+          <h3 className="flex items-center gap-2 text-base font-semibold">
+            {isDark ? <MoonStars size={17} weight="regular" aria-hidden="true" />
+                    : <Sun size={17} weight="regular" aria-hidden="true" />}
+            Appearance
+          </h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {isDark ? "Dark theme is on." : "Light theme is on."}
+          </p>
+        </div>
+        <button type="button" onClick={toggle} data-testid="settings-theme-toggle"
+          aria-pressed={isDark}
+          className="kr-pop flex h-11 shrink-0 items-center gap-2 rounded-pill px-4 text-sm font-medium text-foreground">
+          {isDark ? <Sun size={15} weight="bold" aria-hidden="true" />
+                  : <MoonStars size={15} weight="bold" aria-hidden="true" />}
+          {isDark ? "Switch to light" : "Switch to dark"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SignOutCard() {
+  const { logout } = useAuth();
+  return (
+    <div className="kr-bento p-5 sm:p-6" data-testid="settings-signout-card">
+      <div className="flex items-center justify-between gap-4">
+        <div className="min-w-0">
+          <h3 className="text-base font-semibold">Session</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            You will need to sign in again on this device.
+          </p>
+        </div>
+        {/* Not red: DS-1's own rule is that `danger` means money or a deadline
+            at risk, "never chrome, borders, sign-out". Terminal is not
+            alerting. */}
+        <button type="button" onClick={() => { logout(); window.location.href = "/login"; }}
+          data-testid="settings-signout"
+          className="kr-pop flex h-11 shrink-0 items-center gap-2 rounded-pill px-4 text-sm font-medium text-foreground">
+          <SignOut size={15} weight="bold" aria-hidden="true" /> Sign out
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function Settings() {
   // MPWA-11 (§8): rebuilt below lg as a row-list; desktop untouched. WE-04's
   // 8-cards-to-4-tabs restructure replaced this component wholesale, so the
@@ -218,34 +275,36 @@ export default function Settings() {
         </div>
       </header>
 
-      {/* KR-12 — the same black-hairline pill Finance, CRM and the nav wear.
-          Was an underline tab bar, which is a third tab grammar in an app
-          that already has two too many. Still horizontal-scrolls on narrow
-          screens so the four never clip. */}
-      <div className="mb-5 flex flex-wrap gap-2" data-testid="settings-tabs">
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {TABS.map((t) => {
-            const Icon = t.icon;
-            const isActive = t.key === tab;
-            return (
-              <button
-                key={t.key}
-                type="button"
-                onClick={() => selectTab(t.key)}
-                data-testid={`settings-tab-${t.key}`}
-                aria-pressed={isActive}
-                className={`flex h-9 items-center gap-2 whitespace-nowrap rounded-pill border-[0.5px] px-4 text-sm ${
-                  isActive
-                    ? "border-kr-ink font-medium text-foreground"
-                    : "border-kr-ink/55 text-foreground/65 hover:text-foreground/85"
-                }`}
-              >
-                <Icon size={16} weight="regular" aria-hidden="true" />
-                {t.label}
-              </button>
-            );
-          })}
-        </div>
+      {/* KM-5 — a neumorphic segmented bar, not four hairline pills in a
+          scroller. The founder's read is that Business / Operations / Money /
+          Account looked misaligned, and it did: the pills were natural-width
+          inside an overflow-x-auto that also carried `flex-wrap` on its
+          parent, so the four sat ragged and the last one clipped at the
+          gutter with nothing to say it had. Four equal segments in a
+          .kr-pressed track cannot go ragged, and they cannot clip.
+          Icons drop below lg — at ~78px a segment, an icon costs more label
+          than it earns. No transition utility (outset/inset shadows). */}
+      <div className="kr-pressed mb-5 flex items-center gap-1 rounded-pill p-1"
+           role="tablist" aria-label="Settings sections" data-testid="settings-tabs">
+        {TABS.map((t) => {
+          const Icon = t.icon;
+          const isActive = t.key === tab;
+          return (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => selectTab(t.key)}
+              data-testid={`settings-tab-${t.key}`}
+              aria-pressed={isActive}
+              className={`flex h-10 min-w-0 flex-1 basis-0 items-center justify-center gap-1.5 rounded-pill px-1 text-xs lg:text-sm ${
+                isActive ? "kr-pop font-semibold text-foreground" : "text-foreground/60"
+              }`}
+            >
+              <Icon size={15} weight="regular" aria-hidden="true" className="hidden shrink-0 lg:block" />
+              <span className="truncate">{t.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       <p className="text-xs text-muted-foreground mb-4 max-w-2xl">{active.desc}</p>
@@ -277,8 +336,10 @@ export default function Settings() {
         {tab === "account" && (
           <>
             <LanguageCard />
+            <ThemeCard />
             <ProfileCard />
             <SecurityCard />
+            <SignOutCard />
           </>
         )}
       </div>

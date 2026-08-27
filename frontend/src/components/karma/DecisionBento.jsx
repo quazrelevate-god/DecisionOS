@@ -120,46 +120,82 @@ function firstRowCount(tiers, bp) {
 function DecisionBox({ card, tier, tint, verb, icon: Icon, busy, done, onAction }) {
   const t = TIER[tier] || TIER.c;
   return (
-    <button
-      type="button"
+    /* KM-3 — THE CARD IS NO LONGER THE BUTTON, below lg.
+       The founder's ask: a dedicated action button living in a bite cut out of
+       the card's bottom-right corner — "Review" on Needs your decision, "Chase"
+       on On fire — so the action is taken deliberately rather than by tapping
+       anywhere on the card. That forces the outer element from <button> to
+       <div>: a button inside a button is invalid HTML and hands screen readers
+       two overlapping targets for one action.
+
+       WHY THE SURFACE IS ITS OWN LAYER. A CSS mask applies to the element AND
+       everything inside it, so with .kr-cut-br on the card the action button —
+       being a child, and sitting exactly in the cut — was masked away with the
+       corner. Measured: the bite rendered, the button did not. So the glass
+       surface is an absolutely-positioned sibling that carries the mask alone,
+       the content sits above it unmasked, and the button is a sibling of both.
+       Desktop is unchanged: .kr-cut-br drops its mask at lg and the button
+       becomes a normal static footer action. */
+    <div
       data-testid={`desk-card-${card.id}`}
       data-tier={tier}
-      onClick={onAction}
-      disabled={busy || done}
-      aria-label={done ? `${card.title} — actioned` : card.title}
-      className={cn(
-        "kr-glass kr-lift group relative flex flex-col p-4 text-left xl:p-5",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60",
-        tint, t.span, t.minH,
-        // The acted state: quieter, desaturated, no longer inviting a click.
-        done && "kr-done pointer-events-none"
-      )}
+      className={cn("group relative flex flex-col", t.span, t.minH)}
     >
-      <div className="flex items-start justify-between gap-3">
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-white/30">
-          {done
-            ? <CheckCircle size={17} weight="fill" aria-hidden="true" />
-            : <Icon size={16} weight="regular" aria-hidden="true" />}
-        </span>
-        {card.amount_formatted && (
-          <span className={cn("font-mono font-medium", tier === "a" ? "text-base" : "text-sm")}>
-            {card.amount_formatted}
+      {/* The masked surface. aria-hidden: it is paint, not content. */}
+      <span
+        aria-hidden="true"
+        className={cn("kr-glass kr-cut-br absolute inset-0", tint, done && "kr-done")}
+      />
+
+      <div className="relative flex flex-1 flex-col p-4 text-left xl:p-5">
+        <div className="flex items-start justify-between gap-3">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-white/30">
+            {done
+              ? <CheckCircle size={17} weight="fill" aria-hidden="true" />
+              : <Icon size={16} weight="regular" aria-hidden="true" />}
           </span>
-        )}
+          {card.amount_formatted && (
+            <span className={cn("font-mono font-medium", tier === "a" ? "text-base" : "text-sm")}>
+              {card.amount_formatted}
+            </span>
+          )}
+        </div>
+
+        <p className={cn("mt-3.5", t.title, t.clamp)}>{card.title}</p>
+
+        {/* pr-28 keeps the context line clear of the cut: the bite is 118px
+            wide and text running under it would be sliced mid-word. */}
+        <p className="mt-auto pr-28 pt-3 text-xs leading-relaxed opacity-75 lg:pr-0">
+          {card.context_line}
+        </p>
       </div>
 
-      <p className={cn("mt-3.5", t.title, t.clamp)}>{card.title}</p>
-
-      <p className="mt-auto pt-3 text-xs leading-relaxed opacity-75">{card.context_line}</p>
-
-      <p className="mt-2 flex items-center gap-1.5 text-xs font-semibold">
+      {/* THE ACTION. 102x40 inside a 118x56 cut, leaving the 8px ring of
+          clearance that makes the card's edge read as tracing the button
+          rather than colliding with it. White on the ink band, because this
+          is the one thing on the card you are meant to hit. */}
+      <button
+        type="button"
+        onClick={onAction}
+        disabled={busy || done}
+        data-testid={`desk-card-action-${card.id}`}
+        aria-label={done ? `${card.title} — actioned` : `${verb}: ${card.title}`}
+        className={cn(
+          "absolute bottom-2 right-2 z-10 flex h-10 w-[102px] items-center justify-center gap-1.5",
+          "rounded-pill text-xs font-semibold",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70",
+          done ? "bg-white/15 text-white/70" : "bg-white text-kr-ink disabled:opacity-60",
+          "lg:static lg:mt-2 lg:mb-4 lg:ml-4 lg:w-fit lg:px-3.5"
+        )}
+      >
         {busy && <Spinner size={12} className="animate-spin" aria-hidden="true" />}
         {done ? "Done" : busy ? "Working…" : verb}
         {!busy && !done && (
-          <CaretRight size={11} weight="bold" aria-hidden="true" className="transition-transform group-hover:translate-x-0.5" />
+          <CaretRight size={11} weight="bold" aria-hidden="true"
+            className="transition-transform group-hover:translate-x-0.5" />
         )}
-      </p>
-    </button>
+      </button>
+    </div>
   );
 }
 
@@ -177,7 +213,14 @@ export function DecisionBento({ sections, verbFor, iconFor, onCard, busyId, done
     });
 
   return (
-    <div className={cn("min-w-0", className)} data-testid={testid}>
+    /* KM-3 — BELOW lg THE FOUR SECTIONS SCROLL SIDEWAYS, one per screen.
+       Stacked vertically they made the band ~1,800px tall: four headings and
+       their cards, so reaching "Important" meant scrolling past everything
+       else. Horizontally they cost one screen each and the band's height is
+       set by the tallest visible panel — which, collapsed, is one card.
+       .kr-snap carries the snap + gutter bleed; at lg it turns itself back
+       into a plain block and the sections stack exactly as they do today. */
+    <div className={cn("min-w-0 kr-snap", className)} data-testid={testid}>
       {sections.map((s, si) => {
         const cards = s.cards || [];
         const tiers = tiersFor(cards, si);
@@ -187,7 +230,7 @@ export function DecisionBento({ sections, verbFor, iconFor, onCard, busyId, done
         const hidden = cards.length - rowN;
 
         return (
-          <section key={s.key} className={cn(si > 0 && "mt-6 lg:mt-8")} data-testid={`desk-section-${s.key}`}>
+          <section key={s.key} className={cn("min-w-0", si > 0 && "lg:mt-8")} data-testid={`desk-section-${s.key}`}>
             <div className="mb-3 flex items-center gap-2.5">
               <span aria-hidden="true" className={cn("h-3 w-3 rounded-full", s.dot)} />
               <h3 className="text-base font-semibold">{s.label}</h3>
@@ -217,7 +260,16 @@ export function DecisionBento({ sections, verbFor, iconFor, onCard, busyId, done
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-12">
+            {/* Collapsed, the panel is exactly one card tall — the founder's
+                "fixed to accommodate one single card". Expanded (via +N more)
+                it becomes a capped, freely-scrolling column. Both caps are
+                lg:-reset so desktop keeps its full grid. */}
+            <div className={cn(
+              "grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-12",
+              expanded
+                ? "max-h-[60vh] overflow-y-auto lg:max-h-none lg:overflow-visible"
+                : "overflow-hidden"
+            )}>
               {s.loading && Array.from({ length: 3 }, (_, i) => (
                 <div key={i} className={cn("ds-skeleton rounded-tile", TIER[i === 0 ? "a" : "b"].span, TIER.b.minH)} />
               ))}

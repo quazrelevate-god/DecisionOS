@@ -1304,6 +1304,11 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
    carrying six Recharts surfaces. 320ms — long enough to read as motion,
    short enough that a founder clicking through four pipelines in a row
    never waits on it. */
+@keyframes kr-dex-breathe {
+    0%, 100% { transform: scaleY(0.55); }
+    50%      { transform: scaleY(1); }
+}
+
 @keyframes kr-page-in {
     from { opacity: 0; transform: translate3d(0, 10px, 0); }
     to   { opacity: 1; transform: none; }
@@ -1354,6 +1359,137 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
    Dex room proved — so every token-reading child (text, chips, hairlines,
    recipes) just works on ink without a `dark:` variant in sight.
    ═════════════════════════════════════════════════════════════════════════ */
+@layer components {
+    /* KM-3 · .kr-cut-br — a real bite taken out of a card's bottom-right
+       corner, so an action button can sit IN the card's outline rather than on
+       top of it. Two mask layers composited with `exclude`: a rounded-rect the
+       size of the button plus its clearance, positioned bottom-right, and a
+       full-coverage layer. Exclude subtracts the overlap, which cuts an actual
+       hole — the bloom behind the ink band shows through it, exactly the way
+       the dark band's centre dip is cut (see .kr-dark-band).
+       The cut is 8px larger than the button on every side, which is the
+       "small space between the button and the card" the founder asked for:
+       the card's edge traces the button's shape at a constant offset instead
+       of the button overlapping a square corner.
+       Masking happens AFTER filtering, so this composes with the card's
+       backdrop-blur without fighting it. */
+    .kr-cut-br {
+        --cut-w: 118px;
+        --cut-h: 56px;
+        -webkit-mask-image:
+            url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="118" height="56" viewBox="0 0 118 56"><rect x="0" y="0" width="118" height="56" rx="28" ry="28" fill="black"/></svg>'),
+            linear-gradient(#000, #000);
+        -webkit-mask-size: var(--cut-w) var(--cut-h), auto;
+        -webkit-mask-position: right bottom, top left;
+        -webkit-mask-repeat: no-repeat, no-repeat;
+        -webkit-mask-composite: xor;
+        mask-image:
+            url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="118" height="56" viewBox="0 0 118 56"><rect x="0" y="0" width="118" height="56" rx="28" ry="28" fill="black"/></svg>'),
+            linear-gradient(#000, #000);
+        mask-size: var(--cut-w) var(--cut-h), auto;
+        mask-position: right bottom, top left;
+        mask-repeat: no-repeat, no-repeat;
+        mask-composite: exclude;
+    }
+    /* Desktop keeps the whole-card-is-the-button pattern, so no bite there. */
+    @media (min-width: 1024px) {
+        .kr-cut-br {
+            -webkit-mask-image: none;
+            mask-image: none;
+        }
+    }
+
+    /* KM-3 — .kr-pop INSIDE AN INK SURFACE inverts its ground.
+       .kr-pop is built for the light page: a 38%-white fill with a white
+       inset lip. Dropped onto the ink More panel that reads as a pale grey
+       blob, and the panel's own light-on-dark text then sat light-on-light —
+       measured: the CRM, Operating Score, Calendar and utility-row labels
+       were all but unreadable. Same material, same direction of light,
+       opposite ground: a low-alpha WHITE fill over the ink, a faint white
+       lip, and real black shadow doing the lifting. Scoped to .kr-glass.dark
+       so it only fires inside an ink container and the light-page recipe is
+       untouched everywhere else. */
+    .kr-glass.dark .kr-pop {
+        background: hsl(0 0% 100% / .08);
+        box-shadow:
+            inset 0 1px 0 hsl(0 0% 100% / .14),
+            0 1px 2px hsl(0 0% 0% / .34),
+            0 4px 10px -4px hsl(0 0% 0% / .48);
+        color: hsl(40 20% 97%);
+    }
+    .kr-glass.dark .kr-pop:hover {
+        background: hsl(0 0% 100% / .12);
+    }
+
+    /* KM-3 — the idle breath of the Dex waveform. Scale on the Y axis only,
+       from the bar's own centre, so the row keeps its silhouette while it
+       moves. Deliberately slow (2.6s) and shallow: this runs the whole time
+       the sheet is open, and anything faster reads as a loading spinner. */
+    .kr-dex-breathe {
+        animation: kr-dex-breathe 2600ms ease-in-out infinite;
+        transform-origin: center;
+    }
+
+    /* KM-3 · .kr-snap — the horizontal section scroller on the Desk band.
+       One section per screen, snapped, with the page gutter as the inline
+       padding so a panel sits exactly where the page's content sits. */
+    .kr-snap {
+        display: flex;
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+        overscroll-behavior-x: contain;
+        scrollbar-width: none;
+        margin-inline: calc(var(--page-pad, 1rem) * -1);
+        padding-inline: var(--page-pad, 1rem);
+        gap: var(--page-pad, 1rem);
+    }
+    .kr-snap::-webkit-scrollbar { display: none; }
+    .kr-snap > * {
+        scroll-snap-align: start;
+        flex: 0 0 100%;
+        min-width: 0;
+        /* Contain each panel's backdrop root. Without this, the .kr-glass
+           cards' backdrop-filter escalates out of the scroll container and
+           samples the whole page — measured: the hero above the band rendered
+           blurred. `isolation` forms a stacking context, which is what pins
+           the backdrop root to the panel. */
+        isolation: isolate;
+    }
+    @media (min-width: 1024px) {
+        .kr-snap {
+            display: block;
+            overflow-x: visible;
+            scroll-snap-type: none;
+            margin-inline: 0;
+            padding-inline: 0;
+        }
+    }
+
+    /* KM-3 · .kr-form-row — form fields STACK below lg. Full stop.
+       A dialog is the viewport width on a phone: 375 minus the dialog's own
+       p-4 (32px) leaves 343px of content. Two columns puts a currency or a
+       name select at 165px; three puts a native date input at ~106px, which
+       iOS clips. And there is no viewport below lg where a second column
+       becomes honest — the content column caps at --app-shell (448px) and
+       stops growing at a 480px viewport (see KM-0) — so this class does not
+       offer one.
+       It also fixes a subtler bug than width: in a 2-col row a long label
+       ("Supporting employee (optional)") wraps to two lines while its
+       neighbour ("Assigned employee") stays on one, so the two SELECTS below
+       them start at different y positions and the row reads as broken
+       alignment. Stacked, every label owns its own line and the question
+       disappears. */
+    .kr-form-row {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+    }
+}
+@media (min-width: 1024px) {
+    .kr-form-row    { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .kr-form-row--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
 /* KM-0 — the bleed must match the GUTTER, not a guess at it. <main> pads with
    `px-gutter-safe` = max(1rem, env(safe-area-inset-left)) (index.css ~430), so
    on a notched device in landscape the real gutter is ~44px while a flat 1rem
@@ -1811,6 +1947,7 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
     .kr-glow { transition: none; }
     .kr-lift:hover .kr-arrow { transform: none; }
     .kr-reveal { opacity: 1; transform: none; transition: none; }
+    .kr-dex-breathe { animation: none; }
 
     /* KR-8.9 — the aurora is gone, so the well itself has nothing left to
        guard. .kr-pop still does: it eases its shadows on hover and drops 1px

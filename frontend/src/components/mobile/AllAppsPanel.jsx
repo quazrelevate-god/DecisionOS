@@ -190,11 +190,18 @@ function Tile({ tile, onPick }) {
       onClick={() => onPick(tile)}
       className={cn(
         // >= 100x100 per §5.7, so the 44px floor is met with room to spare.
-        "relative flex min-h-[6.25rem] flex-col nm-raised p-3 text-left",
-        "transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        /* KM-3 — .kr-pop + .kr-lift instead of nm-raised + a flat colour
+           hover. Inside the ink panel .kr-pop reads as a subtly raised
+           translucent tile, which is the "subtle neumorphism" asked for;
+           hover:bg-accent was the flat idiom the redesign replaced. */
+        "relative flex min-h-[6.25rem] flex-col kr-pop kr-lift rounded-tile p-3 text-left",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60",
         big || wide ? "justify-between" : "items-center justify-center gap-1.5",
         SPAN[tile.size] || "",
-        tile.danger && "text-danger-700"
+        /* KM-3 — no red. DS-1's token comment: `danger` means money or a
+           deadline at risk, "never chrome, borders, sign-out". Sign out is
+           terminal, not alerting, and spending the alert colour on it
+           devalues it everywhere it does mean something. */
       )}
     >
       {big || wide ? (
@@ -345,7 +352,7 @@ export function AllAppsPanel({
         <DialogPrimitive.Overlay
           data-testid="allapps-backdrop"
           className={cn(
-            "fixed inset-0 z-[10080] bg-neutral-900/55 backdrop-blur-[20px]",
+            "fixed inset-0 z-[10080] bg-black/65 backdrop-blur-[22px]",
             "data-[state=open]:animate-in data-[state=closed]:animate-out",
             "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
           )}
@@ -366,7 +373,18 @@ export function AllAppsPanel({
           className={cn(
             // inset 16px from every edge, max-height 80vh (§8)
             "fixed inset-x-4 z-[10090] mx-auto flex max-h-[80vh] max-w-md flex-col overflow-hidden",
-            "rounded-2xl border border-border bg-background shadow-brutal-lg",
+            /* KM-3 — THE PANEL BECOMES AN INK OBJECT.
+               It was `bg-background` — the page's own greige — so More opened
+               a copy of the page floating over the page, with a hard
+               `border-border` frame and shadow-brutal-lg, both retired.
+               Now .kr-glass (frosted, translucent, blurred) PLUS .dark, which
+               KR-2 redefined to mean "inside the ink" rather than a night
+               theme: it re-scopes --nm-raised, --hairline, --text-* and the
+               shadcn aliases, so every .nm-raised tile and every
+               text-muted-foreground inside becomes its ink counterpart with
+               no `dark:` variant written anywhere. The thing More opens now
+               looks like the ink pill you tapped to open it. */
+            "dark kr-glass rounded-cardlg",
             "top-1/2 -translate-y-1/2",
             // scale 0.92 -> 1 with opacity, ~180ms ease-out; reverse on close
             // [animation-duration:...] rather than duration-[180ms]: the
@@ -474,9 +492,9 @@ export function AllAppsPanel({
                       data-testid={`allapps-tile-${item.key}`}
                       onClick={() => pick(item)}
                       className={cn(
-                        "flex min-h-[3.5rem] flex-1 flex-col items-center justify-center gap-1 rounded-lg px-1",
-                        "transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                        item.danger ? "text-danger-700" : "text-muted-foreground"
+                        "flex min-h-[3.5rem] flex-1 flex-col items-center justify-center gap-1 rounded-control px-1",
+                        "kr-pop focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60",
+                        "text-muted-foreground"   /* KM-3 — see above: no red on sign out. */
                       )}
                     >
                       <item.icon size={20} weight="bold" aria-hidden="true" />

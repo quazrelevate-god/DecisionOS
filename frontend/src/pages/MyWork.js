@@ -26,7 +26,7 @@ import {
   File, FileArrowUp, Lightbulb, Info,
   FlowArrow,  // WE-11 stage chip
   SlidersHorizontal,  // KR-14.6 · mobile MyWork filter icon (reference)
-  Buildings, CalendarBlank, Play, // KR-14.22 · mobile expanded task card
+  Buildings, CalendarBlank, // KR-14.22 · mobile expanded task card
 } from "@phosphor-icons/react";
 
 // RD-2 (2026-08-17): the toolbar control. Was uppercase + wide tracking +
@@ -89,6 +89,20 @@ const STATUS_LABEL = {
   review: "Under Review", done: "Completed", cancelled: "Cancelled", blocked: "Pending Approval",
 };
 const PROGRESS_OPTIONS = [0, 25, 50, 75, 100];
+
+/* KM-3 — the five settable states, in the order work actually moves through
+   them, with the founder's colour ramp: orange at the start of the work,
+   warming through amber and lime, green when it lands, and red set apart for
+   the one outcome that is not progress. "Not Started" is deliberately absent —
+   it is the default, i.e. the absence of a choice, and `blocked` is a gate the
+   approver controls rather than a state the assignee sets. */
+const M_STATUS_PILLS = [
+  { key: "in_progress", label: "In Progress", on: "bg-orange-500 text-white" },
+  { key: "waiting",     label: "Waiting",     on: "bg-amber-500 text-white" },
+  { key: "review",      label: "Review",      on: "bg-lime-600 text-white" },
+  { key: "done",        label: "Completed",   on: "bg-green-600 text-white" },
+  { key: "cancelled",   label: "Cancelled",   on: "bg-red-600 text-white" },
+];
 const isTerminal = (t) => t.status === "done" || t.status === "cancelled";
 const isOverdue = (t) => t.due_date && new Date(t.due_date) < new Date() && !isTerminal(t);
 
@@ -773,7 +787,6 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
   const [selfExpanded, setSelfExpanded] = useState(highlight);
   // KR-14.24 — mobile "Set % manually" toggle. When on, the percent select
   // renders inline in the same status row instead of dropping a new block.
-  const [manualPctOpen, setManualPctOpen] = useState(false);
   const controlled = open !== undefined;
   const expanded = controlled ? open : selfExpanded;
   const setExpanded = controlled ? () => onToggleOpen?.() : setSelfExpanded;
@@ -1114,67 +1127,56 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
           );
         })()}
 
-        {/* Status row — flex-wrap so the "Set % manually" percent selector
-            can drop to a second line on narrow phones instead of pushing
-            neighbours off the row. */}
+        {/* KM-3 · STATUS PILLS — the founder's replacement for the native
+            <select> + the "Set % manually" percent picker, both of which are
+            gone. A dropdown hides four of five choices behind a tap and lands
+            an OS-drawn wheel on top of the app; five pills show the whole
+            state machine at once and set it in one tap.
+            NOT STARTED IS THE DEFAULT AND HAS NO PILL. It is the absence of a
+            choice, so giving it a chip would make "nothing has happened yet"
+            look like a thing you picked. `blocked` (pending approval) also
+            resolves to no selection — it is a gate, not a status you set.
+            The ramp is the founder's: orange at In Progress, warming through
+            amber and lime as the work advances, green at Completed, and red
+            standing apart for Cancelled — the one outcome that is not
+            progress. Solid fill when chosen; .kr-pop when not, so an unchosen
+            pill is still a raised control rather than a flat swatch. */}
         {!terminal && !awaitingApproval && (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <span className="text-sm text-muted-foreground">Status</span>
-            <select
-              data-testid={`status-select-m-${t.id}`}
-              value={t.status === "blocked" ? "todo" : t.status}
-              onChange={(e) => setStatus(e.target.value)}
-              className="min-w-[120px] flex-1 rounded-pill border border-nm-edge/40 bg-white px-3 py-2 text-sm focus:outline-none"
-            >
-              {STATUS_OPTIONS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-            </select>
-            <span aria-hidden="true" className="h-5 w-px shrink-0 bg-nm-edge/60" />
-            {/* KR-14.24 — the details wrapper is replaced by an inline
-                button + conditional select. When toggled on, the percent
-                selector renders IN the same row (or wraps below without
-                pushing content off-screen), matching the founder's ask. */}
-            <button
-              type="button"
-              data-testid={`toggle-manual-pct-m-${t.id}`}
-              onClick={() => setManualPctOpen((v) => !v)}
-              aria-pressed={manualPctOpen}
-              className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground"
-            >
-              <Play size={11} weight="fill" /> Set % manually
-            </button>
-            {manualPctOpen && (
-              <select
-                data-testid={`progress-select-m-${t.id}`}
-                value={PROGRESS_OPTIONS.includes(t.progress) ? t.progress : 0}
-                onChange={(e) => setProgress(e.target.value)}
-                className="shrink-0 rounded-pill border border-nm-edge/40 bg-white px-2 py-1 text-xs focus:outline-none"
-              >
-                {PROGRESS_OPTIONS.map((p) => <option key={p} value={p}>{p}%</option>)}
-              </select>
-            )}
+          <div className="flex flex-wrap gap-1.5" role="group"
+               aria-label="Task status" data-testid={`status-pills-m-${t.id}`}>
+            {M_STATUS_PILLS.map((sp) => {
+              const on = t.status === sp.key;
+              return (
+                <button
+                  key={sp.key}
+                  type="button"
+                  onClick={() => setStatus(on ? "todo" : sp.key)}
+                  aria-pressed={on}
+                  data-testid={`status-pill-m-${sp.key}-${t.id}`}
+                  className={`flex h-9 shrink-0 items-center rounded-pill px-3 text-xs ${
+                    on ? `${sp.on} font-semibold` : "kr-pop text-foreground/70"
+                  }`}
+                >
+                  {sp.label}
+                </button>
+              );
+            })}
           </div>
         )}
 
-        {/* KR-14.24 — Add manually + Ask Dex share one row with an "or"
-            between them. The Complete + attach row moves BELOW so the two
-            plan-building options read as the first choice. */}
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            data-testid={`add-manually-m-${t.id}`}
-            className="flex flex-1 items-center justify-center gap-2 rounded-pill border border-nm-edge/40 bg-white px-4 py-2 text-sm"
-          >
-            <PencilSimple size={14} weight="regular" /> Add manually
-          </button>
-          <span className="text-xs text-muted-foreground">or</span>
-          <button
-            type="button"
-            data-testid={`ask-dex-m-${t.id}`}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-pill border border-nm-edge/40 bg-white px-4 py-2 text-sm font-medium text-violet-600"
-          >
-            <Sparkle size={12} weight="fill" /> Ask Dex
-          </button>
-        </div>
+        {/* KM-3 — THE REAL COMPONENT, not a lookalike. The two buttons that
+            used to sit here ("Add manually" / "Ask Dex") were rebuilt as
+            plain markup during the mobile pass and shipped with NO onClick at
+            all, so both were inert: Dex never drafted anything and manual
+            never opened a field. ExecutionPlan already owns that whole
+            behaviour — generate() posts to /execution-plan/generate,
+            startManual() seeds one empty step, and the editor below it adds,
+            edits, reorders, removes and persists. Rendering it restores the
+            AI draft, the manual path, and "add another step" in one move,
+            with no second copy of the logic to drift. */}
+        {!awaitingApproval && (
+          <ExecutionPlan t={t} onChange={onChange} members={members} roleOptions={roleOptions} />
+        )}
 
         {/* Actions row — Complete + attach controls, now below the two
             plan-building buttons above. */}
@@ -1660,11 +1662,43 @@ const BANDS = [
 
 function TaskPriorityColumns({ list, openId, setOpenId, cardProps }) {
   const grouped = BANDS.map((b) => ({ ...b, items: list.filter((t) => TIER_OF(t) === b.key) }));
+  /* KM-3 — ON A PHONE THE THREE COLUMNS BECOME THREE TABS.
+     A 3-col grid linearises to three stacked sections, so turning AI priority
+     on used to make the page THREE TIMES LONGER and buried Medium and Low
+     below two full screens of High — the opposite of what "sort by priority"
+     is for. A segmented bar shows one band at a time and names the other two,
+     so the grouping is visible at a glance and switching costs one tap.
+     Default is High: if you asked for priority order, that is the band you
+     asked to see. Desktop keeps all three columns side by side, untouched. */
+  const [band, setBand] = useState("high");
   return (
+    <>
+      <div className="kr-pressed mb-4 flex items-center gap-1 rounded-pill p-1 lg:hidden"
+           role="group" aria-label="Priority band" data-testid="mywork-priority-bands">
+        {grouped.map((b) => (
+          <button
+            key={b.key}
+            type="button"
+            onClick={() => setBand(b.key)}
+            aria-pressed={band === b.key}
+            data-testid={`priority-band-${b.key}`}
+            className={`flex h-9 flex-1 items-center justify-center gap-1.5 rounded-pill px-2 text-xs ${
+              band === b.key ? "kr-pop font-semibold text-foreground" : "text-foreground/60"
+            }`}
+          >
+            {b.label}
+            <span className="tabular-nums opacity-60">{b.items.length}</span>
+          </button>
+        ))}
+      </div>
     <div className="grid gap-4 lg:grid-cols-3" data-testid="mywork-priority-columns">
       {grouped.map((col) => (
-        <section key={col.key} data-testid={`priority-col-${col.key}`} className="min-w-0">
-          <div className="mb-3 flex items-baseline gap-2">
+        <section key={col.key} data-testid={`priority-col-${col.key}`}
+                 className={`min-w-0 lg:block ${band === col.key ? "block" : "hidden"}`}>
+          {/* The heading is desktop-only: below lg the segmented bar above
+              already names the band and carries its count, so repeating it
+              here would label a list that has just been labelled. */}
+          <div className="mb-3 hidden items-baseline gap-2 lg:flex">
             <h3 className="text-sm font-semibold">{col.label}</h3>
             <span className="font-mono text-xs tabular-nums opacity-55">{col.items.length}</span>
           </div>
@@ -1691,6 +1725,7 @@ function TaskPriorityColumns({ list, openId, setOpenId, cardProps }) {
         </section>
       ))}
     </div>
+    </>
   );
 }
 
@@ -1854,12 +1889,35 @@ export default function MyWork() {
   //          old category chip strip is gone, its selection moves in here.
   // Reuses the same state (view/scope/tab/aiPriority) so the desktop tree can
   // stay untouched via `lg:hidden` / `hidden lg:*`.
-  const MPILL = "flex h-9 shrink-0 items-center gap-1.5 rounded-pill px-2.5 text-[12px] transition-colors";
-  const MPILL_ON = "bg-kr-ink text-white font-medium";
-  const MPILL_OFF = "border-[0.5px] border-kr-ink/55 text-foreground/75";
-  const MSEG = "flex h-9 shrink-0 items-center justify-center px-2.5 text-[12px] transition-colors";
-  const MSEG_ON = "bg-kr-ink text-white font-medium";
-  const MSEG_OFF = "text-foreground/75";
+  // KM-2 · MOBILE HEADER — the founder's arrangement, and it now uses the
+  // DESKTOP MATERIAL. The phone was still painting selection as a solid ink
+  // fill (MSEG_ON = bg-kr-ink text-white) while the desktop had long since
+  // moved to depth: .kr-pressed for "you are in this", .kr-pop for "you are
+  // not". One app, one grammar.
+  //
+  //   Row 1: h1 left · [Leave] right-aligned
+  //   Row 2: the LENS GROUP — [My Tasks | All Tasks] joined by geometry with
+  //          a circular [+] sitting inside the same group — then [Workflows];
+  //          [AI priority] and [filter] as a pair of circles on the right
+  //   Row 3: the active sub-filter caption
+  //
+  // NO `transition-colors` ANYWHERE IN HERE, and it is load-bearing rather
+  // than an oversight: every control below swaps .kr-pop <-> .kr-pressed,
+  // whose box-shadows are an OUTSET list and an INSET list. Shadow lists only
+  // interpolate when their lengths and `inset` keywords agree, so the browser
+  // falls back to a discrete transition and the button sits visually unchanged
+  // for half the duration — and a transition-colors utility (which @layer
+  // utilities puts after @layer components, replacing transition-property
+  // wholesale) drags the LABEL COLOUR into that same dead zone. Selection
+  // should snap anyway. See the note at the top of this file.
+  const MPILL = "flex h-9 shrink-0 items-center gap-1.5 rounded-pill px-2.5 text-[12px]";
+  const MPILL_ON = "kr-pressed font-semibold text-foreground";
+  const MPILL_OFF = "kr-pop text-foreground/75";
+  const MSEG = "flex h-9 shrink-0 items-center justify-center px-2.5 text-[12px]";
+  const MSEG_ON = "kr-pressed font-semibold text-foreground";
+  const MSEG_OFF = "kr-pop text-foreground/70";
+  // The two circles on the right of Row 2, and the [+] in the lens group.
+  const MCIRCLE = "grid h-9 w-9 shrink-0 place-items-center rounded-full text-foreground";
   const mobileView = (() => {
     if (view === "workflows") return "workflows";
     if (view === "leave") return "leave";
@@ -1876,118 +1934,152 @@ export default function MyWork() {
     <div>
       {/* ─── MOBILE HEADER (below lg) ───────────────────────────────────── */}
       <header className="mb-5 flex flex-col gap-3 lg:hidden" data-testid="mywork-mobile-header">
-        {/* Row 1 — title only. Stays constant across every view (My Tasks /
-            All Tasks / Workflows / Leave) so switching views never resizes
-            this row and the header no longer feels jumpy. Task-creation and
-            AI priority moved to Row 3 below. */}
-        <div className="flex items-center gap-3">
-          <h1 className="font-display text-3xl leading-none">{t("mywork.title")}</h1>
-        </div>
-
-        {/* Row 2 — segmented [My Tasks | All Tasks] + [Workflows] + [Leave]
-            + sliders filter. The segment is one pill split in two: outer
-            corners rounded, inner corners square, a hairline seam. */}
-        <div className="flex items-center gap-1.5" data-testid="mywork-mobile-tabs">
-          {isOwner && (
-            <div className="flex shrink-0 items-center overflow-hidden rounded-pill border-[0.5px] border-kr-ink/55"
-                 role="group" aria-label={t("mywork.title", "My Work")} data-testid="work-mobile-segment">
-              <button type="button" onClick={() => { setScope("mine"); setView("mywork"); }}
-                aria-pressed={mobileView === "mine"} data-testid="work-mobile-mine"
-                className={`${MSEG} ${mobileView === "mine" ? MSEG_ON : MSEG_OFF}`}>
-                {t("mywork.my_tasks")}
-              </button>
-              <span aria-hidden="true" className="h-5 w-px shrink-0 bg-kr-ink/20" />
-              <button type="button" onClick={() => { setScope("all"); setView("mywork"); }}
-                aria-pressed={mobileView === "all"} data-testid="work-mobile-all"
-                className={`${MSEG} ${mobileView === "all" ? MSEG_ON : MSEG_OFF}`}>
-                {t("mywork.all_tasks")}
-              </button>
-            </div>
-          )}
+        {/* Row 1 — title left, the two DESTINATIONS right.
+            Workflows and Leave are the only two controls in this header that
+            are not lenses on the task list — they replace the list with a
+            different subject. Putting them on the title's line says that, and
+            leaves Row 2 holding exactly the things that act on the list.
+            MEASURED, not chosen: with Workflows still in Row 2 that row needed
+            378px of a 343px column — 194 (lens group) + 78 (Workflows) + 94
+            (the two circles) + gaps — and the filter circle's right edge landed
+            at 394px against a 375px viewport, where overflow-x:clip on <main>
+            cropped it away with no way to reach it. The circles are 44px wide,
+            not the 36px `w-9` declares, because index.css puts a 44px
+            min-width touch floor on every button below lg. Tightening padding
+            and gaps recovers ~16px of the 35px gap, so the row genuinely
+            cannot hold six controls; a destination pair moving up is the only
+            fix that keeps every control reachable. */}
+        <div className="flex items-center gap-1.5">
+          <h1 className="min-w-0 flex-1 font-display text-3xl leading-none">{t("mywork.title")}</h1>
+          {/* Workflows — never changes depth, on the founder's standing call:
+              held .kr-pressed in BOTH states so colour alone carries selection,
+              brown at rest and ink when you are in it. Everything around it
+              moves between raised and sunken, which is what lets a
+              permanently-sunken button read as a place rather than a toggle.
+              Identical rule to the desktop row. */}
           {canSeeWorkflows && (
             <button type="button" onClick={() => setView("workflows")}
               aria-pressed={mobileView === "workflows"} data-testid="work-mobile-workflows"
-              className={`${MPILL} ${mobileView === "workflows" ? MPILL_ON : MPILL_OFF}`}>
+              className={`${MPILL} shrink-0 kr-pressed ${
+                mobileView === "workflows" ? "font-semibold text-foreground" : "text-kr-brown"
+              }`}>
               {t("mywork.view_workflows")}
             </button>
           )}
           <button type="button" onClick={() => setView("leave")}
             aria-pressed={mobileView === "leave"} data-testid="work-mobile-leave"
-            className={`${MPILL} ${mobileView === "leave" ? MPILL_ON : MPILL_OFF}`}>
+            className={`${MPILL} shrink-0 ${mobileView === "leave" ? MPILL_ON : MPILL_OFF}`}>
             {t("mywork.view_leave")}
           </button>
-
-          {/* KR-14.7 — the sliders filter circle carries the sub-filters for
-              the currently-active view. In the segment views it lists task
-              categories (All, Finance, Logistics… + Completed); in Workflows
-              the same affordance moves inside Workflows.js and lists
-              pipelines. On Leave there is no sub-filter, so the button is
-              a passive spacer to keep the row's alignment. */}
-          {mobileView === "leave" ? (
-            <span className="ml-auto h-9 w-9 shrink-0" aria-hidden="true" />
-          ) : (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button type="button" data-testid="work-mobile-filter"
-                  aria-label={t("mywork.filter", "Filter")}
-                  className="ml-auto grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white text-foreground shadow-[0_1px_2px_rgba(0,0,0,0.06)]">
-                  <SlidersHorizontal size={16} weight="regular" aria-hidden="true" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" sideOffset={8} className="min-w-[12rem]">
-                {mobileView === "workflows"
-                  ? om.pipelines.map((pip) => {
-                      const cur = params.get("wf_type") || om.pipelines[0]?.key;
-                      return (
-                        <DropdownMenuItem key={pip.key} onSelect={() => {
-                          const next = new URLSearchParams(params);
-                          next.set("view", "workflows");
-                          next.set("wf_type", pip.key);
-                          setParams(next);
-                        }}
-                          data-testid={`work-mobile-filter-wf-${pip.key}`}
-                          className={`flex items-center justify-between gap-3 ${cur === pip.key ? "font-medium" : ""}`}>
-                          <span>{pip.label}</span>
-                        </DropdownMenuItem>
-                      );
-                    })
-                  : mobileFilterTabs.map((tb) => (
-                      <DropdownMenuItem key={tb.key} onSelect={() => setTab(tb.key)}
-                        data-testid={`work-mobile-filter-${tb.key}`}
-                        className={`flex items-center justify-between gap-3 ${tab === tb.key ? "font-medium" : ""}`}>
-                        <span>{tb.label}</span>
-                        <span className="tabular-nums text-xs text-muted-foreground">{countFor(tb.key)}</span>
-                      </DropdownMenuItem>
-                    ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
         </div>
 
-        {/* Row 3 — active-tab caption on the left, New Task + priority
-            sparkle on the right. Only rendered in the segment views: those
-            are the two controls that operate on the task list, and putting
-            them in a stable row below the tabs keeps Row 1/Row 2 fixed so
-            switching to Workflows/Leave no longer shifts the header. */}
-        {inSegmentView && (
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-xs text-muted-foreground" data-testid="work-mobile-active-tab">
-              {activeTabLabel}
-              <span className="ml-1 tabular-nums opacity-70">· {countFor(tab)}</span>
-            </p>
-            <div className="flex shrink-0 items-center gap-2">
+        {/* Row 2 — everything that ACTS ON THE LIST, and nothing else:
+            the lens group on the left, the two action circles on the right. */}
+        <div className="flex items-center gap-1.5" data-testid="mywork-mobile-tabs">
+          {/* THE LENS GROUP. My Tasks and All Tasks are joined by geometry —
+              touching, outer corners round, inner corners square, a hairline
+              seam — and the [+] rides with them as a circle: it acts on the
+              same list, so it belongs in the same group, and being round is
+              what stops it reading as a third tab. Same anatomy the desktop
+              cluster uses for AI priority. */}
+          {isOwner && (
+            <div className="flex shrink-0 items-center gap-1.5"
+                 role="group" aria-label={t("mywork.title", "My Work")} data-testid="work-mobile-segment">
+              <div className="flex items-center">
+                <button type="button" onClick={() => { setScope("mine"); setView("mywork"); }}
+                  aria-pressed={mobileView === "mine"} data-testid="work-mobile-mine"
+                  className={`${MSEG} rounded-l-pill ${mobileView === "mine" ? MSEG_ON : MSEG_OFF}`}>
+                  {t("mywork.my_tasks")}
+                </button>
+                <span aria-hidden="true" className="h-5 w-px shrink-0 bg-kr-ink/15" />
+                <button type="button" onClick={() => { setScope("all"); setView("mywork"); }}
+                  aria-pressed={mobileView === "all"} data-testid="work-mobile-all"
+                  className={`${MSEG} rounded-r-pill ${mobileView === "all" ? MSEG_ON : MSEG_OFF}`}>
+                  {t("mywork.all_tasks")}
+                </button>
+              </div>
               <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members}
-                triggerClassName={`${MPILL} ${MPILL_ON} kr-lift`} />
+                triggerClassName={`${MCIRCLE} kr-pop`}
+                triggerAriaLabel={t("mywork.new_task", "New Task")}
+                triggerChildren={<Plus size={16} weight="bold" aria-hidden="true" />} />
+            </div>
+          )}
+
+
+          {/* The two circles, as a pair, hard right. AI priority moved up here
+              from its own row so that both controls that act on the LIST
+              — reorder it, filter it — sit together, in the same shape, in
+              the same place. */}
+          <div className="ml-auto flex shrink-0 items-center gap-1.5">
+            {inSegmentView && (
               <button type="button" onClick={() => { setAiPriority((v) => !v); setView("mywork"); }}
                 aria-pressed={aiPriority} data-testid="work-mobile-priority"
                 aria-label={aiPriority ? t("mywork.ai_priority_on", "AI priority on") : t("mywork.ai_priority", "AI priority")}
                 title={scoring ? t("mywork.scoring", "Scoring…") : (aiPriority ? t("mywork.ai_priority_on", "AI priority on") : t("mywork.ai_priority", "AI priority"))}
-                className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${aiPriority ? "kr-pressed" : "kr-pop"}`}>
+                className={`${MCIRCLE} ${aiPriority ? "kr-pressed" : "kr-pop"}`}>
                 <Sparkle size={15} weight={aiPriority ? "fill" : "bold"} aria-hidden="true"
                   className={scoring ? "animate-pulse" : ""} />
               </button>
-            </div>
+            )}
+
+            {/* KR-14.7 — the sliders filter carries the sub-filters for the
+                active view: task categories in the segment views, pipelines
+                inside Workflows. Leave has no sub-filter, so it renders a
+                passive spacer that keeps the row's right edge steady.
+                KM-2 — now .kr-pop rather than a bare white circle: it sits
+                shoulder to shoulder with the AI circle, and two adjacent
+                circles in two different materials read as a mistake. */}
+            {mobileView === "leave" ? (
+              <span className="h-9 w-9 shrink-0" aria-hidden="true" />
+            ) : (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button type="button" data-testid="work-mobile-filter"
+                    aria-label={t("mywork.filter", "Filter")}
+                    className={`${MCIRCLE} kr-pop`}>
+                    <SlidersHorizontal size={16} weight="regular" aria-hidden="true" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" sideOffset={8} className="min-w-[12rem]">
+                  {mobileView === "workflows"
+                    ? om.pipelines.map((pip) => {
+                        const cur = params.get("wf_type") || om.pipelines[0]?.key;
+                        return (
+                          <DropdownMenuItem key={pip.key} onSelect={() => {
+                            const next = new URLSearchParams(params);
+                            next.set("view", "workflows");
+                            next.set("wf_type", pip.key);
+                            setParams(next);
+                          }}
+                            data-testid={`work-mobile-filter-wf-${pip.key}`}
+                            className={`flex items-center justify-between gap-3 ${cur === pip.key ? "font-medium" : ""}`}>
+                            <span>{pip.label}</span>
+                          </DropdownMenuItem>
+                        );
+                      })
+                    : mobileFilterTabs.map((tb) => (
+                        <DropdownMenuItem key={tb.key} onSelect={() => setTab(tb.key)}
+                          data-testid={`work-mobile-filter-${tb.key}`}
+                          className={`flex items-center justify-between gap-3 ${tab === tb.key ? "font-medium" : ""}`}>
+                          <span>{tb.label}</span>
+                          <span className="tabular-nums text-xs text-muted-foreground">{countFor(tb.key)}</span>
+                        </DropdownMenuItem>
+                      ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
+        </div>
+
+        {/* Row 3 — the active sub-filter caption. New Task and AI priority
+            both left this row in KM-2 (into the lens group and the circle
+            pair respectively), so what remains is the one thing that names
+            what the list below is currently showing. */}
+        {inSegmentView && (
+          <p className="text-xs text-muted-foreground" data-testid="work-mobile-active-tab">
+            {activeTabLabel}
+            <span className="ml-1 tabular-nums opacity-70">· {countFor(tab)}</span>
+          </p>
         )}
       </header>
 

@@ -257,7 +257,7 @@ export function OperatingModelEditor() {
             <div className="mt-3 space-y-3">
               <span className="label-mono text-muted-foreground">Stages (in order)</span>
               {p.stages.map((s, si) => (
-                <div key={s._uid} className="border border-nm-edge/40/60 rounded-md p-2.5 bg-accent/30" data-testid={`op-stage-${pi}-${si}`}>
+                <div key={s._uid} className="border border-nm-edge/60 rounded-md p-2.5 bg-accent/30" data-testid={`op-stage-${pi}-${si}`}>
                   {/* Stage name row + reorder + delete */}
                   <div className="flex items-center gap-1.5">
                     <input className={`${smInp} flex-1`} placeholder="Stage name" value={s.label} onChange={(e) => setStage(pi, si, { label: e.target.value })} />

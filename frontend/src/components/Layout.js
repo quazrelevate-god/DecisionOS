@@ -235,8 +235,12 @@ export default function Layout({ children }) {
     (n) => !n.read && NEEDS_HIM.test(n.kind || "")
   ).length;
   const qc = useQueryClient();
-  const { data: brief } = useQuery({ queryKey: ["fires-count"], queryFn: () => api.get("/brief?period=morning").then((r) => r.data), refetchInterval: 60000, enabled: user?.role === "owner" });
-  const fires = brief?.counters?.fires || 0;
+  // KM-1 — the return value is deliberately not destructured. Its only reader
+  // was `counts.myWork`, a prop AllAppsPanel never looked at; the poll itself
+  // stays because it keeps /brief?period=morning warm in the cache, which is
+  // where the More panel's live tiles will read from (they must not fire
+  // requests on open). If that panel work does not land, delete this too.
+  useQuery({ queryKey: ["fires-count"], queryFn: () => api.get("/brief?period=morning").then((r) => r.data), refetchInterval: 60000, enabled: user?.role === "owner" });
   const { data: capPending } = useQuery({ queryKey: ["captures-pending"], queryFn: () => api.get("/captures/pending-count").then((r) => r.data), refetchInterval: 30000 });
   const captureCount = capPending?.count || 0;
 
@@ -512,7 +516,15 @@ export default function Layout({ children }) {
         user={user}
         onMore={() => setAllAppsOpen(true)}
         moreOpen={allAppsOpen}
-        moreBadge={captureCount}
+        /* KM-1 — the badge on a container must be a promise the container
+           keeps. This counted pending WhatsApp captures, but Review Queue is
+           not a tile in the panel — it is a TAB inside /finance, which is the
+           Money dock slot sitting right beside More. So the founder saw "3",
+           opened More, and found nothing counting to three. Notifications is
+           the only badged tile inside, so the badge is its count.
+           (The capture signal now has no mobile home: it wants a badge on the
+           Money slot, which DockItem does not support yet.) */
+        moreBadge={bellCount}
       />
       <DexFab
         onOpen={() => setDexOpen(true)}
@@ -528,7 +540,7 @@ export default function Layout({ children }) {
         onToggleTheme={toggleTheme}
         onSignOut={doLogout}
         onOpenLanguage={() => setLangOpen(true)}
-        counts={{ notifications: bellCount, myWork: fires }}
+        counts={{ notifications: bellCount }}
       />
       {/* MPWA-05: third session, dismissible, above the dock (§8). */}
       <InstallPrompt />

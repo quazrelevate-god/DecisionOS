@@ -4,6 +4,31 @@ module.exports = {
     content: ["./src/**/*.{js,jsx,ts,tsx}", "./public/index.html"],
     theme: {
         extend: {
+            // KM-0 (2026-08-27) — THE ONLY MOBILE BREAKPOINT.
+            //
+            // Below lg the content column is `.app-shell`, capped at
+            // --app-shell (28rem/448px, index.css:134). It therefore stops
+            // growing at a 480px VIEWPORT and sits at ~414px from 481 all the
+            // way to 1023. `sm` (640) and `md` (768) both fire inside that
+            // dead zone: there is no value either can set that corresponds to
+            // more space, because there is no more space.
+            //
+            // So `sm:` and `md:` are BANNED inside the app shell — that is,
+            // in anything rendered into <main> (src/pages/* except Landing,
+            // Login, Signup and admin/*). Use `xs:` for the one real step
+            // (320-399 -> 400-448) and `lg:` for desktop.
+            //
+            // They remain CORRECT, and are deliberately left working, for:
+            //   · components/ui/* — dialog, sheet, toast, drawer, alert-dialog
+            //     are portaled to document.body, OUTSIDE .app-shell, so their
+            //     `sm:` really does measure the viewport;
+            //   · /landing — not in the shell.
+            // This is why `screens` sits inside `extend` rather than replacing
+            // the default scale: redefining `sm` globally would stack every
+            // dialog footer until 1024px.
+            screens: {
+                xs: '400px',
+            },
             fontFamily: {
                 // KR-1 (2026-08-18): one geometric voice. sans/heading/display
                 // all resolve to Urbanist — the three keys survive because

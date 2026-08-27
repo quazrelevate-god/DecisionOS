@@ -824,7 +824,7 @@ function RevenueTab({ data, cur, onDelete, onChange, initialFilter = "all" }) {
                   return (
                   <tr
                     key={s.id}
-                    className={`border-b border-nm-edge/40/60 hover:bg-accent/50 ${overdue ? "bg-kr-accent/[0.04]" : ""}`}
+                    className={`border-b border-nm-edge/60 hover:bg-accent/50 ${overdue ? "bg-kr-accent/[0.04]" : ""}`}
                     data-testid={`revenue-invoice-row-${s.id}`}
                   >
                     <td className="p-3 font-medium">
@@ -885,7 +885,7 @@ function RevenueTab({ data, cur, onDelete, onChange, initialFilter = "all" }) {
               </tr></thead>
               <tbody>
                 {payments.map((p) => (
-                  <tr key={p.id} className="border-b border-nm-edge/40/60 hover:bg-accent/50" data-testid={`revenue-payment-row-${p.id}`}>
+                  <tr key={p.id} className="border-b border-nm-edge/60 hover:bg-accent/50" data-testid={`revenue-payment-row-${p.id}`}>
                     <td className="p-3 text-muted-foreground">{p.date || "—"}</td>
                     <td className="p-3 font-medium">{p.contact_name || "—"}{p.source && p.source !== "manual" && <Chip value={p.source} className={`ml-2 ${SOURCE_CHIP[p.source] || "bg-nm-sunken"}`} />}</td>
                     <td className="p-3 text-muted-foreground">{p.method || "—"}</td>
@@ -984,7 +984,7 @@ function ExpensesTable({ rows, cur, onDelete }) {
         </tr></thead>
         <tbody>
           {rows.map((e) => (
-            <tr key={e.id} className="border-b border-nm-edge/40/60 hover:bg-accent/50" data-testid={`expense-row-${e.id}`}>
+            <tr key={e.id} className="border-b border-nm-edge/60 hover:bg-accent/50" data-testid={`expense-row-${e.id}`}>
               <td className="p-3 font-medium">{e.title}{e.source !== "manual" && <Chip value={e.source} className={`ml-2 ${SOURCE_CHIP[e.source] || "bg-nm-sunken"}`} />}<AttachmentLink att={e.attachment} /></td>
               <td className="p-3"><Chip value={e.category} className="bg-nm-sunken text-foreground" /></td>
               <td className="p-3 text-muted-foreground">{e.vendor_name || "—"}</td>
@@ -1012,7 +1012,7 @@ function AssetsTable({ rows, cur, onDelete }) {
         </tr></thead>
         <tbody>
           {rows.map((a) => (
-            <tr key={a.id} className="border-b border-nm-edge/40/60 hover:bg-accent/50" data-testid={`asset-row-${a.id}`}>
+            <tr key={a.id} className="border-b border-nm-edge/60 hover:bg-accent/50" data-testid={`asset-row-${a.id}`}>
               <td className="p-3 font-medium">{a.name}{a.source !== "manual" && <Chip value={a.source} className={`ml-2 ${SOURCE_CHIP[a.source] || "bg-nm-sunken"}`} />}<AttachmentLink att={a.attachment} /></td>
               <td className="p-3"><Chip value={a.category} className="bg-nm-sunken text-foreground" /></td>
               <td className="p-3 text-muted-foreground">{a.vendor_name || "—"}</td>
@@ -1040,7 +1040,7 @@ function InventoryTable({ rows, cur, onDelete }) {
         </tr></thead>
         <tbody>
           {rows.map((i) => (
-            <tr key={i.id} className="border-b border-nm-edge/40/60 hover:bg-accent/50" data-testid={`inv-row-${i.id}`}>
+            <tr key={i.id} className="border-b border-nm-edge/60 hover:bg-accent/50" data-testid={`inv-row-${i.id}`}>
               <td className="p-3 font-medium">{i.item}<AttachmentLink att={i.attachment} /></td>
               <td className="p-3 text-muted-foreground">{i.sku || "—"}</td>
               <td className="p-3 font-mono">{i.quantity} {i.unit}</td>

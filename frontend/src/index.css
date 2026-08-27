@@ -372,6 +372,37 @@
         font-size: max(1rem, var(--text-label));
     }
 
+    /* KM-0 — range was excluded from the field rule above (it has no text to
+       zoom, and a min-height on the input alone does not grow the THUMB, which
+       is the thing a thumb actually has to hit). So it needs its own rule and
+       it needs the thumb sized explicitly, per-engine — there is no shorthand.
+       Without this the weight sliders on /operating-score render a ~15px thumb
+       on a ~71px track, which is the smallest target in the app AND invisible
+       to the audit, because the audit measures the input box. */
+    input[type="range"] {
+        min-height: var(--control-h-sm);
+    }
+    input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 28px;
+        height: 28px;
+        border-radius: 9999px;
+        background: hsl(var(--kr-ink));
+        border: 2px solid #fff;
+        box-shadow: 0 1px 3px hsl(230 20% 20% / .28);
+        cursor: pointer;
+    }
+    input[type="range"]::-moz-range-thumb {
+        width: 28px;
+        height: 28px;
+        border-radius: 9999px;
+        background: hsl(var(--kr-ink));
+        border: 2px solid #fff;
+        box-shadow: 0 1px 3px hsl(230 20% 20% / .28);
+        cursor: pointer;
+    }
+
     /* A control that opted into a taller tier keeps it. */
     .min-h-touch-md { min-height: var(--control-h-md) !important; }
     .min-h-touch-lg { min-height: var(--control-h-lg) !important; }
@@ -561,7 +592,13 @@
         letter-spacing: -0.01em;
         font-weight: 700;
     }
-    @media (min-width: 640px) {
+    /* KM-0 — 1024, not 640. The step used to fire at 640px, but below lg the
+       content column is .app-shell (capped at 448px), so a 640px viewport
+       still has a ~414px column. Stepping the two largest type tiers up
+       inside a column that did not get wider is the same class of bug as
+       `sm:grid-cols-2` in the shell. Desktop is unaffected: 1024 is where
+       the column actually stops being a phone. */
+    @media (min-width: 1024px) {
         .text-display { font-size: 2.125rem; }  /* 34 */
         .text-h1      { font-size: 1.5rem;   }  /* 24 */
     }
@@ -1310,7 +1347,13 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
    Dex room proved — so every token-reading child (text, chips, hairlines,
    recipes) just works on ink without a `dark:` variant in sight.
    ═════════════════════════════════════════════════════════════════════════ */
-.app-canvas { --page-pad: 1rem; }
+/* KM-0 — the bleed must match the GUTTER, not a guess at it. <main> pads with
+   `px-gutter-safe` = max(1rem, env(safe-area-inset-left)) (index.css ~430), so
+   on a notched device in landscape the real gutter is ~44px while a flat 1rem
+   here still said 16px — and every full-bleed child (the dark band on Desk,
+   Operating Score and the rest) under-bled by the difference, leaving an
+   un-inked sliver down the notch side. Same expression, same value, always. */
+.app-canvas { --page-pad: max(1rem, env(safe-area-inset-left, 0px)); }
 @media (min-width: 1024px) { .app-canvas { --page-pad: 2rem; } }
 
 @layer components {

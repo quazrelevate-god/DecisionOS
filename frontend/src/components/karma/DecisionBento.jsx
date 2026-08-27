@@ -187,7 +187,7 @@ export function DecisionBento({ sections, verbFor, iconFor, onCard, busyId, done
         const hidden = cards.length - rowN;
 
         return (
-          <section key={s.key} className={cn(si > 0 && "mt-8")} data-testid={`desk-section-${s.key}`}>
+          <section key={s.key} className={cn(si > 0 && "mt-6 lg:mt-8")} data-testid={`desk-section-${s.key}`}>
             <div className="mb-3 flex items-center gap-2.5">
               <span aria-hidden="true" className={cn("h-3 w-3 rounded-full", s.dot)} />
               <h3 className="text-base font-semibold">{s.label}</h3>

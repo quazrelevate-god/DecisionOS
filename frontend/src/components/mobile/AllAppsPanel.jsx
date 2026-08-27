@@ -46,8 +46,13 @@ import { SkeletonLine } from "./Skeleton";
  * Read a value straight out of the query cache, never fetching.
  *
  * `getQueriesData` rather than `getQueryData`: the keys that hold this data are
- * parameterised (["contacts", status, q]), so there is no single key to ask for.
- * The freshest cached entry wins.
+ * parameterised (["crm-contacts", status, q]), so there is no single key to ask
+ * for. The freshest cached entry wins.
+ *
+ * KM-1 — prefix matching is EXACT per array element. This read asked for
+ * ["contacts"] while CRM.js:508 writes ["crm-contacts", status, q], and
+ * "contacts" !== "crm-contacts", so it never matched: the 2x2 CRM tile — the
+ * largest object in the panel — rendered a skeleton in every session, forever.
  */
 function cached(qc, prefix) {
   const hits = qc.getQueriesData({ queryKey: prefix });
@@ -69,7 +74,7 @@ const ymd = (d) => d.toISOString().slice(0, 10);
 function useLiveLines() {
   const qc = useQueryClient();
 
-  const contacts = cached(qc, ["contacts"]);
+  const contacts = cached(qc, ["crm-contacts"]);
   const crm = React.useMemo(() => {
     if (contacts === undefined) return undefined;
     const list = Array.isArray(contacts) ? contacts : contacts.contacts || [];
@@ -253,7 +258,7 @@ function Tile({ tile, onPick }) {
  * @param {Function} onToggleTheme
  * @param {Function} onSignOut
  * @param {Function} onOpenLanguage
- * @param {{myWork?:number,notifications?:number}} [counts]
+ * @param {{notifications?:number}} [counts]  KM-1: myWork was never read by buildTiles.
  */
 export function AllAppsPanel({
   open,

@@ -294,7 +294,7 @@ export default function Desk() {
           eyeballed. In the reference the light zone divides 36 / 56 with a
           wide 8% trough between; we were at 42 / 58 with a 40px gap, which is
           what made our tiles read as squeezed and over-spaced at once. */}
-      <div ref={heroRef} className="kr-hero grid gap-5 lg:sticky lg:top-5 lg:z-0 lg:grid-cols-[minmax(0,29fr)_minmax(0,45fr)] lg:gap-20">
+      <div ref={heroRef} className="kr-hero flex flex-col gap-6 lg:grid lg:gap-8 lg:sticky lg:top-5 lg:z-0 lg:grid-cols-[minmax(0,29fr)_minmax(0,45fr)] lg:gap-20">
         {/* LEFT column (KR-8.7) — greeting, scope, THE INSIGHT WELL, and the
             score pushed to the floor.
             The founder wanted the editorial space directly under the greeting
@@ -303,67 +303,52 @@ export default function Desk() {
             takes flex-1 (it absorbs whatever height the grid dictates) and
             the score block, being last with nothing after it, lands on the
             column's floor — which the hero grid has already made equal to
-            the right column's floor. */}
-        {/* KM-1 — `contents` below lg, flex column from lg.
-            The InsightWell is nested INSIDE this column, so while the column is
-            a box the well can never be reordered against the KPI grid that is
-            its sibling. display:contents dissolves the box: h1, the score
-            wrapper's children and the well all become direct grid items of
-            .kr-hero, and `order-*` can then interleave them with the grid.
-            lg:flex re-materialises the box, so at desktop .kr-hero still sees
-            exactly two children (this column, then the grid at order-3) and
-            renders the same two columns it does today. */}
-        <div className="contents min-w-0 lg:flex lg:min-w-0 lg:flex-col">
-          {/* KR-8.14 — centred, to share the score's axis. The score row is
-              justify-center within this column, so centring the greeting in
-              the same column puts both on the column's centre line rather
-              than needing either to know the other's width. */}
-          <h1 className="text-center font-display text-3xl sm:text-4xl" data-testid="desk-brief-greeting">
-            {gi === -1
-              ? <span>{greeting || " "}</span>
-              : <>
-                  <span>{greeting.slice(0, gi + 1)}</span>
-                  <span className="text-muted-foreground">{greeting.slice(gi + 1)}.</span>
-                </>}
-          </h1>
+            the right column's floor.
+            KR-14.2 · MOBILE ONLY — the column becomes display:contents so its
+            children flow into the outer flex-col, letting the KPI grid slot
+            between the pills and the Dex well via `order-*`. Desktop is
+            unchanged: from lg the column reverts to flex flex-col and its
+            children forget their orders. */}
+        <div className="contents lg:flex lg:min-w-0 lg:flex-col">
+          {/* KR-14.2 · MOBILE row — greeting on the LEFT, a compact
+              score+gauge on the RIGHT, matching the reference. On lg the
+              wrapper reverts to a block and its children stack: the h1
+              re-centres, the mobile score cluster hides, and the full-size
+              score row (below) takes over. */}
+          <div className="order-1 flex items-start justify-between gap-4 lg:order-none lg:block">
+            <h1 className="font-display text-2xl leading-tight lg:text-center lg:text-3xl sm:lg:text-4xl" data-testid="desk-brief-greeting">
+              {gi === -1
+                ? <span>{greeting || " "}</span>
+                : <>
+                    <span>{greeting.slice(0, gi + 1)}</span>
+                    <span className="text-muted-foreground">{greeting.slice(gi + 1)}.</span>
+                  </>}
+            </h1>
 
-          {/* KR-8.11 — the pills only appear ABOVE the score below lg. From
-              lg they move into the score row, stacked to the numeral's left
-              (see below). Measured why: at 375 the numeral block is 166px
-              and the gauge 128 in a 343px column — 26px of slack against the
-              93px the stack needs.
-              The same arithmetic rules out the whole lg range: at 1024 the
-              left column is ~341, and 93 + 12 + 112 + 12 leaves 112px for
-              the gauge — an instrument too small to read. So the side stack
-              starts at xl (441px column, 423px of content), and below that
-              the pills stay where they were. */}
-          {/* KM-1 — THE CONTROL AND THE NUMBER IT CONTROLS ARE ONE UNIT.
-              8px inside this box against the hero's 20px gap outside it: the
-              proximity is what says "this switch drives that score". Two pills
-              floating in an equidistant gap belonged to neither neighbour.
-              lg:contents dissolves the box again at desktop, so the left
-              column's flex stack sees exactly the children it sees today, in
-              the same source order — the pills node, then the score row. */}
-          <div className="order-2 flex flex-col items-center gap-2 lg:contents">
-            {/* Below lg: the joined segmented pair. */}
-            {isOwnerView && (
-              <div className="flex items-center lg:hidden" role="group" aria-label="Score scope" data-testid="desk-scope-pills">
-                <ScopePills scope={scope} setScope={setScope} variant="joined" />
+            {/* Compact score cluster — mobile only. Hides from lg where the
+                dedicated score row below owns this content. */}
+            <div className="flex shrink-0 items-center gap-3 lg:hidden" aria-hidden={!scoreReady}>
+              <div className="flex items-baseline">
+                <span className="font-display text-6xl leading-none">{scoreReady ? shownScore : "—"}</span>
+                {scoreReady && <span className="ml-1 text-sm text-muted-foreground">/100</span>}
               </div>
-            )}
+              <ArcGauge
+                value={scoreReady ? shownScore : null}
+                size={110}
+                className="w-24 shrink-0 text-foreground"
+              />
+            </div>
+          </div>
 
-            {/* 1024-1279: today's node, today's classes, untouched. Splitting
-                the old `xl:hidden` node in two is what makes the desktop claim
-                provable rather than argued — this branch serves exactly the
-                range it served before, and the xl stack below is unchanged. */}
-            {isOwnerView && (
-              /* justify-center too: below xl the pills sit BETWEEN the centred
-                 greeting and the centred score, and a left-aligned row in that
-                 gap reads as a mistake rather than a choice. */
-              <div className="mt-4 hidden items-center justify-center gap-2 lg:flex xl:hidden" data-testid="desk-scope-pills-lg">
-                <ScopePills scope={scope} setScope={setScope} />
-              </div>
-            )}
+          {/* KR-11 — the pills only appear ABOVE the score below lg. From
+              lg they move into the score row, stacked to the numeral's left.
+              KR-14.2 · MOBILE — justify-start, per the reference; from lg the
+              row re-centres between the greeting and the desktop score. */}
+          {isOwnerView && (
+            <div className="order-2 flex items-center justify-start gap-2 lg:order-none lg:mt-4 lg:justify-center xl:hidden" data-testid="desk-scope-pills">
+              <ScopePills scope={scope} setScope={setScope} />
+            </div>
+          )}
 
           {/* Score + gauge, side by side like the reference — back in their
               original slot under the pills (KR-8.8).
@@ -396,12 +381,7 @@ export default function Desk() {
               Padding cannot collapse, so the gap is never smaller than 20px
               — and because it is inside the row, both sides still grow by
               the same amount and stay even. */}
-          {/* KM-1 — my-8 removed. Numeral (72px) and gauge (69px) sit side by
-              side, so this row's CONTENT is 75px and the other 64px was pure
-              margin. The score is the brand statement and it is not what makes
-              this hero 968px tall; its packaging was. lg:my-auto/lg:py-5 both
-              already won at lg, so desktop does not move. */}
-          <div className="flex items-end justify-center gap-5 lg:my-auto lg:py-5">
+          <div className="hidden lg:my-auto lg:flex lg:items-end lg:justify-center lg:gap-5 lg:py-5">
             {/* KR-8.11 — the pills, stacked to the numeral's LEFT from xl.
                 items-end is the founder's "right aligned to the left side of
                 the number": the two pills keep their own natural widths (93
@@ -484,7 +464,7 @@ export default function Desk() {
           <InsightWell
             insight={insight}
             loading={!insight}
-            className="order-4 min-h-[172px]"
+            className="order-4 min-h-[172px] lg:order-none"
             testid="desk-insight"
           />
         </div>
@@ -499,7 +479,7 @@ export default function Desk() {
             · auto-rows-fr so the two rows are EQUAL and the grid's floor lands
               on the money cards' floor. Ragged row heights (173/200/173) were
               the actual misalignment. */}
-        <div className="order-3 grid min-w-0 grid-cols-2 gap-3 lg:auto-rows-fr lg:grid-cols-3" data-testid="desk-kpi-grid">
+        <div className="order-3 grid min-w-0 grid-cols-2 gap-3 lg:order-none lg:auto-rows-fr lg:grid-cols-3" data-testid="desk-kpi-grid">
           <StatTile
             icon={Timer}
             label="Delayed"

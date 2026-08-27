@@ -501,6 +501,13 @@
     .app-dock-left {
         left: calc(max(0px, (100vw - var(--app-shell)) / 2) + 1rem);
     }
+    /* KR-14.3 — the dock stretches across the shell on mobile, with a right
+       anchor that leaves clearance for the Dex FAB (64px + a 12px gap). Paired
+       with `app-dock-left`, this widens the pill from a hugging content box
+       to a near-edge-to-edge bar. */
+    .app-dock-right {
+        right: calc(max(0px, (100vw - var(--app-shell)) / 2) + 1rem + 4.75rem);
+    }
     .app-fab-right {
         right: calc(max(0px, (100vw - var(--app-shell)) / 2) + 1rem);
     }
@@ -1385,6 +1392,12 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
            It stays a CUT rather than a painted shape because what shows
            through is the page's bloom — a notch "coloured like the
            background" would be a flat patch sitting on a gradient. */
+        /* KR-14.5 — THE NOTCH IS BACK. Founder: "the folder-like design in
+           the decision desk is missing — I want it back." The dip on the top
+           edge is what gives the card its tab-folder silhouette; without it
+           the band read as a plain rounded box. The grab-handle bar stays
+           removed (KR-14.4) — the folder shape carries the affordance on its
+           own. */
         -webkit-mask-image:
             url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="220" height="18" viewBox="0 0 220 18"><path d="M0 0H220C196 0 196 18 172 18H48C24 18 24 0 0 0Z" fill="black"/></svg>'),
             linear-gradient(#000, #000);

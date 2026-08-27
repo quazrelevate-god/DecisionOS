@@ -14,6 +14,7 @@ import { toast } from "sonner";
 // New-task launcher.
 import { NewTaskDialog } from "./Tasks";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "../components/ui/dropdown-menu";
 import Workflows from "./Workflows";
 import Leave from "./Leave";
 import {
@@ -24,6 +25,7 @@ import {
   ArrowClockwise, XCircle, LockKey, X, AirplaneTakeoff, MagnifyingGlassPlus, Eye,
   File, FileArrowUp, Lightbulb, Info,
   FlowArrow,  // WE-11 stage chip
+  SlidersHorizontal,  // KR-14.6 · mobile MyWork filter icon (reference)
 } from "@phosphor-icons/react";
 
 // RD-2 (2026-08-17): the toolbar control. Was uppercase + wide tracking +
@@ -1502,7 +1504,7 @@ export default function MyWork() {
     ...om.task_categories.map((c) => ({ key: c.key, label: c.label })),
     { key: "completed", label: "Completed" },
   ];
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const isOwner = user?.role === "owner";
   const focusTaskId = params.get("task");
   const rawView = params.get("view");
@@ -1640,9 +1642,155 @@ export default function MyWork() {
     list = [...list].sort((a, b) => (scoreMap[b.id]?.priority_score || 0) - (scoreMap[a.id]?.priority_score || 0));
   }
 
+  // KR-14.6 · MOBILE HEADER — reference-driven layout for MyWork on phones:
+  //   Row 1 (segment views only): h1 title left, [+ New Task] and the
+  //          star-priority circle right.
+  //   Row 2: [My Tasks | All Tasks] as a single segmented pill, plus
+  //          [Workflows] and [Leave] as their own pills, and the sliders
+  //          filter circle on the right. The filter opens a dropdown listing
+  //          the sub-filters (All, Finance, Logistics… + Completed) — the
+  //          old category chip strip is gone, its selection moves in here.
+  // Reuses the same state (view/scope/tab/aiPriority) so the desktop tree can
+  // stay untouched via `lg:hidden` / `hidden lg:*`.
+  const MPILL = "flex h-9 shrink-0 items-center gap-1.5 rounded-pill px-2.5 text-[12px] transition-colors";
+  const MPILL_ON = "bg-kr-ink text-white font-medium";
+  const MPILL_OFF = "border-[0.5px] border-kr-ink/55 text-foreground/75";
+  const MSEG = "flex h-9 shrink-0 items-center justify-center px-2.5 text-[12px] transition-colors";
+  const MSEG_ON = "bg-kr-ink text-white font-medium";
+  const MSEG_OFF = "text-foreground/75";
+  const mobileView = (() => {
+    if (view === "workflows") return "workflows";
+    if (view === "leave") return "leave";
+    if (isOwner && scope === "all") return "all";
+    return "mine";
+  })();
+  const inSegmentView = mobileView === "mine" || mobileView === "all";
+  // The filter dropdown lists only tabs that have items — same rule the old
+  // chip strip used. "Completed" appears when any completed task exists.
+  const mobileFilterTabs = WORK_TABS.filter((tb) => tb.key === "all" || countFor(tb.key) > 0);
+  const activeTabLabel = (WORK_TABS.find((tb) => tb.key === tab) || WORK_TABS[0]).label;
+
   return (
     <div>
-      <header className="mb-7 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      {/* ─── MOBILE HEADER (below lg) ───────────────────────────────────── */}
+      <header className="mb-5 flex flex-col gap-3 lg:hidden" data-testid="mywork-mobile-header">
+        {/* Row 1 — title only. Stays constant across every view (My Tasks /
+            All Tasks / Workflows / Leave) so switching views never resizes
+            this row and the header no longer feels jumpy. Task-creation and
+            AI priority moved to Row 3 below. */}
+        <div className="flex items-center gap-3">
+          <h1 className="font-display text-3xl leading-none">{t("mywork.title")}</h1>
+        </div>
+
+        {/* Row 2 — segmented [My Tasks | All Tasks] + [Workflows] + [Leave]
+            + sliders filter. The segment is one pill split in two: outer
+            corners rounded, inner corners square, a hairline seam. */}
+        <div className="flex items-center gap-1.5" data-testid="mywork-mobile-tabs">
+          {isOwner && (
+            <div className="flex shrink-0 items-center overflow-hidden rounded-pill border-[0.5px] border-kr-ink/55"
+                 role="group" aria-label={t("mywork.title", "My Work")} data-testid="work-mobile-segment">
+              <button type="button" onClick={() => { setScope("mine"); setView("mywork"); }}
+                aria-pressed={mobileView === "mine"} data-testid="work-mobile-mine"
+                className={`${MSEG} ${mobileView === "mine" ? MSEG_ON : MSEG_OFF}`}>
+                {t("mywork.my_tasks")}
+              </button>
+              <span aria-hidden="true" className="h-5 w-px shrink-0 bg-kr-ink/20" />
+              <button type="button" onClick={() => { setScope("all"); setView("mywork"); }}
+                aria-pressed={mobileView === "all"} data-testid="work-mobile-all"
+                className={`${MSEG} ${mobileView === "all" ? MSEG_ON : MSEG_OFF}`}>
+                {t("mywork.all_tasks")}
+              </button>
+            </div>
+          )}
+          {canSeeWorkflows && (
+            <button type="button" onClick={() => setView("workflows")}
+              aria-pressed={mobileView === "workflows"} data-testid="work-mobile-workflows"
+              className={`${MPILL} ${mobileView === "workflows" ? MPILL_ON : MPILL_OFF}`}>
+              {t("mywork.view_workflows")}
+            </button>
+          )}
+          <button type="button" onClick={() => setView("leave")}
+            aria-pressed={mobileView === "leave"} data-testid="work-mobile-leave"
+            className={`${MPILL} ${mobileView === "leave" ? MPILL_ON : MPILL_OFF}`}>
+            {t("mywork.view_leave")}
+          </button>
+
+          {/* KR-14.7 — the sliders filter circle carries the sub-filters for
+              the currently-active view. In the segment views it lists task
+              categories (All, Finance, Logistics… + Completed); in Workflows
+              the same affordance moves inside Workflows.js and lists
+              pipelines. On Leave there is no sub-filter, so the button is
+              a passive spacer to keep the row's alignment. */}
+          {mobileView === "leave" ? (
+            <span className="ml-auto h-9 w-9 shrink-0" aria-hidden="true" />
+          ) : (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button type="button" data-testid="work-mobile-filter"
+                  aria-label={t("mywork.filter", "Filter")}
+                  className="ml-auto grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white text-foreground shadow-[0_1px_2px_rgba(0,0,0,0.06)]">
+                  <SlidersHorizontal size={16} weight="regular" aria-hidden="true" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" sideOffset={8} className="min-w-[12rem]">
+                {mobileView === "workflows"
+                  ? om.pipelines.map((pip) => {
+                      const cur = params.get("wf_type") || om.pipelines[0]?.key;
+                      return (
+                        <DropdownMenuItem key={pip.key} onSelect={() => {
+                          const next = new URLSearchParams(params);
+                          next.set("view", "workflows");
+                          next.set("wf_type", pip.key);
+                          setParams(next);
+                        }}
+                          data-testid={`work-mobile-filter-wf-${pip.key}`}
+                          className={`flex items-center justify-between gap-3 ${cur === pip.key ? "font-medium" : ""}`}>
+                          <span>{pip.label}</span>
+                        </DropdownMenuItem>
+                      );
+                    })
+                  : mobileFilterTabs.map((tb) => (
+                      <DropdownMenuItem key={tb.key} onSelect={() => setTab(tb.key)}
+                        data-testid={`work-mobile-filter-${tb.key}`}
+                        className={`flex items-center justify-between gap-3 ${tab === tb.key ? "font-medium" : ""}`}>
+                        <span>{tb.label}</span>
+                        <span className="tabular-nums text-xs text-muted-foreground">{countFor(tb.key)}</span>
+                      </DropdownMenuItem>
+                    ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+
+        {/* Row 3 — active-tab caption on the left, New Task + priority
+            sparkle on the right. Only rendered in the segment views: those
+            are the two controls that operate on the task list, and putting
+            them in a stable row below the tabs keeps Row 1/Row 2 fixed so
+            switching to Workflows/Leave no longer shifts the header. */}
+        {inSegmentView && (
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs text-muted-foreground" data-testid="work-mobile-active-tab">
+              {activeTabLabel}
+              <span className="ml-1 tabular-nums opacity-70">· {countFor(tab)}</span>
+            </p>
+            <div className="flex shrink-0 items-center gap-2">
+              <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members}
+                triggerClassName={`${MPILL} ${MPILL_ON} kr-lift`} />
+              <button type="button" onClick={() => { setAiPriority((v) => !v); setView("mywork"); }}
+                aria-pressed={aiPriority} data-testid="work-mobile-priority"
+                aria-label={aiPriority ? t("mywork.ai_priority_on", "AI priority on") : t("mywork.ai_priority", "AI priority")}
+                title={scoring ? t("mywork.scoring", "Scoring…") : (aiPriority ? t("mywork.ai_priority_on", "AI priority on") : t("mywork.ai_priority", "AI priority"))}
+                className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${aiPriority ? "kr-pressed" : "kr-pop"}`}>
+                <Sparkle size={15} weight={aiPriority ? "fill" : "bold"} aria-hidden="true"
+                  className={scoring ? "animate-pulse" : ""} />
+              </button>
+            </div>
+          </div>
+        )}
+      </header>
+
+      {/* ─── DESKTOP HEADER (lg and up) ─────────────────────────────────── */}
+      <header className="mb-7 hidden gap-4 lg:flex lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{t("mywork.eyebrow")}</p>
           <h1 className="mt-1.5 font-display text-3xl sm:text-4xl">{t("mywork.title")}</h1>
@@ -1774,7 +1922,7 @@ export default function MyWork() {
               borderless pills, sentence case, indigo tint on the active one.
               The bordered-uppercase version stacked a frame on every tab and
               the count badge carried a second frame inside it. */}
-          <div className="mb-5 flex flex-wrap gap-2 border-b border-nm-edge/40 pb-4" data-testid="work-tabs">
+          <div className="mb-5 hidden flex-wrap gap-2 border-b border-nm-edge/40 pb-4 lg:flex" data-testid="work-tabs">
             {WORK_TABS
               .filter((tb) => tb.key === "all" || countFor(tb.key) > 0)
               .map((tb) => (

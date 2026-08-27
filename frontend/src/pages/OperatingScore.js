@@ -43,6 +43,7 @@ import {
   CaretRight, Camera, ClipboardText, Check, ArrowRight,
   Info, CaretDown, CaretUp, Microphone, Receipt, X,
   ArrowsClockwise, Eye,
+  MagnifyingGlass,  // KR-14.13 · leaderboard search
 } from "@phosphor-icons/react";
 import {
   isDemoTenant, demoDelta, demoDrivers, demoDrilldowns, demoDex,
@@ -164,6 +165,30 @@ function ScoreCard({ score, caption, delta, testid }) {
   );
 }
 
+/**
+ * KR-14.12 · MOBILE — compact stat cell used inside the mobile "Today's
+ * operations" and "Your own execution" cards. Icon in a hairline ring at
+ * top, label under, numeral last. Optional accent dot for `alert`.
+ */
+function MobileStatItem({ icon: Icon, label, value, alert = false, suffix }) {
+  return (
+    <div className="flex flex-col items-center gap-1 text-center">
+      <span className="relative grid h-8 w-8 place-items-center rounded-full border border-nm-edge/40 text-foreground/70">
+        <Icon size={14} weight="regular" aria-hidden="true" />
+        {alert && (
+          <span aria-hidden="true"
+            className="absolute -right-0.5 -top-0.5 block h-1.5 w-1.5 rounded-full bg-kr-accent" />
+        )}
+      </span>
+      <p className="text-[10px] leading-tight text-muted-foreground">{label}</p>
+      <p className="font-display text-lg leading-none">
+        {value}
+        {suffix && <span className="ml-0.5 text-[10px] text-muted-foreground">{suffix}</span>}
+      </p>
+    </div>
+  );
+}
+
 // ─── owner view ──────────────────────────────────────────────────────────────
 
 function OwnerView({ data }) {
@@ -197,7 +222,74 @@ function OwnerView({ data }) {
         <>
           {/* The score, then the four reasons for it. 5/7 split: the
               categories are the subject of this page, not the total. */}
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+          {/* KR-14.11 · MOBILE — the reference splits the score into two
+              sheets: a headline score + gauge INLINE with the page title
+              (no card), and a "Key scores" card carrying the four
+              categories as mini-gauges in a single row. Both are mobile-only
+              (`lg:hidden`); from lg the existing 5/7 hero grid takes over. */}
+          <div className="mb-6 flex items-end justify-between gap-4 lg:hidden" data-testid="operating-mobile-hero">
+            <div className="min-w-0">
+              <div className="flex items-baseline gap-2">
+                <BigNumeral text={overall != null ? String(overall) : "—"} size="xl" countUp={overall != null} testid="operating-mobile-score" />
+                {overall != null && <span className="text-base text-muted-foreground">/100</span>}
+              </div>
+              {scoreBand(overall) && (
+                <p className="mt-1 text-sm font-medium text-[hsl(120_30%_36%)]">{scoreBand(overall)}</p>
+              )}
+              {demo && (
+                <p className="mt-1 text-xs text-muted-foreground" data-testid="operating-mobile-delta">
+                  {demoDelta.sign === "up" ? "+" : "−"}{Math.abs(demoDelta.value)} pts {demoDelta.period}
+                </p>
+              )}
+            </div>
+            <ArcGauge
+              value={overall}
+              size={150}
+              className="w-32 shrink-0 text-foreground"
+              testid="operating-mobile-gauge"
+            />
+          </div>
+
+          {/* Mobile "Key scores" card — the four categories as a horizontal
+              strip of mini-gauges. Tapping a mini-gauge drills into the
+              same modal the desktop CategoryCard opens. */}
+          <div className="nm-tile mb-6 p-4 lg:hidden" data-testid="operating-mobile-keyscores">
+            <div className="mb-3 flex items-baseline justify-between">
+              <p className="text-sm font-semibold">Key scores</p>
+              <Link to="#" onClick={(e) => e.preventDefault()} className="flex items-center gap-1 text-xs font-semibold text-foreground/70">
+                View all <CaretRight size={11} weight="bold" aria-hidden="true" />
+              </Link>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {CATS.map((c) => {
+                const v = company.categories[c.key];
+                const has = v != null;
+                return (
+                  /* KR-14.13 · MOBILE — the arc mini-gauge was replaced
+                     by a bigger numeral and the existing progress bar. Same
+                     data, cleaner render at 56–70px column widths. Fixed
+                     row heights keep the four columns baseline-aligned. */
+                  <button key={c.key} type="button" onClick={() => has && setDrillCat(c.key)} disabled={!has}
+                    data-testid={`operating-mobile-cat-${c.key}`}
+                    className="flex flex-col items-center gap-2 rounded-tile p-1 text-center disabled:opacity-55">
+                    <span className="flex h-5 items-center gap-1 text-[10px] font-medium text-muted-foreground">
+                      <c.icon size={10} weight="regular" aria-hidden="true" className="shrink-0" />
+                      <span className="truncate">{c.label}</span>
+                    </span>
+                    <div className="flex items-baseline gap-0.5">
+                      <span className={`font-display text-2xl leading-none ${isFailing(v) ? "text-kr-accent" : ""}`}>{has ? v : "—"}</span>
+                      <span className="text-[10px] text-muted-foreground">/100</span>
+                    </div>
+                    <ScoreMeter value={v} alert={isFailing(v)} className="w-full" />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Desktop hero — the 5/7 split, ScoreCard + 2×2 categories. Held
+              intact from `lg` up; mobile uses the two blocks above instead. */}
+          <div className="hidden gap-5 lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
             <ScoreCard
               score={overall}
               caption="Weighted across the four categories. Updates as work lands."
@@ -226,7 +318,10 @@ function OwnerView({ data }) {
               is something to read rather than a card to click. */}
           <NextMoves actions={actions} onDrill={setDrillCat} demoText={demo ? demoDex.explainer : null} />
 
-          <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4" data-testid="operating-quick-stats">
+          {/* Desktop stat quad — the original grid of individual StatTiles.
+              Hidden on mobile; the "Today's operations" card below renders
+              the same numbers in a single container matching the reference. */}
+          <div className="mt-6 hidden gap-3 lg:grid lg:grid-cols-4" data-testid="operating-quick-stats">
             <StatTile icon={Check} label="Tasks done" value={String(stats.done)} to="/my-work" countUp testid="ops-stat-done" />
             <StatTile icon={ClipboardText} label="Open tasks" value={String(stats.open)} to="/my-work" countUp testid="ops-stat-open" />
             <StatTile
@@ -249,6 +344,24 @@ function OwnerView({ data }) {
               countUp
               testid="ops-stat-complaints"
             />
+          </div>
+
+          {/* KR-14.12 · MOBILE — Today's operations card. Four inline stat
+              items (icon-in-thin-ring · label · numeral) grouped inside a
+              single `nm-tile`, matching the reference. */}
+          <div className="nm-tile mt-6 p-4 lg:hidden" data-testid="operating-mobile-quickstats">
+            <div className="mb-3 flex items-baseline justify-between">
+              <p className="text-sm font-semibold">Today's operations</p>
+              <Link to="/my-work" className="flex items-center gap-1 text-xs font-semibold text-foreground/70">
+                View all <CaretRight size={11} weight="bold" aria-hidden="true" />
+              </Link>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              <MobileStatItem icon={Check} label="Tasks done" value={stats.done} />
+              <MobileStatItem icon={ClipboardText} label="Open tasks" value={stats.open} />
+              <MobileStatItem icon={Lightning} label="Overdue" value={stats.overdue} alert={stats.overdue > 0} />
+              <MobileStatItem icon={ChatCenteredDots} label="Open complaints" value={stats.open_complaints} alert={stats.open_complaints > 0} />
+            </div>
           </div>
 
           {mySnapshot && <PersonalSnapshot stats={mySnapshot} />}
@@ -355,23 +468,47 @@ function NextMoves({ actions, onDrill, demoText }) {
 function PersonalSnapshot({ stats }) {
   return (
     <section className="mt-8" data-testid="operating-personal-snapshot">
-      <h2 className="text-h3">Your own execution</h2>
-      <p className="mt-1 text-sm text-muted-foreground">
-        You are an operator too — this is your work, not the company's.
-      </p>
-      <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatTile icon={TrendUp} label="Completion" value={`${stats.completion_rate}%`} to="/my-work" testid="ops-me-completion" />
-        <StatTile icon={ClipboardText} label="Open" value={String(stats.open)} to="/my-work" countUp testid="ops-me-open" />
-        <StatTile
-          icon={Lightning} label="Overdue" value={String(stats.overdue)}
-          alert={stats.overdue > 0} urgent={stats.overdue > 0}
-          to="/my-work?filter=overdue" countUp testid="ops-me-overdue"
-        />
-        <StatTile
-          icon={Camera} label="Proof rate" value={`${stats.proof_upload_rate}%`}
-          meaning={stats.proof_upload_rate < 40 && stats.completed > 0 ? "Attach a photo or voice on done tasks" : undefined}
-          to="/my-work" testid="ops-me-proof"
-        />
+      {/* Desktop — the original heading + StatTile quad. Hidden on mobile;
+          the mobile card renders below. */}
+      <div className="hidden lg:block">
+        <h2 className="text-h3">Your own execution</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          You are an operator too — this is your work, not the company's.
+        </p>
+        <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <StatTile icon={TrendUp} label="Completion" value={`${stats.completion_rate}%`} to="/my-work" testid="ops-me-completion" />
+          <StatTile icon={ClipboardText} label="Open" value={String(stats.open)} to="/my-work" countUp testid="ops-me-open" />
+          <StatTile
+            icon={Lightning} label="Overdue" value={String(stats.overdue)}
+            alert={stats.overdue > 0} urgent={stats.overdue > 0}
+            to="/my-work?filter=overdue" countUp testid="ops-me-overdue"
+          />
+          <StatTile
+            icon={Camera} label="Proof rate" value={`${stats.proof_upload_rate}%`}
+            meaning={stats.proof_upload_rate < 40 && stats.completed > 0 ? "Attach a photo or voice on done tasks" : undefined}
+            to="/my-work" testid="ops-me-proof"
+          />
+        </div>
+      </div>
+
+      {/* KR-14.12 · MOBILE — Your own execution as a single card matching
+          the "Today's operations" layout above. */}
+      <div className="nm-tile p-4 lg:hidden" data-testid="operating-mobile-personal">
+        <div className="mb-1 flex items-baseline justify-between">
+          <p className="text-sm font-semibold">Your own execution</p>
+          <Link to="/my-work" className="flex items-center gap-1 text-xs font-semibold text-foreground/70">
+            View all <CaretRight size={11} weight="bold" aria-hidden="true" />
+          </Link>
+        </div>
+        <p className="mb-3 text-[11px] leading-relaxed text-muted-foreground">
+          You are an operator too — this is your work, not the company's.
+        </p>
+        <div className="grid grid-cols-4 gap-2">
+          <MobileStatItem icon={TrendUp} label="Completion" value={stats.completion_rate} suffix="%" />
+          <MobileStatItem icon={ClipboardText} label="Open" value={stats.open} />
+          <MobileStatItem icon={Lightning} label="Overdue" value={stats.overdue} alert={stats.overdue > 0} />
+          <MobileStatItem icon={Camera} label="Proof rate" value={stats.proof_upload_rate} suffix="%" />
+        </div>
       </div>
     </section>
   );
@@ -710,18 +847,28 @@ function CategoryDrillModal({ cat, value, drivers, drill, onClose }) {
   );
 }
 
-/** Leaderboard — glass member cards on the band. Sort preserved. */
+/** Leaderboard — glass member cards on the band. Sort preserved.
+ *  KR-14.13 — a search box now sits under the header. Filters by name and
+ *  role (case-insensitive) before the sort runs. */
 function Leaderboard({ employees }) {
   const [sortBy, setSortBy] = useState("score");
+  const [query, setQuery] = useState("");
   const sorted = useMemo(() => {
-    const copy = [...(employees || [])];
+    const q = query.trim().toLowerCase();
+    let copy = [...(employees || [])];
+    if (q) {
+      copy = copy.filter((e) =>
+        (e.name || "").toLowerCase().includes(q) ||
+        (e.role || "").toLowerCase().includes(q)
+      );
+    }
     copy.sort((a, b) => {
       if (sortBy === "name") return (a.name || "").localeCompare(b.name || "");
       if (sortBy === "activity") return (b.done + b.open) - (a.done + a.open);
       return (b.score ?? -1) - (a.score ?? -1);
     });
     return copy;
-  }, [employees, sortBy]);
+  }, [employees, sortBy, query]);
 
   return (
     <>
@@ -748,8 +895,24 @@ function Leaderboard({ employees }) {
         </label>
       </div>
 
+      {/* KR-14.13 — search bar. Sits on the band with the same hairline the
+          leaderboard cards wear. Filters name and role live. */}
+      <label className="mb-4 flex items-center gap-2 rounded-pill border border-white/20 bg-white/5 px-3.5 py-2.5"
+             data-testid="operating-leaderboard-search-wrap">
+        <MagnifyingGlass size={15} weight="regular" aria-hidden="true" className="shrink-0 opacity-70" />
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search team, member, department…"
+          aria-label="Search team"
+          data-testid="operating-leaderboard-search"
+          className="w-full bg-transparent text-sm placeholder:opacity-60 focus:outline-none"
+        />
+      </label>
+
       {sorted.length === 0 ? (
-        <p className="text-sm opacity-65">No team activity to rank yet.</p>
+        <p className="text-sm opacity-65">{query ? "No matches — try a different name or role." : "No team activity to rank yet."}</p>
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" data-testid="operating-employees">
           {sorted.map((e, i) => (

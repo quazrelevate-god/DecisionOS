@@ -489,10 +489,13 @@ export default function Layout({ children }) {
             recipes re-skin. */}
         {/* KR-8.2: the mobile bar blends too — transparent, no border, no
             blur, static. The phone reference floats its title on the bloom. */}
-        <header className="lg:hidden min-h-14 grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-gutter-safe pt-safe bg-transparent">
-          <span aria-hidden="true" />
-          <KarmaLogo size="sm" />
-          <div className="flex items-center justify-self-end gap-touch-gap">
+        {/* KR-14.17 — the wordmark moves from the row's centre column to
+            the left edge, and steps up to `size="lg"` for a stronger app
+            identity in the phone header. Grid collapses to two columns
+            (logo left, actions right) — the empty centre span is gone. */}
+        <header className="lg:hidden min-h-14 flex items-center justify-between gap-2 px-gutter-safe pt-safe bg-transparent">
+          <KarmaLogo size="lg" />
+          <div className="flex items-center gap-touch-gap">
             <Bellicon mobile />
           </div>
         </header>

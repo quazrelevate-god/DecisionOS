@@ -27,6 +27,7 @@ import { hasPerm } from "../lib/perms";
 import { formatApiError } from "../lib/api";
 import {
   StatTile, ScoreMeter, DonutBreak, HistoryBand, DarkBand, IconChip,
+  DataList, // KM-4 — table on desktop, cards on a phone
 } from "../components/karma";
 
 // KR-10 — THE TWELVE HEXES ARE GONE.
@@ -812,92 +813,87 @@ function RevenueTab({ data, cur, onDelete, onChange, initialFilter = "all" }) {
         ) : filtered.length === 0 ? (
           <EmptyState title={`No ${statusFilter} invoices`} hint="Try a different filter, or clear it to see all." />
         ) : (
-          <div className="card-brutal overflow-x-auto" data-testid="revenue-invoices-table">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b border-nm-edge/40 text-left text-xs font-medium text-muted-foreground">
-                <th className="p-3">Invoice</th><th className="p-3">Customer</th><th className="p-3">Date</th><th className="p-3">Status</th><th className="p-3 text-right">Amount</th><th className="p-3"></th>
-              </tr></thead>
-              <tbody>
-                {filtered.map((s) => {
+          /* KM-4 — same six columns, cards below lg. The overdue tint rides
+             `rowClass`, so it is a wash on the table row and a wash on the
+             card without either renderer knowing about the other. */
+          <DataList
+            testid="revenue-invoices-table"
+            rows={filtered}
+            rowKey={(s) => s.id}
+            rowTestid={(s) => `revenue-invoice-row-${s.id}`}
+            rowClass={(s) => (isOverdue(s) ? "bg-kr-accent/[0.04]" : "")}
+            footer={filtered.length > 1 ? {
+              label: `Showing ${filtered.length} of ${invoices.length}`,
+              value: f(filteredTotal),
+              testid: "revenue-filtered-total",
+            } : undefined}
+            columns={[
+              { key: "invoice", head: "Invoice", role: "title", tdClass: "font-medium",
+                cell: (s) => (
+                  <>
+                    {/* Show invoice # AND title when both exist — title alone
+                        hides the reference customers quote back on WhatsApp
+                        or the phone when asking about payment. */}
+                    {s.number && <span className="mr-1.5 text-xs text-muted-foreground">#{s.number}</span>}
+                    <span>{s.title || (s.number ? "" : "Sale")}</span>
+                    {s.source && s.source !== "manual" && <Chip value={s.source} className={`ml-2 ${SOURCE_CHIP[s.source] || "bg-nm-sunken"}`} />}
+                    <AttachmentLink att={s.attachment} />
+                  </>
+                ) },
+              { key: "customer", head: "Customer", role: "meta", tdClass: "text-muted-foreground",
+                value: (s) => s.contact_name, cell: (s) => s.contact_name || "—" },
+              { key: "date", head: "Date", role: "meta", tdClass: "text-muted-foreground",
+                value: (s) => s.date, cell: (s) => s.date || "—" },
+              { key: "status", head: "Status", role: "chip",
+                cell: (s) => {
                   const st = invStatus(s);
                   const overdue = isOverdue(s);
                   const days = overdue ? daysSinceIso(s.date) : null;
                   return (
-                  <tr
-                    key={s.id}
-                    className={`border-b border-nm-edge/60 hover:bg-accent/50 ${overdue ? "bg-kr-accent/[0.04]" : ""}`}
-                    data-testid={`revenue-invoice-row-${s.id}`}
-                  >
-                    <td className="p-3 font-medium">
-                      {/* Show invoice # AND title when both exist -- title
-                          alone hides the reference customers quote back
-                          on WhatsApp / phone when asking about payment. */}
-                      {s.number && (
-                        <span className="label-mono text-muted-foreground mr-1.5">#{s.number}</span>
-                      )}
-                      <span>{s.title || (s.number ? "" : "Sale")}</span>
-                      {s.source && s.source !== "manual" && <Chip value={s.source} className={`ml-2 ${SOURCE_CHIP[s.source] || "bg-nm-sunken"}`} />}
-                      <AttachmentLink att={s.attachment} />
-                    </td>
-                    <td className="p-3 text-muted-foreground">{s.contact_name || "—"}</td>
-                    <td className="p-3 text-muted-foreground">{s.date || "—"}</td>
-                    <td className="p-3">
+                    <>
                       <Chip value={st.label} className={st.cls} />
                       {s.status === "partial" && <span className="ml-2 text-xs text-muted-foreground">bal {f(s.balance)}</span>}
                       {overdue && (
-                        <span
-                          className="ml-2 inline-flex items-center gap-1 rounded-pill bg-kr-accent px-2 py-0.5 text-[10px] font-bold text-white"
-                          data-testid={`revenue-overdue-${s.id}`}
-                        >
+                        <span className="ml-2 inline-flex items-center gap-1 rounded-pill bg-kr-accent px-2 py-0.5 text-[10px] font-bold text-white"
+                          data-testid={`revenue-overdue-${s.id}`}>
                           <WarningCircle size={11} weight="bold" /> {days}d overdue
                         </span>
                       )}
-                    </td>
-                    <td className="p-3 text-right font-mono font-semibold">{f(s.amount)}</td>
-                    <td className="p-3 text-right"><button onClick={() => onDelete("invoice", s.id)} data-testid={`revenue-invoice-delete-${s.id}`} className="text-muted-foreground hover:text-kr-accent"><Trash size={15} /></button></td>
-                  </tr>
-                );})}
-              </tbody>
-              {filtered.length > 1 && (
-                <tfoot>
-                  <tr className="border-t border-nm-edge/40 bg-nm-sunken/40">
-                    <td colSpan={4} className="p-3 label-mono text-xs text-muted-foreground">
-                      Showing {filtered.length} of {invoices.length}
-                    </td>
-                    <td className="p-3 text-right font-mono font-bold" data-testid="revenue-filtered-total">
-                      {f(filteredTotal)}
-                    </td>
-                    <td />
-                  </tr>
-                </tfoot>
-              )}
-            </table>
-          </div>
+                    </>
+                  );
+                } },
+              { key: "amount", head: "Amount", role: "amount", align: "right", tdClass: "font-mono font-semibold",
+                cell: (s) => f(s.amount) },
+              { key: "act", head: "", role: "action", align: "right",
+                cell: (s) => <button onClick={() => onDelete("invoice", s.id)} data-testid={`revenue-invoice-delete-${s.id}`} aria-label="Delete invoice" className="grid h-9 w-9 place-items-center text-muted-foreground hover:text-kr-accent"><Trash size={15} /></button> },
+            ]}
+          />
         )}
       </div>
 
       {payments.length > 0 && (
         <div>
           <h3 className="text-sm font-medium mb-3">Payments Received ({payments.length})</h3>
-          <div className="card-brutal overflow-x-auto" data-testid="revenue-payments-table">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b border-nm-edge/40 text-left text-xs font-medium text-muted-foreground">
-                <th className="p-3">Date</th><th className="p-3">Customer</th><th className="p-3">Method</th><th className="p-3">Reference</th><th className="p-3 text-right">Amount</th><th className="p-3"></th>
-              </tr></thead>
-              <tbody>
-                {payments.map((p) => (
-                  <tr key={p.id} className="border-b border-nm-edge/60 hover:bg-accent/50" data-testid={`revenue-payment-row-${p.id}`}>
-                    <td className="p-3 text-muted-foreground">{p.date || "—"}</td>
-                    <td className="p-3 font-medium">{p.contact_name || "—"}{p.source && p.source !== "manual" && <Chip value={p.source} className={`ml-2 ${SOURCE_CHIP[p.source] || "bg-nm-sunken"}`} />}</td>
-                    <td className="p-3 text-muted-foreground">{p.method || "—"}</td>
-                    <td className="p-3 text-muted-foreground">{p.reference || p.invoice_number || "—"}</td>
-                    <td className="p-3 text-right font-mono font-semibold">{f(p.amount)}</td>
-                    <td className="p-3 text-right"><button onClick={() => onDelete("payment", p.id)} data-testid={`revenue-payment-delete-${p.id}`} className="text-muted-foreground hover:text-kr-accent"><Trash size={15} /></button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataList
+            testid="revenue-payments-table"
+            rows={payments}
+            rowKey={(p) => p.id}
+            rowTestid={(p) => `revenue-payment-row-${p.id}`}
+            columns={[
+              { key: "customer", head: "Customer", role: "title", tdClass: "font-medium",
+                cell: (p) => <>{p.contact_name || "—"}{p.source && p.source !== "manual" && <Chip value={p.source} className={`ml-2 ${SOURCE_CHIP[p.source] || "bg-nm-sunken"}`} />}</> },
+              { key: "date", head: "Date", role: "meta", tdClass: "text-muted-foreground",
+                value: (p) => p.date, cell: (p) => p.date || "—" },
+              { key: "method", head: "Method", role: "meta", tdClass: "text-muted-foreground",
+                value: (p) => p.method, cell: (p) => p.method || "—" },
+              { key: "ref", head: "Reference", role: "meta", tdClass: "text-muted-foreground",
+                value: (p) => p.reference || p.invoice_number, cell: (p) => p.reference || p.invoice_number || "—" },
+              { key: "amount", head: "Amount", role: "amount", align: "right", tdClass: "font-mono font-semibold",
+                cell: (p) => f(p.amount) },
+              { key: "act", head: "", role: "action", align: "right",
+                cell: (p) => <button onClick={() => onDelete("payment", p.id)} data-testid={`revenue-payment-delete-${p.id}`} aria-label="Delete payment" className="grid h-9 w-9 place-items-center text-muted-foreground hover:text-kr-accent"><Trash size={15} /></button> },
+            ]}
+          />
         </div>
       )}
     </div>
@@ -1201,84 +1197,77 @@ function ExpensesTable({ rows, cur, onDelete }) {
   const { t } = useTranslation();
   const f = fmt(cur);
   if (!rows.length) return <EmptyState title={t("finance.empty_exp_title")} hint={t("finance.empty_exp_hint")} />;
-  return (
-    <div className="card-brutal overflow-x-auto" data-testid="expenses-table">
-      <table className="w-full text-sm">
-        <thead><tr className="border-b border-nm-edge/40 text-left text-xs font-medium text-muted-foreground">
-          <th className="p-3">{t("finance.c_title")}</th><th className="p-3">{t("finance.c_category")}</th><th className="p-3">{t("finance.c_vendor")}</th><th className="p-3">{t("finance.c_date")}</th><th className="p-3">{t("finance.c_status")}</th><th className="p-3 text-right">{t("finance.c_amount")}</th><th className="p-3"></th>
-        </tr></thead>
-        <tbody>
-          {rows.map((e) => (
-            <tr key={e.id} className="border-b border-nm-edge/60 hover:bg-accent/50" data-testid={`expense-row-${e.id}`}>
-              <td className="p-3 font-medium">{e.title}{e.source !== "manual" && <Chip value={e.source} className={`ml-2 ${SOURCE_CHIP[e.source] || "bg-nm-sunken"}`} />}<AttachmentLink att={e.attachment} /></td>
-              <td className="p-3"><Chip value={e.category} className="bg-nm-sunken text-foreground" /></td>
-              <td className="p-3 text-muted-foreground">{e.vendor_name || "—"}</td>
-              <td className="p-3 text-muted-foreground">{e.date || "—"}</td>
-              <td className="p-3"><Chip value={e.status} className={e.status === "paid" ? "bg-kr-ink text-white" : "border-[0.5px] border-kr-ink/55 text-foreground/70"} /></td>
-              <td className="p-3 text-right font-mono font-semibold">{f(e.amount)}</td>
-              <td className="p-3 text-right"><button onClick={() => onDelete(e.id)} data-testid={`expense-delete-${e.id}`} className="text-muted-foreground hover:text-kr-accent"><Trash size={15} /></button></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+  /* KM-4 — same seven columns, two renderers. `value` on the meta columns is
+     what lets DataList tell "no vendor" from a cell that renders an em dash,
+     so the phone's dot-joined line never shows a lone "—". */
+  const columns = [
+    { key: "title", head: t("finance.c_title"), role: "title", tdClass: "font-medium",
+      cell: (e) => <>{e.title}{e.source !== "manual" && <Chip value={e.source} className={`ml-2 ${SOURCE_CHIP[e.source] || "bg-nm-sunken"}`} />}<AttachmentLink att={e.attachment} /></> },
+    { key: "category", head: t("finance.c_category"), role: "chip",
+      cell: (e) => <Chip value={e.category} className="bg-nm-sunken text-foreground" /> },
+    { key: "vendor", head: t("finance.c_vendor"), role: "meta", tdClass: "text-muted-foreground",
+      value: (e) => e.vendor_name, cell: (e) => e.vendor_name || "—" },
+    { key: "date", head: t("finance.c_date"), role: "meta", tdClass: "text-muted-foreground",
+      value: (e) => e.date, cell: (e) => e.date || "—" },
+    { key: "status", head: t("finance.c_status"), role: "chip",
+      cell: (e) => <Chip value={e.status} className={e.status === "paid" ? "bg-kr-ink text-white" : "border-[0.5px] border-kr-ink/55 text-foreground/70"} /> },
+    { key: "amount", head: t("finance.c_amount"), role: "amount", align: "right", tdClass: "font-mono font-semibold",
+      cell: (e) => f(e.amount) },
+    { key: "act", head: "", role: "action", align: "right",
+      cell: (e) => <button onClick={() => onDelete(e.id)} data-testid={`expense-delete-${e.id}`} aria-label="Delete expense" className="grid h-9 w-9 place-items-center text-muted-foreground hover:text-kr-accent"><Trash size={15} /></button> },
+  ];
+  return <DataList columns={columns} rows={rows} rowKey={(e) => e.id}
+    rowTestid={(e) => `expense-row-${e.id}`} testid="expenses-table" />;
 }
 
 function AssetsTable({ rows, cur, onDelete }) {
   const { t } = useTranslation();
   const f = fmt(cur);
   if (!rows.length) return <EmptyState title={t("finance.empty_asset_title")} hint={t("finance.empty_asset_hint")} />;
-  return (
-    <div className="card-brutal overflow-x-auto" data-testid="assets-table">
-      <table className="w-full text-sm">
-        <thead><tr className="border-b border-nm-edge/40 text-left text-xs font-medium text-muted-foreground">
-          <th className="p-3">{t("finance.a_asset")}</th><th className="p-3">{t("finance.c_category")}</th><th className="p-3">{t("finance.c_vendor")}</th><th className="p-3">{t("finance.a_bought")}</th><th className="p-3">{t("finance.c_status")}</th><th className="p-3 text-right">{t("finance.a_value")}</th><th className="p-3"></th>
-        </tr></thead>
-        <tbody>
-          {rows.map((a) => (
-            <tr key={a.id} className="border-b border-nm-edge/60 hover:bg-accent/50" data-testid={`asset-row-${a.id}`}>
-              <td className="p-3 font-medium">{a.name}{a.source !== "manual" && <Chip value={a.source} className={`ml-2 ${SOURCE_CHIP[a.source] || "bg-nm-sunken"}`} />}<AttachmentLink att={a.attachment} /></td>
-              <td className="p-3"><Chip value={a.category} className="bg-nm-sunken text-foreground" /></td>
-              <td className="p-3 text-muted-foreground">{a.vendor_name || "—"}</td>
-              <td className="p-3 text-muted-foreground">{a.purchase_date || "—"}</td>
-              <td className="p-3"><Chip value={a.status} className={a.status === "active" ? "bg-kr-ink text-white" : "bg-nm-sunken text-foreground"} /></td>
-              <td className="p-3 text-right font-mono font-semibold">{f(a.purchase_amount)}</td>
-              <td className="p-3 text-right"><button onClick={() => onDelete(a.id)} className="text-muted-foreground hover:text-kr-accent"><Trash size={15} /></button></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+  const columns = [
+    { key: "name", head: t("finance.a_asset"), role: "title", tdClass: "font-medium",
+      cell: (a) => <>{a.name}{a.source !== "manual" && <Chip value={a.source} className={`ml-2 ${SOURCE_CHIP[a.source] || "bg-nm-sunken"}`} />}<AttachmentLink att={a.attachment} /></> },
+    { key: "category", head: t("finance.c_category"), role: "chip",
+      cell: (a) => <Chip value={a.category} className="bg-nm-sunken text-foreground" /> },
+    { key: "vendor", head: t("finance.c_vendor"), role: "meta", tdClass: "text-muted-foreground",
+      value: (a) => a.vendor_name, cell: (a) => a.vendor_name || "—" },
+    { key: "bought", head: t("finance.a_bought"), role: "meta", tdClass: "text-muted-foreground",
+      value: (a) => a.purchase_date, cell: (a) => a.purchase_date || "—" },
+    { key: "status", head: t("finance.c_status"), role: "chip",
+      cell: (a) => <Chip value={a.status} className={a.status === "active" ? "bg-kr-ink text-white" : "bg-nm-sunken text-foreground"} /> },
+    { key: "value", head: t("finance.a_value"), role: "amount", align: "right", tdClass: "font-mono font-semibold",
+      cell: (a) => f(a.purchase_amount) },
+    { key: "act", head: "", role: "action", align: "right",
+      cell: (a) => <button onClick={() => onDelete(a.id)} aria-label="Delete asset" className="grid h-9 w-9 place-items-center text-muted-foreground hover:text-kr-accent"><Trash size={15} /></button> },
+  ];
+  return <DataList columns={columns} rows={rows} rowKey={(a) => a.id}
+    rowTestid={(a) => `asset-row-${a.id}`} testid="assets-table" />;
 }
 
 function InventoryTable({ rows, cur, onDelete }) {
   const { t } = useTranslation();
   const f = fmt(cur);
   if (!rows.length) return <EmptyState title={t("finance.empty_inv_title")} hint={t("finance.empty_inv_hint")} />;
-  return (
-    <div className="card-brutal overflow-x-auto" data-testid="inventory-table">
-      <table className="w-full text-sm">
-        <thead><tr className="border-b border-nm-edge/40 text-left text-xs font-medium text-muted-foreground">
-          <th className="p-3">{t("finance.i_item")}</th><th className="p-3">{t("finance.i_sku")}</th><th className="p-3">{t("finance.i_qty")}</th><th className="p-3">{t("finance.i_unitcost")}</th><th className="p-3">{t("finance.c_vendor")}</th><th className="p-3 text-right">{t("finance.i_value")}</th><th className="p-3"></th>
-        </tr></thead>
-        <tbody>
-          {rows.map((i) => (
-            <tr key={i.id} className="border-b border-nm-edge/60 hover:bg-accent/50" data-testid={`inv-row-${i.id}`}>
-              <td className="p-3 font-medium">{i.item}<AttachmentLink att={i.attachment} /></td>
-              <td className="p-3 text-muted-foreground">{i.sku || "—"}</td>
-              <td className="p-3 font-mono">{i.quantity} {i.unit}</td>
-              <td className="p-3 font-mono">{f(i.unit_cost)}</td>
-              <td className="p-3 text-muted-foreground">{i.vendor_name || "—"}</td>
-              <td className="p-3 text-right font-mono font-semibold">{f(i.value)}</td>
-              <td className="p-3 text-right"><button onClick={() => onDelete(i.id)} className="text-muted-foreground hover:text-kr-accent"><Trash size={15} /></button></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+  const columns = [
+    { key: "item", head: t("finance.i_item"), role: "title", tdClass: "font-medium",
+      cell: (i) => <>{i.item}<AttachmentLink att={i.attachment} /></> },
+    { key: "sku", head: t("finance.i_sku"), role: "meta", tdClass: "text-muted-foreground",
+      value: (i) => i.sku, cell: (i) => i.sku || "—" },
+    /* Quantity is the one "meta" here that is really data, so it keeps its
+       mono treatment in the table and rides the dot-joined line on a phone. */
+    { key: "qty", head: t("finance.i_qty"), role: "meta", tdClass: "font-mono",
+      value: (i) => i.quantity, cell: (i) => `${i.quantity} ${i.unit}` },
+    { key: "unitcost", head: t("finance.i_unitcost"), role: "meta", tdClass: "font-mono",
+      value: (i) => i.unit_cost, cell: (i) => f(i.unit_cost) },
+    { key: "vendor", head: t("finance.c_vendor"), role: "meta", tdClass: "text-muted-foreground",
+      value: (i) => i.vendor_name, cell: (i) => i.vendor_name || "—" },
+    { key: "value", head: t("finance.i_value"), role: "amount", align: "right", tdClass: "font-mono font-semibold",
+      cell: (i) => f(i.value) },
+    { key: "act", head: "", role: "action", align: "right",
+      cell: (i) => <button onClick={() => onDelete(i.id)} aria-label="Delete item" className="grid h-9 w-9 place-items-center text-muted-foreground hover:text-kr-accent"><Trash size={15} /></button> },
+  ];
+  return <DataList columns={columns} rows={rows} rowKey={(i) => i.id}
+    rowTestid={(i) => `inv-row-${i.id}`} testid="inventory-table" />;
 }
 
 const TABS = [
@@ -1505,24 +1494,37 @@ export default function Ledger() {
           <p className="mt-1 text-sm text-muted-foreground lg:hidden">Money in one place</p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center lg:w-auto" data-testid="ledger-controls">
-          {/* KR-14.15 · MOBILE — pill strip that FITS the viewport with no
-              horizontal scroll. The seldom-used Inventory tab is folded
-              into the Assets tab on mobile (both live under the desktop
-              Assets area anyway); the remaining five buttons share the row
-              evenly via `flex-1 basis-0`. Hidden from lg where the wider
-              wrapping row below returns. */}
-          <div className="flex items-center gap-1 lg:hidden" data-testid="ledger-tabs-mobile">
-            {TABS.filter((tb) => tb.key !== "inventory").map((tb) => {
+          {/* KM-4 · MOBILE TABS — a rail, and ALL SIX tabs.
+              The previous strip dropped Inventory to make five fit, on the
+              stated grounds that it was "folded into the Assets tab on
+              mobile". It was not: `tab === "inventory"` renders its own
+              InventoryTable and the Assets tab renders only AssetsTable, so
+              on a phone there was no route to inventory at all — the data was
+              simply unreachable. Squeezing six into a fixed row is not the
+              answer either: at 343px `flex-1 basis-0` gives ~52px a tab and
+              every label truncates to nonsense.
+              So it scrolls, and it says so. The rail bleeds to the page gutter
+              (-mx-4 px-4) so the last pill is cut by the SCREEN rather than
+              stopping short of it, which is the thing that reads as "there is
+              more this way". Snap keeps it landing on whole pills. Same
+              grammar as the /calendar filter rail.
+              Selection is depth (.kr-pressed / .kr-pop), not a solid ink fill,
+              matching the rest of the app's page controls — and with no
+              transition utility, since those two shadow lists are not
+              interpolable. */}
+          <div className="-mx-4 flex snap-x snap-mandatory gap-1.5 overflow-x-auto px-4 pb-1 lg:hidden"
+               style={{ scrollbarWidth: "none" }}
+               role="tablist" aria-label={t("nav.finance", "Finance")} data-testid="ledger-tabs-mobile">
+            {TABS.map((tb) => {
               const active = tab === tb.key;
               return (
                 <button key={tb.key} onClick={() => setTab(tb.key)} data-testid={`ledger-tab-mobile-${tb.key}`}
                   aria-pressed={active}
-                  className={`flex h-9 min-w-0 flex-1 basis-0 items-center justify-center rounded-pill px-1 text-[12px] transition-colors ${
-                    active
-                      ? "bg-kr-ink text-white font-medium"
-                      : "border-[0.5px] border-kr-ink/55 text-foreground/75"
+                  className={`flex h-9 shrink-0 snap-start items-center gap-1.5 whitespace-nowrap rounded-pill px-3.5 text-xs ${
+                    active ? "kr-pressed font-semibold text-foreground" : "kr-pop text-foreground/70"
                   }`}>
-                  <span className="truncate">{t(tb.tkey)}</span>
+                  <tb.icon size={14} weight="regular" aria-hidden="true" />
+                  {t(tb.tkey)}
                 </button>
               );
             })}

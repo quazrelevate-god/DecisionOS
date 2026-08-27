@@ -30,7 +30,6 @@ Run:  python -m evals.run            # replay every registered case (free)
 """
 from __future__ import annotations
 
-import asyncio
 import contextlib
 import traceback
 from dataclasses import dataclass, field

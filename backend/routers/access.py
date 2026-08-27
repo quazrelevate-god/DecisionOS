@@ -22,7 +22,6 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
 
 from config import PERMISSION_KEYS
 from core import (
@@ -31,7 +30,6 @@ from core import (
     log_activity,
     now_iso,
     require_perm,
-    require_role,
 )
 
 

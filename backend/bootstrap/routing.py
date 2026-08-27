@@ -5,13 +5,23 @@ Mounts the in-file ``api`` router (still defined in server.py — its endpoints
 move out in Sprint 3) plus every already-extracted domain router. Include
 order and prefixes are unchanged, so the mounted route table is identical.
 
-These router modules only import from ``core`` / ``services`` at module load
-time (their ``from server import ...`` calls are deferred inside functions),
-so importing them here introduces no import-time cycle.
+These router modules import only from ``core`` / ``services`` / ``models``, so
+importing them here introduces no import-time cycle. (As of Sprint 10 there are
+no ``from server import ...`` shims left in application code -- every cross-domain
+helper is imported from its real home.)
 """
 from routers.onboarding import router as onboarding_router
 from routers.ledger import router as ledger_router
 from routers.admin import router as admin_router
+from routers.admin_tenant360 import router as admin_tenant360_router  # Epic 10 S1
+from routers.admin_impersonation import router as admin_impersonation_router  # Epic 10 S2
+from routers.admin_support import router as admin_support_router  # Epic 10 S3
+from routers.support import router as support_router  # Epic 10 S3 (tenant-facing)
+from routers.admin_billing import router as admin_billing_router  # Epic 10 S4
+from routers.admin_observability import router as admin_observability_router  # Epic 10 S5
+from routers.admin_config import router as admin_config_router  # Epic 10 S6
+from routers.admin_rbac import router as admin_rbac_router  # Epic 10 S7
+from routers.admin_announcements import router as admin_announcements_router, tenant_router as announcements_tenant_router  # Epic 10 S8
 from routers.brain import router as brain_router
 from routers.brain_docs import router as brain_docs_router
 from routers.brain_context_api import router as brain_context_router
@@ -50,6 +60,16 @@ _DOMAIN_ROUTERS = (
     onboarding_router,
     ledger_router,
     admin_router,
+    admin_tenant360_router,
+    admin_impersonation_router,
+    admin_support_router,
+    support_router,
+    admin_billing_router,
+    admin_observability_router,
+    admin_config_router,
+    admin_rbac_router,
+    admin_announcements_router,
+    announcements_tenant_router,
     brain_router,
     brain_docs_router,
     brain_context_router,

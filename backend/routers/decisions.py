@@ -21,7 +21,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
 
 from core import db, get_current_user, require_perm, new_id, now_iso
 from models.tasks import TaskCreateInput
@@ -36,7 +35,7 @@ router = APIRouter(prefix="/api")
 
 async def _decision_participants(tenant_id: str, d: dict) -> set:
     """Everyone involved with a decision: creator, task assignees, and owners."""
-    from server import _owner_ids  # deferred
+    from services.notifications import _owner_ids
     ids = set(await _owner_ids(tenant_id))
     if d.get("created_by"):
         ids.add(d["created_by"])
@@ -54,7 +53,7 @@ from models.decisions import (
 
 @router.get("/decisions")
 async def list_decisions(status: Optional[str] = None, user: dict = Depends(get_current_user)):
-    from server import enrich_decisions  # deferred
+    from services.enrich import enrich_decisions
     q = {"tenant_id": user["tenant_id"]}
     if status:
         q["status"] = status
@@ -67,7 +66,7 @@ async def list_decisions(status: Optional[str] = None, user: dict = Depends(get_
 
 @router.get("/decisions/{decision_id}")
 async def get_decision(decision_id: str, user: dict = Depends(get_current_user)):
-    from server import enrich_decision  # deferred
+    from services.enrich import enrich_decision
     d = await db.decisions.find_one({"id": decision_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
     if not d:
         raise HTTPException(status_code=404, detail="Not found")
@@ -116,12 +115,8 @@ async def ceo_journal(q: str = "", user: dict = Depends(require_perm("brain"))):
 
 @router.post("/decisions/{decision_id}/tasks")
 async def add_decision_task(decision_id: str, inp: TaskCreateInput, user: dict = Depends(require_perm("decisions_approve"))):
-    from server import (  # deferred
-        tenant_role_keys,
-        add_decision_event,
-        log_activity,
-        enrich_decision,
-    )
+    from core import tenant_role_keys, add_decision_event, log_activity
+    from services.enrich import enrich_decision
     d = await db.decisions.find_one({"id": decision_id, "tenant_id": user["tenant_id"]})
     if not d:
         raise HTTPException(status_code=404, detail="Not found")
@@ -183,7 +178,8 @@ async def add_decision_task(decision_id: str, inp: TaskCreateInput, user: dict =
 
 @router.post("/decisions/{decision_id}/approve")
 async def approve_decision(decision_id: str, user: dict = Depends(require_perm("decisions_approve"))):
-    from server import add_decision_event, log_activity, enrich_decision  # deferred
+    from core import add_decision_event, log_activity
+    from services.enrich import enrich_decision
     # FIX-001-C: ensure_owned wraps the read + 404 in one call.
     d = await ensure_owned(db.decisions, decision_id, user["tenant_id"], projection=None)
     # FIX-001-C: all writes below now include tenant_id in the filter.
@@ -260,7 +256,8 @@ async def approve_decision(decision_id: str, user: dict = Depends(require_perm("
 
 @router.post("/decisions/{decision_id}/reject")
 async def reject_decision(decision_id: str, user: dict = Depends(require_perm("decisions_approve"))):
-    from server import add_decision_event, log_activity, enrich_decision  # deferred
+    from core import add_decision_event, log_activity
+    from services.enrich import enrich_decision
     d = await ensure_owned(db.decisions, decision_id, user["tenant_id"], projection=None)
     await db.decisions.update_one(tenant_filter(decision_id, user["tenant_id"]),
                                   {"$set": {"status": "rejected", "decided_at": now_iso()}})
@@ -287,7 +284,9 @@ async def reject_decision(decision_id: str, user: dict = Depends(require_perm("d
 
 @router.post("/decisions/{decision_id}/comment")
 async def comment_decision(decision_id: str, inp: DecisionCommentInput, user: dict = Depends(get_current_user)):
-    from server import push_notification, log_activity, enrich_decision  # deferred
+    from core import log_activity
+    from services.enrich import enrich_decision
+    from services.notifications import push_notification
     d = await ensure_owned(db.decisions, decision_id, user["tenant_id"])
     participants = await _decision_participants(user["tenant_id"], d)
     if user["id"] not in participants:

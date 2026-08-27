@@ -250,7 +250,7 @@ class TestInboxWriter:
             assert r.status_code == 200
             items = r.json()["items"]
             hits = [i for i in items if i.get("id") == item_id]
-            assert hits, f"writer-produced item not visible in inbox list"
+            assert hits, "writer-produced item not visible in inbox list"
             assert hits[0]["title"] == marker
             assert hits[0]["classification"] == "reminder"
             # counts dict should also include the reminder bucket

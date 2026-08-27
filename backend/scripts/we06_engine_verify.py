@@ -219,7 +219,7 @@ async def scenario_8_notify_role_no_recipients():
         {"$set": {"operating_model.pipelines": [pdict]}},
     )
     wid = await _make_workflow(stage="booked", stages=("booked",))
-    result = await on_stage_enter(TENANT, wid, ACTOR, ACTOR_NAME)
+    await on_stage_enter(TENANT, wid, ACTOR, ACTOR_NAME)
     # notify_role internally returned {skipped: no_recipients}; the
     # engine still records it in fired (it did not raise). Result is
     # a graceful no-op -- no notifications created.

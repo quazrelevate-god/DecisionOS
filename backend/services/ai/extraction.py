@@ -5,14 +5,13 @@ task execution planning/assist. Pure LLM helpers: depend on core (claude_chat,
 LLM_MODEL, _extract_json, DEFAULT_OPERATING_MODEL, logger) + stdlib only;
 import nothing from server.
 """
-import os
 import json
 from datetime import datetime, timezone
 from typing import Optional
 
 from emergentintegrations.llm.chat import UserMessage
 
-from core import claude_chat, LLM_MODEL, _extract_json, logger, DEFAULT_OPERATING_MODEL
+from core import claude_chat, _extract_json, logger, DEFAULT_OPERATING_MODEL
 from core import model_for, record_ai_call
 from prompts import render
 from services.ai.validation import (

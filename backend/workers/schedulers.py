@@ -5,9 +5,10 @@ actions for every tenant on a timer so overdue alerts fire even when nobody is
 polling /notifications; a Mongo leader-lock keeps it single-flight across
 replicas. Provider-outage alerts piggyback on the same tick.
 
-server.py re-exports these names so the deferred `from server import ...` call
-sites (and the lifespan wiring) keep resolving unchanged.
+The lifespan wiring (bootstrap/lifecycle.py) imports these directly; server.py
+also re-exports them for backward compatibility.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -15,6 +16,7 @@ import os
 
 from core import db, logger, now_iso
 from services.email import send_email
+
 # _followup_last_run is the per-tenant poll-throttle map owned by finance_signals.
 # The timer sweep clears a tenant's entry so it bypasses the 60s poll throttle.
 # (Historically referenced bare in server.py without an import -- a latent
@@ -34,6 +36,7 @@ async def _followup_scheduler_loop():
     # margin over normal sweep duration (~seconds); a crashed leader's
     # lock naturally expires on the next tick's attempt.
     from services.leader_lock import try_acquire, release, make_holder_id
+
     holder_id = make_holder_id("followup-scheduler")
     lease_seconds = max(FOLLOWUP_INTERVAL_SECONDS * 2, 120)
     # Small initial delay so startup/bootstrap finishes first.
@@ -41,6 +44,13 @@ async def _followup_scheduler_loop():
     while True:
         got_lock = False
         try:
+            # Epic 10 S6: refresh runtime platform config on every replica each tick
+            # so an admin model/Sarvam/flag change converges across the fleet (<=1 tick).
+            try:
+                from services.platform_config import refresh as _refresh_platform_config
+                await _refresh_platform_config()
+            except Exception as e:
+                logger.debug(f"[scheduler] platform_config refresh failed: {e}")
             got_lock = await try_acquire(db, "followup_sweep", holder_id, lease_seconds=lease_seconds)
             if not got_lock:
                 logger.debug("[followup-scheduler] another replica is leader this tick; skipping")
@@ -55,7 +65,9 @@ async def _followup_scheduler_loop():
                         await run_followup(tid)
                     except Exception as e:
                         logger.warning(f"[followup-scheduler] tenant {tid} failed: {e}")
-                logger.info(f"[followup-scheduler] leader swept {len(tenant_ids)} tenant(s); next in {FOLLOWUP_INTERVAL_SECONDS}s")
+                logger.info(
+                    f"[followup-scheduler] leader swept {len(tenant_ids)} tenant(s); next in {FOLLOWUP_INTERVAL_SECONDS}s"
+                )
             except Exception as e:
                 logger.warning(f"[followup-scheduler] sweep failed: {e}")
             try:
@@ -84,12 +96,22 @@ async def _notify_provider_outages():
     admin_email = os.environ.get("SUPERADMIN_EMAIL", "admin@decisionos.biz").strip()
     for a in pending:
         subject = f"[DecisionOS] AI provider alert: {a['provider']} — {a.get('status')}"
-        html = (f"<h3>AI provider outage detected</h3>"
-                f"<p><b>Provider:</b> {a['provider']}<br/>"
-                f"<b>Status:</b> {a.get('status')}<br/>"
-                f"<b>Detail:</b> {a.get('message','')}</p>"
-                f"<p>Open the Admin Console → AI Keys to update the key or clear it so AI falls back to the Emergent universal key.</p>")
+        html = (
+            f"<h3>AI provider outage detected</h3>"
+            f"<p><b>Provider:</b> {a['provider']}<br/>"
+            f"<b>Status:</b> {a.get('status')}<br/>"
+            f"<b>Detail:</b> {a.get('message','')}</p>"
+            f"<p>Open the Admin Console → AI Keys to update the key or clear it so AI falls back to the Emergent universal key.</p>"
+        )
         res = await send_email(admin_email, subject, html)
-        await db.platform_alerts.update_one({"id": a["id"]},
-            {"$set": {"notified": True, "notified_at": now_iso(), "notify_result": res.get("provider") or ("sent" if res.get("sent") else "mock")}})
+        await db.platform_alerts.update_one(
+            {"id": a["id"]},
+            {
+                "$set": {
+                    "notified": True,
+                    "notified_at": now_iso(),
+                    "notify_result": res.get("provider") or ("sent" if res.get("sent") else "mock"),
+                }
+            },
+        )
         logger.info(f"[outage-alert] notified admin about {a['provider']} ({a.get('status')})")

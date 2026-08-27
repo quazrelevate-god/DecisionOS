@@ -1,0 +1,13 @@
+# Files under black's format gate (Epic 8 Sprint 8 -- U8-08.5).
+# "Enforce forward": we do NOT bulk-reformat the legacy tree. A path joins this
+# list when a maintainer deliberately black-formats it (new modules start here).
+# CI (.github/workflows/backend-lint.yml) and scripts/lint.sh both `black --check`
+# exactly these paths. One path per line; blank lines and # comments ignored.
+bootstrap/lifecycle.py
+bootstrap/seed.py
+bootstrap/migrations.py
+bootstrap/__init__.py
+workers/schedulers.py
+workers/__init__.py
+services/otp.py
+services/inbox.py

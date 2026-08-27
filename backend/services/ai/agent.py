@@ -17,7 +17,7 @@ import time
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 from core import (db, logger, new_id, now_iso, model_for, record_ai_call,
-                  get_ai_key, EMERGENT_LLM_KEY, _ctx_tenant, _est_tokens)
+                  get_ai_key, EMERGENT_LLM_KEY, _est_tokens)
 from prompts import render, get as _get_prompt
 from services.ai.safety import INJECTION_GUARD, detect_injection
 from services.ai import agent_tools
@@ -131,7 +131,7 @@ async def run_agent(question: str, user: dict, *, conversation_id: str = None,
         answer = (getattr(resp, "content", "") or "").strip()
         if not answer and steps >= max_steps:
             answer = "I gathered a lot but couldn't finish within the step limit. Try narrowing the question."
-    except Exception as e:
+    except Exception:
         logger.exception("run_agent failed")
         answer = "I couldn't complete that request just now."
 

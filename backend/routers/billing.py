@@ -32,7 +32,6 @@ from typing import Optional
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field
 
 from config import (
     BILLING_LANDING_URL,
@@ -40,7 +39,6 @@ from config import (
     BILLING_SIGNING_SECRET,
     BILLING_PLAN_PRICES_INR_PAISE,
     RAZORPAY_KEY_ID,
-    RAZORPAY_WEBHOOK_SECRET,
 )
 from core import db, get_current_user, log_activity, now_iso, require_role
 
@@ -95,7 +93,7 @@ async def list_plans(user: dict = Depends(get_current_user)):
     """Public plan catalogue. Merges services/plans PLAN_DEFINITIONS
     with the env-configured prices so a single call gives everything
     the pricing landing page needs."""
-    from services.plans import PLAN_DEFINITIONS, PLAN_TRIAL, PLAN_STARTER, PLAN_BUSINESS, PLAN_ENTERPRISE
+    from services.plans import PLAN_DEFINITIONS, PLAN_TRIAL, PLAN_ENTERPRISE
     out = []
     for key, spec in PLAN_DEFINITIONS.items():
         if key in (PLAN_TRIAL,):
@@ -149,7 +147,7 @@ async def checkout(inp: CheckoutInput,
     plan_key = inp.plan_key.lower().strip()
     if plan_key not in PLAN_KEYS or plan_key in ("trial", "grandfathered"):
         raise HTTPException(status_code=400,
-                             detail=f"Invalid plan_key. Purchasable plans: starter, business, enterprise.")
+                             detail="Invalid plan_key. Purchasable plans: starter, business, enterprise.")
     tid = user["tenant_id"]
     # 15-minute handoff window; landing page must complete Checkout
     # before this expires.

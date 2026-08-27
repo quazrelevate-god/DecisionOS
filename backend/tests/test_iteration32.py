@@ -241,7 +241,7 @@ class TestWorkflowMaterialization:
         # LLM non-deterministic; policy should ideally yield 0 cards. Allow 1 (minor) but not more.
         assert total_new <= 1, f"Policy directive materialized {total_new} cards; expected 0. new_sd={new_sd} new_pp={new_pp}"
         if total_new == 1:
-            print(f"[WARN] policy directive slipped 1 card through — minor LLM non-determinism.")
+            print("[WARN] policy directive slipped 1 card through — minor LLM non-determinism.")
         else:
             assert es["workflows"] == 0, f"expected workflows=0 for policy, got {es['workflows']}"
 
@@ -270,7 +270,8 @@ def _cleanup(request, auth_headers):
     yield
     # Mongo cleanup (public API has no DELETE for workflows/decisions/voice_notes)
     try:
-        import motor.motor_asyncio, asyncio
+        import motor.motor_asyncio
+        import asyncio
         mongo_url = os.environ.get("MONGO_URL")
         db_name = os.environ.get("DB_NAME")
         if not mongo_url:

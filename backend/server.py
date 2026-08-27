@@ -77,18 +77,11 @@ from services.tasks import TASK_STATUSES  # noqa: F401
 from models.tasks import TaskCreateInput, TaskUpdateInput  # noqa: F401
 
 
-CONTACT_TYPES = ("customer", "dealer", "vendor")
-CONTACT_STATUS = ("lead", "active", "inactive")
-
-
-# Epic 2 Sprint 1 (E2-03): relationship lifecycle stages. Enum differs
-# by contact type -- customers have a sales-funnel journey, suppliers
-# have a procurement journey. Backend accepts any value in the UNION so
-# a single validator works regardless of type; the CRM frontend renders
-# type-appropriate options. Empty string is allowed (means "unset").
-CUSTOMER_STAGES = ["lead", "qualified", "active", "at_risk", "churned"]
-SUPPLIER_STAGES = ["prospect", "active", "preferred", "on_hold", "retired"]
-LIFECYCLE_STAGES = list({*CUSTOMER_STAGES, *SUPPLIER_STAGES}) + [""]
+# Contact vocabulary moved to models/contacts.py (Epic 8 Sprint 10 -- U8-10.3);
+# imported back so any `from server import CONTACT_TYPES` (tests) still resolves.
+from models.contacts import (  # noqa: E402,F401
+    CONTACT_TYPES, CONTACT_STATUS, CUSTOMER_STAGES, SUPPLIER_STAGES, LIFECYCLE_STAGES,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -204,11 +197,8 @@ from services.otp import (  # noqa: E402,F401
 # consolidated `from services.enrich import ...` re-export below.
 
 
-# ---------------------------------------------------------------------------
-# Voice notes / ingestion
-# ---------------------------------------------------------------------------
-UPLOAD_DIR = ROOT_DIR / "uploads"
-UPLOAD_DIR.mkdir(exist_ok=True)
+# UPLOAD_DIR moved to config.py (single source, Epic 8 Sprint 8 -- U8-08.2);
+# no server.py code references it after the Sprint 7 extractions.
 
 
 # ---------------------------------------------------------------------------

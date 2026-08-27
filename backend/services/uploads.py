@@ -48,6 +48,7 @@ Categories (organizational, not enforced):
     ledger       — finance bill/receipt uploads
     task-files   — task attachments (already migrated via _store_file)
 """
+import asyncio
 import os
 import tempfile
 from pathlib import Path
@@ -55,6 +56,17 @@ from typing import Optional, Tuple
 
 from core import logger, new_id
 from services import obj_store
+
+
+async def awrite_bytes(path, data: bytes) -> None:
+    """Write bytes to a local path off the event loop (S9 -- U8-09.3).
+
+    Upload paths staged data to a temp file with a synchronous
+    ``open(...).write(...)`` inside async handlers, blocking the loop for the
+    duration of the disk write. Offloading to a thread keeps concurrent uploads
+    from serializing on each other's I/O.
+    """
+    await asyncio.to_thread(Path(path).write_bytes, data)
 
 
 # Legacy local-disk directory — kept as a read-only fallback during the
@@ -142,9 +154,9 @@ async def download_to_temp(storage_path: str,
         p = Path(storage_path)
         inferred_suffix = p.suffix or ".bin"
     fd, tmp_path = tempfile.mkstemp(suffix=inferred_suffix)
+    os.close(fd)  # we write via awrite_bytes (off-thread), not this fd
     try:
-        with os.fdopen(fd, "wb") as f:
-            f.write(data)
+        await awrite_bytes(tmp_path, data)
     except Exception:
         try:
             os.unlink(tmp_path)

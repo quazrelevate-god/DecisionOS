@@ -227,29 +227,9 @@ class TestBriefDetails:
         assert body.get("actionable") is False
 
 
-class TestBriefSendDigest:
-    """POST /api/brief/send-digest — owner only."""
-
-    def test_send_digest_owner(self, owner_token):
-        r = requests.post(f"{BASE_URL}/api/brief/send-digest",
-                          headers=_h(owner_token), timeout=45)
-        # 200 whether SMTP configured OR mocked
-        assert r.status_code == 200, r.text
-        body = r.json()
-        # Either {sent: true, provider: ...} OR {sent: false, mocked: true, ...}
-        if body.get("sent"):
-            assert "to" in body and "provider" in body
-        else:
-            assert body.get("mocked") is True, (
-                f"expected sent or mocked=true, got {body}"
-            )
-
-    def test_send_digest_sales_forbidden(self, sales_token):
-        r = requests.post(f"{BASE_URL}/api/brief/send-digest",
-                          headers=_h(sales_token), timeout=15)
-        assert r.status_code == 403, (
-            f"expected 403 for non-owner, got {r.status_code} {r.text[:200]}"
-        )
+# TestBriefSendDigest removed: POST /api/brief/send-digest was deleted in E2-63
+# (DIGEST_I18N and its only consumer went away). The tests exercised a route that
+# no longer exists; nothing to assert.
 
 
 # ===========================================================================
@@ -845,10 +825,10 @@ class TestImportBootSanity:
         from routers.brief import router
         paths = {r.path for r in router.routes}
         for expected in (
-            "/api/brief", "/api/brief/details", "/api/brief/send-digest",
+            "/api/brief", "/api/brief/details",
             "/api/notifications", "/api/notifications/{nid}/read",
             "/api/notifications/read-all",
-        ):
+        ):  # /api/brief/send-digest was removed in E2-63 (DIGEST_I18N deleted)
             assert expected in paths, f"brief router missing route: {expected}; got {sorted(paths)}"
 
     def test_routers_team_importable(self):
@@ -866,18 +846,23 @@ class TestImportBootSanity:
         ):
             assert expected in paths, f"team router missing route: {expected}; got {sorted(paths)}"
 
-    def test_server_still_owns_cross_domain_helpers(self):
-        """Cross-domain helpers stayed in server.py and are deferred-imported.
-        Verify each still resolves as a top-level attribute of `server`."""
-        import server
-        for name in ("_norm_phone", "_mask_phone", "_create_leave",
-                    "ai_leave_impact", "_resolve_leave_approver",
-                    "run_followup", "_overdue_receivables",
-                    "_bills_due_or_overdue", "_unmatched_payments",
-                    "_inv_remaining", "_pay_remaining_amt",
-                    "enrich_decisions", "dashboard", "send_email",
-                    "push_notification", "DIGEST_I18N",
-                    "LeaveApproverMapInput"):
-            assert hasattr(server, name), (
-                f"server.py lost cross-domain helper {name} — deferred-import will fail"
-            )
+    def test_cross_domain_helpers_resolve_from_real_homes(self):
+        """Epic 8 (S10): the cross-domain helpers moved OUT of server.py to their
+        real domain modules; app code imports them from there, not from server.
+        Verify each resolves at its home. (DIGEST_I18N was deleted in E2-63.)"""
+        import importlib
+        homes = {
+            "services.whatsapp": ("_norm_phone", "_mask_phone"),
+            "services.leave": ("_create_leave", "ai_leave_impact", "_resolve_leave_approver"),
+            "services.finance_signals": ("run_followup", "_overdue_receivables",
+                                         "_bills_due_or_overdue", "_unmatched_payments",
+                                         "_inv_remaining", "_pay_remaining_amt"),
+            "services.enrich": ("enrich_decisions",),
+            "services.email": ("send_email",),
+            "services.notifications": ("push_notification",),
+            "models.calendar": ("LeaveApproverMapInput",),
+        }
+        for module_name, names in homes.items():
+            mod = importlib.import_module(module_name)
+            for name in names:
+                assert hasattr(mod, name), f"{module_name} lost cross-domain helper {name}"

@@ -6,6 +6,7 @@ delivery, salted-hash storage, and the _issue_otp orchestrator. Extracted
 verbatim from server.py; routers/auth_otp.py imports from here. server.py
 re-exports the public names for compatibility.
 """
+
 from __future__ import annotations
 
 import os
@@ -26,7 +27,11 @@ from core import db
 OTP_TTL_SECONDS = 300
 OTP_MAX_ATTEMPTS = 5
 OTP_RESEND_COOLDOWN = 30
-TWILIO_ENABLED = bool(os.environ.get("TWILIO_ACCOUNT_SID") and os.environ.get("TWILIO_AUTH_TOKEN") and os.environ.get("TWILIO_FROM_NUMBER"))
+TWILIO_ENABLED = bool(
+    os.environ.get("TWILIO_ACCOUNT_SID")
+    and os.environ.get("TWILIO_AUTH_TOKEN")
+    and os.environ.get("TWILIO_FROM_NUMBER")
+)
 APM_SMS_API_KEY = os.environ.get("APM_SMS_API_KEY")
 APM_OTP_ENDPOINT = os.environ.get("APM_OTP_ENDPOINT", "Registration")  # "Registration" or "ForgotPassword"
 APM_ENABLED = bool(APM_SMS_API_KEY)
@@ -79,10 +84,12 @@ async def _send_otp_sms(phone: str, code: str) -> bool:
         return False
     try:
         from twilio.rest import Client
+
         client = Client(os.environ["TWILIO_ACCOUNT_SID"], os.environ["TWILIO_AUTH_TOKEN"])
         client.messages.create(
             body=f"Your DecisionOS login code is {code}. Valid for 5 minutes.",
-            from_=os.environ["TWILIO_FROM_NUMBER"], to=phone,
+            from_=os.environ["TWILIO_FROM_NUMBER"],
+            to=phone,
         )
         return True
     except Exception as e:
@@ -90,8 +97,7 @@ async def _send_otp_sms(phone: str, code: str) -> bool:
         return False
 
 
-async def _issue_otp(norm: str, display_phone: str, tenant_id: str,
-                     enforce_cooldown: bool = True):
+async def _issue_otp(norm: str, display_phone: str, tenant_id: str, enforce_cooldown: bool = True):
     """Generate + store a 6-digit OTP for a normalized phone (scoped to a
     tenant) and try to send it.
 
@@ -114,7 +120,10 @@ async def _issue_otp(norm: str, display_phone: str, tenant_id: str,
         if existing:
             age = (datetime.now(timezone.utc) - datetime.fromisoformat(existing["created_at"])).total_seconds()
             if age < OTP_RESEND_COOLDOWN:
-                raise HTTPException(status_code=429, detail=f"Please wait {int(OTP_RESEND_COOLDOWN - age)}s before requesting a new code")
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"Please wait {int(OTP_RESEND_COOLDOWN - age)}s before requesting a new code",
+                )
     code = f"{secrets.randbelow(1000000):06d}"  # cryptographically secure fallback OTP
     now = datetime.now(timezone.utc)
     # Prefer the APM gateway when configured: it sends the SMS AND returns the code it generated.
@@ -128,10 +137,16 @@ async def _issue_otp(norm: str, display_phone: str, tenant_id: str,
         dev = not TWILIO_ENABLED
     await db.otp_codes.update_one(
         key,
-        {"$set": {"phone": norm, "tenant_id": tenant_id,
-                  "code_hash": _hash_otp(code, norm),
-                  "expires_at": (now + timedelta(seconds=OTP_TTL_SECONDS)).isoformat(),
-                  "created_at": now.isoformat(), "attempts": 0}},
+        {
+            "$set": {
+                "phone": norm,
+                "tenant_id": tenant_id,
+                "code_hash": _hash_otp(code, norm),
+                "expires_at": (now + timedelta(seconds=OTP_TTL_SECONDS)).isoformat(),
+                "created_at": now.isoformat(),
+                "attempts": 0,
+            }
+        },
         upsert=True,
     )
     resp = {"sent": sent, "dev_mode": dev, "tenant_id": tenant_id}
@@ -143,6 +158,7 @@ async def _issue_otp(norm: str, display_phone: str, tenant_id: str,
     # server.py's boot check also refuses to start in prod when no SMS
     # provider is configured, so "silently in dev mode" is impossible.
     from config import DEV_OTP_IN_RESPONSE
+
     if dev and DEV_OTP_IN_RESPONSE:
         resp["dev_otp"] = code
     return resp

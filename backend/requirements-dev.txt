@@ -1,0 +1,7 @@
+# Dev + CI tooling (Epic 8 Sprint 8 -- U8-08.5). Not needed at runtime.
+# Install with: pip install -r requirements-dev.txt
+-r requirements.txt
+
+ruff==0.16.4              # linter (config in pyproject.toml [tool.ruff])
+black==26.5.1             # formatter (config in pyproject.toml [tool.black])
+import-linter==2.13       # layering contracts (config in .importlinter)

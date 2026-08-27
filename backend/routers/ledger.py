@@ -11,13 +11,12 @@ import json
 import re
 from pathlib import Path
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, File, Form, UploadFile
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, File, Form, UploadFile, Query
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
 
 from core import (
-    db, claude_chat, LLM_MODEL, EMERGENT_LLM_KEY, VISION_MODEL,
+    db, claude_chat, EMERGENT_LLM_KEY, VISION_MODEL,
     _extract_json, new_id, now_iso, logger, log_usage, _est_tokens,
     get_current_user, user_perms, log_activity,
 )
@@ -227,7 +226,7 @@ async def ai_extract_ledger_file(file_path: str, mime_type: str, kind: str, curr
     _eng, _ti, _to = None, 0, 0
     # Prefer the user's own Gemini key (same client server.py configures), else the Emergent vision key.
     try:
-        from server import get_gemini_client, _gemini_doc_sync
+        from services.vision import _gemini_doc_sync, get_gemini_client
         if get_gemini_client() is not None:
             resp, _gti, _gto = await asyncio.to_thread(_gemini_doc_sync, file_path, mime_type, system, "Extract the JSON now.")
             await log_usage(f"ledger-ocr-{kind}", "gemini", model=VISION_MODEL[1],
@@ -616,8 +615,12 @@ from models.finance import (
 
 
 @router.get("/expenses")
-async def list_expenses(user: dict = Depends(require_ledger)):
-    return await db.expenses.find({"tenant_id": user["tenant_id"]}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+async def list_expenses(user: dict = Depends(require_ledger),
+                        limit: int = Query(1000, ge=1, le=2000), offset: int = Query(0, ge=0)):
+    # S9 (U8-09.4): optional pagination. Defaults reproduce the prior response
+    # (newest up to 1000); now index-backed by (tenant_id, created_at).
+    return await db.expenses.find({"tenant_id": user["tenant_id"]}, {"_id": 0}) \
+        .sort("created_at", -1).skip(offset).limit(limit).to_list(limit)
 
 
 @router.post("/expenses")
@@ -718,8 +721,10 @@ async def suggest_category(inp: SuggestCategoryInput, user: dict = Depends(requi
 
 # --- Assets -----------------------------------------------------------------
 @router.get("/assets")
-async def list_assets(user: dict = Depends(require_ledger)):
-    return await db.assets.find({"tenant_id": user["tenant_id"]}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+async def list_assets(user: dict = Depends(require_ledger),
+                      limit: int = Query(1000, ge=1, le=2000), offset: int = Query(0, ge=0)):
+    return await db.assets.find({"tenant_id": user["tenant_id"]}, {"_id": 0}) \
+        .sort("created_at", -1).skip(offset).limit(limit).to_list(limit)
 
 
 @router.post("/assets")
@@ -769,8 +774,10 @@ async def delete_asset(aid: str, user: dict = Depends(require_ledger)):
 
 # --- Inventory --------------------------------------------------------------
 @router.get("/inventory")
-async def list_inventory(user: dict = Depends(require_ledger)):
-    return await db.inventory.find({"tenant_id": user["tenant_id"]}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+async def list_inventory(user: dict = Depends(require_ledger),
+                         limit: int = Query(1000, ge=1, le=2000), offset: int = Query(0, ge=0)):
+    return await db.inventory.find({"tenant_id": user["tenant_id"]}, {"_id": 0}) \
+        .sort("created_at", -1).skip(offset).limit(limit).to_list(limit)
 
 
 @router.post("/inventory")
@@ -1077,7 +1084,7 @@ async def resync_finance(tid: str, uid: str, user_name: str = "System") -> dict:
     """The full 'Fix Mis-booked Purchases' engine: (1) re-classify purchase bills into the right
     bucket with company categories, (2) re-categorize expenses & assets onto the company categories,
     (3) recompute payment matching & outstanding balances."""
-    from server import ai_classify_purchase
+    from services.ingestion import ai_classify_purchase
     fc = await get_finance_categories(tid)
     bills = await db.invoices.find({"tenant_id": tid, "type": "purchase_bill"}, {"_id": 0}).to_list(5000)
     summary = {"reviewed": 0, "to_asset": 0, "to_inventory": 0, "kept_expense": 0, "unknown": 0, "unchanged": 0,

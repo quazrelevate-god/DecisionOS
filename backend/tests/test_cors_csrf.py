@@ -372,7 +372,8 @@ class TestCsrfMiddlewareDispatch:
     def _dispatch(self, enforce, method, path, cookies, headers):
         """Drive the middleware with a fake Request; return the
         Response's status_code + body dict (best-effort)."""
-        import asyncio, json
+        import asyncio
+        import json
         from services.csrf import CSRFMiddleware
         import services.csrf as _csrf
         original_enforce = _csrf.CSRF_ENFORCE

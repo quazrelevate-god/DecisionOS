@@ -80,14 +80,17 @@ async def pick_least_loaded_member(tenant_id: str, role: str) -> Optional[str]:
                 return None
         if len(members) == 1:
             return members[0]["id"]
-        loads = []
-        for m in members:
-            load = await db.tasks.count_documents({
-                "tenant_id": tenant_id, "assignee_id": m["id"],
-                "status": {"$nin": ["done", "cancelled"]},
-            })
-            loads.append((load, m["id"]))
-        loads.sort()  # (load asc, id asc) -> least-loaded, deterministic on ties
+        # S9 (U8-09.1): one aggregation instead of a count_documents per member
+        # (this runs on every auto-assign -- voice + agent). Members with zero
+        # open tasks don't appear in the group result and default to 0.
+        member_ids = [m["id"] for m in members]
+        cur = await db.tasks.aggregate([
+            {"$match": {"tenant_id": tenant_id, "assignee_id": {"$in": member_ids},
+                        "status": {"$nin": ["done", "cancelled"]}}},
+            {"$group": {"_id": "$assignee_id", "n": {"$sum": 1}}},
+        ])
+        counts = {r["_id"]: r["n"] for r in await cur.to_list(len(member_ids))}
+        loads = sorted((counts.get(m["id"], 0), m["id"]) for m in members)  # (load asc, id asc): deterministic
         return loads[0][1]
     except Exception as e:
         logger.warning(f"pick_least_loaded_member failed: {e}")
@@ -203,7 +206,7 @@ async def _create_meetings(tenant_id, note, decision_id, extracted):
 
 async def _create_workflows(tenant_id, note, decision_id, extracted):
     """Materialize each detected workflow_event into a real board card; returns the created ids."""
-    from server import tenant_operating_model  # cross-domain; moves in U8-04.12
+    from services.ai.generators import tenant_operating_model
     wf_ids = []
     om = await tenant_operating_model(tenant_id)
     pmap = {p["key"]: p for p in om["pipelines"]}
@@ -244,7 +247,8 @@ async def process_voice_note(note_id: str):
         return
     tenant_id = note["tenant_id"]
     set_usage_tenant(tenant_id)
-    from server import tenant_operating_model, _read_reference_text  # cross-domain; move in U8-04.7/.12
+    from services.ai.generators import tenant_operating_model
+    from services.files import _read_reference_text
     from services.inbox import add_inbox_item
     try:
         await db.voice_notes.update_one({"id": note_id}, {"$set": {"status": "transcribing"}})

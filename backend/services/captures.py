@@ -13,7 +13,7 @@ from typing import Optional
 
 from emergentintegrations.llm.chat import UserMessage
 
-from core import db, logger, new_id, now_iso, claude_chat, LLM_MODEL, _extract_json
+from core import db, logger, new_id, now_iso, claude_chat, _extract_json
 from core import model_for
 from prompts import render
 from services.ingestion import commit_ingestion_records, _classify_ingestion

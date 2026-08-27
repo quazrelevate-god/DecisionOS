@@ -33,7 +33,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
 
 from core import (
     db,
@@ -89,7 +88,7 @@ def _can_approve_leave(user: dict, leave: dict) -> bool:
 
 
 async def _decide_leave(leave_id, user, new_status, note, ntype, employee_msg):
-    from server import push_notification  # deferred
+    from services.notifications import push_notification
     lv = await db.leaves.find_one({"id": leave_id, "tenant_id": user["tenant_id"]})
     if not lv:
         raise HTTPException(status_code=404, detail="Not found")
@@ -252,7 +251,8 @@ async def uninvite_user(user_id: str, user: dict = Depends(require_perm("team_ma
 
 @router.post("/users")
 async def create_user(inp: UserCreateInput, user: dict = Depends(require_perm("team_manage"))):
-    from server import _norm_phone, tenant_role_keys  # deferred
+    from core import tenant_role_keys
+    from services.whatsapp import _norm_phone
     role_keys = await tenant_role_keys(user["tenant_id"])
     if inp.role == "owner":
         if user.get("role") != "owner":
@@ -332,7 +332,7 @@ async def create_user(inp: UserCreateInput, user: dict = Depends(require_perm("t
 
 @router.post("/users/{user_id}/invite")
 async def regenerate_invite(user_id: str, user: dict = Depends(require_perm("team_manage"))):
-    from server import _norm_phone, _mask_phone  # deferred
+    from services.whatsapp import _mask_phone, _norm_phone
     target = await db.users.find_one({"id": user_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
     if not target:
         raise HTTPException(status_code=404, detail="Member not found")
@@ -454,7 +454,7 @@ async def list_attendance(date: Optional[str] = None, user: dict = Depends(get_c
 # ---------------------------------------------------------------------------
 @router.post("/leaves")
 async def create_leave(inp: LeaveRequestInput, user: dict = Depends(get_current_user)):
-    from server import _create_leave  # deferred (also called by voice/inbox flows)
+    from services.leave import _create_leave
     if inp.leave_type not in LEAVE_TYPES:
         raise HTTPException(status_code=400, detail="Invalid leave type")
     if inp.to_date[:10] < inp.from_date[:10]:
@@ -466,7 +466,7 @@ async def create_leave(inp: LeaveRequestInput, user: dict = Depends(get_current_
 
 @router.post("/leaves/absence")
 async def report_absence(inp: AbsenceInput, user: dict = Depends(get_current_user)):
-    from server import _create_leave  # deferred
+    from services.leave import _create_leave
     if inp.reason not in ABSENCE_REASONS:
         raise HTTPException(status_code=400, detail="Invalid reason")
     today = datetime.now(timezone.utc).date().isoformat()
@@ -544,7 +544,7 @@ async def request_leave_info(leave_id: str, inp: LeaveDecisionInput, user: dict 
 async def leave_impact(leave_id: str, user: dict = Depends(get_current_user)):
     """AI-driven: for each active task assigned to the person on leave, suggest
     a reassignment/extension/monitor action based on team workload."""
-    from server import ai_leave_impact  # deferred (uses Claude)
+    from services.leave import ai_leave_impact
     tid = user["tenant_id"]
     lv = await db.leaves.find_one({"id": leave_id, "tenant_id": tid})
     if not lv:

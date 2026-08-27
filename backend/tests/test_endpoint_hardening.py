@@ -43,8 +43,8 @@ class TestLegacyDiskFallback:
     def test_get_file_source_has_serve_legacy_flag_gate(self):
         """get_file's legacy branch must be gated on SERVE_LEGACY_LOCAL_DISK,
         not just `legacy_path.exists()`."""
-        import server
-        src = inspect.getsource(server.get_file)
+        from routers import files  # get_file moved to routers/files.py (Epic 8 S3)
+        src = inspect.getsource(files.get_file)
         assert "SERVE_LEGACY_LOCAL_DISK" in src, (
             "S0-03 regression: get_file must import + gate the legacy "
             "disk fallback on SERVE_LEGACY_LOCAL_DISK"
@@ -72,8 +72,8 @@ class TestLegacyDiskFallback:
         ledger, capture_drafts) all query on tenant_id. That was the
         FIX-002-E fix; regression-guard it here so nobody quietly
         removes the scoping while touching the file for S0-03."""
-        import server
-        src = inspect.getsource(server.get_file)
+        from routers import files  # get_file moved to routers/files.py (Epic 8 S3)
+        src = inspect.getsource(files.get_file)
         # Each of the 4 branches queries with tenant_id in the filter.
         assert src.count('"tenant_id": tid') >= 4, (
             "get_file must scope every DB lookup by tenant_id"
@@ -111,8 +111,9 @@ class TestDevOtpLeak:
         """server.py must raise at import time when ENV=prod and neither
         APM_SMS_API_KEY nor TWILIO_* is set. Grep-style check because
         actually reloading server with prod env is heavy."""
-        import server, inspect
-        src = inspect.getsource(server)
+        import services.otp  # the prod-boot SMS guard moved to services/otp.py (Epic 8 S7)
+        import inspect
+        src = inspect.getsource(services.otp)
         # The check must reference both providers and the RuntimeError.
         assert "APM_ENABLED or TWILIO_ENABLED" in src
         assert 'No SMS provider configured' in src
@@ -131,9 +132,12 @@ class TestDevOtpLeak:
         monkeypatch.setenv("CORS_ORIGINS", "https://app.decisionos.com")
         monkeypatch.setenv("SUPERADMIN_EMAIL", "ops@x.com")
         monkeypatch.setenv("SUPERADMIN_PASSWORD", "x")
-        # Evict + fresh import.
+        # Evict + fresh import. The SMS-provider guard moved to services/otp.py
+        # (Epic 8 S7); server imports it, so evict services.otp too or the guard
+        # won't re-run from its module cache.
         sys.modules.pop("server", None)
         sys.modules.pop("config", None)
+        sys.modules.pop("services.otp", None)
         try:
             with pytest.raises(RuntimeError, match="SMS provider"):
                 import server  # noqa: F401
@@ -142,6 +146,7 @@ class TestDevOtpLeak:
             monkeypatch.setenv("ENV", "dev")
             sys.modules.pop("server", None)
             sys.modules.pop("config", None)
+            sys.modules.pop("services.otp", None)
             import server  # noqa: F401
 
 
@@ -152,8 +157,8 @@ class TestWhatsappSignatureEnforcement:
     def test_source_rejects_on_mismatch_not_processes(self):
         """The whole point of the fix: on signature mismatch, RAISE 403
         instead of logging and processing anyway."""
-        import server
-        src = inspect.getsource(server.whatsapp_webhook)
+        from routers import whatsapp  # webhook moved to routers/whatsapp.py (Epic 8 S3)
+        src = inspect.getsource(whatsapp.whatsapp_webhook)
         # Must raise 403 in the mismatch branch.
         assert 'status_code=403' in src
         assert 'Invalid signature' in src
@@ -166,15 +171,15 @@ class TestWhatsappSignatureEnforcement:
     def test_source_still_uses_constant_time_compare(self):
         """hmac.compare_digest must still be the comparison — no
         accidental regression to == that would leak timing info."""
-        import server
-        src = inspect.getsource(server.whatsapp_webhook)
+        from routers import whatsapp  # webhook moved to routers/whatsapp.py (Epic 8 S3)
+        src = inspect.getsource(whatsapp.whatsapp_webhook)
         assert "hmac.compare_digest(expected, sig)" in src
 
     def test_source_refuses_missing_secret_in_prod(self):
         """WA_APP_SECRET absent + ENV=prod → refuse. Dev/staging still
         accept so local tunnels work during integration testing."""
-        import server
-        src = inspect.getsource(server.whatsapp_webhook)
+        from routers import whatsapp  # webhook moved to routers/whatsapp.py (Epic 8 S3)
+        src = inspect.getsource(whatsapp.whatsapp_webhook)
         assert "running_env == \"prod\"" in src or 'running_env == "prod"' in src
         assert 'WA_APP_SECRET not configured' in src
 
@@ -182,8 +187,8 @@ class TestWhatsappSignatureEnforcement:
         """Unchanged: the early-return for missing WA_ACCESS_TOKEN
         stays — it's the "webhook wired but ingestion not enabled"
         response, not a security decision."""
-        import server
-        src = inspect.getsource(server.whatsapp_webhook)
+        from routers import whatsapp  # webhook moved to routers/whatsapp.py (Epic 8 S3)
+        src = inspect.getsource(whatsapp.whatsapp_webhook)
         assert 'status": "not_configured' in src
 
     def test_signature_computation_is_correct(self):

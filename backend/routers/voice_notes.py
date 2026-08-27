@@ -7,11 +7,10 @@ process_voice_note / transcribe_audio / _tenant_industry stay in server.
 import os
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File, Form
-from pydantic import BaseModel
 
 from core import (
     db, get_current_user, require_perm, new_id, now_iso, logger,
-    claude_chat, LLM_MODEL, _extract_json,
+    claude_chat, _extract_json,
 )
 from emergentintegrations.llm.chat import UserMessage
 from models.voice import TextNoteInput
@@ -67,9 +66,10 @@ async def transcribe_only(file: UploadFile = File(...), language: str = Form("au
     ext = (file.filename or "audio.webm").split(".")[-1]
     data = await file.read()
     fd, tmp_path = tempfile.mkstemp(suffix=f".{ext}", prefix="dictation-")
+    os.close(fd)  # write off-thread via awrite_bytes (S9 -- U8-09.3)
     try:
-        with os.fdopen(fd, "wb") as f:
-            f.write(data)
+        from services.uploads import awrite_bytes
+        await awrite_bytes(tmp_path, data)
         try:
             text = await transcribe_audio(tmp_path, language)
         except Exception as e:

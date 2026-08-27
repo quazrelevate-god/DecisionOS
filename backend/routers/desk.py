@@ -30,7 +30,6 @@ from datetime import datetime, timezone, date, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
 
 from core import db, get_current_user, now_iso, new_id
 
@@ -154,7 +153,7 @@ async def _cash_flow_status(tid: str) -> dict:
     Brief show the same numbers. Also fixes the unmatched-payments
     query: real field is `match_status ∈ {unmatched, partial}` (not
     the boolean `matched` the old code checked, which never existed)."""
-    from server import _overdue_receivables, _inv_remaining, _unmatched_payments  # deferred
+    from services.finance_signals import _inv_remaining, _overdue_receivables, _unmatched_payments
     overdue_rows = await _overdue_receivables(tid)
     overdue_receivables = round(sum(_inv_remaining(r) for r in overdue_rows), 2)
     # Unmatched INBOUND payments only (out payments live on a separate
@@ -398,7 +397,6 @@ def _format_amount(n) -> Optional[str]:
     s = f"{int(round(n)):,}"
     parts = s.split(",")
     if len(parts) > 2:
-        last = parts[-1]
         rest = parts[:-1]
         s = ",".join(rest[::-1][0:1] + [",".join(rest[::-1][1:][::-1])]) if len(rest) > 1 else ",".join(rest)
         # Simpler: reformat with Indian style manually

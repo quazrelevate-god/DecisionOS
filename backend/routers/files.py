@@ -4,12 +4,11 @@ Generic reference-file upload, authenticated download by id, legacy serve-by-
 name, and the public brochure. File-analysis helpers (_store_file, _file_public,
 _analyze_reference_file, _read_reference_text) stay in server.
 """
-import os
 import re
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 
-from core import db, get_current_user, logger
+from core import db, get_current_user, logger, UPLOAD_DIR
 from services import obj_store
 from services.files import _store_file, _file_public
 
@@ -54,7 +53,7 @@ async def get_file(fname: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Not found")
     tid = user["tenant_id"]
     from fastapi.responses import Response, FileResponse
-    from services.uploads import read_upload, is_legacy_path
+    from services.uploads import read_upload
 
     # 1) Try db.files (task attachments, generic uploads).
     rec = await db.files.find_one(

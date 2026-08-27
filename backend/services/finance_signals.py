@@ -135,7 +135,7 @@ async def _unmatched_payments(tenant_id: str) -> list:
 
 async def _finance_assignee(tenant_id: str):
     """Route finance action tasks to the Finance/Accounts department; if none exists, to the owner."""
-    from server import _finance_role_key  # captures domain; moves in U8-04.8
+    from services.captures import _finance_role_key
     troles = await tenant_role_keys(tenant_id)
     fin_role = await _finance_role_key(tenant_id, troles)
     if fin_role:

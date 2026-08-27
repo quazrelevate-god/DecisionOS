@@ -28,7 +28,7 @@ Endpoints (server.py):
 from typing import Any, Dict, Optional
 
 from config import _AI_KEY_ENV
-from core import get_ai_key, logger, mask_key
+from core import get_ai_key, mask_key
 
 
 # Providers the tenant can customize. Same set as the platform pool.

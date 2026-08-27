@@ -1,0 +1,92 @@
+# Import-layering contract (Epic 8 Sprint 8 -- U8-08.4).
+#
+# Encodes the domain-modular layering the epic built and, crucially, prevents
+# NEW regressions. Target layering, top -> leaf:
+#     bootstrap / workers   (app assembly + background jobs)
+#     routers               (HTTP surface)
+#     services              (business logic)
+#     integrations          (external-provider adapters)
+#     core / shared / models  (foundation)
+#
+# `server` is unconstrained here. As of Sprint 10 (U8-10.3) application code holds
+# ZERO `from server import` shims -- every cross-domain helper is imported from its
+# real home (locked by tests/test_epic8_s7_modules.py::test_no_server_import_shims_
+# in_app_code). server.py keeps a re-export surface only for the grandfathered
+# test_iteration* suite, to be retired when those tests are restructured.
+#
+# KNOWN DEBT (target layering not yet met; catalogued, to be paid down in S9/S10):
+#   * 5 services -> routers edges (cross-domain helpers still living in a router):
+#       services.ai.brain_retrieval -> routers.brain_docs
+#       services.ai.generators      -> routers.ledger
+#       services.finance_signals    -> routers.access
+#       services.ingestion          -> routers.ledger
+#       services.workflow_engine    -> routers.ledger
+#   * core.deps -> services.auth.* (session tracking/membership/revocation) and
+#     core.usage -> services.ai.pii, plus core -> integrations.llm (claude_chat
+#     facade re-export) and integrations.llm -> services.ai.{llm_limits,pii}
+#     (guarded_llm is intentional cross-cutting policy, kept in services by design).
+# These are asserted-around below via ignore_imports so the gate is green AND the
+# debt is explicit; remove the ignores as each edge is resolved.
+
+[importlinter]
+root_packages =
+    bootstrap
+    workers
+    routers
+    services
+    integrations
+    core
+    shared
+    models
+
+[importlinter:contract:1]
+name = Routers must not import app-assembly (bootstrap/workers)
+type = forbidden
+source_modules =
+    routers
+forbidden_modules =
+    bootstrap
+    workers
+
+[importlinter:contract:2]
+name = Services must not import app-assembly (bootstrap/workers)
+type = forbidden
+source_modules =
+    services
+forbidden_modules =
+    bootstrap
+    workers
+
+[importlinter:contract:3]
+name = Integrations must not import routers or app-assembly
+type = forbidden
+source_modules =
+    integrations
+forbidden_modules =
+    routers
+    bootstrap
+    workers
+
+[importlinter:contract:4]
+name = models is a pure schema leaf
+type = forbidden
+source_modules =
+    models
+forbidden_modules =
+    routers
+    services
+    integrations
+    bootstrap
+    workers
+
+[importlinter:contract:5]
+name = shared is a pure helper leaf
+type = forbidden
+source_modules =
+    shared
+forbidden_modules =
+    routers
+    services
+    integrations
+    bootstrap
+    workers

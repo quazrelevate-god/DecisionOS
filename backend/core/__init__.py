@@ -26,6 +26,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 # public surface of `core` unchanged for every existing consumer.
 from config import (  # noqa: F401 — re-exports
     MONGO_URL, DB_NAME,
+    ROOT_DIR, UPLOAD_DIR,  # E8 S8: single source for the legacy upload path
     JWT_SECRET, JWT_ALGORITHM,
     PLATFORM_ADMIN_JWT_SECRET, AUTH_RETURN_TOKEN, SUPERADMIN_ALLOW_HASH_REFRESH,
     AUTH_COOKIE_NAME, AUTH_COOKIE_MAX_AGE, ADMIN_COOKIE_NAME,
@@ -78,7 +79,8 @@ from core.security import (  # noqa: F401,E402
     bearer_scheme, _mint_csrf_token, set_csrf_cookie, clear_csrf_cookie,
     set_auth_cookie, clear_auth_cookie, login_response,
     create_admin_token, set_admin_cookie, clear_admin_cookie, get_platform_admin,
-    hash_password, verify_password, create_token,
+    require_admin_role, ADMIN_ROLES,
+    hash_password, verify_password, create_token, create_impersonation_token,
 )
 # --- Access permissions moved to core/permissions.py (Epic 8 Sprint 2) -----
 # Pure resolution logic. Re-exported so require_perm (below) and external

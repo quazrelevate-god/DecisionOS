@@ -11,17 +11,15 @@ No auth required — these run BEFORE the account exists. Inputs are length-capp
 """
 import os
 import re
-from typing import List, Optional
 
 import httpx
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
-from pydantic import BaseModel, Field
 from core import model_for
 from prompts import render
 from emergentintegrations.llm.chat import UserMessage
 
 from core import (
-    db, claude_chat, LLM_MODEL, _extract_json, new_id, now_iso, logger,
+    db, claude_chat, _extract_json, new_id, now_iso, logger,
     normalize_os_blueprint, get_ai_key,
 )
 # FIX-004-A (RBAC-03): rate-limit + SSRF guard for unauth AI endpoints.

@@ -20,22 +20,18 @@ so the router can never leak content the caller shouldn't see.
 """
 import asyncio
 import io
-import re
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
 from emergentintegrations.llm.chat import UserMessage
 
 from services import obj_store
 from services.ai import brain_context
 from services.ai import brain_rbac
 from core import (
-    db, claude_chat, LLM_MODEL, _extract_json, new_id, now_iso, logger,
+    db, claude_chat, _extract_json, new_id, now_iso, logger,
     get_current_user, user_perms,
 )
-from routers.brain_docs import _visibility_filter as _docs_visibility_filter
-from routers.brain_docs import _keywords as _docs_keywords
 from core import model_for
 from prompts import render
 
@@ -211,17 +207,24 @@ async def _tool_mongo_query(query: str, user: dict) -> dict:
         return {"tool": "mongo_query", "query": query, "error": "analytics engine unavailable"}
 
 
+# Central agent-tool registry (Epic 1 S4-07) -- mirrors brain.py's _COMPUTE_HANDLERS.
+# Each entry maps a tool name to an adapter that unpacks the pick dict into the
+# handler's args. Add a new agent tool by defining `_tool_<name>` above and adding
+# one line here -- no edits to the dispatcher below.
+_TOOL_HANDLERS = {
+    "metadata_search": lambda t, u: _tool_metadata_search(t["query"], u),
+    "knowledge_lookup": lambda t, u: _tool_knowledge_lookup(t["query"], u),
+    "file_open": lambda t, u: _tool_file_open(t.get("doc_id"), t["query"], u),
+    "mongo_query": lambda t, u: _tool_mongo_query(t["query"], u),
+}
+
+
 async def _run_tools(picks: List[dict], user: dict) -> List[dict]:
     async def run(t):
-        if t["name"] == "metadata_search":
-            return await _tool_metadata_search(t["query"], user)
-        if t["name"] == "knowledge_lookup":
-            return await _tool_knowledge_lookup(t["query"], user)
-        if t["name"] == "file_open":
-            return await _tool_file_open(t.get("doc_id"), t["query"], user)
-        if t["name"] == "mongo_query":
-            return await _tool_mongo_query(t["query"], user)
-        return {"tool": t["name"], "error": "unknown tool"}
+        handler = _TOOL_HANDLERS.get(t["name"])
+        if handler is None:
+            return {"tool": t["name"], "error": "unknown tool"}
+        return await handler(t, user)
     return list(await asyncio.gather(*(run(t) for t in picks), return_exceptions=False))
 
 

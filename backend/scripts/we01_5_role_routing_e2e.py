@@ -26,8 +26,7 @@ from typing import Optional
 from core import db
 from services.workflows import stage_owned_by
 from services.workflow_engine import (
-    advance, check_stage_ready, on_stage_enter,
-    record_stage_approval, WorkflowAdvanceError,
+    advance, check_stage_ready, record_stage_approval, WorkflowAdvanceError,
 )
 
 

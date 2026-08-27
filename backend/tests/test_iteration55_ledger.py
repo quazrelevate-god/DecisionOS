@@ -363,7 +363,7 @@ class TestBrainSync:
         # memory row for manual expense (write_brain=True)
         mem = body["memory"]
         assert any(uniq in (m.get("text") or "") for m in mem), \
-            f"memory row not written for manual expense — write_brain=True path broken"
+            "memory row not written for manual expense — write_brain=True path broken"
 
     def test_manual_asset_and_inventory_in_brain_search(self, owner_tok):
         h = _h(owner_tok)

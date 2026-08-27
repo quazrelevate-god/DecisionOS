@@ -8,7 +8,7 @@ Depends on core + services.obj_store + services.vision.
 from fastapi import HTTPException
 from emergentintegrations.llm.chat import UserMessage
 
-from core import db, logger, new_id, now_iso, claude_chat, LLM_MODEL, _extract_json
+from core import db, logger, new_id, now_iso, claude_chat, _extract_json
 from services import obj_store
 from services.vision import ai_read_image_general
 from core import model_for
@@ -57,11 +57,12 @@ async def _analyze_reference_file(tenant_id, task_id, rec):
         if not (ctype.startswith("image/") or ctype == "application/pdf"):
             return  # Phase 1: analyse images & PDFs only
         data, _ = await obj_store.get_object(rec["storage_path"])
-        import tempfile, os as _os
+        import tempfile
+        import os as _os
         ext = rec.get("original_filename", "f.bin").rsplit(".", 1)[-1]
         tmp = _os.path.join(tempfile.gettempdir(), f"ref_{rec['id']}.{ext}")
-        with open(tmp, "wb") as f:
-            f.write(data)
+        from services.uploads import awrite_bytes
+        await awrite_bytes(tmp, data)
         raw = await ai_read_image_general(tmp, ctype, session_id=f"ref-{task_id}")
         try:
             _os.remove(tmp)
@@ -107,11 +108,12 @@ async def _read_reference_text(rec: dict, tenant_id: str = "", max_chars: int = 
     try:
         # Images & PDFs -> general vision reader (business cards, lists, notes, invoices — anything).
         if ctype.startswith("image/") or ctype == "application/pdf":
-            import tempfile, os as _os
+            import tempfile
+            import os as _os
             ext = fname.rsplit(".", 1)[-1] if "." in fname else "bin"
             tmp = _os.path.join(tempfile.gettempdir(), f"capref_{rec['id']}.{ext}")
-            with open(tmp, "wb") as f:
-                f.write(data)
+            from services.uploads import awrite_bytes
+            await awrite_bytes(tmp, data)
             try:
                 text = await ai_read_image_general(tmp, ctype, session_id=f"capref-{tenant_id}")
             finally:
@@ -120,16 +122,19 @@ async def _read_reference_text(rec: dict, tenant_id: str = "", max_chars: int = 
             return f"[{fname}]\n" + (text or "")
         # Excel / CSV -> parse to a compact text table.
         if ctype in ("text/csv",) or fname.lower().endswith(".csv"):
-            import pandas as pd, io as _io
+            import pandas as pd
+            import io as _io
             df = pd.read_csv(_io.BytesIO(data), nrows=200)
             return f"[{fname}]\n" + df.to_csv(index=False)[:max_chars]
         if fname.lower().endswith((".xlsx", ".xls")) or "spreadsheet" in ctype or "excel" in ctype:
-            import pandas as pd, io as _io
+            import pandas as pd
+            import io as _io
             df = pd.read_excel(_io.BytesIO(data), nrows=200)
             return f"[{fname}]\n" + df.to_csv(index=False)[:max_chars]
         # Word.
         if fname.lower().endswith(".docx") or "wordprocessingml" in ctype:
-            import docx, io as _io
+            import docx
+            import io as _io
             doc = docx.Document(_io.BytesIO(data))
             text = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
             return f"[{fname}]\n" + text[:max_chars]

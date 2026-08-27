@@ -11,10 +11,8 @@ Server-local helpers (`ai_generate_lexicon`, `normalize_os_blueprint`,
 inside each handler to avoid the circular import between `server.py` and
 its own routers.
 """
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from pydantic import BaseModel, EmailStr, Field
 
 from core import (
     db, get_current_user, hash_password, verify_password, create_token,
@@ -123,7 +121,7 @@ async def register(inp: RegisterInput, request: Request, response: Response):
         )
 
     # Deferred to break the server.py ↔ routers/auth.py cycle.
-    from server import normalize_os_blueprint
+    from core import normalize_os_blueprint
     from core import DEFAULT_ROLES
     # FIX-001-D imports — status-aware AI + draft merge/complete
     from services.ai import ai_setup as ai_setup_svc
@@ -346,7 +344,7 @@ async def register(inp: RegisterInput, request: Request, response: Response):
     # (POST /auth/email/send-verification).
     try:
         from services.auth import auth_emails
-        from server import send_email
+        from services.email import send_email
         _row = await auth_emails.issue(
             db, kind=auth_emails.KIND_EMAIL_VERIFY,
             user_id=user_id, tenant_id=tenant_id, email=email,
@@ -771,9 +769,7 @@ async def logout(request: Request, response: Response):
 @router.get("/me")
 async def me(user: dict = Depends(get_current_user)):
     # Deferred so this router doesn't import server.py at module load.
-    from server import (
-        ai_generate_lexicon, ai_generate_finance_categories, backfill_operating_model,
-    )
+    from services.ai.generators import ai_generate_finance_categories, ai_generate_lexicon, backfill_operating_model
 
     tenant = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0})
     if tenant and not tenant.get("lexicon"):
@@ -854,7 +850,7 @@ async def send_verification_email(user: dict = Depends(get_current_user)):
     the current user. Idempotent — hitting this twice in the cooldown
     window returns the same token and does NOT re-send."""
     from services.auth import auth_emails
-    from server import send_email  # deferred: server.py owns the SMTP helper
+    from services.email import send_email
     email = (user.get("email") or "").strip().lower()
     if not email:
         raise HTTPException(status_code=400, detail="No email on file for this account")
@@ -900,7 +896,7 @@ async def password_forgot(inp: PasswordForgotInput):
     sent a reset link" message.
     """
     from services.auth import auth_emails
-    from server import send_email
+    from services.email import send_email
     email = inp.email.lower().strip()
     # Same response shape regardless of what we find below.
     canonical_response = {"ok": True,

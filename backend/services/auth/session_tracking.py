@@ -86,7 +86,6 @@ async def record_session(
     if not jti or not user_id:
         return
     exp_dt = _to_datetime(exp) or (_now() + timedelta(days=7))
-    now_dt = _now()
     # Cap UA at 500 chars — same rationale as audit_log.record.
     if ua and len(ua) > 500:
         ua = ua[:500]

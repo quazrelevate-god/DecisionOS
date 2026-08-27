@@ -30,6 +30,7 @@ import { PillNav } from "./karma";
 import { KarmaLogo } from "./karma/Logo";
 import { CommandDialog, CommandInput, CommandList, CommandEmpty, CommandItem } from "./ui/command";
 import { ProfileDialog } from "./ProfileDialog";
+import AnnouncementBanner from "./AnnouncementBanner";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { WelcomeOverlay } from "./WelcomeOverlay";
 // MPWA-03: mobile navigation is the floating dock + All Apps panel. The
@@ -505,7 +506,10 @@ export default function Layout({ children }) {
             main's scrollport — which never scrolls, because the DOCUMENT does
             — so sticky quietly did nothing app-wide. `clip` crops the same
             pixels without creating a scroll container, so sticky works. */}
-        <main ref={mainRef} className="flex-1 p-4 lg:p-8 pb-dock lg:pb-8 px-gutter-safe overflow-x-clip app-canvas">{children}</main>
+        <main ref={mainRef} className="flex-1 pb-dock lg:pb-8 overflow-x-clip app-canvas">
+          <AnnouncementBanner />
+          <div className="p-4 lg:p-8 px-gutter-safe">{children}</div>
+        </main>
       </div>
 
       {/* MPWA-03 — mobile navigation.

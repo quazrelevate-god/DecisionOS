@@ -34,7 +34,7 @@ async def tenant_procurement_pipeline(tenant_id: str) -> Optional[dict]:
     The returned dict is the pipeline entry from the tenant's operating
     model: `{key, label, sub?, stages: [{key,label}, ...], approval_stage}`.
     """
-    from server import tenant_operating_model  # deferred: no import-time cycle
+    from services.ai.generators import tenant_operating_model
     om = await tenant_operating_model(tenant_id)
     pipelines = (om or {}).get("pipelines") or []
     for p in pipelines:
@@ -124,7 +124,7 @@ async def tenant_terminal_stages(tenant_id: str,
     """Same as `all_terminal_stages` but resolves the tenant's operating
     model from the DB first. The natural call-site helper for dashboard
     counters (`{"stage": {"$nin": await tenant_terminal_stages(tid)}}`)."""
-    from server import tenant_operating_model  # deferred: avoid import cycle
+    from services.ai.generators import tenant_operating_model
     om = await tenant_operating_model(tenant_id)
     return all_terminal_stages(om, include_legacy=include_legacy)
 

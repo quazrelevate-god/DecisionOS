@@ -18,7 +18,7 @@ from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithM
 import time
 from core import (
     db, logger, new_id, now_iso, tenant_role_keys,
-    claude_chat, LLM_MODEL, _extract_json, _est_tokens, log_usage,
+    claude_chat, _extract_json, _est_tokens, log_usage,
     EMERGENT_LLM_KEY, VISION_MODEL, record_ai_call,
 )
 from services.vision import get_gemini_client, _gemini_doc_sync
@@ -246,7 +246,7 @@ def _has_unclassified_purchase(records: dict, doc_type: str = "") -> bool:
 
 async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, ingestion_id: str, source: str) -> dict:
     from routers.ledger import create_expense, create_asset, create_inventory, guess_asset_category
-    from server import CONTACT_TYPES  # shared constant; stays in server
+    from models.contacts import CONTACT_TYPES
     # Validate BEFORE writing anything — an unclassified purchase must be classified first,
     # otherwise we'd leave orphaned contacts committed before the 400 fires.
     if _has_unclassified_purchase(records):

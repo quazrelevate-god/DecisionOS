@@ -3,15 +3,12 @@
 Foundation (db, LLM config, auth deps, helpers) comes from `core` — this module
 does NOT import from `server`, so there is no circular dependency.
 """
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+from emergentintegrations.llm.chat import UserMessage
 
 from core import (
-    db, EMERGENT_LLM_KEY, CLAUDE_KEY, claude_key, claude_chat, LLM_MODEL,
-    _extract_json, new_id, now_iso, logger, DEFAULT_ROLES,
+    db, claude_chat, _extract_json, new_id, now_iso, logger, DEFAULT_ROLES,
     normalize_os_blueprint, require_perm, require_role, log_activity,
     get_current_user,
 )

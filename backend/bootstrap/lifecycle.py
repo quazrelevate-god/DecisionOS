@@ -9,6 +9,7 @@ fire-and-forget so uvicorn can bind the port and answer /health immediately
 shutdown hooks: it launches _bootstrap + the follow-up scheduler on entry and
 closes the Mongo client on exit. server.py passes it to FastAPI(lifespan=...).
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -19,7 +20,9 @@ from services import obj_store
 from models.workflows import WORKFLOW_OWNER_ROLE
 from bootstrap.seed import seed_demo, fixup_demo_tenant, write_test_credentials
 from bootstrap.migrations import (
-    migrate_tenants, migrate_local_disk_uploads_to_obj_store, seed_platform_admin,
+    migrate_tenants,
+    migrate_local_disk_uploads_to_obj_store,
+    seed_platform_admin,
 )
 from workers.schedulers import _followup_scheduler_loop
 
@@ -38,6 +41,7 @@ async def _bootstrap():
     # missing membership rows, tenants missing plan field, tenants
     # still holding the old 'production' role key.
     from services.migrations import apply_migration as _apply_migration  # noqa: F401
+
     try:
         # Core tenant-scoped indexes (P0 for multi-tenant scale — every read
         # of these collections filters by tenant_id, so unindexed = full scans).
@@ -50,7 +54,8 @@ async def _bootstrap():
         # removes stale rows for hygiene.
         try:
             await db.scheduler_locks.create_index(
-                "expires_at", expireAfterSeconds=0,
+                "expires_at",
+                expireAfterSeconds=0,
                 name="scheduler_locks_expires_at_ttl",
             )
         except Exception as e:
@@ -85,7 +90,8 @@ async def _bootstrap():
         #   * list memberships for a tenant (GET /users, admin views)
         try:
             await db.memberships.create_index(
-                [("user_id", 1), ("tenant_id", 1)], unique=True,
+                [("user_id", 1), ("tenant_id", 1)],
+                unique=True,
                 name="memberships_user_tenant_unique",
             )
         except Exception as e:
@@ -112,7 +118,8 @@ async def _bootstrap():
             # duplicate + double-upgrade a plan. Belt (unique index)
             # AND braces (DuplicateKeyError catch at insert site).
             await db.billing_events.create_index(
-                "idempotency_key", unique=True,
+                "idempotency_key",
+                unique=True,
                 name="billing_events_idempotency_key_unique",
             )
             # crm_activities: tenant+contact+created for the
@@ -145,11 +152,11 @@ async def _bootstrap():
                 STATUS_ACTIVE as _ACTIVE,
                 STATUS_SUSPENDED as _SUSP,
             )
+
             scanned = created = 0
             async for u in _db.users.find(
                 {"tenant_id": {"$type": "string", "$gt": ""}},
-                {"_id": 0, "id": 1, "tenant_id": 1, "role": 1,
-                 "permissions": 1, "suspended": 1},
+                {"_id": 0, "id": 1, "tenant_id": 1, "role": 1, "permissions": 1, "suspended": 1},
             ):
                 scanned += 1
                 if not u.get("id") or not u.get("tenant_id"):
@@ -158,22 +165,28 @@ async def _bootstrap():
                     continue
                 status = _SUSP if u.get("suspended") else _ACTIVE
                 await _cm(
-                    _db, user_id=u["id"], tenant_id=u["tenant_id"],
+                    _db,
+                    user_id=u["id"],
+                    tenant_id=u["tenant_id"],
                     role=u.get("role") or "sales",
                     permissions=u.get("permissions") or [],
                     status=status,
                 )
                 created += 1
             logger.info(f"[FIX-004-B] backfill_memberships: scanned={scanned} created={created}")
+
         try:
             _mres = await _apply_migration(
-                db, "backfill_memberships_v1", _backfill_memberships,
+                db,
+                "backfill_memberships_v1",
+                _backfill_memberships,
                 description="FIX-004-B: create memberships rows for legacy user.tenant_id 1:1 model",
             )
             if _mres == "applied":
                 logger.info("Migration applied: backfill_memberships_v1")
         except Exception as e:
             logger.exception(f"backfill_memberships migration: {e}")  # S5-05: surface tracebacks
+
         # FIX-005-A (S3-02): backfill plan fields on existing tenants
         # that predate the plan model. Every legacy tenant gets
         # plan=grandfathered (unlimited seats + quotas, feature-flag
@@ -183,27 +196,35 @@ async def _bootstrap():
         # routers/auth.register.
         async def _backfill_grandfathered_plans(_db):
             from services.plans import PLAN_GRANDFATHERED
+
             _res = await _db.tenants.update_many(
                 {"plan": {"$exists": False}},
-                {"$set": {"plan": PLAN_GRANDFATHERED,
-                          "seat_limit_override": None,
-                          "usage_quotas": {},
-                          "feature_flags": {},
-                          "updated_at": now_iso()}},
+                {
+                    "$set": {
+                        "plan": PLAN_GRANDFATHERED,
+                        "seat_limit_override": None,
+                        "usage_quotas": {},
+                        "feature_flags": {},
+                        "updated_at": now_iso(),
+                    }
+                },
             )
             logger.info(
-                f"[FIX-005-A] backfill_grandfathered_plans: "
-                f"tenants marked={getattr(_res, 'modified_count', 0)}"
+                f"[FIX-005-A] backfill_grandfathered_plans: " f"tenants marked={getattr(_res, 'modified_count', 0)}"
             )
+
         try:
             _pres = await _apply_migration(
-                db, "backfill_grandfathered_plans_v1", _backfill_grandfathered_plans,
+                db,
+                "backfill_grandfathered_plans_v1",
+                _backfill_grandfathered_plans,
                 description="FIX-005-A (S3-02): mark pre-plan tenants as grandfathered",
             )
             if _pres == "applied":
                 logger.info("Migration applied: backfill_grandfathered_plans_v1")
         except Exception as e:
             logger.exception(f"backfill_grandfathered_plans migration: {e}")  # S5-05
+
         # FIX-004-D (RBAC-16): canonical role rename production -> operations.
         # Prior code had config.ROLES with 'production' but
         # config.DEFAULT_ROLES with 'operations' — silent inconsistency
@@ -214,43 +235,51 @@ async def _bootstrap():
             renamed_tenants = renamed_users = renamed_memberships = 0
             # 1. Tenants: rewrite the tenant.roles[] array entries.
             async for _t in _db.tenants.find(
-                {"roles.key": "production"}, {"_id": 0, "id": 1, "roles": 1},
+                {"roles.key": "production"},
+                {"_id": 0, "id": 1, "roles": 1},
             ):
                 new_roles = []
                 changed = False
-                for _r in (_t.get("roles") or []):
+                for _r in _t.get("roles") or []:
                     if _r.get("key") == "production":
                         _r = {**_r, "key": "operations"}
                         changed = True
                     new_roles.append(_r)
                 if changed:
                     await _db.tenants.update_one(
-                        {"id": _t["id"]}, {"$set": {"roles": new_roles}},
+                        {"id": _t["id"]},
+                        {"$set": {"roles": new_roles}},
                     )
                     renamed_tenants += 1
             # 2. Legacy users.role (compat until pre-membership sites migrated).
             _ures = await _db.users.update_many(
-                {"role": "production"}, {"$set": {"role": "operations"}},
+                {"role": "production"},
+                {"$set": {"role": "operations"}},
             )
             renamed_users = getattr(_ures, "modified_count", 0)
             # 3. Memberships — the authoritative source post-Wave-2.
             _mres = await _db.memberships.update_many(
-                {"role": "production"}, {"$set": {"role": "operations"}},
+                {"role": "production"},
+                {"$set": {"role": "operations"}},
             )
             renamed_memberships = getattr(_mres, "modified_count", 0)
             logger.info(
                 f"[FIX-004-D] rename_production_to_operations: "
                 f"tenants={renamed_tenants} users={renamed_users} memberships={renamed_memberships}"
             )
+
         try:
             _rres = await _apply_migration(
-                db, "rename_production_role_v1", _rename_production_to_operations,
+                db,
+                "rename_production_role_v1",
+                _rename_production_to_operations,
                 description="FIX-004-D: canonicalize role key 'production' -> 'operations'",
             )
             if _rres == "applied":
                 logger.info("Migration applied: rename_production_role_v1")
         except Exception as e:
             logger.exception(f"rename_production_role migration: {e}")  # S5-05
+
         # WE-03 (2026-08-16): stage objects extend. Existing tenant
         # operating_model.pipelines[].stages[] entries only carry
         # {key,label}. This migration re-runs normalize_operating_model
@@ -261,6 +290,7 @@ async def _bootstrap():
         # "no gate required". Backward-compatible by construction.
         async def _stage_objects_extend(_db):
             from core import normalize_operating_model
+
             scanned = touched = 0
             async for _t in _db.tenants.find(
                 {"operating_model": {"$exists": True}},
@@ -273,12 +303,14 @@ async def _bootstrap():
                 # one of the three new fields. Skips the write for
                 # tenants who were already on the new shape.
                 needs = False
-                for _p in (om_in.get("pipelines") or []):
-                    for _s in (_p.get("stages") or []):
+                for _p in om_in.get("pipelines") or []:
+                    for _s in _p.get("stages") or []:
                         if not isinstance(_s, dict):
-                            needs = True; break
+                            needs = True
+                            break
                         if "tasks" not in _s or "approval" not in _s or "side_effects" not in _s:
-                            needs = True; break
+                            needs = True
+                            break
                     if needs:
                         break
                 if not needs:
@@ -288,18 +320,20 @@ async def _bootstrap():
                     {"$set": {"operating_model": om_out, "updated_at": now_iso()}},
                 )
                 touched += 1
-            logger.info(
-                f"[WE-03] stage_objects_extend: scanned={scanned} touched={touched}"
-            )
+            logger.info(f"[WE-03] stage_objects_extend: scanned={scanned} touched={touched}")
+
         try:
             _sres = await _apply_migration(
-                db, "stage_objects_extend_v1", _stage_objects_extend,
+                db,
+                "stage_objects_extend_v1",
+                _stage_objects_extend,
                 description="WE-03: add tasks[]/approval/side_effects[] to every pipeline stage (empty defaults preserve behaviour)",
             )
             if _sres == "applied":
                 logger.info("Migration applied: stage_objects_extend_v1")
         except Exception as e:
             logger.exception(f"stage_objects_extend migration: {e}")  # WE-03
+
         # WE-01 (2026-08-16): task -> workflow linkage backfill.
         # Every task with a decision_id gets workflow_id set to the
         # matching workflow (looked up by shared decision_id, tenant-
@@ -311,17 +345,18 @@ async def _bootstrap():
         # match filter excludes tasks that already have workflow_id.
         async def _backfill_task_workflow_link(_db):
             from services.workflows import stage_key_for_backfill
+
             scanned = matched = 0
             async for _tsk in _db.tasks.find(
-                {"decision_id": {"$exists": True, "$nin": [None, ""]},
-                 "$or": [{"workflow_id": {"$exists": False}},
-                         {"workflow_id": {"$in": [None, ""]}}]},
+                {
+                    "decision_id": {"$exists": True, "$nin": [None, ""]},
+                    "$or": [{"workflow_id": {"$exists": False}}, {"workflow_id": {"$in": [None, ""]}}],
+                },
                 {"_id": 0, "id": 1, "tenant_id": 1, "decision_id": 1},
             ):
                 scanned += 1
                 _wfs = await _db.workflows.find(
-                    {"tenant_id": _tsk["tenant_id"],
-                     "decision_id": _tsk["decision_id"]},
+                    {"tenant_id": _tsk["tenant_id"], "decision_id": _tsk["decision_id"]},
                     {"_id": 0, "id": 1, "stages": 1},
                 ).to_list(2)
                 if len(_wfs) != 1:
@@ -330,23 +365,23 @@ async def _bootstrap():
                 _stage_key = stage_key_for_backfill(_wf)
                 await _db.tasks.update_one(
                     {"id": _tsk["id"]},
-                    {"$set": {"workflow_id": _wf["id"],
-                              "stage_key": _stage_key}},
+                    {"$set": {"workflow_id": _wf["id"], "stage_key": _stage_key}},
                 )
                 matched += 1
-            logger.info(
-                f"[WE-01] backfill_task_workflow_link: "
-                f"scanned={scanned} matched={matched}"
-            )
+            logger.info(f"[WE-01] backfill_task_workflow_link: " f"scanned={scanned} matched={matched}")
+
         try:
             _bwlres = await _apply_migration(
-                db, "backfill_task_workflow_link_v1", _backfill_task_workflow_link,
+                db,
+                "backfill_task_workflow_link_v1",
+                _backfill_task_workflow_link,
                 description="WE-01: link tasks to workflows via shared decision_id (initial stage, tenant-scoped)",
             )
             if _bwlres == "applied":
                 logger.info("Migration applied: backfill_task_workflow_link_v1")
         except Exception as e:
             logger.exception(f"backfill_task_workflow_link migration: {e}")  # WE-01
+
         # WE-02 (2026-08-16): drop the two ghost collections that
         # confused Settings ("three cards, three shapes, one concept").
         # Nothing reads workflow_templates now that /tenant/os-blueprint
@@ -369,15 +404,19 @@ async def _bootstrap():
                 f"tenants.workflow_templates unset={getattr(_r1, 'modified_count', 0)} "
                 f"tenants.lexicon.workflows unset={getattr(_r2, 'modified_count', 0)}"
             )
+
         try:
             _dres = await _apply_migration(
-                db, "drop_ghost_workflow_collections_v1", _drop_ghost_workflow_collections,
+                db,
+                "drop_ghost_workflow_collections_v1",
+                _drop_ghost_workflow_collections,
                 description="WE-02: $unset tenant.workflow_templates and tenant.lexicon.workflows (dead outputs)",
             )
             if _dres == "applied":
                 logger.info("Migration applied: drop_ghost_workflow_collections_v1")
         except Exception as e:
             logger.exception(f"drop_ghost_workflow_collections migration: {e}")  # WE-02
+
         # WE-08 (2026-08-16): the FIX-001-B behaviour that used to be
         # hardcoded in the advance endpoint (procurement -> Finance
         # auto-expense) is now a `create_expense` side-effect bound to
@@ -398,11 +437,10 @@ async def _bootstrap():
                 scanned += 1
                 om = _t.get("operating_model") or {}
                 changed = False
-                for _p in (om.get("pipelines") or []):
+                for _p in om.get("pipelines") or []:
                     # Identify procurement: pipelines with an
                     # approval_stage, plus the legacy purchase_payment key.
-                    if not (_p.get("approval_stage") or
-                            _p.get("key") == "purchase_payment"):
+                    if not (_p.get("approval_stage") or _p.get("key") == "purchase_payment"):
                         continue
                     _stages = _p.get("stages") or []
                     if not _stages:
@@ -413,25 +451,25 @@ async def _bootstrap():
                     _ses = _term.setdefault("side_effects", [])
                     if any((_se or {}).get("kind") == "create_expense" for _se in _ses):
                         continue
-                    _ses.append({
-                        "kind": "create_expense",
-                        "params": {"status": "awaiting_bill"},
-                    })
+                    _ses.append(
+                        {
+                            "kind": "create_expense",
+                            "params": {"status": "awaiting_bill"},
+                        }
+                    )
                     changed = True
                 if changed:
                     await _db.tenants.update_one(
                         {"id": _t["id"]},
-                        {"$set": {"operating_model": om,
-                                  "updated_at": now_iso()}},
+                        {"$set": {"operating_model": om, "updated_at": now_iso()}},
                     )
                     touched += 1
-            logger.info(
-                f"[WE-08] backfill_procurement_side_effect: "
-                f"scanned={scanned} touched={touched}"
-            )
+            logger.info(f"[WE-08] backfill_procurement_side_effect: " f"scanned={scanned} touched={touched}")
+
         try:
             _pres = await _apply_migration(
-                db, "backfill_procurement_side_effect_v1",
+                db,
+                "backfill_procurement_side_effect_v1",
                 _backfill_procurement_side_effect,
                 description="WE-08: bind create_expense side-effect to procurement terminal stage",
             )
@@ -439,6 +477,7 @@ async def _bootstrap():
                 logger.info("Migration applied: backfill_procurement_side_effect_v1")
         except Exception as e:
             logger.exception(f"backfill_procurement_side_effect migration: {e}")  # WE-08
+
         # WE-09 (2026-08-16): stage_version = optimistic-lock counter for
         # engine.advance's find_one_and_update CAS. Backfill every
         # existing workflow to stage_version=0 so the first engine
@@ -448,19 +487,20 @@ async def _bootstrap():
                 {"stage_version": {"$exists": False}},
                 {"$set": {"stage_version": 0}},
             )
-            logger.info(
-                f"[WE-09] backfill_stage_version: "
-                f"workflows initialised={getattr(_r, 'modified_count', 0)}"
-            )
+            logger.info(f"[WE-09] backfill_stage_version: " f"workflows initialised={getattr(_r, 'modified_count', 0)}")
+
         try:
             _svres = await _apply_migration(
-                db, "backfill_stage_version_v1", _backfill_stage_version,
+                db,
+                "backfill_stage_version_v1",
+                _backfill_stage_version,
                 description="WE-09: initialise workflows.stage_version=0 for optimistic-lock CAS",
             )
             if _svres == "applied":
                 logger.info("Migration applied: backfill_stage_version_v1")
         except Exception as e:
             logger.exception(f"backfill_stage_version migration: {e}")  # WE-09
+
         # WE-01.5 (2026-08-16): backfill stage.role for existing
         # tenants. The AI didn't emit it before, so we derive it from
         # (a) stage.tasks[0].role if a template task exists there, or
@@ -478,10 +518,10 @@ async def _bootstrap():
                 scanned += 1
                 om = _t.get("operating_model") or {}
                 changed = False
-                for _p in (om.get("pipelines") or []):
+                for _p in om.get("pipelines") or []:
                     _p_key = _p.get("key")
                     _legacy = WORKFLOW_OWNER_ROLE.get(_p_key) or {}
-                    for _s in (_p.get("stages") or []):
+                    for _s in _p.get("stages") or []:
                         if not isinstance(_s, dict):
                             continue
                         if _s.get("role"):
@@ -489,7 +529,7 @@ async def _bootstrap():
                         _stage_key = _s.get("key")
                         # (a) derive from first template task's role
                         _from_task = None
-                        for _tk in (_s.get("tasks") or []):
+                        for _tk in _s.get("tasks") or []:
                             if _tk.get("role"):
                                 _from_task = _tk["role"]
                                 break
@@ -502,16 +542,16 @@ async def _bootstrap():
                 if changed:
                     await _db.tenants.update_one(
                         {"id": _t["id"]},
-                        {"$set": {"operating_model": om,
-                                  "updated_at": now_iso()}},
+                        {"$set": {"operating_model": om, "updated_at": now_iso()}},
                     )
                     touched += 1
-            logger.info(
-                f"[WE-01.5] backfill_stage_role: scanned={scanned} touched={touched}"
-            )
+            logger.info(f"[WE-01.5] backfill_stage_role: scanned={scanned} touched={touched}")
+
         try:
             _srres = await _apply_migration(
-                db, "backfill_stage_role_v1", _backfill_stage_role,
+                db,
+                "backfill_stage_role_v1",
+                _backfill_stage_role,
                 description="WE-01.5: derive stage.role from tasks[0].role or WORKFLOW_OWNER_ROLE legacy map",
             )
             if _srres == "applied":
@@ -529,8 +569,7 @@ async def _bootstrap():
             await db.tasks.create_index(
                 [("tenant_id", 1), ("workflow_id", 1), ("stage_key", 1)],
                 name="tasks_tenant_workflow_stage",
-                partialFilterExpression={
-                    "workflow_id": {"$type": "string"}},
+                partialFilterExpression={"workflow_id": {"$type": "string"}},
             )
         except Exception as e:
             logger.warning(f"WE-01 tasks_tenant_workflow_stage index: {e}")
@@ -540,13 +579,13 @@ async def _bootstrap():
         # is queried on issue() to reuse an existing token within the
         # cooldown — add a compound index for that lookup too.
         try:
-            await db.auth_email_tokens.create_index("token", unique=True,
-                                                    name="auth_email_tokens_token_unique")
+            await db.auth_email_tokens.create_index("token", unique=True, name="auth_email_tokens_token_unique")
         except Exception as e:
             logger.warning(f"auth_email_tokens token index: {e}")
         try:
             await db.auth_email_tokens.create_index(
-                "expires_at", expireAfterSeconds=0,
+                "expires_at",
+                expireAfterSeconds=0,
                 name="auth_email_tokens_expires_at_ttl",
             )
         except Exception as e:
@@ -563,14 +602,17 @@ async def _bootstrap():
         # (find by jti). TTL on `exp` cleans up expired-token rows.
         try:
             await db.active_sessions.create_index(
-                "jti", unique=True, name="active_sessions_jti_unique",
+                "jti",
+                unique=True,
+                name="active_sessions_jti_unique",
             )
             await db.active_sessions.create_index(
                 [("user_id", 1), ("created_at", -1)],
                 name="active_sessions_user_created",
             )
             await db.active_sessions.create_index(
-                "exp", expireAfterSeconds=0,
+                "exp",
+                expireAfterSeconds=0,
                 name="active_sessions_exp_ttl",
             )
         except Exception as e:
@@ -582,13 +624,13 @@ async def _bootstrap():
         # have expired anyway — keeps the table bounded to (~= logouts
         # per 7-day window).
         try:
-            await db.revoked_tokens.create_index("jti", unique=True,
-                                                 name="revoked_tokens_jti_unique")
+            await db.revoked_tokens.create_index("jti", unique=True, name="revoked_tokens_jti_unique")
         except Exception as e:
             logger.warning(f"revoked_tokens jti index: {e}")
         try:
             await db.revoked_tokens.create_index(
-                "exp", expireAfterSeconds=0,
+                "exp",
+                expireAfterSeconds=0,
                 name="revoked_tokens_exp_ttl",
             )
         except Exception as e:
@@ -609,6 +651,7 @@ async def _bootstrap():
 
         async def _backfill_phone_norm(_db):
             from services.auth.phone import norm_phone as _np
+
             async for _u in _db.users.find(
                 {"phone": {"$type": "string", "$gt": ""}, "phone_norm": {"$exists": False}},
                 {"_id": 0, "id": 1, "phone": 1},
@@ -619,13 +662,16 @@ async def _bootstrap():
 
         try:
             _result = await _apply_migration(
-                db, "backfill_users_phone_norm_v1", _backfill_phone_norm,
+                db,
+                "backfill_users_phone_norm_v1",
+                _backfill_phone_norm,
                 description="FIX-002-A: compute phone_norm for pre-migration users",
             )
             if _result == "applied":
                 logger.info("Migration applied: backfill_users_phone_norm_v1")
         except Exception as e:
             logger.exception(f"phone_norm backfill migration: {e}")  # S5-05
+
         # FIX-003-A (S2-03): otp_codes are keyed by (phone, tenant_id) so
         # two tenants that share a phone can each hold their own live
         # OTP. The migration ledger call:
@@ -671,7 +717,9 @@ async def _bootstrap():
 
         try:
             _fix003_res = await _apply_migration(
-                db, "otp_codes_tenant_scope_v1", _prepare_otp_codes_tenant_scope,
+                db,
+                "otp_codes_tenant_scope_v1",
+                _prepare_otp_codes_tenant_scope,
                 description="FIX-003-A: drop legacy {phone:1} unique index and clear tenant-less otp_codes rows",
             )
             if _fix003_res == "applied":
@@ -713,13 +761,13 @@ async def _bootstrap():
             # qualified namespaces.
             src_ns = f"{DB_NAME}.brain_contexts"
             dst_ns = f"{DB_NAME}.brain_query_cache"
-            await client.admin.command(
-                {"renameCollection": src_ns, "to": dst_ns, "dropTarget": False}
-            )
+            await client.admin.command({"renameCollection": src_ns, "to": dst_ns, "dropTarget": False})
             logger.info("[S4-03] renamed brain_contexts → brain_query_cache")
+
         try:
             _s403_res = await _apply_migration(
-                db, "rename_brain_contexts_to_query_cache_v1",
+                db,
+                "rename_brain_contexts_to_query_cache_v1",
                 _rename_brain_contexts_to_query_cache,
                 description="FIX-007-A (S4-03): kill brain_contexts/brain_context name collision",
             )
@@ -745,16 +793,17 @@ async def _bootstrap():
                     if spec.get("default_language") == "none":
                         await _db[coll_name].drop_index(index_name)
                         logger.info(
-                            "[S4-01] dropped %s.%s (default_language=none) — "
-                            "will be recreated with english below",
-                            coll_name, index_name,
+                            "[S4-01] dropped %s.%s (default_language=none) — " "will be recreated with english below",
+                            coll_name,
+                            index_name,
                         )
                 except Exception as _e:
-                    logger.warning("[S4-01] %s.%s inspect/drop failed: %s",
-                                    coll_name, index_name, _e)
+                    logger.warning("[S4-01] %s.%s inspect/drop failed: %s", coll_name, index_name, _e)
+
         try:
             _s401_res = await _apply_migration(
-                db, "drop_none_language_text_indexes_v1",
+                db,
+                "drop_none_language_text_indexes_v1",
                 _drop_none_language_text_indexes,
                 description="FIX-007-A (S4-01): drop stale text indexes so english-stemmed ones can rebuild",
             )
@@ -841,6 +890,16 @@ async def _bootstrap():
         await db.payments.create_index([("tenant_id", 1), ("invoice_id", 1)])
         await db.expenses.create_index([("tenant_id", 1), ("date", -1)])
         await db.complaints.create_index([("tenant_id", 1), ("status", 1), ("created_at", -1)])
+        # S9 (U8-09.2): index gap-fill. These list endpoints filter by tenant_id
+        # and sort by created_at, but had no supporting index (workflows had only
+        # a bare tenant_id; expenses was indexed on `date` not `created_at`;
+        # assets/inventory had none) -- so each list was a tenant scan + in-memory
+        # sort. Adding (tenant_id, created_at) makes the sort index-backed.
+        await db.workflows.create_index([("tenant_id", 1), ("created_at", -1)])
+        await db.workflows.create_index([("tenant_id", 1), ("type", 1), ("stage", 1)])
+        await db.expenses.create_index([("tenant_id", 1), ("created_at", -1)])
+        await db.assets.create_index([("tenant_id", 1), ("created_at", -1)])
+        await db.inventory.create_index([("tenant_id", 1), ("created_at", -1)])
         await db.calendar_events.create_index([("tenant_id", 1), ("date", 1)])
         await db.meetings.create_index([("tenant_id", 1), ("created_at", -1)])
         await db.platform_audit.create_index([("admin_id", 1), ("created_at", -1)])
@@ -877,8 +936,13 @@ async def _bootstrap():
             logger.warning(f"brain_context text index: {e}")
         try:
             await db.brain_documents.create_index(
-                [("title", "text"), ("summary", "text"),
-                 ("original_filename", "text"), ("keywords", "text"), ("tags", "text")],
+                [
+                    ("title", "text"),
+                    ("summary", "text"),
+                    ("original_filename", "text"),
+                    ("keywords", "text"),
+                    ("tags", "text"),
+                ],
                 weights={"title": 8, "tags": 4, "keywords": 3, "summary": 2, "original_filename": 1},
                 name="brain_documents_text_v1",
                 default_language="english",
@@ -896,7 +960,8 @@ async def _bootstrap():
         # once instead of scanning every tenant on every boot.
         try:
             _tres = await _apply_migration(
-                db, "migrate_tenants_backfill_roles_v1",
+                db,
+                "migrate_tenants_backfill_roles_v1",
                 lambda _db: migrate_tenants(),
                 description="Backfill industry/roles/products on pre-onboarding tenants",
             )
@@ -909,7 +974,8 @@ async def _bootstrap():
         # storage_path. Runs exactly once via ledger; safe on second boot.
         try:
             _ures = await _apply_migration(
-                db, "migrate_local_disk_uploads_to_obj_store_v1",
+                db,
+                "migrate_local_disk_uploads_to_obj_store_v1",
                 migrate_local_disk_uploads_to_obj_store,
                 description="FIX-002-E: move voice_notes/meetings/ingestions/ledger files to obj_store",
             )
@@ -932,6 +998,9 @@ async def lifespan(app):
     asyncio.create_task(_bootstrap())
     # Timer-driven follow-up/escalation sweep (independent of user polling).
     asyncio.create_task(_followup_scheduler_loop())
+    # Epic 10 S6: apply runtime platform config (model routes, Sarvam) at boot.
+    from services.platform_config import load_all as _load_platform_config
+    asyncio.create_task(_load_platform_config())
     try:
         yield
     finally:

@@ -16,6 +16,24 @@ OPENAI_STT_MODEL = os.environ.get("OPENAI_STT_MODEL", "gpt-4o-transcribe").strip
 SARVAM_API_KEY = os.environ.get("SARVAM_API_KEY", "").strip()
 SARVAM_STT_MODEL = os.environ.get("SARVAM_STT_MODEL", "saaras:v3").strip() or "saaras:v3"
 
+# Runtime, DB-backed Sarvam overrides (Epic 10 S6 -- admin voice config). Populated
+# by services.platform_config from db.platform_config at boot + on write; empty means
+# use the env/default (model=SARVAM_STT_MODEL, mode='translate').
+_SARVAM_RUNTIME: dict = {}
+
+
+def set_sarvam_runtime(cfg: dict) -> None:
+    """Replace the in-process Sarvam STT override (called by services.platform_config)."""
+    global _SARVAM_RUNTIME
+    _SARVAM_RUNTIME = dict(cfg or {})
+
+
+def _sarvam_model_mode():
+    """(model, mode) for Sarvam STT -- admin override, else env model + 'translate'."""
+    return (_SARVAM_RUNTIME.get("model") or SARVAM_STT_MODEL,
+            _SARVAM_RUNTIME.get("mode") or "translate")
+
+
 _openai_stt_state = {"key": None, "client": None}
 
 
@@ -47,12 +65,13 @@ def sarvam_rest(path: str) -> dict:
     """Sarvam REST speech-to-text (saaras:v3): auto-detect language + translate to English.
     REST handles audio under ~30s; raises on error so the caller can fall back to batch/OpenAI."""
     import requests
+    _model, _mode = _sarvam_model_mode()
     with open(path, "rb") as f:
         r = requests.post(
             "https://api.sarvam.ai/speech-to-text",
             headers={"api-subscription-key": get_ai_key("sarvam")},
             files={"file": (os.path.basename(path), f, _sarvam_mime(path))},
-            data={"model": SARVAM_STT_MODEL, "mode": "translate", "language_code": "unknown"},
+            data={"model": _model, "mode": _mode, "language_code": "unknown"},
             timeout=90,
         )
     r.raise_for_status()
@@ -61,10 +80,13 @@ def sarvam_rest(path: str) -> dict:
 
 def sarvam_batch(path: str) -> dict:
     """Sarvam Batch STT (async job) for long recordings (>30s, up to 2h). Blocking — run in a thread."""
-    import tempfile, glob, json as _json
+    import tempfile
+    import glob
+    import json as _json
     from sarvamai import SarvamAI
     client = SarvamAI(api_subscription_key=get_ai_key("sarvam"))
-    job = client.speech_to_text_job.create_job(model=SARVAM_STT_MODEL, mode="translate", language_code="unknown")
+    _model, _mode = _sarvam_model_mode()
+    job = client.speech_to_text_job.create_job(model=_model, mode=_mode, language_code="unknown")
     job.upload_files(file_paths=[path])
     job.start()
     job.wait_until_complete(poll_interval=5, timeout=1500)

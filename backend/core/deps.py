@@ -6,6 +6,7 @@ session touch, membership projection, permission maps; require_role /
 require_perm gate endpoints; tenant_role_keys lists a tenant's role keys.
 core re-exports all four.
 """
+from datetime import datetime, timezone
 from typing import Optional
 
 import jwt
@@ -33,13 +34,28 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail="Session expired, please log in again")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
+    # Support impersonation (Epic 10 S2): an impersonation token carries an `imp`
+    # claim. Verify the impersonation_sessions record is still live and enforce
+    # read-only by blocking any mutating request. Session-based revocation replaces
+    # the jti check below (the `and not _imp` guard).
+    _imp = payload.get("imp")
+    if _imp:
+        _sess = await db.impersonation_sessions.find_one({"id": _imp.get("session_id")})
+        _now = datetime.now(timezone.utc).isoformat()
+        if (not _sess) or _sess.get("revoked") or (_sess.get("expires_at") or "") < _now:
+            raise HTTPException(status_code=401, detail="Impersonation session has ended")
+        if _imp.get("read_only", True) and request.method not in ("GET", "HEAD", "OPTIONS"):
+            raise HTTPException(
+                status_code=403,
+                detail="Read-only impersonation: writes are blocked. End impersonation to act as an admin.",
+            )
     # FIX-003-C (S2-06): revocation check. A user who hit /logout
     # invalidated their jti; the token is still cryptographically
     # valid until `exp`, but we must refuse to honor it. Deferred
     # import breaks the core.py <-> services cycle. See
     # services/session_revocation.py for the fail-open contract.
     jti = payload.get("jti")
-    if jti:
+    if jti and not _imp:
         from services.auth.session_revocation import is_revoked as _is_revoked
         if await _is_revoked(db, jti):
             raise HTTPException(status_code=401, detail="Session ended, please log in again")
@@ -56,6 +72,12 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail="User not found")
     if user.get("suspended") or user.get("tenant_suspended"):
         raise HTTPException(status_code=403, detail="Your account has been suspended. Contact your administrator.")
+    # Impersonation flags survive project_membership_onto_user (it copies the dict),
+    # so /me + audit + the app banner can see them on every downstream call site.
+    if _imp:
+        user["_impersonated_by"] = _imp.get("admin")
+        user["_impersonation_session"] = _imp.get("session_id")
+        user["_read_only"] = bool(_imp.get("read_only", True))
     # FIX-004-B (RBAC-13): resolve the current-tenant membership. The
     # JWT carries a `tenant_id` claim chosen at login (or via
     # /me/switch-workspace); we look up the corresponding membership

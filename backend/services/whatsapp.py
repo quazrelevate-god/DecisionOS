@@ -10,7 +10,7 @@ ingestion, transcription, notifications; nothing imports it back.
 import os
 import re
 
-from core import db, logger, new_id, now_iso, get_ai_key, set_usage_tenant, tenant_role_keys
+from core import db, logger, new_id, now_iso, set_usage_tenant, tenant_role_keys
 # Graph API transport moved to integrations/whatsapp.py (Epic 8 Sprint 6);
 # imported here + re-exported so `from services.whatsapp import wa_token, ...`
 # call sites (whatsapp router, captures, finance) keep working.
@@ -53,6 +53,17 @@ async def update_wa_event(ev_id: str, **fields):
 
 def _norm_phone(p: str) -> str:
     return re.sub(r"\D", "", p or "")[-10:]
+
+
+def _mask_phone(phone: str) -> str:
+    """Last-4-digits phone mask for display (e.g. "•••• 0001").
+
+    Sprint 10 (U8-10.3): consolidated here next to _norm_phone. routers/team.py
+    used to import this from server, which never actually re-exported it -- a
+    latent ImportError on the member-phone display path.
+    """
+    d = re.sub(r"\D", "", phone or "")
+    return ("•••• " + d[-4:]) if len(d) >= 4 else "••••"
 
 
 async def resolve_wa_tenant(sender: str):
@@ -204,7 +215,6 @@ async def process_whatsapp_message(message: dict):
             # the review UI can render it via the auth-gated /api/files
             # endpoint.
             from services.uploads import store_upload, download_to_temp
-            import tempfile
             stored = await store_upload(tenant_id, "ingestions", data, ext,
                                          content_type=mime, file_id=ing_id)
             fname = f"ingest_{ing_id}.{ext}"  # kept for capture_draft display

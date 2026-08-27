@@ -6,8 +6,7 @@ helpers (_resolve_leave_approver, _create_leave) stay in server.
 """
 from datetime import datetime, timezone, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends
 
 from core import db, get_current_user, require_perm, tenant_role_keys, user_perms
 

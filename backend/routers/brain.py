@@ -17,11 +17,10 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
 from emergentintegrations.llm.chat import UserMessage
 
 from core import (
-    db, claude_chat, LLM_MODEL, _extract_json, new_id, now_iso, logger,
+    db, claude_chat, _extract_json, new_id, now_iso, logger,
     require_perm, user_perms,
 )
 # FIX-007-C (S4-04): shared Brain retrieval so /ask + /brain/agent

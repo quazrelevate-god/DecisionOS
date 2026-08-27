@@ -141,7 +141,27 @@ async def get_platform_admin(
     admin = await db.platform_admins.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0})
     if not admin:
         raise HTTPException(status_code=401, detail="Admin not found")
+    # Epic 10 S7: admin RBAC. Existing admins (no role) are super_admin.
+    if admin.get("active") is False:
+        raise HTTPException(status_code=403, detail="This admin account has been deactivated")
+    admin["role"] = admin.get("role") or "super_admin"
+    # A read-only admin can view everything but change nothing.
+    if admin["role"] == "read_only" and request.method not in ("GET", "HEAD", "OPTIONS"):
+        raise HTTPException(status_code=403, detail="Read-only admin: this action is not permitted")
     return admin
+
+
+ADMIN_ROLES = ("super_admin", "support", "billing", "read_only")
+
+
+def require_admin_role(*roles: str):
+    """Dependency factory (Epic 10 S7): gate an admin route to specific admin roles.
+    super_admin is always allowed; read-only writes are already blocked upstream."""
+    async def _dep(admin: dict = Depends(get_platform_admin)) -> dict:
+        if admin.get("role") == "super_admin" or admin.get("role") in roles:
+            return admin
+        raise HTTPException(status_code=403, detail=f"Requires admin role: {', '.join(roles)}")
+    return _dep
 
 
 def hash_password(password: str) -> str:
@@ -165,5 +185,24 @@ def create_token(user_id: str, tenant_id: str, role: str) -> str:
         "sub": user_id, "tenant_id": tenant_id, "role": role,
         "jti": str(uuid.uuid4()),
         "exp": datetime.now(timezone.utc) + timedelta(days=7), "type": "access",
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+def create_impersonation_token(*, target_user_id: str, tenant_id: str, role: str,
+                               admin_email: str, session_id: str,
+                               read_only: bool = True, minutes: int = 30) -> str:
+    """Mint a short-lived, session-bound impersonation token (Epic 10 S2 -- support
+    'view as tenant'). It is an ordinary target-user JWT plus an `imp` claim; a
+    super-admin uses it to see the tenant's data. get_current_user verifies the
+    impersonation_sessions record is still live and blocks writes when read_only,
+    and stamps `_impersonated_by` on the user so the app can banner + audit.
+    """
+    payload = {
+        "sub": target_user_id, "tenant_id": tenant_id, "role": role,
+        "jti": str(uuid.uuid4()),
+        "imp": {"admin": admin_email, "session_id": session_id, "read_only": bool(read_only)},
+        "exp": datetime.now(timezone.utc) + timedelta(minutes=max(1, min(minutes, 240))),
+        "type": "impersonation",
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)

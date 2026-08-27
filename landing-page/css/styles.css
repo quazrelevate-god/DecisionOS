@@ -1352,12 +1352,7 @@ body.modal-open{ overflow:hidden; }
     transform:scale(calc(1 + var(--hp,0) * .07));
     will-change:filter, transform;
   }
-  .hero-copy{
-    opacity:calc(1 - var(--hp,0) * 1.4);
-    transform:translateY(calc(var(--hp,0) * -46px));
-    will-change:opacity, transform;
-  }
-  .scroll-cue{ opacity:calc(1 - var(--hp,0) * 3.5); }
+    .scroll-cue{ opacity:calc(1 - var(--hp,0) * 3.5); }
 }
 @media (prefers-reduced-motion: reduce){
   .hero{ position:static; }
@@ -1407,9 +1402,9 @@ body.modal-open{ overflow:hidden; }
    ============================================================ */
 .hero-grid{
   display:grid;
-  grid-template-columns:minmax(0,0.85fr) minmax(0,1.15fr);
-  gap:clamp(24px,4vw,56px);
-  align-items:start;
+  grid-template-columns:minmax(0,0.72fr) minmax(0,1.28fr);
+  gap:clamp(28px,4vw,64px);
+  align-items:center;
   padding-top:clamp(120px,22vh,220px);
 }
 .hero-content{ padding-top:0 !important; padding-bottom:clamp(200px,26vh,260px); position:relative; z-index:2; }
@@ -1522,46 +1517,64 @@ body.modal-open{ overflow:hidden; }
   position:absolute; z-index:4;
   right:clamp(24px,5vw,80px);
   bottom:clamp(96px,11vh,120px);
-  display:flex; align-items:center; gap:14px;
-  padding:14px 20px 14px 16px;
-  background:rgba(255,255,255,0.82);
+  display:flex; align-items:center; gap:10px;
+  padding:10px 14px 10px 12px;
+  background:rgba(255,255,255,0.85);
   backdrop-filter:blur(18px) saturate(1.08);
   -webkit-backdrop-filter:blur(18px) saturate(1.08);
   border:1px solid rgba(255,255,255,0.9);
-  border-radius:24px;
+  border-radius:16px;
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,0.9),
     inset 0 0 0 1px rgba(255,255,255,0.35),
     0 1px 0 rgba(255,255,255,0.55),
-    0 22px 55px -22px rgba(24,18,7,0.5),
-    0 6px 18px -8px rgba(24,18,7,0.28);
-  max-width:380px;
+    0 18px 42px -20px rgba(24,18,7,0.45),
+    0 5px 14px -8px rgba(24,18,7,0.25);
+  max-width:290px;
 }
 .dex-brain{
   display:inline-flex; align-items:center; justify-content:center;
-  width:38px; height:38px; border-radius:999px;
-  background:rgba(0,0,0,0.05); color:#1a1408; flex:0 0 38px;
+  width:30px; height:30px; border-radius:999px;
+  background:rgba(0,0,0,0.05); color:#1a1408; flex:0 0 30px;
 }
-.dex-head{ font-family:var(--sans); font-size:11.5px; font-weight:600; letter-spacing:.02em; color:rgba(26,20,8,0.55); margin-bottom:2px; }
-.dex-msg{ font-family:var(--sans); font-size:14px; font-weight:600; color:#1a1408; line-height:1.35; }
+.dex-head{ font-family:var(--sans); font-size:10.5px; font-weight:600; letter-spacing:.03em; text-transform:uppercase; color:rgba(26,20,8,0.55); margin-bottom:2px; }
+.dex-msg{ font-family:var(--sans); font-size:12.5px; font-weight:600; color:#1a1408; line-height:1.3; }
 
-/* --- Partner strip inside hero, along the bottom edge --- */
+/* --- Trusted-by band: contained pill sitting over the mountain silhouette --- */
 .hero-partners{
-  position:absolute; z-index:2; left:0; right:0; bottom:0;
-  padding:10px clamp(20px,3vw,48px) 14px;
-  background:linear-gradient(180deg, rgba(24,18,7,0) 0%, rgba(24,18,7,0.35) 55%, rgba(24,18,7,0.62) 100%);
-  color:rgba(255,255,255,0.9);
+  position:absolute; z-index:4;
+  left:50%; transform:translateX(-50%);
+  bottom:clamp(75px, 11vh, 130px);
+  width:min(780px, calc(100% - 48px));
+  padding:12px 24px 14px;
+  color:rgba(255,255,255,0.95);
+  pointer-events:none;
 }
 .hp-title{
-  font-family:var(--sans); font-size:10.5px; font-weight:600; letter-spacing:.14em;
+  font-family:var(--sans); font-size:10px; font-weight:600; letter-spacing:.18em;
   text-transform:uppercase; text-align:center;
-  color:rgba(255,255,255,0.55); margin:0 0 8px;
+  color:rgba(255,255,255,0.85); margin:0 0 8px;
+  text-shadow:0 1px 4px rgba(0,0,0,0.5);
 }
-.hp-row{
-  display:flex; justify-content:space-between; align-items:baseline;
-  gap:clamp(14px,2.4vw,32px);
-  flex-wrap:nowrap;
-  max-width:1180px; margin:0 auto;
+.hp-marquee{
+  position:relative;
+  overflow:hidden;
+  max-width:100%;
+  margin:0 auto;
+  -webkit-mask-image:linear-gradient(90deg, transparent 0%, black 8%, black 92%, transparent 100%);
+          mask-image:linear-gradient(90deg, transparent 0%, black 8%, black 92%, transparent 100%);
+}
+.hp-track{
+  display:flex; align-items:baseline; gap:clamp(24px,2.8vw,36px);
+  width:max-content;
+  animation:hp-scroll 28s linear infinite;
+}
+@keyframes hp-scroll{
+  from{ transform:translate3d(0, 0, 0); }
+  to  { transform:translate3d(-50%, 0, 0); }
+}
+@media (prefers-reduced-motion: reduce){
+  .hp-track{ animation:none; }
 }
 .hp-brand{
   display:inline-flex; align-items:baseline; gap:8px;
@@ -1569,8 +1582,8 @@ body.modal-open{ overflow:hidden; }
   color:rgba(255,255,255,0.88);
   opacity:.88;
 }
-.hp-brand b{ font-weight:800; font-size:18px; letter-spacing:.01em; white-space:nowrap; }
-.hp-brand em{ font-style:normal; font-weight:500; font-size:10px; letter-spacing:.16em; color:rgba(255,255,255,0.55); white-space:nowrap; }
+.hp-brand b{ font-weight:800; font-size:18px; letter-spacing:.01em; white-space:nowrap; color:rgba(255,255,255,0.95); text-shadow:0 1px 6px rgba(0,0,0,0.4); }
+.hp-brand em{ font-style:normal; font-weight:500; font-size:10px; letter-spacing:.16em; color:rgba(255,255,255,0.72); white-space:nowrap; text-shadow:0 1px 4px rgba(0,0,0,0.4); }
 .hp-serif b{ font-family:Georgia, "Times New Roman", serif; font-weight:700; letter-spacing:0; }
 
 /* --- Pin+blur behavior: keep mockup + dex + partners tied to the hero copy --- */
@@ -1612,8 +1625,7 @@ body.modal-open{ overflow:hidden; }
     position:relative; right:auto; bottom:auto;
     margin:16px 0 0; max-width:none;
   }
-  .hero-partners{ position:relative; padding-bottom:16px; background:linear-gradient(180deg, rgba(24,18,7,0.55) 0%, rgba(24,18,7,0.72) 100%); }
-  .hp-row{ justify-content:flex-start; overflow-x:auto; padding-bottom:4px; gap:24px; }
+  .hero-partners{ position:relative; bottom:auto; padding:12px 0; background:linear-gradient(180deg, rgba(24,18,7,0.35) 0%, rgba(24,18,7,0.55) 100%); }
   .hp-brand{ flex:0 0 auto; }
 }
 
@@ -1682,4 +1694,134 @@ body.modal-open{ overflow:hidden; }
 @media (max-width:960px){
   .hero-fg{ display:none; }  /* Foreground clutters the compact mobile hero */
   .hero-bg{ object-position:60% center; }
+}
+
+
+/* ============================================================
+   HERO v5 -- curved video card replaces the 6-card grid.
+   Sits in the middle depth plane (z:2) between hero-bg (0) and hero-fg (3).
+   Inherits the .hero-grid parallax transform so it moves with the copy.
+   ============================================================ */
+.hero-video-card{
+  position:relative;
+  width:100%;
+  aspect-ratio:1280/684;
+  max-width:700px;
+  margin-left:auto;
+  margin-right:0;
+  border-radius:clamp(12px, 1.4vw, 20px);
+  overflow:hidden;
+  background:rgba(255,255,255,0.35);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.9),
+    inset 0 0 0 1px rgba(255,255,255,0.35),
+    0 1px 0 rgba(255,255,255,0.55),
+    0 40px 90px -36px rgba(24,18,7,0.55),
+    0 14px 30px -14px rgba(24,18,7,0.3);
+  isolation:isolate;
+}
+.hero-video{
+  position:absolute; inset:0;
+  width:100%; height:100%;
+  object-fit:cover;
+  object-position:center center;
+  display:block;
+  z-index:0;
+}
+/* Subtle luminous rim, painted over the video so glass depth still reads even
+   when the video is dark. */
+.hero-video-rim{
+  position:absolute; inset:0;
+  border-radius:inherit;
+  pointer-events:none;
+  z-index:1;
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,0.55),
+    inset 0 2px 0 rgba(255,255,255,0.4);
+}
+
+/* Hide the (now-unused) 6-card grid rules so nothing accidentally renders. */
+.hero-mockup{ display:none !important; }
+
+/* Mobile: preserve the video card visibility even though the desk foreground
+   was hidden below 960px in v4. The card sits nicely in the compact stack. */
+@media (max-width:960px){
+  .hero-video-card{
+    max-width:none;
+    margin:12px 0 0;
+    aspect-ratio:16/10;
+  }
+}
+
+
+/* ============================================================
+   HERO v6 -- per-layer parallax + "next section takes over".
+   Each element moves, scales, and blurs at its own rate as --hp
+   grows from 0 (hero at rest) to 1 (fully receding).
+   Sprint 6 already keeps .hero position:sticky.
+   ============================================================ */
+@media (min-width:961px){
+  /* Hero pins for the full duration of its own scroll -- next section
+     then rises up over the pinned hero from below.                    */
+  .hero{
+    position:relative;
+    z-index:0;
+    overflow:hidden;                 /* keep parallax counter-translation in-bounds */
+  }
+
+  /* Every hero layer becomes an independent parallax plane. Common
+     shape: translate up, scale down slightly, blur up. All bound to --hp. */
+  .hero-bg{
+    /* 30% apparent speed -> counter-scroll 70vh downward */
+    transform:translate3d(0, calc(var(--hp,0) * 70vh), 0);
+    filter:blur(calc(var(--hp,0) * 15px));
+    will-change:transform, filter;
+  }
+  .hero-fg{
+    /* 100% apparent speed -> moves with the page, no counter */
+    transform:translate3d(0, 0, 0);
+    filter:blur(calc(var(--hp,0) * 10px));
+    will-change:filter;
+  }
+  .hero-copy{
+    /* 70% apparent speed */
+    transform:translate3d(0, calc(var(--hp,0) * 30vh), 0);
+    filter:blur(calc(var(--hp,0) * 5px));
+    will-change:transform, filter;
+  }
+  .hero-video-card{
+    /* Group with copy + trust band -- ~68% apparent speed, visibly parallaxes */
+    transform:translate3d(0, calc(var(--hp,0) * 32vh), 0);
+    filter:blur(calc(var(--hp,0) * 5px));
+    will-change:transform, filter;
+  }
+  .hero-dex{
+    /* 60% apparent speed */
+    transform:translate3d(0, calc(var(--hp,0) * 40vh), 0);
+    filter:blur(calc(var(--hp,0) * 8px));
+    will-change:transform, filter;
+  }
+  .hero-partners{
+    /* 55% apparent speed + preserve the horizontal centering (translateX -50%) */
+    transform:translate(-50%, calc(var(--hp,0) * 45vh));
+    filter:blur(calc(var(--hp,0) * 10px));
+    will-change:transform, filter;
+  }
+
+
+  /* Reduced motion: freeze the parallax + blur curves. */
+  @media (prefers-reduced-motion: reduce){
+    .hero-bg, .hero-fg, .hero-copy, .hero-video-card, .hero-dex, .hero-partners{
+      transform:none; filter:none; opacity:1;
+    }
+  }
+}
+
+/* Mobile: skip per-layer parallax below 960px. Hero scrolls normally. */
+@media (max-width:960px){
+  .hero{ overflow:visible; }
+  .hero-bg, .hero-fg, .hero-copy, .hero-video-card,
+  .hero-dex, .hero-partners{
+    transform:none !important; filter:none !important;
+  }
 }

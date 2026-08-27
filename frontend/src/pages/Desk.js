@@ -26,7 +26,7 @@
 // needs_decision pill and auto-opens the DecisionDialog (E2-66/U7-02.2).
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import api from "../lib/api";
 import { toast } from "sonner";
 import { DecisionDialog } from "../components/DecisionDialog";
@@ -175,11 +175,12 @@ export default function Desk() {
     const el = heroRef.current;
     if (!el) return undefined;
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const wide = window.matchMedia("(min-width: 1024px)");
+    // KR-14.19 — progressive blur now runs on mobile too. The hero is sticky
+    // at every viewport, so the rising sheet needs the same fog either way.
     let raf = 0;
     const paint = () => {
       raf = 0;
-      if (reduced.matches || !wide.matches) {
+      if (reduced.matches) {
         el.style.removeProperty("--kr-hero-blur");
         el.style.removeProperty("--kr-hero-fade");
         el.style.removeProperty("--kr-hero-scale");
@@ -294,7 +295,7 @@ export default function Desk() {
           eyeballed. In the reference the light zone divides 36 / 56 with a
           wide 8% trough between; we were at 42 / 58 with a 40px gap, which is
           what made our tiles read as squeezed and over-spaced at once. */}
-      <div ref={heroRef} className="kr-hero flex flex-col gap-6 lg:grid lg:gap-8 lg:sticky lg:top-5 lg:z-0 lg:grid-cols-[minmax(0,29fr)_minmax(0,45fr)] lg:gap-20">
+      <div ref={heroRef} className="kr-hero sticky top-0 z-0 flex flex-col gap-6 lg:grid lg:gap-8 lg:top-5 lg:grid-cols-[minmax(0,29fr)_minmax(0,45fr)] lg:gap-20">
         {/* LEFT column (KR-8.7) — greeting, scope, THE INSIGHT WELL, and the
             score pushed to the floor.
             The founder wanted the editorial space directly under the greeting
@@ -344,8 +345,11 @@ export default function Desk() {
               lg they move into the score row, stacked to the numeral's left.
               KR-14.2 · MOBILE — justify-start, per the reference; from lg the
               row re-centres between the greeting and the desktop score. */}
+          {/* KR-14.20 · MOBILE — the You / Company scope pills are hidden
+              on the phone per the founder's ask. They still render at lg
+              (below xl) and, at xl and above, in the side stack. */}
           {isOwnerView && (
-            <div className="order-2 flex items-center justify-start gap-2 lg:order-none lg:mt-4 lg:justify-center xl:hidden" data-testid="desk-scope-pills">
+            <div className="order-2 hidden items-center justify-start gap-2 lg:order-none lg:mt-4 lg:flex lg:justify-center xl:hidden" data-testid="desk-scope-pills">
               <ScopePills scope={scope} setScope={setScope} />
             </div>
           )}
@@ -442,7 +446,6 @@ export default function Desk() {
               testid="desk-gauge"
             />
           </div>
-          </div>{/* /KM-1 scope+score unit */}
 
           {/* KR-8.8 — the well moves to the floor. mt-auto, not flex-1: the
               founder wants it ALIGNED to the grid's bottom line, not
@@ -479,7 +482,43 @@ export default function Desk() {
             · auto-rows-fr so the two rows are EQUAL and the grid's floor lands
               on the money cards' floor. Ragged row heights (173/200/173) were
               the actual misalignment. */}
-        <div className="order-3 grid min-w-0 grid-cols-2 gap-3 lg:order-none lg:auto-rows-fr lg:grid-cols-3" data-testid="desk-kpi-grid">
+        {/* KR-14.20 · MOBILE — the KPIs are four rounded rectangles in a
+            2×2 grid. Each card: label on the LEFT, icon + numeral aligned
+            to the RIGHT. Score-mix and Spend are dropped per the founder;
+            the four kept are Delayed, Complaints, Overdue, Net profit. */}
+        <div className="order-3 grid grid-cols-2 gap-2 lg:hidden" data-testid="desk-kpi-strip">
+          {[
+            { icon: Timer, label: "Delayed",
+              value: String(m.counters ? m.counters.delayed : m.work?.overdue ?? "…"),
+              urgent: (m.counters?.delayed ?? m.work?.overdue ?? 0) > 0,
+              to: "/my-work?filter=overdue", testid: "kpi-delayed-m" },
+            { icon: ChatCircleText, label: "Complaints",
+              value: String(m.complaints ? m.complaints.value : "…"),
+              urgent: (m.complaints?.new_7d || 0) > 0,
+              to: "/crm", testid: "kpi-complaints-m" },
+            { icon: HandCoins, label: "Overdue",
+              value: m.cash ? inrCompact(m.cash.overdue) : "…",
+              urgent: (m.cash?.overdue || 0) > 0,
+              to: "/finance?tab=revenue&filter=overdue", testid: "kpi-collect-m" },
+            { icon: TrendUp, label: "Net profit",
+              value: m.ledger && Number.isFinite(m.ledger.netProfit) ? inrCompact(m.ledger.netProfit) : "…",
+              urgent: m.ledger ? m.ledger.netProfit < 0 : false,
+              to: "/finance", testid: "kpi-profit-m" },
+          ].map((k) => (
+            <Link key={k.testid} to={k.to} data-testid={k.testid}
+              className="nm-tile flex min-w-0 items-center justify-between gap-2 p-3">
+              <p className="min-w-0 truncate text-xs font-medium text-foreground/80">{k.label}</p>
+              <span className="flex shrink-0 items-center gap-1.5">
+                <k.icon size={13} weight="regular" aria-hidden="true" className="text-muted-foreground" />
+                <span className={`font-display text-base leading-none tabular-nums ${k.urgent ? "text-kr-accent" : ""}`}>
+                  {k.value}
+                </span>
+              </span>
+            </Link>
+          ))}
+        </div>
+
+        <div className="order-3 hidden min-w-0 grid-cols-2 gap-3 lg:order-none lg:grid lg:auto-rows-fr lg:grid-cols-3" data-testid="desk-kpi-grid">
           <StatTile
             icon={Timer}
             label="Delayed"
@@ -564,8 +603,10 @@ export default function Desk() {
             the four sections now use the full width as one bento, all visible
             at once, sized by priority. No filter pills: colour does the
             grouping, so nothing is a click away. */}
-        <div className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1 lg:mb-5">
-          <h2 className="text-h2">Decision desk</h2>
+        {/* KR-14.20 — the "Decision desk" heading and its count are hidden
+            on mobile per the founder's ask; both return from lg up. */}
+        <div className="mb-4 hidden flex-wrap items-baseline gap-x-3 gap-y-1 lg:mb-5 lg:flex lg:justify-start">
+          <h2 className="text-h2 lg:text-left">Decision desk</h2>
           <p className="text-sm opacity-70">
             {total === 0 ? "Nothing waiting on you" : `${total} waiting on you`}
           </p>

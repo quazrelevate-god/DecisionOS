@@ -26,6 +26,7 @@ import {
   File, FileArrowUp, Lightbulb, Info,
   FlowArrow,  // WE-11 stage chip
   SlidersHorizontal,  // KR-14.6 · mobile MyWork filter icon (reference)
+  Buildings, CalendarBlank, Play, // KR-14.22 · mobile expanded task card
 } from "@phosphor-icons/react";
 
 // RD-2 (2026-08-17): the toolbar control. Was uppercase + wide tracking +
@@ -770,6 +771,9 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
   // status band, progress, attachments, updates, action buttons, plan,
   // trail. Highlighted cards (deep-link focus) auto-expand.
   const [selfExpanded, setSelfExpanded] = useState(highlight);
+  // KR-14.24 — mobile "Set % manually" toggle. When on, the percent select
+  // renders inline in the same status row instead of dropping a new block.
+  const [manualPctOpen, setManualPctOpen] = useState(false);
   const controlled = open !== undefined;
   const expanded = controlled ? open : selfExpanded;
   const setExpanded = controlled ? () => onToggleOpen?.() : setSelfExpanded;
@@ -992,7 +996,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
                   terminal ? "bg-kr-ink text-white border-transparent"
                   : awaitingApproval ? "border-[0.5px] border-kr-ink text-foreground"
                   : "bg-nm-sunken text-muted-foreground border-nm-edge/40"
-                }`}>{STATUS_LABEL[t.status] || t.status}</span>
+                } ${expanded ? "hidden lg:inline-block" : ""}`}>{STATUS_LABEL[t.status] || t.status}</span>
               {overdue && !terminal && (
                 <span data-testid={`overdue-${t.id}`}
                   className="rounded-pill bg-kr-accent px-2 py-0.5 font-medium text-white">
@@ -1038,9 +1042,207 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
       </button>
       </div>
 
+      {/* KR-14.22 · MOBILE EXPANDED BODY — reference-driven layout for the
+          task expanded view on phones. Uses the same handlers/state as the
+          desktop body below; the desktop body is `hidden lg:block` from
+          here on. Rendered only when `expanded`. */}
+      {expanded && (
+      <div className="px-4 pb-5 space-y-5 border-t border-nm-edge/40 pt-4 lg:hidden" data-testid={`task-body-m-${t.id}`}>
+        {/* KR-14.23 — a single accent status pill leads the body. The
+            summary row above already shows the full meta row (status +
+            due + context), so repeating it here made the pill look
+            doubled on tasks that had all three fields. */}
+        <div>
+          <span className={`inline-flex rounded-pill px-2.5 py-0.5 text-xs font-medium ${
+            overdue && !terminal ? "bg-kr-accent text-white"
+            : "bg-orange-50 text-kr-accent"
+          }`}>
+            {STATUS_LABEL[t.status] || t.status}
+          </span>
+        </div>
+
+        {/* Description card (orange) */}
+        {t.description && (
+          <div className="flex items-start gap-3 rounded-cardlg bg-orange-50/70 p-3">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-tile bg-orange-100 text-kr-accent">
+              <File size={18} weight="regular" />
+            </span>
+            <p className="text-sm leading-relaxed">{t.description}</p>
+          </div>
+        )}
+
+        {/* Info card — the top row (workflow / due date) only renders when
+            there is something to show; the created-ago footnote only gets a
+            top border when the top row is present. Prevents the hollow
+            curve above a lone "Created X ago" line. */}
+        {(t.workflow_summary?.title || t.due_date || t.created_at) && (() => {
+          const hasTop = !!(t.workflow_summary?.title || t.due_date);
+          return (
+            <div className="rounded-cardlg border border-nm-edge/40 p-3">
+              {hasTop && (
+                <div className="flex items-center gap-2">
+                  {t.workflow_summary?.title && (
+                    <>
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-violet-50 text-violet-500">
+                        <Buildings size={14} weight="regular" />
+                      </span>
+                      <span className="min-w-0 truncate text-sm">{t.workflow_summary.title}</span>
+                    </>
+                  )}
+                  {t.workflow_summary?.title && t.due_date && (
+                    <span className="mx-1 h-5 w-px shrink-0 bg-nm-edge/60" />
+                  )}
+                  {t.due_date && (
+                    <>
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-green-50 text-green-600">
+                        <ClockCounterClockwise size={14} weight="regular" />
+                      </span>
+                      <span className="min-w-0 truncate text-sm">
+                        Due {new Date(t.due_date).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", ...(t.due_date.includes("T") ? { hour: "2-digit", minute: "2-digit" } : {}) })}
+                      </span>
+                    </>
+                  )}
+                </div>
+              )}
+              {t.created_at && (
+                <div className={`flex items-center gap-1 text-xs text-muted-foreground ${hasTop ? "mt-3 border-t border-nm-edge/30 pt-2" : ""}`}>
+                  <span aria-hidden="true" className="h-1 w-1 rounded-full bg-muted-foreground/60" />
+                  Created {timeAgo(t.created_at)}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Status row — flex-wrap so the "Set % manually" percent selector
+            can drop to a second line on narrow phones instead of pushing
+            neighbours off the row. */}
+        {!terminal && !awaitingApproval && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <span className="text-sm text-muted-foreground">Status</span>
+            <select
+              data-testid={`status-select-m-${t.id}`}
+              value={t.status === "blocked" ? "todo" : t.status}
+              onChange={(e) => setStatus(e.target.value)}
+              className="min-w-[120px] flex-1 rounded-pill border border-nm-edge/40 bg-white px-3 py-2 text-sm focus:outline-none"
+            >
+              {STATUS_OPTIONS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+            </select>
+            <span aria-hidden="true" className="h-5 w-px shrink-0 bg-nm-edge/60" />
+            {/* KR-14.24 — the details wrapper is replaced by an inline
+                button + conditional select. When toggled on, the percent
+                selector renders IN the same row (or wraps below without
+                pushing content off-screen), matching the founder's ask. */}
+            <button
+              type="button"
+              data-testid={`toggle-manual-pct-m-${t.id}`}
+              onClick={() => setManualPctOpen((v) => !v)}
+              aria-pressed={manualPctOpen}
+              className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground"
+            >
+              <Play size={11} weight="fill" /> Set % manually
+            </button>
+            {manualPctOpen && (
+              <select
+                data-testid={`progress-select-m-${t.id}`}
+                value={PROGRESS_OPTIONS.includes(t.progress) ? t.progress : 0}
+                onChange={(e) => setProgress(e.target.value)}
+                className="shrink-0 rounded-pill border border-nm-edge/40 bg-white px-2 py-1 text-xs focus:outline-none"
+              >
+                {PROGRESS_OPTIONS.map((p) => <option key={p} value={p}>{p}%</option>)}
+              </select>
+            )}
+          </div>
+        )}
+
+        {/* KR-14.24 — Add manually + Ask Dex share one row with an "or"
+            between them. The Complete + attach row moves BELOW so the two
+            plan-building options read as the first choice. */}
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            data-testid={`add-manually-m-${t.id}`}
+            className="flex flex-1 items-center justify-center gap-2 rounded-pill border border-nm-edge/40 bg-white px-4 py-2 text-sm"
+          >
+            <PencilSimple size={14} weight="regular" /> Add manually
+          </button>
+          <span className="text-xs text-muted-foreground">or</span>
+          <button
+            type="button"
+            data-testid={`ask-dex-m-${t.id}`}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-pill border border-nm-edge/40 bg-white px-4 py-2 text-sm font-medium text-violet-600"
+          >
+            <Sparkle size={12} weight="fill" /> Ask Dex
+          </button>
+        </div>
+
+        {/* Actions row — Complete + attach controls, now below the two
+            plan-building buttons above. */}
+        {!isTerminal(t) && !awaitingApproval && (
+          <div className="flex items-center gap-3">
+            <button
+              onClick={complete}
+              data-testid={`complete-m-${t.id}`}
+              title={t.evidence_required && !hasEvidence ? "Add proof first" : "Mark as complete"}
+              className="flex items-center gap-2 rounded-pill bg-kr-ink px-4 py-2 text-sm font-medium text-white"
+            >
+              <CheckCircle size={14} weight="bold" /> Complete
+            </button>
+            <span aria-hidden="true" className="h-6 w-px shrink-0 bg-nm-edge/60" />
+            <button
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+              data-testid={`photo-m-${t.id}`}
+              aria-label="Attach a photo"
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-nm-edge/40 bg-white disabled:opacity-40"
+            >
+              <Camera size={16} weight="regular" />
+            </button>
+            <button
+              onClick={() => evidenceRef.current?.click()}
+              disabled={uploading}
+              data-testid={`upload-file-m-${t.id}`}
+              aria-label="Upload a file"
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-nm-edge/40 bg-white disabled:opacity-40"
+            >
+              <FileArrowUp size={16} weight="regular" />
+            </button>
+            <button
+              onClick={toggleVoice}
+              data-testid={`voice-m-${t.id}`}
+              aria-label={recording ? "Stop recording" : "Record voice reply"}
+              className={`grid h-10 w-10 shrink-0 place-items-center rounded-full border border-nm-edge/40 ${recording ? "bg-kr-accent text-white" : "bg-white"}`}
+            >
+              {recording ? <Stop size={16} weight="fill" /> : <Microphone size={16} weight="regular" />}
+            </button>
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="flex items-center justify-between border-t border-nm-edge/40 pt-3">
+          <span className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span aria-hidden="true" className="grid h-6 w-6 place-items-center rounded-full bg-nm-sunken">
+              <XCircle size={12} weight="regular" />
+            </span>
+            No activity yet
+          </span>
+          <button
+            type="button"
+            data-testid={`log-update-m-${t.id}`}
+            className="flex items-center gap-2 text-sm text-muted-foreground"
+          >
+            <span aria-hidden="true" className="grid h-6 w-6 place-items-center rounded-full bg-orange-50 text-kr-accent">
+              <Plus size={12} weight="bold" />
+            </span>
+            Log update or hand off
+          </button>
+        </div>
+      </div>
+      )}
+
       {/* EXPANDED BODY -- everything else lives here. Rendered only when open. */}
       {expanded && (
-      <div id={`task-card-body-${t.id}`} className="px-4 pb-4 space-y-3 border-t border-nm-edge/40 pt-3">
+      <div id={`task-card-body-${t.id}`} className="hidden px-4 pb-4 space-y-3 border-t border-nm-edge/40 pt-3 lg:block">
       {t.description && <p className="text-sm text-muted-foreground">{t.description}</p>}
       {showAssignee && !isOp && (
         <p className="label-mono text-muted-foreground flex items-center gap-1" data-testid={`assignee-line-${t.id}`}>

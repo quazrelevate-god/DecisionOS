@@ -1222,23 +1222,36 @@ html[data-dex="1"].dark .text-muted-foreground { color: hsl(var(--muted-foregrou
 
 /* My Work — steel blue lifted with gold. Cool for a focus surface, warm
    enough not to feel like a spreadsheet. */
-/* KM-13 — /inbox's sky is the founder's own image, not a gradient.
+/* KM-13 — /inbox's sky is the founder's own artwork, DESKTOP ONLY.
    Every other room tints four radial stops through --sky-*; the Desk instead
-   paints the supplied artwork, so `background-image` is replaced outright
-   rather than re-created in CSS. Cover + centre so it fills any aspect from a
-   375px phone to a 1400px desktop without letterboxing.
+   paints the supplied image, so `background-image` is replaced outright rather
+   than re-created in CSS.
 
-   The drift animation is switched off here. On a gradient it is a slow breath
-   of light; on a photographic bloom with real internal structure it becomes a
-   visibly sliding picture, which is a different effect from the one that was
-   asked for. ::after already sits at opacity 0 app-wide, so ::before is the
-   only layer painting and this is the only rule that has to change. */
-html[data-page="inbox"] .app-sky::before {
-    background-image: url("./assets/inbox-glow.png");
-    background-size: cover;
-    background-position: center center;
-    animation: none;
-    transform: none;
+   KM-14 — gated behind lg on the founder's call: the phone goes back to the
+   gradient sky. The reason it did not carry to mobile is aspect. The artwork
+   is landscape (1659x948); `cover` on a 375x812 portrait viewport scales by
+   HEIGHT and crops to the middle 438px of the source, which is the hot core of
+   the bloom — so the phone got the most saturated slice of a picture whose
+   composition depends on the cool field around it. Measured, that pushed the
+   greeting's muted half to 3.10:1, passing only because 30px counts as large
+   text. The gradient was authored for that viewport and does not have the
+   problem.
+
+   Below lg nothing here applies, so the base .app-sky::before rule — gradients,
+   kr-drift and all — is what paints, exactly as before KM-13.
+
+   The drift is switched off at lg: on a gradient it is a slow breath of light,
+   but on artwork with real internal structure it becomes a visibly sliding
+   picture. ::after already sits at opacity 0 app-wide, so ::before is the only
+   layer painting and this is the only rule that has to change. */
+@media (min-width: 1024px) {
+    html[data-page="inbox"] .app-sky::before {
+        background-image: url("./assets/inbox-glow.png");
+        background-size: cover;
+        background-position: center center;
+        animation: none;
+        transform: none;
+    }
 }
 
 html[data-page="my-work"] .app-sky {

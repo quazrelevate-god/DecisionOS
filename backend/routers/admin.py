@@ -281,12 +281,14 @@ async def admin_usage(admin: dict = Depends(get_platform_admin), range: str = "3
     cutoff = _range_cutoff(range)
     base = {} if cutoff is None else {"created_at": {"$gte": cutoff}}
 
-    # Per-provider breakdown (always across all providers in range)
-    prov_rows = await db.usage_events.aggregate([
+    # Per-provider breakdown (always across all providers in range).
+    # Motor 3.x: aggregate() returns a coroutine that resolves to the cursor.
+    _prov_cur = await db.usage_events.aggregate([
         {"$match": base},
         {"$group": {"_id": "$provider", "calls": {"$sum": 1},
                     "tokens_total": {"$sum": "$tokens_total"}, "cost": {"$sum": "$cost_estimate"}}},
-    ]).to_list(50)
+    ])
+    prov_rows = await _prov_cur.to_list(50)
     by_provider = [{"provider": r["_id"] or "unknown", "calls": r["calls"],
                     "tokens_total": r["tokens_total"], "cost_estimate": round(r["cost"], 4)}
                    for r in prov_rows]
@@ -296,12 +298,13 @@ async def admin_usage(admin: dict = Depends(get_platform_admin), range: str = "3
     match = dict(base)
     if provider and provider != "all":
         match["provider"] = provider
-    rows = await db.usage_events.aggregate([
+    _rows_cur = await db.usage_events.aggregate([
         {"$match": match},
         {"$group": {"_id": "$tenant_id", "calls": {"$sum": 1},
                     "tokens_in": {"$sum": "$tokens_in"}, "tokens_out": {"$sum": "$tokens_out"},
                     "tokens_total": {"$sum": "$tokens_total"}, "cost": {"$sum": "$cost_estimate"}}},
-    ]).to_list(2000)
+    ])
+    rows = await _rows_cur.to_list(2000)
     tmap = {t["id"]: (t.get("company_name") or t.get("name") or "—")
             for t in await db.tenants.find({}, {"_id": 0, "id": 1, "company_name": 1, "name": 1}).to_list(2000)}
     workspaces, totals = [], {"calls": 0, "tokens_total": 0, "cost": 0.0}

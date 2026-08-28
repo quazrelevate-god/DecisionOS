@@ -165,43 +165,15 @@ export default function Desk() {
   const [doneIds, setDoneIds] = useState(() => new Set());
   const markDone = useCallback((id) => setDoneIds((prev) => new Set(prev).add(id)), []);
 
-  // KR-8.5 — the hero blurs progressively as the sheet climbs over it.
-  // A passive scroll listener writing three custom properties, rAF-coalesced:
-  // the alternative (blur as React state) would re-render the whole dashboard
-  // on every scroll frame. Desktop only — the hero is not pinned below lg, so
-  // blurring it there would just fog content the founder is still reading.
+  /* KM-9 — THE PROGRESSIVE BLUR IS GONE, on the founder's call.
+     A passive scroll listener used to write --kr-hero-blur / --kr-hero-fade /
+     --kr-hero-scale so the hero fogged as the dark sheet climbed over it. It
+     was built for the DESKTOP composition, where the hero is pinned and the
+     sheet genuinely travels across it; on a phone the page just scrolls, so
+     the effect only ever blurred content still being read. heroRef stays —
+     .kr-hero is still the grid — it simply has nothing writing to it now. */
   const heroRef = useRef(null);
-  useEffect(() => {
-    const el = heroRef.current;
-    if (!el) return undefined;
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
-    // KR-14.19 — progressive blur now runs on mobile too. The hero is sticky
-    // at every viewport, so the rising sheet needs the same fog either way.
-    let raf = 0;
-    const paint = () => {
-      raf = 0;
-      if (reduced.matches) {
-        el.style.removeProperty("--kr-hero-blur");
-        el.style.removeProperty("--kr-hero-fade");
-        el.style.removeProperty("--kr-hero-scale");
-        return;
-      }
-      // Full effect by the time the sheet has climbed ~320px.
-      const p = Math.max(0, Math.min(1, window.scrollY / 320));
-      el.style.setProperty("--kr-hero-blur", `${(p * 9).toFixed(2)}px`);
-      el.style.setProperty("--kr-hero-fade", (1 - p * 0.5).toFixed(3));
-      el.style.setProperty("--kr-hero-scale", (1 - p * 0.028).toFixed(4));
-    };
-    const onScroll = () => { if (!raf) raf = requestAnimationFrame(paint); };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onScroll);
-    paint();
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onScroll);
-      if (raf) cancelAnimationFrame(raf);
-    };
-  }, []);
+
   // Owner sees Company/You; everyone else only ever has their own view.
   const [scope, setScope] = useState("company");
 
@@ -596,7 +568,13 @@ export default function Desk() {
            against lg:pb-14 = 56px) on top of main's own pb-dock (96px): ~200px
            of nothing at the foot of the page. pb-20 still leaves 80 - 16 + 96 =
            160px of clearance under the last card against a ~96px dock. */
-        className="relative z-10 mt-6 pt-6 pb-20 lg:mt-10 lg:pt-10 lg:pb-14 -mb-4 lg:-mb-8"
+        /* KM-9 — the collapsed sheet must CLEAR the dock, not sit under it.
+           Measured before: at rest the band ran 516->865 while the dock's top
+           edge is 732, so the single card it is collapsed to was cut in half
+           by the bar. Pulling the band up (mt-4/pt-4) and dropping the mobile
+           card floor to 150px puts the whole card above 732. Desktop keeps its
+           own margins and the 178/196px floors. */
+        className="relative z-10 mt-4 pt-4 pb-20 lg:mt-10 lg:pt-10 lg:pb-14 -mb-4 lg:-mb-8"
       >
         {/* KR-8.5 — the desk takes the WHOLE sheet. The spend line chart is
             gone from here (it lives on /finance, where a money chart belongs);

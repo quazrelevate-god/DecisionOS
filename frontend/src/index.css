@@ -1787,18 +1787,11 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
         transition: opacity 260ms ease, filter 260ms ease;
     }
 
-    /* KR-8.5 — the hero blurs progressively as the sheet climbs over it.
-       Driven by three custom properties a scroll handler writes; all three
-       are compositor-friendly and default to "no effect", so if the handler
-       never runs (or reduced motion short-circuits it) the hero is simply
-       sharp. */
-    .kr-hero {
-        filter: blur(var(--kr-hero-blur, 0px));
-        opacity: var(--kr-hero-fade, 1);
-        transform: scale(var(--kr-hero-scale, 1));
-        transform-origin: 50% 22%;
-        will-change: filter, opacity, transform;
-    }
+    /* KM-9 — the progressive blur is removed. The filter/opacity/scale trio
+       and their will-change are gone with the scroll handler that fed them:
+       leaving `filter: blur(var(--x, 0px))` in place would still promote the
+       whole hero to its own compositor layer on every page, for an effect
+       nothing writes to any more. */
 
     /* KR-4 — the two motion verbs the primitives share.
 

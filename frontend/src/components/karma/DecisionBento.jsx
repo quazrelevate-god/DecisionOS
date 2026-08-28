@@ -40,13 +40,13 @@ import { cn } from "@/lib/utils";
 const TIER = {
   a: {
     span: "col-span-2 sm:col-span-4 xl:col-span-6",
-    minH: "min-h-[178px] xl:min-h-[196px]",
+    minH: "min-h-[150px] lg:min-h-[178px] xl:min-h-[196px]",
     title: "text-lg xl:text-xl font-semibold leading-snug",
     clamp: "line-clamp-3",
   },
   b: {
     span: "col-span-2 sm:col-span-2 xl:col-span-3",
-    minH: "min-h-[178px] xl:min-h-[196px]",
+    minH: "min-h-[150px] lg:min-h-[178px] xl:min-h-[196px]",
     title: "text-base font-semibold leading-snug",
     clamp: "line-clamp-3",
   },

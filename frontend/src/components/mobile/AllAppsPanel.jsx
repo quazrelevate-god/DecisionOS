@@ -199,12 +199,13 @@ function Tile({ tile, onPick }) {
       onClick={() => onPick(tile)}
       className={cn(
         // >= 100x100 per §5.7, so the 44px floor is met with room to spare.
-        /* KM-3 — .kr-pop + .kr-lift instead of nm-raised + a flat colour
-           hover. Inside the ink panel .kr-pop reads as a subtly raised
-           translucent tile, which is the "subtle neumorphism" asked for;
-           hover:bg-accent was the flat idiom the redesign replaced. */
-        "relative flex min-h-[6.25rem] flex-col kr-pop kr-lift rounded-tile p-3 text-left",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60",
+        /* KM-8 — minimal glass, not neumorphism. .kr-pop drew a raised,
+           shadowed tile; the founder wants all seven reading as one quiet set
+           of glass panes on a glass sheet, so they take .kr-frost-min and are
+           drawn by their hairline rather than by depth. .kr-lift stays for the
+           press response. */
+        "relative flex min-h-[6.25rem] flex-col kr-frost-min kr-lift rounded-tile p-3 text-left",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline",
         big || wide ? "justify-between" : "items-center justify-center gap-1.5",
         SPAN[tile.size] || "",
         /* KM-3 — no red. DS-1's token comment: `danger` means money or a
@@ -361,7 +362,12 @@ export function AllAppsPanel({
         <DialogPrimitive.Overlay
           data-testid="allapps-backdrop"
           className={cn(
-            "fixed inset-0 z-[10080] bg-black/65 backdrop-blur-[22px]",
+            /* KM-8 — no darkening, no blur. The overlay stays only to catch
+               the outside-tap that closes the panel; it no longer paints. The
+               founder wants the app still legible behind the menu, and a
+               frosted LIGHT panel already separates itself from the page
+               without the page having to be dimmed to make room for it. */
+            "fixed inset-0 z-[10080] bg-transparent",
             "data-[state=open]:animate-in data-[state=closed]:animate-out",
             "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
           )}
@@ -407,10 +413,20 @@ export function AllAppsPanel({
                text-muted-foreground inside becomes its ink counterpart with
                no `dark:` variant written anywhere. The thing More opens now
                looks like the ink pill you tapped to open it. */
-            /* Exactly the bar's material — same alpha, same blur, same
-               saturation — so the two read as one object rather than two
-               dark surfaces that nearly match. */
-            "dark rounded-cardlg bg-kr-ink/55 backdrop-blur-2xl backdrop-saturate-150",
+            /* KM-8 — LIGHT glass, not the bar's ink. KM-7 matched the dock's
+               colour so the two read as one object; the founder's call now is
+               that the menu should be light and minimal, so it keeps the
+               dock's WIDTH and ANCHOR (still growing out of the bar) but takes
+               .kr-frost — the light-zone glass — instead of ink. The `dark`
+               token re-scope goes with it, so every label inside returns to
+               the light palette on its own. */
+            /* focus:outline-none — the panel takes focus itself on open (see
+               onOpenAutoFocus below, which moves it off the search field so
+               the keyboard does not cover the grid), and the browser was
+               drawing its default ring around the whole sheet. The focus trap
+               still has its anchor; it just stops painting a blue rectangle
+               around a menu nobody typed into. */
+            "kr-frost rounded-cardlg focus:outline-none focus-visible:outline-none",
 
             // scale 0.92 -> 1 with opacity, ~180ms ease-out; reverse on close
             // [animation-duration:...] rather than duration-[180ms]: the
@@ -520,7 +536,7 @@ export function AllAppsPanel({
                       onClick={() => pick(item)}
                       className={cn(
                         "flex min-h-[3.5rem] flex-1 flex-col items-center justify-center gap-1 rounded-control px-1",
-                        "kr-pop focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60",
+                        "kr-frost-min focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline",
                         "text-muted-foreground"   /* KM-3 — see above: no red on sign out. */
                       )}
                     >

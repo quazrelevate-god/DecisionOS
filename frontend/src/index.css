@@ -1748,6 +1748,22 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
         color: hsl(var(--text-primary));
     }
 
+    /* KM-8 · .kr-frost-min — the same light glass as .kr-frost, one step
+       quieter, for panes that sit ON a frosted surface rather than on the
+       page. If a tile used full .kr-frost inside a .kr-frost panel the two
+       alphas would stack to near-opaque and the tile would vanish into its
+       own container; this drops the fill and lets the parent's blur do the
+       work, so the tile is drawn almost entirely by its hairline. No
+       backdrop-filter of its own — nesting blurs is how you get a smeared,
+       expensive surface that reads as neither glass nor solid. */
+    .kr-frost-min {
+        background: hsl(0 0% 100% / .34);
+        border: 1px solid hsl(0 0% 100% / .60);
+        border-radius: var(--radius-tile);
+        color: hsl(var(--text-primary));
+    }
+    .kr-frost-min:hover { background: hsl(0 0% 100% / .46); }
+
     .kr-glass--blue  { --kr-glass-from: 214 45% 58%; --kr-glass-to: 28 55% 50%; }
     .kr-glass--olive { --kr-glass-from: 85 34% 42%;  --kr-glass-to: 75 32% 22%; }
     .kr-glass--warm  { --kr-glass-from: 36 18% 48%;  --kr-glass-to: 225 12% 38%; }

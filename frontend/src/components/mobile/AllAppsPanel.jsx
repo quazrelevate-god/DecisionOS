@@ -28,7 +28,6 @@
 // Notes (hidden this phase per E2-31). Nothing appears in two places.
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -37,78 +36,22 @@ import {
   MagnifyingGlass, ArrowRight,
 } from "@phosphor-icons/react";
 import { hasPerm } from "@/lib/perms";
-import { inrCompact } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useBodyScrollLock } from "./BottomSheet";
-import { SkeletonLine } from "./Skeleton";
 
-/**
- * Read a value straight out of the query cache, never fetching.
- *
- * `getQueriesData` rather than `getQueryData`: the keys that hold this data are
- * parameterised (["crm-contacts", status, q]), so there is no single key to ask
- * for. The freshest cached entry wins.
- *
- * KM-1 — prefix matching is EXACT per array element. This read asked for
- * ["contacts"] while CRM.js:508 writes ["crm-contacts", status, q], and
- * "contacts" !== "crm-contacts", so it never matched: the 2x2 CRM tile — the
- * largest object in the panel — rendered a skeleton in every session, forever.
- */
-function cached(qc, prefix) {
-  const hits = qc.getQueriesData({ queryKey: prefix });
-  for (let i = hits.length - 1; i >= 0; i--) {
-    const [, value] = hits[i];
-    if (value !== undefined && value !== null) return value;
-  }
-  return undefined;
-}
-
-const ymd = (d) => d.toISOString().slice(0, 10);
-
-/**
- * The live line each large/wide tile carries, read from cache.
- *
- * Returns `undefined` for "not cached" — which renders a Skeleton, NOT a smaller
- * tile — and `null` for "cached and genuinely empty", which renders nothing.
- */
-function useLiveLines() {
-  const qc = useQueryClient();
-
-  const contacts = cached(qc, ["crm-contacts"]);
-  const crm = React.useMemo(() => {
-    if (contacts === undefined) return undefined;
-    const list = Array.isArray(contacts) ? contacts : contacts.contacts || [];
-    const owed = list.reduce((n, c) => n + (Number(c.outstanding) || 0), 0);
-    return {
-      headline: owed > 0 ? inrCompact(owed) : "₹0",
-      support: `${list.length} relationship${list.length === 1 ? "" : "s"}`,
-    };
-  }, [contacts]);
-
-  const score = cached(qc, ["operating-score"]);
-  const ops = React.useMemo(() => {
-    if (score === undefined) return undefined;
-    const n = score?.overall_score ?? score?.score ?? null;
-    return n == null ? null : { line: String(Math.round(n)), suffix: "out of 100" };
-  }, [score]);
-
-  const calendar = cached(qc, ["calendar"]);
-  const cal = React.useMemo(() => {
-    if (calendar === undefined) return undefined;
-    const list = Array.isArray(calendar) ? calendar : calendar?.events || calendar?.items || [];
-    const today = ymd(new Date());
-    const n = list.filter((e) => String(e.date || e.start || e.due_date || "").slice(0, 10) === today).length;
-    return { line: String(n), suffix: n === 1 ? "today" : "today" };
-  }, [calendar]);
-
-  return { crm, ops, cal };
-}
+/* KM-9 — `cached()` and `useLiveLines()` were deleted here.
+   They read the React Query cache so a tile could show a live figure without
+   firing a request on open. The rule was right; the consequence was not — the
+   cache is only warm for routes already visited, and every route in this menu
+   sits BEHIND the menu, so the figures were almost never there and the three
+   wide tiles rendered a skeleton that never resolved. Static descriptors now,
+   and opening More touches no query at all. */
 
 /**
  * The bento, in §5.7's order: live destinations first, occasional ones second,
  * utility last. `size` is config and never derived from the data.
  */
-function buildTiles({ user, t, counts, live }) {
+function buildTiles({ user, t, counts }) {
   const tiles = [
     {
       key: "crm",
@@ -122,7 +65,7 @@ function buildTiles({ user, t, counts, live }) {
          tiles on the left now sit level with three smalls on the right. */
       size: "wide",
       perm: "people",
-      live: live.crm,
+      blurb: "Buyers, suppliers, complaints",
     },
     { key: "team", to: "/team", label: t("nav.team", "Team"), icon: UsersThree, size: "small", perm: "team_manage" },
     {
@@ -135,7 +78,7 @@ function buildTiles({ user, t, counts, live }) {
       icon: Gauge,
       size: "wide",
       ownerOnly: true,
-      live: live.ops,
+      blurb: "How the business is running",
     },
     { key: "journal", to: "/journal", label: t("nav.journal", "Journal"), icon: BookOpen, size: "small", ownerOnly: true },
     {
@@ -144,7 +87,7 @@ function buildTiles({ user, t, counts, live }) {
       label: t("nav.calendar", "Calendar"),
       icon: CalendarBlank,
       size: "wide",
-      live: live.cal,
+      blurb: "Everything with a date",
     },
     { key: "coach", to: "/coach", label: t("nav.coach", "Work Coach"), icon: Sparkle, size: "small" },
     // §5.7 listed "Send Daily Digest" as a Small tile, and §8 asked for it to sit
@@ -189,7 +132,6 @@ function Tile({ tile, onPick }) {
   const big = tile.size === "large";
   const wide = tile.size === "wide";
   // undefined = not cached yet -> Skeleton in a full-size tile (§5.7).
-  const pending = (big || wide) && tile.live === undefined;
 
   return (
     <button
@@ -221,29 +163,11 @@ function Tile({ tile, onPick }) {
             {tile.label}
           </span>
 
-          {pending ? (
-            <span className="mt-2 block w-2/3" data-testid={`allapps-skeleton-${tile.key}`}>
-              <SkeletonLine className="h-7" />
-            </span>
-          ) : tile.live ? (
-            <span className={cn("mt-2 flex min-w-0 items-baseline gap-1.5", wide && "justify-between")}>
-              <span className="font-heading text-2xl font-bold leading-none tabular-nums">
-                {tile.live.headline ?? tile.live.line}
-              </span>
-              {(tile.live.support || tile.live.suffix) && (
-                <span className="min-w-0 truncate text-[length:var(--text-label)] font-semibold leading-4 text-muted-foreground">
-                  {tile.live.support || tile.live.suffix}
-                </span>
-              )}
-            </span>
-          ) : (
-            // Cached and genuinely empty. The tile keeps its size and says where
-            // it goes rather than showing a number that is not there.
-            <span className="mt-2 flex items-center gap-1 text-sm font-semibold text-muted-foreground">
-              Open
-              <ArrowRight size={14} weight="bold" aria-hidden="true" />
-            </span>
-          )}
+          {/* KM-9 — a static descriptor, not a live figure. A menu tile's
+              job is to say where it goes; it does not also need to report. */}
+          <span className="mt-2 block text-[length:var(--text-label)] leading-4 text-muted-foreground">
+            {tile.blurb}
+          </span>
         </>
       ) : (
         <>
@@ -299,10 +223,9 @@ export function AllAppsPanel({
     if (open) setQ("");
   }, [open]);
 
-  const live = useLiveLines();
   const tiles = React.useMemo(
-    () => buildTiles({ user, t, counts, live }),
-    [user, t, counts, live]
+    () => buildTiles({ user, t, counts }),
+    [user, t, counts]
   );
   const utility = React.useMemo(() => buildUtility({ user, isDark, t }), [user, isDark, t]);
 
@@ -367,7 +290,10 @@ export function AllAppsPanel({
                founder wants the app still legible behind the menu, and a
                frosted LIGHT panel already separates itself from the page
                without the page having to be dimmed to make room for it. */
-            "fixed inset-0 z-[10080] bg-transparent",
+            /* KM-9 — a slight dim, still no blur. Fully transparent let the
+               page compete with a light panel sitting on it; 22% black settles
+               the background just enough for the frosted sheet to read. */
+            "fixed inset-0 z-[10080] bg-black/[0.22]",
             "data-[state=open]:animate-in data-[state=closed]:animate-out",
             "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
           )}
@@ -446,53 +372,20 @@ export function AllAppsPanel({
             {t("allapps.description", "Every screen, grouped")}
           </DialogPrimitive.Description>
 
-          {searchable ? (
-            <div className="flex shrink-0 items-center gap-2 border-b border-border p-3">
-              <div className="relative flex-1">
-                <MagnifyingGlass
-                  size={20}
-                  weight="bold"
-                  aria-hidden="true"
-                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400"
-                />
-                <input
-                  type="text"
-                  inputMode="search"
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                  data-testid="allapps-search"
-                  aria-label={t("allapps.search", "Search screens")}
-                  placeholder={t("allapps.search", "Search screens")}
-                  className="w-full rounded-lg border border-input bg-card pl-10 pr-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  style={{ minHeight: "var(--control-h-base)" }}
-                />
-              </div>
-              <DialogPrimitive.Close
-                data-testid="allapps-close"
-                aria-label={t("common.close", "Close")}
-                className="grid shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                style={{ minHeight: "var(--control-h-base)", minWidth: "var(--control-h-base)" }}
-              >
-                <X size={22} weight="bold" />
-              </DialogPrimitive.Close>
-            </div>
-          ) : (
-            // No search row to hang it on, so the close button gets its own.
-            <div className="flex shrink-0 justify-end p-2 pb-0">
-              <DialogPrimitive.Close
-                data-testid="allapps-close"
-                aria-label={t("common.close", "Close")}
-                className="grid shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                style={{ minHeight: "var(--control-h-sm)", minWidth: "var(--control-h-sm)" }}
-              >
-                <X size={22} weight="bold" />
-              </DialogPrimitive.Close>
-            </div>
-          )}
+          {/* KM-9 — no close button. The panel closes by tapping outside,
+              by tapping More again, or by Escape; an X in a menu this small
+              was a seventh thing to look at. The search row it used to live
+              in was unreachable anyway — `searchable` needs more than 12
+              entries and an owner has 7. */}
 
           <div
             data-testid="allapps-scroll"
-            className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 pb-safe"
+            /* KM-9 — `flex-1` made this fill the sheet whatever the content
+               needed, which is what left dead space under Settings; and
+               `pb-safe` resolves to 0 with no bottom inset, so the last row
+               sat flush against the edge. Sizes to content now, with a real
+               12px floor plus whatever the inset adds. */
+            className="min-h-0 overflow-y-auto overscroll-contain p-3 [padding-bottom:calc(0.75rem+env(safe-area-inset-bottom,0px))]"
           >
             {shown.length === 0 && shownUtility.length === 0 && (
               <p className="py-8 text-center text-sm text-muted-foreground" data-testid="allapps-no-match">

@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DecisionOS — Phase 1 Quotation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#14171F; --ink-soft:#3A3E47; --muted:#6B6F76; --faint:#9BA0A8;
+    --paper:#FBFAF7; --surface:#FFFFFF; --line:#E6E2D8; --line-soft:#EFEDE5;
+    --navy:#1B2A4C; --navy-ink:#0F1A30;
+    --indigo:#4338CA; --indigo-soft:#EEF0FF; --indigo-line:#D6D9FA;
+    --success:#1F7A4D; --success-bg:#EAF6EE; --success-line:#CBE8D5;
+    --amber:#9A6B12; --amber-bg:#FBF3E1; --amber-line:#EFDCAE;
+    --radius:10px; --radius-lg:16px;
+    --shadow-sm:0 1px 2px rgba(20,23,31,.04);
+    --shadow-md:0 6px 20px -8px rgba(20,23,31,.14);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper); color:var(--ink);
+    font-family:'Inter',system-ui,-apple-system,sans-serif;
+    font-size:14.5px; line-height:1.6; -webkit-font-smoothing:antialiased;
+  }
+  .page{max-width:900px;margin:0 auto;padding:56px 48px 80px;}
+  h1,h2,h3{font-family:'Space Grotesk',system-ui,sans-serif;letter-spacing:-0.01em;color:var(--navy-ink);}
+  .mono{font-family:'IBM Plex Mono',ui-monospace,monospace;}
+  .tabular{font-variant-numeric:tabular-nums;}
+
+  /* ---------- Letterhead ---------- */
+  .letterhead{
+    display:flex; justify-content:space-between; align-items:flex-start;
+    padding-bottom:28px; margin-bottom:36px; border-bottom:2px solid var(--navy-ink);
+  }
+  .brand{display:flex; align-items:center; gap:12px;}
+  .brand-mark{
+    width:42px;height:42px;border-radius:10px;
+    background:linear-gradient(155deg,var(--navy) 0%, var(--indigo) 100%);
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;
+    box-shadow:var(--shadow-sm);
+  }
+  .brand-mark svg{width:22px;height:22px;}
+  .brand-name{font-family:'Space Grotesk';font-weight:700;font-size:20px;color:var(--navy-ink);letter-spacing:-0.01em;}
+  .brand-tag{font-size:11.5px;color:var(--muted);margin-top:1px;letter-spacing:.02em;}
+  .letterhead-right{text-align:right;font-size:12.5px;color:var(--muted);line-height:1.65;}
+  .letterhead-right strong{color:var(--ink-soft);font-weight:600;}
+
+  /* ---------- Doc title block ---------- */
+  .doctitle-row{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;margin-bottom:8px;flex-wrap:wrap;}
+  .doctitle{font-size:30px;font-weight:700;margin:0;color:var(--navy-ink);}
+  .doctitle .sub{display:block;font-family:'Inter';font-size:14px;font-weight:500;color:var(--muted);margin-top:4px;letter-spacing:0;}
+  .doc-meta{display:flex;gap:28px;flex-wrap:wrap;font-size:12px;}
+  .doc-meta div{white-space:nowrap;}
+  .doc-meta .k{color:var(--faint);display:block;text-transform:uppercase;letter-spacing:.06em;font-size:10px;margin-bottom:2px;}
+  .doc-meta .v{color:var(--ink-soft);font-weight:600;}
+
+  .to-for{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin:28px 0 40px;}
+  .to-for .box{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;}
+  .to-for .label{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);font-weight:600;margin-bottom:6px;}
+  .to-for .name{font-weight:700;font-size:15px;color:var(--ink);}
+  .to-for .sub{color:var(--muted);font-size:12.5px;margin-top:2px;}
+
+  /* ---------- Section headers ---------- */
+  .section{margin:44px 0;page-break-inside:avoid;}
+  .section-num{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:26px;height:26px;border-radius:7px;background:var(--navy-ink);color:#fff;
+    font-family:'Space Grotesk';font-weight:700;font-size:12px;margin-right:10px;flex-shrink:0;
+  }
+  .section-head{display:flex;align-items:center;margin-bottom:16px;}
+  .section-head h2{font-size:19px;font-weight:600;margin:0;}
+  .section-sub{color:var(--muted);font-size:13px;margin:6px 0 18px 36px;max-width:640px;}
+
+  p{color:var(--ink-soft);}
+  .lead{font-size:15px;line-height:1.75;color:var(--ink-soft);max-width:720px;}
+
+  /* ---------- Stat strip ---------- */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:28px 0;}
+  .stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px 16px 14px;}
+  .stat .n{font-family:'Space Grotesk';font-size:26px;font-weight:700;color:var(--navy-ink);line-height:1;}
+  .stat .l{font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.4;}
+
+  /* ---------- Phase cards ---------- */
+  .phase{
+    border:1px solid var(--line); border-radius:var(--radius-lg); background:var(--surface);
+    margin-bottom:14px; overflow:hidden; page-break-inside:avoid;
+  }
+  .phase.is-quoted{border:1.5px solid var(--indigo);box-shadow:0 0 0 3px var(--indigo-soft);}
+  .phase-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:18px 20px 14px;}
+  .phase-title-wrap{display:flex;gap:12px;align-items:flex-start;}
+  .phase-idx{font-family:'Space Grotesk';font-weight:700;color:var(--faint);font-size:13px;padding-top:2px;min-width:20px;}
+  .phase-title{font-weight:700;font-size:15px;color:var(--ink);}
+  .phase-epic{font-size:11.5px;color:var(--muted);margin-top:3px;}
+  .phase-price{text-align:right;flex-shrink:0;}
+  .phase-price .amt{font-family:'Space Grotesk';font-weight:700;font-size:18px;color:var(--navy-ink);}
+  .phase-price .amt small{font-size:11px;color:var(--faint);font-weight:500;display:block;margin-top:1px;}
+  .phase-body{padding:0 20px 18px;}
+  .phase-desc{font-size:13px;color:var(--ink-soft);line-height:1.65;margin:0 0 12px 32px;max-width:600px;}
+  .tag-row{display:flex;gap:8px;margin:0 0 10px 32px;flex-wrap:wrap;}
+  .tag{
+    display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:100px;
+    font-size:10.5px;font-weight:600;letter-spacing:.02em;
+  }
+  .tag-done{background:var(--success-bg);color:var(--success);border:1px solid var(--success-line);}
+  .tag-progress{background:var(--indigo-soft);color:var(--indigo);border:1px solid var(--indigo-line);}
+  .tag-proposed{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-line);}
+  .tag-quoted{background:var(--indigo);color:#fff;}
+  .tag-dot{width:5px;height:5px;border-radius:50%;background:currentColor;}
+  .bar-track{margin:0 0 4px 32px;max-width:280px;height:5px;background:var(--line-soft);border-radius:100px;overflow:hidden;}
+  .bar-fill{height:100%;background:var(--navy);border-radius:100px;}
+  .bar-label{margin:0 0 0 32px;font-size:10.5px;color:var(--faint);}
+  .deliverables{margin:12px 0 0 32px;padding:0;list-style:none;max-width:600px;}
+  .deliverables li{
+    font-size:12.5px;color:var(--ink-soft);padding:4px 0 4px 16px;position:relative;line-height:1.5;
+  }
+  .deliverables li::before{content:"—";position:absolute;left:0;color:var(--faint);}
+
+  /* ---------- Roadmap teaser cards (Phase 2, indicative / unpriced) ---------- */
+  .roadmap-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .roadmap-card{
+    border:1px dashed var(--line); border-radius:var(--radius-lg); background:var(--surface);
+    padding:18px 20px; page-break-inside:avoid;
+  }
+  .roadmap-card .rc-title{font-weight:700;font-size:14px;color:var(--ink);margin-bottom:6px;}
+  .roadmap-card .rc-desc{font-size:12.5px;color:var(--ink-soft);line-height:1.6;margin-bottom:12px;}
+  .roadmap-card .rc-range{font-family:'Space Grotesk';font-weight:700;font-size:16px;color:var(--muted);}
+  .roadmap-card .rc-note{font-size:10.5px;color:var(--faint);margin-top:4px;text-transform:uppercase;letter-spacing:.04em;}
+
+  /* ---------- Investment summary ---------- */
+  .invest-box{
+    background:var(--navy-ink); color:#fff; border-radius:var(--radius-lg);
+    padding:32px 36px; margin:24px 0; page-break-inside:avoid;
+  }
+  .invest-grid{display:grid;grid-template-columns:1fr 1fr;gap:28px;}
+  .invest-col .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.55);margin-bottom:10px;}
+  .invest-row{display:flex;justify-content:space-between;padding:7px 0;font-size:13px;border-bottom:1px solid rgba(255,255,255,.1);}
+  .invest-row .desc{color:rgba(255,255,255,.82);}
+  .invest-row .val{font-family:'IBM Plex Mono';font-weight:600;color:#fff;}
+  .invest-total{display:flex;justify-content:space-between;align-items:baseline;padding-top:14px;margin-top:6px;}
+  .invest-total .t{font-size:13px;color:rgba(255,255,255,.7);}
+  .invest-total .v{font-family:'Space Grotesk';font-size:24px;font-weight:700;color:#fff;}
+  .quote-callout{
+    margin-top:26px;padding-top:22px;border-top:1px solid rgba(255,255,255,.16);
+    display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;
+  }
+  .quote-callout .ql{font-size:12.5px;color:rgba(255,255,255,.6);}
+  .quote-callout .qv{font-family:'Space Grotesk';font-size:34px;font-weight:700;color:#fff;line-height:1;}
+  .quote-callout .qv small{display:block;font-size:12px;font-weight:500;color:rgba(255,255,255,.55);margin-top:4px;font-family:'Inter';}
+  .badge-indigo{
+    background:var(--indigo);color:#fff;font-size:11px;font-weight:600;padding:5px 12px;
+    border-radius:100px;letter-spacing:.02em;
+  }
+
+  /* ---------- Table ---------- */
+  table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  th{
+    text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;
+    color:var(--faint);font-weight:600;padding:9px 12px;border-bottom:1px solid var(--line);
+  }
+  td{padding:11px 12px;border-bottom:1px solid var(--line-soft);color:var(--ink-soft);vertical-align:top;}
+  tr:last-child td{border-bottom:none;}
+  td.num, th.num{text-align:right;font-family:'IBM Plex Mono';}
+  .rate-table td strong{color:var(--ink);font-weight:600;}
+  .table-wrap{border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--surface);}
+
+  /* ---------- Timeline ---------- */
+  .timeline{border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);padding:6px 20px;}
+  .tl-row{display:flex;align-items:center;gap:16px;padding:13px 0;border-bottom:1px solid var(--line-soft);}
+  .tl-row:last-child{border-bottom:none;}
+  .tl-name{width:230px;flex-shrink:0;font-size:12.5px;font-weight:600;color:var(--ink);}
+  .tl-track{flex:1;height:22px;background:var(--line-soft);border-radius:6px;position:relative;overflow:hidden;}
+  .tl-bar{position:absolute;top:0;height:100%;border-radius:6px;background:linear-gradient(90deg,var(--indigo),var(--navy));}
+  .tl-wk{width:80px;flex-shrink:0;text-align:right;font-size:11.5px;color:var(--muted);font-family:'IBM Plex Mono';}
+
+  /* ---------- Milestones ---------- */
+  .milestones{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+  .ms{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px;}
+  .ms .pct{font-family:'Space Grotesk';font-size:22px;font-weight:700;color:var(--indigo);}
+  .ms .name{font-size:12.5px;font-weight:600;color:var(--ink);margin-top:6px;}
+  .ms .when{font-size:11px;color:var(--muted);margin-top:3px;}
+
+  /* ---------- Notes list ---------- */
+  .notes{padding:0;margin:0;list-style:none;}
+  .notes li{
+    font-size:12.5px;color:var(--ink-soft);padding:9px 0 9px 22px;position:relative;
+    border-bottom:1px solid var(--line-soft);line-height:1.6;
+  }
+  .notes li:last-child{border-bottom:none;}
+  .notes li::before{content:"•";position:absolute;left:4px;color:var(--faint);font-weight:700;}
+
+  /* ---------- Signature ---------- */
+  .sign-grid{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:32px;}
+  .sign-box{border-top:1.5px solid var(--ink);padding-top:10px;}
+  .sign-box .role{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;}
+  .sign-box .who{font-size:13px;font-weight:600;color:var(--ink);margin-top:14px;}
+  .sign-box .line{height:44px;}
+
+  footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--line);display:flex;justify-content:space-between;font-size:11px;color:var(--faint);}
+
+  @media print{
+    body{background:#fff;}
+    .page{padding:20px 8mm;max-width:100%;}
+    .section{page-break-inside:avoid;}
+    .phase{page-break-inside:avoid;}
+    .invest-box{page-break-inside:avoid;}
+    a{color:inherit;text-decoration:none;}
+  }
+  @media (max-width:720px){
+    .page{padding:32px 20px;}
+    .to-for, .invest-grid, .stats, .milestones, .roadmap-grid{grid-template-columns:1fr;}
+    .letterhead{flex-direction:column;gap:16px;}
+    .letterhead-right{text-align:left;}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ================= LETTERHEAD ================= -->
+  <div class="letterhead">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M4 12L10 18L20 6" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-name">Quazr Elevate</div>
+        <div class="brand-tag">Software &amp; Product Engineering Studio · Chennai, India</div>
+      </div>
+    </div>
+    <div class="letterhead-right">
+      <div><strong>Quazr Elevate</strong></div>
+      <div>Chennai, Tamil Nadu, India</div>
+      <div>quazrelevate@gmail.com&nbsp; ·&nbsp; +91&nbsp;[XXXXX&nbsp;XXXXX]</div>
+      <div>GSTIN: [33XXXXXXXXXXZX] &nbsp;·&nbsp; [www.quazrelevate.com]</div>
+    </div>
+  </div>
+
+  <!-- ================= DOC TITLE ================= -->
+  <div class="doctitle-row">
+    <h1 class="doctitle">Phase 1 Quotation<span class="sub">Stabilization &amp; Design-System Rollout — DecisionOS</span></h1>
+    <div class="doc-meta">
+      <div><span class="k">Reference</span><span class="v mono">QE/DOS/2026/P1</span></div>
+      <div><span class="k">Date</span><span class="v">18 August 2026</span></div>
+      <div><span class="k">Valid Until</span><span class="v">17 September 2026</span></div>
+    </div>
+  </div>
+  <p class="lead" style="margin-top:6px;">
+    Commercial proposal for <strong style="color:var(--ink);">Phase 1</strong> of the ongoing
+    DecisionOS engagement — stabilizing the platform and completing the in-progress design-system
+    rollout, plus a new public landing page. This is a focused, fixed-scope phase; the roadmap
+    beyond it (advanced AI persona work, enterprise access controls) is outlined for context in
+    Section 4 and will be scoped and quoted separately once Phase 1 ships.
+  </p>
+
+  <div class="to-for">
+    <div class="box">
+      <div class="label">Prepared For</div>
+      <div class="name">[Client Name]</div>
+      <div class="sub">[Client Company Pvt. Ltd.]</div>
+      <div class="sub">[City, State — GSTIN if available]</div>
+    </div>
+    <div class="box">
+      <div class="label">Prepared By</div>
+      <div class="name">Yogesh K.</div>
+      <div class="sub">Founder &amp; Technical Lead, Quazr Elevate</div>
+      <div class="sub">quazrelevate@gmail.com</div>
+    </div>
+  </div>
+
+  <!-- ================= 1. EXECUTIVE SUMMARY ================= -->
+  <div class="section">
+    <div class="section-head"><span class="section-num">1</span><h2>Executive Summary</h2></div>
+    <p class="lead" style="margin-left:36px;">
+      DecisionOS began as an MVP scaffold provided by the client. Since taking on the engagement,
+      Quazr Elevate's five-person team has hardened the backend into a real multi-tenant SaaS
+      product, rebuilt the core product experience end to end, and shipped a full
+      workflow-automation engine — all already delivered and running in production (Section 2,
+      shown for context). <strong style="color:var(--ink);">Phase 1</strong>, quoted in this
+      document, closes out the in-progress design-system overhaul, hardens the app for
+      production, and adds the public landing page the product doesn't yet have — a tightly
+      scoped, four-week phase built directly on top of the foundation already shipped, which is
+      what keeps the timeline and the price this tight.
+    </p>
+    <div class="stats" style="margin-left:36px;width:calc(100% - 36px);">
+      <div class="stat"><div class="n tabular">3</div><div class="l">Major phases already delivered — foundation, core UX, workflow engine</div></div>
+      <div class="stat"><div class="n tabular">4</div><div class="l">Weeks to deliver Phase 1 — stabilization, redesign completion, landing page</div></div>
+      <div class="stat"><div class="n tabular">228</div><div class="l">Items already shipped and verified in production</div></div>
+      <div class="stat"><div class="n tabular">5</div><div class="l">Dedicated team members — architecture, backend, frontend, design, QA</div></div>
+    </div>
+  </div>
+
+  <!-- ================= 2. DELIVERED SO FAR ================= -->
+  <div class="section">
+    <div class="section-head"><span class="section-num">2</span><h2>The Journey So Far <span style="font-weight:400;color:var(--muted);font-size:14px;">(Delivered — Reference Only)</span></h2></div>
+    <p class="section-sub">
+      Already contracted, built, shipped and running in production. Not part of this quotation —
+      shown so Phase 1 below reads against the full journey, not in isolation.
+    </p>
+
+    <div class="phase">
+      <div class="phase-head">
+        <div class="phase-title-wrap">
+          <div class="phase-idx">01</div>
+          <div>
+            <div class="phase-title">Platform Foundation, Security &amp; Multi-Tenant Backend</div>
+            <div class="phase-epic">Maps to Epic 1 — Stability, Security, RBAC foundation</div>
+          </div>
+        </div>
+        <div class="phase-price"><div class="amt tabular">₹21,00,000<small>indicative value</small></div></div>
+      </div>
+      <div class="phase-body">
+        <div class="tag-row"><span class="tag tag-done"><span class="tag-dot"></span>94 / 105 items — 90% complete</span></div>
+        <div class="bar-track"><div class="bar-fill" style="width:90%"></div></div>
+        <p class="phase-desc">
+          Took the inherited MVP from single-tenant prototype to a hardened multi-tenant SaaS
+          backend: tenant data isolation, endpoint-level permission gates, authentication &amp;
+          2FA, CORS/credential hardening, database indexing &amp; migrations, AI-key and billing
+          infrastructure, WhatsApp integration, and observability.
+        </p>
+        <ul class="deliverables">
+          <li>Multi-tenant data isolation across 12/12 tenancy items — zero cross-tenant leakage paths</li>
+          <li>Full endpoint permission gating (11/11) and security/auth hardening (10/10)</li>
+          <li>Database scale &amp; ops hygiene, billing + AI-key infrastructure, WhatsApp channel wiring</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-head">
+        <div class="phase-title-wrap">
+          <div class="phase-idx">02</div>
+          <div>
+            <div class="phase-title">Core Product UX Rebuild — CRM, Decision Desk, Finance, Dex</div>
+            <div class="phase-epic">Maps to Epic 2 — UX Redesign v1</div>
+          </div>
+        </div>
+        <div class="phase-price"><div class="amt tabular">₹16,00,000<small>indicative value</small></div></div>
+      </div>
+      <div class="phase-body">
+        <div class="tag-row"><span class="tag tag-done"><span class="tag-dot"></span>64 / 73 items — 88% complete</span></div>
+        <div class="bar-track"><div class="bar-fill" style="width:88%"></div></div>
+        <p class="phase-desc">
+          Replaced the MVP's generic screens with purpose-built product experiences: the 4-chip
+          Decision Desk, a unified CRM replacing the old contacts list, a merged Finance +
+          document-capture home, and Dex — the single AI persona now woven through every surface.
+        </p>
+        <ul class="deliverables">
+          <li>Decision Desk shipped as the new home screen with a live daily brief</li>
+          <li>CRM rebuilt with lifecycle stages, activity timeline, relationship-health scoring</li>
+          <li>Finance merged with document capture; persona presence unified across 6+ surfaces</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-head">
+        <div class="phase-title-wrap">
+          <div class="phase-idx">03</div>
+          <div>
+            <div class="phase-title">Workflow Automation Engine</div>
+            <div class="phase-epic">Maps to Epic 5 — Workflow Engine</div>
+          </div>
+        </div>
+        <div class="phase-price"><div class="amt tabular">₹7,50,000<small>indicative value</small></div></div>
+      </div>
+      <div class="phase-body">
+        <div class="tag-row"><span class="tag tag-done"><span class="tag-dot"></span>18 / 18 items — 100% complete</span></div>
+        <div class="bar-track"><div class="bar-fill" style="width:100%"></div></div>
+        <p class="phase-desc">
+          Workflows moved from static data to a real state-machine engine: atomic stage
+          transitions, per-stage approval gates, override-with-reason audit trails, and a
+          kanban UI wired directly to it.
+        </p>
+        <ul class="deliverables">
+          <li>Backend engine with atomic transitions and full audit-log history per workflow</li>
+          <li>Approval-gate + override-reason flow, so a forced advance is never invisible</li>
+          <li>Kanban UI across every pipeline type, fully data-driven from the tenant's operating model</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="table-wrap" style="margin-top:8px;">
+      <table>
+        <tr><td style="padding:14px 16px;font-weight:700;color:var(--ink);">Subtotal — Delivered to Date (reference, not billed)</td>
+            <td class="num" style="padding:14px 16px;font-weight:700;color:var(--navy-ink);font-size:15px;">₹44,50,000</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- ================= 3. PHASE 1 — THE QUOTATION ================= -->
+  <div class="section">
+    <div class="section-head"><span class="section-num">3</span><h2>Phase 1 — Stabilize &amp; Ship the Redesign <span style="font-weight:400;color:var(--indigo);font-size:14px;">(This Quotation)</span></h2></div>
+    <p class="section-sub">
+      A focused, four-week phase: finish the design-system rollout already 32% underway, harden
+      the app for production use, and ship the public landing page. This is the full scope being
+      quoted below — nothing else is billed in Phase 1.
+    </p>
+
+    <div class="phase is-quoted">
+      <div class="phase-head">
+        <div class="phase-title-wrap">
+          <div class="phase-idx">01</div>
+          <div>
+            <div class="phase-title">Design System Rollout — Completion</div>
+            <div class="phase-epic">Remaining Epic 7 — accessibility, mobile parity, backend wiring, remaining screens</div>
+          </div>
+        </div>
+        <div class="phase-price"><div class="amt tabular">₹16,00,000</div></div>
+      </div>
+      <div class="phase-body">
+        <div class="tag-row"><span class="tag tag-quoted"><span class="tag-dot"></span>Quoted</span><span class="tag tag-proposed">110 items remaining</span></div>
+        <p class="phase-desc">
+          Carries the design language already established (RD-1 through RD-6) across every
+          remaining screen — Operating Score, Workflows, Team, Settings, Calendar, onboarding —
+          plus the work that doesn't show up in a screenshot: an accessibility pass, mobile PWA
+          parity, and the backend wiring the new UI needs.
+        </p>
+        <ul class="deliverables">
+          <li>Remaining screen rebuilds: Operating Score, Workflows, Team, Settings, Calendar, onboarding flow</li>
+          <li>Accessibility (WCAG AA) pass — keyboard nav, contrast, screen-reader labelling, focus states</li>
+          <li>Mobile PWA parity pass so the redesign matches 1:1 on phone-width screens</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="phase is-quoted">
+      <div class="phase-head">
+        <div class="phase-title-wrap">
+          <div class="phase-idx">02</div>
+          <div>
+            <div class="phase-title">Public Landing Page &amp; Marketing Website</div>
+            <div class="phase-epic">New scope — brand site, pricing, signup funnel</div>
+          </div>
+        </div>
+        <div class="phase-price"><div class="amt tabular">₹2,50,000</div></div>
+      </div>
+      <div class="phase-body">
+        <div class="tag-row"><span class="tag tag-quoted"><span class="tag-dot"></span>Quoted</span><span class="tag tag-proposed">Not started</span></div>
+        <p class="phase-desc">
+          A dedicated, conversion-focused marketing site — separate from the product app — built
+          on the same design language: hero + product story, use-case pages, pricing, and a
+          signup funnel that hands off cleanly into the existing onboarding flow.
+        </p>
+        <ul class="deliverables">
+          <li>Home, Pricing, Use-Cases/Industries, and Signup pages — custom-designed, not templated</li>
+          <li>SEO structure (meta, sitemap, OpenGraph), analytics + conversion tracking wired in</li>
+          <li>Copywriting collaboration — 2 rounds of revision on structure &amp; messaging included</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="phase is-quoted">
+      <div class="phase-head">
+        <div class="phase-title-wrap">
+          <div class="phase-idx">03</div>
+          <div>
+            <div class="phase-title">Stabilization, QA &amp; Production Hardening</div>
+            <div class="phase-epic">Regression testing, bug triage, performance pass</div>
+          </div>
+        </div>
+        <div class="phase-price"><div class="amt tabular">₹3,00,000</div></div>
+      </div>
+      <div class="phase-body">
+        <div class="tag-row"><span class="tag tag-quoted"><span class="tag-dot"></span>Quoted</span></div>
+        <p class="phase-desc">
+          A dedicated hardening pass across the full app: full regression test cycle against
+          the redesigned surfaces, outstanding bug triage and fixes, and a performance pass so
+          Phase 1 ships as a genuinely stable release — not just a visual refresh.
+        </p>
+        <ul class="deliverables">
+          <li>Full regression pass across every redesigned screen before go-live</li>
+          <li>Outstanding bug triage and fix cycle, prioritized by severity</li>
+          <li>Performance pass — load time, query efficiency, and mobile responsiveness checks</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="table-wrap" style="margin-top:8px;">
+      <table>
+        <tr><td style="padding:14px 16px;font-weight:700;color:var(--ink);">Subtotal — Phase 1 (before GST)</td>
+            <td class="num" style="padding:14px 16px;font-weight:700;color:var(--navy-ink);font-size:15px;">₹21,50,000</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- ================= 4. ROADMAP BEYOND PHASE 1 ================= -->
+  <div class="section">
+    <div class="section-head"><span class="section-num">4</span><h2>What's Next <span style="font-weight:400;color:var(--muted);font-size:14px;">(Indicative Roadmap — Not Quoted)</span></h2></div>
+    <p class="section-sub">
+      Shown for planning context only. Both are scoped, tracked and ready to start once Phase 1
+      ships — pricing will be finalized in a separate Phase 2 quotation.
+    </p>
+    <div class="roadmap-grid">
+      <div class="roadmap-card">
+        <div class="rc-title">Dex — Advanced AI Persona &amp; Knowledge Retrieval</div>
+        <div class="rc-desc">Deeper persona integration across remaining surfaces, a company knowledge base with retrieval, and AI-assisted task routing.</div>
+        <div class="rc-range tabular">₹9,00,000 – ₹13,00,000</div>
+        <div class="rc-note">Indicative · 13 tracked items</div>
+      </div>
+      <div class="roadmap-card">
+        <div class="rc-title">Enterprise RBAC — Branches, SSO, API Keys, Partner Portal</div>
+        <div class="rc-desc">Branch-level data scoping, SSO for enterprise IT policies, programmatic API-key access, and a scoped partner portal.</div>
+        <div class="rc-range tabular">₹7,00,000 – ₹10,00,000</div>
+        <div class="rc-note">Indicative · 5 tracked items</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 5. INVESTMENT SUMMARY ================= -->
+  <div class="section">
+    <div class="section-head"><span class="section-num">5</span><h2>Investment Summary</h2></div>
+    <div class="invest-box">
+      <div class="invest-grid">
+        <div class="invest-col">
+          <div class="lbl">Delivered So Far (Reference)</div>
+          <div class="invest-row"><span class="desc">Foundation + Core UX + Workflow Engine</span><span class="val tabular">₹44,50,000</span></div>
+          <div class="invest-row"><span class="desc">Status</span><span class="val" style="font-family:'Inter';font-weight:600;">Live in production</span></div>
+          <div class="invest-total"><span class="t">Not billed under this quotation</span><span class="v tabular" style="font-size:15px;">—</span></div>
+        </div>
+        <div class="invest-col">
+          <div class="lbl">Phase 1 — This Quotation</div>
+          <div class="invest-row"><span class="desc">Phase 1 subtotal</span><span class="val tabular">₹21,50,000</span></div>
+          <div class="invest-row"><span class="desc">GST @ 18% (CGST 9% + SGST 9%)</span><span class="val tabular">₹3,87,000</span></div>
+          <div class="invest-total"><span class="t">Total payable</span><span class="v tabular">₹25,37,000</span></div>
+        </div>
+      </div>
+      <div class="quote-callout">
+        <div>
+          <div class="ql">Amount quoted for Phase 1, inclusive of GST</div>
+          <div class="qv tabular">₹25,37,000<small>IGST @ 18% applies instead if billed outside Tamil Nadu</small></div>
+        </div>
+        <span class="badge-indigo">Valid until 17 September 2026</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 6. TEAM & RATE CARD ================= -->
+  <div class="section">
+    <div class="section-head"><span class="section-num">6</span><h2>Team &amp; Rate Basis</h2></div>
+    <p class="section-sub">The five-person team Phase 1 is built on, shown for transparency — not billed separately from the fixed price above.</p>
+    <div class="table-wrap">
+      <table class="rate-table">
+        <tr><th>Role</th><th>Primary Responsibility</th><th class="num">Indicative Day Rate</th></tr>
+        <tr><td><strong>Founder / Technical Architect</strong></td><td>System design, security, backend architecture</td><td class="num tabular">₹9,500</td></tr>
+        <tr><td><strong>Senior Full-Stack Engineer</strong></td><td>Workflow engine, APIs, database &amp; integrations</td><td class="num tabular">₹7,500</td></tr>
+        <tr><td><strong>Frontend Engineer</strong></td><td>React implementation, design-system rollout</td><td class="num tabular">₹6,500</td></tr>
+        <tr><td><strong>Product Designer</strong></td><td>UI/UX, design system, landing page &amp; brand site</td><td class="num tabular">₹6,000</td></tr>
+        <tr><td><strong>QA &amp; Delivery Lead</strong></td><td>Testing, sprint coordination, client communication</td><td class="num tabular">₹4,500</td></tr>
+      </table>
+    </div>
+    <p style="font-size:12px;color:var(--muted);margin-left:0;margin-top:10px;">
+      Blended team rate works out to roughly <strong style="color:var(--ink-soft);">₹1,900–2,200/hour</strong>
+      at realistic utilisation — around 25–35% below the ₹3,100/hour (~$37/hr) median quoted by
+      Chennai-based software agencies for comparable custom SaaS work. A small, senior, fully
+      dedicated pod working directly on top of the foundation already shipped is what makes the
+      four-week window realistic for this phase.
+    </p>
+  </div>
+
+  <!-- ================= 7. TIMELINE ================= -->
+  <div class="section">
+    <div class="section-head"><span class="section-num">7</span><h2>Phase 1 Delivery Timeline</h2></div>
+    <p class="section-sub">Four weeks from kickoff, workstreams overlapping across the team.</p>
+    <div class="timeline">
+      <div class="tl-row">
+        <div class="tl-name">Stabilization &amp; QA hardening</div>
+        <div class="tl-track"><div class="tl-bar" style="left:0%;width:100%;"></div></div>
+        <div class="tl-wk">Wk 1 – 4</div>
+      </div>
+      <div class="tl-row">
+        <div class="tl-name">Design system rollout — remaining screens</div>
+        <div class="tl-track"><div class="tl-bar" style="left:0%;width:75%;"></div></div>
+        <div class="tl-wk">Wk 1 – 3</div>
+      </div>
+      <div class="tl-row">
+        <div class="tl-name">Accessibility + mobile parity pass</div>
+        <div class="tl-track"><div class="tl-bar" style="left:38%;width:37%;"></div></div>
+        <div class="tl-wk">Wk 2 – 3</div>
+      </div>
+      <div class="tl-row">
+        <div class="tl-name">Landing page — design &amp; build</div>
+        <div class="tl-track"><div class="tl-bar" style="left:13%;width:62%;"></div></div>
+        <div class="tl-wk">Wk 1.5 – 3.5</div>
+      </div>
+      <div class="tl-row">
+        <div class="tl-name">Final integration, UAT &amp; go-live</div>
+        <div class="tl-track"><div class="tl-bar" style="left:75%;width:25%;"></div></div>
+        <div class="tl-wk">Wk 4</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 8. PAYMENT MILESTONES ================= -->
+  <div class="section">
+    <div class="section-head"><span class="section-num">8</span><h2>Payment Milestones</h2></div>
+    <div class="milestones">
+      <div class="ms"><div class="pct">40%</div><div class="name">On acceptance</div><div class="when">Mobilisation, kickoff</div></div>
+      <div class="ms"><div class="pct">30%</div><div class="name">Week 2 checkpoint</div><div class="when">Design system rollout + stabilization substantially complete</div></div>
+      <div class="ms"><div class="pct">30%</div><div class="name">Go-live</div><div class="when">Landing page live, UAT signed off</div></div>
+    </div>
+  </div>
+
+  <!-- ================= 9. ASSUMPTIONS ================= -->
+  <div class="section">
+    <div class="section-head"><span class="section-num">9</span><h2>Assumptions &amp; Exclusions</h2></div>
+    <div class="table-wrap">
+      <ul class="notes" style="padding:6px 18px;">
+        <li>Third-party running costs — cloud hosting, WhatsApp Business API messaging, domain &amp; SSL — are billed at actuals on the client's own accounts, not included above.</li>
+        <li>Landing-page copywriting is collaborative; final brand voice, testimonials and case-study content to be supplied by the client. Two rounds of structural/messaging revision are included.</li>
+        <li>Pricing assumes the current tracked Phase 1 scope (110 items). Material scope changes are estimated and quoted separately before work begins.</li>
+        <li>Client UAT feedback turnaround of 2 business days per milestone is assumed to hold the 4-week timeline; slower turnaround extends the schedule proportionally, not the price.</li>
+        <li>Work referenced in Section 2 (delivered so far) is context only and is not re-billed under this quotation.</li>
+        <li>Phase 2 (Section 4) is indicative only; a firm price will follow a short scoping exercise once Phase 1 ships.</li>
+        <li>GST shown at 18% assuming an intra-Tamil-Nadu billing address (CGST 9% + SGST 9%); IGST 18% applies instead for an out-of-state client.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ================= SIGN-OFF ================= -->
+  <div class="section" style="margin-top:56px;">
+    <div class="section-head"><span class="section-num">10</span><h2>Acceptance</h2></div>
+    <p class="section-sub" style="margin-left:36px;">
+      This quotation is valid for 30 days from the date of issue. Signed acceptance authorises
+      Quazr Elevate to begin mobilisation on Phase 1 against the milestone schedule above.
+    </p>
+    <div class="sign-grid">
+      <div class="sign-box">
+        <div class="role">For Quazr Elevate</div>
+        <div class="line"></div>
+        <div class="who">Yogesh K. — Founder &amp; Technical Lead</div>
+      </div>
+      <div class="sign-box">
+        <div class="role">For [Client Company Pvt. Ltd.]</div>
+        <div class="line"></div>
+        <div class="who">[Name], [Title] — Date</div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <span>Quazr Elevate · Chennai, India</span>
+    <span>QE/DOS/2026/P1 · Page 1 of 1</span>
+  </footer>
+
+</div>
+</body>
+</html>

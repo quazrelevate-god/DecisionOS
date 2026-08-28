@@ -331,11 +331,13 @@ document.getElementById('ov_open').textContent=(mTotal-mDone)+' open';
 const totalSprints=DATA.epics.reduce((a,e)=>a+e.sprints.length,0);
 const totalTasks=DATA.epics.reduce((a,e)=>a+e.sprints.reduce((b,s)=>b+(s.tasks?s.tasks.length:0),0),0);
 const doneEpics=DATA.epics.filter(e=>stKey(e.status)==='done').length;
+const deferredEpics=DATA.epics.filter(e=>stKey(e.status)==='moved').length;
+const completeSub=' of '+DATA.epics.length+(deferredEpics?` · ${deferredEpics} deferred`:'');
 document.getElementById('tiles').innerHTML=[
   ['Epics',DATA.epics.length,''],
   ['Sprints',totalSprints,''],
   ['Tasks tracked',totalTasks,''],
-  ['Epics complete',doneEpics,' of '+DATA.epics.length],
+  ['Epics complete',doneEpics,completeSub],
 ].map((t,i)=>`<div class="tile${i===3?' accent':''}"><div class="k">${t[0]}</div><div class="v">${t[1]}<small>${t[2]}</small></div></div>`).join('');
 
 /* epics */

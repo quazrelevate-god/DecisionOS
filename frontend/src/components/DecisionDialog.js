@@ -39,6 +39,7 @@ import { Chip } from "./common";
 import { timeAgo } from "../lib/format";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
+import { Close as DialogPrimitiveClose } from "@radix-ui/react-dialog";
 import {
   ChatCircleText, User, WhatsappLogo, Microphone, PaperPlaneTilt,
   CheckCircle, CaretDown, CaretUp, ArrowRight, LinkSimple, Check, X,
@@ -92,8 +93,8 @@ function TimelineDot({ tone = "muted", check = false }) {
   // green (raised / done), blue (current), muted (pending).
   const bg = {
     green: "bg-green-600 text-white",
-    blue: "bg-brand-blue text-white",
-    muted: "nm-tile text-transparent",
+    blue: "bg-kr-ink text-white",
+    muted: "kr-pop text-transparent",
   }[tone];
   return (
     <span className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${bg}`}>
@@ -104,7 +105,7 @@ function TimelineDot({ tone = "muted", check = false }) {
 
 function Section({ label, right, open, onToggle, children, testid }) {
   return (
-    <div className="border-t border-border pt-3 mt-4" data-testid={testid}>
+    <div className="mt-4 border-t border-nm-edge/40 pt-3" data-testid={testid}>
       <button
         type="button"
         onClick={onToggle}
@@ -175,7 +176,7 @@ export function DecisionDialog({ decisionId, open, onClose }) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg border border-border rounded-xl p-0" data-testid="decision-dialog">
+      <DialogContent className="kr-bento max-w-lg rounded-cardlg border-0 p-0 [&>button.absolute]:hidden" data-testid="decision-dialog">
         {isError ? (
           <div className="p-6" data-testid="decision-access-restricted">
             <DialogHeader>
@@ -194,14 +195,23 @@ export function DecisionDialog({ decisionId, open, onClose }) {
           <div className="p-6">
             {/* HEADER: title, amount, workflow chip. Status pill shows
                 the current state (pending / approved / rejected). */}
-            <DialogHeader>
-              <DialogTitle className="text-left font-medium text-xl leading-tight">
+            {/* KM-12 — the close sits ON the title's line, not floating in the
+                sheet's corner, and is the same .kr-pop circle every other
+                dismiss in the app uses. */}
+            <DialogHeader className="pr-11">
+              <DialogPrimitiveClose
+                data-testid="decision-close"
+                aria-label="Close"
+                className="kr-pop absolute right-5 top-5 grid h-9 w-9 place-items-center rounded-full text-foreground/70">
+                <X size={15} weight="bold" aria-hidden="true" />
+              </DialogPrimitiveClose>
+              <DialogTitle className="text-left text-xl font-semibold leading-snug">
                 {d.title}
               </DialogTitle>
             </DialogHeader>
             {amount && (
               <p
-                className="text-2xl font-medium text-brand-blue mt-1"
+                className="mt-1 text-2xl font-semibold tabular-nums text-foreground"
                 data-testid="decision-amount"
               >
                 {amount}
@@ -210,13 +220,13 @@ export function DecisionDialog({ decisionId, open, onClose }) {
             <div className="flex items-center gap-2 flex-wrap mt-2">
               {wfLabel && (
                 <span
-                  className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-muted text-black border border-border"
+                  className="kr-pop inline-flex items-center gap-1 rounded-pill px-2.5 py-1 text-xs font-medium text-foreground/80"
                   data-testid="decision-workflow-chip"
                 >
                   <LinkSimple size={12} weight="bold" /> Part of: {wfLabel}
                 </span>
               )}
-              {d.dtype && <Chip value={d.dtype} className="bg-primary text-primary-foreground" />}
+              {d.dtype && <Chip value={d.dtype} />}
               {d.status && d.status !== "pending_approval" && (
                 <Chip
                   value={d.status.replace("_", " ")}
@@ -243,7 +253,7 @@ export function DecisionDialog({ decisionId, open, onClose }) {
               <button
                 type="button"
                 onClick={() => setShowTimeline(true)}
-                className="mt-3 w-full flex items-center gap-2 border border-border bg-muted/40 px-3 py-2 text-xs text-black hover:bg-accent transition-colors"
+                className="kr-pop mt-3 flex w-full items-center gap-2 rounded-control px-3 py-2.5 text-xs text-foreground"
                 data-testid="decision-unblocks"
               >
                 <LinkSimple size={13} weight="bold" />
@@ -260,7 +270,7 @@ export function DecisionDialog({ decisionId, open, onClose }) {
                   onClick={() => approveM.mutate()}
                   disabled={approveM.isPending || rejectM.isPending}
                   data-testid="decision-approve"
-                  className="flex items-center justify-center gap-2 bg-primary text-primary-foreground px-4 py-3 text-sm font-medium border border-border transition-all disabled:opacity-60"
+                  className="kr-lift flex h-12 items-center justify-center gap-2 rounded-pill bg-kr-ink px-4 text-sm font-medium text-white disabled:opacity-60"
                 >
                   <CheckCircle size={16} weight="bold" />
                   {approveM.isPending ? "Approving…" : "Approve"}
@@ -270,10 +280,10 @@ export function DecisionDialog({ decisionId, open, onClose }) {
                   onClick={() => (confirmReject ? rejectM.mutate() : setConfirmReject(true))}
                   disabled={approveM.isPending || rejectM.isPending}
                   data-testid="decision-reject"
-                  className={`flex items-center justify-center gap-2 border-2 px-4 py-3 text-sm font-medium transition-all disabled:opacity-60 ${
+                  className={`flex h-12 items-center justify-center gap-2 rounded-pill px-4 text-sm font-medium disabled:opacity-60 ${
                     confirmReject
-                      ? "border-danger-600 bg-danger-600 text-white"
-                      : "border-border bg-white text-black hover:bg-accent"
+                      ? "bg-danger-600 text-white"
+                      : "kr-pop text-foreground"
                   }`}
                 >
                   {confirmReject ? (
@@ -364,60 +374,67 @@ export function DecisionDialog({ decisionId, open, onClose }) {
               onToggle={() => setShowNote((o) => !o)}
               testid="decision-note-section"
             >
-              <div className="flex gap-2 items-start">
+              {/* KM-12 — THE MIC STOPS FLOATING BESIDE THE FIELD.
+                  It sat as a solid indigo circle to the LEFT of the textarea,
+                  which read as an unrelated button parked next to a box: its
+                  job is to fill that field, not to sit outside it. Now the
+                  field takes the full width and the row beneath it reads
+                  left-to-right as the actual flow — speak (mic) … then send.
+                  The helper line that explains the mic sits under it rather
+                  than wedged between the two controls. */}
+              <textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) sendNote();
+                }}
+                data-testid="decision-note-input"
+                placeholder={`Speak or type — this goes back to ${d.created_by_name || "the raiser"}`}
+                rows={3}
+                className="kr-pressed w-full resize-none rounded-control border-0 px-3.5 py-2.5 text-sm text-foreground placeholder:text-foreground/40"
+              />
+              <div className="mt-2 flex items-center justify-between gap-3">
                 <button
                   type="button"
                   title="Voice input"
                   aria-label="Voice input"
-                  className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0 transition-all"
+                  className="kr-pop grid h-11 w-11 shrink-0 place-items-center rounded-full text-foreground"
                   data-testid="decision-note-mic"
                   onClick={() => toast("Voice capture is available from the Dex panel", { icon: "🎙" })}
                 >
-                  <Microphone size={16} weight="bold" />
+                  <Microphone size={16} weight="regular" aria-hidden="true" />
                 </button>
-                <textarea
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) sendNote();
-                  }}
-                  data-testid="decision-note-input"
-                  placeholder={`Speak or type — this goes back to ${d.created_by_name || "the raiser"}`}
-                  rows={3}
-                  className="flex-1 border border-border px-3 py-2 text-sm focus:outline-none focus:shadow-sm resize-none"
-                />
-              </div>
-              <div className="flex items-center gap-3 mt-2">
                 <button
                   type="button"
                   onClick={sendNote}
                   disabled={sending || !note.trim()}
                   data-testid="decision-note-send"
-                  className="flex items-center gap-1 bg-primary text-primary-foreground px-3 py-1.5 text-sm font-medium border border-border transition-all disabled:opacity-50"
+                  className="kr-lift flex h-11 items-center gap-1.5 rounded-pill bg-kr-ink px-4 text-sm font-medium text-white disabled:opacity-50"
                 >
-                  <PaperPlaneTilt size={14} weight="bold" /> {sending ? "Sending…" : "Send note"}
+                  <PaperPlaneTilt size={14} weight="bold" aria-hidden="true" />
+                  {sending ? "Sending…" : "Send note"}
                 </button>
-                <p className="text-xs text-muted-foreground">
-                  Or tap the mic — speaking is faster than typing.
-                </p>
               </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Or tap the mic — speaking is faster than typing.
+              </p>
             </Section>
 
             {/* Prior discussion, preserved but tucked below to keep the
                 approval flow above the fold. */}
             {(d.timeline || []).length > 0 && (
-              <div className="mt-4 border-t border-border pt-3">
-                <p className="label-mono text-muted-foreground mb-2 flex items-center gap-1">
+              <div className="mt-4 border-t border-nm-edge/40 pt-3">
+                <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                   <ChatCircleText size={14} weight="bold" /> Prior activity
                 </p>
                 <div className="space-y-2 max-h-40 overflow-y-auto" data-testid="decision-history">
                   {(d.timeline || []).map((e, i) => (
                     <div
                       key={`${e.ts}-${i}`}
-                      className={`text-sm pl-2 border-l-2 ${e.kind === "comment" ? "border-brand-blue" : "border-border"}`}
+                      className={`border-l-2 pl-2.5 text-sm ${e.kind === "comment" ? "border-kr-ink/60" : "border-nm-edge/60"}`}
                     >
                       <p className={e.kind === "comment" ? "" : "text-muted-foreground"}>{e.label}</p>
-                      <p className="label-mono text-muted-foreground">
+                      <p className="text-xs text-muted-foreground">
                         {e.actor || "System"} · {timeAgo(e.ts)}
                       </p>
                     </div>

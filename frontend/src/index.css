@@ -403,6 +403,17 @@
         cursor: pointer;
     }
 
+    /* KM-6 — the ONE documented exception to the 44px floor. The step
+       reorder arrows are a stacked pair that must fit inside a 3.9rem text
+       field; at 44px each they would be 88px tall and the row's height would
+       be set by its controls instead of its content. 27px each, and they are
+       the only targets in that column with 4px of clearance either side, so
+       nothing sits close enough to mis-tap. Everything else keeps the floor. */
+    .kr-step-nudge {
+        min-height: 0;
+        min-width: 0;
+    }
+
     /* A control that opted into a taller tier keeps it. */
     .min-h-touch-md { min-height: var(--control-h-md) !important; }
     .min-h-touch-lg { min-height: var(--control-h-lg) !important; }

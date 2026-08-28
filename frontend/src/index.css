@@ -1222,6 +1222,25 @@ html[data-dex="1"].dark .text-muted-foreground { color: hsl(var(--muted-foregrou
 
 /* My Work — steel blue lifted with gold. Cool for a focus surface, warm
    enough not to feel like a spreadsheet. */
+/* KM-13 — /inbox's sky is the founder's own image, not a gradient.
+   Every other room tints four radial stops through --sky-*; the Desk instead
+   paints the supplied artwork, so `background-image` is replaced outright
+   rather than re-created in CSS. Cover + centre so it fills any aspect from a
+   375px phone to a 1400px desktop without letterboxing.
+
+   The drift animation is switched off here. On a gradient it is a slow breath
+   of light; on a photographic bloom with real internal structure it becomes a
+   visibly sliding picture, which is a different effect from the one that was
+   asked for. ::after already sits at opacity 0 app-wide, so ::before is the
+   only layer painting and this is the only rule that has to change. */
+html[data-page="inbox"] .app-sky::before {
+    background-image: url("./assets/inbox-glow.png");
+    background-size: cover;
+    background-position: center center;
+    animation: none;
+    transform: none;
+}
+
 html[data-page="my-work"] .app-sky {
     --sky-core: hsl(212 52% 79% / .62);
     --sky-deep: hsl(202 44% 72% / .38);

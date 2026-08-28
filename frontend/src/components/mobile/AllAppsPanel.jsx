@@ -115,7 +115,12 @@ function buildTiles({ user, t, counts, live }) {
       to: "/crm",
       label: t("nav.crm", "CRM"),
       icon: AddressBook,
-      size: "large",
+      /* KM-7 — CRM drops from a 2x2 to the same 2x1 the other two live tiles
+         use. As a `large` it was twice the height of everything else and left
+         the right-hand column (Team / Journal / Work Coach) floating against
+         a tall blank, so the two columns never lined up. Three equal wide
+         tiles on the left now sit level with three smalls on the right. */
+      size: "wide",
       perm: "people",
       live: live.crm,
     },
@@ -124,7 +129,9 @@ function buildTiles({ user, t, counts, live }) {
       key: "operating-score",
       to: "/operating-score",
       // Not t("nav.ops") — that bundle says "Ops", which is jargon for a tile.
-      label: t("allapps.operating_score", "Operating Score"),
+      // KM-7 — "Ops", not "Operating Score": at a 2x1 tile the long form
+      // wrapped to two lines and pushed its own live figure out of the card.
+      label: t("allapps.ops", "Ops"),
       icon: Gauge,
       size: "wide",
       ownerOnly: true,
@@ -381,8 +388,14 @@ export function AllAppsPanel({
                growing rather than a separate object arriving. The bottom
                offset is the dock's own anchor (1rem + safe inset) plus its
                64px height plus a 12px seam. */
-            "fixed inset-x-4 z-[10090] mx-auto flex max-h-[68vh] max-w-md flex-col overflow-hidden",
-            "bottom-[calc(1rem+4rem+0.75rem+env(safe-area-inset-bottom,0px))]",
+            /* KM-7 — the panel IS the bar, extended upward. It takes the
+               dock's own horizontal anchor (app-dock-left), its width, its
+               ink and its blur, and sits directly on top of it — so opening
+               More reads as the bar growing rather than a separate card
+               arriving over the app. w-[17rem] is the dock's measured width
+               (267px at a 375px viewport, four slots plus padding). */
+            "fixed z-[10090] flex max-h-[68vh] w-[var(--app-dock-w,17rem)] flex-col overflow-hidden app-dock-left",
+            "bottom-[calc(1rem+4rem+0.5rem+env(safe-area-inset-bottom,0px))]",
             /* KM-3 — THE PANEL BECOMES AN INK OBJECT.
                It was `bg-background` — the page's own greige — so More opened
                a copy of the page floating over the page, with a hard
@@ -394,7 +407,10 @@ export function AllAppsPanel({
                text-muted-foreground inside becomes its ink counterpart with
                no `dark:` variant written anywhere. The thing More opens now
                looks like the ink pill you tapped to open it. */
-            "dark kr-glass rounded-cardlg",
+            /* Exactly the bar's material — same alpha, same blur, same
+               saturation — so the two read as one object rather than two
+               dark surfaces that nearly match. */
+            "dark rounded-cardlg bg-kr-ink/55 backdrop-blur-2xl backdrop-saturate-150",
 
             // scale 0.92 -> 1 with opacity, ~180ms ease-out; reverse on close
             // [animation-duration:...] rather than duration-[180ms]: the

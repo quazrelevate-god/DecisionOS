@@ -606,27 +606,41 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
       </div>
 
       {editing && (
-        <div className="flex gap-2 mt-3">
+        /* KM-7 — the add row joins the material. The field is .nm-field like
+           every other input in the app, and the plus is a round .kr-pop button
+           rather than a square .nm-tile with a colour hover. */
+        <div className="mt-3 flex items-center gap-2">
           <input value={newStep} onChange={(e) => setNewStep(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addStep()}
-            placeholder="Add your own step…" data-testid={`exec-newstep-${t.id}`} className={inp} />
-          <button onClick={addStep} data-testid={`exec-add-${t.id}`} className="px-3 nm-tile hover:bg-accent"><Plus size={14} weight="bold" /></button>
+            placeholder="Add your own step…" data-testid={`exec-newstep-${t.id}`}
+            className="nm-field h-11 min-w-0 flex-1 rounded-pill px-4 text-sm" />
+          <button onClick={addStep} data-testid={`exec-add-${t.id}`} aria-label="Add step"
+            className="kr-pop grid h-11 w-11 shrink-0 place-items-center rounded-full text-foreground">
+            <Plus size={15} weight="bold" aria-hidden="true" />
+          </button>
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2 mt-4">
+      <div className="mt-4 flex items-center gap-2">
         {editing ? (
           <>
+            {/* KM-7 — all three on ONE row. Accept takes the space it needs
+                and Regenerate the rest; Cancel plan drops its word and becomes
+                a circle on the right, which is what makes the row fit at
+                343px. Its icon is translucent red — present enough to read as
+                the destructive one, quiet enough not to compete with the two
+                controls you actually came here to press. */}
             <button onClick={() => save("accepted")} disabled={busy} data-testid={`exec-accept-${t.id}`}
-              className="kr-lift flex min-w-[140px] flex-1 items-center justify-center gap-2 rounded-pill bg-kr-ink py-2.5 text-sm font-medium text-white transition-all disabled:opacity-50">
-              <CheckCircle size={16} weight="bold" /> Accept plan
+              className="kr-lift flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-pill bg-kr-ink px-3 text-xs font-medium text-white disabled:opacity-50">
+              <CheckCircle size={14} weight="bold" aria-hidden="true" /> Accept plan
             </button>
             <button onClick={generate} disabled={busy} data-testid={`exec-regenerate-${t.id}`}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium nm-btn hover:bg-accent transition-colors disabled:opacity-50">
-              <ArrowClockwise size={15} weight="bold" /> Regenerate
+              className="kr-pop flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-pill px-3 text-xs font-medium text-foreground disabled:opacity-50">
+              <ArrowClockwise size={14} weight="bold" aria-hidden="true" /> Regenerate
             </button>
             <button onClick={cancelAIPlan} disabled={busy} data-testid={`exec-cancel-plan-${t.id}`}
-              className="nm-btn flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50">
-              <XCircle size={15} weight="bold" /> Cancel plan
+              aria-label="Cancel plan" title="Cancel plan"
+              className="kr-pop grid h-11 w-11 shrink-0 place-items-center rounded-full text-danger-600/60 disabled:opacity-50">
+              <XCircle size={16} weight="bold" aria-hidden="true" />
             </button>
           </>
         ) : (
@@ -643,13 +657,32 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
         )}
       </div>
 
+      {/* KM-7 — the step detail joins the design system. It was the retired
+          system's last corner in this file: a hairline-framed panel, a
+          font-heading title and a `label-mono` footnote, with the close X
+          inheriting the dialog default and sitting off the title's baseline.
+          Now a .kr-bento sheet, sans throughout, the step itself pressed into
+          a .nm-inset well so the text reads as the CONTENT rather than more
+          chrome, and the X replaced by an explicit .kr-pop Close so it is
+          aligned by the layout instead of floating. */}
       <Dialog open={!!viewStep} onOpenChange={(o) => !o && setViewStep(null)}>
-        <DialogContent className="rounded-cardlg border border-nm-edge/40">
+        <DialogContent className="kr-bento rounded-cardlg border-0 [&>button.absolute]:hidden">
           <DialogHeader>
-            <DialogTitle className="font-heading tracking-tight text-base flex items-center gap-2"><ListChecks size={18} weight="bold" aria-hidden="true" className="text-muted-foreground" /> Execution Step</DialogTitle>
+            <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+              <ListChecks size={17} weight="regular" aria-hidden="true" className="text-muted-foreground" />
+              Execution step
+            </DialogTitle>
           </DialogHeader>
-          <p className="text-sm leading-relaxed whitespace-pre-wrap break-words" data-testid={`exec-step-detail-${t.id}`}>{viewStep?.text}</p>
-          <p className="label-mono text-muted-foreground mt-1">Tap outside to close</p>
+          <div className="nm-inset rounded-control p-3.5">
+            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed"
+               data-testid={`exec-step-detail-${t.id}`}>
+              {viewStep?.text}
+            </p>
+          </div>
+          <button type="button" onClick={() => setViewStep(null)} data-testid={`exec-step-close-${t.id}`}
+            className="kr-pop mt-1 flex h-11 w-full items-center justify-center rounded-pill text-sm font-medium text-foreground">
+            Close
+          </button>
         </DialogContent>
       </Dialog>
     </div>
@@ -1173,6 +1206,16 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
                 className="shrink-0 rounded-pill border-[0.5px] border-kr-ink/55 px-2 py-0.5 text-[11px] font-medium capitalize text-foreground/70">
                 {t.priority || "medium"}
               </span>
+              {/* KM-7 — Overdue rides WITH the priority chip, not on the meta
+                  line below it. They are the same kind of statement about the
+                  task — how urgent, how late — and splitting them across two
+                  rows made a late task three lines tall for two short words. */}
+              {overdue && !terminal && (
+                <span data-testid={`overdue-${t.id}`}
+                  className="shrink-0 rounded-pill bg-kr-accent px-2 py-0.5 text-[11px] font-medium text-white">
+                  Overdue
+                </span>
+              )}
             </div>
             <div className="flex items-center flex-wrap gap-2 mt-1.5 text-xs">
               {/* Status pill -- muted when normal, red when overdue/rejected */}
@@ -1182,12 +1225,6 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
                   : awaitingApproval ? "border-[0.5px] border-kr-ink text-foreground"
                   : "bg-nm-sunken text-muted-foreground border-nm-edge/40"
                 } ${expanded ? "hidden lg:inline-block" : ""}`}>{STATUS_LABEL[t.status] || t.status}</span>
-              {overdue && !terminal && (
-                <span data-testid={`overdue-${t.id}`}
-                  className="rounded-pill bg-kr-accent px-2 py-0.5 font-medium text-white">
-                  Overdue
-                </span>
-              )}
               {t.due_date && !overdue && (
                 <span className="text-muted-foreground">
                   due {new Date(t.due_date).toLocaleString(undefined, { day: "numeric", month: "short" })}
@@ -1367,35 +1404,41 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
              (Complete, Cancel, photo, file, voice) share 343px, and Complete
              was truncating to "Comp…". Wrapping lets the two endings hold the
              first line and the three attachment circles drop to the second. */
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <button
-              onClick={complete}
-              data-testid={`complete-m-${t.id}`}
-              title={t.evidence_required && !hasEvidence ? "Add proof first" : "Mark as complete"}
-              className="flex items-center gap-2 rounded-pill bg-kr-ink px-4 py-2 text-sm font-medium text-white"
-            >
-              <CheckCircle size={14} weight="bold" /> Complete
-            </button>
-            {/* KM-6 — Cancel moves here from the status bar. It is an ENDING,
-                like Complete, and endings belong together at the foot of the
-                card rather than inside a progress track they would remove the
-                task from. Quiet by default: it is a legitimate outcome, not a
-                warning, so it gets .kr-pop rather than a red fill. */}
-            <button
-              onClick={() => setStatus("cancelled")}
-              data-testid={`cancel-m-${t.id}`}
-              title="Cancel this task"
-              className="kr-pop flex items-center gap-2 rounded-pill px-4 py-2 text-sm font-medium text-foreground"
-            >
-              <XCircle size={14} weight="bold" aria-hidden="true" /> Cancel
-            </button>
-            <span aria-hidden="true" className="hidden h-6 w-px shrink-0 bg-nm-edge/60 sm:block" />
+          <div className="flex items-center gap-2">
+            {/* KM-7 — Complete and Cancel are ONE welded control, and Cancel is
+                icon-only. Five worded/round controls could not share 343px, so
+                KM-6 wrapped the row onto two lines; dropping the word "Cancel"
+                and joining the two endings into a single .kr-pop group buys
+                back enough width for the whole row to fit again.
+                Cancel keeps a real aria-label and title — an icon-only
+                destructive action with no name is not a control, it is a
+                guess. */}
+            <div className="kr-pop flex shrink-0 items-center gap-1 rounded-pill p-1"
+                 role="group" aria-label="Finish this task">
+              <button
+                onClick={complete}
+                data-testid={`complete-m-${t.id}`}
+                title={t.evidence_required && !hasEvidence ? "Add proof first" : "Mark as complete"}
+                className="flex h-9 items-center gap-1.5 rounded-pill bg-kr-ink px-3.5 text-xs font-medium text-white"
+              >
+                <CheckCircle size={13} weight="bold" aria-hidden="true" /> Complete
+              </button>
+              <button
+                onClick={() => setStatus("cancelled")}
+                data-testid={`cancel-m-${t.id}`}
+                aria-label="Cancel this task"
+                title="Cancel this task"
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-foreground/70"
+              >
+                <XCircle size={15} weight="bold" aria-hidden="true" />
+              </button>
+            </div>
             <button
               onClick={() => fileRef.current?.click()}
               disabled={uploading}
               data-testid={`photo-m-${t.id}`}
               aria-label="Attach a photo"
-              className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-nm-edge/40 bg-white disabled:opacity-40"
+              className="kr-pop grid h-11 w-11 shrink-0 place-items-center rounded-full text-foreground disabled:opacity-40"
             >
               <Camera size={16} weight="regular" />
             </button>
@@ -1404,7 +1447,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
               disabled={uploading}
               data-testid={`upload-file-m-${t.id}`}
               aria-label="Upload a file"
-              className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-nm-edge/40 bg-white disabled:opacity-40"
+              className="kr-pop grid h-11 w-11 shrink-0 place-items-center rounded-full text-foreground disabled:opacity-40"
             >
               <FileArrowUp size={16} weight="regular" />
             </button>
@@ -1412,7 +1455,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
               onClick={toggleVoice}
               data-testid={`voice-m-${t.id}`}
               aria-label={recording ? "Stop recording" : "Record voice reply"}
-              className={`grid h-10 w-10 shrink-0 place-items-center rounded-full border border-nm-edge/40 ${recording ? "bg-kr-accent text-white" : "bg-white"}`}
+              className={`grid h-11 w-11 shrink-0 place-items-center rounded-full ${recording ? "bg-kr-accent text-white" : "kr-pop text-foreground"}`}
             >
               {recording ? <Stop size={16} weight="fill" /> : <Microphone size={16} weight="regular" />}
             </button>

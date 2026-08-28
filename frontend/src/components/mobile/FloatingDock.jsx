@@ -98,6 +98,23 @@ export function FloatingDock({ user, onMore, moreOpen = false, moreBadge = 0 }) 
   const location = useLocation();
   const slots = React.useMemo(() => dockSlots(user, t), [user, t]);
 
+  /* KM-7 — publish the bar's measured width as --app-dock-w so the More panel
+     can be EXACTLY as wide as it. The bar is w-fit and its slot count varies
+     by role (dockSlots drops Money without finance access), so any constant
+     the panel hard-coded would be right for owners and wrong for everyone
+     else. Measured, not guessed, and re-measured on resize. */
+  const barRef = React.useRef(null);
+  React.useEffect(() => {
+    const el = barRef.current;
+    if (!el) return;
+    const publish = () =>
+      document.documentElement.style.setProperty("--app-dock-w", `${Math.round(el.getBoundingClientRect().width)}px`);
+    publish();
+    const ro = new ResizeObserver(publish);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [slots.length]);
+
   const isActive = (to) =>
     to === "/inbox"
       ? location.pathname === "/inbox" || location.pathname === "/"
@@ -114,6 +131,7 @@ export function FloatingDock({ user, onMore, moreOpen = false, moreBadge = 0 }) 
       aria-label={t("nav.primary", "Primary")}
     >
       <div
+        ref={barRef}
         className={cn(
           // KR-14.3 · GLASS DOCK — the pill widens edge-to-edge (via
           // `app-dock-right` also anchoring the right side) and takes a

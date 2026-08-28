@@ -1244,6 +1244,29 @@ html[data-dex="1"].dark .text-muted-foreground { color: hsl(var(--muted-foregrou
    but on artwork with real internal structure it becomes a visibly sliding
    picture. ::after already sits at opacity 0 app-wide, so ::before is the only
    layer painting and this is the only rule that has to change. */
+/* KM-15 — the phone gets the artwork back, as the 9 KB WebP.
+   KM-14 had reverted mobile to the gradient because the ORANGE artwork's
+   landscape crop put the hot core under the hero. This is a different picture
+   (yellow with grey cores) supplied as WebP, and it is what the founder wants
+   on the phone.
+
+   Two formats, one picture: the phone loads inbox-glow-mobile.webp at 9 KB,
+   desktop loads inbox-glow.png at 1,044 KB. Browsers do not fetch background
+   images for rules whose media query does not match, so each viewport pulls
+   exactly one of them.
+
+   Drift is off for the same reason as at lg: on artwork with real internal
+   structure a 90s pan reads as a sliding picture, not as light moving. */
+@media (max-width: 1023.98px) {
+    html[data-page="inbox"] .app-sky::before {
+        background-image: url("./assets/inbox-glow-mobile.webp");
+        background-size: cover;
+        background-position: center center;
+        animation: none;
+        transform: none;
+    }
+}
+
 @media (min-width: 1024px) {
     html[data-page="inbox"] .app-sky::before {
         background-image: url("./assets/inbox-glow.png");

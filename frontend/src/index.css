@@ -372,6 +372,48 @@
         font-size: max(1rem, var(--text-label));
     }
 
+    /* KM-0 — range was excluded from the field rule above (it has no text to
+       zoom, and a min-height on the input alone does not grow the THUMB, which
+       is the thing a thumb actually has to hit). So it needs its own rule and
+       it needs the thumb sized explicitly, per-engine — there is no shorthand.
+       Without this the weight sliders on /operating-score render a ~15px thumb
+       on a ~71px track, which is the smallest target in the app AND invisible
+       to the audit, because the audit measures the input box. */
+    input[type="range"] {
+        min-height: var(--control-h-sm);
+    }
+    input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 28px;
+        height: 28px;
+        border-radius: 9999px;
+        background: hsl(var(--kr-ink));
+        border: 2px solid #fff;
+        box-shadow: 0 1px 3px hsl(230 20% 20% / .28);
+        cursor: pointer;
+    }
+    input[type="range"]::-moz-range-thumb {
+        width: 28px;
+        height: 28px;
+        border-radius: 9999px;
+        background: hsl(var(--kr-ink));
+        border: 2px solid #fff;
+        box-shadow: 0 1px 3px hsl(230 20% 20% / .28);
+        cursor: pointer;
+    }
+
+    /* KM-6 — the ONE documented exception to the 44px floor. The step
+       reorder arrows are a stacked pair that must fit inside a 3.9rem text
+       field; at 44px each they would be 88px tall and the row's height would
+       be set by its controls instead of its content. 27px each, and they are
+       the only targets in that column with 4px of clearance either side, so
+       nothing sits close enough to mis-tap. Everything else keeps the floor. */
+    .kr-step-nudge {
+        min-height: 0;
+        min-width: 0;
+    }
+
     /* A control that opted into a taller tier keeps it. */
     .min-h-touch-md { min-height: var(--control-h-md) !important; }
     .min-h-touch-lg { min-height: var(--control-h-lg) !important; }
@@ -470,6 +512,13 @@
     .app-dock-left {
         left: calc(max(0px, (100vw - var(--app-shell)) / 2) + 1rem);
     }
+    /* KR-14.3 — the dock stretches across the shell on mobile, with a right
+       anchor that leaves clearance for the Dex FAB (64px + a 12px gap). Paired
+       with `app-dock-left`, this widens the pill from a hugging content box
+       to a near-edge-to-edge bar. */
+    .app-dock-right {
+        right: calc(max(0px, (100vw - var(--app-shell)) / 2) + 1rem + 4.75rem);
+    }
     .app-fab-right {
         right: calc(max(0px, (100vw - var(--app-shell)) / 2) + 1rem);
     }
@@ -561,7 +610,13 @@
         letter-spacing: -0.01em;
         font-weight: 700;
     }
-    @media (min-width: 640px) {
+    /* KM-0 — 1024, not 640. The step used to fire at 640px, but below lg the
+       content column is .app-shell (capped at 448px), so a 640px viewport
+       still has a ~414px column. Stepping the two largest type tiers up
+       inside a column that did not get wider is the same class of bug as
+       `sm:grid-cols-2` in the shell. Desktop is unaffected: 1024 is where
+       the column actually stops being a phone. */
+    @media (min-width: 1024px) {
         .text-display { font-size: 2.125rem; }  /* 34 */
         .text-h1      { font-size: 1.5rem;   }  /* 24 */
     }
@@ -1167,6 +1222,73 @@ html[data-dex="1"].dark .text-muted-foreground { color: hsl(var(--muted-foregrou
 
 /* My Work — steel blue lifted with gold. Cool for a focus surface, warm
    enough not to feel like a spreadsheet. */
+/* KM-13 — /inbox's sky is the founder's own artwork, DESKTOP ONLY.
+   Every other room tints four radial stops through --sky-*; the Desk instead
+   paints the supplied image, so `background-image` is replaced outright rather
+   than re-created in CSS.
+
+   KM-14 — gated behind lg on the founder's call: the phone goes back to the
+   gradient sky. The reason it did not carry to mobile is aspect. The artwork
+   is landscape (1659x948); `cover` on a 375x812 portrait viewport scales by
+   HEIGHT and crops to the middle 438px of the source, which is the hot core of
+   the bloom — so the phone got the most saturated slice of a picture whose
+   composition depends on the cool field around it. Measured, that pushed the
+   greeting's muted half to 3.10:1, passing only because 30px counts as large
+   text. The gradient was authored for that viewport and does not have the
+   problem.
+
+   Below lg nothing here applies, so the base .app-sky::before rule — gradients,
+   kr-drift and all — is what paints, exactly as before KM-13.
+
+   The drift is switched off at lg: on a gradient it is a slow breath of light,
+   but on artwork with real internal structure it becomes a visibly sliding
+   picture. ::after already sits at opacity 0 app-wide, so ::before is the only
+   layer painting and this is the only rule that has to change. */
+/* KM-15 — the phone gets the artwork back, as the 9 KB WebP.
+   KM-14 had reverted mobile to the gradient because the ORANGE artwork's
+   landscape crop put the hot core under the hero. This is a different picture
+   (yellow with grey cores) supplied as WebP, and it is what the founder wants
+   on the phone.
+
+   Two formats, one picture: the phone loads inbox-glow-mobile.webp at 9 KB,
+   desktop loads inbox-glow.png at 1,044 KB. Browsers do not fetch background
+   images for rules whose media query does not match, so each viewport pulls
+   exactly one of them.
+
+   Drift is off for the same reason as at lg: on artwork with real internal
+   structure a 90s pan reads as a sliding picture, not as light moving. */
+@media (max-width: 1023.98px) {
+    html[data-page="inbox"] .app-sky::before {
+        background-image: url("./assets/inbox-glow-mobile.webp");
+        background-size: cover;
+        /* KM-16 — 60%, not centre. This artwork has dark grey cores where the
+           orange one had none, and at `center` one of them sat directly under
+           the greeting: the muted half ("Rajesh.") measured 1.73:1 against a
+           3.0 large-text threshold — close to unreadable.
+           The value is swept, not guessed. Sampling the darkest pixel inside
+           the greeting's own box across background-position-x from 0 to 100%:
+           centre is the WORST region of the whole range (1.73), 55% is the
+           first to clear (3.67), and 60% gives 5.15 with the score area at
+           15.31 / 5.84. Past ~75% everything scores higher still, but only
+           because the crop has panned onto the pale right edge and the glow
+           has left the hero — which is not a fix, it is a deletion. 60% is the
+           smallest pan that clears the core while keeping the picture. */
+        background-position: 60% center;
+        animation: none;
+        transform: none;
+    }
+}
+
+@media (min-width: 1024px) {
+    html[data-page="inbox"] .app-sky::before {
+        background-image: url("./assets/inbox-glow.png");
+        background-size: cover;
+        background-position: center center;
+        animation: none;
+        transform: none;
+    }
+}
+
 html[data-page="my-work"] .app-sky {
     --sky-core: hsl(212 52% 79% / .62);
     --sky-deep: hsl(202 44% 72% / .38);
@@ -1260,6 +1382,11 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
    carrying six Recharts surfaces. 320ms — long enough to read as motion,
    short enough that a founder clicking through four pipelines in a row
    never waits on it. */
+@keyframes kr-dex-breathe {
+    0%, 100% { transform: scaleY(0.55); }
+    50%      { transform: scaleY(1); }
+}
+
 @keyframes kr-page-in {
     from { opacity: 0; transform: translate3d(0, 10px, 0); }
     to   { opacity: 1; transform: none; }
@@ -1310,7 +1437,143 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
    Dex room proved — so every token-reading child (text, chips, hairlines,
    recipes) just works on ink without a `dark:` variant in sight.
    ═════════════════════════════════════════════════════════════════════════ */
-.app-canvas { --page-pad: 1rem; }
+@layer components {
+    /* KM-3 — .kr-pop INSIDE AN INK SURFACE inverts its ground.
+       .kr-pop is built for the light page: a 38%-white fill with a white
+       inset lip. Dropped onto the ink More panel that reads as a pale grey
+       blob, and the panel's own light-on-dark text then sat light-on-light —
+       measured: the CRM, Operating Score, Calendar and utility-row labels
+       were all but unreadable. Same material, same direction of light,
+       opposite ground. Scoped to .kr-glass.dark so it only fires inside an
+       ink container and the light-page recipe is untouched elsewhere. */
+    .kr-glass.dark .kr-pop {
+        background: hsl(0 0% 100% / .08);
+        box-shadow:
+            inset 0 1px 0 hsl(0 0% 100% / .14),
+            0 1px 2px hsl(0 0% 0% / .34),
+            0 4px 10px -4px hsl(0 0% 0% / .48);
+        color: hsl(40 20% 97%);
+    }
+    .kr-glass.dark .kr-pop:hover {
+        background: hsl(0 0% 100% / .12);
+    }
+
+    /* KM-5 — and the same inversion for .kr-pressed, which the decision
+       cards now use for their Review / Chase pill. .kr-pressed's dark inset
+       from the top-left plus a 72%-white inset from the bottom-right is tuned
+       for the light page; on an ink card the white inset blows out and the
+       "pressed" pill reads as a raised white blob. On ink the depression is
+       drawn the other way round: black doing the sinking, a faint white lip
+       on the far side. Descendant selector, not .dark — the decision cards
+       are .kr-glass without the token re-scope. */
+    .kr-glass .kr-pressed {
+        background: hsl(0 0% 0% / .22);
+        box-shadow:
+            inset 3px 3px 8px hsl(0 0% 0% / .45),
+            inset -2px -2px 6px hsl(0 0% 100% / .13);
+    }
+
+    /* KM-11 · .kr-vignette — the page darkens at its EDGES while Dex is
+       listening. A radial gradient rather than a flat scrim: a scrim dims the
+       content you are trying to keep reading, whereas a vignette leaves the
+       middle untouched and only weights the borders, which is what pulls the
+       eye to the bar at the bottom without taking the page away.
+       pointer-events:none — it must never intercept a tap. Deliberately
+       shallow (28% at the very corners, nothing for the middle 55%) because
+       the founder asked for subtle, and because this sits over a live app
+       rather than a modal. */
+    .kr-vignette {
+        position: fixed;
+        inset: 0;
+        z-index: 9998;
+        pointer-events: none;
+        background: radial-gradient(120% 78% at 50% 52%,
+            rgb(0 0 0 / 0) 0%,
+            rgb(0 0 0 / 0) 55%,
+            rgb(0 0 0 / .12) 78%,
+            rgb(0 0 0 / .28) 100%);
+        opacity: 0;
+        transition: opacity 260ms ease;
+    }
+    .kr-vignette[data-on="1"] { opacity: 1; }
+
+    /* KM-3 · .kr-snap — the horizontal section scroller on the Desk band.
+       One section per screen, snapped, with the page gutter as the inline
+       padding so a panel sits exactly where the page's content sits. */
+    .kr-snap {
+        display: flex;
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+        overscroll-behavior-x: contain;
+        scrollbar-width: none;
+        margin-inline: calc(var(--page-pad, 1rem) * -1);
+        padding-inline: var(--page-pad, 1rem);
+        /* KM-5 — TWO gutters, not one. A panel is 100% of the padded content
+           box (343px at a 375px viewport), so with a single-gutter gap the
+           next panel began at 343 + 16 = 359 and 16px of it — the red On-fire
+           card — sat visible past the right edge. Two gutters puts its leading
+           edge at 391, cleanly off-screen, and one card is one card. */
+        gap: calc(var(--page-pad, 1rem) * 2);
+        /* And the snapport has to start at the GUTTER. Without this the snap
+           aligns a panel's start to the scroll container's padding edge, i.e.
+           x=0, so every card sat flush against the left of the screen with no
+           page margin while its right side kept one. */
+        scroll-padding-inline: var(--page-pad, 1rem);
+    }
+    .kr-snap::-webkit-scrollbar { display: none; }
+    .kr-snap > * {
+        scroll-snap-align: start;
+        flex: 0 0 100%;
+        min-width: 0;
+        /* Contain each panel's backdrop root. Without this, the .kr-glass
+           cards' backdrop-filter escalates out of the scroll container and
+           samples the whole page — measured: the hero above the band rendered
+           blurred. `isolation` forms a stacking context, which is what pins
+           the backdrop root to the panel. */
+        isolation: isolate;
+    }
+    @media (min-width: 1024px) {
+        .kr-snap {
+            display: block;
+            overflow-x: visible;
+            scroll-snap-type: none;
+            margin-inline: 0;
+            padding-inline: 0;
+        }
+    }
+
+    /* KM-3 · .kr-form-row — form fields STACK below lg. Full stop.
+       A dialog is the viewport width on a phone: 375 minus the dialog's own
+       p-4 (32px) leaves 343px of content. Two columns puts a currency or a
+       name select at 165px; three puts a native date input at ~106px, which
+       iOS clips. And there is no viewport below lg where a second column
+       becomes honest — the content column caps at --app-shell (448px) and
+       stops growing at a 480px viewport (see KM-0) — so this class does not
+       offer one.
+       It also fixes a subtler bug than width: in a 2-col row a long label
+       ("Supporting employee (optional)") wraps to two lines while its
+       neighbour ("Assigned employee") stays on one, so the two SELECTS below
+       them start at different y positions and the row reads as broken
+       alignment. Stacked, every label owns its own line and the question
+       disappears. */
+    .kr-form-row {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+    }
+}
+@media (min-width: 1024px) {
+    .kr-form-row    { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .kr-form-row--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* KM-0 — the bleed must match the GUTTER, not a guess at it. <main> pads with
+   `px-gutter-safe` = max(1rem, env(safe-area-inset-left)) (index.css ~430), so
+   on a notched device in landscape the real gutter is ~44px while a flat 1rem
+   here still said 16px — and every full-bleed child (the dark band on Desk,
+   Operating Score and the rest) under-bled by the difference, leaving an
+   un-inked sliver down the notch side. Same expression, same value, always. */
+.app-canvas { --page-pad: max(1rem, env(safe-area-inset-left, 0px)); }
 @media (min-width: 1024px) { .app-canvas { --page-pad: 2rem; } }
 
 @layer components {
@@ -1342,6 +1605,12 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
            It stays a CUT rather than a painted shape because what shows
            through is the page's bloom — a notch "coloured like the
            background" would be a flat patch sitting on a gradient. */
+        /* KR-14.5 — THE NOTCH IS BACK. Founder: "the folder-like design in
+           the decision desk is missing — I want it back." The dip on the top
+           edge is what gives the card its tab-folder silhouette; without it
+           the band read as a plain rounded box. The grab-handle bar stays
+           removed (KR-14.4) — the folder shape carries the affordance on its
+           own. */
         -webkit-mask-image:
             url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="220" height="18" viewBox="0 0 220 18"><path d="M0 0H220C196 0 196 18 172 18H48C24 18 24 0 0 0Z" fill="black"/></svg>'),
             linear-gradient(#000, #000);
@@ -1520,18 +1789,31 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
             hsl(214 26% 95% / .76));
         -webkit-backdrop-filter: blur(18px) saturate(1.3);
         backdrop-filter: blur(18px) saturate(1.3);
-        border: 1px solid hsl(214 34% 100% / .95);
+        border: 1px solid hsl(214 30% 100% / .85);
+        /* KR-14.2 — NO WHITE BLOOM. The neumorphic pair used to be a 14px
+           white halo opposite a soft dark one, which is textbook neumorphism
+           and, at tile scale on a pale ground, reads exactly as the founder
+           put it: "cloudy, foggy, glowy." The white had nothing to sit
+           against — the page behind it is already near-white, so the halo
+           had no edge and just fogged outward.
+           The lift is carried by DARK now, and by a much tighter one: a 1px
+           contact shadow that defines the edge, plus a short lifted shadow
+           underneath. The only white left is an INSET top line — a highlight
+           catching the tile's own lip, which is a hard edge rather than a
+           bloom, so it reads as material instead of glow. */
         box-shadow:
-            -6px -6px 14px hsl(0 0% 100% / .70),
-             7px  8px 20px hsl(216 30% 40% / .15);
+            inset 0 1px 0 hsl(0 0% 100% / .90),
+            0 1px 2px hsl(216 28% 18% / .11),
+            0 6px 14px -6px hsl(216 28% 18% / .26);
         transition: box-shadow 220ms cubic-bezier(.22,1,.36,1),
                     transform 220ms cubic-bezier(.22,1,.36,1);
     }
     .kr-bento:hover {
         transform: translateY(-3px);
         box-shadow:
-            -7px -7px 16px hsl(0 0% 100% / .80),
-             9px 11px 26px hsl(216 30% 40% / .19);
+            inset 0 1px 0 hsl(0 0% 100% / .90),
+            0 2px 4px hsl(216 28% 18% / .13),
+            0 12px 22px -10px hsl(216 28% 18% / .32);
     }
     /* Opened: the tile stops hovering and settles, so an expanded card reads
        as a surface you are inside rather than one more thing to click. */
@@ -1557,6 +1839,22 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
         color: hsl(var(--text-primary));
     }
 
+    /* KM-8 · .kr-frost-min — the same light glass as .kr-frost, one step
+       quieter, for panes that sit ON a frosted surface rather than on the
+       page. If a tile used full .kr-frost inside a .kr-frost panel the two
+       alphas would stack to near-opaque and the tile would vanish into its
+       own container; this drops the fill and lets the parent's blur do the
+       work, so the tile is drawn almost entirely by its hairline. No
+       backdrop-filter of its own — nesting blurs is how you get a smeared,
+       expensive surface that reads as neither glass nor solid. */
+    .kr-frost-min {
+        background: hsl(0 0% 100% / .34);
+        border: 1px solid hsl(0 0% 100% / .60);
+        border-radius: var(--radius-tile);
+        color: hsl(var(--text-primary));
+    }
+    .kr-frost-min:hover { background: hsl(0 0% 100% / .46); }
+
     .kr-glass--blue  { --kr-glass-from: 214 45% 58%; --kr-glass-to: 28 55% 50%; }
     .kr-glass--olive { --kr-glass-from: 85 34% 42%;  --kr-glass-to: 75 32% 22%; }
     .kr-glass--warm  { --kr-glass-from: 36 18% 48%;  --kr-glass-to: 225 12% 38%; }
@@ -1580,18 +1878,11 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
         transition: opacity 260ms ease, filter 260ms ease;
     }
 
-    /* KR-8.5 — the hero blurs progressively as the sheet climbs over it.
-       Driven by three custom properties a scroll handler writes; all three
-       are compositor-friendly and default to "no effect", so if the handler
-       never runs (or reduced motion short-circuits it) the hero is simply
-       sharp. */
-    .kr-hero {
-        filter: blur(var(--kr-hero-blur, 0px));
-        opacity: var(--kr-hero-fade, 1);
-        transform: scale(var(--kr-hero-scale, 1));
-        transform-origin: 50% 22%;
-        will-change: filter, opacity, transform;
-    }
+    /* KM-9 — the progressive blur is removed. The filter/opacity/scale trio
+       and their will-change are gone with the scroll handler that fed them:
+       leaving `filter: blur(var(--x, 0px))` in place would still promote the
+       whole hero to its own compositor layer on every page, for an effect
+       nothing writes to any more. */
 
     /* KR-4 — the two motion verbs the primitives share.
 
@@ -1695,15 +1986,20 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
         background: hsl(0 0% 100% / .38);
         backdrop-filter: blur(14px) saturate(1.4);
         -webkit-backdrop-filter: blur(14px) saturate(1.4);
+        /* KR-14.2 — same de-fogging as .kr-bento: the white halo goes, a
+           tight dark contact shadow does the lifting, and the only white
+           left is an inset lip. */
         box-shadow:
-            -4px -4px 9px hsl(0 0% 100% / .72),
-             5px  5px 12px hsl(230 22% 34% / .24);
+            inset 0 1px 0 hsl(0 0% 100% / .85),
+            0 1px 2px hsl(230 20% 20% / .12),
+            0 4px 10px -4px hsl(230 20% 20% / .26);
         transition: box-shadow 160ms ease, transform 160ms ease;
     }
     .kr-pop:hover {
         box-shadow:
-            -5px -5px 11px hsl(0 0% 100% / .80),
-             6px  6px 14px hsl(230 22% 34% / .28);
+            inset 0 1px 0 hsl(0 0% 100% / .85),
+            0 2px 4px hsl(230 20% 20% / .14),
+            0 7px 14px -6px hsl(230 20% 20% / .30);
     }
     /* KR-11.3 · .kr-pressed — the "on" state of a neumorphic control.
        .kr-pop's :active is momentary; this is the same look held. Selected
@@ -1737,6 +2033,7 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
     .kr-glow { transition: none; }
     .kr-lift:hover .kr-arrow { transform: none; }
     .kr-reveal { opacity: 1; transform: none; transition: none; }
+    .kr-dex-breathe { animation: none; }
 
     /* KR-8.9 — the aurora is gone, so the well itself has nothing left to
        guard. .kr-pop still does: it eases its shadows on hover and drops 1px

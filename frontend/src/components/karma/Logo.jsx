@@ -22,8 +22,14 @@ import { Sparkle } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 
 export function KarmaLogo({ size = "md", className }) {
-  const word = size === "sm" ? "text-[16px]" : "text-[19px]";
-  const star = size === "sm" ? 9 : 10;
+  const word =
+    size === "sm" ? "text-[16px]"
+    : size === "lg" ? "text-[22px]"
+    : "text-[19px]";
+  const star =
+    size === "sm" ? 9
+    : size === "lg" ? 12
+    : 10;
   return (
     <span className={cn("inline-flex select-none items-start", className)} data-testid="karma-logo">
       <span className={cn("font-semibold leading-none tracking-tight text-foreground", word)}>

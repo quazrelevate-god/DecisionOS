@@ -29,6 +29,7 @@ import {
 import api from "@/lib/api";
 import { useAuth } from "../../context/AuthContext";
 import { hasPerm } from "@/lib/perms";
+import { cn } from "@/lib/utils";
 import { useDexCapture, BARS } from "../../hooks/useDexCapture";
 import { dueLabel } from "./MobileCard";
 import { BottomSheet } from "./BottomSheet";
@@ -107,176 +108,46 @@ const STATUS_COPY = {
  * §5.6: "Not a timer. A timer says a process is running; a waveform says I am
  * listening to you."
  */
-function LiveWaveform({ levels = [] }) {
+/* KM-3 · LiveWaveform — the ONLY visual element in the voice sheet.
+   The founder's brief: no mic icon anywhere in this window, no orb, "some
+   baby animated visual element" in the Gemini/ChatGPT idiom that responds to
+   the voice. So: a row of rounded bars driven by the live `levels` array from
+   useDexCapture while recording, and breathing gently on a staggered CSS
+   animation while idle so the surface is alive before you speak rather than a
+   dead placeholder waiting to be told what to do.
+   White on the ink sheet, not danger-600: red is this app's alert colour and
+   "Dex is listening" is not an alert. */
+function LiveWaveform({ levels = [], live }) {
   const peak = Math.max(...levels, 0);
   return (
     <div
       data-testid="dex-waveform"
       data-amplitude={peak.toFixed(3)}
+      data-live={live ? "1" : "0"}
       aria-hidden="true"
-      className="flex h-24 w-full items-center justify-center gap-[3px]"
+      className="flex h-28 w-full items-center justify-center gap-[5px]"
     >
       {levels.map((v, i) => (
         <span
           key={i}
-          className="w-[6px] shrink-0 rounded-full bg-danger-600 transition-[height] duration-75"
-          // 4px floor so silence still reads as a live line rather than a gap.
-          style={{ height: `${Math.max(4, Math.round(v * 96))}px`, opacity: 0.35 + (i / BARS) * 0.65 }}
+          className={cn(
+            "w-[6px] shrink-0 rounded-full bg-white",
+            live ? "transition-[height] duration-75" : "kr-dex-breathe"
+          )}
+          style={
+            live
+              ? { height: `${Math.max(6, Math.round(v * 104))}px`, opacity: 0.45 + (i / BARS) * 0.55 }
+              : {
+                  // Idle: a fixed silhouette that breathes. The delay ladder is
+                  // what makes it read as one organism rather than N blinking
+                  // bars, and the height curve gives it a centre-weighted shape.
+                  height: `${14 + Math.round(Math.sin((i / BARS) * Math.PI) * 30)}px`,
+                  animationDelay: `${i * 90}ms`,
+                  opacity: 0.4 + (i / BARS) * 0.4,
+                }
+          }
         />
       ))}
-    </div>
-  );
-}
-
-/** One extracted field, with the value carrying the emphasis. */
-function Field({ label, value }) {
-  if (!value) return null;
-  return (
-    <span className="flex min-w-0 items-baseline gap-1.5">
-      <span className="shrink-0 text-[length:var(--text-label)] font-semibold leading-4 text-muted-foreground">
-        {label}
-      </span>
-      <span className="min-w-0 truncate text-sm font-semibold">{value}</span>
-    </span>
-  );
-}
-
-/**
- * The understanding card — Dex echoing back what it heard as structure.
- *
- * Everything shown here is read from what the backend actually extracted: the
- * transcript, the decision title, and the tasks it created. Nothing is
- * paraphrased on the client, because a plausible-looking echo that does not
- * match what was stored would be worse than no echo at all.
- */
-function Understanding({ u, onLooksRight, onFix, busy }) {
-  const working = ["queued", "transcribing", "structuring"].includes(u.status);
-  const done = u.status === "done" || (!!u.decision && !working);
-  const bad = u.status === "failed";
-
-  return (
-    <div data-testid="dex-understanding" data-status={u.status}>
-      {/* What he said, always first — it is the thing being confirmed. */}
-      {u.transcript ? (
-        <blockquote
-          data-testid="dex-heard"
-          className="rounded-xl border-l-4 border-primary bg-accent px-3.5 py-3 text-[0.9375rem] leading-relaxed"
-        >
-          “{u.transcript}”
-          {u.language && (
-            <span className="mt-1 block text-[length:var(--text-label)] font-semibold leading-4 text-muted-foreground">
-              heard in {u.language}
-            </span>
-          )}
-        </blockquote>
-      ) : (
-        <p className="flex items-center gap-2 text-[0.9375rem] text-muted-foreground">
-          <Spinner size={18} className="animate-spin" aria-hidden="true" />
-          {STATUS_COPY[u.status] || "Listening…"}
-        </p>
-      )}
-
-      {working && u.transcript && (
-        <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground" data-testid="dex-working">
-          <Spinner size={16} className="animate-spin" aria-hidden="true" />
-          {STATUS_COPY[u.status]}
-        </p>
-      )}
-
-      {bad && (
-        <p className="mt-3 flex items-start gap-2 text-sm text-danger-700" data-testid="dex-failed">
-          <WarningCircle size={18} weight="bold" aria-hidden="true" className="mt-0.5 shrink-0" />
-          Say it again and Dex will have another go. Nothing was saved.
-        </p>
-      )}
-
-      {u.status === "slow" && (
-        <p className="mt-3 text-sm text-muted-foreground">
-          It is saved either way — it will appear on your desk when it is ready.
-        </p>
-      )}
-
-      {/* The structure. This is the moment §5.6 is about. */}
-      {done && u.decision && (
-        <div className="mt-4" data-testid="dex-structured">
-          <p className="text-[length:var(--text-label)] font-semibold leading-4 text-muted-foreground">
-            Dex turned that into
-          </p>
-          <div className="mt-2 nm-raised p-3.5">
-            <p className="font-heading text-[1.0625rem] font-bold leading-snug tracking-tight">
-              {u.decision.title}
-            </p>
-            {u.decision.summary && u.decision.summary !== u.decision.title && (
-              <p className="mt-1 text-sm leading-relaxed text-muted-foreground line-clamp-3">
-                {u.decision.summary}
-              </p>
-            )}
-
-            {u.tasks?.length > 0 && (
-              <ul className="mt-3 space-y-2 border-t border-border pt-3">
-                {u.tasks.map((task) => {
-                  const d = dueLabel(task.due_date);
-                  return (
-                    <li
-                      key={task.id}
-                      data-testid={`dex-task-${task.id}`}
-                      className="flex flex-wrap items-baseline gap-x-3 gap-y-1"
-                    >
-                      <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
-                        <ListChecks size={16} weight="bold" aria-hidden="true" className="shrink-0 translate-y-0.5 text-muted-foreground" />
-                        <span className="min-w-0 text-sm font-semibold leading-snug">{task.title}</span>
-                      </span>
-                      <Field label="for" value={task.assignee_name} />
-                      <Field label="by" value={d?.text} />
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-
-            {u.summary && (
-              <p className="mt-3 text-[length:var(--text-label)] font-semibold leading-4 text-muted-foreground">
-                {[
-                  u.summary.tasks ? `${u.summary.tasks} task${u.summary.tasks === 1 ? "" : "s"}` : null,
-                  u.summary.workflows ? `${u.summary.workflows} workflow${u.summary.workflows === 1 ? "" : "s"}` : null,
-                  u.summary.meetings ? `${u.summary.meetings} meeting${u.summary.meetings === 1 ? "" : "s"}` : null,
-                  u.summary.reminders ? `${u.summary.reminders} reminder${u.summary.reminders === 1 ? "" : "s"}` : null,
-                ].filter(Boolean).join(" · ") || "Nothing to assign — filed as a note"}
-              </p>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* §5.6: `Looks right ✓` / `Fix ↺`. Only once there is something to judge. */}
-      {(done || bad) && (
-        <div className="mt-5 flex items-stretch gap-touch-gap">
-          <button
-            type="button"
-            onClick={onLooksRight}
-            data-testid="dex-looks-right"
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-success-600 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-            style={{ minHeight: "var(--control-h-lg)" }}
-            disabled={busy}
-          >
-            <Check size={20} weight="bold" aria-hidden="true" />
-            Looks right
-          </button>
-          {done && (
-            <button
-              type="button"
-              onClick={onFix}
-              data-testid="dex-fix"
-              disabled={busy}
-              className="flex items-center justify-center gap-2 rounded-xl border border-border px-4 text-base font-semibold transition-colors hover:bg-accent disabled:opacity-50"
-              style={{ minHeight: "var(--control-h-lg)" }}
-            >
-              {busy ? <Spinner size={18} className="animate-spin" /> : <ArrowCounterClockwise size={18} weight="bold" aria-hidden="true" />}
-              Fix
-            </button>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -350,165 +221,85 @@ export function DexSheet({ open, onClose, onRecordingChange, onCaptured }) {
             ? t("dex.listening", "Listening…")
             : t("dex.prompt", "Tell Dex what to do")
       }
+      /* KM-3 — the old subtitle read "Speak, type, or attach. Dex sorts it
+         out." Two of those three are gone from this sheet, so the sentence
+         was describing a window that no longer exists. */
       description={
         stage === "idle"
-          ? t("dex.subtitle", "Speak, type, or attach. Dex sorts it out.")
+          ? t("dex.subtitle_voice", "Just say it. Dex sorts it out.")
           : undefined
       }
       // idle sits at its content height (~45% at 390x844); recording and
       // understanding take the tall sheet (§5.6's ~80%).
-      size={stage === "idle" ? "auto" : "tall"}
+      size="auto"
+      /* KM-3 — the sheet is a MINIMISED /brain: ink ground, frosted, with the
+         same token re-scope the room uses (`dark` means "inside the ink" since
+         KR-2), so every caption and control inside reads light-on-dark without
+         a single `dark:` variant. One size for both states too — idle and
+         recording share a layout now, so the sheet no longer resizes under
+         your thumb the moment you start speaking. */
+      className="dark border-t-white/10 bg-kr-ink/95 text-white backdrop-blur-2xl"
       data-testid="dex-sheet"
-      footer={
-        stage === "idle" ? (
-          <button
-            type="button"
-            data-testid="dex-sheet-open-full"
-            onClick={() => {
-              onClose?.();
-              navigate("/brain");
-            }}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-border text-base font-semibold transition-colors hover:bg-accent"
-            style={{ minHeight: "var(--control-h-md)" }}
-          >
-            {t("dex.open_full", "Open Dex")}
-            <ArrowRight size={18} weight="bold" />
-          </button>
-        ) : undefined
-      }
+      /* KM-3 — the sheet's footer slot is gone. It rendered a SECOND "Open
+         Dex" button (dex-sheet-open-full) in a `bg-card` bar, which on an ink
+         sheet painted a white strip across the bottom and gave the founder two
+         identical buttons for one action. The one in the body is the keeper:
+         it is styled for the ink ground and sits with the voice stage it
+         belongs to. */
     >
       <div data-testid="dex-sheet-stage" data-stage={stage} className="contents">
       {stage === "understanding" && (
         <Understanding u={understanding} onLooksRight={looksRight} onFix={fix} busy={busy} />
       )}
 
-      {stage === "recording" && (
-        <div className="flex flex-col items-center py-2" data-testid="dex-recording">
-          <LiveWaveform levels={levels} />
-          {/* Elapsed time small and secondary beneath it (§5.6). */}
-          <p
-            data-testid="dex-elapsed"
-            className="mt-2 text-sm font-semibold tabular-nums text-muted-foreground"
-          >
-            {Math.floor(recordSecs / 60)}:{String(recordSecs % 60).padStart(2, "0")}
-          </p>
+      {(stage === "recording" || stage === "idle") && (
+        /* KM-3 · THE VOICE STAGE — one surface, two states, no chrome.
+           The founder's brief, point by point: this window is voice-only; the
+           mic ICON is gone as a visual element (the waveform IS the control,
+           and it carries the label for anyone not looking at it); no text
+           field and no send button; the only other affordance is Open Dex.
+           Idle and recording are the same layout so nothing jumps when you
+           start speaking — only the bars change from breathing to reacting,
+           and the caption underneath changes what it says. */
+        <div className="flex flex-col items-center py-2" data-testid="dex-voice-stage" data-stage={stage}>
           <button
             type="button"
-            onClick={stopRecording}
-            data-testid="dex-mic-stop"
-            aria-label={`Stop recording (${recordSecs} seconds)`}
-            className="mt-6 flex h-20 w-20 items-center justify-center rounded-full bg-danger-600 text-white transition-transform active:scale-95"
-          >
-            <Stop size={32} weight="fill" aria-hidden="true" />
-          </button>
-          <p className="mt-3 text-sm text-muted-foreground">Tap to finish</p>
-        </div>
-      )}
-
-      {stage === "idle" && (
-        <div data-testid="dex-idle">
-          {/* The mic is the hero: 64px, centred, with a brand-tinted halo. */}
-          <div className="flex flex-col items-center pb-1 pt-1">
-            <button
-              type="button"
-              onClick={startRecording}
-              disabled={sending}
-              data-testid="dex-mic-record"
-              aria-label={t("dex.record", "Record a voice note for Dex")}
-              className="relative flex h-16 w-16 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-nm-sm transition-transform active:scale-95 disabled:opacity-50"
-            >
-              <span
-                aria-hidden="true"
-                className="absolute -inset-3 rounded-full bg-primary/15"
-              />
-              <span
-                aria-hidden="true"
-                className="absolute -inset-6 rounded-full bg-primary/[0.07]"
-              />
-              {sending ? (
-                <Spinner size={28} className="animate-spin" />
-              ) : (
-                <Microphone size={30} weight="fill" aria-hidden="true" />
-              )}
-            </button>
-          </div>
-
-          {/* Typing is the alternative, so it says so rather than sitting there
-              as an equal-weight field with a generic placeholder. */}
-          <div className="mt-6 flex items-stretch gap-2">
-            <input
-              data-testid="dex-text-input"
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendText()}
-              disabled={sending}
-              placeholder={t("dex.type_instead", "type instead…")}
-              className="min-w-0 flex-1 rounded-xl border border-input bg-card px-3.5 text-base outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-              style={{ minHeight: "var(--control-h-md)" }}
-            />
-            <button
-              type="button"
-              onClick={sendText}
-              disabled={!text.trim() || sending}
-              data-testid="dex-send"
-              aria-label={t("dex.send", "Send to Dex")}
-              className="flex w-12 shrink-0 items-center justify-center rounded-xl bg-foreground text-background transition-opacity disabled:opacity-40"
-              style={{ minHeight: "var(--control-h-md)" }}
-            >
-              {sending ? <Spinner size={20} className="animate-spin" /> : <PaperPlaneTilt size={20} weight="bold" />}
-            </button>
-          </div>
-
-          {/* §5.6: horizontal pills, not a vertical stack of four full-width
-              buttons. The row scrolls; §5.2.2's fade mask marks that it does. */}
-          <div className="relative mt-4">
-            <div
-              className="-mx-4 flex gap-touch-gap overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-              data-testid="dex-chips"
-            >
-              {chips.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  data-testid="dex-suggestion"
-                  onClick={() => setText(c)}
-                  className="flex shrink-0 items-center rounded-pill nm-tile px-3.5 text-sm transition-colors hover:bg-accent"
-                  style={{ minHeight: "var(--control-h-sm)" }}
-                >
-                  {c}
-                </button>
-              ))}
-            </div>
-            {/* §5.2.2's fade mask. It was at right-[-1rem], which put it past
-                the sheet's own edge and therefore off-screen — the row scrolled
-                with a hard cut and nothing to say so. */}
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-card to-transparent"
-            />
-          </div>
-
-          {/* Attach stays available but demoted — it is the rarest of the three. */}
-          <input
-            type="file"
-            ref={fileRef}
-            hidden
-            onChange={uploadFile}
-            accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx"
-          />
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
+            onClick={recording ? stopRecording : startRecording}
             disabled={sending}
-            data-testid="dex-file-upload"
-            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold text-muted-foreground transition-colors hover:bg-accent disabled:opacity-50"
-            style={{ minHeight: "var(--control-h-sm)" }}
+            data-testid={recording ? "dex-mic-stop" : "dex-mic-record"}
+            aria-label={
+              recording
+                ? t("dex.stop", "Stop recording")
+                : t("dex.record", "Record a voice note for Dex")
+            }
+            className="w-full rounded-cardlg px-2 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 disabled:opacity-50"
           >
-            <Paperclip size={18} weight="bold" aria-hidden="true" />
-            {t("dex.attach", "Attach a bill or photo")}
+            <LiveWaveform levels={levels} live={recording} />
+          </button>
+
+          <p className="mt-1 text-sm text-white/70" data-testid="dex-voice-caption">
+            {sending
+              ? t("dex.thinking", "Dex is thinking…")
+              : recording
+                ? `${Math.floor(recordSecs / 60)}:${String(recordSecs % 60).padStart(2, "0")} · ${t("dex.tap_finish", "tap to finish")}`
+                : t("dex.tap_speak", "Tap to speak")}
+          </p>
+
+          {/* The one button. Full width so it is unmistakably the other thing
+              you can do here, and it hands off to the full room rather than
+              trying to be it. */}
+          <button
+            type="button"
+            onClick={() => { onClose?.(); navigate("/brain"); }}
+            data-testid="dex-open-full"
+            className="mt-7 flex h-12 w-full items-center justify-center gap-2 rounded-pill bg-white text-sm font-semibold text-kr-ink"
+          >
+            {t("dex.open", "Open Dex")}
+            <ArrowRight size={15} weight="bold" aria-hidden="true" />
           </button>
         </div>
       )}
+
       </div>
     </BottomSheet>
   );

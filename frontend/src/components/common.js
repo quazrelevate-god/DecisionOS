@@ -1,9 +1,49 @@
 import { cn } from "../lib/utils";
 
-export function PageHeader({ eyebrow, title, children }) {
-  if (!children) return null;
+/**
+ * KM-1 (2026-08-27) — this component accepted `eyebrow` and `title` and rendered
+ * NEITHER, and returned null entirely when it had no children. The result was
+ * four routes with no heading at all (Journal, Calendar, Captures, WorkCoach's
+ * denied state) and four more showing only their action row (People, Leave,
+ * Notifications, WorkCoach). Half of them sit behind the mobile "More" panel,
+ * which is part of why those destinations feel second-class — they literally
+ * had no title.
+ *
+ * The markup below is the grammar the six hand-rolled headers already use
+ * (MyWork:1645, Ledger:1235, CRM:645, Settings:214, Team:211, OperatingScore's
+ * local PageTitle), so adopting it there later is a delete, not a redesign.
+ *
+ * Type is held as literals (text-3xl / lg:text-4xl) rather than the DS-4
+ * .text-h1//.text-display tiers on purpose: .text-display resolves to 34px at
+ * lg and today's headers render 36px, so using the scale would move six desktop
+ * pages by 2px. Adopting the scale is its own decision with its own diff.
+ *
+ * @param {string} [eyebrow]  the small line above the title
+ * @param {string} [title]    the page's h1
+ * @param {node}   [children] trailing controls; wraps below the title on mobile
+ */
+export function PageHeader({ eyebrow, title, children, testid }) {
+  if (!eyebrow && !title && !children) return null;
   return (
-    <div className="mb-6 flex flex-wrap items-center gap-2 w-full">{children}</div>
+    <header className="mb-6 lg:mb-7" data-testid={testid}>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between lg:gap-4">
+        {(eyebrow || title) && (
+          <div className="min-w-0">
+            {eyebrow && (
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-[0.14em]">
+                {eyebrow}
+              </p>
+            )}
+            {title && (
+              <h1 className="mt-1 font-display text-3xl lg:mt-1.5 lg:text-4xl">{title}</h1>
+            )}
+          </div>
+        )}
+        {children && (
+          <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto">{children}</div>
+        )}
+      </div>
+    </header>
   );
 }
 

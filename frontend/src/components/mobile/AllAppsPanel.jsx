@@ -28,7 +28,6 @@
 // Notes (hidden this phase per E2-31). Nothing appears in two places.
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -37,94 +36,49 @@ import {
   MagnifyingGlass, ArrowRight,
 } from "@phosphor-icons/react";
 import { hasPerm } from "@/lib/perms";
-import { inrCompact } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useBodyScrollLock } from "./BottomSheet";
-import { SkeletonLine } from "./Skeleton";
 
-/**
- * Read a value straight out of the query cache, never fetching.
- *
- * `getQueriesData` rather than `getQueryData`: the keys that hold this data are
- * parameterised (["contacts", status, q]), so there is no single key to ask for.
- * The freshest cached entry wins.
- */
-function cached(qc, prefix) {
-  const hits = qc.getQueriesData({ queryKey: prefix });
-  for (let i = hits.length - 1; i >= 0; i--) {
-    const [, value] = hits[i];
-    if (value !== undefined && value !== null) return value;
-  }
-  return undefined;
-}
-
-const ymd = (d) => d.toISOString().slice(0, 10);
-
-/**
- * The live line each large/wide tile carries, read from cache.
- *
- * Returns `undefined` for "not cached" — which renders a Skeleton, NOT a smaller
- * tile — and `null` for "cached and genuinely empty", which renders nothing.
- */
-function useLiveLines() {
-  const qc = useQueryClient();
-
-  const contacts = cached(qc, ["contacts"]);
-  const crm = React.useMemo(() => {
-    if (contacts === undefined) return undefined;
-    const list = Array.isArray(contacts) ? contacts : contacts.contacts || [];
-    const owed = list.reduce((n, c) => n + (Number(c.outstanding) || 0), 0);
-    return {
-      headline: owed > 0 ? inrCompact(owed) : "₹0",
-      support: `${list.length} relationship${list.length === 1 ? "" : "s"}`,
-    };
-  }, [contacts]);
-
-  const score = cached(qc, ["operating-score"]);
-  const ops = React.useMemo(() => {
-    if (score === undefined) return undefined;
-    const n = score?.overall_score ?? score?.score ?? null;
-    return n == null ? null : { line: String(Math.round(n)), suffix: "out of 100" };
-  }, [score]);
-
-  const calendar = cached(qc, ["calendar"]);
-  const cal = React.useMemo(() => {
-    if (calendar === undefined) return undefined;
-    const list = Array.isArray(calendar) ? calendar : calendar?.events || calendar?.items || [];
-    const today = ymd(new Date());
-    const n = list.filter((e) => String(e.date || e.start || e.due_date || "").slice(0, 10) === today).length;
-    return { line: String(n), suffix: n === 1 ? "today" : "today" };
-  }, [calendar]);
-
-  return { crm, ops, cal };
-}
+/* KM-9 — `cached()` and `useLiveLines()` were deleted here.
+   They read the React Query cache so a tile could show a live figure without
+   firing a request on open. The rule was right; the consequence was not — the
+   cache is only warm for routes already visited, and every route in this menu
+   sits BEHIND the menu, so the figures were almost never there and the three
+   wide tiles rendered a skeleton that never resolved. Static descriptors now,
+   and opening More touches no query at all. */
 
 /**
  * The bento, in §5.7's order: live destinations first, occasional ones second,
  * utility last. `size` is config and never derived from the data.
  */
-function buildTiles({ user, t, counts, live }) {
+function buildTiles({ user, t, counts }) {
   const tiles = [
     {
       key: "crm",
       to: "/crm",
       label: t("nav.crm", "CRM"),
       icon: AddressBook,
-      size: "large",
+      /* KM-7 — CRM drops from a 2x2 to the same 2x1 the other two live tiles
+         use. As a `large` it was twice the height of everything else and left
+         the right-hand column (Team / Journal / Work Coach) floating against
+         a tall blank, so the two columns never lined up. Three equal wide
+         tiles on the left now sit level with three smalls on the right. */
+      size: "wide",
       perm: "people",
-      live: live.crm,
+      blurb: "Buyers, suppliers, complaints",
     },
-    { key: "notifications", to: "/notifications", label: t("nav.notifications", "Notifications"), icon: Bell, size: "small", badge: counts.notifications },
     { key: "team", to: "/team", label: t("nav.team", "Team"), icon: UsersThree, size: "small", perm: "team_manage" },
     {
       key: "operating-score",
       to: "/operating-score",
       // Not t("nav.ops") — that bundle says "Ops", which is jargon for a tile.
-      label: t("allapps.operating_score", "Operating Score"),
+      // KM-7 — "Ops", not "Operating Score": at a 2x1 tile the long form
+      // wrapped to two lines and pushed its own live figure out of the card.
+      label: t("allapps.ops", "Ops"),
       icon: Gauge,
       size: "wide",
       ownerOnly: true,
-      live: live.ops,
+      blurb: "How the business is running",
     },
     { key: "journal", to: "/journal", label: t("nav.journal", "Journal"), icon: BookOpen, size: "small", ownerOnly: true },
     {
@@ -133,7 +87,7 @@ function buildTiles({ user, t, counts, live }) {
       label: t("nav.calendar", "Calendar"),
       icon: CalendarBlank,
       size: "wide",
-      live: live.cal,
+      blurb: "Everything with a date",
     },
     { key: "coach", to: "/coach", label: t("nav.coach", "Work Coach"), icon: Sparkle, size: "small" },
     // §5.7 listed "Send Daily Digest" as a Small tile, and §8 asked for it to sit
@@ -152,11 +106,14 @@ function buildTiles({ user, t, counts, live }) {
 }
 
 function buildUtility({ user, isDark, t }) {
+  /* KM-5 — Language, Theme and Sign out are gone from here and live in
+     Settings -> Account. A nav menu is a list of PLACES; a theme switch and a
+     session-ending action are neither, and putting Sign out one mis-tap from
+     Theme in a 4-up strip was the arrangement that made it need a red colour
+     to feel safe. Settings is the only utility left, so it is the only one
+     listed. */
   return [
     { key: "settings", to: "/settings", label: t("nav.settings", "Settings"), icon: GearSix, ownerOnly: true },
-    { key: "language", action: "language", label: t("allapps.language", "Language"), icon: Translate },
-    { key: "theme", action: "theme", label: t("allapps.theme", "Theme"), icon: isDark ? Sun : MoonStars },
-    { key: "signout", action: "signout", label: t("header.sign_out", "Sign out"), icon: SignOut, danger: true },
   ].filter((x) => !x.ownerOnly || user?.role === "owner");
 }
 
@@ -175,7 +132,6 @@ function Tile({ tile, onPick }) {
   const big = tile.size === "large";
   const wide = tile.size === "wide";
   // undefined = not cached yet -> Skeleton in a full-size tile (§5.7).
-  const pending = (big || wide) && tile.live === undefined;
 
   return (
     <button
@@ -185,11 +141,19 @@ function Tile({ tile, onPick }) {
       onClick={() => onPick(tile)}
       className={cn(
         // >= 100x100 per §5.7, so the 44px floor is met with room to spare.
-        "relative flex min-h-[6.25rem] flex-col nm-raised p-3 text-left",
-        "transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        /* KM-8 — minimal glass, not neumorphism. .kr-pop drew a raised,
+           shadowed tile; the founder wants all seven reading as one quiet set
+           of glass panes on a glass sheet, so they take .kr-frost-min and are
+           drawn by their hairline rather than by depth. .kr-lift stays for the
+           press response. */
+        "relative flex min-h-[6.25rem] flex-col kr-frost-min kr-lift rounded-tile p-3 text-left",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline",
         big || wide ? "justify-between" : "items-center justify-center gap-1.5",
         SPAN[tile.size] || "",
-        tile.danger && "text-danger-700"
+        /* KM-3 — no red. DS-1's token comment: `danger` means money or a
+           deadline at risk, "never chrome, borders, sign-out". Sign out is
+           terminal, not alerting, and spending the alert colour on it
+           devalues it everywhere it does mean something. */
       )}
     >
       {big || wide ? (
@@ -199,29 +163,11 @@ function Tile({ tile, onPick }) {
             {tile.label}
           </span>
 
-          {pending ? (
-            <span className="mt-2 block w-2/3" data-testid={`allapps-skeleton-${tile.key}`}>
-              <SkeletonLine className="h-7" />
-            </span>
-          ) : tile.live ? (
-            <span className={cn("mt-2 flex min-w-0 items-baseline gap-1.5", wide && "justify-between")}>
-              <span className="font-heading text-2xl font-bold leading-none tabular-nums">
-                {tile.live.headline ?? tile.live.line}
-              </span>
-              {(tile.live.support || tile.live.suffix) && (
-                <span className="min-w-0 truncate text-[length:var(--text-label)] font-semibold leading-4 text-muted-foreground">
-                  {tile.live.support || tile.live.suffix}
-                </span>
-              )}
-            </span>
-          ) : (
-            // Cached and genuinely empty. The tile keeps its size and says where
-            // it goes rather than showing a number that is not there.
-            <span className="mt-2 flex items-center gap-1 text-sm font-semibold text-muted-foreground">
-              Open
-              <ArrowRight size={14} weight="bold" aria-hidden="true" />
-            </span>
-          )}
+          {/* KM-9 — a static descriptor, not a live figure. A menu tile's
+              job is to say where it goes; it does not also need to report. */}
+          <span className="mt-2 block text-[length:var(--text-label)] leading-4 text-muted-foreground">
+            {tile.blurb}
+          </span>
         </>
       ) : (
         <>
@@ -253,7 +199,7 @@ function Tile({ tile, onPick }) {
  * @param {Function} onToggleTheme
  * @param {Function} onSignOut
  * @param {Function} onOpenLanguage
- * @param {{myWork?:number,notifications?:number}} [counts]
+ * @param {{notifications?:number}} [counts]  KM-1: myWork was never read by buildTiles.
  */
 export function AllAppsPanel({
   open,
@@ -277,10 +223,9 @@ export function AllAppsPanel({
     if (open) setQ("");
   }, [open]);
 
-  const live = useLiveLines();
   const tiles = React.useMemo(
-    () => buildTiles({ user, t, counts, live }),
-    [user, t, counts, live]
+    () => buildTiles({ user, t, counts }),
+    [user, t, counts]
   );
   const utility = React.useMemo(() => buildUtility({ user, isDark, t }), [user, isDark, t]);
 
@@ -340,7 +285,15 @@ export function AllAppsPanel({
         <DialogPrimitive.Overlay
           data-testid="allapps-backdrop"
           className={cn(
-            "fixed inset-0 z-[10080] bg-neutral-900/55 backdrop-blur-[20px]",
+            /* KM-8 — no darkening, no blur. The overlay stays only to catch
+               the outside-tap that closes the panel; it no longer paints. The
+               founder wants the app still legible behind the menu, and a
+               frosted LIGHT panel already separates itself from the page
+               without the page having to be dimmed to make room for it. */
+            /* KM-9 — a slight dim, still no blur. Fully transparent let the
+               page compete with a light panel sitting on it; 22% black settles
+               the background just enough for the frosted sheet to read. */
+            "fixed inset-0 z-[10080] bg-black/[0.22]",
             "data-[state=open]:animate-in data-[state=closed]:animate-out",
             "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
           )}
@@ -359,15 +312,54 @@ export function AllAppsPanel({
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
           className={cn(
-            // inset 16px from every edge, max-height 80vh (§8)
-            "fixed inset-x-4 z-[10090] mx-auto flex max-h-[80vh] max-w-md flex-col overflow-hidden",
-            "rounded-2xl border border-border bg-background shadow-brutal-lg",
-            "top-1/2 -translate-y-1/2",
+            /* KM-5 — ANCHORED TO THE DOCK, not floating in the middle.
+               The founder's ask: rather than a card hovering over the screen,
+               the app bar should expand upward and reveal the menu. So the
+               panel sits directly above the dock, matches its inset and its
+               ink material, and slides up from it — it reads as the bar
+               growing rather than a separate object arriving. The bottom
+               offset is the dock's own anchor (1rem + safe inset) plus its
+               64px height plus a 12px seam. */
+            /* KM-7 — the panel IS the bar, extended upward. It takes the
+               dock's own horizontal anchor (app-dock-left), its width, its
+               ink and its blur, and sits directly on top of it — so opening
+               More reads as the bar growing rather than a separate card
+               arriving over the app. w-[17rem] is the dock's measured width
+               (267px at a 375px viewport, four slots plus padding). */
+            "fixed z-[10090] flex max-h-[68vh] w-[var(--app-dock-w,17rem)] flex-col overflow-hidden app-dock-left",
+            "bottom-[calc(1rem+4rem+0.5rem+env(safe-area-inset-bottom,0px))]",
+            /* KM-3 — THE PANEL BECOMES AN INK OBJECT.
+               It was `bg-background` — the page's own greige — so More opened
+               a copy of the page floating over the page, with a hard
+               `border-border` frame and shadow-brutal-lg, both retired.
+               Now .kr-glass (frosted, translucent, blurred) PLUS .dark, which
+               KR-2 redefined to mean "inside the ink" rather than a night
+               theme: it re-scopes --nm-raised, --hairline, --text-* and the
+               shadcn aliases, so every .nm-raised tile and every
+               text-muted-foreground inside becomes its ink counterpart with
+               no `dark:` variant written anywhere. The thing More opens now
+               looks like the ink pill you tapped to open it. */
+            /* KM-8 — LIGHT glass, not the bar's ink. KM-7 matched the dock's
+               colour so the two read as one object; the founder's call now is
+               that the menu should be light and minimal, so it keeps the
+               dock's WIDTH and ANCHOR (still growing out of the bar) but takes
+               .kr-frost — the light-zone glass — instead of ink. The `dark`
+               token re-scope goes with it, so every label inside returns to
+               the light palette on its own. */
+            /* focus:outline-none — the panel takes focus itself on open (see
+               onOpenAutoFocus below, which moves it off the search field so
+               the keyboard does not cover the grid), and the browser was
+               drawing its default ring around the whole sheet. The focus trap
+               still has its anchor; it just stops painting a blue rectangle
+               around a menu nobody typed into. */
+            "kr-frost rounded-cardlg focus:outline-none focus-visible:outline-none",
+
             // scale 0.92 -> 1 with opacity, ~180ms ease-out; reverse on close
             // [animation-duration:...] rather than duration-[180ms]: the
             // bare arbitrary value is ambiguous between transition- and
             // animation-duration, and Tailwind warns on it at build time.
             "[animation-duration:180ms] ease-out",
+            "data-[state=open]:slide-in-from-bottom-4 data-[state=closed]:slide-out-to-bottom-4",
             "data-[state=open]:animate-in data-[state=closed]:animate-out",
             "data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0",
             "data-[state=open]:zoom-in-[0.92] data-[state=closed]:zoom-out-[0.92]"
@@ -380,53 +372,20 @@ export function AllAppsPanel({
             {t("allapps.description", "Every screen, grouped")}
           </DialogPrimitive.Description>
 
-          {searchable ? (
-            <div className="flex shrink-0 items-center gap-2 border-b border-border p-3">
-              <div className="relative flex-1">
-                <MagnifyingGlass
-                  size={20}
-                  weight="bold"
-                  aria-hidden="true"
-                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400"
-                />
-                <input
-                  type="text"
-                  inputMode="search"
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                  data-testid="allapps-search"
-                  aria-label={t("allapps.search", "Search screens")}
-                  placeholder={t("allapps.search", "Search screens")}
-                  className="w-full rounded-lg border border-input bg-card pl-10 pr-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  style={{ minHeight: "var(--control-h-base)" }}
-                />
-              </div>
-              <DialogPrimitive.Close
-                data-testid="allapps-close"
-                aria-label={t("common.close", "Close")}
-                className="grid shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                style={{ minHeight: "var(--control-h-base)", minWidth: "var(--control-h-base)" }}
-              >
-                <X size={22} weight="bold" />
-              </DialogPrimitive.Close>
-            </div>
-          ) : (
-            // No search row to hang it on, so the close button gets its own.
-            <div className="flex shrink-0 justify-end p-2 pb-0">
-              <DialogPrimitive.Close
-                data-testid="allapps-close"
-                aria-label={t("common.close", "Close")}
-                className="grid shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                style={{ minHeight: "var(--control-h-sm)", minWidth: "var(--control-h-sm)" }}
-              >
-                <X size={22} weight="bold" />
-              </DialogPrimitive.Close>
-            </div>
-          )}
+          {/* KM-9 — no close button. The panel closes by tapping outside,
+              by tapping More again, or by Escape; an X in a menu this small
+              was a seventh thing to look at. The search row it used to live
+              in was unreachable anyway — `searchable` needs more than 12
+              entries and an owner has 7. */}
 
           <div
             data-testid="allapps-scroll"
-            className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 pb-safe"
+            /* KM-9 — `flex-1` made this fill the sheet whatever the content
+               needed, which is what left dead space under Settings; and
+               `pb-safe` resolves to 0 with no bottom inset, so the last row
+               sat flush against the edge. Sizes to content now, with a real
+               12px floor plus whatever the inset adds. */
+            className="min-h-0 overflow-y-auto overscroll-contain p-3 [padding-bottom:calc(0.75rem+env(safe-area-inset-bottom,0px))]"
           >
             {shown.length === 0 && shownUtility.length === 0 && (
               <p className="py-8 text-center text-sm text-muted-foreground" data-testid="allapps-no-match">
@@ -469,9 +428,9 @@ export function AllAppsPanel({
                       data-testid={`allapps-tile-${item.key}`}
                       onClick={() => pick(item)}
                       className={cn(
-                        "flex min-h-[3.5rem] flex-1 flex-col items-center justify-center gap-1 rounded-lg px-1",
-                        "transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                        item.danger ? "text-danger-700" : "text-muted-foreground"
+                        "flex min-h-[3.5rem] flex-1 flex-col items-center justify-center gap-1 rounded-control px-1",
+                        "kr-frost-min focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline",
+                        "text-muted-foreground"   /* KM-3 — see above: no red on sign out. */
                       )}
                     >
                       <item.icon size={20} weight="bold" aria-hidden="true" />

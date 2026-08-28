@@ -7,8 +7,9 @@ import { opModel } from "../lib/operatingModel";
 import { toast } from "sonner";
 import { timeAgo, fullTime } from "../lib/format";
 import { userPerms } from "../lib/perms";
-import { Plus, User, Paperclip, ClockCounterClockwise } from "@phosphor-icons/react";
+import { Plus, User, Paperclip, ClockCounterClockwise, X } from "@phosphor-icons/react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from "../components/ui/dialog";
+import { Close as DialogPrimitiveClose } from "@radix-ui/react-dialog";
 
 const COLUMNS = [
   { key: "blocked", label: "Pending Approval" },
@@ -40,7 +41,17 @@ const EMPTY_FORM = {
   evidence_required: false,
 };
 
-export function NewTaskDialog({ onCreated, roleOptions, members, defaultType, triggerClassName }) {
+/**
+ * @param {string} [triggerClassName]   classes for the trigger button
+ * @param {node}   [triggerChildren]    KM-2: overrides the default
+ *   "+ New Task" label. The phone toolbar renders this as a bare circular
+ *   plus inside the task-view lens group, where a worded button would not fit
+ *   and would not read as a member of that group.
+ * @param {string} [triggerAriaLabel]   required whenever triggerChildren is
+ *   icon-only — the default trigger carries its own visible text, an icon
+ *   one carries nothing.
+ */
+export function NewTaskDialog({ onCreated, roleOptions, members, defaultType, triggerClassName, triggerChildren, triggerAriaLabel }) {
   const { user, tenant } = useAuth();
   const cats = opModel(tenant).task_categories;
   const [open, setOpen] = useState(false);
@@ -87,48 +98,75 @@ export function NewTaskDialog({ onCreated, roleOptions, members, defaultType, tr
     finally { setBusy(false); }
   };
 
-  const inp = "w-full border border-border px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring/30 bg-white";
+  /* KM-3 — the dialog joins the design system. Was: a hand-rolled
+     `border border-border ... font-mono bg-white` field and `label-mono`
+     captions, both survivors of the retired brutalist system — a monospace
+     form in an app whose whole voice is Urbanist. Now the field is the
+     .nm-field recipe (soft-depth control, rounded-control, the outline token
+     as its boundary) and labels are plain sans at label weight. */
+  /* KM-10 — the fields are SUNKEN now, which is the actual point of a
+     neumorphic form. KM-3 moved them off the retired mono/hairline styling
+     onto .nm-field, but .nm-field is a RAISED surface with a hairline
+     boundary — a white box on a grey sheet — so the form still read flat.
+     .kr-pressed is the concave twin: dark inset from the top-left, light
+     inset from the bottom-right, no border at all. A field you type into
+     should look like a groove, not a card. */
+  const inp = "w-full kr-pressed rounded-control border-0 px-3.5 py-2.5 text-sm text-foreground placeholder:text-foreground/40";
+  const lbl = "block text-xs font-medium text-muted-foreground";
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <button data-testid="new-task-button" className={triggerClassName || "flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 text-sm font-medium border border-border transition-all"}>
-          <Plus size={16} weight="bold" /> New Task
+        <button data-testid="new-task-button"
+          aria-label={triggerAriaLabel}
+          title={triggerAriaLabel}
+          className={triggerClassName || "flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 text-sm font-medium border border-border transition-all"}>
+          {triggerChildren || (<><Plus size={16} weight="bold" /> New Task</>)}
         </button>
       </DialogTrigger>
-      <DialogContent className="border border-border rounded-xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      {/* KM-10 — .kr-bento: the app's glass-over-neumorphic tile, so the sheet
+          the fields sit in is the same material as every card behind it. The
+          default close X is hidden and replaced below, aligned with the title
+          rather than floating in the corner. */}
+      <DialogContent className="kr-bento max-h-[90vh] overflow-y-auto rounded-cardlg border-0 [&>button.absolute]:hidden">
+        <DialogHeader className="pr-11">
+          <DialogPrimitiveClose
+            data-testid="task-dialog-close"
+            aria-label="Close"
+            className="kr-pop absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full text-foreground/70">
+            <X size={15} weight="bold" aria-hidden="true" />
+          </DialogPrimitiveClose>
           <DialogTitle className="font-display text-xl">New Task</DialogTitle>
-          <DialogDescription className="label-mono text-muted-foreground">Capture any company task — operational or department work.</DialogDescription>
+          <DialogDescription className="text-sm text-muted-foreground">Capture any company task — operational or department work.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <input data-testid="task-title-input" className={inp} placeholder="Task title" value={form.title} onChange={set("title")} />
           <textarea data-testid="task-description-input" className={inp} rows={2} placeholder="Description" value={form.description} onChange={set("description")} />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="kr-form-row">
             <div>
-              <label className="label-mono text-muted-foreground">Task type</label>
+              <label className={lbl}>Task type</label>
               <select data-testid="task-type-select" className={`${inp} mt-1`} value={form.task_type} onChange={set("task_type")}>
                 {cats.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
               </select>
             </div>
             {isOp && (
               <div data-testid="op-category-wrap">
-                <label className="label-mono text-muted-foreground">Operational category</label>
+                <label className={lbl}>Operational category</label>
                 <select data-testid="op-category-select" className={`${inp} mt-1`} value={form.op_category} onChange={set("op_category")}>
                   {OP_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="kr-form-row">
             <div>
-              <label className="label-mono text-muted-foreground">Assigned employee</label>
+              <label className={lbl}>Assigned employee</label>
               <select data-testid="task-member-select" className={`${inp} mt-1`} value={form.assignee_id} onChange={set("assignee_id")}>
                 <option value="">— Pick a person —</option>
                 {members.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
               </select>
             </div>
             <div>
-              <label className="label-mono text-muted-foreground">Supporting employee (optional)</label>
+              <label className={lbl}>Supporting employee (optional)</label>
               <select data-testid="task-support-select" className={`${inp} mt-1`} value={form.support_id} onChange={set("support_id")}>
                 <option value="">— None —</option>
                 {members.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
@@ -137,37 +175,37 @@ export function NewTaskDialog({ onCreated, roleOptions, members, defaultType, tr
           </div>
           {!form.assignee_id && (
             <div>
-              <label className="label-mono text-muted-foreground">…or assign by team/role</label>
+              <label className={lbl}>…or assign by team/role</label>
               <select data-testid="task-role-select" className={`${inp} mt-1`} value={form.assignee_role} onChange={set("assignee_role")}>
                 <option value="">Any / unassigned</option>
                 {roleOptions.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
               </select>
             </div>
           )}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="kr-form-row kr-form-row--3">
             <div>
-              <label className="label-mono text-muted-foreground">Priority</label>
+              <label className={lbl}>Priority</label>
               <select data-testid="task-priority-select" className={`${inp} mt-1`} value={form.priority} onChange={set("priority")}>
                 {["low", "medium", "high"].map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
             </div>
             <div>
-              <label className="label-mono text-muted-foreground">Due date</label>
+              <label className={lbl}>Due date</label>
               <input data-testid="task-due-date" type="date" className={`${inp} mt-1`} value={form.due_date} onChange={set("due_date")} />
             </div>
             <div>
-              <label className="label-mono text-muted-foreground">Due time</label>
+              <label className={lbl}>Due time</label>
               <input data-testid="task-due-time" type="time" className={`${inp} mt-1`} value={form.due_time} onChange={set("due_time")} />
             </div>
           </div>
           <input data-testid="task-expected-output" className={inp} placeholder="Expected output (e.g. Final deck in PDF)" value={form.expected_output} onChange={set("expected_output")} />
-          <label className="flex items-center gap-2 text-sm font-mono cursor-pointer">
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
             <input data-testid="task-approval-required" type="checkbox" className="w-4 h-4 border border-border" checked={form.approval_required} onChange={(e) => setForm({ ...form, approval_required: e.target.checked })} />
             Approval required
           </label>
           {form.approval_required && (
             <div data-testid="task-approver-wrap">
-              <label className="label-mono text-muted-foreground">Approver</label>
+              <label className={lbl}>Approver</label>
               <select data-testid="task-approver-select" className={`${inp} mt-1`} value={form.approver_id} onChange={set("approver_id")}>
                 <option value="">— Anyone with approval access —</option>
                 {members.filter((m) => m.role === "owner" || userPerms(m).includes("approvals")).map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
@@ -175,7 +213,7 @@ export function NewTaskDialog({ onCreated, roleOptions, members, defaultType, tr
               <p className="label-mono text-muted-foreground mt-1">Grant approval access to a user in People → Access Control.</p>
             </div>
           )}
-          <label className="flex items-center gap-2 text-sm font-mono cursor-pointer">
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
             <input data-testid="task-evidence-required" type="checkbox" className="w-4 h-4 border border-border" checked={form.evidence_required} onChange={(e) => setForm({ ...form, evidence_required: e.target.checked })} />
             Require proof of work before completion
           </label>
@@ -194,10 +232,15 @@ export function NewTaskDialog({ onCreated, roleOptions, members, defaultType, tr
               </ul>
             )}
           </div>
-          <p className="label-mono text-muted-foreground">Created by: {user?.name}</p>
+          <p className={lbl}>Created by: {user?.name}</p>
         </div>
         <DialogFooter>
-          <button data-testid="task-create-submit" onClick={create} disabled={busy} className="bg-brand-600 text-white px-5 py-2 text-sm font-medium border border-border transition-all disabled:opacity-50">{busy ? "Creating…" : "Create"}</button>
+          {/* KM-10 — ink, not brand-600 (the retired indigo), and a pill at
+              the app's control height. */}
+          <button data-testid="task-create-submit" onClick={create} disabled={busy}
+            className="kr-lift flex h-11 w-full items-center justify-center rounded-pill bg-kr-ink px-5 text-sm font-medium text-white disabled:opacity-50 sm:w-auto">
+            {busy ? "Creating…" : "Create task"}
+          </button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

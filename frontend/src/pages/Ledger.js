@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "../lib/api";
 import { lex } from "../lib/lexicon";
@@ -12,6 +12,7 @@ import {
   Plus, Sparkle, Package, Receipt, TrendUp, Trash, Buildings, Robot,
   Paperclip, ArrowClockwise, PaperPlaneRight, WarningCircle, Brain, CaretDown, ListPlus,
   CurrencyDollar, Coins,
+  CaretRight, ArrowRight,  // KR-14.16 · mobile overview
   // Epic 2 Sprint 4: hero capture bar + Inbox tab
   FilePdf, Camera, UploadSimple, Tray, WhatsappLogo,
 } from "@phosphor-icons/react";
@@ -21,11 +22,11 @@ import {
 import { CaptureReview } from "./Captures";
 // E2-30 (2026-08-15): extracted from Ingest.js so it could be retired.
 import ReviewPanel from "./finance/ReviewPanel";
-import WhatsAppCard from "./finance/WhatsAppCard";
 import { hasPerm } from "../lib/perms";
 import { formatApiError } from "../lib/api";
 import {
   StatTile, ScoreMeter, DonutBreak, HistoryBand, DarkBand, IconChip,
+  DataList, // KM-4 — table on desktop, cards on a phone
 } from "../components/karma";
 
 // KR-10 — THE TWELVE HEXES ARE GONE.
@@ -811,92 +812,87 @@ function RevenueTab({ data, cur, onDelete, onChange, initialFilter = "all" }) {
         ) : filtered.length === 0 ? (
           <EmptyState title={`No ${statusFilter} invoices`} hint="Try a different filter, or clear it to see all." />
         ) : (
-          <div className="card-brutal overflow-x-auto" data-testid="revenue-invoices-table">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b border-nm-edge/40 text-left text-xs font-medium text-muted-foreground">
-                <th className="p-3">Invoice</th><th className="p-3">Customer</th><th className="p-3">Date</th><th className="p-3">Status</th><th className="p-3 text-right">Amount</th><th className="p-3"></th>
-              </tr></thead>
-              <tbody>
-                {filtered.map((s) => {
+          /* KM-4 — same six columns, cards below lg. The overdue tint rides
+             `rowClass`, so it is a wash on the table row and a wash on the
+             card without either renderer knowing about the other. */
+          <DataList
+            testid="revenue-invoices-table"
+            rows={filtered}
+            rowKey={(s) => s.id}
+            rowTestid={(s) => `revenue-invoice-row-${s.id}`}
+            rowClass={(s) => (isOverdue(s) ? "bg-kr-accent/[0.04]" : "")}
+            footer={filtered.length > 1 ? {
+              label: `Showing ${filtered.length} of ${invoices.length}`,
+              value: f(filteredTotal),
+              testid: "revenue-filtered-total",
+            } : undefined}
+            columns={[
+              { key: "invoice", head: "Invoice", role: "title", tdClass: "font-medium",
+                cell: (s) => (
+                  <>
+                    {/* Show invoice # AND title when both exist — title alone
+                        hides the reference customers quote back on WhatsApp
+                        or the phone when asking about payment. */}
+                    {s.number && <span className="mr-1.5 text-xs text-muted-foreground">#{s.number}</span>}
+                    <span>{s.title || (s.number ? "" : "Sale")}</span>
+                    {s.source && s.source !== "manual" && <Chip value={s.source} className={`ml-2 ${SOURCE_CHIP[s.source] || "bg-nm-sunken"}`} />}
+                    <AttachmentLink att={s.attachment} />
+                  </>
+                ) },
+              { key: "customer", head: "Customer", role: "meta", tdClass: "text-muted-foreground",
+                value: (s) => s.contact_name, cell: (s) => s.contact_name || "—" },
+              { key: "date", head: "Date", role: "meta", tdClass: "text-muted-foreground",
+                value: (s) => s.date, cell: (s) => s.date || "—" },
+              { key: "status", head: "Status", role: "chip",
+                cell: (s) => {
                   const st = invStatus(s);
                   const overdue = isOverdue(s);
                   const days = overdue ? daysSinceIso(s.date) : null;
                   return (
-                  <tr
-                    key={s.id}
-                    className={`border-b border-nm-edge/40/60 hover:bg-accent/50 ${overdue ? "bg-kr-accent/[0.04]" : ""}`}
-                    data-testid={`revenue-invoice-row-${s.id}`}
-                  >
-                    <td className="p-3 font-medium">
-                      {/* Show invoice # AND title when both exist -- title
-                          alone hides the reference customers quote back
-                          on WhatsApp / phone when asking about payment. */}
-                      {s.number && (
-                        <span className="label-mono text-muted-foreground mr-1.5">#{s.number}</span>
-                      )}
-                      <span>{s.title || (s.number ? "" : "Sale")}</span>
-                      {s.source && s.source !== "manual" && <Chip value={s.source} className={`ml-2 ${SOURCE_CHIP[s.source] || "bg-nm-sunken"}`} />}
-                      <AttachmentLink att={s.attachment} />
-                    </td>
-                    <td className="p-3 text-muted-foreground">{s.contact_name || "—"}</td>
-                    <td className="p-3 text-muted-foreground">{s.date || "—"}</td>
-                    <td className="p-3">
+                    <>
                       <Chip value={st.label} className={st.cls} />
                       {s.status === "partial" && <span className="ml-2 text-xs text-muted-foreground">bal {f(s.balance)}</span>}
                       {overdue && (
-                        <span
-                          className="ml-2 inline-flex items-center gap-1 rounded-pill bg-kr-accent px-2 py-0.5 text-[10px] font-bold text-white"
-                          data-testid={`revenue-overdue-${s.id}`}
-                        >
+                        <span className="ml-2 inline-flex items-center gap-1 rounded-pill bg-kr-accent px-2 py-0.5 text-[10px] font-bold text-white"
+                          data-testid={`revenue-overdue-${s.id}`}>
                           <WarningCircle size={11} weight="bold" /> {days}d overdue
                         </span>
                       )}
-                    </td>
-                    <td className="p-3 text-right font-mono font-semibold">{f(s.amount)}</td>
-                    <td className="p-3 text-right"><button onClick={() => onDelete("invoice", s.id)} data-testid={`revenue-invoice-delete-${s.id}`} className="text-muted-foreground hover:text-kr-accent"><Trash size={15} /></button></td>
-                  </tr>
-                );})}
-              </tbody>
-              {filtered.length > 1 && (
-                <tfoot>
-                  <tr className="border-t border-nm-edge/40 bg-nm-sunken/40">
-                    <td colSpan={4} className="p-3 label-mono text-xs text-muted-foreground">
-                      Showing {filtered.length} of {invoices.length}
-                    </td>
-                    <td className="p-3 text-right font-mono font-bold" data-testid="revenue-filtered-total">
-                      {f(filteredTotal)}
-                    </td>
-                    <td />
-                  </tr>
-                </tfoot>
-              )}
-            </table>
-          </div>
+                    </>
+                  );
+                } },
+              { key: "amount", head: "Amount", role: "amount", align: "right", tdClass: "font-mono font-semibold",
+                cell: (s) => f(s.amount) },
+              { key: "act", head: "", role: "action", align: "right",
+                cell: (s) => <button onClick={() => onDelete("invoice", s.id)} data-testid={`revenue-invoice-delete-${s.id}`} aria-label="Delete invoice" className="grid h-9 w-9 place-items-center text-muted-foreground hover:text-kr-accent"><Trash size={15} /></button> },
+            ]}
+          />
         )}
       </div>
 
       {payments.length > 0 && (
         <div>
           <h3 className="text-sm font-medium mb-3">Payments Received ({payments.length})</h3>
-          <div className="card-brutal overflow-x-auto" data-testid="revenue-payments-table">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b border-nm-edge/40 text-left text-xs font-medium text-muted-foreground">
-                <th className="p-3">Date</th><th className="p-3">Customer</th><th className="p-3">Method</th><th className="p-3">Reference</th><th className="p-3 text-right">Amount</th><th className="p-3"></th>
-              </tr></thead>
-              <tbody>
-                {payments.map((p) => (
-                  <tr key={p.id} className="border-b border-nm-edge/40/60 hover:bg-accent/50" data-testid={`revenue-payment-row-${p.id}`}>
-                    <td className="p-3 text-muted-foreground">{p.date || "—"}</td>
-                    <td className="p-3 font-medium">{p.contact_name || "—"}{p.source && p.source !== "manual" && <Chip value={p.source} className={`ml-2 ${SOURCE_CHIP[p.source] || "bg-nm-sunken"}`} />}</td>
-                    <td className="p-3 text-muted-foreground">{p.method || "—"}</td>
-                    <td className="p-3 text-muted-foreground">{p.reference || p.invoice_number || "—"}</td>
-                    <td className="p-3 text-right font-mono font-semibold">{f(p.amount)}</td>
-                    <td className="p-3 text-right"><button onClick={() => onDelete("payment", p.id)} data-testid={`revenue-payment-delete-${p.id}`} className="text-muted-foreground hover:text-kr-accent"><Trash size={15} /></button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataList
+            testid="revenue-payments-table"
+            rows={payments}
+            rowKey={(p) => p.id}
+            rowTestid={(p) => `revenue-payment-row-${p.id}`}
+            columns={[
+              { key: "customer", head: "Customer", role: "title", tdClass: "font-medium",
+                cell: (p) => <>{p.contact_name || "—"}{p.source && p.source !== "manual" && <Chip value={p.source} className={`ml-2 ${SOURCE_CHIP[p.source] || "bg-nm-sunken"}`} />}</> },
+              { key: "date", head: "Date", role: "meta", tdClass: "text-muted-foreground",
+                value: (p) => p.date, cell: (p) => p.date || "—" },
+              { key: "method", head: "Method", role: "meta", tdClass: "text-muted-foreground",
+                value: (p) => p.method, cell: (p) => p.method || "—" },
+              { key: "ref", head: "Reference", role: "meta", tdClass: "text-muted-foreground",
+                value: (p) => p.reference || p.invoice_number, cell: (p) => p.reference || p.invoice_number || "—" },
+              { key: "amount", head: "Amount", role: "amount", align: "right", tdClass: "font-mono font-semibold",
+                cell: (p) => f(p.amount) },
+              { key: "act", head: "", role: "action", align: "right",
+                cell: (p) => <button onClick={() => onDelete("payment", p.id)} data-testid={`revenue-payment-delete-${p.id}`} aria-label="Delete payment" className="grid h-9 w-9 place-items-center text-muted-foreground hover:text-kr-accent"><Trash size={15} /></button> },
+            ]}
+          />
         </div>
       )}
     </div>
@@ -928,46 +924,270 @@ function OverviewTab({ summary }) {
 
   return (
     <div className="space-y-6" data-testid="ledger-overview">
-      <KpiRow summary={summary} />
-      <AiPanel scope="brief" variant="brief" />
+      {/* KR-14.16 · MOBILE — reference-driven Finance overview. Hidden from
+          lg up; the desktop tree below takes over there. */}
+      <MobileOverview summary={summary} f={f} />
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="nm-tile p-5">
-          <h3 className="text-sm font-medium">{t("finance.by_category")}</h3>
-          {categories.length ? (
-            <DonutBreak data={categories} format={f} className="mt-4" testid="ledger-category-donut" />
-          ) : (
-            <p className="mt-3 text-sm text-muted-foreground">{t("finance.no_categories")}</p>
-          )}
+      {/* DESKTOP overview — original. */}
+      <div className="hidden space-y-6 lg:block">
+        <KpiRow summary={summary} />
+        <AiPanel scope="brief" variant="brief" />
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="nm-tile p-5">
+            <h3 className="text-sm font-medium">{t("finance.by_category")}</h3>
+            {categories.length ? (
+              <DonutBreak data={categories} format={f} className="mt-4" testid="ledger-category-donut" />
+            ) : (
+              <p className="mt-3 text-sm text-muted-foreground">{t("finance.no_categories")}</p>
+            )}
+          </div>
+
+          <div className="nm-tile p-5">
+            <h3 className="text-sm font-medium">{t("finance.top_vendors")}</h3>
+            {summary.by_vendor.length ? (
+              <ul className="mt-4 space-y-3" data-testid="ledger-vendors">
+                {summary.by_vendor.map((v) => (
+                  <li key={v.vendor} className="flex items-center gap-3">
+                    <span className="w-28 shrink-0 truncate text-sm sm:w-36">{v.vendor}</span>
+                    <ScoreMeter value={(v.amount / vendorMax) * 100} size="sm" className="flex-1" />
+                    <span className="w-24 shrink-0 text-right font-mono text-sm font-semibold tabular-nums">{f(v.amount)}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-3 text-sm text-muted-foreground">{t("finance.no_vendor")}</p>
+            )}
+          </div>
         </div>
 
-        <div className="nm-tile p-5">
-          <h3 className="text-sm font-medium">{t("finance.top_vendors")}</h3>
-          {summary.by_vendor.length ? (
-            <ul className="mt-4 space-y-3" data-testid="ledger-vendors">
-              {summary.by_vendor.map((v) => (
-                <li key={v.vendor} className="flex items-center gap-3">
-                  <span className="w-28 shrink-0 truncate text-sm sm:w-36">{v.vendor}</span>
-                  <ScoreMeter value={(v.amount / vendorMax) * 100} size="sm" className="flex-1" />
-                  <span className="w-24 shrink-0 text-right font-mono text-sm font-semibold tabular-nums">{f(v.amount)}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="mt-3 text-sm text-muted-foreground">{t("finance.no_vendor")}</p>
-          )}
+        {/* The band: one dark zone per page, and on Finance it belongs to
+            the only real time series in the product. */}
+        <DarkBand testid="ledger-band" className="mt-8 pt-8 pb-10">
+          <HistoryBand
+            series={summary.by_month || []}
+            title={t("finance.monthly_spend")}
+            testid="ledger-history"
+          />
+        </DarkBand>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * KR-14.16 · MobileOverview — reference-driven mobile layout for the
+ * Finance overview: net-profit hero with a sparkline, 2×2 KPI grid,
+ * "View all financials" link, cash-flow alert card with overdue vendors,
+ * and an "Ask AI" input card.
+ */
+function MobileOverview({ summary, f }) {
+  const tt = summary.totals || {};
+  const net = tt.net_profit ?? ((tt.revenue_billed || 0) - (tt.total_spend || 0));
+  const overdueAmount = tt.overdue_amount ?? tt.receivables_overdue ?? 0;
+  const overdueCount = tt.overdue_count ?? tt.receivables_overdue_count ?? 0;
+
+  const months = summary.by_month || [];
+  const netPoints = months.map((m) => Number(m.net ?? m.amount ?? 0));
+
+  // Trend %: last month vs the previous, if we have at least 2 points.
+  const pct = (curr, prev) => (prev ? ((curr - prev) / Math.abs(prev)) * 100 : 0);
+  const lastNet = netPoints[netPoints.length - 1] ?? net;
+  const prevNet = netPoints[netPoints.length - 2] ?? lastNet;
+  const netTrend = pct(lastNet, prevNet);
+
+  // Cash-flow list — use top overdue receivables if the summary carries
+  // them, otherwise fall back to the top vendors as an interim signal.
+  const overdueList = (summary.overdue_receivables || summary.by_vendor || [])
+    .slice(0, 3)
+    .map((r) => ({
+      name: r.contact_name || r.vendor || r.name || "—",
+      note: r.overdue_days != null ? `Overdue ${r.overdue_days}+ days` : "Outstanding",
+      amount: r.balance ?? r.amount ?? 0,
+    }));
+
+  return (
+    <div className="space-y-4 lg:hidden" data-testid="ledger-overview-mobile">
+      {/* Net profit hero */}
+      <Link to="/finance?tab=revenue" data-testid="ledger-mobile-netprofit"
+        className="nm-tile relative flex items-start overflow-hidden p-5">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium">Net profit</p>
+          <p className="mt-2 font-display text-3xl font-semibold leading-none">{f(net)}</p>
+          <p className={`mt-3 flex items-center gap-1 text-xs font-medium ${netTrend >= 0 ? "text-[hsl(140_45%_35%)]" : "text-kr-accent"}`}>
+            <span aria-hidden="true">{netTrend >= 0 ? "↑" : "↓"}</span>
+            {Math.abs(netTrend).toFixed(1)}%
+            <span className="text-muted-foreground font-normal">this month</span>
+          </p>
         </div>
+        <span aria-hidden="true"
+          className="ml-2 grid h-9 w-9 shrink-0 place-items-center rounded-full bg-kr-ink text-white">
+          <ArrowRight size={14} weight="bold" />
+        </span>
+        <MobileSparkline points={netPoints} className="pointer-events-none absolute inset-y-4 right-16 w-32 opacity-70 sm:w-40" />
+      </Link>
+
+      {/* 2×2 KPI grid */}
+      <div className="grid grid-cols-2 gap-3">
+        <MobileKpiCard icon={CurrencyDollar} tint="green" label="Revenue" value={f(tt.revenue_billed || 0)}
+          trend={pct(months.at?.(-1)?.amount || 0, months.at?.(-2)?.amount || 0)} to="/finance?tab=revenue" testid="mkpi-revenue" />
+        <MobileKpiCard icon={Receipt} tint="blue" label="Received" value={f(tt.revenue_received || 0)}
+          trend={null} to="/finance?tab=revenue" testid="mkpi-received" />
+        <MobileKpiCard icon={TrendUp} tint="rose" label="Total spend" value={f(tt.total_spend || 0)}
+          trend={null} to="/finance?tab=expenses" testid="mkpi-spend" />
+        <MobileKpiCard icon={WarningCircle} tint="warn" label="Overdue amount" value={f(overdueAmount)}
+          note={overdueCount > 0 ? `${overdueCount} overdue invoice${overdueCount === 1 ? "" : "s"}` : "No overdue"}
+          urgent={overdueAmount > 0} to="/finance?tab=revenue&filter=overdue" testid="mkpi-overdue" />
       </div>
 
-      {/* The band: one dark zone per page, and on Finance it belongs to the
-          only real time series in the product. */}
-      <DarkBand testid="ledger-band" className="mt-8 pt-8 pb-10">
-        <HistoryBand
-          series={summary.by_month || []}
-          title={t("finance.monthly_spend")}
-          testid="ledger-history"
+      {/* View all financials */}
+      <Link to="/finance?tab=revenue" data-testid="ledger-mobile-viewall"
+        className="nm-tile flex items-center justify-center gap-2 p-4 text-sm font-medium">
+        View all financials
+        <ArrowRight size={13} weight="bold" aria-hidden="true" />
+      </Link>
+
+      {/* Cash flow needs attention */}
+      {overdueList.length > 0 && (
+        <div className="rounded-cardlg border-l-[3px] border-kr-accent bg-kr-accent/10 p-4"
+          data-testid="ledger-mobile-cashflow">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-2 min-w-0">
+              <WarningCircle size={20} weight="fill" aria-hidden="true" className="mt-0.5 shrink-0 text-kr-accent" />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">Cash flow needs attention</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {f(overdueAmount || overdueList.reduce((s, r) => s + Number(r.amount || 0), 0))} is stuck outside
+                </p>
+              </div>
+            </div>
+            <Link to="/finance?tab=revenue&filter=overdue"
+              className="shrink-0 rounded-pill bg-white px-3 py-1.5 text-xs font-semibold shadow-[0_1px_2px_rgba(0,0,0,0.06)]">
+              View all
+            </Link>
+          </div>
+          <ul className="mt-3 space-y-2">
+            {overdueList.map((r, i) => (
+              <li key={i} className="flex items-center gap-3 rounded-tile bg-white p-3">
+                <span aria-hidden="true"
+                  className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-orange-100 text-orange-700">
+                  <Buildings size={14} weight="regular" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{r.name}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{r.note}</p>
+                </div>
+                <span className="shrink-0 text-sm font-semibold text-kr-accent tabular-nums">{f(r.amount)}</span>
+                <CaretRight size={11} weight="bold" aria-hidden="true" className="text-muted-foreground" />
+              </li>
+            ))}
+          </ul>
+          <Link to="/finance?tab=revenue&filter=overdue"
+            className="mt-3 flex items-center gap-1 text-xs font-semibold text-kr-accent">
+            View all {overdueList.length}+ action items <ArrowRight size={11} weight="bold" aria-hidden="true" />
+          </Link>
+        </div>
+      )}
+
+      {/* Ask AI about your finances */}
+      <AskFinanceMobile />
+    </div>
+  );
+}
+
+/**
+ * KR-14.16 — a tiny KPI card with icon-in-circle, label, big value and an
+ * optional trend line or note. The whole card is a link, chevron at the far
+ * right of the row.
+ */
+function MobileKpiCard({ icon: Icon, tint, label, value, trend, note, urgent, to, testid }) {
+  const tintMap = {
+    green: "bg-green-100 text-green-700",
+    blue: "bg-blue-100 text-blue-700",
+    rose: "bg-rose-100 text-rose-700",
+    warn: "bg-orange-100 text-orange-700",
+  };
+  return (
+    <Link to={to} data-testid={testid}
+      className="nm-tile flex flex-col gap-1 p-4">
+      <div className="flex items-start justify-between gap-2">
+        <span className={`grid h-9 w-9 place-items-center rounded-full ${tintMap[tint] || "bg-nm-sunken"}`}>
+          <Icon size={16} weight="regular" aria-hidden="true" />
+        </span>
+        <CaretRight size={13} weight="bold" aria-hidden="true" className="mt-1 text-muted-foreground" />
+      </div>
+      <p className="mt-1 text-xs text-muted-foreground">{label}</p>
+      <p className={`font-mono text-lg font-semibold tabular-nums ${urgent ? "text-kr-accent" : ""}`}>{value}</p>
+      {trend != null && Number.isFinite(trend) && trend !== 0 && (
+        <p className={`text-[11px] font-medium ${trend >= 0 ? "text-[hsl(140_45%_35%)]" : "text-kr-accent"}`}>
+          <span aria-hidden="true">{trend >= 0 ? "↑" : "↓"}</span> {Math.abs(trend).toFixed(1)}%
+          <span className="ml-1 text-muted-foreground font-normal">this month</span>
+        </p>
+      )}
+      {trend == null && note && (
+        <p className={`text-[11px] font-medium ${urgent ? "text-kr-accent" : "text-muted-foreground"}`}>{note}</p>
+      )}
+    </Link>
+  );
+}
+
+/**
+ * KR-14.16 — a small area-under-curve sparkline used inside the net profit
+ * hero card. Pure inline SVG so it never fetches, and rescales to any width.
+ */
+function MobileSparkline({ points, className }) {
+  if (!points || points.length < 2) return null;
+  const W = 120, H = 48;
+  const min = Math.min(...points), max = Math.max(...points);
+  const rng = max - min || 1;
+  const step = W / (points.length - 1);
+  const y = (v) => H - ((v - min) / rng) * (H - 4) - 2;
+  const path = points.map((v, i) => `${i === 0 ? "M" : "L"}${(i * step).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const area = `${path} L${W},${H} L0,${H} Z`;
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className={className} aria-hidden="true">
+      <path d={area} fill="hsl(140 55% 55% / 0.18)" />
+      <path d={path} fill="none" stroke="hsl(140 55% 40%)" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/**
+ * KR-14.16 — an "Ask AI about your finances" input card. Delegates the
+ * actual query to the existing /brain page (the AiPanel is a heavier
+ * component; this card is a scan-first entry point).
+ */
+function AskFinanceMobile() {
+  const [q, setQ] = useState("");
+  const navigate = useNavigate();
+  const send = () => {
+    if (!q.trim()) return;
+    navigate(`/brain?q=${encodeURIComponent(q.trim())}`);
+  };
+  return (
+    <div className="nm-tile p-4" data-testid="ledger-mobile-askai">
+      <div className="mb-3 flex items-center gap-2">
+        <span aria-hidden="true" className="grid h-7 w-7 place-items-center rounded-full bg-violet-100 text-violet-700">
+          <Sparkle size={13} weight="fill" />
+        </span>
+        <p className="text-sm font-semibold">Ask AI about your finances</p>
+      </div>
+      <div className="flex items-center gap-2">
+        <input
+          type="text"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") send(); }}
+          placeholder="e.g. Which vendor did I spend the most on?"
+          className="h-10 flex-1 rounded-pill border border-nm-edge/40 bg-white px-4 text-sm focus:outline-none focus:ring-2 focus:ring-kr-ink/15"
+          data-testid="ledger-mobile-askai-input"
         />
-      </DarkBand>
+        <button type="button" onClick={send} data-testid="ledger-mobile-askai-send"
+          aria-label="Ask"
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-kr-ink text-white">
+          <PaperPlaneRight size={14} weight="bold" aria-hidden="true" />
+        </button>
+      </div>
     </div>
   );
 }
@@ -976,84 +1196,77 @@ function ExpensesTable({ rows, cur, onDelete }) {
   const { t } = useTranslation();
   const f = fmt(cur);
   if (!rows.length) return <EmptyState title={t("finance.empty_exp_title")} hint={t("finance.empty_exp_hint")} />;
-  return (
-    <div className="card-brutal overflow-x-auto" data-testid="expenses-table">
-      <table className="w-full text-sm">
-        <thead><tr className="border-b border-nm-edge/40 text-left text-xs font-medium text-muted-foreground">
-          <th className="p-3">{t("finance.c_title")}</th><th className="p-3">{t("finance.c_category")}</th><th className="p-3">{t("finance.c_vendor")}</th><th className="p-3">{t("finance.c_date")}</th><th className="p-3">{t("finance.c_status")}</th><th className="p-3 text-right">{t("finance.c_amount")}</th><th className="p-3"></th>
-        </tr></thead>
-        <tbody>
-          {rows.map((e) => (
-            <tr key={e.id} className="border-b border-nm-edge/40/60 hover:bg-accent/50" data-testid={`expense-row-${e.id}`}>
-              <td className="p-3 font-medium">{e.title}{e.source !== "manual" && <Chip value={e.source} className={`ml-2 ${SOURCE_CHIP[e.source] || "bg-nm-sunken"}`} />}<AttachmentLink att={e.attachment} /></td>
-              <td className="p-3"><Chip value={e.category} className="bg-nm-sunken text-foreground" /></td>
-              <td className="p-3 text-muted-foreground">{e.vendor_name || "—"}</td>
-              <td className="p-3 text-muted-foreground">{e.date || "—"}</td>
-              <td className="p-3"><Chip value={e.status} className={e.status === "paid" ? "bg-kr-ink text-white" : "border-[0.5px] border-kr-ink/55 text-foreground/70"} /></td>
-              <td className="p-3 text-right font-mono font-semibold">{f(e.amount)}</td>
-              <td className="p-3 text-right"><button onClick={() => onDelete(e.id)} data-testid={`expense-delete-${e.id}`} className="text-muted-foreground hover:text-kr-accent"><Trash size={15} /></button></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+  /* KM-4 — same seven columns, two renderers. `value` on the meta columns is
+     what lets DataList tell "no vendor" from a cell that renders an em dash,
+     so the phone's dot-joined line never shows a lone "—". */
+  const columns = [
+    { key: "title", head: t("finance.c_title"), role: "title", tdClass: "font-medium",
+      cell: (e) => <>{e.title}{e.source !== "manual" && <Chip value={e.source} className={`ml-2 ${SOURCE_CHIP[e.source] || "bg-nm-sunken"}`} />}<AttachmentLink att={e.attachment} /></> },
+    { key: "category", head: t("finance.c_category"), role: "chip",
+      cell: (e) => <Chip value={e.category} className="bg-nm-sunken text-foreground" /> },
+    { key: "vendor", head: t("finance.c_vendor"), role: "meta", tdClass: "text-muted-foreground",
+      value: (e) => e.vendor_name, cell: (e) => e.vendor_name || "—" },
+    { key: "date", head: t("finance.c_date"), role: "meta", tdClass: "text-muted-foreground",
+      value: (e) => e.date, cell: (e) => e.date || "—" },
+    { key: "status", head: t("finance.c_status"), role: "chip",
+      cell: (e) => <Chip value={e.status} className={e.status === "paid" ? "bg-kr-ink text-white" : "border-[0.5px] border-kr-ink/55 text-foreground/70"} /> },
+    { key: "amount", head: t("finance.c_amount"), role: "amount", align: "right", tdClass: "font-mono font-semibold",
+      cell: (e) => f(e.amount) },
+    { key: "act", head: "", role: "action", align: "right",
+      cell: (e) => <button onClick={() => onDelete(e.id)} data-testid={`expense-delete-${e.id}`} aria-label="Delete expense" className="grid h-9 w-9 place-items-center text-muted-foreground hover:text-kr-accent"><Trash size={15} /></button> },
+  ];
+  return <DataList columns={columns} rows={rows} rowKey={(e) => e.id}
+    rowTestid={(e) => `expense-row-${e.id}`} testid="expenses-table" />;
 }
 
 function AssetsTable({ rows, cur, onDelete }) {
   const { t } = useTranslation();
   const f = fmt(cur);
   if (!rows.length) return <EmptyState title={t("finance.empty_asset_title")} hint={t("finance.empty_asset_hint")} />;
-  return (
-    <div className="card-brutal overflow-x-auto" data-testid="assets-table">
-      <table className="w-full text-sm">
-        <thead><tr className="border-b border-nm-edge/40 text-left text-xs font-medium text-muted-foreground">
-          <th className="p-3">{t("finance.a_asset")}</th><th className="p-3">{t("finance.c_category")}</th><th className="p-3">{t("finance.c_vendor")}</th><th className="p-3">{t("finance.a_bought")}</th><th className="p-3">{t("finance.c_status")}</th><th className="p-3 text-right">{t("finance.a_value")}</th><th className="p-3"></th>
-        </tr></thead>
-        <tbody>
-          {rows.map((a) => (
-            <tr key={a.id} className="border-b border-nm-edge/40/60 hover:bg-accent/50" data-testid={`asset-row-${a.id}`}>
-              <td className="p-3 font-medium">{a.name}{a.source !== "manual" && <Chip value={a.source} className={`ml-2 ${SOURCE_CHIP[a.source] || "bg-nm-sunken"}`} />}<AttachmentLink att={a.attachment} /></td>
-              <td className="p-3"><Chip value={a.category} className="bg-nm-sunken text-foreground" /></td>
-              <td className="p-3 text-muted-foreground">{a.vendor_name || "—"}</td>
-              <td className="p-3 text-muted-foreground">{a.purchase_date || "—"}</td>
-              <td className="p-3"><Chip value={a.status} className={a.status === "active" ? "bg-kr-ink text-white" : "bg-nm-sunken text-foreground"} /></td>
-              <td className="p-3 text-right font-mono font-semibold">{f(a.purchase_amount)}</td>
-              <td className="p-3 text-right"><button onClick={() => onDelete(a.id)} className="text-muted-foreground hover:text-kr-accent"><Trash size={15} /></button></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+  const columns = [
+    { key: "name", head: t("finance.a_asset"), role: "title", tdClass: "font-medium",
+      cell: (a) => <>{a.name}{a.source !== "manual" && <Chip value={a.source} className={`ml-2 ${SOURCE_CHIP[a.source] || "bg-nm-sunken"}`} />}<AttachmentLink att={a.attachment} /></> },
+    { key: "category", head: t("finance.c_category"), role: "chip",
+      cell: (a) => <Chip value={a.category} className="bg-nm-sunken text-foreground" /> },
+    { key: "vendor", head: t("finance.c_vendor"), role: "meta", tdClass: "text-muted-foreground",
+      value: (a) => a.vendor_name, cell: (a) => a.vendor_name || "—" },
+    { key: "bought", head: t("finance.a_bought"), role: "meta", tdClass: "text-muted-foreground",
+      value: (a) => a.purchase_date, cell: (a) => a.purchase_date || "—" },
+    { key: "status", head: t("finance.c_status"), role: "chip",
+      cell: (a) => <Chip value={a.status} className={a.status === "active" ? "bg-kr-ink text-white" : "bg-nm-sunken text-foreground"} /> },
+    { key: "value", head: t("finance.a_value"), role: "amount", align: "right", tdClass: "font-mono font-semibold",
+      cell: (a) => f(a.purchase_amount) },
+    { key: "act", head: "", role: "action", align: "right",
+      cell: (a) => <button onClick={() => onDelete(a.id)} aria-label="Delete asset" className="grid h-9 w-9 place-items-center text-muted-foreground hover:text-kr-accent"><Trash size={15} /></button> },
+  ];
+  return <DataList columns={columns} rows={rows} rowKey={(a) => a.id}
+    rowTestid={(a) => `asset-row-${a.id}`} testid="assets-table" />;
 }
 
 function InventoryTable({ rows, cur, onDelete }) {
   const { t } = useTranslation();
   const f = fmt(cur);
   if (!rows.length) return <EmptyState title={t("finance.empty_inv_title")} hint={t("finance.empty_inv_hint")} />;
-  return (
-    <div className="card-brutal overflow-x-auto" data-testid="inventory-table">
-      <table className="w-full text-sm">
-        <thead><tr className="border-b border-nm-edge/40 text-left text-xs font-medium text-muted-foreground">
-          <th className="p-3">{t("finance.i_item")}</th><th className="p-3">{t("finance.i_sku")}</th><th className="p-3">{t("finance.i_qty")}</th><th className="p-3">{t("finance.i_unitcost")}</th><th className="p-3">{t("finance.c_vendor")}</th><th className="p-3 text-right">{t("finance.i_value")}</th><th className="p-3"></th>
-        </tr></thead>
-        <tbody>
-          {rows.map((i) => (
-            <tr key={i.id} className="border-b border-nm-edge/40/60 hover:bg-accent/50" data-testid={`inv-row-${i.id}`}>
-              <td className="p-3 font-medium">{i.item}<AttachmentLink att={i.attachment} /></td>
-              <td className="p-3 text-muted-foreground">{i.sku || "—"}</td>
-              <td className="p-3 font-mono">{i.quantity} {i.unit}</td>
-              <td className="p-3 font-mono">{f(i.unit_cost)}</td>
-              <td className="p-3 text-muted-foreground">{i.vendor_name || "—"}</td>
-              <td className="p-3 text-right font-mono font-semibold">{f(i.value)}</td>
-              <td className="p-3 text-right"><button onClick={() => onDelete(i.id)} className="text-muted-foreground hover:text-kr-accent"><Trash size={15} /></button></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+  const columns = [
+    { key: "item", head: t("finance.i_item"), role: "title", tdClass: "font-medium",
+      cell: (i) => <>{i.item}<AttachmentLink att={i.attachment} /></> },
+    { key: "sku", head: t("finance.i_sku"), role: "meta", tdClass: "text-muted-foreground",
+      value: (i) => i.sku, cell: (i) => i.sku || "—" },
+    /* Quantity is the one "meta" here that is really data, so it keeps its
+       mono treatment in the table and rides the dot-joined line on a phone. */
+    { key: "qty", head: t("finance.i_qty"), role: "meta", tdClass: "font-mono",
+      value: (i) => i.quantity, cell: (i) => `${i.quantity} ${i.unit}` },
+    { key: "unitcost", head: t("finance.i_unitcost"), role: "meta", tdClass: "font-mono",
+      value: (i) => i.unit_cost, cell: (i) => f(i.unit_cost) },
+    { key: "vendor", head: t("finance.c_vendor"), role: "meta", tdClass: "text-muted-foreground",
+      value: (i) => i.vendor_name, cell: (i) => i.vendor_name || "—" },
+    { key: "value", head: t("finance.i_value"), role: "amount", align: "right", tdClass: "font-mono font-semibold",
+      cell: (i) => f(i.value) },
+    { key: "act", head: "", role: "action", align: "right",
+      cell: (i) => <button onClick={() => onDelete(i.id)} aria-label="Delete item" className="grid h-9 w-9 place-items-center text-muted-foreground hover:text-kr-accent"><Trash size={15} /></button> },
+  ];
+  return <DataList columns={columns} rows={rows} rowKey={(i) => i.id}
+    rowTestid={(i) => `inv-row-${i.id}`} testid="inventory-table" />;
 }
 
 const TABS = [
@@ -1113,7 +1326,46 @@ function CaptureHero({ pendingCount, onIngested, onOpenInbox }) {
 
   return (
     <>
-      <div className="nm-tile p-3 mb-6 flex flex-wrap items-center gap-2" data-testid="finance-capture-hero">
+      {/* KR-14.15 · MOBILE — capture actions as a four-column icon grid
+          inside one card, matching the reference. Each column: colored
+          circular icon on the left, two-line label on the right. */}
+      <div className="nm-tile mb-5 grid grid-cols-4 gap-2 p-3 lg:hidden" data-testid="finance-capture-hero-mobile">
+        <label data-testid="finance-hero-doc-m" title="Upload a bill or receipt (PDF or photo)"
+          className={`flex flex-col items-center gap-1.5 rounded-tile p-1 text-center cursor-pointer ${uploading ? "opacity-60 pointer-events-none" : ""}`}>
+          <span className="grid h-9 w-9 place-items-center rounded-full bg-orange-100 text-orange-600">
+            <FilePdf size={16} weight="bold" aria-hidden="true" />
+          </span>
+          <span className="text-[10px] leading-tight font-medium">Upload bill<br /><span className="text-muted-foreground font-normal">/receipt</span></span>
+          <input type="file" hidden accept="image/*,application/pdf" onChange={(e) => upload("/ingest/document", e.target.files)} />
+        </label>
+        <label data-testid="finance-hero-photo-m" title="Scan a receipt"
+          className={`flex flex-col items-center gap-1.5 rounded-tile p-1 text-center cursor-pointer ${uploading ? "opacity-60 pointer-events-none" : ""}`}>
+          <span className="grid h-9 w-9 place-items-center rounded-full bg-green-100 text-green-700">
+            <Camera size={16} weight="bold" aria-hidden="true" />
+          </span>
+          <span className="text-[10px] leading-tight font-medium">Scan<br /><span className="text-muted-foreground font-normal">receipt</span></span>
+          <input type="file" hidden accept="image/*" capture="environment" onChange={(e) => upload("/ingest/document", e.target.files)} />
+        </label>
+        <button type="button" data-testid="finance-hero-add-m" title="Add expense"
+          onClick={() => document.querySelector('[data-testid="ledger-add-expense"]')?.click()}
+          className="flex flex-col items-center gap-1.5 rounded-tile p-1 text-center">
+          <span className="grid h-9 w-9 place-items-center rounded-full bg-violet-100 text-violet-600">
+            <Plus size={16} weight="bold" aria-hidden="true" />
+          </span>
+          <span className="text-[10px] leading-tight font-medium">Add<br /><span className="text-muted-foreground font-normal">expense</span></span>
+        </button>
+        <label data-testid="finance-hero-csv-m" title="Bulk CSV or Excel import"
+          className={`flex flex-col items-center gap-1.5 rounded-tile p-1 text-center cursor-pointer ${uploading ? "opacity-60 pointer-events-none" : ""}`}>
+          <span className="grid h-9 w-9 place-items-center rounded-full bg-blue-100 text-blue-700">
+            <UploadSimple size={16} weight="bold" aria-hidden="true" />
+          </span>
+          <span className="text-[10px] leading-tight font-medium">CSV /Excel<br /><span className="text-muted-foreground font-normal">Export</span></span>
+          <input type="file" hidden accept=".csv,.xlsx,.xls" onChange={(e) => upload("/ingest/csv", e.target.files)} />
+        </label>
+      </div>
+
+      {/* DESKTOP capture bar — unchanged. */}
+      <div className="nm-tile p-3 mb-6 hidden flex-wrap items-center gap-2 lg:flex" data-testid="finance-capture-hero">
         <span className="text-xs text-muted-foreground hidden sm:inline mr-1">
           Capture
         </span>
@@ -1232,25 +1484,56 @@ export default function Ledger() {
 
   return (
     <div>
-      <header className="mb-7 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <header className="mb-5 flex flex-col gap-4 lg:mb-7 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{t("finance.eyebrow")}</p>
-          <h1 className="mt-1.5 font-display text-3xl sm:text-4xl">{t("finance.title")}</h1>
+          {/* KR-14.15 — MOBILE: title + "Money in one place" subtitle,
+              matching the reference. DESKTOP keeps the uppercase eyebrow. */}
+          <p className="hidden text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground lg:block">{t("finance.eyebrow")}</p>
+          <h1 className="font-display text-3xl sm:text-4xl lg:mt-1.5">{t("finance.title")}</h1>
+          <p className="mt-1 text-sm text-muted-foreground lg:hidden">Money in one place</p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center lg:w-auto" data-testid="ledger-controls">
-          {/* RD-4 (2026-08-17): the six tabs were a welded segmented block of
-              uppercase slabs, and the active one inverted to solid dark — the
-              loudest element on a page whose job is showing money. Now the
-              same pill strip the Desk and MyWork use: borderless, sentence
-              case, indigo tint on the active tab. Below sm they wrap in a
-              2-col grid rather than forming a bordered block. */}
-          <div className="grid grid-cols-2 gap-1.5 sm:flex sm:gap-1 w-full sm:w-auto">
+          {/* KM-4 · MOBILE TABS — a rail, and ALL SIX tabs.
+              The previous strip dropped Inventory to make five fit, on the
+              stated grounds that it was "folded into the Assets tab on
+              mobile". It was not: `tab === "inventory"` renders its own
+              InventoryTable and the Assets tab renders only AssetsTable, so
+              on a phone there was no route to inventory at all — the data was
+              simply unreachable. Squeezing six into a fixed row is not the
+              answer either: at 343px `flex-1 basis-0` gives ~52px a tab and
+              every label truncates to nonsense.
+              So it scrolls, and it says so. The rail bleeds to the page gutter
+              (-mx-4 px-4) so the last pill is cut by the SCREEN rather than
+              stopping short of it, which is the thing that reads as "there is
+              more this way". Snap keeps it landing on whole pills. Same
+              grammar as the /calendar filter rail.
+              Selection is depth (.kr-pressed / .kr-pop), not a solid ink fill,
+              matching the rest of the app's page controls — and with no
+              transition utility, since those two shadow lists are not
+              interpolable. */}
+          <div className="-mx-4 flex snap-x snap-mandatory gap-1.5 overflow-x-auto px-4 pb-1 lg:hidden"
+               style={{ scrollbarWidth: "none" }}
+               role="tablist" aria-label={t("nav.finance", "Finance")} data-testid="ledger-tabs-mobile">
             {TABS.map((tb) => {
               const active = tab === tb.key;
               return (
-                /* KR-10 — the same pill the scope toggle and the nav wear:
-                   no fill either way, a black hairline, and the selected one
-                   at full strength against a faded neighbour. */
+                <button key={tb.key} onClick={() => setTab(tb.key)} data-testid={`ledger-tab-mobile-${tb.key}`}
+                  aria-pressed={active}
+                  className={`flex h-9 shrink-0 snap-start items-center gap-1.5 whitespace-nowrap rounded-pill px-3.5 text-xs ${
+                    active ? "kr-pressed font-semibold text-foreground" : "kr-pop text-foreground/70"
+                  }`}>
+                  <tb.icon size={14} weight="regular" aria-hidden="true" />
+                  {t(tb.tkey)}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* DESKTOP tabs — original pill row, hidden below lg. */}
+          <div className="hidden grid-cols-2 gap-1.5 lg:flex lg:gap-1 lg:w-auto">
+            {TABS.map((tb) => {
+              const active = tab === tb.key;
+              return (
                 <button key={tb.key} onClick={() => setTab(tb.key)} data-testid={`ledger-tab-${tb.key}`}
                   aria-pressed={active}
                   className={`flex h-9 items-center justify-center gap-1.5 rounded-pill border-[0.5px] px-3.5 text-xs transition-colors sm:text-sm ${
@@ -1263,7 +1546,7 @@ export default function Ledger() {
               );
             })}
           </div>
-          {addBtn}
+          <div className="hidden lg:block">{addBtn}</div>
         </div>
       </header>
 
@@ -1279,11 +1562,15 @@ export default function Ledger() {
       ) : (
         <>
           {tab === "overview" && summary && (
-            <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-              <div><OverviewTab summary={summary} /></div>
-              {/* Epic 2 Sprint 4 (E2-26): WhatsApp status card moves here. */}
-              <div className="lg:sticky lg:top-6 self-start"><WhatsAppCard /></div>
-            </div>
+            /* KM-5 — the WhatsApp QR / status card is removed on the founder's
+               call: the pairing QR, its refresh control and the inbound
+               "recent WhatsApp activity" log all went with it. Overview is a
+               single column again rather than a 1fr/320px split with a
+               sidebar. The component file stays in the tree unreferenced
+               rather than being deleted in the same breath as a layout change
+               — if the pairing surface is wanted back it belongs somewhere
+               deliberate (Settings), not stapled to the money page. */
+            <OverviewTab summary={summary} />
           )}
           {tab === "revenue" && <RevenueTab data={revenueQ.data} cur={cur} onDelete={delRevenue} onChange={invalidate} initialFilter={initialFilter} />}
           {tab === "expenses" && <div className="space-y-6"><NeedsMatchingPanel title="Supplier payments to match" testid="payables-needs-matching" hint="These payments to suppliers couldn’t be auto-linked to a purchase bill. Pick the bill they settle, or mark as a standalone expense." unmatched={payablesQ.data?.unmatched_payments} open={payablesQ.data?.open_invoices || []} cur={cur} endpoint="/payables/payment" standaloneLabel={{ btn: "Standalone expense", done: "Booked as a standalone expense" }} onChange={invalidate} /><AiPanel scope="expenses" /><ExpensesTable rows={expensesQ.data || []} cur={cur} onDelete={(id) => del("expenses", id)} /></div>}

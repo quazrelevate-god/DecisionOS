@@ -32,11 +32,16 @@ import {
   Plus, MagnifyingGlass, PencilSimple, Trash, Phone, EnvelopeSimple,
   MapPin, Eye, AddressBook, Truck, UsersFour, Warning as WarningIcon,
   ArrowsDownUp, CurrencyInr, Clock, UploadSimple,
+  SlidersHorizontal,  // KR-14.14 · mobile filter icon
 } from "@phosphor-icons/react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
   DialogFooter,
 } from "../components/ui/dialog";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuLabel, DropdownMenuSeparator,
+} from "../components/ui/dropdown-menu";
 
 const CUSTOMER_TYPES = ["customer", "dealer"];
 const VENDOR_TYPES = ["vendor"];
@@ -642,10 +647,11 @@ export default function CRM() {
 
   return (
     <div>
-      <header className="mb-7 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <header className="mb-5 flex flex-col gap-4 lg:mb-7 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{t("crm.eyebrow", { customers: L.customer_plural.toLowerCase(), suppliers: L.vendor_plural.toLowerCase() })}</p>
-          <h1 className="mt-1.5 font-display text-3xl sm:text-4xl">{t("crm.title")}</h1>
+          {/* KR-14.14 — eyebrow is hidden on mobile per the reference. */}
+          <p className="hidden text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground lg:block">{t("crm.eyebrow", { customers: L.customer_plural.toLowerCase(), suppliers: L.vendor_plural.toLowerCase() })}</p>
+          <h1 className="font-display text-3xl sm:text-4xl lg:mt-1.5">{t("crm.title")}</h1>
         </div>
         {/* U7-07 (2026-08-17): three equal-weight header CTAs (Add
             Buyer / Add Supplier / Import CSV) collapsed to ONE primary
@@ -693,18 +699,87 @@ export default function CRM() {
         )}
       </header>
 
+      {/* KR-14.14 · MOBILE — full-width search + sliders filter circle
+          (opens a dropdown with the status/sort selects). Followed by a
+          segmented [Buyers | Suppliers] pill. Hidden from lg up where the
+          desktop layout below takes over. */}
+      <div className="mb-4 flex items-center gap-2 lg:hidden">
+        <div className="relative flex-1">
+          <MagnifyingGlass size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+          <input
+            data-testid="crm-search-mobile"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder={t("crm.search_ph")}
+            className="h-11 w-full rounded-pill border border-nm-edge/40 bg-white/70 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-kr-ink/20"
+          />
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button type="button" data-testid="crm-mobile-filter"
+              aria-label={t("crm.filter", "Filter")}
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white text-foreground shadow-[0_1px_2px_rgba(0,0,0,0.06)]">
+              <SlidersHorizontal size={18} weight="regular" aria-hidden="true" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" sideOffset={8} className="min-w-[13rem]">
+            <DropdownMenuLabel>{t("crm.all_statuses")}</DropdownMenuLabel>
+            <DropdownMenuItem onSelect={() => setStatus("")}
+              className={`justify-between ${status === "" ? "font-medium" : ""}`}>
+              <span>{t("crm.all_statuses")}</span>
+            </DropdownMenuItem>
+            {STATUSES.map((s) => (
+              <DropdownMenuItem key={s} onSelect={() => setStatus(s)}
+                className={`justify-between capitalize ${status === s ? "font-medium" : ""}`}>
+                <span>{s}</span>
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>Sort</DropdownMenuLabel>
+            {SORT_OPTIONS.map((o) => (
+              <DropdownMenuItem key={o.key} onSelect={() => setSort(o.key)}
+                className={`justify-between ${sort === o.key ? "font-medium" : ""}`}>
+                <span>{o.label}</span>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      {/* KR-14.14 · MOBILE — Buyers | Suppliers as a single segmented pill,
+          the active half filled ink. Hidden from lg up. */}
+      {/* KM-5 — Buyers | Suppliers as a neumorphic segmented bar. Was a
+          welded pair of hairline pills with a solid ink fill on the active
+          one; every other page-level "pick one of these two" control in the
+          app is now a .kr-pressed track with a raised .kr-pop segment, and
+          this was the last one still painting selection as a fill.
+          No transition utility — the segments swap between an outset and an
+          inset shadow pair, which do not interpolate. */}
+      <div className="kr-pressed mb-4 flex items-center gap-1 rounded-pill p-1 lg:hidden"
+           role="group" aria-label="Contact type" data-testid="crm-scope-mobile">
+        {SCOPES.map((s) => {
+          const active = scope === s.key;
+          return (
+            <button
+              key={s.key}
+              type="button"
+              onClick={() => setScope(s.key)}
+              aria-pressed={active}
+              data-testid={`crm-scope-mobile-${s.key}`}
+              className={`flex h-10 flex-1 items-center justify-center gap-2 rounded-pill text-sm ${
+                active ? "kr-pop font-semibold text-foreground" : "text-foreground/60"
+              }`}
+            >
+              {s.label}
+            </button>
+          );
+        })}
+      </div>
+
       {/* U7-07 (2026-08-17): HRM-style segmented tabs -- Buyers | Suppliers.
-          Two big equal-width tabs with a shared underline that slides
-          under the active one. Filters moved to a subtle strip below,
-          not inline with the type toggle. Founder ask: 'make it better
-          ui as actual CRM. remove all section, just Buyer / suppliers
-          enough'. */}
-      {/* RD-3 (2026-08-17): the underline tab keeps its structure — it is the
-          right control for two mutually exclusive lanes — but drops the
-          uppercase + wide tracking, and the active count badge stops being a
-          solid dark slab. Underline moves to indigo so the accent marks the
-          selection here as it does everywhere else. */}
-      <div className="mb-5" data-testid="crm-scope-chips">
+          KR-14.14 — DESKTOP ONLY (hidden below lg); the mobile scope pill
+          above renders the same choice. */}
+      <div className="mb-5 hidden lg:block" data-testid="crm-scope-chips">
         <div className="flex border-b border-nm-edge/40">
           {SCOPES.map((s) => {
             const active = scope === s.key;
@@ -729,9 +804,9 @@ export default function CRM() {
         </div>
       </div>
 
-      {/* Filter strip -- search + status + sort, below the type toggle
-          and visually secondary. Wraps on narrow viewports. */}
-      <div className="flex flex-wrap items-center gap-2 mb-5">
+      {/* Filter strip — DESKTOP ONLY (hidden below lg). Mobile uses the
+          search-and-sliders row above. */}
+      <div className="mb-5 hidden flex-wrap items-center gap-2 lg:flex">
         <div className="relative flex-1 min-w-[200px] max-w-md">
           <MagnifyingGlass size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
           <input
@@ -782,7 +857,7 @@ export default function CRM() {
         />
       )}
 
-      <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-2 md:gap-4 xl:grid-cols-3">
         {contacts.map((c) => {
           const isCustomer = CUSTOMER_TYPES.includes(c.type);
           // Epic 2 Sprint 8 (E2-67 / E2-69 / E2-71): per-card derived data.
@@ -886,7 +961,12 @@ export default function CRM() {
                   </p>
                   {c.company && <p className="text-xs text-muted-foreground truncate">{c.company}</p>}
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
+                {/* KR-14.14 — mobile drops the type + stage chips and shows
+                    a chevron instead (reference). Chips return from lg. */}
+                <span aria-hidden="true" className="mt-0.5 shrink-0 text-muted-foreground lg:hidden">
+                  ›
+                </span>
+                <div className="hidden shrink-0 items-center gap-1 lg:flex">
                   <span
                     className={`px-1.5 py-0.5 rounded text-[10px] font-medium tracking-wide ${isCustomer ? "border-[0.5px] border-kr-ink/55 text-foreground/70" : "bg-nm-sunken text-muted-foreground"}`}
                     data-testid={`crm-type-chip-${c.id}`}

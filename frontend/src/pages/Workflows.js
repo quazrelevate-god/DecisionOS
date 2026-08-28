@@ -44,10 +44,13 @@ import { money, timeAgo, fullTime, humanStage } from "../lib/format";
 import { toast } from "sonner";
 import {
   Plus, ArrowRight, Trash, ClockCounterClockwise, WarningCircle, DotsSixVertical, Check,
+  SlidersHorizontal,  // KR-14.6 · mobile pipeline filter
+  CaretDown,  // KR-14.21 · mobile stage collapse
 } from "@phosphor-icons/react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter,
 } from "../components/ui/dialog";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "../components/ui/dropdown-menu";
 
 function _initials(name) {
   if (!name) return "?";
@@ -185,6 +188,14 @@ export default function Workflows({ embedded = false }) {
   const focusWfType = params.get("wf_type") || params.get("type");
   const [tab, setTab] = useState(() =>
     (focusWfType && pipelines.some((p) => p.key === focusWfType)) ? focusWfType : pipelines[0]?.key);
+  // KR-14.9 — sync tab from ?wf_type= when MyWork's mobile filter dropdown
+  // changes it externally. Guard against pipeline drift by validating the
+  // key against the current pipeline list before applying.
+  useEffect(() => {
+    if (focusWfType && pipelines.some((p) => p.key === focusWfType) && focusWfType !== tab) {
+      setTab(focusWfType);
+    }
+  }, [focusWfType, pipelines, tab]);
   const activeKey = pipelines.some((p) => p.key === tab) ? tab : pipelines[0]?.key;
 
   const { data } = useQuery({
@@ -211,6 +222,12 @@ export default function Workflows({ embedded = false }) {
   // under the pointer, used only to paint the drop target.
   const [dragId, setDragId] = useState(null);
   const [overStage, setOverStage] = useState(null);
+  // KR-14.21 · MOBILE — collapse state per stage key. All stages start
+  // MINIMIZED on first open; toggling one flips only its own entry.
+  const [openStages, setOpenStages] = useState({});
+  const toggleStage = useCallback((key) => {
+    setOpenStages((s) => ({ ...s, [key]: !s[key] }));
+  }, []);
   const [busyId, setBusyId] = useState(null);
 
   const refresh = useCallback(() => {
@@ -297,14 +314,28 @@ export default function Workflows({ embedded = false }) {
           </div>
         )}
 
+        {/* KR-14.8 · MOBILE — the pipeline pills are folded into MyWork's
+            mobile filter dropdown (via the shared `?wf_type=` param). The
+            "+ New workflow" trigger stays inline as a mobile-only button
+            just below the pill row's caption. */}
+        {embedded && (
+          <div className="flex w-full lg:hidden" data-testid="workflow-mobile-controls">
+            <NewWorkflowDialog
+              type={activeKey} typeLabel={tabLabel} custLabel={L.customer_singular} vendLabel={L.vendor_singular}
+              onCreated={refresh} />
+          </div>
+        )}
+
         {/* Pipeline switch — the same black-hairline pill the nav, the scope
             toggle and Finance's tabs wear. Was a welded bordered block with
             an inverted active slab, which read as the loudest thing on a
             page whose subject is the board below it.
             Empty pipelines still render (U7-06.4, founder: "show the
             complete operational, not only the ones with data") — they just
-            carry a 0 and sit at the faded weight. */}
-        <div className="flex flex-wrap items-center gap-2" data-testid="workflow-pipelines">
+            carry a 0 and sit at the faded weight.
+            KR-14.8 — hidden on mobile (below lg); the sliders dropdown
+            above takes over. */}
+        <div className="hidden flex-wrap items-center gap-2 lg:flex" data-testid="workflow-pipelines">
           {pipelines.map((pip) => {
             const count = (data || []).filter((w) => w.type === pip.key).length;
             const active = activeKey === pip.key;
@@ -331,14 +362,19 @@ export default function Workflows({ embedded = false }) {
           })}
         </div>
 
-        <NewWorkflowDialog
-          type={activeKey} typeLabel={tabLabel} custLabel={L.customer_singular} vendLabel={L.vendor_singular}
-          onCreated={refresh} />
+        {/* Desktop New Workflow — the mobile controls row above renders its
+            own trigger inside the sliders/New pair. */}
+        <div className="hidden lg:block">
+          <NewWorkflowDialog
+            type={activeKey} typeLabel={tabLabel} custLabel={L.customer_singular} vendLabel={L.vendor_singular}
+            onCreated={refresh} />
+        </div>
       </header>
 
-      {/* One line telling the founder the board is draggable. A drag
-          affordance nobody discovers is a feature nobody has. */}
-      <p className="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground">
+      {/* KR-14.21 · MOBILE — the drag hint is hidden on the phone (there is
+          no drag target when each stage is a collapsed card and a horizontal
+          scroller). It still renders from lg up. */}
+      <p className="mb-3 hidden items-center gap-1.5 text-xs text-muted-foreground lg:flex">
         <DotsSixVertical size={13} weight="bold" aria-hidden="true" />
         Drag a card into its next stage, or use its button. {total} in this pipeline.
       </p>
@@ -349,8 +385,12 @@ export default function Workflows({ embedded = false }) {
       {/* KR-11.5 — the board's tray is glass now, not a grey well. It still
           reads as recessed (the tiles inside are raised against it), but the
           page's weather passes through instead of being covered by a slab. */}
-      <div className="kr-glass-well overflow-x-auto p-4" data-testid="workflow-board">
-        <div className="flex min-w-max items-stretch gap-4">
+      {/* KR-14.9 — the board stacks VERTICALLY on mobile: each stage is a
+          full-width section, cards flow beneath in one column. Drag-to-move
+          still works within a section. From lg the original horizontal
+          kanban with fixed 300px columns returns unchanged. */}
+      <div className="kr-glass-well p-4 lg:overflow-x-auto" data-testid="workflow-board">
+        <div className="flex flex-col gap-4 lg:min-w-max lg:flex-row lg:items-stretch">
           {stages.map((stg) => {
             const cards = (data || []).filter((w) => w.stage === stg.key);
             const draggedWf = dragId ? (data || []).find((w) => w.id === dragId) : null;
@@ -361,6 +401,11 @@ export default function Workflows({ embedded = false }) {
               return i >= 0 && draggedWf.stages[i + 1] === stg.key;
             })();
             const isTarget = overStage === stg.key && dropOk;
+            // KR-14.21 · MOBILE — stages start MINIMIZED. `openStages[key]`
+            // is undefined by default (falsy → collapsed); tapping the
+            // header row flips it. Desktop ignores this state and always
+            // shows the cards.
+            const isOpen = !!openStages[stg.key];
             return (
               <section
                 key={stg.key}
@@ -376,20 +421,44 @@ export default function Workflows({ embedded = false }) {
                 /* No fill at rest — the board's inset well is the ground, and
                    a grey panel per column was a box inside a box. The column
                    only paints while a drag is live, and then only to say
-                   "this one accepts" or "this one does not". */
-                className={`flex w-[300px] shrink-0 flex-col rounded-tile transition-all ${
+                   "this one accepts" or "this one does not".
+                   KR-14.21 — mobile paints the stage as an nm-tile card so
+                   the collapsed rows read as stacked cards; desktop keeps
+                   the transparent column look. */
+                className={`flex w-full flex-col rounded-tile transition-all nm-tile p-2 lg:nm-none lg:bg-transparent lg:p-0 lg:w-[300px] lg:shrink-0 ${
                   isTarget ? "bg-kr-accent/10 ring-2 ring-kr-accent/60"
                   : dropOk ? "ring-1 ring-dashed ring-foreground/30"
                   : dragId && !isSource ? "opacity-40"
                   : ""
                 }`}
               >
-                <div className="flex items-baseline justify-between gap-2 px-1.5 pb-1 pt-1">
+                {/* Header row — clickable on mobile to toggle collapse. On
+                    desktop it stays a plain non-interactive label. */}
+                <button
+                  type="button"
+                  onClick={() => toggleStage(stg.key)}
+                  data-testid={`stage-toggle-${stg.key}`}
+                  aria-expanded={isOpen}
+                  className="flex items-center justify-between gap-2 px-1.5 pb-1 pt-1 text-left lg:pointer-events-none"
+                >
                   <p className="truncate text-sm font-semibold">{stg.label}</p>
-                  <span className="font-mono text-sm tabular-nums opacity-50">{cards.length}</span>
-                </div>
+                  <span className="flex items-center gap-2">
+                    <span className="font-mono text-sm tabular-nums opacity-50">{cards.length}</span>
+                    <CaretDown
+                      size={13}
+                      weight="bold"
+                      aria-hidden="true"
+                      className={`text-muted-foreground transition-transform lg:hidden ${isOpen ? "rotate-180" : ""}`}
+                    />
+                  </span>
+                </button>
 
-                <div className="flex min-h-[320px] flex-1 flex-col gap-3 p-1.5">
+                {/* KR-14.21 · MOBILE — when expanded, cards render as a
+                    HORIZONTAL scroller (`-mx-2 overflow-x-auto flex-row`).
+                    Desktop keeps the original vertical stack. */}
+                <div className={`min-h-[140px] flex-1 gap-3 p-1.5 lg:min-h-[320px] lg:flex lg:flex-col ${
+                  isOpen ? "-mx-2 flex flex-row overflow-x-auto px-2" : "hidden lg:flex"
+                }`}>
                   {cards.length === 0 && (
                     <div className="grid flex-1 place-items-center rounded-control border border-dashed border-foreground/15 p-4">
                       <p className="text-center text-xs text-muted-foreground">
@@ -418,7 +487,7 @@ export default function Workflows({ embedded = false }) {
                           setDragId(w.id);
                         }}
                         onDragEnd={() => { setDragId(null); setOverStage(null); }}
-                        className={`kr-bento group cursor-grab p-3.5 active:cursor-grabbing ${
+                        className={`kr-bento group cursor-grab p-3 active:cursor-grabbing w-64 h-[260px] shrink-0 flex flex-col overflow-hidden text-left lg:h-auto lg:w-auto lg:shrink lg:overflow-visible lg:p-3.5 ${
                           dragging ? "opacity-40" : ""
                         } ${busyId === w.id ? "opacity-60" : ""} ${
                           w.id === focusWf ? "ring-2 ring-kr-ink ring-offset-2" : ""
@@ -426,8 +495,8 @@ export default function Workflows({ embedded = false }) {
                       >
                         <div className="flex items-start gap-2">
                           <DotsSixVertical size={15} weight="bold" aria-hidden="true"
-                            className="mt-0.5 shrink-0 text-muted-foreground opacity-40 transition-opacity group-hover:opacity-80" />
-                          <p className="min-w-0 flex-1 text-sm font-semibold leading-snug">{w.title}</p>
+                            className="mt-0.5 hidden shrink-0 text-muted-foreground opacity-40 transition-opacity group-hover:opacity-80 lg:block" />
+                          <p className="min-w-0 flex-1 text-sm font-semibold leading-snug line-clamp-2 text-left">{w.title}</p>
                           {user?.role === "owner" && (
                             <button onClick={() => del(w)} data-testid={`delete-workflow-${w.id}`} title={t("workflows.delete_card")}
                               className="shrink-0 text-muted-foreground transition-colors hover:text-kr-accent">
@@ -437,14 +506,14 @@ export default function Workflows({ embedded = false }) {
                         </div>
 
                         {(w.counterparty || w.amount != null) && (
-                          <div className="mt-1.5 flex items-baseline justify-between gap-2 pl-[23px]">
+                          <div className="mt-1.5 flex items-baseline justify-between gap-2 lg:pl-[23px]">
                             {w.counterparty && <span className="truncate text-xs text-muted-foreground">{w.counterparty}</span>}
                             {w.amount != null && <span className="shrink-0 font-mono text-xs font-semibold tabular-nums">{money(w.amount, tenant?.currency)}</span>}
                           </div>
                         )}
 
                         {stageTasks.length > 0 ? (
-                          <div className="mt-2.5 space-y-1" data-testid={`wf-card-tasks-${w.id}`}>
+                          <div className="mt-2.5 space-y-1 min-h-0 flex-1 overflow-hidden" data-testid={`wf-card-tasks-${w.id}`}>
                             {stageTasks.slice(0, 4).map((tk) => (
                               <a key={tk.id} href={`/my-work?task=${encodeURIComponent(tk.id)}`}
                                 data-testid={`wf-card-task-${w.id}-${tk.id}`}

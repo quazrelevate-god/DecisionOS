@@ -39,6 +39,7 @@ import { FloatingDock } from "./mobile/FloatingDock";
 import { AllAppsPanel } from "./mobile/AllAppsPanel";
 import { DexFab } from "./mobile/DexFab";
 import { DexSheet } from "./mobile/DexSheet";
+import { useDexCapture } from "../hooks/useDexCapture";
 import { BottomSheet } from "./mobile/BottomSheet";
 import { InstallPrompt } from "./mobile/InstallPrompt";
 
@@ -212,6 +213,15 @@ export default function Layout({ children }) {
     return () => window.removeEventListener("dos:open-dex", open);
   }, []);
   const [dexRecording, setDexRecording] = useState({ on: false, secs: 0 });
+  /* KM-11 — the capture hook moves UP here from DexSheet, because the thing
+     that now renders the voice UI is the dock, not a sheet. Layout is the only
+     common parent of the FAB (which starts it), the bar (which draws it) and
+     the sheet (which still shows what Dex heard afterwards). */
+  const dex = useDexCapture({
+    watch: true,
+    onRecordingChange: (on, secs) => setDexRecording({ on, secs }),
+    onCaptured: () => qc.invalidateQueries({ queryKey: ["captures-pending"] }),
+  });
   const [langOpen, setLangOpen] = useState(false);
   // KR-5: the global search moved into a ⌘K dialog; same /brain?q= handoff.
   const [globalQuery, setGlobalQuery] = useState("");
@@ -236,8 +246,12 @@ export default function Layout({ children }) {
     (n) => !n.read && NEEDS_HIM.test(n.kind || "")
   ).length;
   const qc = useQueryClient();
-  const { data: brief } = useQuery({ queryKey: ["fires-count"], queryFn: () => api.get("/brief?period=morning").then((r) => r.data), refetchInterval: 60000, enabled: user?.role === "owner" });
-  const fires = brief?.counters?.fires || 0;
+  // KM-1 — the return value is deliberately not destructured. Its only reader
+  // was `counts.myWork`, a prop AllAppsPanel never looked at; the poll itself
+  // stays because it keeps /brief?period=morning warm in the cache, which is
+  // where the More panel's live tiles will read from (they must not fire
+  // requests on open). If that panel work does not land, delete this too.
+  useQuery({ queryKey: ["fires-count"], queryFn: () => api.get("/brief?period=morning").then((r) => r.data), refetchInterval: 60000, enabled: user?.role === "owner" });
   const { data: capPending } = useQuery({ queryKey: ["captures-pending"], queryFn: () => api.get("/captures/pending-count").then((r) => r.data), refetchInterval: 30000 });
   const captureCount = capPending?.count || 0;
 
@@ -485,10 +499,13 @@ export default function Layout({ children }) {
             recipes re-skin. */}
         {/* KR-8.2: the mobile bar blends too — transparent, no border, no
             blur, static. The phone reference floats its title on the bloom. */}
-        <header className="lg:hidden min-h-14 grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-gutter-safe pt-safe bg-transparent">
-          <span aria-hidden="true" />
-          <KarmaLogo size="sm" />
-          <div className="flex items-center justify-self-end gap-touch-gap">
+        {/* KR-14.17 — the wordmark moves from the row's centre column to
+            the left edge, and steps up to `size="lg"` for a stronger app
+            identity in the phone header. Grid collapses to two columns
+            (logo left, actions right) — the empty centre span is gone. */}
+        <header className="lg:hidden min-h-14 flex items-center justify-between gap-2 px-gutter-safe pt-safe bg-transparent">
+          <KarmaLogo size="lg" />
+          <div className="flex items-center gap-touch-gap">
             <Bellicon mobile />
           </div>
         </header>
@@ -516,13 +533,33 @@ export default function Layout({ children }) {
         user={user}
         onMore={() => setAllAppsOpen(true)}
         moreOpen={allAppsOpen}
-        moreBadge={captureCount}
+        /* KM-1 — the badge on a container must be a promise the container
+           keeps. This counted pending WhatsApp captures, but Review Queue is
+           not a tile in the panel — it is a TAB inside /finance, which is the
+           Money dock slot sitting right beside More. So the founder saw "3",
+           opened More, and found nothing counting to three. Notifications is
+           the only badged tile inside, so the badge is its count.
+           (The capture signal now has no mobile home: it wants a badge on the
+           Money slot, which DockItem does not support yet.) */
+        moreBadge={bellCount}
+        dexActive={dex.recording}
+        dexLevels={dex.levels}
       />
+      {/* KM-11 — the vignette. Rendered always so it can transition rather
+          than pop in, and gated by a data attribute. Sits below the dock's
+          z-index so the bar stays fully lit while the edges fall away. */}
+      <div className="kr-vignette lg:hidden" data-on={dex.recording ? "1" : "0"}
+           data-testid="dex-vignette" aria-hidden="true" />
+
+      {/* KM-11 — tapping Dex starts LISTENING; it no longer opens a sheet.
+          The bar becomes the voice surface (see FloatingDock), and the sheet
+          below is left for the one thing the bar cannot do: show what Dex
+          understood once you stop talking. */}
       <DexFab
-        onOpen={() => setDexOpen(true)}
-        recording={dexRecording.on}
-        seconds={dexRecording.secs}
-        onStop={() => setDexOpen(true)}
+        onOpen={() => (dex.recording ? dex.stopRecording() : dex.startRecording())}
+        recording={dex.recording}
+        seconds={dex.recordSecs}
+        onStop={() => dex.stopRecording()}
       />
       <AllAppsPanel
         open={allAppsOpen}
@@ -532,13 +569,18 @@ export default function Layout({ children }) {
         onToggleTheme={toggleTheme}
         onSignOut={doLogout}
         onOpenLanguage={() => setLangOpen(true)}
-        counts={{ notifications: bellCount, myWork: fires }}
+        counts={{ notifications: bellCount }}
       />
       {/* MPWA-05: third session, dismissible, above the dock (§8). */}
       <InstallPrompt />
+      {/* KM-11 — opens ONLY once Dex has something to show. The founder asked
+          for the black card that slid up on tap to go, not for the confirmation
+          step to disappear: after you stop talking you still have to see what
+          was heard before it becomes work. So the sheet is driven by
+          `understanding` rather than by the FAB. */}
       <DexSheet
-        open={dexOpen}
-        onClose={() => setDexOpen(false)}
+        open={!!dex.understanding}
+        onClose={() => dex.clearUnderstanding?.()}
         onRecordingChange={(on, secs) => setDexRecording({ on, secs })}
         onCaptured={() => qc.invalidateQueries({ queryKey: ["captures-pending"] })}
       />

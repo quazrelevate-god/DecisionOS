@@ -88,7 +88,8 @@ function RequestLeaveDialog({ onDone }) {
               <input data-testid="leave-to-date" type="date" className={`${inp} mt-1`} value={form.to_date} onChange={set("to_date")} />
             </div>
           </div>
-          <div className="nm-inset flex items-center gap-1 rounded-pill p-1" data-testid="leave-portion-toggle">
+          {/* KM-3 — same track treatment as leave-tabs above. */}
+          <div className="kr-pressed flex items-center gap-1 rounded-pill p-1" data-testid="leave-portion-toggle">
             <button type="button" onClick={() => setForm({ ...form, day_portion: "full" })}
               className={`flex-1 rounded-pill px-3 py-2 text-xs font-medium transition-all ${form.day_portion === "full" ? "kr-pop text-foreground" : "text-foreground/60 hover:text-foreground/85"}`}>Full Day</button>
             <button type="button" onClick={() => setForm({ ...form, day_portion: "half" })}
@@ -456,7 +457,15 @@ export default function Leave({ embedded = false }) {
         <PageHeader eyebrow="Time off & availability" title="Leave & Absence">{actions}</PageHeader>
       )}
 
-      <div className="nm-inset mb-6 flex w-fit items-center gap-1 rounded-pill p-1" data-testid="leave-tabs">
+      {/* KM-3 — the TRACK is .kr-pressed, not .nm-inset. nm-inset is a flat
+          sunken FILL (bg-nm-sunken, border-0) and draws no shadow at all, so
+          the bar read as a grey rectangle with good buttons sitting on it.
+          .kr-pressed is the real thing: a dark inset from the top-left and a
+          white inset from the bottom-right, i.e. the same held-pressed look a
+          selected control has. The raised .kr-pop tab then sits IN a genuine
+          depression instead of on a painted panel, which is the whole point of
+          a segmented track. */}
+      <div className="kr-pressed mb-6 flex w-fit items-center gap-1 rounded-pill p-1" data-testid="leave-tabs">
         {TABS.map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)} data-testid={`leave-tab-${t.key}`}
             className={`flex h-9 items-center gap-2 rounded-pill px-4 text-sm font-medium transition-all ${tab === t.key ? "kr-pop text-foreground" : "text-foreground/60 hover:text-foreground/85"}`}>

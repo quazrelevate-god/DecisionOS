@@ -26,7 +26,7 @@
 // needs_decision pill and auto-opens the DecisionDialog (E2-66/U7-02.2).
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import api from "../lib/api";
 import { toast } from "sonner";
 import { DecisionDialog } from "../components/DecisionDialog";
@@ -68,7 +68,55 @@ const CTA_ICON = { review: Scales, respond: ChatCircleText, chase: Fire, nudge: 
  * toggle is two chances for the pressed state to drift apart. The pill's own
  * size is untouched, per the founder: h-9, px-4, natural width.
  */
-function ScopePills({ scope, setScope }) {
+/* KM-1 — the JOINED variant.
+   WHY NOT .kr-pop / .kr-pressed, which is what MyWork's segmented pair uses:
+   measured on this page, it inverts. .kr-pressed draws a big white inset from
+   the bottom-right (inset -4px -4px 9px hsl(0 0% 100% / .72)); that reads as
+   recessed over MyWork's cool blue-grey zone, but Desk's sky is a HOT ORANGE
+   bloom, and against a warm ground the same white inset reads as a lighter
+   FILL — so the selected half looked raised and the unselected half looked
+   pushed in, exactly backwards. Same failure mode this project already hit
+   once ("the white highlight needs a darker ground"). Depth was never
+   available here, so the arm's-length argument for it does not apply.
+   What is left is the founder's own KR-8.13 treatment, whose alphas were
+   MEASURED against this bloom (faded label 4.75:1, faded border 3.63:1) and
+   whose rule was explicit: no fill on either pill. That stays untouched.
+   The real defect was never the material — it was that two pills floating in
+   an equidistant gap belonged to neither neighbour. So the fix is pure
+   GEOMETRY: -ml-px welds the two hairlines into one continuous outline, so the
+   pair reads as ONE control with two halves, and `relative z-10` lets the
+   selected pill's full-strength border draw over its faded neighbour's rather
+   than averaging with it. No new material, no fill, nothing to re-measure. */
+const SEG = "flex h-11 items-center justify-center border-[0.5px] px-5 text-sm";
+const SEG_ON = "relative z-10 border-kr-ink font-medium text-foreground";
+const SEG_OFF = "border-kr-ink/55 text-foreground/65";
+
+function ScopePills({ scope, setScope, variant = "pill" }) {
+  if (variant === "joined") {
+    return (
+      <div className="flex items-center">
+        <button
+          type="button"
+          onClick={() => setScope("you")}
+          aria-pressed={scope === "you"}
+          data-testid="desk-scope-joined-you"
+          className={`${SEG} rounded-l-pill ${scope === "you" ? SEG_ON : SEG_OFF}`}
+        >
+          You
+        </button>
+        <button
+          type="button"
+          onClick={() => setScope("company")}
+          aria-pressed={scope === "company"}
+          data-testid="desk-scope-joined-company"
+          className={`${SEG} -ml-px rounded-r-pill ${scope === "company" ? SEG_ON : SEG_OFF}`}
+        >
+          Company
+        </button>
+      </div>
+    );
+  }
+
   // KR-8.12 — "You" leads, "Company" follows. Stacked that puts You on top
   // and Company below, which is the founder's order; the horizontal phone
   // row inherits it rather than keeping a second, contradictory order.
@@ -117,42 +165,15 @@ export default function Desk() {
   const [doneIds, setDoneIds] = useState(() => new Set());
   const markDone = useCallback((id) => setDoneIds((prev) => new Set(prev).add(id)), []);
 
-  // KR-8.5 — the hero blurs progressively as the sheet climbs over it.
-  // A passive scroll listener writing three custom properties, rAF-coalesced:
-  // the alternative (blur as React state) would re-render the whole dashboard
-  // on every scroll frame. Desktop only — the hero is not pinned below lg, so
-  // blurring it there would just fog content the founder is still reading.
+  /* KM-9 — THE PROGRESSIVE BLUR IS GONE, on the founder's call.
+     A passive scroll listener used to write --kr-hero-blur / --kr-hero-fade /
+     --kr-hero-scale so the hero fogged as the dark sheet climbed over it. It
+     was built for the DESKTOP composition, where the hero is pinned and the
+     sheet genuinely travels across it; on a phone the page just scrolls, so
+     the effect only ever blurred content still being read. heroRef stays —
+     .kr-hero is still the grid — it simply has nothing writing to it now. */
   const heroRef = useRef(null);
-  useEffect(() => {
-    const el = heroRef.current;
-    if (!el) return undefined;
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const wide = window.matchMedia("(min-width: 1024px)");
-    let raf = 0;
-    const paint = () => {
-      raf = 0;
-      if (reduced.matches || !wide.matches) {
-        el.style.removeProperty("--kr-hero-blur");
-        el.style.removeProperty("--kr-hero-fade");
-        el.style.removeProperty("--kr-hero-scale");
-        return;
-      }
-      // Full effect by the time the sheet has climbed ~320px.
-      const p = Math.max(0, Math.min(1, window.scrollY / 320));
-      el.style.setProperty("--kr-hero-blur", `${(p * 9).toFixed(2)}px`);
-      el.style.setProperty("--kr-hero-fade", (1 - p * 0.5).toFixed(3));
-      el.style.setProperty("--kr-hero-scale", (1 - p * 0.028).toFixed(4));
-    };
-    const onScroll = () => { if (!raf) raf = requestAnimationFrame(paint); };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onScroll);
-    paint();
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onScroll);
-      if (raf) cancelAnimationFrame(raf);
-    };
-  }, []);
+
   // Owner sees Company/You; everyone else only ever has their own view.
   const [scope, setScope] = useState("company");
 
@@ -246,7 +267,7 @@ export default function Desk() {
           eyeballed. In the reference the light zone divides 36 / 56 with a
           wide 8% trough between; we were at 42 / 58 with a 40px gap, which is
           what made our tiles read as squeezed and over-spaced at once. */}
-      <div ref={heroRef} className="kr-hero grid gap-8 lg:sticky lg:top-5 lg:z-0 lg:grid-cols-[minmax(0,29fr)_minmax(0,45fr)] lg:gap-20">
+      <div ref={heroRef} className="kr-hero sticky top-0 z-0 flex flex-col gap-6 lg:grid lg:gap-8 lg:top-5 lg:grid-cols-[minmax(0,29fr)_minmax(0,45fr)] lg:gap-20">
         {/* LEFT column (KR-8.7) — greeting, scope, THE INSIGHT WELL, and the
             score pushed to the floor.
             The founder wanted the editorial space directly under the greeting
@@ -255,36 +276,52 @@ export default function Desk() {
             takes flex-1 (it absorbs whatever height the grid dictates) and
             the score block, being last with nothing after it, lands on the
             column's floor — which the hero grid has already made equal to
-            the right column's floor. */}
-        <div className="flex min-w-0 flex-col">
-          {/* KR-8.14 — centred, to share the score's axis. The score row is
-              justify-center within this column, so centring the greeting in
-              the same column puts both on the column's centre line rather
-              than needing either to know the other's width. */}
-          <h1 className="text-center font-display text-3xl sm:text-4xl" data-testid="desk-brief-greeting">
-            {gi === -1
-              ? <span>{greeting || " "}</span>
-              : <>
-                  <span>{greeting.slice(0, gi + 1)}</span>
-                  <span className="text-muted-foreground">{greeting.slice(gi + 1)}.</span>
-                </>}
-          </h1>
+            the right column's floor.
+            KR-14.2 · MOBILE ONLY — the column becomes display:contents so its
+            children flow into the outer flex-col, letting the KPI grid slot
+            between the pills and the Dex well via `order-*`. Desktop is
+            unchanged: from lg the column reverts to flex flex-col and its
+            children forget their orders. */}
+        <div className="contents lg:flex lg:min-w-0 lg:flex-col">
+          {/* KR-14.2 · MOBILE row — greeting on the LEFT, a compact
+              score+gauge on the RIGHT, matching the reference. On lg the
+              wrapper reverts to a block and its children stack: the h1
+              re-centres, the mobile score cluster hides, and the full-size
+              score row (below) takes over. */}
+          <div className="order-1 flex items-start justify-between gap-4 lg:order-none lg:block">
+            <h1 className="font-display text-2xl leading-tight lg:text-center lg:text-3xl sm:lg:text-4xl" data-testid="desk-brief-greeting">
+              {gi === -1
+                ? <span>{greeting || " "}</span>
+                : <>
+                    <span>{greeting.slice(0, gi + 1)}</span>
+                    <span className="text-muted-foreground">{greeting.slice(gi + 1)}.</span>
+                  </>}
+            </h1>
 
-          {/* KR-8.11 — the pills only appear ABOVE the score below lg. From
-              lg they move into the score row, stacked to the numeral's left
-              (see below). Measured why: at 375 the numeral block is 166px
-              and the gauge 128 in a 343px column — 26px of slack against the
-              93px the stack needs.
-              The same arithmetic rules out the whole lg range: at 1024 the
-              left column is ~341, and 93 + 12 + 112 + 12 leaves 112px for
-              the gauge — an instrument too small to read. So the side stack
-              starts at xl (441px column, 423px of content), and below that
-              the pills stay where they were. */}
+            {/* Compact score cluster — mobile only. Hides from lg where the
+                dedicated score row below owns this content. */}
+            <div className="flex shrink-0 items-center gap-3 lg:hidden" aria-hidden={!scoreReady}>
+              <div className="flex items-baseline">
+                <span className="font-display text-6xl leading-none">{scoreReady ? shownScore : "—"}</span>
+                {scoreReady && <span className="ml-1 text-sm text-muted-foreground">/100</span>}
+              </div>
+              <ArcGauge
+                value={scoreReady ? shownScore : null}
+                size={110}
+                className="w-24 shrink-0 text-foreground"
+              />
+            </div>
+          </div>
+
+          {/* KR-11 — the pills only appear ABOVE the score below lg. From
+              lg they move into the score row, stacked to the numeral's left.
+              KR-14.2 · MOBILE — justify-start, per the reference; from lg the
+              row re-centres between the greeting and the desktop score. */}
+          {/* KR-14.20 · MOBILE — the You / Company scope pills are hidden
+              on the phone per the founder's ask. They still render at lg
+              (below xl) and, at xl and above, in the side stack. */}
           {isOwnerView && (
-            /* justify-center too: below xl the pills sit BETWEEN the centred
-               greeting and the centred score, and a left-aligned row in that
-               gap reads as a mistake rather than a choice. */
-            <div className="mt-4 flex items-center justify-center gap-2 xl:hidden" data-testid="desk-scope-pills">
+            <div className="order-2 hidden items-center justify-start gap-2 lg:order-none lg:mt-4 lg:flex lg:justify-center xl:hidden" data-testid="desk-scope-pills">
               <ScopePills scope={scope} setScope={setScope} />
             </div>
           )}
@@ -320,7 +357,7 @@ export default function Desk() {
               Padding cannot collapse, so the gap is never smaller than 20px
               — and because it is inside the row, both sides still grow by
               the same amount and stay even. */}
-          <div className="my-8 flex items-end justify-center gap-5 lg:my-auto lg:py-5">
+          <div className="hidden lg:my-auto lg:flex lg:items-end lg:justify-center lg:gap-5 lg:py-5">
             {/* KR-8.11 — the pills, stacked to the numeral's LEFT from xl.
                 items-end is the founder's "right aligned to the left side of
                 the number": the two pills keep their own natural widths (93
@@ -389,10 +426,20 @@ export default function Desk() {
               (The two money cards left this column in KR-8.7 for the KPI
               grid opposite, taking the slots Due today and Completion rate
               gave up.) */}
+          {/* KM-1 — order-4 puts the well AFTER the KPI grid on a phone.
+              Evidence, then interpretation: today Dex tells you what to do
+              before you have seen a single number to judge it against, and the
+              well's 172-242px sits between the score and the first tile. This
+              is also the honest linearisation of the desktop composition, where
+              the comment above already places the well at the column's FLOOR,
+              level with the grid's bottom edge — stacking it naively teleported
+              that bottom-left element into the vertical middle.
+              This class and the grid's order-3 below are the entire decision;
+              swapping the two numbers reverts it. */}
           <InsightWell
             insight={insight}
             loading={!insight}
-            className="min-h-[172px]"
+            className="order-4 min-h-[172px] lg:order-none"
             testid="desk-insight"
           />
         </div>
@@ -407,7 +454,43 @@ export default function Desk() {
             · auto-rows-fr so the two rows are EQUAL and the grid's floor lands
               on the money cards' floor. Ragged row heights (173/200/173) were
               the actual misalignment. */}
-        <div className="grid min-w-0 grid-cols-2 gap-3 lg:auto-rows-fr lg:grid-cols-3" data-testid="desk-kpi-grid">
+        {/* KR-14.20 · MOBILE — the KPIs are four rounded rectangles in a
+            2×2 grid. Each card: label on the LEFT, icon + numeral aligned
+            to the RIGHT. Score-mix and Spend are dropped per the founder;
+            the four kept are Delayed, Complaints, Overdue, Net profit. */}
+        <div className="order-3 grid grid-cols-2 gap-2 lg:hidden" data-testid="desk-kpi-strip">
+          {[
+            { icon: Timer, label: "Delayed",
+              value: String(m.counters ? m.counters.delayed : m.work?.overdue ?? "…"),
+              urgent: (m.counters?.delayed ?? m.work?.overdue ?? 0) > 0,
+              to: "/my-work?filter=overdue", testid: "kpi-delayed-m" },
+            { icon: ChatCircleText, label: "Complaints",
+              value: String(m.complaints ? m.complaints.value : "…"),
+              urgent: (m.complaints?.new_7d || 0) > 0,
+              to: "/crm", testid: "kpi-complaints-m" },
+            { icon: HandCoins, label: "Overdue",
+              value: m.cash ? inrCompact(m.cash.overdue) : "…",
+              urgent: (m.cash?.overdue || 0) > 0,
+              to: "/finance?tab=revenue&filter=overdue", testid: "kpi-collect-m" },
+            { icon: TrendUp, label: "Net profit",
+              value: m.ledger && Number.isFinite(m.ledger.netProfit) ? inrCompact(m.ledger.netProfit) : "…",
+              urgent: m.ledger ? m.ledger.netProfit < 0 : false,
+              to: "/finance", testid: "kpi-profit-m" },
+          ].map((k) => (
+            <Link key={k.testid} to={k.to} data-testid={k.testid}
+              className="nm-tile flex min-w-0 items-center justify-between gap-2 p-3">
+              <p className="min-w-0 truncate text-xs font-medium text-foreground/80">{k.label}</p>
+              <span className="flex shrink-0 items-center gap-1.5">
+                <k.icon size={13} weight="regular" aria-hidden="true" className="text-muted-foreground" />
+                <span className={`font-display text-base leading-none tabular-nums ${k.urgent ? "text-kr-accent" : ""}`}>
+                  {k.value}
+                </span>
+              </span>
+            </Link>
+          ))}
+        </div>
+
+        <div className="order-3 hidden min-w-0 grid-cols-2 gap-3 lg:order-none lg:grid lg:auto-rows-fr lg:grid-cols-3" data-testid="desk-kpi-grid">
           <StatTile
             icon={Timer}
             label="Delayed"
@@ -481,15 +564,27 @@ export default function Desk() {
       {/* ── THE DARK BAND ──────────────────────────────────────────────── */}
       <DarkBand
         testid="desk-band"
-        className="relative z-10 mt-8 pt-8 pb-28 lg:mt-10 lg:pt-10 lg:pb-14 -mb-4 lg:-mb-8"
+        /* KM-1 — mobile carried DOUBLE desktop's bottom padding (pb-28 = 112px
+           against lg:pb-14 = 56px) on top of main's own pb-dock (96px): ~200px
+           of nothing at the foot of the page. pb-20 still leaves 80 - 16 + 96 =
+           160px of clearance under the last card against a ~96px dock. */
+        /* KM-9 — the collapsed sheet must CLEAR the dock, not sit under it.
+           Measured before: at rest the band ran 516->865 while the dock's top
+           edge is 732, so the single card it is collapsed to was cut in half
+           by the bar. Pulling the band up (mt-4/pt-4) and dropping the mobile
+           card floor to 150px puts the whole card above 732. Desktop keeps its
+           own margins and the 178/196px floors. */
+        className="relative z-10 mt-4 pt-4 pb-20 lg:mt-10 lg:pt-10 lg:pb-14 -mb-4 lg:-mb-8"
       >
         {/* KR-8.5 — the desk takes the WHOLE sheet. The spend line chart is
             gone from here (it lives on /finance, where a money chart belongs);
             the four sections now use the full width as one bento, all visible
             at once, sized by priority. No filter pills: colour does the
             grouping, so nothing is a click away. */}
-        <div className="mb-5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h2 className="text-h2">Decision desk</h2>
+        {/* KR-14.20 — the "Decision desk" heading and its count are hidden
+            on mobile per the founder's ask; both return from lg up. */}
+        <div className="mb-4 hidden flex-wrap items-baseline gap-x-3 gap-y-1 lg:mb-5 lg:flex lg:justify-start">
+          <h2 className="text-h2 lg:text-left">Decision desk</h2>
           <p className="text-sm opacity-70">
             {total === 0 ? "Nothing waiting on you" : `${total} waiting on you`}
           </p>

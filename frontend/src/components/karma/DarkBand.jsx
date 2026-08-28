@@ -33,18 +33,11 @@ export function DarkBand({ children, reveal = true, className, testid }) {
         "--kr-chip-line": "40 12% 55%",
       }}
     >
-      {/* The grab handle, sitting INSIDE the dip. The dip itself is cut out
-          of the band by a mask (see .kr-dark-band) so the bloom shows through
-          it; this is only the small dark bar the reference draws in the
-          middle of that gap. Ink at low alpha so it reads on whatever the
-          bloom happens to be doing behind it.
-          KR-14.1 — the dip is 18px deep now (a drawn path, not an ellipse),
-          so the bar sits at +7px: centred in the flat floor rather than
-          clinging to one wall of an oval. */}
-      <span
-        aria-hidden="true"
-        className="absolute top-[7px] left-1/2 block h-[4px] w-9 -translate-x-1/2 rounded-full bg-kr-ink/55"
-      />
+      {/* KR-14.4 — the grab-handle bar is gone. The reference has a clean
+          rounded-top card with nothing sitting above the header. The dip
+          cut-out was there to hold this bar; without the bar the dip reads as
+          a stray notch, so `.kr-dark-band` also drops its mask (see
+          index.css). */}
       <div ref={reveal ? ref : undefined} className={reveal ? "kr-reveal" : undefined}>
         {children}
       </div>

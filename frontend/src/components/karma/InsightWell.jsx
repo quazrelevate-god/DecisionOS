@@ -47,7 +47,20 @@ export function InsightWell({ insight, loading = false, className, testid }) {
             </p>
 
             {insight.lines.length > 0 && (
-              <ul className="mt-3 space-y-1.5">
+              /* KM-1 — the supporting lines are candidates[1..2] from
+                 lib/deskInsight (slice(1,3)), i.e. the same facts the KPI tiles
+                 print: overdue cash -> "To collect", overdue tasks ->
+                 "Delayed", complaints -> "Complaints", weakest -> "Score mix".
+                 On a phone those tiles now sit directly ABOVE this box, so the
+                 bullets restate the grid in prose one thumb-flick away — the
+                 exact duplication NM-14 deleted once already.
+                 They also made the box breathe with the news: 172px at the
+                 floor with none, ~242px with two. A dashboard element that
+                 changes height depending on how bad the week is never looks the
+                 same twice. Hidden below lg, it is a stable 172-178px.
+                 The HEADLINE stays at every width — it is the one thing here
+                 that is a READ rather than a readout. */
+              <ul className="mt-3 hidden space-y-1.5 lg:block">
                 {insight.lines.map((l) => (
                   /* foreground/70, not text-muted-foreground: the token is
                      tuned for an opaque card, and over glass on the bloom's
@@ -69,7 +82,7 @@ export function InsightWell({ insight, loading = false, className, testid }) {
             the top of the Chase it" — the bullets were crowding it.
             The row renders even while the insight is loading, because the
             way into Dex should not depend on Dex having finished thinking. */}
-        <div className="mt-auto flex items-center justify-between gap-3 pt-7">
+        <div className="mt-auto flex items-center justify-between gap-3 pt-5 lg:pt-7">
           {insight && (
             /* Borderless too — a hairline pill next to a shadow-modelled
                well would be two different materials in one box. */

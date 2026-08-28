@@ -14,16 +14,19 @@ import { toast } from "sonner";
 // New-task launcher.
 import { NewTaskDialog } from "./Tasks";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "../components/ui/dropdown-menu";
 import Workflows from "./Workflows";
 import Leave from "./Leave";
 import {
   CheckCircle, Camera, Microphone, Stop, ChatCircleText,
-  Sparkle, Plus, Trash, ArrowUp, ArrowDown, Robot, PencilSimple, ListChecks, CaretDown, ArrowsOutSimple,
+  Sparkle, Plus, Trash, Robot, PencilSimple, ListChecks, CaretDown, CaretUp,
   ArrowBendUpRight, WarningCircle, ChatText, ArrowRight, Kanban, ListChecks as ListIcon,
   Paperclip, UserCircle, ShieldCheck, Tag, ClockCounterClockwise,
   ArrowClockwise, XCircle, LockKey, X, AirplaneTakeoff, MagnifyingGlassPlus, Eye,
   File, FileArrowUp, Lightbulb, Info,
   FlowArrow,  // WE-11 stage chip
+  SlidersHorizontal,  // KR-14.6 · mobile MyWork filter icon (reference)
+  Buildings, CalendarBlank, // KR-14.22 · mobile expanded task card
 } from "@phosphor-icons/react";
 
 // RD-2 (2026-08-17): the toolbar control. Was uppercase + wide tracking +
@@ -86,6 +89,22 @@ const STATUS_LABEL = {
   review: "Under Review", done: "Completed", cancelled: "Cancelled", blocked: "Pending Approval",
 };
 const PROGRESS_OPTIONS = [0, 25, 50, 75, 100];
+
+/* KM-6 — the bar is a PROGRESS track now, not a status dropdown in disguise.
+   Completed and Cancelled are gone from it, and that was a correctness fix
+   rather than a layout one: both are TERMINAL, so choosing either removed the
+   task from the list the bar was sitting in — the control deleted its own
+   context. Complete already has its own button below, and Cancel now sits
+   beside it, which is where an ending belongs.
+   What remains is the four states a task actually passes THROUGH, in order,
+   each carrying its own colour: yellow at rest, warming through orange as the
+   work heats up, lime when it is out for review. */
+const M_STATUS_PILLS = [
+  { key: "todo",        label: "Not Started", on: "bg-yellow-200 text-yellow-900" },
+  { key: "in_progress", label: "In Progress", on: "bg-orange-500 text-white" },
+  { key: "waiting",     label: "Waiting",     on: "bg-orange-300 text-orange-950" },
+  { key: "review",      label: "Review",      on: "bg-lime-600 text-white" },
+];
 const isTerminal = (t) => t.status === "done" || t.status === "cancelled";
 const isOverdue = (t) => t.due_date && new Date(t.due_date) < new Date() && !isTerminal(t);
 
@@ -221,6 +240,132 @@ function TaskTrail({ t, members, roleOptions, onChange }) {
   );
 }
 
+/* KM-6 · StepRow — the drag-to-reorder gesture is REVERTED.
+   KM-5 replaced the up/down buttons with long-press-and-drag plus live
+   reflow. The founder's verdict is that it was not built well enough to keep,
+   and he is right that an invisible 450ms hold is a lot to ask of a control
+   whose whole job is "move this up one". So reordering goes back to explicit
+   arrows: a small stacked pair on the right of each field, sized to sit
+   INSIDE the field's height rather than beside it.
+
+   What survives from KM-5, because both are discoverable and both tested
+   clean: tap the field to expand and edit (two lines collapsed, grows on
+   focus), and swipe sideways to delete with a red ground bleeding in. Only
+   the reorder gesture goes.
+
+   Note on the arrow sizes: index.css puts a 44px min-height touch floor on
+   every button below lg, which would make a stacked pair 88px tall — taller
+   than the 62px field they must fit inside. These two are the deliberate
+   exception, declared via .kr-step-nudge in index.css, and they stay
+   comfortably tappable because they are the only things in that column. */
+function StepRow({
+  step, index, count, editing, inpClass,
+  onEdit, onRemove, onMove,
+}) {
+  const rowRef = useRef(null);
+  const start = useRef(null);
+  /* Gesture state in REFS, not state: two pointermove events can land in the
+     same frame, and a closure read still holds the previous render's value —
+     which is what made an earlier cut of the swipe never move. */
+  const axisRef = useRef(null);
+  const dxRef = useRef(0);
+  const [dx, setDx] = useState(0);
+  const [expanded, setExpanded] = useState(false);
+
+  const onPointerDown = (e) => {
+    if (e.target.closest("button")) return;
+    start.current = { x: e.clientX, y: e.clientY };
+    axisRef.current = null;
+  };
+
+  const onPointerMove = (e) => {
+    if (!start.current) return;
+    const mx = e.clientX - start.current.x;
+    const my = e.clientY - start.current.y;
+    if (!axisRef.current) {
+      if (Math.abs(mx) < 8 && Math.abs(my) < 8) return;
+      axisRef.current = Math.abs(mx) > Math.abs(my) ? "x" : "y";
+      if (axisRef.current === "y") return;   // a vertical drag is a scroll
+    }
+    if (axisRef.current === "x") {
+      e.preventDefault();
+      dxRef.current = mx;
+      setDx(mx);
+    }
+  };
+
+  const endGesture = () => {
+    if (Math.abs(dxRef.current) > (rowRef.current?.offsetWidth || 300) / 3) onRemove(index);
+    dxRef.current = 0;
+    setDx(0);
+    axisRef.current = null;
+    start.current = null;
+  };
+
+  if (!editing) return null;
+
+  const killPct = Math.min(1, Math.abs(dx) / ((rowRef.current?.offsetWidth || 300) / 3));
+
+  return (
+    <div ref={rowRef} className="relative" data-testid={`exec-step-row-${index}`}>
+      {/* The delete ground, revealed BY the swipe rather than drawn over it. */}
+      {dx !== 0 && (
+        <div aria-hidden="true"
+          className="absolute inset-0 flex items-center justify-between rounded-control bg-red-600 px-4 text-white"
+          style={{ opacity: 0.25 + killPct * 0.75 }}>
+          <Trash size={16} weight="bold" />
+          <Trash size={16} weight="bold" />
+        </div>
+      )}
+
+      <div
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endGesture}
+        onPointerCancel={endGesture}
+        className="relative flex items-stretch gap-1.5"
+        style={{
+          transform: `translateX(${dx}px)`,
+          transition: dx === 0 ? "transform 180ms cubic-bezier(.22,1,.36,1)" : "none",
+          touchAction: "pan-y",
+        }}
+      >
+        <textarea
+          value={step.text}
+          onChange={(e) => onEdit(index, e.target.value)}
+          onFocus={() => setExpanded(true)}
+          onBlur={() => setExpanded(false)}
+          data-testid={`exec-step-input-${index}`}
+          aria-label={`Step ${index + 1} of ${count}`}
+          className={`${inpClass} min-w-0 flex-1 resize-none leading-snug`}
+          style={{
+            height: expanded ? "auto" : "3.9rem",
+            minHeight: "3.9rem",
+            maxHeight: expanded ? "12rem" : "3.9rem",
+            overflowY: expanded ? "auto" : "hidden",
+          }}
+        />
+
+        {/* The arrows: stacked, on the right, and together no taller than the
+            collapsed field (3.9rem) so the row's height is still set by the
+            text and never by its controls. */}
+        <div className="flex w-7 shrink-0 flex-col justify-center gap-1">
+          <button type="button" onClick={() => onMove(index, -1)} disabled={index === 0}
+            data-testid={`exec-up-${index}`} aria-label="Move step up"
+            className="kr-step-nudge kr-pop grid h-[27px] w-7 place-items-center rounded-full text-foreground/70 disabled:opacity-30">
+            <CaretUp size={11} weight="bold" aria-hidden="true" />
+          </button>
+          <button type="button" onClick={() => onMove(index, 1)} disabled={index === count - 1}
+            data-testid={`exec-down-${index}`} aria-label="Move step down"
+            className="kr-step-nudge kr-pop grid h-[27px] w-7 place-items-center rounded-full text-foreground/70 disabled:opacity-30">
+            <CaretDown size={11} weight="bold" aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
   const plan = t.execution_plan;
   const [steps, setSteps] = useState(plan?.steps || []);
@@ -297,6 +442,8 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
 
   const editStep = (i, v) => setSteps(steps.map((s, idx) => (idx === i ? { ...s, text: v } : s)));
   const removeStep = (i) => setSteps(steps.filter((_, idx) => idx !== i));
+  /* KM-6 — back to a neighbour swap, which is all the arrows can express and
+     all the founder asked for. */
   const moveStep = (i, dir) => {
     const j = i + dir;
     if (j < 0 || j >= steps.length) return;
@@ -304,6 +451,7 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
     [ns[i], ns[j]] = [ns[j], ns[i]];
     setSteps(ns);
   };
+
   const addStep = () => {
     if (!newStep.trim()) return;
     setSteps([...steps, { id: `new-${Date.now()}`, text: newStep.trim(), done: false }]);
@@ -321,22 +469,22 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
   const inp = "flex-1 nm-field px-2.5 py-2 text-sm";
 
   if (!plan && !steps.length) {
-    // U7-05.EXP polish (2026-08-17): was two big dashed boxes taking
-    // full-width equal weight. When there is no plan yet, most tasks
-    // never need one -- so a whole visual band for the empty state was
-    // noise. Now: single one-line prompt with two small pill buttons
-    // ("Ask Dex" is the primary; manual is the escape hatch). Reads as
-    // an offer, not an unfilled requirement.
+    /* KM-5 — the two plan-building options SIDE BY SIDE with the "or" between
+       them, in the app's neumorphic material. The "Break this into steps?"
+       prompt is gone on the founder's call: two buttons labelled "Add
+       manually" and "Ask Dex" already state the question, and a line of prose
+       above them asked it twice. Equal width, same weight — they are two
+       routes to the same place, not a primary and a fallback. */
     return (
-      <div className="mt-4 flex items-center gap-2 flex-wrap" data-testid={`exec-plan-empty-${t.id}`}>
-        <span className="label-mono text-muted-foreground">Break this into steps?</span>
-        <button onClick={generate} disabled={busy} data-testid={`generate-plan-${t.id}`}
-          className="nm-btn inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium disabled:opacity-50">
-          <Sparkle size={13} weight="bold" /> {busy ? "Thinking…" : "Ask Dex"}
-        </button>
+      <div className="mt-4 flex items-center gap-3" data-testid={`exec-plan-empty-${t.id}`}>
         <button onClick={startManual} disabled={busy} data-testid={`manual-plan-${t.id}`}
-          className="inline-flex items-center gap-1.5 nm-btn px-3 py-1 text-xs font-medium hover:bg-accent transition-colors disabled:opacity-50">
-          <PencilSimple size={13} weight="bold" /> Add manually
+          className="kr-pop flex h-11 flex-1 items-center justify-center gap-1.5 rounded-pill px-3 text-xs font-medium text-foreground disabled:opacity-50">
+          <PencilSimple size={13} weight="bold" aria-hidden="true" /> Add manually
+        </button>
+        <span className="shrink-0 text-xs text-muted-foreground">or</span>
+        <button onClick={generate} disabled={busy} data-testid={`generate-plan-${t.id}`}
+          className="kr-pop flex h-11 flex-1 items-center justify-center gap-1.5 rounded-pill px-3 text-xs font-semibold text-foreground disabled:opacity-50">
+          <Sparkle size={13} weight="bold" aria-hidden="true" /> {busy ? "Thinking…" : "Ask Dex"}
         </button>
       </div>
     );
@@ -357,39 +505,76 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
       <div className="space-y-2">
         {steps.map((s, i) => (
           <div key={s.id} data-testid={`exec-step-${t.id}-${i}`}>
-            <div className={editing ? "flex flex-col sm:flex-row sm:items-start gap-2" : "flex items-start gap-2"}>
-              {editing ? (
-                <>
-                  <textarea value={s.text} onChange={(e) => editStep(i, e.target.value)} rows={2}
-                    className={`${inp} w-full resize-y leading-snug`} />
-                  <div className="flex gap-1 shrink-0 self-end sm:self-start">
-                    <button onClick={() => setViewStep(s)} data-testid={`exec-expand-${t.id}-${i}`} className="p-2 sm:p-1 nm-btn hover:bg-accent" title="View full"><ArrowsOutSimple size={14} weight="bold" /></button>
-                    <button onClick={() => moveStep(i, -1)} className="p-2 sm:p-1 nm-btn hover:bg-accent" title="Up"><ArrowUp size={14} weight="bold" /></button>
-                    <button onClick={() => moveStep(i, 1)} className="p-2 sm:p-1 nm-btn hover:bg-accent" title="Down"><ArrowDown size={14} weight="bold" /></button>
-                    <button onClick={() => removeStep(i)} data-testid={`exec-remove-${t.id}-${i}`} className="p-2 sm:p-1 nm-tile hover:bg-kr-accent hover:text-white" title="Remove"><Trash size={14} weight="bold" /></button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <button onClick={() => toggle(i)} data-testid={`exec-toggle-${t.id}-${i}`}
-                    className={`w-5 h-5 shrink-0 mt-0.5 nm-tile flex items-center justify-center ${s.done ? "bg-kr-ink text-white" : "bg-nm"}`}>
-                    {s.done && <CheckCircle size={13} weight="bold" />}
-                  </button>
-                  <button onClick={() => setViewStep(s)} data-testid={`exec-view-${t.id}-${i}`}
-                    className={`text-sm flex-1 min-w-0 text-left break-words hover:underline decoration-dotted ${s.done ? "line-through text-muted-foreground" : ""}`}>{s.text}</button>
-                  <div className="flex gap-1 shrink-0">
-                    <button onClick={() => askAI(s)} data-testid={`exec-ask-${t.id}-${i}`}
-                      className="flex items-center gap-1 text-xs font-medium nm-btn px-2 py-1 hover:bg-accent transition-colors">
-                      <Sparkle size={12} weight="bold" /> Ask AI
-                    </button>
-                    <button onClick={() => setUpdStep(updStep === s.id ? null : s.id)} data-testid={`exec-update-${t.id}-${i}`}
-                      className="flex items-center gap-1 text-xs font-medium nm-btn px-2 py-1 hover:bg-accent transition-colors">
-                      <ArrowBendUpRight size={12} weight="bold" /> Update
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
+            {editing ? (
+              /* KM-5 — the four buttons are gone; the row IS the control.
+                 Tap to expand and edit, long-press to drag-reorder with live
+                 reflow, swipe sideways to delete. See StepRow. */
+              <StepRow
+                step={s}
+                index={i}
+                count={steps.length}
+                editing
+                inpClass={inp}
+                onEdit={editStep}
+                onRemove={removeStep}
+                onMove={moveStep}
+              />
+            ) : (
+              /* KM-5 · ACCEPTED PLAN ROW — rebuilt.
+                 Was: a 20px square check, a bare text button that wrapped to
+                 as many lines as it liked, and two full-width worded buttons
+                 ("Ask AI", "Update") that dominated the row and pushed the
+                 text into a narrow column. The founder's shape instead — a
+                 two-line field carrying the step, a properly-sized circular
+                 check on the left, and the two actions reduced to small
+                 circular icon buttons whose expanded views open on tap. */
+              /* KM-6 · ONE STRIP, NOT THREE OBJECTS.
+                 The row was a loose check square, a two-line text plate and
+                 two 36px circles floating beside each other, so a checklist
+                 read as a stack of separate widgets rather than a list. Now a
+                 single .kr-pop strip holds all of it: check on the left, the
+                 step on ONE line (tap opens the full text), the two actions on
+                 the right. Fixed height, so ten steps make ten identical bars.
+
+                 On the icon sizes: index.css puts a 44px min-height/min-width
+                 touch floor on every button below lg, so these stay 44px TAP
+                 TARGETS while the drawn glyph inside each is small — the
+                 founder's "shrink the icons" without shrinking what a thumb
+                 has to hit. */
+              <div className="kr-pop flex h-12 items-center gap-1 rounded-control pl-2 pr-1">
+                <button onClick={() => toggle(i)} data-testid={`exec-toggle-${t.id}-${i}`}
+                  aria-pressed={s.done}
+                  aria-label={s.done ? "Mark step not done" : "Mark step done"}
+                  className="grid h-11 w-8 shrink-0 place-items-center">
+                  <span className={`grid h-5 w-5 place-items-center rounded-full ${
+                    s.done ? "bg-kr-ink text-white" : "border border-kr-ink/35 text-transparent"
+                  }`}>
+                    <CheckCircle size={12} weight="bold" aria-hidden="true" />
+                  </span>
+                </button>
+
+                <button onClick={() => setViewStep(s)} data-testid={`exec-view-${t.id}-${i}`}
+                  className={`min-w-0 flex-1 truncate text-left text-sm ${
+                    s.done ? "text-muted-foreground line-through" : ""
+                  }`}>
+                  {s.text}
+                </button>
+
+                <button onClick={() => askAI(s)} data-testid={`exec-ask-${t.id}-${i}`}
+                  aria-label="Ask AI about this step" title="Ask AI"
+                  className="grid h-11 w-8 shrink-0 place-items-center text-foreground/70">
+                  <Sparkle size={14} weight="bold" aria-hidden="true" />
+                </button>
+                <button onClick={() => setUpdStep(updStep === s.id ? null : s.id)} data-testid={`exec-update-${t.id}-${i}`}
+                  aria-label="Log an update or hand off" title="Update"
+                  aria-expanded={updStep === s.id}
+                  className={`grid h-11 w-8 shrink-0 place-items-center ${
+                    updStep === s.id ? "text-foreground" : "text-foreground/70"
+                  }`}>
+                  <ArrowBendUpRight size={14} weight="bold" aria-hidden="true" />
+                </button>
+              </div>
+            )}
             {updStep === s.id && (
               <div className="ml-7 mt-1.5 mb-2" data-testid={`exec-update-form-${t.id}-${i}`}>
                 <UpdateForm taskId={t.id} stepId={s.id} members={members} roleOptions={roleOptions}
@@ -421,46 +606,83 @@ function ExecutionPlan({ t, onChange, members = [], roleOptions = [] }) {
       </div>
 
       {editing && (
-        <div className="flex gap-2 mt-3">
+        /* KM-7 — the add row joins the material. The field is .nm-field like
+           every other input in the app, and the plus is a round .kr-pop button
+           rather than a square .nm-tile with a colour hover. */
+        <div className="mt-3 flex items-center gap-2">
           <input value={newStep} onChange={(e) => setNewStep(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addStep()}
-            placeholder="Add your own step…" data-testid={`exec-newstep-${t.id}`} className={inp} />
-          <button onClick={addStep} data-testid={`exec-add-${t.id}`} className="px-3 nm-tile hover:bg-accent"><Plus size={14} weight="bold" /></button>
+            placeholder="Add your own step…" data-testid={`exec-newstep-${t.id}`}
+            className="nm-field h-11 min-w-0 flex-1 rounded-pill px-4 text-sm" />
+          <button onClick={addStep} data-testid={`exec-add-${t.id}`} aria-label="Add step"
+            className="kr-pop grid h-11 w-11 shrink-0 place-items-center rounded-full text-foreground">
+            <Plus size={15} weight="bold" aria-hidden="true" />
+          </button>
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2 mt-4">
+      <div className="mt-4 flex items-center gap-2">
         {editing ? (
           <>
+            {/* KM-7 — all three on ONE row. Accept takes the space it needs
+                and Regenerate the rest; Cancel plan drops its word and becomes
+                a circle on the right, which is what makes the row fit at
+                343px. Its icon is translucent red — present enough to read as
+                the destructive one, quiet enough not to compete with the two
+                controls you actually came here to press. */}
             <button onClick={() => save("accepted")} disabled={busy} data-testid={`exec-accept-${t.id}`}
-              className="kr-lift flex min-w-[140px] flex-1 items-center justify-center gap-2 rounded-pill bg-kr-ink py-2.5 text-sm font-medium text-white transition-all disabled:opacity-50">
-              <CheckCircle size={16} weight="bold" /> Accept plan
+              className="kr-lift flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-pill bg-kr-ink px-3 text-xs font-medium text-white disabled:opacity-50">
+              <CheckCircle size={14} weight="bold" aria-hidden="true" /> Accept plan
             </button>
             <button onClick={generate} disabled={busy} data-testid={`exec-regenerate-${t.id}`}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium nm-btn hover:bg-accent transition-colors disabled:opacity-50">
-              <ArrowClockwise size={15} weight="bold" /> Regenerate
+              className="kr-pop flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-pill px-3 text-xs font-medium text-foreground disabled:opacity-50">
+              <ArrowClockwise size={14} weight="bold" aria-hidden="true" /> Regenerate
             </button>
             <button onClick={cancelAIPlan} disabled={busy} data-testid={`exec-cancel-plan-${t.id}`}
-              className="nm-btn flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50">
-              <XCircle size={15} weight="bold" /> Cancel plan
+              aria-label="Cancel plan" title="Cancel plan"
+              className="kr-pop grid h-11 w-11 shrink-0 place-items-center rounded-full text-danger-600/60 disabled:opacity-50">
+              <XCircle size={16} weight="bold" aria-hidden="true" />
             </button>
           </>
         ) : (
           t.status !== "done" && (
+            /* KM-6 — .kr-pop and a real height, matching every other pill on
+               this card. It was .nm-btn with a colour hover, the flat idiom
+               the redesign replaced, and py-2 left it sitting a few pixels
+               short of its neighbours. */
             <button onClick={() => setEditing(true)} data-testid={`exec-edit-${t.id}`}
-              className="flex items-center gap-2 text-sm font-medium nm-btn px-4 py-2 hover:bg-accent transition-colors">
-              <PencilSimple size={15} weight="bold" /> Customize steps
+              className="kr-pop flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium text-foreground">
+              <PencilSimple size={15} weight="bold" aria-hidden="true" /> Customize steps
             </button>
           )
         )}
       </div>
 
+      {/* KM-7 — the step detail joins the design system. It was the retired
+          system's last corner in this file: a hairline-framed panel, a
+          font-heading title and a `label-mono` footnote, with the close X
+          inheriting the dialog default and sitting off the title's baseline.
+          Now a .kr-bento sheet, sans throughout, the step itself pressed into
+          a .nm-inset well so the text reads as the CONTENT rather than more
+          chrome, and the X replaced by an explicit .kr-pop Close so it is
+          aligned by the layout instead of floating. */}
       <Dialog open={!!viewStep} onOpenChange={(o) => !o && setViewStep(null)}>
-        <DialogContent className="rounded-cardlg border border-nm-edge/40">
+        <DialogContent className="kr-bento rounded-cardlg border-0 [&>button.absolute]:hidden">
           <DialogHeader>
-            <DialogTitle className="font-heading tracking-tight text-base flex items-center gap-2"><ListChecks size={18} weight="bold" aria-hidden="true" className="text-muted-foreground" /> Execution Step</DialogTitle>
+            <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+              <ListChecks size={17} weight="regular" aria-hidden="true" className="text-muted-foreground" />
+              Execution step
+            </DialogTitle>
           </DialogHeader>
-          <p className="text-sm leading-relaxed whitespace-pre-wrap break-words" data-testid={`exec-step-detail-${t.id}`}>{viewStep?.text}</p>
-          <p className="label-mono text-muted-foreground mt-1">Tap outside to close</p>
+          <div className="nm-inset rounded-control p-3.5">
+            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed"
+               data-testid={`exec-step-detail-${t.id}`}>
+              {viewStep?.text}
+            </p>
+          </div>
+          <button type="button" onClick={() => setViewStep(null)} data-testid={`exec-step-close-${t.id}`}
+            className="kr-pop mt-1 flex h-11 w-full items-center justify-center rounded-pill text-sm font-medium text-foreground">
+            Close
+          </button>
         </DialogContent>
       </Dialog>
     </div>
@@ -768,6 +990,8 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
   // status band, progress, attachments, updates, action buttons, plan,
   // trail. Highlighted cards (deep-link focus) auto-expand.
   const [selfExpanded, setSelfExpanded] = useState(highlight);
+  // KR-14.24 — mobile "Set % manually" toggle. When on, the percent select
+  // renders inline in the same status row instead of dropping a new block.
   const controlled = open !== undefined;
   const expanded = controlled ? open : selfExpanded;
   const setExpanded = controlled ? () => onToggleOpen?.() : setSelfExpanded;
@@ -982,6 +1206,16 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
                 className="shrink-0 rounded-pill border-[0.5px] border-kr-ink/55 px-2 py-0.5 text-[11px] font-medium capitalize text-foreground/70">
                 {t.priority || "medium"}
               </span>
+              {/* KM-7 — Overdue rides WITH the priority chip, not on the meta
+                  line below it. They are the same kind of statement about the
+                  task — how urgent, how late — and splitting them across two
+                  rows made a late task three lines tall for two short words. */}
+              {overdue && !terminal && (
+                <span data-testid={`overdue-${t.id}`}
+                  className="shrink-0 rounded-pill bg-kr-accent px-2 py-0.5 text-[11px] font-medium text-white">
+                  Overdue
+                </span>
+              )}
             </div>
             <div className="flex items-center flex-wrap gap-2 mt-1.5 text-xs">
               {/* Status pill -- muted when normal, red when overdue/rejected */}
@@ -990,13 +1224,7 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
                   terminal ? "bg-kr-ink text-white border-transparent"
                   : awaitingApproval ? "border-[0.5px] border-kr-ink text-foreground"
                   : "bg-nm-sunken text-muted-foreground border-nm-edge/40"
-                }`}>{STATUS_LABEL[t.status] || t.status}</span>
-              {overdue && !terminal && (
-                <span data-testid={`overdue-${t.id}`}
-                  className="rounded-pill bg-kr-accent px-2 py-0.5 font-medium text-white">
-                  Overdue
-                </span>
-              )}
+                } ${expanded ? "hidden lg:inline-block" : ""}`}>{STATUS_LABEL[t.status] || t.status}</span>
               {t.due_date && !overdue && (
                 <span className="text-muted-foreground">
                   due {new Date(t.due_date).toLocaleString(undefined, { day: "numeric", month: "short" })}
@@ -1036,9 +1264,229 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
       </button>
       </div>
 
+      {/* KR-14.22 · MOBILE EXPANDED BODY — reference-driven layout for the
+          task expanded view on phones. Uses the same handlers/state as the
+          desktop body below; the desktop body is `hidden lg:block` from
+          here on. Rendered only when `expanded`. */}
+      {expanded && (
+      <div className="px-4 pb-5 space-y-5 border-t border-nm-edge/40 pt-4 lg:hidden" data-testid={`task-body-m-${t.id}`}>
+        {/* KR-14.23 — a single accent status pill leads the body. The
+            summary row above already shows the full meta row (status +
+            due + context), so repeating it here made the pill look
+            doubled on tasks that had all three fields. */}
+        <div>
+          <span className={`inline-flex rounded-pill px-2.5 py-0.5 text-xs font-medium ${
+            overdue && !terminal ? "bg-kr-accent text-white"
+            : "bg-orange-50 text-kr-accent"
+          }`}>
+            {STATUS_LABEL[t.status] || t.status}
+          </span>
+        </div>
+
+        {/* Description card (orange) */}
+        {t.description && (
+          <div className="flex items-start gap-3 rounded-cardlg bg-orange-50/70 p-3">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-tile bg-orange-100 text-kr-accent">
+              <File size={18} weight="regular" />
+            </span>
+            <p className="text-sm leading-relaxed">{t.description}</p>
+          </div>
+        )}
+
+        {/* Info card — the top row (workflow / due date) only renders when
+            there is something to show; the created-ago footnote only gets a
+            top border when the top row is present. Prevents the hollow
+            curve above a lone "Created X ago" line. */}
+        {(t.workflow_summary?.title || t.due_date || t.created_at) && (() => {
+          const hasTop = !!(t.workflow_summary?.title || t.due_date);
+          return (
+            <div className="rounded-cardlg border border-nm-edge/40 p-3">
+              {hasTop && (
+                <div className="flex items-center gap-2">
+                  {t.workflow_summary?.title && (
+                    <>
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-violet-50 text-violet-500">
+                        <Buildings size={14} weight="regular" />
+                      </span>
+                      <span className="min-w-0 truncate text-sm">{t.workflow_summary.title}</span>
+                    </>
+                  )}
+                  {t.workflow_summary?.title && t.due_date && (
+                    <span className="mx-1 h-5 w-px shrink-0 bg-nm-edge/60" />
+                  )}
+                  {t.due_date && (
+                    <>
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-green-50 text-green-600">
+                        <ClockCounterClockwise size={14} weight="regular" />
+                      </span>
+                      <span className="min-w-0 truncate text-sm">
+                        Due {new Date(t.due_date).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", ...(t.due_date.includes("T") ? { hour: "2-digit", minute: "2-digit" } : {}) })}
+                      </span>
+                    </>
+                  )}
+                </div>
+              )}
+              {t.created_at && (
+                <div className={`flex items-center gap-1 text-xs text-muted-foreground ${hasTop ? "mt-3 border-t border-nm-edge/30 pt-2" : ""}`}>
+                  <span aria-hidden="true" className="h-1 w-1 rounded-full bg-muted-foreground/60" />
+                  Created {timeAgo(t.created_at)}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* KM-5 · STATUS — ONE ROW, A SEGMENTED BAR.
+            KM-6 note: `blocked` (pending approval) still matches no segment —
+            it is a gate the approver controls, not a state the assignee sets.
+            KM-3 put five pills in a flex-wrap, which at 343px could not hold
+            them and broke onto a second line — and five states genuinely do
+            not fit one row, so "Waiting" goes on the founder's call. Four
+            remain and they are the states work actually moves through.
+            It is a segmented bar now rather than five loose chips: a single
+            .kr-pressed track with four equal segments, and the selected one
+            fills with ITS OWN status colour, so choosing a status visibly
+            moves the coloured pill along the track. Not Started stays the
+            default and has no segment — it is the absence of a choice, and
+            tapping the active segment returns to it.
+            No transition utility: the track's children swap fills, and the
+            selected segment also swaps against .kr-pressed's shadow, which is
+            not interpolable against an outset pair. */}
+        {!terminal && !awaitingApproval && (
+          <div className="kr-pressed flex items-center gap-1 rounded-pill p-1" role="group"
+               aria-label="Task status" data-testid={`status-pills-m-${t.id}`}>
+            {M_STATUS_PILLS.map((sp) => {
+              const on = t.status === sp.key;
+              return (
+                <button
+                  key={sp.key}
+                  type="button"
+                  onClick={() => setStatus(sp.key)}
+                  aria-pressed={on}
+                  data-testid={`status-pill-m-${sp.key}-${t.id}`}
+                  /* text-[10px] and px-0.5: four segments share 323px of a
+                     343px row, so each label gets ~76px and "Not Started" is
+                     the one that decides the size. */
+                  className={`flex h-9 min-w-0 flex-1 basis-0 items-center justify-center rounded-pill px-0.5 text-[10px] leading-tight ${
+                    /* KM-6 — the selected segment is RAISED, not a flat
+                       swatch: .kr-pop supplies the lift and the colour
+                       utility overrides its white ground (utilities layer
+                       beats components), so the moving pill reads as a
+                       physical thing sitting in the track. */
+                    on ? `kr-pop ${sp.on} font-semibold` : "text-foreground/60"
+                  }`}
+                >
+                  <span className="truncate">{sp.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* KM-3 — THE REAL COMPONENT, not a lookalike. The two buttons that
+            used to sit here ("Add manually" / "Ask Dex") were rebuilt as
+            plain markup during the mobile pass and shipped with NO onClick at
+            all, so both were inert: Dex never drafted anything and manual
+            never opened a field. ExecutionPlan already owns that whole
+            behaviour — generate() posts to /execution-plan/generate,
+            startManual() seeds one empty step, and the editor below it adds,
+            edits, reorders, removes and persists. Rendering it restores the
+            AI draft, the manual path, and "add another step" in one move,
+            with no second copy of the logic to drift. */}
+        {!awaitingApproval && (
+          <ExecutionPlan t={t} onChange={onChange} members={members} roleOptions={roleOptions} />
+        )}
+
+        {/* Actions row — Complete + attach controls, now below the two
+            plan-building buttons above. */}
+        {!isTerminal(t) && !awaitingApproval && (
+          /* KM-6 — flex-wrap. Cancel joining this row made five controls
+             (Complete, Cancel, photo, file, voice) share 343px, and Complete
+             was truncating to "Comp…". Wrapping lets the two endings hold the
+             first line and the three attachment circles drop to the second. */
+          <div className="flex items-center gap-2">
+            {/* KM-7 — Complete and Cancel are ONE welded control, and Cancel is
+                icon-only. Five worded/round controls could not share 343px, so
+                KM-6 wrapped the row onto two lines; dropping the word "Cancel"
+                and joining the two endings into a single .kr-pop group buys
+                back enough width for the whole row to fit again.
+                Cancel keeps a real aria-label and title — an icon-only
+                destructive action with no name is not a control, it is a
+                guess. */}
+            <div className="kr-pop flex shrink-0 items-center gap-1 rounded-pill p-1"
+                 role="group" aria-label="Finish this task">
+              <button
+                onClick={complete}
+                data-testid={`complete-m-${t.id}`}
+                title={t.evidence_required && !hasEvidence ? "Add proof first" : "Mark as complete"}
+                className="flex h-9 items-center gap-1.5 rounded-pill bg-kr-ink px-3.5 text-xs font-medium text-white"
+              >
+                <CheckCircle size={13} weight="bold" aria-hidden="true" /> Complete
+              </button>
+              <button
+                onClick={() => setStatus("cancelled")}
+                data-testid={`cancel-m-${t.id}`}
+                aria-label="Cancel this task"
+                title="Cancel this task"
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-foreground/70"
+              >
+                <XCircle size={15} weight="bold" aria-hidden="true" />
+              </button>
+            </div>
+            <button
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+              data-testid={`photo-m-${t.id}`}
+              aria-label="Attach a photo"
+              className="kr-pop grid h-11 w-11 shrink-0 place-items-center rounded-full text-foreground disabled:opacity-40"
+            >
+              <Camera size={16} weight="regular" />
+            </button>
+            <button
+              onClick={() => evidenceRef.current?.click()}
+              disabled={uploading}
+              data-testid={`upload-file-m-${t.id}`}
+              aria-label="Upload a file"
+              className="kr-pop grid h-11 w-11 shrink-0 place-items-center rounded-full text-foreground disabled:opacity-40"
+            >
+              <FileArrowUp size={16} weight="regular" />
+            </button>
+            <button
+              onClick={toggleVoice}
+              data-testid={`voice-m-${t.id}`}
+              aria-label={recording ? "Stop recording" : "Record voice reply"}
+              className={`grid h-11 w-11 shrink-0 place-items-center rounded-full ${recording ? "bg-kr-accent text-white" : "kr-pop text-foreground"}`}
+            >
+              {recording ? <Stop size={16} weight="fill" /> : <Microphone size={16} weight="regular" />}
+            </button>
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="flex items-center justify-between border-t border-nm-edge/40 pt-3">
+          <span className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span aria-hidden="true" className="grid h-6 w-6 place-items-center rounded-full bg-nm-sunken">
+              <XCircle size={12} weight="regular" />
+            </span>
+            No activity yet
+          </span>
+          <button
+            type="button"
+            data-testid={`log-update-m-${t.id}`}
+            className="flex items-center gap-2 text-sm text-muted-foreground"
+          >
+            <span aria-hidden="true" className="grid h-6 w-6 place-items-center rounded-full bg-orange-50 text-kr-accent">
+              <Plus size={12} weight="bold" />
+            </span>
+            Log update or hand off
+          </button>
+        </div>
+      </div>
+      )}
+
       {/* EXPANDED BODY -- everything else lives here. Rendered only when open. */}
       {expanded && (
-      <div id={`task-card-body-${t.id}`} className="px-4 pb-4 space-y-3 border-t border-nm-edge/40 pt-3">
+      <div id={`task-card-body-${t.id}`} className="hidden px-4 pb-4 space-y-3 border-t border-nm-edge/40 pt-3 lg:block">
       {t.description && <p className="text-sm text-muted-foreground">{t.description}</p>}
       {showAssignee && !isOp && (
         <p className="label-mono text-muted-foreground flex items-center gap-1" data-testid={`assignee-line-${t.id}`}>
@@ -1401,7 +1849,19 @@ const TIER_SPAN = {
   medium: "col-span-6 sm:col-span-3 lg:col-span-2",
   low:    "col-span-6 sm:col-span-3 lg:col-span-2",
 };
-const TIER_MINH = { high: "min-h-[210px]", medium: "min-h-[182px]", low: "min-h-[156px]" };
+/* KR-14.2 — 210/182/156 → 148/128/112. The tiles were sized for a card that
+   does not exist: a task's summary is a title, a status chip and a meta row,
+   which lands around 80px, so a third of every box was empty. The founder
+   asked for spacious and got hollow.
+   Measured on the way down: at 148 the ink sat with 46px of air above AND
+   below it — the content is vertically centred, so every pixel of excess
+   floor is paid twice. 128 leaves ~16px each side of a one-line card and
+   still clears the tallest real content (a two-line title measures 94px)
+   without clipping, because these are FLOORS — a tile grows if its card
+   needs it.
+   Ratios stay rectangular, the original ask: at 1280 a high tile is
+   799 × 128 and a medium 391 × 128. */
+const TIER_MINH = { high: "min-h-[128px]", medium: "min-h-[112px]", low: "min-h-[100px]" };
 
 function TaskBento({ list, openId, setOpenId, cardProps }) {
   return (
@@ -1444,11 +1904,43 @@ const BANDS = [
 
 function TaskPriorityColumns({ list, openId, setOpenId, cardProps }) {
   const grouped = BANDS.map((b) => ({ ...b, items: list.filter((t) => TIER_OF(t) === b.key) }));
+  /* KM-3 — ON A PHONE THE THREE COLUMNS BECOME THREE TABS.
+     A 3-col grid linearises to three stacked sections, so turning AI priority
+     on used to make the page THREE TIMES LONGER and buried Medium and Low
+     below two full screens of High — the opposite of what "sort by priority"
+     is for. A segmented bar shows one band at a time and names the other two,
+     so the grouping is visible at a glance and switching costs one tap.
+     Default is High: if you asked for priority order, that is the band you
+     asked to see. Desktop keeps all three columns side by side, untouched. */
+  const [band, setBand] = useState("high");
   return (
+    <>
+      <div className="kr-pressed mb-4 flex items-center gap-1 rounded-pill p-1 lg:hidden"
+           role="group" aria-label="Priority band" data-testid="mywork-priority-bands">
+        {grouped.map((b) => (
+          <button
+            key={b.key}
+            type="button"
+            onClick={() => setBand(b.key)}
+            aria-pressed={band === b.key}
+            data-testid={`priority-band-${b.key}`}
+            className={`flex h-9 flex-1 items-center justify-center gap-1.5 rounded-pill px-2 text-xs ${
+              band === b.key ? "kr-pop font-semibold text-foreground" : "text-foreground/60"
+            }`}
+          >
+            {b.label}
+            <span className="tabular-nums opacity-60">{b.items.length}</span>
+          </button>
+        ))}
+      </div>
     <div className="grid gap-4 lg:grid-cols-3" data-testid="mywork-priority-columns">
       {grouped.map((col) => (
-        <section key={col.key} data-testid={`priority-col-${col.key}`} className="min-w-0">
-          <div className="mb-3 flex items-baseline gap-2">
+        <section key={col.key} data-testid={`priority-col-${col.key}`}
+                 className={`min-w-0 lg:block ${band === col.key ? "block" : "hidden"}`}>
+          {/* The heading is desktop-only: below lg the segmented bar above
+              already names the band and carries its count, so repeating it
+              here would label a list that has just been labelled. */}
+          <div className="mb-3 hidden items-baseline gap-2 lg:flex">
             <h3 className="text-sm font-semibold">{col.label}</h3>
             <span className="font-mono text-xs tabular-nums opacity-55">{col.items.length}</span>
           </div>
@@ -1475,6 +1967,7 @@ function TaskPriorityColumns({ list, openId, setOpenId, cardProps }) {
         </section>
       ))}
     </div>
+    </>
   );
 }
 
@@ -1490,7 +1983,7 @@ export default function MyWork() {
     ...om.task_categories.map((c) => ({ key: c.key, label: c.label })),
     { key: "completed", label: "Completed" },
   ];
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const isOwner = user?.role === "owner";
   const focusTaskId = params.get("task");
   const rawView = params.get("view");
@@ -1628,9 +2121,212 @@ export default function MyWork() {
     list = [...list].sort((a, b) => (scoreMap[b.id]?.priority_score || 0) - (scoreMap[a.id]?.priority_score || 0));
   }
 
+  // KR-14.6 · MOBILE HEADER — reference-driven layout for MyWork on phones:
+  //   Row 1 (segment views only): h1 title left, [+ New Task] and the
+  //          star-priority circle right.
+  //   Row 2: [My Tasks | All Tasks] as a single segmented pill, plus
+  //          [Workflows] and [Leave] as their own pills, and the sliders
+  //          filter circle on the right. The filter opens a dropdown listing
+  //          the sub-filters (All, Finance, Logistics… + Completed) — the
+  //          old category chip strip is gone, its selection moves in here.
+  // Reuses the same state (view/scope/tab/aiPriority) so the desktop tree can
+  // stay untouched via `lg:hidden` / `hidden lg:*`.
+  // KM-2 · MOBILE HEADER — the founder's arrangement, and it now uses the
+  // DESKTOP MATERIAL. The phone was still painting selection as a solid ink
+  // fill (MSEG_ON = bg-kr-ink text-white) while the desktop had long since
+  // moved to depth: .kr-pressed for "you are in this", .kr-pop for "you are
+  // not". One app, one grammar.
+  //
+  //   Row 1: h1 left · [Leave] right-aligned
+  //   Row 2: the LENS GROUP — [My Tasks | All Tasks] joined by geometry with
+  //          a circular [+] sitting inside the same group — then [Workflows];
+  //          [AI priority] and [filter] as a pair of circles on the right
+  //   Row 3: the active sub-filter caption
+  //
+  // NO `transition-colors` ANYWHERE IN HERE, and it is load-bearing rather
+  // than an oversight: every control below swaps .kr-pop <-> .kr-pressed,
+  // whose box-shadows are an OUTSET list and an INSET list. Shadow lists only
+  // interpolate when their lengths and `inset` keywords agree, so the browser
+  // falls back to a discrete transition and the button sits visually unchanged
+  // for half the duration — and a transition-colors utility (which @layer
+  // utilities puts after @layer components, replacing transition-property
+  // wholesale) drags the LABEL COLOUR into that same dead zone. Selection
+  // should snap anyway. See the note at the top of this file.
+  const MPILL = "flex h-9 shrink-0 items-center gap-1.5 rounded-pill px-2.5 text-[12px]";
+  const MPILL_ON = "kr-pressed font-semibold text-foreground";
+  const MPILL_OFF = "kr-pop text-foreground/75";
+  const MSEG = "flex h-9 shrink-0 items-center justify-center px-2.5 text-[12px]";
+  const MSEG_ON = "kr-pressed font-semibold text-foreground";
+  const MSEG_OFF = "kr-pop text-foreground/70";
+  // The two circles on the right of Row 2, and the [+] in the lens group.
+  const MCIRCLE = "grid h-9 w-9 shrink-0 place-items-center rounded-full text-foreground";
+  const mobileView = (() => {
+    if (view === "workflows") return "workflows";
+    if (view === "leave") return "leave";
+    if (isOwner && scope === "all") return "all";
+    return "mine";
+  })();
+  const inSegmentView = mobileView === "mine" || mobileView === "all";
+  // The filter dropdown lists only tabs that have items — same rule the old
+  // chip strip used. "Completed" appears when any completed task exists.
+  const mobileFilterTabs = WORK_TABS.filter((tb) => tb.key === "all" || countFor(tb.key) > 0);
+  const activeTabLabel = (WORK_TABS.find((tb) => tb.key === tab) || WORK_TABS[0]).label;
+
   return (
     <div>
-      <header className="mb-7 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      {/* ─── MOBILE HEADER (below lg) ───────────────────────────────────── */}
+      <header className="mb-5 flex flex-col gap-3 lg:hidden" data-testid="mywork-mobile-header">
+        {/* Row 1 — title left, the two DESTINATIONS right.
+            Workflows and Leave are the only two controls in this header that
+            are not lenses on the task list — they replace the list with a
+            different subject. Putting them on the title's line says that, and
+            leaves Row 2 holding exactly the things that act on the list.
+            MEASURED, not chosen: with Workflows still in Row 2 that row needed
+            378px of a 343px column — 194 (lens group) + 78 (Workflows) + 94
+            (the two circles) + gaps — and the filter circle's right edge landed
+            at 394px against a 375px viewport, where overflow-x:clip on <main>
+            cropped it away with no way to reach it. The circles are 44px wide,
+            not the 36px `w-9` declares, because index.css puts a 44px
+            min-width touch floor on every button below lg. Tightening padding
+            and gaps recovers ~16px of the 35px gap, so the row genuinely
+            cannot hold six controls; a destination pair moving up is the only
+            fix that keeps every control reachable. */}
+        <div className="flex items-center gap-1.5">
+          <h1 className="min-w-0 flex-1 font-display text-3xl leading-none">{t("mywork.title")}</h1>
+          {/* Workflows — never changes depth, on the founder's standing call:
+              held .kr-pressed in BOTH states so colour alone carries selection,
+              brown at rest and ink when you are in it. Everything around it
+              moves between raised and sunken, which is what lets a
+              permanently-sunken button read as a place rather than a toggle.
+              Identical rule to the desktop row. */}
+          {canSeeWorkflows && (
+            <button type="button" onClick={() => setView("workflows")}
+              aria-pressed={mobileView === "workflows"} data-testid="work-mobile-workflows"
+              className={`${MPILL} shrink-0 kr-pressed ${
+                mobileView === "workflows" ? "font-semibold text-foreground" : "text-kr-brown"
+              }`}>
+              {t("mywork.view_workflows")}
+            </button>
+          )}
+          <button type="button" onClick={() => setView("leave")}
+            aria-pressed={mobileView === "leave"} data-testid="work-mobile-leave"
+            className={`${MPILL} shrink-0 ${mobileView === "leave" ? MPILL_ON : MPILL_OFF}`}>
+            {t("mywork.view_leave")}
+          </button>
+        </div>
+
+        {/* Row 2 — everything that ACTS ON THE LIST, and nothing else:
+            the lens group on the left, the two action circles on the right. */}
+        <div className="flex items-center gap-1.5" data-testid="mywork-mobile-tabs">
+          {/* THE LENS GROUP. My Tasks and All Tasks are joined by geometry —
+              touching, outer corners round, inner corners square, a hairline
+              seam — and the [+] rides with them as a circle: it acts on the
+              same list, so it belongs in the same group, and being round is
+              what stops it reading as a third tab. Same anatomy the desktop
+              cluster uses for AI priority. */}
+          {isOwner && (
+            <div className="flex shrink-0 items-center gap-1.5"
+                 role="group" aria-label={t("mywork.title", "My Work")} data-testid="work-mobile-segment">
+              <div className="flex items-center">
+                <button type="button" onClick={() => { setScope("mine"); setView("mywork"); }}
+                  aria-pressed={mobileView === "mine"} data-testid="work-mobile-mine"
+                  className={`${MSEG} rounded-l-pill ${mobileView === "mine" ? MSEG_ON : MSEG_OFF}`}>
+                  {t("mywork.my_tasks")}
+                </button>
+                <span aria-hidden="true" className="h-5 w-px shrink-0 bg-kr-ink/15" />
+                <button type="button" onClick={() => { setScope("all"); setView("mywork"); }}
+                  aria-pressed={mobileView === "all"} data-testid="work-mobile-all"
+                  className={`${MSEG} rounded-r-pill ${mobileView === "all" ? MSEG_ON : MSEG_OFF}`}>
+                  {t("mywork.all_tasks")}
+                </button>
+              </div>
+              <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members}
+                triggerClassName={`${MCIRCLE} kr-pop`}
+                triggerAriaLabel={t("mywork.new_task", "New Task")}
+                triggerChildren={<Plus size={16} weight="bold" aria-hidden="true" />} />
+            </div>
+          )}
+
+
+          {/* The two circles, as a pair, hard right. AI priority moved up here
+              from its own row so that both controls that act on the LIST
+              — reorder it, filter it — sit together, in the same shape, in
+              the same place. */}
+          <div className="ml-auto flex shrink-0 items-center gap-1.5">
+            {inSegmentView && (
+              <button type="button" onClick={() => { setAiPriority((v) => !v); setView("mywork"); }}
+                aria-pressed={aiPriority} data-testid="work-mobile-priority"
+                aria-label={aiPriority ? t("mywork.ai_priority_on", "AI priority on") : t("mywork.ai_priority", "AI priority")}
+                title={scoring ? t("mywork.scoring", "Scoring…") : (aiPriority ? t("mywork.ai_priority_on", "AI priority on") : t("mywork.ai_priority", "AI priority"))}
+                className={`${MCIRCLE} ${aiPriority ? "kr-pressed" : "kr-pop"}`}>
+                <Sparkle size={15} weight={aiPriority ? "fill" : "bold"} aria-hidden="true"
+                  className={scoring ? "animate-pulse" : ""} />
+              </button>
+            )}
+
+            {/* KR-14.7 — the sliders filter carries the sub-filters for the
+                active view: task categories in the segment views, pipelines
+                inside Workflows. Leave has no sub-filter, so it renders a
+                passive spacer that keeps the row's right edge steady.
+                KM-2 — now .kr-pop rather than a bare white circle: it sits
+                shoulder to shoulder with the AI circle, and two adjacent
+                circles in two different materials read as a mistake. */}
+            {mobileView === "leave" ? (
+              <span className="h-9 w-9 shrink-0" aria-hidden="true" />
+            ) : (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button type="button" data-testid="work-mobile-filter"
+                    aria-label={t("mywork.filter", "Filter")}
+                    className={`${MCIRCLE} kr-pop`}>
+                    <SlidersHorizontal size={16} weight="regular" aria-hidden="true" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" sideOffset={8} className="min-w-[12rem]">
+                  {mobileView === "workflows"
+                    ? om.pipelines.map((pip) => {
+                        const cur = params.get("wf_type") || om.pipelines[0]?.key;
+                        return (
+                          <DropdownMenuItem key={pip.key} onSelect={() => {
+                            const next = new URLSearchParams(params);
+                            next.set("view", "workflows");
+                            next.set("wf_type", pip.key);
+                            setParams(next);
+                          }}
+                            data-testid={`work-mobile-filter-wf-${pip.key}`}
+                            className={`flex items-center justify-between gap-3 ${cur === pip.key ? "font-medium" : ""}`}>
+                            <span>{pip.label}</span>
+                          </DropdownMenuItem>
+                        );
+                      })
+                    : mobileFilterTabs.map((tb) => (
+                        <DropdownMenuItem key={tb.key} onSelect={() => setTab(tb.key)}
+                          data-testid={`work-mobile-filter-${tb.key}`}
+                          className={`flex items-center justify-between gap-3 ${tab === tb.key ? "font-medium" : ""}`}>
+                          <span>{tb.label}</span>
+                          <span className="tabular-nums text-xs text-muted-foreground">{countFor(tb.key)}</span>
+                        </DropdownMenuItem>
+                      ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
+        </div>
+
+        {/* Row 3 — the active sub-filter caption. New Task and AI priority
+            both left this row in KM-2 (into the lens group and the circle
+            pair respectively), so what remains is the one thing that names
+            what the list below is currently showing. */}
+        {inSegmentView && (
+          <p className="text-xs text-muted-foreground" data-testid="work-mobile-active-tab">
+            {activeTabLabel}
+            <span className="ml-1 tabular-nums opacity-70">· {countFor(tab)}</span>
+          </p>
+        )}
+      </header>
+
+      {/* ─── DESKTOP HEADER (lg and up) ─────────────────────────────────── */}
+      <header className="mb-7 hidden gap-4 lg:flex lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{t("mywork.eyebrow")}</p>
           <h1 className="mt-1.5 font-display text-3xl sm:text-4xl">{t("mywork.title")}</h1>
@@ -1762,7 +2458,7 @@ export default function MyWork() {
               borderless pills, sentence case, indigo tint on the active one.
               The bordered-uppercase version stacked a frame on every tab and
               the count badge carried a second frame inside it. */}
-          <div className="mb-5 flex flex-wrap gap-2 border-b border-nm-edge/40 pb-4" data-testid="work-tabs">
+          <div className="mb-5 hidden flex-wrap gap-2 border-b border-nm-edge/40 pb-4 lg:flex" data-testid="work-tabs">
             {WORK_TABS
               .filter((tb) => tb.key === "all" || countFor(tb.key) > 0)
               .map((tb) => (

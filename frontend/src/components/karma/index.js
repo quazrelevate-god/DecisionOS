@@ -19,3 +19,5 @@ export { InsightWell } from "./InsightWell";
 export { ScoreMeter } from "./ScoreMeter";
 // KR-10 additions
 export { DonutBreak } from "./DonutBreak";
+// KM-4 additions
+export { DataList } from "./DataList";

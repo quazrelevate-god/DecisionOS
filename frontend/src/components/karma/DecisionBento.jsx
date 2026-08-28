@@ -40,13 +40,13 @@ import { cn } from "@/lib/utils";
 const TIER = {
   a: {
     span: "col-span-2 sm:col-span-4 xl:col-span-6",
-    minH: "min-h-[178px] xl:min-h-[196px]",
+    minH: "min-h-[150px] lg:min-h-[178px] xl:min-h-[196px]",
     title: "text-lg xl:text-xl font-semibold leading-snug",
     clamp: "line-clamp-3",
   },
   b: {
     span: "col-span-2 sm:col-span-2 xl:col-span-3",
-    minH: "min-h-[178px] xl:min-h-[196px]",
+    minH: "min-h-[150px] lg:min-h-[178px] xl:min-h-[196px]",
     title: "text-base font-semibold leading-snug",
     clamp: "line-clamp-3",
   },
@@ -120,19 +120,22 @@ function firstRowCount(tiers, bp) {
 function DecisionBox({ card, tier, tint, verb, icon: Icon, busy, done, onAction }) {
   const t = TIER[tier] || TIER.c;
   return (
-    <button
-      type="button"
+    /* KM-5 — THE CUT IS GONE. KM-3 bit a notch out of the corner with a mask
+       and hung the pill in it; the founder's read is that it did not look
+       good, and he is right — the bite fought the card's own silhouette and
+       cost a mask layer plus a separately-positioned surface to achieve it.
+       The pill now simply sits ON the card, bottom-right, in the pressed
+       neumorphic state the AI-insights well uses on this same page. That also
+       lets the card go back to being one element instead of three.
+       The card stays a <div>: the pill is the action, and a button inside a
+       button is invalid regardless of how the corner is drawn. */
+    <div
       data-testid={`desk-card-${card.id}`}
       data-tier={tier}
-      onClick={onAction}
-      disabled={busy || done}
-      aria-label={done ? `${card.title} — actioned` : card.title}
       className={cn(
-        "kr-glass kr-lift group relative flex flex-col p-4 text-left xl:p-5",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60",
+        "kr-glass group relative flex flex-col p-4 text-left xl:p-5",
         tint, t.span, t.minH,
-        // The acted state: quieter, desaturated, no longer inviting a click.
-        done && "kr-done pointer-events-none"
+        done && "kr-done"
       )}
     >
       <div className="flex items-start justify-between gap-3">
@@ -150,16 +153,40 @@ function DecisionBox({ card, tier, tint, verb, icon: Icon, busy, done, onAction 
 
       <p className={cn("mt-3.5", t.title, t.clamp)}>{card.title}</p>
 
-      <p className="mt-auto pt-3 text-xs leading-relaxed opacity-75">{card.context_line}</p>
+      {/* KM-5 — the context line and the action share the floor as a ROW, so
+          the text can never run under the pill. It previously relied on a
+          pr-28 reservation, which is the kind of thing that holds until a
+          longer string or a wider verb arrives; a flex row with min-w-0 and
+          its own truncation cannot overlap by construction. This is the
+          "wrapping misalignment" seen in the expanded state, where the taller
+          tier-c cards gave the text enough room to reach the corner. */}
+      <div className="mt-auto flex items-end justify-between gap-3 pt-3">
+        <p className="min-w-0 flex-1 text-xs leading-relaxed opacity-75 line-clamp-2">
+          {card.context_line}
+        </p>
 
-      <p className="mt-2 flex items-center gap-1.5 text-xs font-semibold">
-        {busy && <Spinner size={12} className="animate-spin" aria-hidden="true" />}
-        {done ? "Done" : busy ? "Working…" : verb}
-        {!busy && !done && (
-          <CaretRight size={11} weight="bold" aria-hidden="true" className="transition-transform group-hover:translate-x-0.5" />
-        )}
-      </p>
-    </button>
+        <button
+          type="button"
+          onClick={onAction}
+          disabled={busy || done}
+          data-testid={`desk-card-action-${card.id}`}
+          aria-label={done ? `${card.title} — actioned` : `${verb}: ${card.title}`}
+          className={cn(
+            "kr-pressed flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-pill px-4",
+            "text-xs font-semibold text-white",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70",
+            (busy || done) && "opacity-60"
+          )}
+        >
+          {busy && <Spinner size={12} className="animate-spin" aria-hidden="true" />}
+          {done ? "Done" : busy ? "Working…" : verb}
+          {!busy && !done && (
+            <CaretRight size={11} weight="bold" aria-hidden="true"
+              className="transition-transform group-hover:translate-x-0.5" />
+          )}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -177,7 +204,14 @@ export function DecisionBento({ sections, verbFor, iconFor, onCard, busyId, done
     });
 
   return (
-    <div className={cn("min-w-0", className)} data-testid={testid}>
+    /* KM-3 — BELOW lg THE FOUR SECTIONS SCROLL SIDEWAYS, one per screen.
+       Stacked vertically they made the band ~1,800px tall: four headings and
+       their cards, so reaching "Important" meant scrolling past everything
+       else. Horizontally they cost one screen each and the band's height is
+       set by the tallest visible panel — which, collapsed, is one card.
+       .kr-snap carries the snap + gutter bleed; at lg it turns itself back
+       into a plain block and the sections stack exactly as they do today. */
+    <div className={cn("min-w-0 kr-snap", className)} data-testid={testid}>
       {sections.map((s, si) => {
         const cards = s.cards || [];
         const tiers = tiersFor(cards, si);
@@ -187,7 +221,7 @@ export function DecisionBento({ sections, verbFor, iconFor, onCard, busyId, done
         const hidden = cards.length - rowN;
 
         return (
-          <section key={s.key} className={cn(si > 0 && "mt-8")} data-testid={`desk-section-${s.key}`}>
+          <section key={s.key} className={cn("min-w-0", si > 0 && "lg:mt-8")} data-testid={`desk-section-${s.key}`}>
             <div className="mb-3 flex items-center gap-2.5">
               <span aria-hidden="true" className={cn("h-3 w-3 rounded-full", s.dot)} />
               <h3 className="text-base font-semibold">{s.label}</h3>
@@ -217,7 +251,16 @@ export function DecisionBento({ sections, verbFor, iconFor, onCard, busyId, done
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-12">
+            {/* Collapsed, the panel is exactly one card tall — the founder's
+                "fixed to accommodate one single card". Expanded (via +N more)
+                it becomes a capped, freely-scrolling column. Both caps are
+                lg:-reset so desktop keeps its full grid. */}
+            <div className={cn(
+              "grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-12",
+              expanded
+                ? "max-h-[60vh] overflow-y-auto lg:max-h-none lg:overflow-visible"
+                : "overflow-hidden"
+            )}>
               {s.loading && Array.from({ length: 3 }, (_, i) => (
                 <div key={i} className={cn("ds-skeleton rounded-tile", TIER[i === 0 ? "a" : "b"].span, TIER.b.minH)} />
               ))}

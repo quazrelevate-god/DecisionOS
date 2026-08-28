@@ -29,6 +29,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { PageHeader, EmptyState } from "../components/common";
+import { ymd, addDays, startOfWeek, DOW, dayTitle } from "../lib/dates";
 import {
   CurrencyCircleDollar, CheckSquare, Truck, Warning, Cake, CalendarBlank,
   UsersThree, AirplaneTakeoff, CaretLeft, CaretRight,
@@ -48,28 +49,9 @@ const TYPES = {
   leave:       { label: "Leave",      icon: AirplaneTakeoff,       dot: "bg-teal-600" },
 };
 
-const ymd = (d) => {
-  // Local, not toISOString(): toISOString() converts to UTC first, so anywhere
-  // east of Greenwich "today" becomes yesterday for part of the day and the
-  // strip highlights the wrong cell.
-  const p = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-};
-const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
-/* Monday-first, matching Indian business practice and every calendar app the
-   founder is comparing this to. getDay() is Sunday-first, hence the shift. */
-const startOfWeek = (d) => addDays(d, -((d.getDay() + 6) % 7));
-
-const DOW = ["M", "T", "W", "T", "F", "S", "S"];
-
-function dayTitle(iso) {
-  const d = new Date(`${iso}T00:00:00`);
-  const today = ymd(new Date());
-  const tmr = ymd(addDays(new Date(), 1));
-  if (iso === today) return "Today";
-  if (iso === tmr) return "Tomorrow";
-  return d.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
-}
+/* KM-10 — ymd / addDays / startOfWeek / DOW / dayTitle moved to lib/dates so
+   /journal's week strip can use the same ones. Two copies of "what is today,
+   locally" is how one file gets a timezone fix and the other quietly does not. */
 
 export default function Calendar() {
   const navigate = useNavigate();

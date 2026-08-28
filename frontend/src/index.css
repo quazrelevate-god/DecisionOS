@@ -1261,7 +1261,19 @@ html[data-dex="1"].dark .text-muted-foreground { color: hsl(var(--muted-foregrou
     html[data-page="inbox"] .app-sky::before {
         background-image: url("./assets/inbox-glow-mobile.webp");
         background-size: cover;
-        background-position: center center;
+        /* KM-16 — 60%, not centre. This artwork has dark grey cores where the
+           orange one had none, and at `center` one of them sat directly under
+           the greeting: the muted half ("Rajesh.") measured 1.73:1 against a
+           3.0 large-text threshold — close to unreadable.
+           The value is swept, not guessed. Sampling the darkest pixel inside
+           the greeting's own box across background-position-x from 0 to 100%:
+           centre is the WORST region of the whole range (1.73), 55% is the
+           first to clear (3.67), and 60% gives 5.15 with the score area at
+           15.31 / 5.84. Past ~75% everything scores higher still, but only
+           because the crop has panned onto the pale right edge and the glow
+           has left the hero — which is not a fix, it is a deletion. 60% is the
+           smallest pan that clears the core while keeping the picture. */
+        background-position: 60% center;
         animation: none;
         transform: none;
     }

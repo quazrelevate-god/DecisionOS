@@ -26,7 +26,10 @@ const humanDate = (iso) => dueLabel(iso)?.text || null;
 function Accordion({ id, title, icon: Icon, count, defaultOpen = false, children }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <section className="mt-3 overflow-hidden nm-raised" data-testid={`cp-section-${id}`}>
+    /* KM-10 — .kr-bento, the app's card material, instead of .nm-raised: a
+       raised block with a hairline was the flat idiom the redesign replaced
+       everywhere else on the phone. */
+    <section className="kr-bento mt-3 overflow-hidden rounded-cardlg" data-testid={`cp-section-${id}`}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -51,7 +54,7 @@ function Accordion({ id, title, icon: Icon, count, defaultOpen = false, children
           className={`shrink-0 text-neutral-400 transition-transform ${open ? "rotate-180" : ""}`}
         />
       </button>
-      {open && <div className="border-t border-border p-3.5">{children}</div>}
+      {open && <div className="border-t border-nm-edge/40 p-3.5">{children}</div>}
     </section>
   );
 }
@@ -138,7 +141,9 @@ export default function ContactProfileMobile() {
             <a
               href={`tel:${c.phone}`}
               data-testid="cp-call"
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-base font-semibold text-primary-foreground"
+              /* KM-10 — ink, not bg-primary (the retired indigo), and a pill at the
+                 app's control height. */
+              className="kr-lift flex h-12 flex-1 items-center justify-center gap-2 rounded-pill bg-kr-ink px-4 text-sm font-semibold text-white"
               style={{ minHeight: "var(--control-h-md)" }}
             >
               <Phone size={20} weight="bold" /> Call
@@ -148,7 +153,7 @@ export default function ContactProfileMobile() {
             <a
               href={`mailto:${c.email}`}
               data-testid="cp-email"
-              className="flex items-center justify-center gap-2 rounded-xl border border-border px-4 text-base font-semibold"
+              className="kr-pop flex h-12 items-center justify-center gap-2 rounded-pill px-4 text-sm font-semibold text-foreground"
               style={{ minHeight: "var(--control-h-md)" }}
             >
               <EnvelopeSimple size={20} weight="bold" /> Email
@@ -173,7 +178,7 @@ export default function ContactProfileMobile() {
           <Row label="Open complaints" value={summary.open_complaints} />
         )}
         {invoices.length > 0 && (
-          <ul className="mt-3 divide-y divide-border border-t border-border">
+          <ul className="mt-3 divide-y divide-nm-edge/40 border-t border-nm-edge/40">
             {invoices.slice(0, 5).map((iv) => (
               <li key={iv.id} className="flex items-center justify-between gap-3 py-2 text-sm">
                 <span className="min-w-0">

@@ -7,8 +7,9 @@ import { opModel } from "../lib/operatingModel";
 import { toast } from "sonner";
 import { timeAgo, fullTime } from "../lib/format";
 import { userPerms } from "../lib/perms";
-import { Plus, User, Paperclip, ClockCounterClockwise } from "@phosphor-icons/react";
+import { Plus, User, Paperclip, ClockCounterClockwise, X } from "@phosphor-icons/react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from "../components/ui/dialog";
+import { Close as DialogPrimitiveClose } from "@radix-ui/react-dialog";
 
 const COLUMNS = [
   { key: "blocked", label: "Pending Approval" },
@@ -103,7 +104,14 @@ export function NewTaskDialog({ onCreated, roleOptions, members, defaultType, tr
      form in an app whose whole voice is Urbanist. Now the field is the
      .nm-field recipe (soft-depth control, rounded-control, the outline token
      as its boundary) and labels are plain sans at label weight. */
-  const inp = "w-full nm-field px-3 py-2.5 text-sm bg-nm-raised";
+  /* KM-10 — the fields are SUNKEN now, which is the actual point of a
+     neumorphic form. KM-3 moved them off the retired mono/hairline styling
+     onto .nm-field, but .nm-field is a RAISED surface with a hairline
+     boundary — a white box on a grey sheet — so the form still read flat.
+     .kr-pressed is the concave twin: dark inset from the top-left, light
+     inset from the bottom-right, no border at all. A field you type into
+     should look like a groove, not a card. */
+  const inp = "w-full kr-pressed rounded-control border-0 px-3.5 py-2.5 text-sm text-foreground placeholder:text-foreground/40";
   const lbl = "block text-xs font-medium text-muted-foreground";
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -115,8 +123,18 @@ export function NewTaskDialog({ onCreated, roleOptions, members, defaultType, tr
           {triggerChildren || (<><Plus size={16} weight="bold" /> New Task</>)}
         </button>
       </DialogTrigger>
-      <DialogContent className="rounded-cardlg border border-nm-edge/40 bg-nm max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      {/* KM-10 — .kr-bento: the app's glass-over-neumorphic tile, so the sheet
+          the fields sit in is the same material as every card behind it. The
+          default close X is hidden and replaced below, aligned with the title
+          rather than floating in the corner. */}
+      <DialogContent className="kr-bento max-h-[90vh] overflow-y-auto rounded-cardlg border-0 [&>button.absolute]:hidden">
+        <DialogHeader className="pr-11">
+          <DialogPrimitiveClose
+            data-testid="task-dialog-close"
+            aria-label="Close"
+            className="kr-pop absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full text-foreground/70">
+            <X size={15} weight="bold" aria-hidden="true" />
+          </DialogPrimitiveClose>
           <DialogTitle className="font-display text-xl">New Task</DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">Capture any company task — operational or department work.</DialogDescription>
         </DialogHeader>
@@ -217,7 +235,12 @@ export function NewTaskDialog({ onCreated, roleOptions, members, defaultType, tr
           <p className={lbl}>Created by: {user?.name}</p>
         </div>
         <DialogFooter>
-          <button data-testid="task-create-submit" onClick={create} disabled={busy} className="bg-brand-600 text-white px-5 py-2 text-sm font-medium border border-border transition-all disabled:opacity-50">{busy ? "Creating…" : "Create"}</button>
+          {/* KM-10 — ink, not brand-600 (the retired indigo), and a pill at
+              the app's control height. */}
+          <button data-testid="task-create-submit" onClick={create} disabled={busy}
+            className="kr-lift flex h-11 w-full items-center justify-center rounded-pill bg-kr-ink px-5 text-sm font-medium text-white disabled:opacity-50 sm:w-auto">
+            {busy ? "Creating…" : "Create task"}
+          </button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

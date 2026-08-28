@@ -23,6 +23,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Tray, Wallet, DotsThree, Briefcase } from "@phosphor-icons/react";
 import { hasPerm } from "@/lib/perms";
+import { DexWave } from "./DexWave";
 import { cn } from "@/lib/utils";
 
 /**
@@ -93,7 +94,7 @@ function DockItem({ to, label, icon: Icon, testid, active, onClick }) {
  * @param {boolean}  moreOpen
  * @param {number}   [moreBadge] count of items needing him behind More (caps at 9)
  */
-export function FloatingDock({ user, onMore, moreOpen = false, moreBadge = 0 }) {
+export function FloatingDock({ user, onMore, moreOpen = false, moreBadge = 0, dexActive = false, dexLevels = [] }) {
   const { t } = useTranslation();
   const location = useLocation();
   const slots = React.useMemo(() => dockSlots(user, t), [user, t]);
@@ -144,10 +145,23 @@ export function FloatingDock({ user, onMore, moreOpen = false, moreBadge = 0 }) 
           "max-[359px]:h-[3.25rem]"
         )}
       >
-        {slots.map((s) => (
-          <DockItem key={s.to} {...s} active={isActive(s.to)} />
-        ))}
-        <div className="relative">
+        {/* KM-11 — WHILE DEX IS LISTENING THE BAR IS THE VISUAL.
+            The founder's call: no separate black card sliding up. The bar
+            already sits where your thumb is and already has the right
+            material, so it hosts the voice UI directly — the four
+            destinations step aside for the ribbon wave and come back the
+            moment listening stops. py-2 is the "adequate spacing above and
+            below" so the ribbons never touch the pill's edge. */}
+        {dexActive ? (
+          <div className="min-w-0 flex-1 px-2 py-2" data-testid="dock-dex-wave">
+            <DexWave levels={dexLevels} live />
+          </div>
+        ) : (
+          slots.map((s) => (
+            <DockItem key={s.to} {...s} active={isActive(s.to)} />
+          ))
+        )}
+        <div className={cn("relative", dexActive && "hidden")}>
           <DockItem
             to="#more"
             label={t("bottomnav.more", "More")}

@@ -1406,6 +1406,30 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
             inset -2px -2px 6px hsl(0 0% 100% / .13);
     }
 
+    /* KM-11 · .kr-vignette — the page darkens at its EDGES while Dex is
+       listening. A radial gradient rather than a flat scrim: a scrim dims the
+       content you are trying to keep reading, whereas a vignette leaves the
+       middle untouched and only weights the borders, which is what pulls the
+       eye to the bar at the bottom without taking the page away.
+       pointer-events:none — it must never intercept a tap. Deliberately
+       shallow (28% at the very corners, nothing for the middle 55%) because
+       the founder asked for subtle, and because this sits over a live app
+       rather than a modal. */
+    .kr-vignette {
+        position: fixed;
+        inset: 0;
+        z-index: 9998;
+        pointer-events: none;
+        background: radial-gradient(120% 78% at 50% 52%,
+            rgb(0 0 0 / 0) 0%,
+            rgb(0 0 0 / 0) 55%,
+            rgb(0 0 0 / .12) 78%,
+            rgb(0 0 0 / .28) 100%);
+        opacity: 0;
+        transition: opacity 260ms ease;
+    }
+    .kr-vignette[data-on="1"] { opacity: 1; }
+
     /* KM-3 · .kr-snap — the horizontal section scroller on the Desk band.
        One section per screen, snapped, with the page gutter as the inline
        padding so a panel sits exactly where the page's content sits. */

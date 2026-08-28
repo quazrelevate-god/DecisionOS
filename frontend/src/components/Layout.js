@@ -39,6 +39,7 @@ import { FloatingDock } from "./mobile/FloatingDock";
 import { AllAppsPanel } from "./mobile/AllAppsPanel";
 import { DexFab } from "./mobile/DexFab";
 import { DexSheet } from "./mobile/DexSheet";
+import { useDexCapture } from "../hooks/useDexCapture";
 import { BottomSheet } from "./mobile/BottomSheet";
 import { InstallPrompt } from "./mobile/InstallPrompt";
 
@@ -212,6 +213,15 @@ export default function Layout({ children }) {
     return () => window.removeEventListener("dos:open-dex", open);
   }, []);
   const [dexRecording, setDexRecording] = useState({ on: false, secs: 0 });
+  /* KM-11 — the capture hook moves UP here from DexSheet, because the thing
+     that now renders the voice UI is the dock, not a sheet. Layout is the only
+     common parent of the FAB (which starts it), the bar (which draws it) and
+     the sheet (which still shows what Dex heard afterwards). */
+  const dex = useDexCapture({
+    watch: true,
+    onRecordingChange: (on, secs) => setDexRecording({ on, secs }),
+    onCaptured: () => qc.invalidateQueries({ queryKey: ["captures-pending"] }),
+  });
   const [langOpen, setLangOpen] = useState(false);
   // KR-5: the global search moved into a ⌘K dialog; same /brain?q= handoff.
   const [globalQuery, setGlobalQuery] = useState("");
@@ -532,12 +542,24 @@ export default function Layout({ children }) {
            (The capture signal now has no mobile home: it wants a badge on the
            Money slot, which DockItem does not support yet.) */
         moreBadge={bellCount}
+        dexActive={dex.recording}
+        dexLevels={dex.levels}
       />
+      {/* KM-11 — the vignette. Rendered always so it can transition rather
+          than pop in, and gated by a data attribute. Sits below the dock's
+          z-index so the bar stays fully lit while the edges fall away. */}
+      <div className="kr-vignette lg:hidden" data-on={dex.recording ? "1" : "0"}
+           data-testid="dex-vignette" aria-hidden="true" />
+
+      {/* KM-11 — tapping Dex starts LISTENING; it no longer opens a sheet.
+          The bar becomes the voice surface (see FloatingDock), and the sheet
+          below is left for the one thing the bar cannot do: show what Dex
+          understood once you stop talking. */}
       <DexFab
-        onOpen={() => setDexOpen(true)}
-        recording={dexRecording.on}
-        seconds={dexRecording.secs}
-        onStop={() => setDexOpen(true)}
+        onOpen={() => (dex.recording ? dex.stopRecording() : dex.startRecording())}
+        recording={dex.recording}
+        seconds={dex.recordSecs}
+        onStop={() => dex.stopRecording()}
       />
       <AllAppsPanel
         open={allAppsOpen}
@@ -551,9 +573,14 @@ export default function Layout({ children }) {
       />
       {/* MPWA-05: third session, dismissible, above the dock (§8). */}
       <InstallPrompt />
+      {/* KM-11 — opens ONLY once Dex has something to show. The founder asked
+          for the black card that slid up on tap to go, not for the confirmation
+          step to disappear: after you stop talking you still have to see what
+          was heard before it becomes work. So the sheet is driven by
+          `understanding` rather than by the FAB. */}
       <DexSheet
-        open={dexOpen}
-        onClose={() => setDexOpen(false)}
+        open={!!dex.understanding}
+        onClose={() => dex.clearUnderstanding?.()}
         onRecordingChange={(on, secs) => setDexRecording({ on, secs })}
         onCaptured={() => qc.invalidateQueries({ queryKey: ["captures-pending"] })}
       />

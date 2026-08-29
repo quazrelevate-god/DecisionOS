@@ -15,6 +15,10 @@ from core import db, logger, user_perms, claude_chat, _extract_json
 from core import model_for
 from prompts import render
 from services.ai.pii import redact_pii
+# Tolerant money parse (handles OCR'd 'Rs 5,000' / '2.5 lakh' / bad strings -> 0.0)
+# instead of a bare float() that crashes the whole score on one malformed amount.
+# This is the same accepted services->routers.ledger helper edge ingestion uses.
+from routers.ledger import parse_amount as _amt
 
 
 # S9 (U8-09.5): shared short-TTL cache for the company operating view. The view
@@ -111,8 +115,8 @@ async def _company_operating_view(tid: str, viewer: dict, now: str) -> dict:
         invs = await db.invoices.find({"tenant_id": tid}, {"_id": 0, "amount": 1, "type": 1, "status": 1, "due_date": 1}).to_list(2000)
         pays = await db.payments.find({"tenant_id": tid}, {"_id": 0, "amount": 1}).to_list(2000)
         inv_count = len(invs)
-        total_billed = sum(float(i.get("amount") or 0) for i in invs if i.get("type") == "sales_invoice")
-        total_paid = sum(float(p.get("amount") or 0) for p in pays)
+        total_billed = sum(_amt(i.get("amount")) for i in invs if i.get("type") == "sales_invoice")
+        total_paid = sum(_amt(p.get("amount")) for p in pays)
         overdue_inv = sum(1 for i in invs if i.get("type") == "sales_invoice" and i.get("status") != "paid" and i.get("due_date") and i["due_date"] < now)
     collected = (min(total_paid, total_billed) / total_billed) if total_billed else 0.7
     finance = _clamp100(collected * 100 - overdue_inv * 5) if can_finance else None

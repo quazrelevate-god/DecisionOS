@@ -94,29 +94,25 @@ def test_zero_tasks_one_invoice_also_crosses():
     assert payload["company"]["overall"] is not None
 
 
-# --- malformed amount crash (T10-07.14) -------------------------------------
-def test_malformed_invoice_amount_currently_raises():
-    """BUG (T10-07.14): line 114 does float(i.get('amount') or 0) with NO
-    try/except, so a non-numeric amount string on a sales_invoice crashes the
-    WHOLE operating-score view. This test pins the current crash; the fix is to
-    route the amount through the tolerant parse_amount (which returns 0.0).
-
-    When the code is hardened, flip this to assert it computes instead of raises."""
+# --- malformed amount no longer crashes (T10-07.14 -- FIXED) ----------------
+def test_malformed_invoice_amount_no_longer_crashes():
+    """FIXED (T10-07.14): the view now routes amounts through parse_amount, so a
+    non-numeric amount ('N/A') is treated as 0.0 instead of raising ValueError
+    and taking down the whole score. Regression guard for the fix."""
     db = _DB()
     import services.operating_score as _ops
     _ops.db = db
     db.invoices.docs = [{"amount": "N/A", "type": "sales_invoice", "status": "unpaid"}]
-    with pytest.raises(ValueError):
-        asyncio.run(_ops._company_operating_view("t1", OWNER, NOW))
+    payload = asyncio.run(_ops._company_operating_view("t1", OWNER, NOW))
+    assert payload["stats"]["outstanding"] == 0  # unparseable -> 0, no crash
 
 
-def test_numeric_string_amount_also_raises_today():
-    """Even a clean numeric STRING '5000' is fine for float(), so only truly
-    non-numeric strings crash -- OCR 'Rs 5,000' (comma/currency) WOULD crash
-    here, unlike everywhere else that uses parse_amount."""
+def test_ocr_formatted_amount_now_parses():
+    """FIXED: an OCR'd 'Rs 5,000' (currency + comma) used to crash the score;
+    it now parses to 5000 like everywhere else in the app."""
     db = _DB()
     import services.operating_score as _ops
     _ops.db = db
     db.invoices.docs = [{"amount": "Rs 5,000", "type": "sales_invoice", "status": "unpaid"}]
-    with pytest.raises(ValueError):
-        asyncio.run(_ops._company_operating_view("t1", OWNER, NOW))
+    payload = asyncio.run(_ops._company_operating_view("t1", OWNER, NOW))
+    assert payload["stats"]["outstanding"] == 5000

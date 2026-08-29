@@ -62,11 +62,12 @@ def test_execution_overdue_penalty():
 
 
 def test_execution_empty_due_date_is_NOT_overdue():
-    """BUG-WATCH (T10-07.2): an empty-string due_date is falsy, so
-    `t.get('due_date') and t['due_date'] < now` short-circuits -> NOT overdue.
-    finance_signals uses ''[:10] <= cutoff which IS overdue -> the SAME blank
-    date is treated two different ways across modules. This locks the
-    operating_score side."""
+    """T10-07.2 (verified consistent, not a bug): an empty/None due_date is
+    falsy, so `t.get('due_date') and t['due_date'] < now` short-circuits ->
+    NOT overdue. NOTE: the initial code-map flagged this as inconsistent with
+    finance_signals, but finance_signals._overdue_receivables ALSO guards blank
+    dates (`if due and due <= cutoff`) -- so both modules agree: no deadline ->
+    never overdue. This test locks that (correct) behavior in."""
     tasks = [{"status": "todo", "due_date": ""}, {"status": "todo", "due_date": None}]
     score, done, open_tasks, overdue, actionable = _score_execution(tasks, NOW)
     assert overdue == 0, "blank/None due_date must not count as overdue here"

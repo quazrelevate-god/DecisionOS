@@ -496,7 +496,7 @@ def _dup_reason(inv: dict, cand: dict, window_days: int = INVOICE_DUP_WINDOW_DAY
         iamt, camt = float(inv.get("amount") or 0), float(cand.get("amount") or 0)
     except (TypeError, ValueError):
         iamt = camt = 0.0
-    if iamt and iamt == camt and iname and iname == cname:
+    if iamt and abs(iamt - camt) < 0.01 and iname and iname == cname:
         gap = _days_between((inv.get("date") or "")[:10], (cand.get("date") or "")[:10])
         if gap is None or gap <= window_days:
             return "amount_window"
@@ -549,10 +549,10 @@ def _payment_dup_reason(pay: dict, cand: dict, window_days: int = INVOICE_DUP_WI
     except (TypeError, ValueError):
         pamt = camt = 0.0
     pinv, cinv = _norm_inv_num(pay.get("invoice_number")), _norm_inv_num(cand.get("invoice_number"))
-    if pinv and pinv == cinv and pamt and pamt == camt:
+    if pinv and pinv == cinv and pamt and abs(pamt - camt) < 0.01:
         return "invoice_amount"
     pname, cname = _norm_contact(pay.get("contact_name")), _norm_contact(cand.get("contact_name"))
-    if pamt and pamt == camt and pname and pname == cname:
+    if pamt and abs(pamt - camt) < 0.01 and pname and pname == cname:
         gap = _days_between((pay.get("date") or "")[:10], (cand.get("date") or "")[:10])
         if gap is None or gap <= window_days:
             return "amount_window"

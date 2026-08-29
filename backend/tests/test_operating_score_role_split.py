@@ -16,11 +16,20 @@ from pathlib import Path
 import re
 
 
-SERVER_PY = Path(__file__).resolve().parent.parent / "server.py"
+# Epic 8 refactor moved these out of server.py: the /operating-score ROUTE now
+# lives in routers/operating_score.py and the view builders in
+# services/operating_score.py. This grep-level shape guard reads both current
+# homes and normalizes the router decorator back to @api. so the existing
+# contract regexes keep matching without rewriting each one.
+_BACKEND = Path(__file__).resolve().parent.parent
+ROUTER_PY = _BACKEND / "routers" / "operating_score.py"
+SERVICE_PY = _BACKEND / "services" / "operating_score.py"
 
 
 def _read_server():
-    return SERVER_PY.read_text(encoding="utf-8")
+    src = (ROUTER_PY.read_text(encoding="utf-8") + "\n\n"
+           + SERVICE_PY.read_text(encoding="utf-8"))
+    return src.replace("@router.", "@api.")
 
 
 def test_operating_score_is_open_to_any_authenticated_user():

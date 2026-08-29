@@ -134,13 +134,21 @@ def test_dup_unparseable_date_is_treated_as_dup():
     assert _dup_reason(a, b) == "amount_window"
 
 
-def test_dup_exact_float_equality_can_miss(a=None):
-    """BUG-WATCH (T10-07.7): dup uses `iamt == camt` exact equality. Amounts
-    that don't round-trip to the same float (0.1+0.2 != 0.3) escape the
-    amount-window rule even though they're 'the same' money."""
+def test_dup_float_tolerance_now_catches_rounding(a=None):
+    """FIXED (T10-07.7): dup now compares amounts with a 1-paisa tolerance
+    (abs(a-b) < 0.01) instead of exact ==, so float-rounding artifacts like
+    0.1+0.2 vs 0.3 are correctly caught as the same money."""
     incoming = _inv(None, "Kapoor Retail", 0.1 + 0.2, "2026-08-01")
     onfile = _inv(None, "Kapoor Retail", 0.3, "2026-08-01")
-    assert _dup_reason(incoming, onfile) is None, "exact-float mismatch slips past dup detection"
+    assert _dup_reason(incoming, onfile) == "amount_window"
+
+
+def test_dup_tolerance_does_not_over_match(a=None):
+    """The tolerance is tight (1 paisa): genuinely different amounts (5000 vs
+    5001) are NOT collapsed into a duplicate."""
+    incoming = _inv(None, "Kapoor Retail", 5001, "2026-08-01")
+    onfile = _inv(None, "Kapoor Retail", 5000, "2026-08-01")
+    assert _dup_reason(incoming, onfile) is None
 
 
 def test_days_between_none_on_bad_date():

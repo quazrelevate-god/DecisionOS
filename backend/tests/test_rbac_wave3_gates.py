@@ -36,10 +36,33 @@ from routers.workflows import create_workflow as _shim_create_workflow  # noqa: 
 from routers.complaints import followup_run as _shim_followup_run  # noqa: E402
 from routers.complaints import add_memory as _shim_add_memory  # noqa: E402
 from routers.voice_notes import create_voice_note as _shim_create_voice_note  # noqa: E402
+from routers.voice_notes import create_text_note as _shim_create_text_note  # noqa: E402
+from routers.workflows import delete_workflow as _shim_delete_workflow  # noqa: E402
+from routers.meetings import create_meeting as _shim_create_meeting  # noqa: E402
+from routers.captures import (  # noqa: E402
+    approve_capture as _shim_approve_capture, reject_capture as _shim_reject_capture,
+    reassign_capture as _shim_reassign_capture, clarify_capture as _shim_clarify_capture,
+)
+from routers.meetings import create_meeting_text as _shim_create_meeting_text  # noqa: E402
+from routers.team import (  # noqa: E402
+    approve_leave as _shim_approve_leave, reject_leave as _shim_reject_leave,
+    request_leave_info as _shim_request_leave_info,
+)
+for _n, _f in {
+    'reject_capture': _shim_reject_capture, 'reassign_capture': _shim_reassign_capture,
+    'clarify_capture': _shim_clarify_capture, 'create_meeting_text': _shim_create_meeting_text,
+    'approve_leave': _shim_approve_leave, 'reject_leave': _shim_reject_leave,
+    'request_leave_info': _shim_request_leave_info,
+}.items():
+    setattr(_server_mod, _n, _f)
 setattr(_server_mod, 'create_workflow', _shim_create_workflow)
 setattr(_server_mod, 'followup_run', _shim_followup_run)
 setattr(_server_mod, 'add_memory', _shim_add_memory)
 setattr(_server_mod, 'create_voice_note', _shim_create_voice_note)
+setattr(_server_mod, 'create_text_note', _shim_create_text_note)
+setattr(_server_mod, 'delete_workflow', _shim_delete_workflow)
+setattr(_server_mod, 'create_meeting', _shim_create_meeting)
+setattr(_server_mod, 'approve_capture', _shim_approve_capture)
 
 
 def _dep_name_of(endpoint) -> str:
@@ -340,11 +363,11 @@ class TestNoRegressionOnExistingGates:
 
     def test_workflows_delete_still_owner_only(self):
         """Symmetric partner of the new RBAC-04 gate on create."""
-        import server
-        # server.delete_workflow may live at a different name; verify
-        # via source that DELETE /workflows/{id} requires owner.
-        import inspect as _inspect
-        src = _inspect.getsource(server)
+        # DELETE /workflows/{id} moved to routers/workflows.py in the Epic 8
+        # refactor; verify via that source that it still requires owner.
+        from pathlib import Path as _P
+        src = (_P(__file__).resolve().parent.parent / "routers" / "workflows.py"
+               ).read_text(encoding="utf-8").replace("@router.", "@api.")
         # Anchor: the delete_workflow handler is role(owner). Just
         # confirm the decorator + require_role("owner") both appear in
         # server.py source together.

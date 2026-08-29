@@ -33,6 +33,9 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+# record_context for a workflow advance lives in the ENGINE now, not the router.
+import services.workflow_engine as _wfe  # noqa: E402
+
 # --- stale-test compat shim (Epic 8 refactor moved these off server.py) ---
 # The functions below moved out of server.py; re-bind them onto the
 # server module so the source-inspection asserts resolve unchanged.
@@ -238,7 +241,7 @@ class TestTaskCallSitesPassDecisionId:
 class TestNewWriteSites:
     def test_advance_workflow_writes_brain_context(self):
         import server
-        src = inspect.getsource(server.advance_workflow)
+        src = inspect.getsource(_wfe.advance)
         assert "brain_context.record_context(" in src
         assert 'kind="workflow"' in src
         # Terminal-stage detection so retrieval can rank completed above in-flight.
@@ -249,7 +252,7 @@ class TestNewWriteSites:
     def test_advance_workflow_write_is_fail_open(self):
         """A Brain-write blip must not 500 the workflow advance."""
         import server
-        src = inspect.getsource(server.advance_workflow)
+        src = inspect.getsource(_wfe.advance)
         # The new write must sit inside a try/except.
         i = src.find("brain_context.record_context(")
         assert i >= 0

@@ -526,3 +526,71 @@ def test_leave_request_validation_approve_and_attendance(with_test_db):
     assert r["approved_status"] == "approved"
     assert r["att_count"] == 1, "attendance upserts one row per (user, date)"
     assert r["att_status"] == "present", "the latest mark wins"
+
+
+# ===========================================================================
+# Batch 6: WhatsApp webhook verify + HMAC gates (pure -- unit tier).
+# ===========================================================================
+
+def test_whatsapp_verify_and_webhook_gates(monkeypatch):
+    import asyncio
+    import routers.whatsapp as wa
+    from starlette.datastructures import QueryParams, Headers
+    from fastapi import BackgroundTasks
+
+    class _Req:
+        def __init__(self, query=None, headers=None, body=b""):
+            self.query_params = QueryParams(query or {})
+            self.headers = Headers(headers or {})
+            self._b = body
+
+        async def body(self):
+            return self._b
+
+    async def _noop(*a, **k):
+        return None
+    monkeypatch.setattr(wa, "log_wa_event", _noop)   # 403 path audits before rejecting -> skip the db write
+
+    r = {}
+    # --- verify handshake: challenge echoed only on mode+token match ---
+    monkeypatch.setenv("WA_VERIFY_TOKEN", "vtok")
+    resp = asyncio.run(wa.whatsapp_verify(_Req(query={"hub.mode": "subscribe",
+                                                      "hub.verify_token": "vtok", "hub.challenge": "C42"})))
+    r["challenge"] = resp.body.decode()
+    try:
+        asyncio.run(wa.whatsapp_verify(_Req(query={"hub.mode": "subscribe", "hub.verify_token": "WRONG"})))
+        r["verify_bad"] = None
+    except HTTPException as e:
+        r["verify_bad"] = e.status_code
+
+    # --- not configured: no WA_ACCESS_TOKEN -> JSON no-op, never processes ---
+    monkeypatch.delenv("WA_ACCESS_TOKEN", raising=False)
+    out = asyncio.run(wa.whatsapp_webhook(_Req(body=b"{}"), BackgroundTasks()))
+    r["not_configured"] = out.get("status")
+
+    # --- configured + signature mismatch -> 403 ---
+    monkeypatch.setenv("WA_ACCESS_TOKEN", "tok")
+    monkeypatch.setenv("WA_APP_SECRET", "secret")
+    monkeypatch.setenv("ENV", "dev")
+    try:
+        asyncio.run(wa.whatsapp_webhook(_Req(headers={"X-Hub-Signature-256": "sha256=deadbeef"}, body=b"{}"),
+                                        BackgroundTasks()))
+        r["mismatch"] = None
+    except HTTPException as e:
+        r["mismatch"] = e.status_code
+
+    # --- prod + no secret -> 503 (refuse forged-message surface) ---
+    monkeypatch.setenv("WA_ACCESS_TOKEN", "tok")
+    monkeypatch.delenv("WA_APP_SECRET", raising=False)
+    monkeypatch.setenv("ENV", "prod")
+    try:
+        asyncio.run(wa.whatsapp_webhook(_Req(body=b"{}"), BackgroundTasks()))
+        r["prod_no_secret"] = None
+    except HTTPException as e:
+        r["prod_no_secret"] = e.status_code
+
+    assert r["challenge"] == "C42", "verify echoes the challenge on a valid handshake"
+    assert r["verify_bad"] == 403, "a bad verify token is rejected"
+    assert r["not_configured"] == "not_configured", "unconfigured webhook is a JSON no-op"
+    assert r["mismatch"] == 403, "a forged signature is rejected"
+    assert r["prod_no_secret"] == 503, "prod without WA_APP_SECRET refuses the webhook"

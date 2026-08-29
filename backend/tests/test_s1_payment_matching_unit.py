@@ -26,10 +26,20 @@ class _Cursor:
     async def to_list(self, n): return list(self._rows[:n])
 
 
+class _UpdateResult:
+    def __init__(self, n): self.modified_count = n; self.matched_count = n
+
+
 class _Coll:
     def __init__(self): self.docs = []
     def find(self, filt=None, proj=None): return _Cursor(self.docs)
-    async def update_one(self, *a, **k): return None
+    async def find_one(self, filt=None, proj=None):
+        # only exercised by the CAS retry path; the happy path never re-reads
+        return self.docs[0] if self.docs else None
+    async def update_one(self, *a, **k):
+        # the CAS write "succeeds" in-memory (these tests assert the mutated dict,
+        # not persistence); the real DB modified_count is exercised in the S10 test
+        return _UpdateResult(1)
 
 
 class _DB:

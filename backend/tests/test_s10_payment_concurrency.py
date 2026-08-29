@@ -46,18 +46,21 @@ def _payment(pid, amount):
             "applications": [], "match_status": "unmatched", "created_at": now_iso()}
 
 
-def test_concurrent_payments_double_allocate_same_invoice(with_test_db, monkeypatch):
-    """Two 1000 payments hit one 1000 invoice from a stale snapshot -> BOTH
-    fully allocate the same balance. Correct behavior: the second should get 0
-    and stay unmatched (an overpayment). Current behavior: double-allocation."""
+def test_concurrent_payments_no_double_allocation_after_cas_fix(with_test_db, monkeypatch):
+    """FIXED (T10-10.2): two 1000 payments hit one 1000 invoice from a stale
+    snapshot. With the compare-and-set on amount_paid, the first fully pays the
+    invoice; the second's CAS write misses, it re-reads the now-1000 balance,
+    finds 0 remaining, and allocates 0 -> it stays unmatched (an overpayment).
+    No double-allocation: total applied == the invoice amount, and the payment
+    records reconcile with the invoice."""
     async def scenario(db):
         monkeypatch.setattr(ledger, "db", db)
         await db.invoices.insert_one(_seed_invoice(1000))
         await db.payments.insert_many([_payment("pay-1", 1000), _payment("pay-2", 1000)])
 
-        # --- the race: both reconcilers read the invoice BEFORE either writes ---
+        # both reconcilers read the invoice from the SAME stale snapshot (paid=0)
         inv_snapshot_1 = await db.invoices.find_one({"id": "inv-1"}, {"_id": 0})
-        inv_snapshot_2 = await db.invoices.find_one({"id": "inv-1"}, {"_id": 0})  # both see amount_paid == 0
+        inv_snapshot_2 = await db.invoices.find_one({"id": "inv-1"}, {"_id": 0})
         pay1 = await db.payments.find_one({"id": "pay-1"}, {"_id": 0})
         pay2 = await db.payments.find_one({"id": "pay-2"}, {"_id": 0})
 
@@ -71,17 +74,18 @@ def test_concurrent_payments_double_allocate_same_invoice(with_test_db, monkeypa
 
     a1, a2, inv, p1, p2 = with_test_db(scenario)
 
-    # BUG: both payments allocated the FULL 1000 against the same invoice.
-    assert a1 == 1000 and a2 == 1000, (a1, a2)
-    # Double-allocation: total allocated exceeds what the invoice ever owed.
-    assert a1 + a2 > inv["amount"], "expected the missing-CAS double-allocation"
-    # Both payments believe they matched the invoice in full.
-    assert p1["match_status"] == "matched" and p2["match_status"] == "matched"
-    assert p1["applied"] == 1000 and p2["applied"] == 1000
-    # ...yet the invoice only records a single 1000 payment (the lost update).
-    assert inv["amount_paid"] == 1000
-    # So money is inconsistent: 2000 applied across payments, invoice shows 1000.
-    assert (p1["applied"] + p2["applied"]) != inv["amount_paid"]
+    # exactly one payment claimed the balance; the other got nothing (overpayment)
+    assert {a1, a2} == {1000, 0}, (a1, a2)
+    # no over-allocation: total applied never exceeds what the invoice owed
+    assert a1 + a2 == inv["amount"] == 1000
+    assert inv["amount_paid"] == 1000 and inv["status"] == "paid"
+    # exactly one payment is matched; the other stays unmatched for review
+    matched = [p for p in (p1, p2) if p["match_status"] == "matched"]
+    unmatched = [p for p in (p1, p2) if p["match_status"] != "matched"]
+    assert len(matched) == 1 and len(unmatched) == 1
+    assert matched[0]["applied"] == 1000 and unmatched[0]["applied"] == 0
+    # money reconciles: sum applied across payments == invoice amount_paid
+    assert p1["applied"] + p2["applied"] == inv["amount_paid"]
 
 
 def test_sequential_reconcile_is_correct(with_test_db, monkeypatch):

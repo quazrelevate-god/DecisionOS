@@ -506,22 +506,57 @@ def _pay_remaining(p: dict) -> float:
     return round(_num(p.get("amount")) - _num(p.get("applied")), 2)
 
 
+_APPLY_MAX_RETRIES = 5
+
+
 async def _apply_payment_to_invoice(tenant_id: str, invoice: dict, payment: dict, matched_by: str, max_amount=None) -> float:
     """Allocate the payment's UNAPPLIED balance to this invoice, never overpaying it.
     Any leftover stays on the payment (surfaces in Needs-matching). Returns the amount applied.
-    Mutates the passed invoice/payment dicts so callers can chain allocations in-memory."""
+    Mutates the passed invoice/payment dicts so callers can chain allocations in-memory.
+
+    FIX (Epic 10 Testing T10-10.2): the invoice balance write is a COMPARE-AND-SET
+    on the prior amount_paid, with a bounded re-read-and-retry when a concurrent
+    payment moved the balance between our read and our write. Without this, two
+    payments reconciling the same invoice from a stale snapshot both allocated the
+    full outstanding balance (double-allocation / lost update). This mirrors the
+    workflow engine's stage_version optimistic-concurrency pattern; the invoice's
+    own amount_paid is the version. Contention on a single invoice is rare, so a
+    small retry bound is plenty; exhausting it applies nothing this pass (the
+    payment stays in Needs-matching) rather than risk an over-allocation."""
     total = _num(invoice.get("amount"))
-    inv_remaining = round(total - _num(invoice.get("amount_paid")), 2)
-    amt = round(min(inv_remaining, _pay_remaining(payment)), 2)
-    if max_amount is not None:
-        amt = round(min(amt, _num(max_amount)), 2)
-    if amt <= 0.01:
+    prior_paid = _num(invoice.get("amount_paid"))
+    amt = 0.0
+    for _attempt in range(_APPLY_MAX_RETRIES):
+        inv_remaining = round(total - prior_paid, 2)
+        amt = round(min(inv_remaining, _pay_remaining(payment)), 2)
+        if max_amount is not None:
+            amt = round(min(amt, _num(max_amount)), 2)
+        if amt <= 0.01:
+            invoice["amount_paid"] = prior_paid  # keep the passed dict truthful
+            return 0.0
+        new_paid = round(prior_paid + amt, 2)
+        inv_status = "paid" if total > 0 and new_paid + 0.01 >= total else "partial"
+        # CAS: only write if amount_paid is STILL what we computed against.
+        cas = {"id": invoice["id"], "tenant_id": tenant_id}
+        if prior_paid == 0:
+            # a freshly-created invoice may store 0, null, or omit the field entirely
+            cas["$or"] = [{"amount_paid": 0}, {"amount_paid": None}, {"amount_paid": {"$exists": False}}]
+        else:
+            cas["amount_paid"] = prior_paid
+        res = await db.invoices.update_one(cas, {"$set": {"amount_paid": new_paid, "status": inv_status}})
+        if res.modified_count == 1:
+            invoice["amount_paid"] = new_paid
+            break
+        # lost the race -> re-read the live balance and retry against it
+        fresh = await db.invoices.find_one(
+            {"id": invoice["id"], "tenant_id": tenant_id}, {"_id": 0, "amount_paid": 1})
+        if not fresh:
+            return 0.0  # invoice vanished (deleted mid-reconcile) -> nothing to apply
+        prior_paid = _num(fresh.get("amount_paid"))
+    else:
+        # extreme contention: give up this pass, leave the payment unmatched
+        invoice["amount_paid"] = prior_paid
         return 0.0
-    new_paid = round(_num(invoice.get("amount_paid")) + amt, 2)
-    inv_status = "paid" if total > 0 and new_paid + 0.01 >= total else "partial"
-    await db.invoices.update_one({"id": invoice["id"], "tenant_id": tenant_id},
-                                 {"$set": {"amount_paid": new_paid, "status": inv_status}})
-    invoice["amount_paid"] = new_paid
     new_applied = round(_num(payment.get("applied")) + amt, 2)
     apps = list(payment.get("applications") or [])
     apps.append({"invoice_id": invoice["id"], "amount": amt, "at": now_iso()})

@@ -47,9 +47,10 @@ KNOWN_TENANT_SCOPED_COLLECTIONS = {
     # Activity + memory
     "activity", "memory", "complaints", "calendar_events",
     # Company Brain — BOTH names (dangerous naming collision)
-    "brain_context",   # singular — decision provenance store
-    "brain_contexts",  # plural — /ask query cache
-    "brain_documents", # documents catalog
+    "brain_context",     # singular — decision provenance store
+    "brain_contexts",    # plural — legacy /ask query cache name (kept for back-compat wipe)
+    "brain_query_cache", # current /ask query-plan cache (FIX-007-A / S4-03 rename of brain_contexts)
+    "brain_documents",   # documents catalog
     # Audit / ops
     "brain_audit", "usage_events", "wa_events", "files",
 }

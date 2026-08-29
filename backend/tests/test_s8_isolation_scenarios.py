@@ -181,3 +181,42 @@ def test_email_global_unique_and_membership_compound_unique(with_test_db):
     assert email_dup, "the same email cannot back a second tenant's user (global unique)"
     assert mem_dup, "(user_id, tenant_id) membership is compound-unique"
     assert cross_ok == 2, "the same user CAN belong to two tenants via distinct memberships"
+
+
+# ---------------------------------------------------------------------------
+# T10-08.3 + T10-08.10 -- auth guards: legacy-token fallback is tenant-matched;
+# logout revokes the jti; suspended user / tenant are refused everywhere.
+# ---------------------------------------------------------------------------
+def test_get_current_user_isolation_guards_present():
+    import inspect
+    import core.deps as deps
+    src = inspect.getsource(deps.get_current_user)
+    # T10-08.3: the legacy no-membership fallback is only trusted when the
+    # user's own tenant_id matches the token's claimed tenant (no confusion).
+    assert 'tenant_id") == claimed_tenant' in src, "legacy fallback must be tenant-matched"
+    # T10-08.10: a revoked jti is refused, and suspended user/tenant are 403.
+    assert "is_revoked" in src, "logout must be able to blacklist the jti"
+    assert 'user.get("suspended")' in src and 'user.get("tenant_suspended")' in src, \
+        "suspended user or tenant must be gated"
+
+
+# ---------------------------------------------------------------------------
+# T10-08.7 -- OTP rows are keyed by (phone, tenant): two tenants sharing a phone
+# get INDEPENDENT codes, never one overwriting the other.
+# ---------------------------------------------------------------------------
+def test_otp_is_keyed_by_phone_and_tenant(with_test_db):
+    import services.otp as otp
+
+    async def scenario(db):
+        restore = _use_db(db, otp)
+        try:
+            phone_norm, disp = "9820011122", "+91 98200 11122"
+            await otp._issue_otp(phone_norm, disp, tenant_id="A", enforce_cooldown=False)
+            await otp._issue_otp(phone_norm, disp, tenant_id="B", enforce_cooldown=False)
+            rows = await db.otp_codes.find({"phone": phone_norm}, {"_id": 0, "tenant_id": 1}).to_list(10)
+            return sorted(r["tenant_id"] for r in rows)
+        finally:
+            restore()
+
+    tenants = with_test_db(scenario)
+    assert tenants == ["A", "B"], f"a shared phone must have one OTP row PER tenant; got {tenants}"

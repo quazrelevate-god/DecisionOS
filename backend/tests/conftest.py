@@ -57,6 +57,35 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "db: needs an isolated Mongo test database (with_test_db)")
 
 
+def pytest_collection_modifyitems(config, items):
+    """T10-11.2 P4: tier every test by CONVENTION so CI can run the offline
+    `unit` gate on every PR and the `integration` / `db` tiers only where a
+    server / Mongo is available -- without hand-tagging 140+ files.
+
+    - db:          the test consumes the `with_test_db` fixture (isolated Mongo).
+    - integration: the module resolved its URL through `integration_base.base_url`
+                   (an HTTP test that needs the live server; it already
+                   self-skips when REACT_APP_BACKEND_URL is unset).
+    - unit:        everything else -- must be offline (no server, no real DB).
+
+    A test that already carries an explicit unit/integration/db marker is left
+    as the author set it.
+    """
+    _OWN = {"unit", "integration", "db"}
+    for item in items:
+        if _OWN & {m.name for m in item.iter_markers()}:
+            continue
+        if "with_test_db" in getattr(item, "fixturenames", ()):
+            item.add_marker(pytest.mark.db)
+            continue
+        mod = getattr(item, "module", None)
+        bu = getattr(mod, "base_url", None)
+        if getattr(bu, "__module__", None) == "integration_base":
+            item.add_marker(pytest.mark.integration)
+        else:
+            item.add_marker(pytest.mark.unit)
+
+
 def _new_test_db_name():
     # unique per test + per worker process -> no cross-test or cross-worker bleed
     return f"{TEST_DB_PREFIX}{os.getpid()}_{uuid.uuid4().hex[:10]}"

@@ -171,9 +171,11 @@ def _tail(path: Path, n: int = 40) -> str:
 
 if __name__ == "__main__":
     import pytest
-    targets = sys.argv[1:] or ["tests/test_iteration60_admin.py"]
+    # No args -> run the whole `integration` tier against the booted server (the
+    # CI command). Pass explicit paths/flags to scope it (e.g. one file locally).
+    args = sys.argv[1:] or ["-m", "integration", "tests/"]
     with live_server() as url:
         os.environ["REACT_APP_BACKEND_URL"] = url
-        print(f"[live-harness] running: {targets}  (REACT_APP_BACKEND_URL={url})")
-        code = pytest.main(["-o", "addopts=", "-q", *targets])
+        print(f"[live-harness] running: {args}  (REACT_APP_BACKEND_URL={url})")
+        code = pytest.main(["-o", "addopts=", "-q", *args])
     sys.exit(code)

@@ -239,3 +239,51 @@ def test_quota_overshoot_without_reservation(with_test_db):
     # Both pass their check (each sees 0 used, 0+60 <= 100) -> if both proceed, the
     # tenant burns 120 tokens against a 100 cap. No reservation between check + spend.
     assert oks == [True, True], "both parallel calls pass the cap check -> collective overshoot possible"
+
+
+# ---------------------------------------------------------------------------
+# T10-10.4 -- stage-enter template-task spawn is find-then-insert with NO unique
+# index, so a concurrent re-entry (advance racing a retry) double-spawns.
+# ---------------------------------------------------------------------------
+def test_stage_enter_double_spawn_race(with_test_db):
+    async def scenario(db):
+        tid = "t1"
+        q = {"tenant_id": tid, "workflow_id": "wf", "stage_key": "cut", "is_template": True,
+             "status": {"$nin": ["done", "cancelled"]}}
+        # worst-case interleaving: both re-entries CHECK (find none) before either INSERTs.
+        e1, e2 = await asyncio.gather(db.tasks.find_one(q), db.tasks.find_one(q))
+        to_insert = [1 for e in (e1, e2) if not e]
+        await asyncio.gather(*[
+            db.tasks.insert_one({"id": f"tpl{i}", "tenant_id": tid, "workflow_id": "wf",
+                                 "stage_key": "cut", "is_template": True, "status": "todo",
+                                 "title": "Cut fabric"})
+            for i in range(len(to_insert))])
+        n = await db.tasks.count_documents({"tenant_id": tid, "workflow_id": "wf",
+                                            "stage_key": "cut", "is_template": True})
+        return n
+
+    spawned = with_test_db(scenario)
+    # No unique (workflow_id, stage_key) index -> the same template task is spawned twice.
+    assert spawned == 2, "concurrent stage re-entry double-spawns template tasks (no unique index)"
+    import warnings
+    warnings.warn("T10-10.4: on_stage_enter double-spawns under a race -- add a unique "
+                  "(workflow_id, stage_key, template) index or upsert. See Bug Log.")
+
+
+# ---------------------------------------------------------------------------
+# T10-10.7 -- the follow-up throttle is in-memory (per-process), so multi-worker
+# can double-run; the escalation_level guard makes that safe (idempotent).
+# ---------------------------------------------------------------------------
+def test_followup_throttle_in_memory_and_escalation_idempotent():
+    import inspect
+    import services.finance_signals as fs
+
+    # The 60s throttle is a plain in-process dict -> not shared across workers,
+    # so a multi-worker deploy CAN run the sweep more than once per window.
+    assert isinstance(fs._followup_last_run, dict), "throttle state is in-process memory, not shared"
+    src = inspect.getsource(fs.run_followup)
+    assert "_followup_last_run" in src and "60" in src, "per-tenant 60s in-memory throttle"
+    # What makes a double-run SAFE: the ladder skips already-escalated tasks
+    # (target <= escalation_level), so a second sweep re-escalates nothing.
+    assert "escalation_level" in src and "target <= t.get" in src, \
+        "escalation ladder is idempotent -> absorbs a double-run"

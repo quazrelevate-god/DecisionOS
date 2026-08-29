@@ -48,6 +48,15 @@ elif _ARB_ENV in ('0', 'false', 'no', 'off'):
 else:
     AUTH_RETURN_TOKEN = (_ENV != 'prod')
 
+# T10-11.2: whether auth / CSRF cookies carry the Secure flag. MUST stay True in
+# prod and on ANY https deploy (the hosted preview included) -- a non-Secure auth
+# cookie can leak over plaintext. Defaults True EVERYWHERE (not tied to ENV, so an
+# https dev box is unaffected); ONLY an explicit COOKIE_SECURE=0 relaxes it, which
+# the local integration-test harness sets so `requests` will send cookies over
+# http://127.0.0.1. Never default this to False.
+_CS_ENV = os.environ.get('COOKIE_SECURE', '').strip().lower()
+COOKIE_SECURE = False if _CS_ENV in ('0', 'false', 'no', 'off') else True
+
 # FIX-006-A (S0-01): platform-admin seed policy. By default we NEVER
 # overwrite an existing password hash on startup — that blocks credential
 # rotation via the DB and, worse, means anyone who can flip an env var

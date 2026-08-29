@@ -117,7 +117,10 @@ class TestAiKeys:
         assert r.status_code == 200
         keys = r.json()["keys"]
         providers = {k["provider"] for k in keys}
-        assert providers == {"anthropic", "openai", "gemini", "wa_access_token", "wa_phone_number_id"}
+        # voyage (E3-09 embeddings) + sarvam (STT) were added to the admin-updatable
+        # AI-key set after this test first froze its expectation at 5 providers.
+        assert providers == {"anthropic", "openai", "gemini", "voyage", "sarvam",
+                             "wa_access_token", "wa_phone_number_id"}
         for k in keys:
             assert "source" in k and "masked" in k
 

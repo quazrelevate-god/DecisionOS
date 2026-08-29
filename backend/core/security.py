@@ -17,6 +17,7 @@ from database import db
 from config import (
     CSRF_COOKIE_NAME, AUTH_COOKIE_NAME, AUTH_COOKIE_MAX_AGE, ADMIN_COOKIE_NAME,
     AUTH_RETURN_TOKEN, JWT_SECRET, JWT_ALGORITHM, PLATFORM_ADMIN_JWT_SECRET,
+    COOKIE_SECURE,
 )
 
 
@@ -47,20 +48,20 @@ def set_csrf_cookie(response: Response, token: str = None) -> str:
     tok = token or _mint_csrf_token()
     response.set_cookie(
         key=CSRF_COOKIE_NAME, value=tok, max_age=AUTH_COOKIE_MAX_AGE,
-        httponly=False, secure=True, samesite="none", path="/",
+        httponly=False, secure=COOKIE_SECURE, samesite="none", path="/",
     )
     return tok
 
 
 def clear_csrf_cookie(response: Response) -> None:
     response.delete_cookie(key=CSRF_COOKIE_NAME, path="/",
-                             samesite="none", secure=True, httponly=False)
+                             samesite="none", secure=COOKIE_SECURE, httponly=False)
 
 
 def set_auth_cookie(response: Response, token: str) -> None:
     response.set_cookie(
         key=AUTH_COOKIE_NAME, value=token, max_age=AUTH_COOKIE_MAX_AGE,
-        httponly=True, secure=True, samesite="none", path="/",
+        httponly=True, secure=COOKIE_SECURE, samesite="none", path="/",
     )
     # FIX-006-B (S0-02): mint CSRF token alongside the auth token so
     # every cookie-authed browser session has a matching double-submit
@@ -70,7 +71,7 @@ def set_auth_cookie(response: Response, token: str) -> None:
 
 
 def clear_auth_cookie(response: Response) -> None:
-    response.delete_cookie(key=AUTH_COOKIE_NAME, path="/", samesite="none", secure=True, httponly=True)
+    response.delete_cookie(key=AUTH_COOKIE_NAME, path="/", samesite="none", secure=COOKIE_SECURE, httponly=True)
     # FIX-006-B (S0-02): drop the CSRF cookie too so a stale one from a
     # previous session can't cross-contaminate the next login.
     clear_csrf_cookie(response)
@@ -108,7 +109,7 @@ def create_admin_token(admin_id: str) -> str:
 def set_admin_cookie(response: Response, token: str) -> None:
     response.set_cookie(
         key=ADMIN_COOKIE_NAME, value=token, max_age=AUTH_COOKIE_MAX_AGE,
-        httponly=True, secure=True, samesite="none", path="/",
+        httponly=True, secure=COOKIE_SECURE, samesite="none", path="/",
     )
     # FIX-006-B (S0-02): admin console needs CSRF too — mint the same
     # cookie so the admin frontend's mutating calls carry the header.
@@ -116,7 +117,7 @@ def set_admin_cookie(response: Response, token: str) -> None:
 
 
 def clear_admin_cookie(response: Response) -> None:
-    response.delete_cookie(key=ADMIN_COOKIE_NAME, path="/", samesite="none", secure=True, httponly=True)
+    response.delete_cookie(key=ADMIN_COOKIE_NAME, path="/", samesite="none", secure=COOKIE_SECURE, httponly=True)
     clear_csrf_cookie(response)
 
 

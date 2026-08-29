@@ -115,3 +115,41 @@ def test_auto_invoice_concurrent_double_completion(with_test_db):
         import warnings
         warnings.warn("T10-10.8: concurrent double-completion double-booked the auto-invoice "
                       "(source_task_id has no unique index) -- see Bug Log.")
+
+
+# ---------------------------------------------------------------------------
+# T10-10.3 -- seat-limit TOCTOU: parallel invites at the cap over-provision.
+# enforce_seat_limit COUNTS then the caller INSERTS, with no atomic reservation,
+# so N parallel invites all pass the count and blow past the cap. Expose it.
+# ---------------------------------------------------------------------------
+def test_seat_limit_toctou_over_provisions(with_test_db):
+    from services.plans import enforce_seat_limit
+    from fastapi import HTTPException
+
+    async def scenario(db):
+        tid = "t1"
+        await db.tenants.insert_one({"id": tid, "plan": "trial"})   # trial = 3 seats
+        # already 2 active members -> exactly one seat left
+        await db.memberships.insert_many([
+            {"tenant_id": tid, "user_id": "u1", "status": "active"},
+            {"tenant_id": tid, "user_id": "u2", "status": "active"},
+        ])
+
+        # Worst-case interleaving of a check-then-act race: all N requests run the
+        # cap CHECK first (each still sees 2 < 3), THEN all commit their insert.
+        # This is exactly what happens when 3 invites land near-simultaneously and
+        # there is no atomic seat reservation between the count and the insert.
+        checks = await asyncio.gather(*[enforce_seat_limit(db, tid) for _ in range(3)],
+                                      return_exceptions=True)
+        passed = sum(1 for c in checks if not isinstance(c, HTTPException))
+        await asyncio.gather(*[
+            db.memberships.insert_one({"tenant_id": tid, "user_id": f"n{i}", "status": "active"})
+            for i in range(passed)])
+        active = await db.memberships.count_documents({"tenant_id": tid, "status": "active"})
+        return passed, active
+
+    passed, active = with_test_db(scenario)
+    # BUG (confirmed): every invite passes the cap check, so all commit -> the
+    # workspace ends up with 5 active members against a hard cap of 3.
+    assert passed == 3, "the count-then-insert cap admits ALL racing invites (no reservation)"
+    assert active == 5, "seat-limit TOCTOU over-provisions past the cap (5 > 3) -- see BUG-12"

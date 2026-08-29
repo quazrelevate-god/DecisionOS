@@ -31,12 +31,18 @@ BACKEND = Path(__file__).resolve().parent.parent
 ALLOWED_WRITERS = {
     # The engine itself is THE writer.
     "services/workflow_engine.py",
-    # server.py has two initial-insert sites (POST /api/workflows and the
-    # voice-capture _create_workflows). Both set stage=stages[0] at doc
-    # creation time -- that is a birth, not a transition -- so they are
-    # allowed. They are the ONLY server.py mentions of workflows write +
-    # stage; any additional writer added here would fail the test.
-    "server.py",
+    # Two initial-insert sites (Epic 8 refactor moved these off server.py):
+    # POST /api/workflows -> routers/workflows.py::create_workflow, and the
+    # voice-capture path -> services/voice.py::_create_workflows. Both set
+    # stage=stages[0] at doc creation time -- that is a birth, not a
+    # transition -- so they are allowed. Any OTHER writer fails the test.
+    "routers/workflows.py",
+    "services/voice.py",
+    # bootstrap/lifecycle.py runs the WE-09 boot migration that backfills
+    # stage_version=0 on existing workflows (a one-time init, not a runtime
+    # stage transition) -- moved here from server.py's boot path in the
+    # Epic 8 refactor.
+    "bootstrap/lifecycle.py",
     # scripts/reclassify_purchases.py is a one-shot admin migration and
     # does not touch stage. It is here in case it ever grows a stage
     # write; today grepping it hits nothing.

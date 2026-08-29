@@ -23,11 +23,18 @@ from pathlib import Path
 import re
 
 
-SERVER_PY = Path(__file__).resolve().parent.parent / "server.py"
+# Epic 8 refactor moved both initial-insert sites off server.py: the voice
+# path _create_workflows -> services/voice.py and POST /workflows'
+# create_workflow -> routers/workflows.py. Read both current homes.
+_BACKEND = Path(__file__).resolve().parent.parent
+_VOICE_PY = _BACKEND / "services" / "voice.py"
+_WORKFLOWS_PY = _BACKEND / "routers" / "workflows.py"
 
 
 def _read_server():
-    return SERVER_PY.read_text(encoding="utf-8")
+    src = (_VOICE_PY.read_text(encoding="utf-8") + "\n\n"
+           + _WORKFLOWS_PY.read_text(encoding="utf-8"))
+    return src.replace("@router.", "@api.")  # normalize router decorator for the grep
 
 
 def test_voice_create_workflows_inits_stage_version():

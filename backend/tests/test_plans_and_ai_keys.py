@@ -364,7 +364,7 @@ class TestPlanEndpoint:
     def test_plan_endpoint_open_to_any_user(self):
         """Every logged-in member reads the plan (UI needs it for
         upgrade prompts + seat-count badges)."""
-        from server import get_tenant_plan
+        from routers.tenant_settings import get_tenant_plan
         src = inspect.getsource(get_tenant_plan)
         assert "get_current_user" in src
         # Includes seats_used so the UI doesn't need a second call.
@@ -373,24 +373,24 @@ class TestPlanEndpoint:
 
 class TestAiKeyEndpoints:
     def test_get_owner_only(self):
-        from server import get_tenant_ai_keys
+        from routers.tenant_settings import get_tenant_ai_keys
         src = inspect.getsource(get_tenant_ai_keys)
         assert 'require_role("owner")' in src
 
     def test_put_owner_only(self):
-        from server import put_tenant_ai_keys
+        from routers.tenant_settings import put_tenant_ai_keys
         src = inspect.getsource(put_tenant_ai_keys)
         assert 'require_role("owner")' in src
 
     def test_delete_owner_only(self):
-        from server import delete_tenant_ai_key
+        from routers.tenant_settings import delete_tenant_ai_key
         src = inspect.getsource(delete_tenant_ai_key)
         assert 'require_role("owner")' in src
 
     def test_put_audits_rotation(self):
         """Each provider whose key was added/rotated/removed emits an
         ai_key_updated audit row. Compliance-critical."""
-        from server import put_tenant_ai_keys
+        from routers.tenant_settings import put_tenant_ai_keys
         src = inspect.getsource(put_tenant_ai_keys)
         assert 'action="ai_key_updated"' in src
         assert "was_rotated" in src
@@ -398,7 +398,7 @@ class TestAiKeyEndpoints:
     def test_put_never_logs_key_value(self):
         """Regression guard: the audit meta must NOT include the key
         itself — only provider + presence."""
-        from server import put_tenant_ai_keys
+        from routers.tenant_settings import put_tenant_ai_keys
         src = inspect.getsource(put_tenant_ai_keys)
         # Metadata contains provider + presence booleans, not the key.
         assert '"provider": p' in src
@@ -407,7 +407,7 @@ class TestAiKeyEndpoints:
         assert '"key":' not in src or 'meta={"provider"' in src
 
     def test_delete_reverts_to_platform(self):
-        from server import delete_tenant_ai_key
+        from routers.tenant_settings import delete_tenant_ai_key
         src = inspect.getsource(delete_tenant_ai_key)
         assert "keys.pop(provider" in src
 

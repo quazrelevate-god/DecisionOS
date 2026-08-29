@@ -82,7 +82,7 @@ class TestPerRolePermissions:
         assert "nonexistent_perm" not in p
 
     def test_endpoint_exists_and_is_gated(self):
-        from server import update_role_permissions
+        from routers.tenant_settings import update_role_permissions
         sig = inspect.signature(update_role_permissions)
         # Requires team_manage — visible in source.
         src = inspect.getsource(update_role_permissions)
@@ -90,20 +90,20 @@ class TestPerRolePermissions:
 
     def test_endpoint_refuses_owner_role(self):
         """Owner perms are managed via owner_exclusions, not per-role."""
-        from server import update_role_permissions
+        from routers.tenant_settings import update_role_permissions
         src = inspect.getsource(update_role_permissions)
         assert 'key == "owner"' in src
         assert 'status_code=400' in src
 
     def test_endpoint_refuses_unknown_role(self):
-        from server import update_role_permissions
+        from routers.tenant_settings import update_role_permissions
         src = inspect.getsource(update_role_permissions)
         assert '"Role not found"' in src
         assert 'status_code=404' in src
 
     def test_endpoint_filters_unknown_perms(self):
         """clean_perms drops keys not in PERMISSION_KEYS."""
-        from server import update_role_permissions
+        from routers.tenant_settings import update_role_permissions
         src = inspect.getsource(update_role_permissions)
         assert "clean_perms(inp.permissions)" in src
 
@@ -137,7 +137,7 @@ class TestOwnerExclusions:
             assert k in p
 
     def test_owner_exclusions_endpoint_is_owner_only(self):
-        from server import update_owner_exclusions
+        from routers.tenant_settings import update_owner_exclusions
         src = inspect.getsource(update_owner_exclusions)
         # Owner-only: only an owner can restrict what owners can see.
         assert 'require_role("owner")' in src
@@ -154,7 +154,7 @@ class TestOwnerExclusions:
         )
 
     def test_owner_exclusions_endpoint_filters_unknown_perms(self):
-        from server import update_owner_exclusions
+        from routers.tenant_settings import update_owner_exclusions
         src = inspect.getsource(update_owner_exclusions)
         assert "clean_perms(inp.exclusions)" in src
 

@@ -289,12 +289,12 @@ class TestBootstrapIndexes:
 
 class TestReadEndpoint:
     def test_read_audit_log_is_owner_only(self):
-        from server import read_audit_log
+        from routers.tenant_settings import read_audit_log
         src = inspect.getsource(read_audit_log)
         assert 'require_role("owner")' in src
 
     def test_read_endpoint_supports_all_filters(self):
-        from server import read_audit_log
+        from routers.tenant_settings import read_audit_log
         sig = inspect.signature(read_audit_log)
         for expected in ("action", "actor_id", "entity_type",
                           "entity_id", "since_ts", "before_ts", "limit"):
@@ -350,7 +350,7 @@ class TestRegisterAudits:
 
 class TestOwnerExclusionsAudits:
     def test_owner_exclusions_edit_is_audited(self):
-        from server import update_owner_exclusions
+        from routers.tenant_settings import update_owner_exclusions
         src = inspect.getsource(update_owner_exclusions)
         assert 'action="owner_exclusions_updated"' in src
         # before/after captured for the compliance diff view.

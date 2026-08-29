@@ -384,17 +384,24 @@ class TestResolveWaTenantMultiTenant:
         to the same tenant.
     """
     def _install(self, monkeypatch, fake_db, owners_by_tid=None, wa_env=None):
-        import server
-        monkeypatch.setattr(server, "db", fake_db)
+        # Epic 8 moved resolve_wa_tenant to services/whatsapp.py, where it
+        # resolves db / push_notification / _owner_ids as *that module's*
+        # globals (db<-core, push/_owner_ids<-services.notifications). Patching
+        # the server.* re-exports is dead here -- the function never reads them,
+        # so the old test silently hit the REAL hosted DB (and could have fired
+        # real update_many/push_notification side effects). Patch the live
+        # module the function actually reads.
+        from services import whatsapp as wa
+        monkeypatch.setattr(wa, "db", fake_db)
         pushes = []
 
         async def _push(*args, **kwargs):
             pushes.append((args, kwargs))
-        monkeypatch.setattr(server, "push_notification", _push)
+        monkeypatch.setattr(wa, "push_notification", _push)
 
         async def _owners(tid):
             return (owners_by_tid or {}).get(tid, [f"owner_of_{tid}"])
-        monkeypatch.setattr(server, "_owner_ids", _owners)
+        monkeypatch.setattr(wa, "_owner_ids", _owners)
 
         # Explicit WA_TENANT_ID env clear so tests are deterministic.
         import os as _os
@@ -520,8 +527,10 @@ class TestWhatsappLogsTenantIsolation:
         {tenant_id: None}]} leaked unrouted events into every tenant's
         log view. Must be a strict {tenant_id: tid} now."""
         import inspect
-        import server
-        src = inspect.getsource(server.whatsapp_logs)
+        # Epic 8 moved the GET /whatsapp/logs handler to routers/whatsapp.py;
+        # server.py no longer defines whatsapp_logs.
+        from routers import whatsapp as wa_router
+        src = inspect.getsource(wa_router.whatsapp_logs)
         assert '"$or"' not in src, (
             "whatsapp_logs regressed to OR-inclusion — cross-tenant leak"
         )

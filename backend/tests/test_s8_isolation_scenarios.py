@@ -121,3 +121,63 @@ def test_file_serve_by_name_tenant_scope_and_traversal(with_test_db):
     assert r["../../etc/passwd"] == 404, "path traversal must be rejected"
     assert r[".hidden"] == 404 and r["a/b.txt"] == 404
     assert r["cross"] == 404, "a file owned by another tenant is not resolvable"
+
+
+# ---------------------------------------------------------------------------
+# T10-08.6 -- brain-doc visibility: a user cannot see a doc they aren't cleared for.
+# ---------------------------------------------------------------------------
+def test_brain_chunk_visibility_matrix():
+    from services.ai.brain_retrieval import _chunk_visible
+    owner = _u("owner", "o1", "t1")
+    sales = _u("sales", "s1", "t1")
+    tm = _u("sales", "m1", "t1", permissions=["team_manage"])
+
+    # owner + team_manage see everything, incl. private
+    assert _chunk_visible({"visibility": "private", "roles_allowed": []}, owner)
+    assert _chunk_visible({"visibility": "private", "roles_allowed": []}, tm)
+    # the uploader always sees their own doc
+    assert _chunk_visible({"visibility": "private", "roles_allowed": [], "uploaded_by": "s1"}, sales)
+    # public -> anyone
+    assert _chunk_visible({"visibility": "public"}, sales)
+    # dept -> only the matching department (or an allow-listed role)
+    assert _chunk_visible({"visibility": "dept", "department": "sales"}, sales)
+    assert not _chunk_visible({"visibility": "dept", "department": "finance", "roles_allowed": []}, sales)
+    assert _chunk_visible({"visibility": "dept", "department": "finance", "roles_allowed": ["sales"]}, sales)
+    # private -> only allow-listed roles
+    assert not _chunk_visible({"visibility": "private", "roles_allowed": ["finance"]}, sales)
+    assert _chunk_visible({"visibility": "private", "roles_allowed": ["sales"]}, sales)
+
+
+# ---------------------------------------------------------------------------
+# T10-08.9 -- global email uniqueness + compound-unique memberships.
+# ---------------------------------------------------------------------------
+def test_email_global_unique_and_membership_compound_unique(with_test_db):
+    from pymongo.errors import DuplicateKeyError
+
+    async def scenario(db):
+        # users.email is unique ACROSS tenants (legacy users index).
+        await db.users.create_index("email", unique=True)
+        await db.users.insert_one({"id": "u1", "tenant_id": "A", "email": "raj@x.com"})
+        email_dup = False
+        try:
+            await db.users.insert_one({"id": "u2", "tenant_id": "B", "email": "raj@x.com"})
+        except DuplicateKeyError:
+            email_dup = True
+
+        # memberships are (user_id, tenant_id) compound-unique.
+        await db.memberships.create_index([("user_id", 1), ("tenant_id", 1)], unique=True)
+        await db.memberships.insert_one({"user_id": "u1", "tenant_id": "A"})
+        mem_dup = False
+        try:
+            await db.memberships.insert_one({"user_id": "u1", "tenant_id": "A"})
+        except DuplicateKeyError:
+            mem_dup = True
+        # ...but the same user in a DIFFERENT tenant is allowed.
+        await db.memberships.insert_one({"user_id": "u1", "tenant_id": "B"})
+        cross_ok = await db.memberships.count_documents({"user_id": "u1"})
+        return email_dup, mem_dup, cross_ok
+
+    email_dup, mem_dup, cross_ok = with_test_db(scenario)
+    assert email_dup, "the same email cannot back a second tenant's user (global unique)"
+    assert mem_dup, "(user_id, tenant_id) membership is compound-unique"
+    assert cross_ok == 2, "the same user CAN belong to two tenants via distinct memberships"

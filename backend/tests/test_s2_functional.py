@@ -18,8 +18,8 @@ def _use_db(testdb, *mods):
     """Point each listed module's global `db` at the isolated test db; return
     restore(). List EVERY module the flow touches -- any left on the real client
     both hits founder-os-58 and can cross-loop-fail under the shared client."""
-    saved = [(m, m.db) for m in mods]
-    for m in mods:
+    saved = [(m, m.db) for m in mods if hasattr(m, "db")]   # skip modules with no db global
+    for m, _ in saved:
         m.db = testdb
     return lambda: [setattr(m, "db", d) for m, d in saved]
 
@@ -274,3 +274,89 @@ def test_workflow_create_and_advance_gating(with_test_db):
     assert not_ready == 409, "advancing with an open stage task must 409"
     assert no_reason == 400, "override requires a non-empty reason"
     assert forced_stage == "confirmed", "audited override advances despite the open task"
+
+
+# ===========================================================================
+# Batch 3: decision approve/reject lifecycle.
+# ===========================================================================
+
+# create_workflow stores stages as a list of string keys -- match that shape.
+_PP_STAGES = ["requested", "approved", "ordered", "received", "payment_pending", "paid"]
+
+
+def test_decision_approve_and_reject_lifecycle(with_test_db):
+    import core
+    import core.deps as core_deps
+    import routers.decisions as dec
+    import services.enrich as enrich
+    import services.tasks as tasks_svc
+    import services.workflows as wfs
+    import services.ai.generators as gen
+    import services.workflow_engine as eng
+    import services.ai.brain_context as bctx
+
+    async def scenario(db):
+        restore = _use_db(db, dec, core, core_deps, enrich, tasks_svc, wfs, gen, eng, bctx)
+        try:
+            tid = "t1"
+            owner = _u("owner", "o1")
+
+            # --- APPROVE: unblock tasks + advance the procurement workflow ---
+            await db.decisions.insert_one({"id": "dec1", "tenant_id": tid, "title": "Buy fabric",
+                                           "status": "pending_approval", "summary": "restock",
+                                           "task_ids": ["tk1"]})
+            await db.tasks.insert_one({"id": "tk1", "tenant_id": tid, "decision_id": "dec1",
+                                       "status": "blocked", "title": "Order 500m"})
+            await db.workflows.insert_one({"id": "wf1", "tenant_id": tid, "decision_id": "dec1",
+                                           "type": "purchase_payment", "stage": "requested",
+                                           "stage_version": 0, "stages": _PP_STAGES,
+                                           "title": "Fabric PO"})
+            await dec.approve_decision("dec1", user=owner)
+            d1 = await db.decisions.find_one({"id": "dec1"}, {"_id": 0, "status": 1})
+            t1 = await db.tasks.find_one({"id": "tk1"}, {"_id": 0, "status": 1})
+            w1 = await db.workflows.find_one({"id": "wf1"}, {"_id": 0, "stage": 1})
+            bc_appr = await db.brain_context.count_documents(
+                {"tenant_id": tid, "kind": "decision", "source_id": "dec1", "outcome": "approved"})
+
+            # --- REJECT: cascade-delete everything spawned, no orphans ---
+            await db.decisions.insert_one({"id": "dec2", "tenant_id": tid, "title": "Hire temp",
+                                           "status": "pending_approval", "summary": "seasonal"})
+            await db.tasks.insert_one({"id": "tk2", "tenant_id": tid, "decision_id": "dec2",
+                                       "status": "todo", "title": "Post listing"})
+            await db.workflows.insert_one({"id": "wf2", "tenant_id": tid, "decision_id": "dec2",
+                                           "type": "purchase_payment", "stage": "requested",
+                                           "stage_version": 0, "stages": _PP_STAGES})
+            await db.calendar_events.insert_one({"id": "cal2", "tenant_id": tid, "decision_id": "dec2"})
+            await db.inbox.insert_one({"id": "ib2", "tenant_id": tid, "ref_type": "decision",
+                                       "ref_id": "dec2", "status": "open"})
+            await dec.reject_decision("dec2", user=owner)
+            d2 = await db.decisions.find_one({"id": "dec2"}, {"_id": 0, "status": 1})
+            orphan_tasks = await db.tasks.count_documents({"tenant_id": tid, "decision_id": "dec2"})
+            orphan_wfs = await db.workflows.count_documents({"tenant_id": tid, "decision_id": "dec2"})
+            orphan_cal = await db.calendar_events.count_documents({"tenant_id": tid, "decision_id": "dec2"})
+            ib = await db.inbox.find_one({"id": "ib2"}, {"_id": 0, "status": 1})
+
+            # missing decision -> 404
+            missing = None
+            try:
+                await dec.approve_decision("ghost", user=owner)
+            except Exception as e:
+                missing = getattr(e, "status_code", None)
+
+            return (d1["status"], t1["status"], w1["stage"], bc_appr,
+                    d2["status"], orphan_tasks, orphan_wfs, orphan_cal, ib["status"], missing)
+        finally:
+            restore()
+
+    (appr_status, task_status, wf_stage, bc_appr, rej_status,
+     orphan_t, orphan_w, orphan_c, ib_status, missing) = with_test_db(scenario)
+    # approve
+    assert appr_status == "approved"
+    assert task_status == "todo", "approving a decision unblocks its blocked tasks"
+    assert wf_stage == "approved", "the procurement workflow auto-advances to approval_stage"
+    assert bc_appr == 1, "approval writes a decision row to brain memory"
+    # reject
+    assert rej_status == "rejected"
+    assert orphan_t == 0 and orphan_w == 0 and orphan_c == 0, "reject must leave NO orphans"
+    assert ib_status == "dismissed", "reject dismisses the decision's inbox item"
+    assert missing == 404

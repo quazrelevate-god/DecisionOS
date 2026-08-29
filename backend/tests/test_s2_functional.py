@@ -360,3 +360,103 @@ def test_decision_approve_and_reject_lifecycle(with_test_db):
     assert orphan_t == 0 and orphan_w == 0 and orphan_c == 0, "reject must leave NO orphans"
     assert ib_status == "dismissed", "reject dismisses the decision's inbox item"
     assert missing == 404
+
+
+# ===========================================================================
+# Batch 4: task lifecycle -- smart-route, evidence/approval gates, auto-invoice.
+# ===========================================================================
+
+def test_task_gates_smart_route_and_auto_invoice(with_test_db):
+    from fastapi import BackgroundTasks
+    import core
+    import core.deps as core_deps
+    import routers.tasks as tasks
+    import services.tasks as tasks_svc   # enrich_task reads db here
+    import services.voice as voice
+    import services.notifications as notif
+    from models.tasks import TaskUpdateInput, TaskCreateInput
+
+    async def scenario(db):
+        restore = _use_db(db, tasks, tasks_svc, core, core_deps, voice, notif)
+        try:
+            tid = "t1"
+            owner = _u("owner", "o1")
+            r = {}
+
+            # --- smart-route: a role task with no assignee -> least-loaded member ---
+            await db.tenants.insert_one({"id": tid, "roles": [{"key": "sales"}, {"key": "finance"},
+                                                              {"key": "operations"}]})
+            await db.users.insert_many([
+                {"id": "s1", "tenant_id": tid, "role": "sales", "name": "Sana"},
+                {"id": "s2", "tenant_id": tid, "role": "sales", "name": "Sam"},
+            ])
+            await db.memberships.insert_many([
+                {"tenant_id": tid, "user_id": "s1", "status": "active"},
+                {"tenant_id": tid, "user_id": "s2", "status": "active"},
+            ])
+            await db.tasks.insert_one({"id": "load1", "tenant_id": tid, "assignee_id": "s1",
+                                       "status": "todo"})   # s1 has load, s2 has none
+            created = await tasks.create_task(TaskCreateInput(title="Chase new leads", assignee_role="sales"),
+                                              background=BackgroundTasks(), user=owner)
+            r["routed_to"] = created.get("assignee_id")
+
+            # --- evidence gate: evidence_required + no proof -> done is 400 ---
+            await db.tasks.insert_one({"id": "ev", "tenant_id": tid, "status": "todo", "title": "Upload proof",
+                                       "evidence_required": True, "attachments": []})
+            try:
+                await tasks.update_task("ev", TaskUpdateInput(status="done"), user=owner)
+                r["evidence_gate"] = None
+            except HTTPException as e:
+                r["evidence_gate"] = e.status_code
+
+            # --- approval gate: unapproved task cannot start ---
+            await db.tasks.insert_one({"id": "ap", "tenant_id": tid, "status": "blocked", "title": "Awaiting approval",
+                                       "approval_required": True, "approval_status": "pending"})
+            try:
+                await tasks.update_task("ap", TaskUpdateInput(status="in_progress"), user=owner)
+                r["approval_gate"] = None
+            except HTTPException as e:
+                r["approval_gate"] = e.status_code
+
+            # --- valid completion ---
+            await db.tasks.insert_one({"id": "ok", "tenant_id": tid, "status": "todo", "title": "Simple task"})
+            await tasks.update_task("ok", TaskUpdateInput(status="done"), user=owner)
+            done = await db.tasks.find_one({"id": "ok"}, {"_id": 0, "status": 1, "progress": 1})
+            r["done_status"], r["done_progress"] = done["status"], done.get("progress")
+
+            # --- invalid status / missing ---
+            try:
+                await tasks.update_task("ok", TaskUpdateInput(status="bogus"), user=owner)
+                r["bad_status"] = None
+            except HTTPException as e:
+                r["bad_status"] = e.status_code
+            try:
+                await tasks.update_task("ghost", TaskUpdateInput(status="done"), user=owner)
+                r["missing"] = None
+            except HTTPException as e:
+                r["missing"] = e.status_code
+
+            # --- auto-invoice on done, idempotent by source_task_id ---
+            await db.tasks.insert_one({"id": "inv", "tenant_id": tid, "status": "todo",
+                                       "title": "Raise invoice for order 42", "amount": 5000,
+                                       "contact_id": "c1"})
+            await tasks.update_task("inv", TaskUpdateInput(status="done"), user=owner)
+            after_first = await db.invoices.count_documents({"tenant_id": tid, "source_task_id": "inv"})
+            # re-running the generator must NOT create a second invoice
+            t_inv = await db.tasks.find_one({"id": "inv"}, {"_id": 0})
+            await tasks._maybe_auto_invoice(tid, owner["id"], t_inv, "inv")
+            after_second = await db.invoices.count_documents({"tenant_id": tid, "source_task_id": "inv"})
+            r["inv_first"], r["inv_second"] = after_first, after_second
+            return r
+        finally:
+            restore()
+
+    r = with_test_db(scenario)
+    assert r["routed_to"] == "s2", "a role task auto-routes to the least-loaded member"
+    assert r["evidence_gate"] == 400, "evidence_required blocks done without proof"
+    assert r["approval_gate"] == 403, "an unapproved task cannot be started"
+    assert r["done_status"] == "done" and r["done_progress"] == 100
+    assert r["bad_status"] == 400
+    assert r["missing"] == 404
+    assert r["inv_first"] == 1, "completing an invoice-task auto-creates a draft invoice"
+    assert r["inv_second"] == 1, "auto-invoice is idempotent (source_task_id dedup)"

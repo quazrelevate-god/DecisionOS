@@ -89,8 +89,19 @@ class _FakeDB:
         return getattr(self, name)
 
 
+# Dedicated module-scoped loop: created once for this module and never shared.
+# `asyncio.get_event_loop()` used to be fine here, but under -n/--dist loadscope
+# a worker runs many modules in one process, and an earlier module's
+# `asyncio.run(...)` CLOSES the process's current loop -- so get_event_loop()
+# then returned a *closed* loop and every _run() raised "Event loop is closed".
+# Owning our own loop keeps all of this module's calls on one live loop (which a
+# real AsyncMongoClient also needs, since it binds to the loop it's first used on)
+# and is immune to whatever other modules do to the current loop.
+_LOOP = asyncio.new_event_loop()
+
+
 def _run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
+    return _LOOP.run_until_complete(coro)
 
 
 # ===========================================================================

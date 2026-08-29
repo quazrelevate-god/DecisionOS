@@ -104,13 +104,25 @@ NO_APPROVAL_OM = {
 
 
 def _patch_operating_model(monkeypatch, mapping):
-    """Point `services.workflows.tenant_procurement_pipeline` at an in-memory
-    tenant_id -> operating_model mapping instead of the real DB-backed
-    resolver in server.py."""
+    """Point the operating-model resolver at an in-memory
+    tenant_id -> operating_model mapping instead of the real DB-backed resolver.
+
+    Epic 8 refactor moved `tenant_operating_model` OFF server.py and into
+    services/ai/generators.py. `services.workflows.tenant_procurement_pipeline`
+    (and `tenant_terminal_stages`) resolve it with a call-time
+    `from services.ai.generators import tenant_operating_model`, so the ONLY
+    binding that takes effect is the attribute on that module. The old
+    monkeypatch targeted `server.tenant_operating_model`, which nothing reads
+    anymore -- so the real DB-backed resolver ran instead, hit the module-level
+    AsyncMongoClient, and (a) made test 1 pass by ACCIDENT via the textile
+    DEFAULT_OPERATING_MODEL fallback and (b) crashed every later test with
+    "Cannot use AsyncMongoClient in different event loop" once the client was
+    bound to the first asyncio.run() loop. Patching the live symbol keeps every
+    call in-memory: no DB, no shared client, no cross-loop binding."""
     async def fake_tom(tenant_id):
         return mapping.get(tenant_id)
-    import server
-    monkeypatch.setattr(server, "tenant_operating_model", fake_tom)
+    import services.ai.generators as _generators
+    monkeypatch.setattr(_generators, "tenant_operating_model", fake_tom)
 
 
 # ---------------------------------------------------------------------------

@@ -159,8 +159,14 @@ class _FakeDB:
         return getattr(self, name)
 
 
+# Dedicated module-scoped loop (see audit-log note): owning our own loop
+# keeps every call in this module on one live loop and is immune to another
+# module's asyncio.run() closing the process current loop under -n/loadscope.
+_LOOP = asyncio.new_event_loop()
+
+
 def _run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
+    return _LOOP.run_until_complete(coro)
 
 
 # ===========================================================================

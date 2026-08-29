@@ -9,7 +9,8 @@ import requests
 from dotenv import load_dotenv
 
 load_dotenv("/app/frontend/.env")
-BASE = os.environ["REACT_APP_BACKEND_URL"].rstrip("/")
+from integration_base import base_url  # T10-11.2: fail-closed, env-only
+BASE = base_url()
 OWNER = {"email": "owner@sharma.com", "password": "demo1234"}
 SALES = {"email": "sales@sharma.com", "password": "demo1234"}
 

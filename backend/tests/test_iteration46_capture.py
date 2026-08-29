@@ -12,7 +12,8 @@ import pytest
 import requests
 
 # External URL for regular API testing; localhost only for the webhook.
-BASE_URL = os.environ["REACT_APP_BACKEND_URL"].rstrip("/")
+from integration_base import base_url  # T10-11.2: fail-closed, env-only
+BASE_URL = base_url()
 LOCAL_URL = "http://localhost:8001"
 
 OWNER_EMAIL = os.getenv("DEMO_EMAIL", "owner@sharma.com")

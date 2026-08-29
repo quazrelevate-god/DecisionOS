@@ -25,7 +25,8 @@ import pytest
 import requests
 from PIL import Image, ImageDraw, ImageFont
 
-BASE = os.environ["REACT_APP_BACKEND_URL"].rstrip("/")
+from integration_base import base_url  # T10-11.2: fail-closed, env-only
+BASE = base_url()
 API = f"{BASE}/api"
 
 OWNER = ("owner@sharma.com", "demo1234")

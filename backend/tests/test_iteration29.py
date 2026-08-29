@@ -27,9 +27,12 @@ import requests
 from dotenv import load_dotenv
 load_dotenv("/app/backend/.env")
 
-from motor.motor_asyncio import AsyncIOMotorClient  # noqa: E402
+# Epic 8 migrated the app off motor to PyMongo's AsyncMongoClient (API-compatible
+# for this file's direct-DB helper). Aliased so the call sites below are unchanged.
+from pymongo import AsyncMongoClient as AsyncIOMotorClient  # noqa: E402
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
+from integration_base import base_url  # T10-11.2: fail-closed, env-only
+BASE_URL = base_url()
 assert BASE_URL, "REACT_APP_BACKEND_URL must be set"
 API = f"{BASE_URL}/api"
 

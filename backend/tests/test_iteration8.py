@@ -24,7 +24,8 @@ def _load_backend_url() -> str:
     raise RuntimeError("REACT_APP_BACKEND_URL not set")
 
 
-BASE_URL = _load_backend_url()
+from integration_base import base_url  # T10-11.2: fail-closed, env-only
+BASE_URL = base_url()
 
 OWNER = {"email": "owner@sharma.com", "password": "demo1234"}
 

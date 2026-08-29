@@ -18,7 +18,8 @@ import uuid
 import pytest
 import requests
 
-BASE_URL = os.environ['REACT_APP_BACKEND_URL'].rstrip('/')
+from integration_base import base_url  # T10-11.2: fail-closed, env-only
+BASE_URL = base_url()
 
 OWNER = {"email": "owner@sharma.com", "password": "demo1234"}
 SALES = {"email": "sales@sharma.com", "password": "demo1234"}

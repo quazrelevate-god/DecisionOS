@@ -24,7 +24,8 @@ def _read_frontend_env():
         return None
     return None
 
-BASE_URL = (os.environ.get("REACT_APP_BACKEND_URL") or _read_frontend_env() or "").rstrip("/")
+from integration_base import base_url  # T10-11.2: fail-closed, env-only
+BASE_URL = base_url()
 assert BASE_URL, "REACT_APP_BACKEND_URL missing"
 API = f"{BASE_URL}/api"
 

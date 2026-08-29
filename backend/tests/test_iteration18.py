@@ -11,7 +11,8 @@ import time
 import pytest
 import requests
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "http://localhost:8001").rstrip("/")
+from integration_base import base_url  # T10-11.2: fail-closed, env-only
+BASE_URL = base_url()
 API = f"{BASE_URL}/api"
 
 OWNER_EMAIL = "owner@sharma.com"

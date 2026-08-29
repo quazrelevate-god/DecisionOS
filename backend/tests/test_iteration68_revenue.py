@@ -17,7 +17,8 @@ def _load_base():
     assert url, "REACT_APP_BACKEND_URL missing"
     return url.rstrip("/") + "/api"
 
-BASE = _load_base()
+from integration_base import base_url  # T10-11.2: fail-closed, env-only
+BASE = base_url()
 
 OWNER = ("owner@sharma.com", "demo1234")
 FIN = ("finance@sharma.com", "demo1234")

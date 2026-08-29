@@ -16,7 +16,8 @@ def _load_frontend_env():
                 return line.split("=", 1)[1].strip()
     return None
 
-BASE_URL = (os.environ.get("REACT_APP_BACKEND_URL") or _load_frontend_env()).rstrip("/")
+from integration_base import base_url  # T10-11.2: fail-closed, env-only
+BASE_URL = base_url()
 ADMIN_EMAIL = "admin@decisionos.biz"
 ADMIN_PASS = "DecisionOS@2026"
 OWNER_EMAIL = "owner@sharma.com"

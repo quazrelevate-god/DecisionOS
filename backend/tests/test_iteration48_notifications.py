@@ -18,7 +18,8 @@ import pytest
 import requests
 import time
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
+from integration_base import base_url  # T10-11.2: fail-closed, env-only
+BASE_URL = base_url()
 assert BASE_URL, "REACT_APP_BACKEND_URL must be set"
 
 OWNER = {"email": "owner@sharma.com", "password": "demo1234"}

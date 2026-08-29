@@ -4,7 +4,8 @@ import time
 import uuid
 import requests
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://founder-os-58.preview.emergentagent.com').rstrip('/')
+from integration_base import base_url  # T10-11.2: fail-closed, env-only
+BASE_URL = base_url()
 API = f"{BASE_URL}/api"
 
 

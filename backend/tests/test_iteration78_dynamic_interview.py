@@ -24,7 +24,8 @@ def _load_frontend_env_url():
     return None
 
 
-BASE_URL = (os.environ.get("REACT_APP_BACKEND_URL") or _load_frontend_env_url()).rstrip("/")
+from integration_base import base_url  # T10-11.2: fail-closed, env-only
+BASE_URL = base_url()
 API = f"{BASE_URL}/api"
 
 # Deliberately short so we don't wait forever on Claude; interview endpoint p95 is ~5-8s.

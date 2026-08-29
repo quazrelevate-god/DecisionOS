@@ -10,7 +10,8 @@ import os
 import requests
 import pytest
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://founder-os-58.preview.emergentagent.com").rstrip("/")
+from integration_base import base_url  # T10-11.2: fail-closed, env-only
+BASE_URL = base_url()
 
 OWNER = {"email": "owner@sharma.com", "password": "demo1234"}
 FINANCE = {"email": "finance@sharma.com", "password": "demo1234"}

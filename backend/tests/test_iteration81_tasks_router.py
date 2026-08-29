@@ -44,7 +44,8 @@ import requests
 from pymongo import MongoClient
 
 
-BASE_URL = os.environ["REACT_APP_BACKEND_URL"].rstrip("/")
+from integration_base import base_url  # T10-11.2: fail-closed, env-only
+BASE_URL = base_url()
 
 # Direct Mongo for injecting pending_approval decisions and inspecting side effects.
 _mongo = MongoClient(os.environ.get("MONGO_URL", "mongodb://localhost:27017"))

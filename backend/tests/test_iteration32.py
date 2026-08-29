@@ -30,7 +30,8 @@ def _load_frontend_backend_url():
     return os.environ.get("REACT_APP_BACKEND_URL")
 
 
-BASE_URL = (_load_frontend_backend_url() or "").rstrip("/")
+from integration_base import base_url  # T10-11.2: fail-closed, env-only
+BASE_URL = base_url()
 assert BASE_URL, "REACT_APP_BACKEND_URL missing"
 
 OWNER_EMAIL = os.environ.get("TEST_OWNER_EMAIL", "owner@sharma.com")

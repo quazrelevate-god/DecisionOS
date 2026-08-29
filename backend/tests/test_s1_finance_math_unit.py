@@ -16,7 +16,7 @@ if str(ROOT) not in sys.path:
 import pytest
 
 from routers.ledger import parse_amount, _remaining, _norm_num
-from services.ingestion import _dup_reason, _norm_inv_num, _days_between
+from services.ingestion import _dup_reason, _payment_dup_reason, _norm_inv_num, _days_between
 
 
 # --- parse_amount (T10-01.4 / T10-07.6) -------------------------------------
@@ -146,3 +146,42 @@ def test_dup_exact_float_equality_can_miss(a=None):
 def test_days_between_none_on_bad_date():
     assert _days_between("2026-08-08", "2026-08-01") == 7
     assert _days_between("garbage", "2026-08-01") is None
+
+
+# --- payment duplicate detection (T10-01.7) ---------------------------------
+def _pay(reference=None, invoice_number=None, amount=None, contact=None, date=None):
+    return {"reference": reference, "invoice_number": invoice_number,
+            "amount": amount, "contact_name": contact, "date": date}
+
+
+def test_payment_dup_reference_is_strongest():
+    """A matching transaction reference (UTR/cheque/txn id) -> 'reference',
+    regardless of amount/party (a reference is globally unique)."""
+    a = _pay(reference="UTR-12345", amount=100, contact="X")
+    b = _pay(reference="utr 12345", amount=999, contact="Y")
+    assert _payment_dup_reason(a, b) == "reference"
+
+
+def test_payment_dup_invoice_amount():
+    a = _pay(invoice_number="INV-1", amount=5000, contact="Kapoor")
+    b = _pay(invoice_number="inv1", amount=5000, contact="Kapoor")
+    assert _payment_dup_reason(a, b) == "invoice_amount"
+
+
+def test_payment_dup_amount_window_same_party():
+    a = _pay(amount=5000, contact="Kapoor Retail", date="2026-08-08")
+    b = _pay(amount=5000, contact="Kapoor Retail", date="2026-08-01")  # gap 7
+    assert _payment_dup_reason(a, b) == "amount_window"
+
+
+def test_payment_dup_different_party_not_dup():
+    a = _pay(amount=5000, contact="Vendor A", date="2026-08-01")
+    b = _pay(amount=5000, contact="Vendor B", date="2026-08-01")
+    assert _payment_dup_reason(a, b) is None
+
+
+def test_payment_dup_no_signal_is_none():
+    """No reference, no invoice#, different party -> not a duplicate."""
+    a = _pay(amount=5000, contact="", date="2026-08-01")
+    b = _pay(amount=5000, contact="", date="2026-08-01")
+    assert _payment_dup_reason(a, b) is None

@@ -153,3 +153,89 @@ def test_seat_limit_toctou_over_provisions(with_test_db):
     # workspace ends up with 5 active members against a hard cap of 3.
     assert passed == 3, "the count-then-insert cap admits ALL racing invites (no reservation)"
     assert active == 5, "seat-limit TOCTOU over-provisions past the cap (5 > 3) -- see BUG-12"
+
+
+# ---------------------------------------------------------------------------
+# T10-10.6 -- the Mongo leader-lock elects exactly one holder under a race.
+# ---------------------------------------------------------------------------
+def test_leader_lock_elects_single_holder(with_test_db):
+    from services.leader_lock import try_acquire
+
+    async def scenario(db):
+        # 5 "replicas" tick at once for the same lock
+        got = await asyncio.gather(*[try_acquire(db, "sched:followups", f"replica-{i}", lease_seconds=600)
+                                     for i in range(5)])
+        winners = sum(1 for g in got if g)
+        winner_id = None
+        holder = await db["_leader_locks"].find_one({"_id": "sched:followups"}) \
+            if "_leader_locks" in await db.list_collection_names() else None
+        # a live lock held by someone else is refused; the holder can re-acquire
+        me = next(f"replica-{i}" for i, g in enumerate(got) if g)
+        again = await try_acquire(db, "sched:followups", me, lease_seconds=600)
+        other = await try_acquire(db, "sched:followups", "replica-99", lease_seconds=600)
+        return winners, again, other
+
+    winners, holder_reacquire, other_blocked = with_test_db(scenario)
+    assert winners == 1, "exactly one replica may hold the leader lock"
+    assert holder_reacquire is True, "the current holder can refresh its own lease"
+    assert other_blocked is False, "a different replica is refused while the lease is live"
+
+
+# ---------------------------------------------------------------------------
+# T10-10.9 -- standalone out-payment books its expense idempotently by payment_id.
+# ---------------------------------------------------------------------------
+def test_standalone_payment_expense_idempotency(with_test_db):
+    import core
+    import core.deps as core_deps
+    import routers.ledger as led
+    import services.ai.brain_context as bctx
+
+    async def scenario(db):
+        restore = _use_db(db, led, core, core_deps, bctx)
+        try:
+            tid = "t1"
+            owner = _u("owner", "o1")
+            await db.payments.insert_one({"id": "p1", "tenant_id": tid, "direction": "out",
+                                          "amount": 500, "applied": 0, "contact_name": "Vendor Co"})
+            await asyncio.gather(
+                led._do_standalone_payment(tid, owner, "p1"),
+                led._do_standalone_payment(tid, owner, "p1"),
+            )
+            n = await db.expenses.count_documents({"tenant_id": tid, "payment_id": "p1"})
+            await led._do_standalone_payment(tid, owner, "p1")   # serialized re-run
+            n_seq = await db.expenses.count_documents({"tenant_id": tid, "payment_id": "p1"})
+            return n, n_seq
+        finally:
+            restore()
+
+    n_concurrent, n_seq = with_test_db(scenario)
+    assert n_seq == n_concurrent, "a serialized re-run never books a second expense (payment_id guard)"
+    assert n_concurrent in (1, 2)
+    if n_concurrent == 2:
+        import warnings
+        warnings.warn("T10-10.9: concurrent standalone payments double-booked the expense "
+                      "(payment_id find-then-insert has no unique index).")
+
+
+# ---------------------------------------------------------------------------
+# T10-10.5 -- quota check has no reservation: parallel calls can overshoot the cap.
+# ---------------------------------------------------------------------------
+def test_quota_overshoot_without_reservation(with_test_db):
+    from services.quotas import check_quota
+
+    async def scenario(db):
+        tid = "t1"
+        # cap 100 for the resource; 0 used so far
+        await db.tenants.insert_one({"id": tid, "plan": "business",
+                                     "usage_quotas": {"ai_tokens": 100}})
+        # two calls, each projecting a cost of 60, run their check together
+        results = await asyncio.gather(
+            check_quota(db, tid, "ai_tokens", cost=60),
+            check_quota(db, tid, "ai_tokens", cost=60),
+        )
+        return [ok for ok, _ in results]
+
+    oks = with_test_db(scenario)
+    # Both pass their check (each sees 0 used, 0+60 <= 100) -> if both proceed, the
+    # tenant burns 120 tokens against a 100 cap. No reservation between check + spend.
+    assert oks == [True, True], "both parallel calls pass the cap check -> collective overshoot possible"

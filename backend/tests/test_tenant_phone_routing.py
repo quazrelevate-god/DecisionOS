@@ -22,6 +22,17 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+# --- stale-test compat shim (Epic 8 refactor moved these off server.py) ---
+# The functions below moved out of server.py; re-bind them onto the
+# server module so the source-inspection asserts resolve unchanged.
+import server as _server_mod  # noqa: E402
+from services.otp import _issue_otp as _shim__issue_otp  # noqa: E402
+from routers.auth_otp import verify_otp as _shim_verify_otp  # noqa: E402
+from routers.auth_otp import request_otp as _shim_request_otp  # noqa: E402
+setattr(_server_mod, '_issue_otp', _shim__issue_otp)
+setattr(_server_mod, 'verify_otp', _shim_verify_otp)
+setattr(_server_mod, 'request_otp', _shim_request_otp)
+
 
 # =============================================================================
 # Tiny in-memory Mongo double

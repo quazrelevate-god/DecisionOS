@@ -26,6 +26,17 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+# --- stale-test compat shim (Epic 8 refactor moved these off server.py) ---
+# The functions below moved out of server.py; re-bind them onto the
+# server module so the source-inspection asserts resolve unchanged.
+import server as _server_mod  # noqa: E402
+from routers.contacts import update_contact as _shim_update_contact  # noqa: E402
+from routers.tenant_settings import regenerate_operating_model as _shim_regenerate_operating_model  # noqa: E402
+from routers.tenant_settings import regenerate_finance_categories as _shim_regenerate_finance_categories  # noqa: E402
+setattr(_server_mod, 'update_contact', _shim_update_contact)
+setattr(_server_mod, 'regenerate_operating_model', _shim_regenerate_operating_model)
+setattr(_server_mod, 'regenerate_finance_categories', _shim_regenerate_finance_categories)
+
 
 # ---------------------------------------------------------------------------
 # In-memory Mongo double (kept local so this file is self-contained)

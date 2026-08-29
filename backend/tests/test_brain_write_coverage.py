@@ -33,6 +33,15 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+# --- stale-test compat shim (Epic 8 refactor moved these off server.py) ---
+# The functions below moved out of server.py; re-bind them onto the
+# server module so the source-inspection asserts resolve unchanged.
+import server as _server_mod  # noqa: E402
+from routers.workflows import advance_workflow as _shim_advance_workflow  # noqa: E402
+from services.meetings import process_meeting as _shim_process_meeting  # noqa: E402
+setattr(_server_mod, 'advance_workflow', _shim_advance_workflow)
+setattr(_server_mod, 'process_meeting', _shim_process_meeting)
+
 
 # ---------------------------------------------------------------------------
 # Small async fake — same pattern as the rest of the suite.

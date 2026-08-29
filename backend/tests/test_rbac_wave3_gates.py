@@ -28,6 +28,19 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+# --- stale-test compat shim (Epic 8 refactor moved these off server.py) ---
+# The functions below moved out of server.py; re-bind them onto the
+# server module so the source-inspection asserts resolve unchanged.
+import server as _server_mod  # noqa: E402
+from routers.workflows import create_workflow as _shim_create_workflow  # noqa: E402
+from routers.complaints import followup_run as _shim_followup_run  # noqa: E402
+from routers.complaints import add_memory as _shim_add_memory  # noqa: E402
+from routers.voice_notes import create_voice_note as _shim_create_voice_note  # noqa: E402
+setattr(_server_mod, 'create_workflow', _shim_create_workflow)
+setattr(_server_mod, 'followup_run', _shim_followup_run)
+setattr(_server_mod, 'add_memory', _shim_add_memory)
+setattr(_server_mod, 'create_voice_note', _shim_create_voice_note)
+
 
 def _dep_name_of(endpoint) -> str:
     """Return the name of the callable behind the user Depends() on an

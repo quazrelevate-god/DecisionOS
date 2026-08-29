@@ -113,7 +113,11 @@ async def _company_operating_view(tid: str, viewer: dict, now: str) -> dict:
     inv_count = 0
     if can_finance:
         invs = await db.invoices.find({"tenant_id": tid}, {"_id": 0, "amount": 1, "type": 1, "status": 1, "due_date": 1}).to_list(2000)
-        pays = await db.payments.find({"tenant_id": tid}, {"_id": 0, "amount": 1}).to_list(2000)
+        # T10-07.4: only INBOUND payments count as money "collected". Without the
+        # direction filter, outbound supplier payments (direction="out", which live
+        # in the same payments collection) inflated total_paid -> the finance score's
+        # `collected` ratio and `outstanding` were both wrong.
+        pays = await db.payments.find({"tenant_id": tid, "direction": "in"}, {"_id": 0, "amount": 1}).to_list(2000)
         inv_count = len(invs)
         total_billed = sum(_amt(i.get("amount")) for i in invs if i.get("type") == "sales_invoice")
         total_paid = sum(_amt(p.get("amount")) for p in pays)

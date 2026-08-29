@@ -4,20 +4,20 @@ The selection strategy is deterministic (not agentic): a named person wins; else
 least-loaded ACTIVE member of the role, with a stable tiebreak. This covers the
 multi-person edge cases -- 0 / 1 / many members, ties, inactive members, named
 person, and named-but-not-found.
-"""
-import asyncio
 
-import core  # noqa: F401
+T10-11.2 P3: runs against an ISOLATED test DB (with_test_db) with services.voice.db
+patched to it -- so it never touches founder-os-58 and never cross-loop-contaminates
+other modules that share the app's Mongo client (the old `from database import db`
++ asyncio.run pattern was order-flaky under -n/loadscope and mutated the dev DB).
+"""
+import services.voice as _voice
 from services.voice import resolve_assignee, pick_least_loaded_member
-from database import db
-from core import now_iso
 
 _T = "aa-test-tenant"
 
 
-async def _seed():
-    await _cleanup()
-    # 3 active sales (Priya has 0 load, Ravi 1, Anil 2), 1 finance, 1 removed sales
+async def _seed(db):
+    # 3 active sales (Priya 0 load, Ravi 1, Anil 2), 1 finance, 1 removed sales
     await db.users.insert_many([
         {"id": "aa-u1", "tenant_id": _T, "name": "Anil Kumar", "role": "sales", "email": "aa-u1@t.test"},
         {"id": "aa-u2", "tenant_id": _T, "name": "Priya Nair", "role": "sales", "email": "aa-u2@t.test"},
@@ -40,15 +40,12 @@ async def _seed():
     ])
 
 
-async def _cleanup():
-    for c in ("users", "memberships", "tasks"):
-        await db[c].delete_many({"tenant_id": _T})
-
-
-def test_auto_assign_edge_cases():
-    async def go():
-        await _seed()
+def test_auto_assign_edge_cases(with_test_db):
+    async def go(db):
+        _prev = _voice.db
+        _voice.db = db  # point the service's module-global db at the isolated test db
         try:
+            await _seed(db)
             # many members -> least-loaded active member (Priya, 0 open tasks)
             assert await pick_least_loaded_member(_T, "sales") == "aa-u2"
 
@@ -77,5 +74,5 @@ def test_auto_assign_edge_cases():
             picks = {await pick_least_loaded_member(_T, "sales") for _ in range(4)}
             assert picks == {"aa-u1"}   # same answer every time, lowest active id
         finally:
-            await _cleanup()
-    asyncio.run(go())
+            _voice.db = _prev
+    with_test_db(go)

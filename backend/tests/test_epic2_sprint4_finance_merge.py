@@ -46,8 +46,9 @@ class TestSprintFourIngestGates:
     so this is the contract the hero relies on."""
 
     def test_ingest_document_still_data_input(self):
-        import server
-        line = _dep_source_marker(server.ingest_document)
+        # Epic 8 moved /api/ingest/document -> routers/finance.py.
+        from routers.finance import ingest_document
+        line = _dep_source_marker(ingest_document)
         assert "require_perm(\"data_input\")" in line, (
             "Sprint 4: /api/ingest/document must keep the data_input "
             "gate -- /finance hero POSTs here after E2-25. Got: "
@@ -55,8 +56,9 @@ class TestSprintFourIngestGates:
         )
 
     def test_ingest_csv_still_data_input(self):
-        import server
-        line = _dep_source_marker(server.ingest_csv)
+        # Epic 8 moved /api/ingest/csv -> routers/finance.py.
+        from routers.finance import ingest_csv
+        line = _dep_source_marker(ingest_csv)
         assert "require_perm(\"data_input\")" in line, (
             f"Sprint 4: /api/ingest/csv must keep data_input gate: {line}"
         )

@@ -357,7 +357,8 @@ class TestGuardedLlmEnforcesQuota:
 # ===========================================================================
 class TestUsageEndpoint:
     def test_endpoint_reads_all_quotas(self):
-        from server import get_tenant_usage
+        # Epic 8 moved GET /api/tenant/usage -> routers/tenant_settings.py.
+        from routers.tenant_settings import get_tenant_usage
         src = inspect.getsource(get_tenant_usage)
         assert "quota_status_all" in src
         # Any logged-in user can read (frontend needs it).

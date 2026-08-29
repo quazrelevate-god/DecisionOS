@@ -1,13 +1,15 @@
 """Epic 3 Sprint 5 (E3-06): LLM-generated Desk narrative + 15-min cache.
 
 Verifies the cache (identical counters -> one LLM call) and the fallback (LLM error
--> deterministic template), against the real cache collection with the LLM mocked.
-"""
-import asyncio
+-> deterministic template), against the cache collection with the LLM mocked.
 
+T10-11.2 P3: runs against an ISOLATED test DB (with_test_db) with routers.desk.db
+patched to it -- so it never touches founder-os-58 and can't cross-loop-contaminate
+other modules sharing the app Mongo client (the old `from database import db`
++ asyncio.run pattern was order-flaky under -n/loadscope and mutated the dev DB).
+"""
 import core
 import routers.desk as desk
-from database import db
 
 _T = "desk-narr-test"
 
@@ -28,11 +30,12 @@ def _fake_claude_chat(**k):
     return _FakeChat()
 
 
-def test_desk_narrative_cache_and_fallback(monkeypatch):
-    async def go():
-        await db.desk_narrative_cache.delete_many({"tenant_id": _T})
-        cash = {"clear": False, "overdue_receivables_amount": 50000, "unmatched_payments": 1}
+def test_desk_narrative_cache_and_fallback(monkeypatch, with_test_db):
+    async def go(db):
+        _prev = desk.db
+        desk.db = db  # point the desk router's module-global db at the isolated test db
         try:
+            cash = {"clear": False, "overdue_receivables_amount": 50000, "unmatched_payments": 1}
             # 1) LLM path + cache: two identical-counter calls -> exactly ONE LLM call
             monkeypatch.setattr(core, "claude_chat", _fake_claude_chat)
             _calls["n"] = 0
@@ -60,5 +63,5 @@ def test_desk_narrative_cache_and_fallback(monkeypatch):
                                        cash={"clear": True}, is_owner=False)
             assert n4 == template
         finally:
-            await db.desk_narrative_cache.delete_many({"tenant_id": _T})
-    asyncio.run(go())
+            desk.db = _prev
+    with_test_db(go)

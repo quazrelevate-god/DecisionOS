@@ -42,8 +42,27 @@ import services.workflow_engine as _wfe  # noqa: E402
 import server as _server_mod  # noqa: E402
 from routers.workflows import advance_workflow as _shim_advance_workflow  # noqa: E402
 from services.meetings import process_meeting as _shim_process_meeting  # noqa: E402
-setattr(_server_mod, 'advance_workflow', _shim_advance_workflow)
-setattr(_server_mod, 'process_meeting', _shim_process_meeting)
+_STALE_SHIMS = {
+    'advance_workflow': _shim_advance_workflow,
+    'process_meeting': _shim_process_meeting,
+}
+
+
+def _apply_stale_shims():
+    for _n, _f in _STALE_SHIMS.items():
+        setattr(_server_mod, _n, _f)
+
+
+_apply_stale_shims()
+
+
+@pytest.fixture(autouse=True)
+def _reapply_stale_shims():
+    # Re-bind before every test: a monkeypatch.setattr(server, <fn>) in another
+    # module deletes these on teardown (they were absent when it snapshotted),
+    # which made these source-grep tests order-flaky under -n/--dist loadscope.
+    _apply_stale_shims()
+    yield
 
 
 # ---------------------------------------------------------------------------
@@ -261,7 +280,7 @@ class TestNewWriteSites:
 
     def test_process_meeting_writes_brain_context(self):
         import server
-        src = inspect.getsource(server.process_meeting)
+        src = inspect.getsource(_shim_process_meeting)
         assert "brain_context.record_context(" in src
         assert 'kind="meeting"' in src
         assert 'source_type="meeting"' in src

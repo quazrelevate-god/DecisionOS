@@ -33,9 +33,28 @@ import server as _server_mod  # noqa: E402
 from routers.contacts import update_contact as _shim_update_contact  # noqa: E402
 from routers.tenant_settings import regenerate_operating_model as _shim_regenerate_operating_model  # noqa: E402
 from routers.tenant_settings import regenerate_finance_categories as _shim_regenerate_finance_categories  # noqa: E402
-setattr(_server_mod, 'update_contact', _shim_update_contact)
-setattr(_server_mod, 'regenerate_operating_model', _shim_regenerate_operating_model)
-setattr(_server_mod, 'regenerate_finance_categories', _shim_regenerate_finance_categories)
+_STALE_SHIMS = {
+    'update_contact': _shim_update_contact,
+    'regenerate_operating_model': _shim_regenerate_operating_model,
+    'regenerate_finance_categories': _shim_regenerate_finance_categories,
+}
+
+
+def _apply_stale_shims():
+    for _n, _f in _STALE_SHIMS.items():
+        setattr(_server_mod, _n, _f)
+
+
+_apply_stale_shims()
+
+
+@pytest.fixture(autouse=True)
+def _reapply_stale_shims():
+    # Re-bind before every test: a monkeypatch.setattr(server, <fn>) in another
+    # module deletes these on teardown (they were absent when it snapshotted),
+    # which made these source-grep tests order-flaky under -n/--dist loadscope.
+    _apply_stale_shims()
+    yield
 
 
 # ---------------------------------------------------------------------------
@@ -234,7 +253,7 @@ class TestContactRenameCascade:
         """Regression guard: renaming a contact must update every
         denormalized copy so search + display columns don't stay stale."""
         import server
-        src = inspect.getsource(server.update_contact)
+        src = inspect.getsource(_shim_update_contact)
         # Cascade blocks
         assert "invoices" in src
         assert "payments" in src
@@ -250,7 +269,7 @@ class TestContactRenameCascade:
         """Both match strategies must be present so legacy rows written
         before contact_id was persisted also get updated."""
         import server
-        src = inspect.getsource(server.update_contact)
+        src = inspect.getsource(_shim_update_contact)
         assert '"contact_id": contact_id' in src
         # Legacy fallback: match by exact old_name where contact_id is
         # missing.
@@ -264,7 +283,7 @@ class TestContactRenameCascade:
 class TestAiRegenTracksStatus:
     def test_operating_model_regen_source_uses_status_wrapper(self):
         import server
-        src = inspect.getsource(server.regenerate_operating_model)
+        src = inspect.getsource(_shim_regenerate_operating_model)
         assert "ai_generate_operating_model_with_status" in src
         # And updates ai_setup_status.operating_model on the tenant.
         assert "ai_setup_status" in src
@@ -275,7 +294,7 @@ class TestAiRegenTracksStatus:
 
     def test_finance_categories_regen_source_uses_status_wrapper(self):
         import server
-        src = inspect.getsource(server.regenerate_finance_categories)
+        src = inspect.getsource(_shim_regenerate_finance_categories)
         assert "ai_generate_finance_categories_with_status" in src
         assert 'status_map["finance_categories"]' in src
         assert "STATUS_GENERATED" in src
@@ -284,8 +303,8 @@ class TestAiRegenTracksStatus:
         """The response payload includes ai_setup_status_summary so the
         frontend can show 'needs retry' without a second /me round-trip."""
         import server
-        for fn in (server.regenerate_operating_model,
-                   server.regenerate_finance_categories):
+        for fn in (_shim_regenerate_operating_model,
+                   _shim_regenerate_finance_categories):
             src = inspect.getsource(fn)
             assert "ai_setup_status_summary" in src
             assert "summarize_ai_setup_status" in src

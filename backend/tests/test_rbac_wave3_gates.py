@@ -48,21 +48,33 @@ from routers.team import (  # noqa: E402
     approve_leave as _shim_approve_leave, reject_leave as _shim_reject_leave,
     request_leave_info as _shim_request_leave_info,
 )
-for _n, _f in {
+_STALE_SHIMS = {
     'reject_capture': _shim_reject_capture, 'reassign_capture': _shim_reassign_capture,
     'clarify_capture': _shim_clarify_capture, 'create_meeting_text': _shim_create_meeting_text,
     'approve_leave': _shim_approve_leave, 'reject_leave': _shim_reject_leave,
     'request_leave_info': _shim_request_leave_info,
-}.items():
-    setattr(_server_mod, _n, _f)
-setattr(_server_mod, 'create_workflow', _shim_create_workflow)
-setattr(_server_mod, 'followup_run', _shim_followup_run)
-setattr(_server_mod, 'add_memory', _shim_add_memory)
-setattr(_server_mod, 'create_voice_note', _shim_create_voice_note)
-setattr(_server_mod, 'create_text_note', _shim_create_text_note)
-setattr(_server_mod, 'delete_workflow', _shim_delete_workflow)
-setattr(_server_mod, 'create_meeting', _shim_create_meeting)
-setattr(_server_mod, 'approve_capture', _shim_approve_capture)
+    'create_workflow': _shim_create_workflow, 'followup_run': _shim_followup_run,
+    'add_memory': _shim_add_memory, 'create_voice_note': _shim_create_voice_note,
+    'create_text_note': _shim_create_text_note, 'delete_workflow': _shim_delete_workflow,
+    'create_meeting': _shim_create_meeting, 'approve_capture': _shim_approve_capture,
+}
+
+
+def _apply_stale_shims():
+    for _n, _f in _STALE_SHIMS.items():
+        setattr(_server_mod, _n, _f)
+
+
+_apply_stale_shims()
+
+
+@pytest.fixture(autouse=True)
+def _reapply_stale_shims():
+    # Re-bind before every test: a monkeypatch.setattr(server, <fn>) in another
+    # module deletes these on teardown (they were absent when it snapshotted),
+    # which made these source-grep tests order-flaky under -n/--dist loadscope.
+    _apply_stale_shims()
+    yield
 
 
 def _dep_name_of(endpoint) -> str:
@@ -142,7 +154,7 @@ class TestEndpointGates:
         """RBAC-04: POST /workflows must require perm('workflows'),
         symmetric with DELETE /workflows/{id} which is role(owner)."""
         import server
-        line = _dep_source_marker(server.create_workflow)
+        line = _dep_source_marker(_shim_create_workflow)
         assert "require_perm(\"workflows\")" in line, (
             f"RBAC-04: create_workflow signature must gate on "
             f"require_perm('workflows'); got: {line}"
@@ -167,7 +179,7 @@ class TestEndpointGates:
         """RBAC-06: manual full-tenant follow-up sweep = LLM cost +
         notification spam potential. Team-manage permission only."""
         import server
-        line = _dep_source_marker(server.followup_run)
+        line = _dep_source_marker(_shim_followup_run)
         assert "require_perm(\"team_manage\")" in line, (
             f"RBAC-06: followup_run must gate on require_perm('team_manage'); got: {line}"
         )
@@ -236,7 +248,7 @@ class TestEndpointGates:
         """RBAC-11: POST /memory writes to shared tenant knowledge.
         Brain permission gates the write; read stays open."""
         import server
-        line = _dep_source_marker(server.add_memory)
+        line = _dep_source_marker(_shim_add_memory)
         assert "require_perm(\"brain\")" in line, (
             f"RBAC-11: add_memory must gate on require_perm('brain'); got: {line}"
         )
@@ -356,9 +368,9 @@ class TestNoRegressionOnExistingGates:
     def test_voice_notes_still_voice_capture(self):
         """Pre-Wave-3 gate — must stay in place."""
         import server
-        line = _dep_source_marker(server.create_voice_note)
+        line = _dep_source_marker(_shim_create_voice_note)
         assert "require_perm(\"voice_capture\")" in line
-        line = _dep_source_marker(server.create_text_note)
+        line = _dep_source_marker(_shim_create_text_note)
         assert "require_perm(\"voice_capture\")" in line
 
     def test_workflows_delete_still_owner_only(self):

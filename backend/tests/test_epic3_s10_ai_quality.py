@@ -2,20 +2,17 @@
 
 Inserts a known set of ai_calls rows for a scoped test tenant, runs ai_quality_report,
 and asserts the rollups (ok-rate, parse-ok-rate, degraded, per-task, per-engine, recent
-failures) -- then cleans up. Verifies the real Mongo aggregation, not a mock.
-"""
-import asyncio
+failures). Verifies the real Mongo aggregation, not a mock.
 
-import core  # noqa: F401
-from core import ai_quality_report
-from database import db
-from core import now_iso, new_id
+T10-11.2 P3: runs against an ISOLATED test DB (with_test_db) with core.usage.db patched
+to it -- so it never touches founder-os-58 and can't cross-loop-contaminate other
+modules sharing the app Mongo client (the old `from database import db` + asyncio.run
+pattern was order-flaky under -n/loadscope and mutated the dev DB).
+"""
+import core.usage as _usage
+from core import ai_quality_report, now_iso, new_id
 
 _T = "aiq-test-tenant"
-
-
-def _run(c):
-    return asyncio.run(c)
 
 
 def _row(task, ok=True, parse_ok=None, degraded=False, engine="anthropic", model="claude-sonnet-4-6",
@@ -25,8 +22,7 @@ def _row(task, ok=True, parse_ok=None, degraded=False, engine="anthropic", model
             "latency_ms": latency, "error": error, "created_at": now_iso()}
 
 
-async def _seed():
-    await db.ai_calls.delete_many({"tenant_id": _T})
+async def _seed(db):
     await db.ai_calls.insert_many([
         _row("extraction.extract", ok=True, parse_ok=True, tokens=1000, latency=8000),
         _row("extraction.extract", ok=True, parse_ok=False, tokens=1200, latency=9000, error="bad json"),
@@ -36,16 +32,12 @@ async def _seed():
     ])
 
 
-async def _cleanup():
-    await db.ai_calls.delete_many({"tenant_id": _T})
-
-
-def test_ai_quality_report():
-    # One event loop for the whole module: AsyncMongoClient binds to the loop it is
-    # first used on, so we run every db-touching assertion inside a single asyncio.run.
-    async def go():
-        await _seed()
+def test_ai_quality_report(with_test_db):
+    async def go(db):
+        _prev = _usage.db
+        _usage.db = db  # point the usage module's global db at the isolated test db
         try:
+            await _seed(db)
             r = await ai_quality_report(tenant_id=_T, since_hours=24)
             ov = r["overall"]
             assert ov["total_calls"] == 5
@@ -71,5 +63,5 @@ def test_ai_quality_report():
             empty = await ai_quality_report(tenant_id="no-such-tenant-xyz", since_hours=1)
             assert empty["overall"]["total_calls"] == 0 and empty["by_task"] == []
         finally:
-            await _cleanup()
-    _run(go())
+            _usage.db = _prev
+    with_test_db(go)

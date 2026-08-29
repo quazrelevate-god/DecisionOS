@@ -29,9 +29,28 @@ import server as _server_mod  # noqa: E402
 from services.otp import _issue_otp as _shim__issue_otp  # noqa: E402
 from routers.auth_otp import verify_otp as _shim_verify_otp  # noqa: E402
 from routers.auth_otp import request_otp as _shim_request_otp  # noqa: E402
-setattr(_server_mod, '_issue_otp', _shim__issue_otp)
-setattr(_server_mod, 'verify_otp', _shim_verify_otp)
-setattr(_server_mod, 'request_otp', _shim_request_otp)
+_STALE_SHIMS = {
+    '_issue_otp': _shim__issue_otp,
+    'verify_otp': _shim_verify_otp,
+    'request_otp': _shim_request_otp,
+}
+
+
+def _apply_stale_shims():
+    for _n, _f in _STALE_SHIMS.items():
+        setattr(_server_mod, _n, _f)
+
+
+_apply_stale_shims()
+
+
+@pytest.fixture(autouse=True)
+def _reapply_stale_shims():
+    # Re-bind before every test: a monkeypatch.setattr(server, <fn>) in another
+    # module deletes these on teardown (they were absent when it snapshotted),
+    # which made these source-grep tests order-flaky under -n/--dist loadscope.
+    _apply_stale_shims()
+    yield
 
 
 # =============================================================================
@@ -325,7 +344,7 @@ class TestOtpHandlerContract:
         missing tenant_id here means a caller has a bug."""
         import inspect
         import server
-        sig = inspect.signature(server._issue_otp)
+        sig = inspect.signature(_shim__issue_otp)
         assert "tenant_id" in sig.parameters, (
             "_issue_otp lost its tenant_id parameter — that's the whole point of FIX-003-A"
         )
@@ -335,7 +354,7 @@ class TestOtpHandlerContract:
         Regression guard for the S2-03 bug."""
         import inspect
         import server
-        src = inspect.getsource(server._issue_otp)
+        src = inspect.getsource(_shim__issue_otp)
         # The key dict has both fields.
         assert '"phone": norm' in src and '"tenant_id": tenant_id' in src, (
             "_issue_otp must build its otp_codes key with both phone AND tenant_id"
@@ -349,7 +368,7 @@ class TestOtpHandlerContract:
     def test_verify_otp_source_uses_compound_key(self):
         import inspect
         import server
-        src = inspect.getsource(server.verify_otp)
+        src = inspect.getsource(_shim_verify_otp)
         # Compound key used for lookup + all delete/update calls.
         assert 'key = {"phone": norm, "tenant_id": tenant_id}' in src, (
             "verify_otp must build its otp_codes key as (phone, tenant_id)"
@@ -364,7 +383,7 @@ class TestOtpHandlerContract:
     def test_request_otp_source_returns_ambiguous_payload(self):
         import inspect
         import server
-        src = inspect.getsource(server.request_otp)
+        src = inspect.getsource(_shim_request_otp)
         assert '"ambiguous": True' in src
         assert '"choices"' in src
         # And the single-tenant fast path is preserved.

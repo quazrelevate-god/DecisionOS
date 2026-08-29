@@ -171,22 +171,22 @@ class TestBuildRevokePatch:
 class TestEndpoints:
     def test_get_open_to_any_user(self):
         """Frontend needs it to decide banner state."""
-        from server import get_ai_consent
+        from routers.tenant_settings import get_ai_consent
         src = inspect.getsource(get_ai_consent)
         assert "get_current_user" in src
 
     def test_post_owner_only(self):
-        from server import grant_ai_consent
+        from routers.tenant_settings import grant_ai_consent
         src = inspect.getsource(grant_ai_consent)
         assert 'require_role("owner")' in src
 
     def test_delete_owner_only(self):
-        from server import revoke_ai_consent
+        from routers.tenant_settings import revoke_ai_consent
         src = inspect.getsource(revoke_ai_consent)
         assert 'require_role("owner")' in src
 
     def test_grant_captures_ip_and_ua(self):
-        from server import grant_ai_consent
+        from routers.tenant_settings import grant_ai_consent
         src = inspect.getsource(grant_ai_consent)
         assert 'X-Forwarded-For' in src
         assert 'User-Agent' in src
@@ -194,17 +194,17 @@ class TestEndpoints:
         assert 'build_grant_payload' in src
 
     def test_grant_emits_audit_log(self):
-        from server import grant_ai_consent
+        from routers.tenant_settings import grant_ai_consent
         src = inspect.getsource(grant_ai_consent)
         assert 'action="tenant_ai_consent_granted"' in src
 
     def test_revoke_emits_audit_log(self):
-        from server import revoke_ai_consent
+        from routers.tenant_settings import revoke_ai_consent
         src = inspect.getsource(revoke_ai_consent)
         assert 'action="tenant_ai_consent_revoked"' in src
 
     def test_revoke_refuses_when_no_active_grant(self):
-        from server import revoke_ai_consent
+        from routers.tenant_settings import revoke_ai_consent
         src = inspect.getsource(revoke_ai_consent)
         assert 'No active AI consent' in src or 'status_code=400' in src
 

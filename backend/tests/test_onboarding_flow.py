@@ -30,6 +30,7 @@ if str(ROOT) not in sys.path:
 import pytest
 
 from services.ai import ai_setup as ai_setup_svc
+from services.ai import generators as _gen  # T10-11.2: wrappers resolve AI fns here, not server
 from services.auth import onboarding_drafts as drafts_svc
 
 
@@ -152,7 +153,7 @@ class TestAiWrappers:
             return {"pipelines": [{"key": "procurement", "stages": [{"key": "req"}]}]}
         # Patch on the `server` module the wrapper imports from lazily
         import server
-        monkeypatch.setattr(server, "ai_generate_operating_model", fake)
+        monkeypatch.setattr(_gen, "ai_generate_operating_model", fake)
         result, status = asyncio.run(
             ai_setup_svc.ai_generate_operating_model_with_status("bakery", "5-10", [], ""))
         assert status == "generated"
@@ -166,7 +167,7 @@ class TestAiWrappers:
             # Simulate normalize_operating_model's default-return shape
             return {"pipelines": []}
         import server
-        monkeypatch.setattr(server, "ai_generate_operating_model", fake)
+        monkeypatch.setattr(_gen, "ai_generate_operating_model", fake)
         result, status = asyncio.run(
             ai_setup_svc.ai_generate_operating_model_with_status("bakery", "5-10", [], ""))
         assert status == "defaulted"
@@ -175,7 +176,7 @@ class TestAiWrappers:
         async def boom(*a, **k):
             raise TimeoutError("Anthropic timeout")
         import server
-        monkeypatch.setattr(server, "ai_generate_operating_model", boom)
+        monkeypatch.setattr(_gen, "ai_generate_operating_model", boom)
         result, status = asyncio.run(
             ai_setup_svc.ai_generate_operating_model_with_status("bakery", "5-10", [], ""))
         assert status == "failed"
@@ -186,7 +187,7 @@ class TestAiWrappers:
         async def fake_good(*a, **k):
             return {"business_terms": ["POS"], "actions": ["Ship"]}
         import server
-        monkeypatch.setattr(server, "ai_generate_lexicon", fake_good)
+        monkeypatch.setattr(_gen, "ai_generate_lexicon", fake_good)
         result, status = asyncio.run(
             ai_setup_svc.ai_generate_lexicon_with_status("bakery", "", [], ""))
         assert status == "generated"
@@ -195,7 +196,7 @@ class TestAiWrappers:
         async def fake_good(*a, **k):
             return {"expense": ["Ingredients", "Rent", "Other"], "asset": ["Oven", "Other"]}
         import server
-        monkeypatch.setattr(server, "ai_generate_finance_categories", fake_good)
+        monkeypatch.setattr(_gen, "ai_generate_finance_categories", fake_good)
         result, status = asyncio.run(
             ai_setup_svc.ai_generate_finance_categories_with_status("bakery", "", [], ""))
         assert status == "generated"

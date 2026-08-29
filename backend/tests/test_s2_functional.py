@@ -15,7 +15,9 @@ from fastapi import HTTPException
 
 
 def _use_db(testdb, *mods):
-    """Point each module's global `db` at the isolated test db; return restore()."""
+    """Point each listed module's global `db` at the isolated test db; return
+    restore(). List EVERY module the flow touches -- any left on the real client
+    both hits founder-os-58 and can cross-loop-fail under the shared client."""
     saved = [(m, m.db) for m in mods]
     for m in mods:
         m.db = testdb
@@ -165,3 +167,110 @@ def test_contact_rename_cascade_and_outstanding_split(with_test_db):
     # outstanding: sales invoice -> receivables (1000), purchase bill -> payables (400)
     assert bucket is not None
     assert bucket["receivables"] == 1000 and bucket["payables"] == 400
+
+
+# ===========================================================================
+# Batch 2: complaint lifecycle, workflow create/advance/override.
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# T10-02.10 -- complaint log -> resolve (writes brain memory) + memory asymmetry.
+# ---------------------------------------------------------------------------
+def test_complaint_log_resolve_and_memory(with_test_db):
+    import core
+    import routers.complaints as comp
+    import services.inbox as inbox_svc
+    import services.ai.brain_context as bctx
+    from models.complaints import ComplaintInput, MemoryInput
+
+    async def scenario(db):
+        restore = _use_db(db, comp, inbox_svc, bctx, core)
+        try:
+            tid = "t1"
+            owner = _u("owner", "o1")
+            c = await comp.create_complaint(ComplaintInput(text="Late delivery again", severity="high"), user=owner)
+            cid = c["id"]
+            logged = await db.complaints.find_one({"id": cid}, {"_id": 0, "status": 1})
+            inbox_n = await db.inbox.count_documents({"tenant_id": tid})           # auto-inbox
+            await comp.resolve_complaint(cid, user=owner)
+            resolved = await db.complaints.find_one({"id": cid}, {"_id": 0, "status": 1})
+            bc_n = await db.brain_context.count_documents(
+                {"tenant_id": tid, "kind": "resolution", "source_id": cid})        # resolution memory
+            missing = None
+            try:
+                await comp.resolve_complaint("ghost", user=owner)
+            except HTTPException as e:
+                missing = e.status_code
+            await comp.add_memory(MemoryInput(text="Prefers email over calls"), user=owner)
+            mem = await comp.list_memory(user=owner)
+            return logged["status"], inbox_n, resolved["status"], bc_n, missing, len(mem)
+        finally:
+            restore()
+
+    logged, inbox_n, resolved, bc_n, missing, mem_n = with_test_db(scenario)
+    assert logged == "open"
+    assert inbox_n == 1, "logging a complaint auto-creates an inbox item"
+    assert resolved == "resolved"
+    assert bc_n == 1, "resolving writes a resolution row to brain memory"
+    assert missing == 404
+    assert mem_n == 1
+
+
+# ---------------------------------------------------------------------------
+# T10-02.3 -- workflow create validates type; advance is gated / override audited.
+# ---------------------------------------------------------------------------
+def test_workflow_create_and_advance_gating(with_test_db):
+    import core
+    import core.deps as core_deps             # tenant_role_keys (task-spawn) reads db here
+    import routers.workflows as wfr
+    import services.ai.generators as gen
+    import services.workflow_engine as eng
+    import services.ai.brain_context as bctx   # engine.advance writes a brain_context row
+    from models.workflows import WorkflowCreateInput, WorkflowAdvanceInput
+
+    async def scenario(db):
+        restore = _use_db(db, wfr, gen, core, core_deps, eng, bctx)
+        try:
+            tid = "t1"
+            owner = _u("owner", "o1")
+
+            # invalid type -> 400
+            bad = None
+            try:
+                await wfr.create_workflow(WorkflowCreateInput(type="not_a_pipeline", title="X"), user=owner)
+            except HTTPException as e:
+                bad = e.status_code
+
+            # valid type -> created at the first stage
+            wf = await wfr.create_workflow(WorkflowCreateInput(type="production", title="Order 42"), user=owner)
+            wid, first_stage = wf["id"], wf["stage"]
+
+            # an open task at the current stage makes it NOT stage-ready -> advance 409
+            await db.tasks.insert_one({"id": "t-block", "tenant_id": tid, "workflow_id": wid,
+                                       "stage_key": first_stage, "status": "todo", "title": "cut fabric"})
+            not_ready = None
+            try:
+                await wfr.advance_workflow(wid, WorkflowAdvanceInput(stage="confirmed"), user=owner)
+            except HTTPException as e:
+                not_ready = e.status_code
+
+            # override WITHOUT a reason -> refused
+            no_reason = None
+            try:
+                await wfr.advance_workflow(wid, WorkflowAdvanceInput(stage="confirmed", override=True, reason=""), user=owner)
+            except HTTPException as e:
+                no_reason = e.status_code
+
+            # override WITH a reason -> forces the transition even though a task is open
+            forced = await wfr.advance_workflow(
+                wid, WorkflowAdvanceInput(stage="confirmed", override=True, reason="customer needs it today"), user=owner)
+            return bad, first_stage, not_ready, no_reason, forced.get("stage")
+        finally:
+            restore()
+
+    bad, first_stage, not_ready, no_reason, forced_stage = with_test_db(scenario)
+    assert bad == 400, "an unknown workflow type must 400"
+    assert first_stage == "order_received"
+    assert not_ready == 409, "advancing with an open stage task must 409"
+    assert no_reason == 400, "override requires a non-empty reason"
+    assert forced_stage == "confirmed", "audited override advances despite the open task"

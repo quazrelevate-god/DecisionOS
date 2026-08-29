@@ -823,6 +823,21 @@ async def _bootstrap():
         await db.decisions.create_index([("tenant_id", 1), ("created_at", -1)])
         await db.tasks.create_index([("tenant_id", 1), ("status", 1), ("due_date", 1)])
         await db.tasks.create_index([("tenant_id", 1), ("assignee_id", 1), ("status", 1)])
+        # BUG-13: engine-spawned template tasks are keyed by
+        # (tenant_id, workflow_id, stage_key, title). on_stage_enter used a
+        # find-then-insert with no unique index, so a concurrent stage re-entry
+        # could double-spawn. This PARTIAL unique index (only over source='engine'
+        # tasks, so it never constrains ordinary user tasks) makes the second
+        # concurrent insert fail with DuplicateKeyError instead.
+        try:
+            await db.tasks.create_index(
+                [("tenant_id", 1), ("workflow_id", 1), ("stage_key", 1), ("title", 1)],
+                unique=True,
+                partialFilterExpression={"source": "engine"},
+                name="engine_template_task_unique",
+            )
+        except Exception as e:
+            logger.warning(f"engine template-task unique index: {e}")
         await db.workflows.create_index("tenant_id")
         await db.platform_admins.create_index("email", unique=True)
         await db.usage_events.create_index([("tenant_id", 1), ("created_at", -1)])

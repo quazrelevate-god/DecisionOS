@@ -49,6 +49,8 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
+from pymongo.errors import DuplicateKeyError
+
 from core import db, log_activity, new_id, now_iso, tenant_role_keys
 
 
@@ -158,27 +160,36 @@ async def on_stage_enter(
         if role:
             assignee_id = await pick_least_loaded_member(tenant_id, role)
         tid = new_id()
-        await db.tasks.insert_one({
-            "id": tid, "tenant_id": tenant_id,
-            "title": title,
-            "description": (
-                f"Spawned by workflow '{wf.get('title') or ''}' entering "
-                f"stage '{stage_obj.get('label') or stage_key}'."
-            ),
-            "assignee_role": role or None,
-            "assignee_id": assignee_id,
-            "priority": "medium", "status": "todo",
-            "due_date": None,
-            "decision_id": wf.get("decision_id"),
-            # WE-01: linkage set at spawn -- WE-06 engine is the only
-            # writer that can populate both fields at creation time.
-            "workflow_id": workflow_id, "stage_key": stage_key,
-            "evidence_required": bool(tmpl.get("evidence_required")),
-            "source": "engine",  # sentinel for the idempotency check
-            "created_by": actor_id, "created_at": now_iso(),
-            "updated_at": now_iso(),
-            "last_action": "Auto-spawned by workflow engine",
-        })
+        try:
+            await db.tasks.insert_one({
+                "id": tid, "tenant_id": tenant_id,
+                "title": title,
+                "description": (
+                    f"Spawned by workflow '{wf.get('title') or ''}' entering "
+                    f"stage '{stage_obj.get('label') or stage_key}'."
+                ),
+                "assignee_role": role or None,
+                "assignee_id": assignee_id,
+                "priority": "medium", "status": "todo",
+                "due_date": None,
+                "decision_id": wf.get("decision_id"),
+                # WE-01: linkage set at spawn -- WE-06 engine is the only
+                # writer that can populate both fields at creation time.
+                "workflow_id": workflow_id, "stage_key": stage_key,
+                "evidence_required": bool(tmpl.get("evidence_required")),
+                "source": "engine",  # sentinel for the idempotency check
+                "created_by": actor_id, "created_at": now_iso(),
+                "updated_at": now_iso(),
+                "last_action": "Auto-spawned by workflow engine",
+            })
+        except DuplicateKeyError:
+            # BUG-13: the find-then-insert above is not atomic. A concurrent
+            # re-entry (an advance racing a crash-retry, or two ticks) can pass
+            # the existence check together and both reach the insert. The partial
+            # unique index on (tenant_id, workflow_id, stage_key, title) for
+            # source='engine' tasks makes the loser fail here instead of
+            # double-spawning -- so we just skip: the task already exists.
+            continue
         created_task_ids.append(tid)
 
     # -----------------------------------------------------------------------

@@ -224,3 +224,79 @@ async def enforce_seat_limit(db, tenant_id: str) -> None:
                 "plan": ep["key"],
             },
         )
+
+
+def _seat_limit_error(cap, used, plan_key):
+    return HTTPException(
+        status_code=402,
+        detail={
+            "code": "seat_limit_reached",
+            "message": (f"You've reached your plan's seat limit ({cap}). "
+                         f"Upgrade to add more members, or remove an existing member first."),
+            "seats_used": used, "seat_limit": cap, "plan": plan_key,
+        },
+    )
+
+
+async def _seed_seats_used(db, tenant_id: str) -> None:
+    """One-time lazy init of tenant.seats_used from the authoritative live ACTIVE
+    membership count. The `$exists: False` filter makes concurrent seeders safe --
+    only the first materialises the counter."""
+    from services.auth.membership import list_memberships_for_tenant, LIVE_STATUSES
+    live = len(await list_memberships_for_tenant(db, tenant_id, statuses=LIVE_STATUSES))
+    await db.tenants.update_one(
+        {"id": tenant_id, "seats_used": {"$exists": False}},
+        {"$set": {"seats_used": live}})
+
+
+async def reserve_seat(db, tenant_id: str) -> None:
+    """Atomically reserve ONE active seat, or raise HTTPException(402) at the cap.
+
+    BUG-12 fix: the old enforce_seat_limit COUNTED then the caller INSERTED, with
+    no atomic step between -- so N parallel invites all passed the count and
+    over-provisioned. Here the reservation is a single conditional `$inc` on
+    tenant.seats_used ({seats_used: {$lt: cap}}), which Mongo applies atomically:
+    exactly `cap - used` racing reservations succeed and the rest get 402.
+
+    Fail-closed on drift: seats_used is maintained by the membership choke points
+    (reserve on ->active, release on active->exit). If a release were ever missed,
+    seats_used drifts HIGH and this over-blocks (safe); recount_seats() reconciles
+    it back to the live truth. It can never drift low enough to over-provision as
+    long as every ->active transition reserves.
+    """
+    tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0})
+    if tenant is None:
+        return  # unknown tenant -> can't resolve a plan; don't gate
+    ep = effective_plan(tenant)
+    cap = ep["seat_limit"]
+    if cap is None:
+        return  # unlimited plan
+    if tenant.get("seats_used") is None:
+        await _seed_seats_used(db, tenant_id)
+    # Atomic conditional increment: only succeeds while seats_used < cap. update_one
+    # (rather than find_one_and_update) so in-memory test doubles support it too.
+    res = await db.tenants.update_one(
+        {"id": tenant_id, "seats_used": {"$lt": cap}},
+        {"$inc": {"seats_used": 1}},
+    )
+    if getattr(res, "modified_count", 0) == 0:
+        raise _seat_limit_error(cap, cap, ep["key"])
+
+
+async def release_seat(db, tenant_id: str) -> None:
+    """Atomically free one seat (floored at 0). Called when an ACTIVE membership
+    leaves the active set (suspend / remove). Best-effort: a missed release only
+    over-blocks and is corrected by recount_seats()."""
+    await db.tenants.update_one(
+        {"id": tenant_id, "seats_used": {"$gt": 0}},
+        {"$inc": {"seats_used": -1}})
+
+
+async def recount_seats(db, tenant_id: str) -> int:
+    """Reconcile tenant.seats_used to the authoritative live ACTIVE count. Safe to
+    run any time (e.g. when listing the team, or a periodic sweep) -- corrects any
+    drift from a missed reserve/release."""
+    from services.auth.membership import list_memberships_for_tenant, LIVE_STATUSES
+    live = len(await list_memberships_for_tenant(db, tenant_id, statuses=LIVE_STATUSES))
+    await db.tenants.update_one({"id": tenant_id}, {"$set": {"seats_used": live}})
+    return live

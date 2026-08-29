@@ -118,41 +118,42 @@ def test_auto_invoice_concurrent_double_completion(with_test_db):
 
 
 # ---------------------------------------------------------------------------
-# T10-10.3 -- seat-limit TOCTOU: parallel invites at the cap over-provision.
-# enforce_seat_limit COUNTS then the caller INSERTS, with no atomic reservation,
-# so N parallel invites all pass the count and blow past the cap. Expose it.
+# T10-10.3 -- seat-limit reservation is atomic (BUG-12 FIXED). N parallel
+# reservations at the cap boundary -> exactly the remaining seats are admitted.
 # ---------------------------------------------------------------------------
-def test_seat_limit_toctou_over_provisions(with_test_db):
-    from services.plans import enforce_seat_limit
+def test_seat_limit_atomic_reservation(with_test_db):
+    from services.plans import reserve_seat, release_seat
     from fastapi import HTTPException
 
     async def scenario(db):
         tid = "t1"
         await db.tenants.insert_one({"id": tid, "plan": "trial"})   # trial = 3 seats
-        # already 2 active members -> exactly one seat left
+        # already 2 active members -> exactly ONE seat left
         await db.memberships.insert_many([
             {"tenant_id": tid, "user_id": "u1", "status": "active"},
             {"tenant_id": tid, "user_id": "u2", "status": "active"},
         ])
 
-        # Worst-case interleaving of a check-then-act race: all N requests run the
-        # cap CHECK first (each still sees 2 < 3), THEN all commit their insert.
-        # This is exactly what happens when 3 invites land near-simultaneously and
-        # there is no atomic seat reservation between the count and the insert.
-        checks = await asyncio.gather(*[enforce_seat_limit(db, tid) for _ in range(3)],
-                                      return_exceptions=True)
-        passed = sum(1 for c in checks if not isinstance(c, HTTPException))
-        await asyncio.gather(*[
-            db.memberships.insert_one({"tenant_id": tid, "user_id": f"n{i}", "status": "active"})
-            for i in range(passed)])
-        active = await db.memberships.count_documents({"tenant_id": tid, "status": "active"})
-        return passed, active
+        async def reserve():
+            try:
+                await reserve_seat(db, tid)   # atomic $inc gate; seats_used lazily seeded to 2
+                return True
+            except HTTPException:
+                return False
 
-    passed, active = with_test_db(scenario)
-    # BUG (confirmed): every invite passes the cap check, so all commit -> the
-    # workspace ends up with 5 active members against a hard cap of 3.
-    assert passed == 3, "the count-then-insert cap admits ALL racing invites (no reservation)"
-    assert active == 5, "seat-limit TOCTOU over-provisions past the cap (5 > 3) -- see BUG-12"
+        # 3 invites race for the 1 remaining seat
+        admitted = sum(await asyncio.gather(*[reserve() for _ in range(3)]))
+        seats_used = (await db.tenants.find_one({"id": tid}, {"_id": 0, "seats_used": 1}))["seats_used"]
+
+        # releasing frees a seat back, and a fresh reservation then succeeds
+        await release_seat(db, tid)
+        freed_ok = await reserve()
+        return admitted, seats_used, freed_ok
+
+    admitted, seats_used, freed_ok = with_test_db(scenario)
+    assert admitted == 1, "exactly ONE of 3 racing reservations wins the last seat (no over-provision)"
+    assert seats_used == 3, "seats_used lands exactly at the cap, never above"
+    assert freed_ok is True, "releasing a seat lets the next reservation through"
 
 
 # ---------------------------------------------------------------------------
@@ -242,32 +243,46 @@ def test_quota_overshoot_without_reservation(with_test_db):
 
 
 # ---------------------------------------------------------------------------
-# T10-10.4 -- stage-enter template-task spawn is find-then-insert with NO unique
-# index, so a concurrent re-entry (advance racing a retry) double-spawns.
+# T10-10.4 -- stage-enter template spawn: FIXED (BUG-13). The partial unique
+# index on engine tasks (tenant_id, workflow_id, stage_key, title) makes a
+# concurrent re-entry's second insert fail instead of double-spawning.
 # ---------------------------------------------------------------------------
-def test_stage_enter_double_spawn_race(with_test_db):
+def test_stage_enter_double_spawn_is_blocked(with_test_db):
     async def scenario(db):
         tid = "t1"
-        q = {"tenant_id": tid, "workflow_id": "wf", "stage_key": "cut", "is_template": True,
-             "status": {"$nin": ["done", "cancelled"]}}
-        # worst-case interleaving: both re-entries CHECK (find none) before either INSERTs.
-        e1, e2 = await asyncio.gather(db.tasks.find_one(q), db.tasks.find_one(q))
-        to_insert = [1 for e in (e1, e2) if not e]
-        await asyncio.gather(*[
-            db.tasks.insert_one({"id": f"tpl{i}", "tenant_id": tid, "workflow_id": "wf",
-                                 "stage_key": "cut", "is_template": True, "status": "todo",
-                                 "title": "Cut fabric"})
-            for i in range(len(to_insert))])
-        n = await db.tasks.count_documents({"tenant_id": tid, "workflow_id": "wf",
-                                            "stage_key": "cut", "is_template": True})
-        return n
+        # the same partial unique index bootstrap installs
+        await db.tasks.create_index(
+            [("tenant_id", 1), ("workflow_id", 1), ("stage_key", 1), ("title", 1)],
+            unique=True, partialFilterExpression={"source": "engine"},
+            name="engine_template_task_unique")
 
-    spawned = with_test_db(scenario)
-    # No unique (workflow_id, stage_key) index -> the same template task is spawned twice.
-    assert spawned == 2, "concurrent stage re-entry double-spawns template tasks (no unique index)"
-    import warnings
-    warnings.warn("T10-10.4: on_stage_enter double-spawns under a race -- add a unique "
-                  "(workflow_id, stage_key, template) index or upsert. See Bug Log.")
+        def _tmpl(i):
+            return {"id": f"tpl{i}", "tenant_id": tid, "workflow_id": "wf", "stage_key": "cut",
+                    "title": "Cut fabric", "source": "engine", "status": "todo"}
+
+        # two concurrent re-entries both reach the insert; the index rejects one.
+        async def spawn(i):
+            try:
+                await db.tasks.insert_one(_tmpl(i))
+                return True
+            except DuplicateKeyError:
+                return False   # on_stage_enter catches this and skips
+
+        results = await asyncio.gather(spawn(0), spawn(1))
+        n = await db.tasks.count_documents({"tenant_id": tid, "workflow_id": "wf",
+                                            "stage_key": "cut", "source": "engine"})
+        # an ordinary (non-engine) task with the same title is NOT constrained
+        await db.tasks.insert_one({"id": "u1", "tenant_id": tid, "workflow_id": "wf",
+                                   "stage_key": "cut", "title": "Cut fabric", "status": "todo"})
+        await db.tasks.insert_one({"id": "u2", "tenant_id": tid, "workflow_id": "wf",
+                                   "stage_key": "cut", "title": "Cut fabric", "status": "todo"})
+        user_tasks = await db.tasks.count_documents({"tenant_id": tid, "source": {"$ne": "engine"}})
+        return sum(1 for r in results if r), n, user_tasks
+
+    inserted, engine_tasks, user_tasks = with_test_db(scenario)
+    assert inserted == 1, "only one concurrent template-task insert succeeds"
+    assert engine_tasks == 1, "the partial unique index prevents the double-spawn (BUG-13 fixed)"
+    assert user_tasks == 2, "the PARTIAL index does not constrain ordinary user tasks"
 
 
 # ---------------------------------------------------------------------------

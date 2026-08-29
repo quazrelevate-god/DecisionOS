@@ -96,6 +96,10 @@ async def create_membership(
     if existing:
         if existing.get("status") == STATUS_REMOVED:
             # Re-inviting a removed member: flip status + refresh audit.
+            if status == STATUS_ACTIVE:
+                # BUG-12: reactivating consumes a seat -> atomic reservation gate.
+                from services.plans import reserve_seat
+                await reserve_seat(db, tenant_id)
             updates = {
                 "status": status,
                 "role": role,
@@ -113,6 +117,11 @@ async def create_membership(
             )
             return {**existing, **updates}
         return existing
+    if status == STATUS_ACTIVE:
+        # BUG-12: a new active member consumes a seat -> atomic reservation gate
+        # (raises 402 at the cap) BEFORE we insert.
+        from services.plans import reserve_seat
+        await reserve_seat(db, tenant_id)
     doc = {
         "id": new_id(),
         "user_id": user_id,
@@ -172,6 +181,17 @@ async def update_membership(db, *, user_id: str, tenant_id: str,
     updated doc or None if none matched."""
     if not updates:
         return await find_membership(db, user_id, tenant_id)
+    # BUG-12: keep tenant.seats_used in step with active-status transitions.
+    new_status = updates.get("status")
+    if new_status is not None:
+        old = await find_membership(db, user_id, tenant_id)
+        old_status = old.get("status") if old else None
+        if old and old_status != STATUS_ACTIVE and new_status == STATUS_ACTIVE:
+            from services.plans import reserve_seat           # activating -> reserve (gate at cap)
+            await reserve_seat(db, tenant_id)
+        elif old and old_status == STATUS_ACTIVE and new_status != STATUS_ACTIVE:
+            from services.plans import release_seat           # leaving active -> free the seat
+            await release_seat(db, tenant_id)
     updates = {**updates, "updated_at": now_iso()}
     res = await db[COLLECTION].update_one(
         {"user_id": user_id, "tenant_id": tenant_id},
@@ -187,11 +207,18 @@ async def remove_membership(db, *, user_id: str, tenant_id: str) -> bool:
     for audit. Idempotent (removing an already-removed membership is a
     no-op returning True)."""
     now = now_iso()
+    # BUG-12: if the removed member was ACTIVE, free their seat.
+    old = await find_membership(db, user_id, tenant_id)
+    was_active = bool(old and old.get("status") == STATUS_ACTIVE)
     res = await db[COLLECTION].update_one(
         {"user_id": user_id, "tenant_id": tenant_id},
         {"$set": {"status": STATUS_REMOVED, "removed_at": now, "updated_at": now}},
     )
-    return getattr(res, "matched_count", 0) > 0
+    matched = getattr(res, "matched_count", 0) > 0
+    if matched and was_active:
+        from services.plans import release_seat
+        await release_seat(db, tenant_id)
+    return matched
 
 
 async def resolve_login_choices(db, user_id: str) -> List[Dict[str, Any]]:

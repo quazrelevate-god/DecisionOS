@@ -11,7 +11,11 @@ Batch 1:
   T10-02.4   contact rename cascades into invoices/payments/workflows; outstanding
              splits purchase_bill -> payables vs receivables
 """
-from fastapi import HTTPException
+from fastapi import HTTPException, BackgroundTasks
+
+
+def _BG():
+    return BackgroundTasks()
 
 
 def _use_db(testdb, *mods):
@@ -594,3 +598,259 @@ def test_whatsapp_verify_and_webhook_gates(monkeypatch):
     assert r["not_configured"] == "not_configured", "unconfigured webhook is a JSON no-op"
     assert r["mismatch"] == 403, "a forged signature is rejected"
     assert r["prod_no_secret"] == 503, "prod without WA_APP_SECRET refuses the webhook"
+
+
+# ===========================================================================
+# Batch 7: ledger typed CRUD + payment matching + delete cascade (T10-02.6).
+# (AI OCR path — /expenses/with-file — is exercised in the S2.5 ingest tests.)
+# ===========================================================================
+
+def test_ledger_typed_crud_payment_match_and_delete_cascade(with_test_db):
+    import core
+    import core.deps as core_deps
+    import routers.ledger as led
+    import services.ai.brain_context as bctx
+    from models.finance import ExpenseInput
+
+    async def scenario(db):
+        restore = _use_db(db, led, core, core_deps, bctx)
+        try:
+            tid = "t1"
+            owner = _u("owner", "o1")
+            r = {}
+
+            # --- typed expense CRUD ---
+            exp = await led.add_expense(ExpenseInput(title="Godown rent", amount=5000, category="Rent"),
+                                        user=owner)
+            r["expense_saved"] = await db.expenses.count_documents({"id": exp["id"], "tenant_id": tid})
+
+            # --- payment match: inbound partial leaves the invoice partial ---
+            await db.invoices.insert_one({"id": "i1", "tenant_id": tid, "type": "sales_invoice",
+                                          "number": "INV-1", "amount": 1000, "amount_paid": 0,
+                                          "status": "unpaid", "contact_name": "Acme"})
+            await db.payments.insert_one({"id": "pay1", "tenant_id": tid, "direction": "in",
+                                          "amount": 600, "applied": 0, "invoice_number": "INV-1"})
+            pay1 = {"id": "pay1", "tenant_id": tid, "direction": "in", "amount": 600,
+                    "applied": 0, "invoice_number": "INV-1"}
+            await led.reconcile_payment(tid, pay1, "test")
+            inv1 = await db.invoices.find_one({"id": "i1"}, {"_id": 0, "amount_paid": 1, "status": 1})
+            r["partial_paid"], r["partial_status"] = inv1["amount_paid"], inv1["status"]
+
+            # --- payment match: overpay leaves a remainder on the payment ---
+            await db.invoices.insert_one({"id": "i2", "tenant_id": tid, "type": "sales_invoice",
+                                          "number": "INV-2", "amount": 500, "amount_paid": 0,
+                                          "status": "unpaid", "contact_name": "Beta"})
+            await db.payments.insert_one({"id": "pay2", "tenant_id": tid, "direction": "in",
+                                          "amount": 800, "applied": 0, "invoice_number": "INV-2"})
+            pay2 = {"id": "pay2", "tenant_id": tid, "direction": "in", "amount": 800,
+                    "applied": 0, "invoice_number": "INV-2"}
+            await led.reconcile_payment(tid, pay2, "test")
+            inv2 = await db.invoices.find_one({"id": "i2"}, {"_id": 0, "status": 1})
+            p2 = await db.payments.find_one({"id": "pay2"}, {"_id": 0, "applied": 1, "match_status": 1})
+            r["over_inv_status"] = inv2["status"]
+            r["over_applied"], r["over_match"] = p2["applied"], p2.get("match_status")
+
+            # --- no confident match -> unmatched ---
+            pay3 = {"id": "pay3", "tenant_id": tid, "direction": "in", "amount": 999,
+                    "applied": 0, "invoice_number": "NOPE", "contact_name": ""}
+            await db.payments.insert_one(dict(pay3))
+            await led.reconcile_payment(tid, pay3, "test")
+            p3 = await db.payments.find_one({"id": "pay3"}, {"_id": 0, "match_status": 1})
+            r["unmatched"] = p3.get("match_status")
+
+            # --- delete revenue cascades its payments; missing -> 404 ---
+            await db.invoices.insert_one({"id": "i3", "tenant_id": tid, "type": "sales_invoice",
+                                          "number": "INV-3", "amount": 200, "status": "unpaid"})
+            await db.payments.insert_one({"id": "pay4", "tenant_id": tid, "invoice_id": "i3",
+                                          "direction": "in", "amount": 200})
+            await led.delete_revenue_invoice("i3", user=owner)
+            r["inv_gone"] = await db.invoices.count_documents({"id": "i3"})
+            r["pay_cascaded"] = await db.payments.count_documents({"invoice_id": "i3"})
+            missing = None
+            try:
+                await led.delete_revenue_invoice("ghost", user=owner)
+            except HTTPException as e:
+                missing = e.status_code
+            r["missing"] = missing
+            return r
+        finally:
+            restore()
+
+    r = with_test_db(scenario)
+    assert r["expense_saved"] == 1
+    assert r["partial_paid"] == 600 and r["partial_status"] == "partial", "partial payment leaves invoice partial"
+    assert r["over_inv_status"] == "paid", "overpayment settles the invoice"
+    assert r["over_applied"] == 500 and r["over_match"] == "partial", "the 300 remainder stays on the payment"
+    assert r["unmatched"] == "unmatched", "no confident match -> stays in the queue"
+    assert r["inv_gone"] == 0 and r["pay_cascaded"] == 0, "deleting revenue cascades its payments"
+    assert r["missing"] == 404
+
+
+# ===========================================================================
+# Batch 8: meeting + voice text intake (T10-02.9 / T10-02.8).
+# Background AI/STT jobs are queued (not run in a direct call), so these pin the
+# request-side contract; the STT-failure path is covered separately below.
+# ===========================================================================
+
+def test_meeting_text_intake_and_cross_tenant_404(with_test_db):
+    import routers.meetings as meet
+    from models.voice import TextNoteInput
+
+    async def scenario(db):
+        restore = _use_db(db, meet)
+        try:
+            owner = _u("owner", "o1", tid="t1")
+            out = await meet.create_meeting_text(TextNoteInput(text="Discussed Q3 targets"),
+                                                 background=_BG(), user=owner)
+            rec = await db.meetings.find_one({"id": out["id"]}, {"_id": 0, "title": 1, "status": 1})
+            got = await meet.get_meeting(out["id"], user=owner)
+            # cross-tenant + missing -> 404
+            other = _u("owner", "x1", tid="t2")
+            cross = missing = None
+            try:
+                await meet.get_meeting(out["id"], user=other)
+            except HTTPException as e:
+                cross = e.status_code
+            try:
+                await meet.get_meeting("ghost", user=owner)
+            except HTTPException as e:
+                missing = e.status_code
+            return out["status"], rec["title"], rec["status"], got["id"], cross, missing
+        finally:
+            restore()
+
+    status, title, rec_status, got_id, cross, missing = with_test_db(scenario)
+    assert status == "queued" and rec_status == "queued"
+    assert title == "Processing meeting…", "record starts in a Processing state until the job finishes"
+    assert cross == 404, "another tenant cannot read this meeting"
+    assert missing == 404
+
+
+def test_voice_text_note_queues_and_empty_is_400(with_test_db):
+    import routers.voice_notes as vn
+    from models.voice import TextNoteInput
+
+    async def scenario(db):
+        restore = _use_db(db, vn)
+        try:
+            owner = _u("owner", "o1")
+            out = await vn.create_text_note(TextNoteInput(text="Order 50 bags of cement"),
+                                            background=_BG(), user=owner)
+            note = await db.voice_notes.find_one({"id": out["id"]}, {"_id": 0, "status": 1})
+            empty = None
+            try:
+                await vn.create_text_note(TextNoteInput(text="   "), background=_BG(), user=owner)
+            except HTTPException as e:
+                empty = e.status_code
+            return out["status"], note["status"], empty
+        finally:
+            restore()
+
+    status, note_status, empty = with_test_db(scenario)
+    assert status == "queued" and note_status == "queued"
+    assert empty == 400, "an empty directive with no attachment is rejected"
+
+
+def test_transcribe_only_stt_failure_is_503(monkeypatch):
+    import asyncio
+    import io
+    import routers.voice_notes as vn
+    from starlette.datastructures import UploadFile
+
+    async def _boom(*a, **k):
+        raise RuntimeError("Sarvam unavailable")
+    monkeypatch.setattr(vn, "transcribe_audio", _boom)
+
+    owner = _u("owner", "o1")
+    uf = UploadFile(file=io.BytesIO(b"fake-audio"), filename="clip.mp3")
+    code = None
+    try:
+        asyncio.run(vn.transcribe_only(file=uf, language="auto", user=owner))
+    except HTTPException as e:
+        code = e.status_code
+    assert code == 503, "an STT provider failure surfaces as 503"
+
+
+# ===========================================================================
+# Batch 9 (final): ingest commit idempotency + Ask RBAC / INSUFFICIENT_DATA.
+# ===========================================================================
+
+def test_ingest_commit_is_idempotent(with_test_db):
+    import core
+    import core.deps as core_deps
+    import routers.finance as fin
+    import services.ingestion as ingestion
+    from models.finance import IngestCommitInput
+
+    async def scenario(db):
+        restore = _use_db(db, fin, ingestion, core, core_deps)
+        try:
+            tid = "t1"
+            owner = _u("owner", "o1")
+            await db.ingestions.insert_one({"id": "ing1", "tenant_id": tid, "status": "review",
+                                            "source": "upload", "filename": "bills.pdf",
+                                            "inbox_id": "ib1"})
+            await db.inbox.insert_one({"id": "ib1", "tenant_id": tid, "status": "open"})
+
+            first = await fin.commit_ingestion("ing1", IngestCommitInput(records={}), user=owner)
+            ing = await db.ingestions.find_one({"id": "ing1"}, {"_id": 0, "status": 1})
+            ib = await db.inbox.find_one({"id": "ib1"}, {"_id": 0, "status": 1})
+
+            dup = None
+            try:
+                await fin.commit_ingestion("ing1", IngestCommitInput(records={}), user=owner)
+            except HTTPException as e:
+                dup = e.status_code
+            missing = None
+            try:
+                await fin.commit_ingestion("ghost", IngestCommitInput(records={}), user=owner)
+            except HTTPException as e:
+                missing = e.status_code
+            return first.get("filed"), ing["status"], ib["status"], dup, missing
+        finally:
+            restore()
+
+    filed, ing_status, ib_status, dup, missing = with_test_db(scenario)
+    assert filed is True
+    assert ing_status == "filed", "a committed ingestion is marked filed"
+    assert ib_status == "done", "committing closes the source inbox item"
+    assert dup == 400, "committing an already-filed upload is rejected"
+    assert missing == 404
+
+def test_ask_finance_intent_denied_and_insufficient_data(with_test_db):
+    import core
+    import core.deps as core_deps
+    import routers.brain as brain
+    import services.ai.brain_rbac as brain_rbac
+    from models.brain import AskRequest
+
+    async def scenario(db):
+        restore = _use_db(db, brain, core, core_deps)
+        # deterministic, offline: control the intent classifier + the LLM planner.
+        saved = (brain_rbac.classify_intent, brain_rbac.allowed_intents, brain._plan)
+        try:
+            # --- a non-finance user asking a money question is refused up front ---
+            brain_rbac.classify_intent = lambda q: "finance"
+            brain_rbac.allowed_intents = lambda u: {"operations"}
+            denied = await brain.ask(AskRequest(question="What are our total sales this month?"),
+                                     user=_u("sales", "s1"))
+
+            # --- second guard: even if the intent passes, a plan that NEEDS finance
+            #     is refused for a non-finance user (defence in depth, no LLM call) ---
+            brain_rbac.classify_intent = lambda q: "operations"
+            brain_rbac.allowed_intents = lambda u: {"operations", "finance"}
+
+            async def _fake_plan(question, prev, lang):
+                return {"primary_entity": "invoice", "needs_finance": True, "metrics": [],
+                        "filters": {}, "intent": "operations", "entities": []}
+            brain._plan = _fake_plan
+            plan_denied = await brain.ask(AskRequest(question="How is business doing?"),
+                                          user=_u("sales", "s1"))
+            return denied.get("type"), plan_denied.get("type")
+        finally:
+            brain_rbac.classify_intent, brain_rbac.allowed_intents, brain._plan = saved
+            restore()
+
+    intent_denied, plan_denied = with_test_db(scenario)
+    assert intent_denied == "PERMISSION_DENIED", "intent gate: a non-finance user can't ask money questions"
+    assert plan_denied == "PERMISSION_DENIED", "plan gate: a finance-needing plan is refused for non-finance users"

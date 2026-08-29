@@ -460,3 +460,69 @@ def test_task_gates_smart_route_and_auto_invoice(with_test_db):
     assert r["missing"] == 404
     assert r["inv_first"] == 1, "completing an invoice-task auto-creates a draft invoice"
     assert r["inv_second"] == 1, "auto-invoice is idempotent (source_task_id dedup)"
+
+
+# ===========================================================================
+# Batch 5: leave request/approve + attendance upsert.
+# ===========================================================================
+
+def test_leave_request_validation_approve_and_attendance(with_test_db):
+    import core
+    import core.deps as core_deps
+    import routers.team as team
+    import services.leave as leave_svc
+    import services.notifications as notif
+    from models.team import LeaveRequestInput, LeaveDecisionInput, AttendanceInput
+
+    async def scenario(db):
+        restore = _use_db(db, team, leave_svc, notif, core, core_deps)
+        try:
+            tid = "t1"
+            owner = _u("owner", "o1")
+            emp = _u("sales", "e1")
+            r = {}
+
+            # bad leave type -> 400
+            try:
+                await team.create_leave(LeaveRequestInput(leave_type="vacation", from_date="2026-06-01",
+                                                          to_date="2026-06-02", day_portion="full", reason="x"), user=emp)
+                r["bad_type"] = None
+            except HTTPException as e:
+                r["bad_type"] = e.status_code
+
+            # end before start -> 400
+            try:
+                await team.create_leave(LeaveRequestInput(leave_type="casual", from_date="2026-06-05",
+                                                          to_date="2026-06-01", day_portion="full", reason="x"), user=emp)
+                r["bad_range"] = None
+            except HTTPException as e:
+                r["bad_range"] = e.status_code
+
+            # valid request -> pending
+            created = await team.create_leave(LeaveRequestInput(leave_type="casual", from_date="2026-06-01",
+                                                                to_date="2026-06-03", day_portion="full",
+                                                                reason="family"), user=emp)
+            lid = created["id"]
+            r["created_status"] = created.get("status")
+
+            # approve -> approved
+            await team.approve_leave(lid, LeaveDecisionInput(note="approved, enjoy"), user=owner)
+            after = await db.leaves.find_one({"id": lid}, {"_id": 0, "status": 1})
+            r["approved_status"] = after["status"]
+
+            # attendance upsert: same (user, date) twice -> one row, latest status
+            await team.mark_attendance(AttendanceInput(user_id="e1", status="absent", date="2026-06-10"), user=owner)
+            await team.mark_attendance(AttendanceInput(user_id="e1", status="present", date="2026-06-10"), user=owner)
+            att = await db.attendance.find({"tenant_id": tid, "user_id": "e1", "date": "2026-06-10"}, {"_id": 0}).to_list(10)
+            r["att_count"], r["att_status"] = len(att), (att[0]["status"] if att else None)
+            return r
+        finally:
+            restore()
+
+    r = with_test_db(scenario)
+    assert r["bad_type"] == 400, "an unknown leave type must 400"
+    assert r["bad_range"] == 400, "end-before-start must 400"
+    assert r["created_status"] == "pending"
+    assert r["approved_status"] == "approved"
+    assert r["att_count"] == 1, "attendance upserts one row per (user, date)"
+    assert r["att_status"] == "present", "the latest mark wins"

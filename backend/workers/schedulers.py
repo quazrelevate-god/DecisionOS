@@ -13,9 +13,13 @@ from __future__ import annotations
 
 import asyncio
 import os
+from datetime import datetime, timezone
 
 from core import db, logger, now_iso
 from services.email import send_email
+
+# Epic 9 S9: run the DPDP retention purge at most once per ~24h (leader-only).
+RETENTION_SWEEP_MIN_INTERVAL_SECONDS = 20 * 3600
 
 # _followup_last_run is the per-tenant poll-throttle map owned by finance_signals.
 # The timer sweep clears a tenant's entry so it bypasses the 60s poll throttle.
@@ -74,6 +78,10 @@ async def _followup_scheduler_loop():
                 await _notify_provider_outages()
             except Exception as e:
                 logger.warning(f"[followup-scheduler] outage-alert check failed: {e}")
+            try:
+                await _maybe_run_retention_sweep()
+            except Exception as e:
+                logger.warning(f"[followup-scheduler] retention sweep failed: {e}")
         except Exception as e:
             # Never let a lock or DB error stop the loop — next tick retries.
             logger.exception(f"[followup-scheduler] tick error: {e}")
@@ -86,6 +94,43 @@ async def _followup_scheduler_loop():
                 except Exception:
                     pass  # natural TTL expiry handles it
         await asyncio.sleep(FOLLOWUP_INTERVAL_SECONDS)
+
+
+async def _maybe_run_retention_sweep():
+    """Run the DPDP retention purge at most once per ~24h. Only the scheduler
+    leader reaches this (it's inside the leader-locked block), and a
+    db.platform_ops marker throttles it across restarts so a redeploy storm
+    can't re-run it every few minutes."""
+    from services.retention import run_retention_sweep
+
+    now = datetime.now(timezone.utc)
+    marker = await db.platform_ops.find_one({"id": "retention_sweep"})
+    if marker and marker.get("last_run"):
+        try:
+            last = datetime.fromisoformat(marker["last_run"])
+            if last.tzinfo is None:
+                last = last.replace(tzinfo=timezone.utc)
+            if (now - last).total_seconds() < RETENTION_SWEEP_MIN_INTERVAL_SECONDS:
+                return
+        except ValueError:
+            pass  # unparseable marker -> run and overwrite it
+    result = await run_retention_sweep(dry_run=False)
+    await db.platform_ops.update_one(
+        {"id": "retention_sweep"},
+        {"$set": {
+            "last_run": now.isoformat(),
+            "last_result": {
+                "tenants_with_policy": result["tenants_with_policy"],
+                "total_purged": result["total_purged"],
+            },
+        }},
+        upsert=True,
+    )
+    if result["total_purged"]:
+        logger.info(
+            f"[retention] purged {result['total_purged']} row(s) across "
+            f"{result['tenants_with_policy']} tenant(s)"
+        )
 
 
 async def _notify_provider_outages():

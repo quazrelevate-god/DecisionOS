@@ -13,9 +13,10 @@ import { ObservabilitySection } from "./ObservabilitySection";
 import { ConfigSection } from "./ConfigSection";
 import { AdminRbacSection } from "./AdminRbacSection";
 import { AnnouncementsSection } from "./AnnouncementsSection";
+import { ComplianceSection } from "./ComplianceSection";
 import {
   ShieldStar, SquaresFour, Key, Buildings, Users, Pulse, SignOut, Spinner,
-  ClockCounterClockwise, ChartBar, WarningCircle, Wrench, MagnifyingGlass, UserSwitch, Lifebuoy, CurrencyInr, ChartLineUp, Sliders, ShieldCheck, Megaphone,
+  ClockCounterClockwise, ChartBar, WarningCircle, Wrench, MagnifyingGlass, UserSwitch, Lifebuoy, CurrencyInr, ChartLineUp, Sliders, ShieldCheck, Megaphone, Scales,
 } from "@phosphor-icons/react";
 
 const TABS = [
@@ -28,6 +29,7 @@ const TABS = [
   { key: "config", label: "Config", icon: Sliders, C: ConfigSection },
   { key: "admins", label: "Admins", icon: ShieldCheck, C: AdminRbacSection },
   { key: "announcements", label: "Announce", icon: Megaphone, C: AnnouncementsSection },
+  { key: "compliance", label: "Compliance", icon: Scales, C: ComplianceSection },
   { key: "usage", label: "Usage", icon: ChartBar, C: UsageSection },
   { key: "ai-keys", label: "AI Keys", icon: Key, C: AiKeysSection },
   { key: "tenants", label: "Workspaces", icon: Buildings, C: TenantsSection },

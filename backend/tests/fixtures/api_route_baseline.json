@@ -1,6 +1,6 @@
 {
-  "count": 309,
-  "sha": "cfdb3646c89ec5b7f42ffe27723feca94121efe3da119ed9f8f33eb0d14e2a70",
+  "count": 317,
+  "sha": "0bb1ed5667e45a85ba13a441986d70cb934fb1bcbfb17a833b4d3ec303aa6f27",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware"
@@ -49,15 +49,20 @@
     "GET /api/admin/observability/outages",
     "GET /api/admin/observability/reliability",
     "GET /api/admin/reclassify-purchases/status",
+    "GET /api/admin/retention/status",
     "GET /api/admin/scheduler-locks",
     "GET /api/admin/search",
     "GET /api/admin/tenants",
     "GET /api/admin/tenants/{tenant_id}/360",
+    "GET /api/admin/tenants/{tenant_id}/consent-export",
+    "GET /api/admin/tenants/{tenant_id}/export",
     "GET /api/admin/tenants/{tenant_id}/flags",
+    "GET /api/admin/tenants/{tenant_id}/retention",
     "GET /api/admin/tickets",
     "GET /api/admin/tickets/{ticket_id}",
     "GET /api/admin/usage",
     "GET /api/admin/users",
+    "GET /api/admin/users/{user_id}/dsar",
     "GET /api/announcements/active",
     "GET /api/assets",
     "GET /api/attendance",
@@ -187,6 +192,8 @@
     "POST /api/admin/login",
     "POST /api/admin/logout",
     "POST /api/admin/reclassify-purchases",
+    "POST /api/admin/retention/run",
+    "POST /api/admin/tenants/{tenant_id}/delete-with-export",
     "POST /api/admin/tenants/{tenant_id}/impersonate",
     "POST /api/admin/tenants/{tenant_id}/reactivate",
     "POST /api/admin/tenants/{tenant_id}/suspend",
@@ -313,6 +320,7 @@
     "POST /api/work-coach/refresh",
     "POST /api/workflows",
     "PUT /api/admin/ai-keys",
+    "PUT /api/admin/tenants/{tenant_id}/retention",
     "PUT /api/tenant/ai-keys",
     "PUT /api/tenant/owner-exclusions"
   ]

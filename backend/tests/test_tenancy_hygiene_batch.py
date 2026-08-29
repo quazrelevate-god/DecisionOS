@@ -168,13 +168,20 @@ def _run(coro):
 # =============================================================================
 class TestEnrichDecisionsTenantGuard:
     def _install(self, monkeypatch):
-        import server
+        # Epic 8 moved enrich_decision(s) to services/enrich.py, where they
+        # resolve db (<-core) and enrich_tasks (<-services.tasks) as THAT
+        # module's globals. Patching server.db / server.enrich_tasks is dead --
+        # the function never reads them -- so the old test silently ran the
+        # lookups against the REAL hosted DB (the two assertions that need the
+        # fake rows to come back failed; the other two passed vacuously against
+        # the empty real DB). Patch the live module the function actually reads.
+        from services import enrich as _enrich
         db = _FakeDB()
 
         async def _enrich_tasks(tasks):
             return list(tasks)
-        monkeypatch.setattr(server, "db", db)
-        monkeypatch.setattr(server, "enrich_tasks", _enrich_tasks)
+        monkeypatch.setattr(_enrich, "db", db)
+        monkeypatch.setattr(_enrich, "enrich_tasks", _enrich_tasks)
         return db
 
     def test_explicit_tenant_id_filters_task_lookup(self, monkeypatch):
@@ -318,8 +325,10 @@ class TestActiveWorkflowsUsesDynamicTerminals:
     def test_active_workflow_counter_uses_dynamic_helper(self):
         """The count_documents that computes `active_workflows` must
         get its terminal-stage list from tenant_terminal_stages."""
-        import server
-        src = inspect.getsource(server)
+        # Epic 8 moved the dashboard-summary handler (which computes
+        # active_workflows) off server.py into routers/dashboard.py.
+        from routers import dashboard
+        src = inspect.getsource(dashboard)
         # The variable pattern used in the counter block.
         assert "await tenant_terminal_stages(tid)" in src, (
             "active_workflows counter must await tenant_terminal_stages(tid)"

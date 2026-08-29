@@ -74,7 +74,11 @@ async def aggregate_usage(
     out: Dict[str, float] = {"llm_tokens_total": 0, "stt_minutes": 0}
     try:
         # LLM tokens: sum tokens_total across all providers.
-        cursor = db.usage_events.aggregate([
+        # NB: AsyncMongoClient.aggregate() is a coroutine -> MUST be awaited
+        # before iterating. Without the await the `async for` below raises
+        # and the broad except silently fails open (BUG-14: the token/STT
+        # quota never actually enforced).
+        cursor = await db.usage_events.aggregate([
             {"$match": {"tenant_id": tenant_id, "created_at": {"$gte": since}}},
             {"$group": {
                 "_id": None,
@@ -107,7 +111,8 @@ async def _storage_bytes(db, tenant_id: str) -> int:
     try:
         # `files` collection holds attachments + uploads with a `size`
         # field written by services.uploads.
-        async for row in db.files.aggregate([
+        # await: aggregate() is a coroutine on AsyncMongoClient (see BUG-14).
+        async for row in await db.files.aggregate([
             {"$match": {"tenant_id": tenant_id}},
             {"$group": {"_id": None, "total": {"$sum": "$size"}}},
         ]):

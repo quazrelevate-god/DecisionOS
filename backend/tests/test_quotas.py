@@ -64,9 +64,13 @@ class _Col:
     async def count_documents(self, q):
         return sum(1 for d in self.docs if self._match(d, q))
 
-    def aggregate(self, pipeline):
+    async def aggregate(self, pipeline):
         """Minimal aggregate: supports {$match} then {$group} with $sum
-        + $cond that matches services/quotas.py exactly."""
+        + $cond that matches services/quotas.py exactly.
+
+        NB: async to match AsyncMongoClient, where aggregate() is a coroutine
+        that must be awaited before iterating. A sync fake here is what let
+        BUG-14 (un-awaited aggregate failing open) slip past this suite."""
         docs = list(self.docs)
         for stage in pipeline:
             if "$match" in stage:

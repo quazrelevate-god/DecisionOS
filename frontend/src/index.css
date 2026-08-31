@@ -1387,8 +1387,6 @@ html[data-page="team"] {
 /* html[data-page="calendar"]        { --sky-art: url("/sky/calendar.webp"); } */
 /* html[data-page="contacts"]        { --sky-art: url("/sky/contacts.webp"); } */
 /* html[data-page="brain"]           { --sky-art: url("/sky/brain.webp"); } */
-/* html[data-page="signup"]          { --sky-art: url("/sky/signup.webp"); } */
-/* html[data-page="login"]           { --sky-art: url("/sky/login.webp"); } */
 
 html[data-page="my-work"] .app-sky {
     --sky-core: hsl(212 52% 79% / .62);

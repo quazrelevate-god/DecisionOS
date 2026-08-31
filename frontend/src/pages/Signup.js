@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
-import { useSkyFade } from "../hooks/useSkyFade";
 import { Wordmark } from "../components/Wordmark";
 import { BasicsFlow } from "./onboarding/BasicsFlow";
 import { WebsiteIntel } from "./onboarding/WebsiteIntel";
@@ -24,20 +23,24 @@ const PHASES = [
 // hard-edged progress ticks. It was the first screen a founder ever saw and
 // the only one that looked nothing like the product behind it.
 //
-// It now stands on the same ground as the app: .app-sky paints the weather,
-// .app-sky__art gives it the KM-17 artwork slot (drop /sky/signup.webp and
-// uncomment its line in index.css and this screen gets a picture like any
-// room), and every surface is .kr-well / .kr-pop / .kr-pressed.
+// Every surface is now .kr-well / .kr-pop / .kr-pressed.
 //
-// useSkyFade is called here for the same reason Layout calls it: it stamps
-// <html data-page> from the first path segment, which is what the sky
-// palettes and the artwork table key on. Signup is outside Layout, so
-// without this the page would inherit whatever room the founder came from.
+// ON THE FLAT WHITE GROUND (founder's call). The first pass put signup on
+// .app-sky, so it carried the same amber weather as the app and had the
+// KM-17 artwork slot. It is a plain white sheet instead: no ::before
+// gradient, no artwork layer, no useSkyFade — the hook only existed to stamp
+// <html data-page> for a sky this page no longer has.
+//
+// WHAT THAT COSTS, so the next person knows. Neumorphism needs a ground it
+// can be lighter AND darker than: .kr-pop's raised lip and .kr-pressed's
+// inner highlight are both white, so against #fff they have nothing to show
+// against and only the dark half of each pair survives. The app itself sits
+// on --nm-bg, an off-white, for exactly that reason. The panes here still
+// read because their dark shadows do the work alone, but they read quieter
+// than the same components do inside the app.
 export default function Signup() {
   const { register } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
-  useSkyFade(location.pathname);
 
   const [phase, setPhase] = useState("basics");
   const [form, setForm] = useState({ company_name: "", name: "", email: "", password: "", phone: "", team_size: "" });
@@ -64,9 +67,7 @@ export default function Signup() {
   };
 
   return (
-    <div className="app-sky min-h-screen flex flex-col bg-nm text-foreground">
-      <div className="app-sky__art" aria-hidden="true" />
-
+    <div className="flex min-h-screen flex-col bg-white text-foreground">
       {/* Top bar — floating glass rather than a ruled band. */}
       <header className="px-4 pt-4 lg:px-8 lg:pt-6">
         <div className="kr-frost mx-auto flex w-full max-w-5xl items-center justify-between gap-4 rounded-pill px-4 py-2.5 lg:px-6">

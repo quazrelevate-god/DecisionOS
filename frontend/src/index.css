@@ -1222,72 +1222,103 @@ html[data-dex="1"].dark .text-muted-foreground { color: hsl(var(--muted-foregrou
 
 /* My Work — steel blue lifted with gold. Cool for a focus surface, warm
    enough not to feel like a spreadsheet. */
-/* KM-13 — /inbox's sky is the founder's own artwork, DESKTOP ONLY.
-   Every other room tints four radial stops through --sky-*; the Desk instead
-   paints the supplied image, so `background-image` is replaced outright rather
-   than re-created in CSS.
+/* ── PAGE ARTWORK ──────────────────────────────────────────────────────────
+   Any room can trade its gradient sky for a picture. Two steps, no rebuild:
 
-   KM-14 — gated behind lg on the founder's call: the phone goes back to the
-   gradient sky. The reason it did not carry to mobile is aspect. The artwork
-   is landscape (1659x948); `cover` on a 375x812 portrait viewport scales by
-   HEIGHT and crops to the middle 438px of the source, which is the hot core of
-   the bloom — so the phone got the most saturated slice of a picture whose
-   composition depends on the cool field around it. Measured, that pushed the
-   greeting's muted half to 3.10:1, passing only because 30px counts as large
-   text. The gradient was authored for that viewport and does not have the
-   problem.
+     1. drop the file in   frontend/public/sky/       e.g.  finance.webp
+     2. uncomment its line in the table at the bottom of this block.
 
-   Below lg nothing here applies, so the base .app-sky::before rule — gradients,
-   kr-drift and all — is what paints, exactly as before KM-13.
+   public/ is copied verbatim into the build, so the picture is live on a
+   refresh — no import, no webpack, no restart. Misspell the name and the
+   request 404s and THE GRADIENT STILL PAINTS: a typo costs you the picture,
+   never the page. (The same url() under src/assets/ fails the whole build
+   instead, which is why the files live in public/.)
 
-   The drift is switched off at lg: on a gradient it is a slow breath of light,
-   but on artwork with real internal structure it becomes a visibly sliding
-   picture. ::after already sits at opacity 0 app-wide, so ::before is the only
-   layer painting and this is the only rule that has to change. */
-/* KM-15 — the phone gets the artwork back, as the 9 KB WebP.
-   KM-14 had reverted mobile to the gradient because the ORANGE artwork's
-   landscape crop put the hot core under the hero. This is a different picture
-   (yellow with grey cores) supplied as WebP, and it is what the founder wants
-   on the phone.
+   The key is the FIRST PATH SEGMENT, not the route — hooks/useSkyFade stamps
+   it — so "finance" covers /finance, /finance?tab=x and /finance/anything.
 
-   Two formats, one picture: the phone loads inbox-glow-mobile.webp at 9 KB,
-   desktop loads inbox-glow.png at 1,044 KB. Browsers do not fetch background
-   images for rules whose media query does not match, so each viewport pulls
-   exactly one of them.
+   Optional, per room:
+     --sky-art-lg      a different picture at >= 1024px  (falls back to --sky-art)
+     --sky-art-pos     background-position, default `center`
+     --sky-art-pos-lg  the same at >= 1024px             (falls back to --sky-art-pos)
 
-   Drift is off for the same reason as at lg: on artwork with real internal
-   structure a 90s pan reads as a sliding picture, not as light moving. */
-@media (max-width: 1023.98px) {
-    html[data-page="inbox"] .app-sky::before {
-        background-image: url("./assets/inbox-glow-mobile.webp");
-        background-size: cover;
-        /* KM-16 — 60%, not centre. This artwork has dark grey cores where the
-           orange one had none, and at `center` one of them sat directly under
-           the greeting: the muted half ("Rajesh.") measured 1.73:1 against a
-           3.0 large-text threshold — close to unreadable.
-           The value is swept, not guessed. Sampling the darkest pixel inside
-           the greeting's own box across background-position-x from 0 to 100%:
-           centre is the WORST region of the whole range (1.73), 55% is the
-           first to clear (3.67), and 60% gives 5.15 with the score area at
-           15.31 / 5.84. Past ~75% everything scores higher still, but only
-           because the crop has panned onto the pale right edge and the glow
-           has left the hero — which is not a fix, it is a deletion. 60% is the
-           smallest pan that clears the core while keeping the picture. */
-        background-position: 60% center;
-        animation: none;
-        transform: none;
-    }
+   WHY ARTWORK GETS A LAYER OF ITS OWN, instead of another background on
+   ::before: ::before carries kr-drift, a 90s transform. On a gradient that
+   reads as light moving; on a picture with real internal structure it reads
+   as a sliding photograph — which is exactly why KM-13 had to switch drift
+   off by hand for /inbox. Giving artwork its own un-animated layer means any
+   room that adopts a picture gets the right behaviour without anyone having
+   to remember to disable anything. The gradient keeps drifting underneath,
+   unseen, and reappears the moment --sky-art is removed.
+
+   KEEP THE FILES SMALL — though not for the reason you might expect. The
+   service worker precaches only the shell: index.html, main.css, main.js,
+   three entries, verified in the built service-worker.js. A sky picture is
+   NOT in the install payload. It is fetched the first time someone opens
+   that room, then held by the runtime CacheFirst image route (60 entries,
+   30 days). So the cost is a real network fetch on first view, on whatever
+   connection the phone happens to have. The phone art below is 9 KB of WebP;
+   the desktop PNG beside it is 1,044 KB and is the thing to copy the FORMAT
+   of, not the weight. */
+.app-sky__art {
+    position: fixed;
+    inset: -12%;
+    z-index: -1;
+    pointer-events: none;
+    background-repeat: no-repeat;
+    background-size: cover;
+    background-image: var(--sky-art, none);
+    background-position: var(--sky-art-pos, center);
+    transition: opacity 480ms cubic-bezier(.4, 0, .2, 1);
 }
-
 @media (min-width: 1024px) {
-    html[data-page="inbox"] .app-sky::before {
-        background-image: url("./assets/inbox-glow.png");
-        background-size: cover;
-        background-position: center center;
-        animation: none;
-        transform: none;
+    .app-sky__art {
+        background-image: var(--sky-art-lg, var(--sky-art, none));
+        background-position: var(--sky-art-pos-lg, var(--sky-art-pos, center));
     }
 }
+/* The Dex room owns the whole sky — artwork stands down with the gradient. */
+html[data-dex="1"] .app-sky__art { opacity: 0; }
+
+/* ── the artwork table ─────────────────────────────────────────────────────
+   One line per room. Uncomment it, drop the matching file in public/sky/,
+   refresh. Comment it out again and that room falls back to its gradient.
+
+   /inbox is the worked example. KM-13/14/15 landed on two formats for one
+   picture: the phone loads a 9 KB WebP, desktop a 1,044 KB PNG. A browser
+   does not fetch a background whose media query does not match, so each
+   viewport pulls exactly one of them — the phone never sees the 1 MB file. */
+html[data-page="inbox"] {
+    --sky-art:    url("/sky/inbox.webp");
+    --sky-art-lg: url("/sky/inbox-lg.png");
+
+    /* KM-16 — 60%, not centre. This artwork has dark grey cores where the
+       orange one had none, and at `center` one of them sat directly under the
+       greeting: the muted half ("Rajesh.") measured 1.73:1 against a 3.0
+       large-text threshold — close to unreadable.
+       The value is swept, not guessed. Sampling the darkest pixel inside the
+       greeting's own box across background-position-x from 0 to 100%: centre
+       is the WORST region of the whole range (1.73), 55% is the first to clear
+       (3.67), and 60% gives 5.15 with the score area at 15.31 / 5.84. Past
+       ~75% everything scores higher still, but only because the crop has
+       panned onto the pale right edge and the glow has left the hero — which
+       is not a fix, it is a deletion. 60% is the smallest pan that clears the
+       core while keeping the picture.
+       Desktop is landscape and has no such collision, so it stays centred. */
+    --sky-art-pos:    60% center;
+    --sky-art-pos-lg: center;
+}
+
+/* html[data-page="my-work"]         { --sky-art: url("/sky/my-work.webp"); } */
+/* html[data-page="operating-score"] { --sky-art: url("/sky/operating-score.webp"); } */
+/* html[data-page="finance"]         { --sky-art: url("/sky/finance.webp"); } */
+/* html[data-page="crm"]             { --sky-art: url("/sky/crm.webp"); } */
+/* html[data-page="team"]            { --sky-art: url("/sky/team.webp"); } */
+/* html[data-page="settings"]        { --sky-art: url("/sky/settings.webp"); } */
+/* html[data-page="journal"]         { --sky-art: url("/sky/journal.webp"); } */
+/* html[data-page="calendar"]        { --sky-art: url("/sky/calendar.webp"); } */
+/* html[data-page="contacts"]        { --sky-art: url("/sky/contacts.webp"); } */
+/* html[data-page="brain"]           { --sky-art: url("/sky/brain.webp"); } */
 
 html[data-page="my-work"] .app-sky {
     --sky-core: hsl(212 52% 79% / .62);

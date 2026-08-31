@@ -99,6 +99,40 @@ let webpackConfig = {
         ],
       };
 
+      // PAGE ARTWORK — leave /sky/* URLs alone.
+      //
+      // The per-page sky pictures (see "PAGE ARTWORK" in index.css) live in
+      // public/sky/ and are referenced as url("/sky/<room>.webp"). css-loader
+      // tries to RESOLVE every url() it finds — including root-absolute ones,
+      // and including those inside custom properties — so without this filter
+      // a picture that has not been added yet fails the whole build with
+      // "Can't resolve '/sky/finance.webp'". That is the wrong failure mode
+      // for a slot the founder fills in by hand: the cost of a typo should be
+      // a missing picture, not a dead build.
+      //
+      // Filtered out here, the URL is emitted verbatim and the BROWSER fetches
+      // it. A missing file is then a 404 on one background layer, and the
+      // room's gradient — still painted underneath — simply shows through.
+      //
+      // (The alternative, a /* webpackIgnore: true */ comment on each line,
+      // works but has to be repeated on every entry and is easy to leave off.)
+      const skyUrlFilter = (url) => !url.startsWith("/sky/");
+      const applySkyFilter = (rules) => {
+        for (const rule of rules || []) {
+          if (rule.oneOf) applySkyFilter(rule.oneOf);
+          if (rule.rules) applySkyFilter(rule.rules);
+          for (const use of Array.isArray(rule.use) ? rule.use : []) {
+            // A path-segment match, not a substring one: "postcss-loader"
+            // CONTAINS "css-loader", and handing css-loader's options to
+            // postcss-loader fails the build on an unknown `url` property.
+            if (typeof use === "object" && use.loader && /[\\/]css-loader[\\/]/.test(use.loader)) {
+              use.options = { ...use.options, url: { filter: skyUrlFilter } };
+            }
+          }
+        }
+      };
+      applySkyFilter(webpackConfig.module?.rules);
+
       // Add health check plugin to webpack if enabled
       if (config.enableHealthCheck && healthPluginInstance) {
         webpackConfig.plugins.push(healthPluginInstance);

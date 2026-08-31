@@ -354,6 +354,12 @@ export default function Layout({ children }) {
        opacity 0 off the Dex route, and keeping it mounted is what lets it fade
        in and out with the theme instead of snapping — see .app-sky::before. */
     <div className="app-sky min-h-screen flex flex-col bg-nm text-foreground">
+      {/* The page-artwork layer. Empty and invisible until a room sets
+          --sky-art (see "PAGE ARTWORK" in index.css); position:fixed keeps it
+          out of this flex column. It is a real element rather than a third
+          pseudo-element because ::before is the drifting gradient and ::after
+          is the Dex sky, and artwork must not drift. */}
+      <div className="app-sky__art" aria-hidden="true" />
       <WelcomeOverlay />
       {/* KR-5 — the Karma header. Three tracks: logo · centred pill nav ·
           circular controls + the avatar block. The reference's shell exactly,

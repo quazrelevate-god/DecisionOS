@@ -1388,6 +1388,66 @@ html[data-page="team"] {
 /* html[data-page="contacts"]        { --sky-art: url("/sky/contacts.webp"); } */
 /* html[data-page="brain"]           { --sky-art: url("/sky/brain.webp"); } */
 
+/* KM-21 · /signup — the Desk's own glow, kept off the card.
+   The founder wanted the inbox artwork on signup, but pushed to the side so
+   it never sits behind the pane the founder is typing into.
+
+   WHY A BOX AND NOT A PAN. The glow occupies the middle 30-70% of that image
+   (measured: mean chroma 2.8 at both edges, 111.8 at 40-50%), and a
+   full-bleed `cover` layer has only ~138px of horizontal slack at 1280 —
+   about 8% of the viewport, nowhere near enough to carry the glow from the
+   centre to the margin. Panning cannot do this. So the LAYER is the right
+   margin, and `cover` fills that box with the middle of the picture.
+
+   The mask is what keeps it honest: the artwork's own ground is a pale grey,
+   which on a white page would draw a visible vertical seam where the box
+   starts. Fading the layer in over its first half means the glow arrives out
+   of the white with no edge at all — and it does not become visible until
+   ~80% of the viewport, clear of the pane's right edge at 76%.
+
+   The phone gets the same idea on the other axis: there the pane is nearly
+   full-width and the only free space is below it, so the glow lies along the
+   bottom and fades upward. */
+.app-sky__art--aside {
+    --sky-art: url("/sky/inbox.webp");
+    /* PHONE: above the pane, held to the right. The first cut put it BELOW,
+       which looked fine and measured badly — the footer line sat on the glow
+       at 2.09:1 against a 4.5 requirement. Above the pane the only free band
+       is between the header and the card, and nothing is printed there. It
+       starts at 18% so it never reaches the header pill, and fades out before
+       the card. The box's left edge lands on the artwork's pale margin
+       (chroma 2.8), so there is no seam to hide there. */
+    inset: -12% -12% 52% 26%;
+    /* RADIAL, not linear. A vertical fade alone left the box's left edge as a
+       hard seam: the artwork's margin is a pale grey, which is still darker
+       than the white page, so the rectangle showed. One radial fades on every
+       axis at once — no second mask layer and no mask-composite, which is the
+       part with the shakiest support. Its centre sits INSIDE the box (82% 40%)
+       rather than on a corner: anchored at the corner, the top and right
+       edges stayed fully opaque and simply moved the seam. The box also
+       bleeds off the top of the screen rather than starting below the header:
+       any in-viewport top edge is a straight line the radial cannot fully
+       hide, and a seam at the screen edge is not a seam. The centre sits at
+       56% so the bright mass still lands BELOW the header pill. */
+    -webkit-mask-image: radial-gradient(95% 78% at 80% 56%, #000 0%, #000 14%, transparent 78%);
+    mask-image: radial-gradient(95% 78% at 80% 56%, #000 0%, #000 14%, transparent 78%);
+}
+@media (min-width: 1024px) {
+    .app-sky__art--aside {
+        inset: -12% -12% -12% 50%;
+        /* Hidden until 973px of a 1280 viewport — the pane's right edge is
+           976 — and fully lit by 1212. */
+        -webkit-mask-image: linear-gradient(90deg, transparent 0%, transparent 42%, #000 72%);
+        mask-image: linear-gradient(90deg, transparent 0%, transparent 42%, #000 72%);
+        /* 37%, not centre: inside this box `cover` scales the picture by
+           1.043, so the glow's core (image x 827) lands at viewport 1160 —
+           the middle of the strip the mask actually reveals. At centre it
+           landed at 1038 and was masked away, which is how the first attempt
+           rendered a white page. */
+        --sky-art-pos-lg: 37% center;
+    }
+}
+
 html[data-page="my-work"] .app-sky {
     --sky-core: hsl(212 52% 79% / .62);
     --sky-deep: hsl(202 44% 72% / .38);

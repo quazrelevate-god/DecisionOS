@@ -66,8 +66,19 @@ export default function Signup() {
     navigate("/brief");
   };
 
+  /* `relative isolate` on the root is load-bearing, not decoration. The art
+     layer is position:fixed at z-index:-1, and a negative-z child only paints
+     above its parent's background if that parent is a STACKING CONTEXT —
+     otherwise it escapes to the root one and lands behind the body fill,
+     which is invisible. .app-sky carries `position: relative; isolation:
+     isolate` for exactly this reason; dropping that class in KM-20 dropped
+     the stacking context with it, and the glow rendered as a white page. */
   return (
-    <div className="flex min-h-screen flex-col bg-white text-foreground">
+    <div className="relative isolate flex min-h-screen flex-col bg-white text-foreground">
+      {/* The Desk's glow, held to the margin — right of the pane on a
+          desktop, below it on a phone. See "KM-21" in index.css. */}
+      <div className="app-sky__art app-sky__art--aside" aria-hidden="true" />
+
       {/* Top bar — floating glass rather than a ruled band. */}
       <header className="px-4 pt-4 lg:px-8 lg:pt-6">
         <div className="kr-frost mx-auto flex w-full max-w-5xl items-center justify-between gap-4 rounded-pill px-4 py-2.5 lg:px-6">

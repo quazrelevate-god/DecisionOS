@@ -312,3 +312,159 @@ def test_draft_merge_into_register_client_wins():
     assert merged["company_name"] == "Final Weaves Pvt Ltd", "client-provided value wins over the draft"
     assert merged["industry"] == "Textile & Apparel", "a value only in the draft falls through"
     assert merged["description"] == "handloom exporter"
+
+
+# ===========================================================================
+# T10-04.3 -- AI-generation status tracking: each generator records
+# generated|defaulted|failed; owner retry re-runs only the non-generated ones.
+# ===========================================================================
+def test_ai_setup_status_classification(with_test_db):
+    """with_status wrappers classify a live/meaningful result as generated, an
+    empty (fallback) result as defaulted, and a raising generator as failed."""
+    from services.ai import ai_setup as aset
+    from services.ai import generators as gen
+
+    async def scenario(_db):
+        saved = gen.ai_generate_lexicon
+        try:
+            async def meaningful(*a, **k):
+                return {"terms": ["purchase order", "dispatch"]}
+            gen.ai_generate_lexicon = meaningful
+            _, s_gen = await aset.ai_generate_lexicon_with_status("Textile", "11-50", [], "")
+
+            async def empty(*a, **k):
+                return {}
+            gen.ai_generate_lexicon = empty
+            _, s_def = await aset.ai_generate_lexicon_with_status("Textile", "11-50", [], "")
+
+            async def boom(*a, **k):
+                raise RuntimeError("LLM down")
+            gen.ai_generate_lexicon = boom
+            _, s_fail = await aset.ai_generate_lexicon_with_status("Textile", "11-50", [], "")
+            return s_gen, s_def, s_fail
+        finally:
+            gen.ai_generate_lexicon = saved
+
+    s_gen, s_def, s_fail = with_test_db(scenario)
+    assert s_gen == aset.STATUS_GENERATED, "a meaningful AI result records generated"
+    assert s_def == aset.STATUS_DEFAULTED, "an empty/fallback result records defaulted"
+    assert s_fail == aset.STATUS_FAILED, "a raising generator records failed"
+
+
+def test_summarize_ai_setup_status():
+    from services.ai.ai_setup import (summarize_ai_setup_status,
+                                       STATUS_GENERATED, STATUS_DEFAULTED, STATUS_FAILED)
+    s = summarize_ai_setup_status({"lexicon": STATUS_GENERATED,
+                                   "operating_model": STATUS_DEFAULTED,
+                                   "finance_categories": STATUS_FAILED})
+    assert s["healthy"] is False
+    assert set(s["needs_retry"]) == {"operating_model", "finance_categories"}
+    healthy = summarize_ai_setup_status({"lexicon": STATUS_GENERATED,
+                                         "operating_model": STATUS_GENERATED,
+                                         "finance_categories": STATUS_GENERATED})
+    assert healthy["healthy"] is True and healthy["needs_retry"] == []
+
+
+def test_owner_retry_reruns_only_non_generated(with_test_db):
+    """retry_ai_setup re-runs the generators that are defaulted/failed and leaves
+    an already-generated one untouched (idempotent)."""
+    import routers.onboarding as ob
+    from services.ai import ai_setup as aset
+
+    async def scenario(db):
+        calls = []
+        saved = (ob.db, ob.log_activity,
+                 aset.ai_generate_lexicon_with_status,
+                 aset.ai_generate_operating_model_with_status,
+                 aset.ai_generate_finance_categories_with_status)
+        ob.db = db
+
+        async def _noop_log(*a, **k):
+            return None
+        ob.log_activity = _noop_log
+
+        def _mk(name, data):
+            async def _f(*a, **k):
+                calls.append(name)
+                return data, aset.STATUS_GENERATED
+            return _f
+        aset.ai_generate_lexicon_with_status = _mk("lexicon", {"terms": ["x"]})
+        aset.ai_generate_operating_model_with_status = _mk("operating_model", {"pipelines": [1]})
+        aset.ai_generate_finance_categories_with_status = _mk("finance_categories", {"expense": [1, 2]})
+        try:
+            await db.tenants.insert_one({
+                "id": "t1", "name": "Weave Co", "industry": "Textile & Apparel",
+                "roles": [], "ai_setup_status": {
+                    "lexicon": aset.STATUS_GENERATED,             # already good -> must be skipped
+                    "operating_model": aset.STATUS_FAILED,        # -> re-run
+                    "finance_categories": aset.STATUS_DEFAULTED,  # -> re-run
+                }})
+            res = await ob.retry_ai_setup(user={"tenant_id": "t1", "id": "u1", "name": "Owner"})
+            doc = await db.tenants.find_one({"id": "t1"}, {"_id": 0})
+            return calls, doc["ai_setup_status"], res
+        finally:
+            (ob.db, ob.log_activity,
+             aset.ai_generate_lexicon_with_status,
+             aset.ai_generate_operating_model_with_status,
+             aset.ai_generate_finance_categories_with_status) = saved
+
+    calls, status_map, res = with_test_db(scenario)
+    assert "lexicon" not in calls, "an already-generated generator is NOT re-run (idempotent)"
+    assert set(calls) == {"operating_model", "finance_categories"}, "only the non-generated ones re-run"
+    assert all(v == aset.STATUS_GENERATED for v in status_map.values()), "after retry every generator is generated"
+    assert res["status"] == "ok" and res["ai_setup_status"]["healthy"] is True
+
+
+# ===========================================================================
+# T10-04.6 -- abuse / rate limits: the sliding window admits up to the cap then
+# refuses (429), and the shared signup guard enforces the burst ceiling per IP.
+# ===========================================================================
+def test_sliding_window_admits_to_cap_then_refuses():
+    import asyncio
+    from services.rate_limit import check_rate_limit, reset_for_test
+
+    async def run():
+        await reset_for_test()
+        cap, window, bucket, key = 5, 10, "t46", "1.1.1.1"
+        results = [await check_rate_limit(key, cap, window, bucket=bucket) for _ in range(cap + 2)]
+        other = await check_rate_limit("2.2.2.2", cap, window, bucket=bucket)  # independent bucket
+        await reset_for_test()
+        return results, other
+
+    results, other = asyncio.run(run())
+    allowed = [ok for ok, _ in results]
+    assert allowed[:5] == [True] * 5, "the first `cap` hits are admitted"
+    assert allowed[5] is False and allowed[6] is False, "hits past the cap are refused"
+    assert results[5][1] > 0, "a refusal returns a positive Retry-After"
+    assert other[0] is True, "a different IP is an independent bucket"
+
+
+def test_signup_guard_enforces_burst_429(with_test_db):
+    from fastapi import HTTPException
+    from services.rate_limit import reset_for_test
+    import routers.signup as sg
+
+    class _Req:
+        def __init__(self, ip):
+            self.headers = {"X-Forwarded-For": ip}
+            self.client = None
+
+    async def scenario(_db):
+        await reset_for_test()
+        req = _Req("203.0.113.7")
+        statuses = []
+        try:
+            for _ in range(sg._SIGNUP_BURST_LIMIT[0] + 2):   # burst cap + 2 hits from one IP
+                try:
+                    await sg._guard_signup_endpoint(req, "website_intel")
+                    statuses.append("ok")
+                except HTTPException as e:
+                    statuses.append(e.status_code)
+        finally:
+            await reset_for_test()
+        return statuses
+
+    statuses = with_test_db(scenario)
+    cap = sg._SIGNUP_BURST_LIMIT[0]
+    assert statuses[:cap] == ["ok"] * cap, f"the first {cap} signup hits from an IP pass"
+    assert 429 in statuses[cap:], f"the burst ceiling refuses with 429: {statuses}"

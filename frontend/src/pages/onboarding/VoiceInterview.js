@@ -5,19 +5,41 @@ import {
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import api from "../../lib/api";
+import { DexWave } from "../../components/mobile/DexWave";
 import { fetchTTS, useAnswerRecorder, SPOKEN_LANGS, langLabel } from "./voice";
 
-// Animated equalizer bars shown while the assistant is speaking.
-const BAR_HEIGHTS = [14, 24, 18, 26, 12];
-const Bars = ({ active }) => (
-  <div className="flex items-end gap-1 h-6">
-    {BAR_HEIGHTS.map((h, i) => (
-      <motion.span key={`bar-${i}`} className="w-1 bg-brand-600"
-        animate={active ? { height: [6, h, 6] } : { height: 6 }}
-        transition={active ? { repeat: Infinity, duration: 0.7 + i * 0.13, ease: "easeInOut" } : { duration: 0.2 }} />
-    ))}
-  </div>
-);
+// KM-19 — the interview now shows the SAME voice surface the app shows.
+// components/mobile/DexWave is the three-ribbon lens (white, grey, gold) that
+// lives in the bottom bar when Dex is listening in-app; a founder who meets it
+// here meets it again on day one, which is the whole argument for reusing it
+// instead of drawing a second, different picture of "voice".
+//
+// DexWave reads a `levels` array. The interview has no analyser — voice.js
+// records to a MediaRecorder and posts the blob, and there is no live
+// amplitude anywhere in that path. So rather than fake a spectrum, the
+// ribbons are driven by a slow synthetic swell whose ENERGY says which state
+// we are in: a wide swell while Dex speaks, a tighter faster one while it
+// listens, near-flat when idle. It is honest about being a state indicator
+// rather than a meter.
+const useSynthLevels = (state) => {
+  const [levels, setLevels] = useState(() => new Array(12).fill(0));
+  useEffect(() => {
+    if (state === "idle") { setLevels(new Array(12).fill(0)); return; }
+    const gain = state === "listening" ? 0.85 : 0.5;
+    const speed = state === "listening" ? 0.11 : 0.06;
+    let t = 0, raf = 0;
+    const tick = () => {
+      t += speed;
+      setLevels(Array.from({ length: 12 }, (_, i) =>
+        Math.max(0, (Math.sin(t + i * 0.7) * 0.5 + 0.5) * gain * (0.55 + 0.45 * Math.sin(t * 0.37 + i)))
+      ));
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [state]);
+  return levels;
+};
 
 // Small chip in the header showing the assistant voice language + a picker to override mid-interview.
 const LangChip = ({ value, onChange, disabled }) => {
@@ -35,7 +57,7 @@ const LangChip = ({ value, onChange, disabled }) => {
         onClick={() => !disabled && setOpen((o) => !o)}
         disabled={disabled}
         title="Change voice language"
-        className="flex items-center gap-1.5 px-2.5 h-10 border border-border bg-white text-[11px] font-medium hover:bg-accent disabled:opacity-40"
+        className="kr-pop flex h-10 items-center gap-1.5 rounded-pill px-3.5 text-[11px] font-medium disabled:opacity-40"
       >
         <span>{langLabel(value)}</span>
         <CaretDown size={12} weight="bold" />
@@ -44,7 +66,7 @@ const LangChip = ({ value, onChange, disabled }) => {
         {open && (
           <motion.div
             initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
-            className="absolute right-0 mt-1 z-20 min-w-[160px] max-h-72 overflow-y-auto border border-border bg-white shadow-md"
+            className="kr-frost absolute right-0 z-20 mt-2 max-h-72 min-w-[170px] overflow-y-auto rounded-2xl p-1.5"
             data-testid="interview-lang-menu"
           >
             {SPOKEN_LANGS.map((l) => (
@@ -52,7 +74,7 @@ const LangChip = ({ value, onChange, disabled }) => {
                 key={l.code}
                 data-testid={`interview-lang-option-${l.code}`}
                 onClick={() => { onChange(l.code); setOpen(false); }}
-                className={`w-full flex items-center justify-between gap-3 px-3 py-2 text-left text-xs hover:bg-brand-600/10 ${value === l.code ? "bg-brand-600/5" : ""}`}
+                className={`flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-xs ${value === l.code ? "kr-pressed" : "hover:bg-white/50"}`}
               >
                 <span className="font-semibold">{l.label}</span>
                 {value === l.code && <Check size={12} weight="bold" />}
@@ -67,32 +89,36 @@ const LangChip = ({ value, onChange, disabled }) => {
 
 // Step 0 — the founder picks the interview language before Dex starts.
 const LanguagePick = ({ onPick, onSkip }) => (
-  <div className="w-full max-w-2xl mx-auto" data-testid="signup-lang-pick">
-    <p className="label-mono text-brand-600 mb-3 flex items-center gap-2"><Translate size={14} weight="bold" /> Your interview</p>
-    <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl leading-[1.02] mb-2">
+  <div className="kr-well mx-auto w-full max-w-2xl" data-testid="signup-lang-pick">
+   <div className="kr-well__pane rounded-[1.75rem] p-6 sm:p-9">
+    <p className="mb-3 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+      <Translate size={14} weight="bold" /> Your interview
+    </p>
+    <h1 className="mb-2 font-display text-3xl leading-[1.04] sm:text-4xl lg:text-5xl">
       Which language should Dex speak?
     </h1>
-    <p className="text-sm text-muted-foreground mb-8">Dex will ask every question — voice and text — in the language you pick. You can answer by speaking or typing.</p>
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
+    <p className="mb-7 text-sm text-muted-foreground">Dex will ask every question — voice and text — in the language you pick. You can answer by speaking or typing.</p>
+    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
       {SPOKEN_LANGS.map((l, i) => (
         <motion.button
           key={l.code}
           data-testid={`lang-pick-${l.code}`}
           initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
           onClick={() => onPick(l.code)}
-          className="group border border-border bg-white p-4 text-left hover:bg-accent hover:-translate-y-0.5 transition-all"
+          className="kr-pop rounded-2xl p-4 text-left"
         >
-          <p className="font-heading text-2xl font-black leading-none">{l.short}</p>
-          <p className="mt-2 text-[11px] font-medium text-muted-foreground group-hover:text-white/70">{l.label}</p>
+          <p className="text-2xl font-semibold leading-none">{l.short}</p>
+          <p className="mt-2 text-[11px] font-medium text-muted-foreground">{l.label}</p>
         </motion.button>
       ))}
     </div>
-    <div className="mt-8">
+    <div className="mt-7">
       <button onClick={onSkip} data-testid="interview-skip"
-        className="text-xs font-medium text-muted-foreground hover:text-brand-ink underline underline-offset-4 transition-colors">
+        className="kr-pop flex h-10 items-center rounded-pill px-5 text-xs font-medium text-muted-foreground">
         Skip the interview — build from what you have
       </button>
     </div>
+   </div>
   </div>
 );
 
@@ -221,41 +247,45 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
     } finally { setThinking(false); }
   };
 
+  // Derived BEFORE the "pick" early return: useSynthLevels is a hook, and a
+  // hook after a conditional return runs in a different order on the render
+  // where that branch is taken.
+  const starting = phase === "starting";
+  const orbState = recorder.recording ? "listening" : speaking ? "speaking" : (thinking || starting) ? "thinking" : "idle";
+  const levels = useSynthLevels(orbState === "listening" ? "listening" : orbState === "speaking" ? "speaking" : "idle");
+
   if (phase === "pick") {
     return <LanguagePick onPick={startInterview} onSkip={() => { stopAudio(); onSkip(null, langRef.current); }} />;
   }
 
-  const starting = phase === "starting";
-  const orbState = recorder.recording ? "listening" : speaking ? "speaking" : (thinking || starting) ? "thinking" : "idle";
-
   return (
-    <div className="w-full max-w-2xl mx-auto" data-testid="signup-interview">
-      {/* Assistant header */}
-      <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center gap-4">
-          <div className="relative w-16 h-16">
-            <motion.div className="absolute inset-0 rounded-full border-2 border-brand-600"
-              animate={orbState === "listening" ? { scale: [1, 1.25, 1], opacity: [0.9, 0.25, 0.9] } :
-                orbState === "speaking" ? { scale: [1, 1.12, 1], opacity: [0.7, 0.35, 0.7] } : { scale: 1, opacity: 0.25 }}
-              transition={{ repeat: Infinity, duration: orbState === "listening" ? 1.1 : 1.6, ease: "easeInOut" }} />
-            <div className={`absolute inset-1.5 rounded-full flex items-center justify-center border border-border transition-colors ${orbState === "listening" ? "bg-brand-600 text-white" : "bg-primary text-primary-foreground"}`}>
-              {orbState === "thinking"
-                ? <CircleNotch size={22} className="animate-spin" />
-                : orbState === "speaking" ? <Waveform size={24} weight="bold" /> : <Microphone size={22} weight="bold" />}
-            </div>
+    <div className="kr-well mx-auto w-full max-w-2xl" data-testid="signup-interview">
+     <div className="kr-well__pane rounded-[1.75rem] p-5 sm:p-8">
+      {/* Assistant header. The ribbons carry the state; the icon disc only
+          names it. Both sit on ink, which is where the app puts Dex too. */}
+      <div className="mb-7 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="kr-pressed grid h-12 w-12 shrink-0 place-items-center rounded-full">
+            {orbState === "thinking"
+              ? <CircleNotch size={20} className="animate-spin" />
+              : orbState === "speaking" ? <Waveform size={22} weight="bold" />
+              : <Microphone size={20} weight="bold" className={orbState === "listening" ? "text-[hsl(var(--kr-gold))]" : ""} />}
           </div>
-          <div>
-            <p className="font-heading font-medium tracking-tight leading-none">Dex · your COO interview</p>
-            <p className="text-xs text-muted-foreground mt-1 font-mono" data-testid="interview-progress">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold leading-none">Dex · your COO interview</p>
+            <p className="mt-1 text-xs text-muted-foreground" data-testid="interview-progress">
               {starting ? "warming up…" : `Question ${index} · up to ${max} · ${orbState === "listening" ? "listening" : orbState === "speaking" ? "speaking" : "ready"}`}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Bars active={speaking} />
+          <div className="bg-kr-ink hidden h-10 w-28 shrink-0 overflow-hidden rounded-pill sm:block" aria-hidden="true">
+            <DexWave levels={levels} live={orbState !== "idle"} />
+          </div>
           <LangChip value={lang} onChange={pickLang} disabled={starting} />
           <button onClick={toggleMute} data-testid="interview-mute-toggle" title={muted ? "Unmute voice" : "Mute voice"}
-            className={`w-10 h-10 flex items-center justify-center border border-border transition-colors ${muted ? "bg-white text-muted-foreground" : "bg-primary text-primary-foreground"}`}>
+            aria-label={muted ? "Unmute voice" : "Mute voice"}
+            className={`grid h-10 w-10 place-items-center rounded-full ${muted ? "kr-pressed text-muted-foreground" : "kr-pop"}`}>
             {muted ? <SpeakerSlash size={18} weight="bold" /> : <SpeakerHigh size={18} weight="bold" />}
           </button>
         </div>
@@ -267,34 +297,34 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
           {starting ? (
             <motion.div key="warm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className="space-y-3">
-              <div className="h-8 w-4/5 bg-muted animate-pulse" />
-              <div className="h-8 w-3/5 bg-muted animate-pulse" />
+              <div className="kr-pressed h-8 w-4/5 animate-pulse rounded-pill" />
+              <div className="kr-pressed h-8 w-3/5 animate-pulse rounded-pill" />
             </motion.div>
           ) : (
             <motion.div key={question} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }}
               transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}>
               <div className="flex items-center gap-2 mb-3">
                 <motion.span
-                  className={`inline-block w-1.5 h-1.5 rounded-full ${speaking ? "bg-brand-600" : "bg-black/25"}`}
+                  className={`inline-block h-1.5 w-1.5 rounded-full ${speaking ? "bg-[hsl(var(--kr-gold))]" : "bg-foreground/25"}`}
                   animate={speaking ? { scale: [1, 1.6, 1], opacity: [1, 0.5, 1] } : { scale: 1, opacity: 0.5 }}
                   transition={speaking ? { repeat: Infinity, duration: 1 } : { duration: 0.2 }}
                 />
-                <p className="text-[10px] font-mono  text-muted-foreground">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
                   {speaking ? "Speaking · read along" : "Read or listen"}
                 </p>
               </div>
               <h1 data-testid="interview-question"
-                  className={`font-heading text-2xl sm:text-3xl lg:text-4xl font-black uppercase tracking-tighter leading-[1.05] transition-colors ${speaking ? "text-brand-ink" : "text-brand-ink/85"}`}>
+                  className={`font-display text-2xl leading-[1.06] sm:text-3xl lg:text-4xl ${speaking ? "text-foreground" : "text-foreground/85"}`}>
                 {question}
               </h1>
-              {why && <p className="mt-3 text-xs text-muted-foreground font-mono">Why we ask — {why}</p>}
+              {why && <p className="mt-3 text-xs text-muted-foreground">Why we ask — {why}</p>}
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
       {/* Answer area */}
-      <div className="mt-8 border border-border bg-white shadow-md p-4" data-testid="interview-answer-box">
+      <div className="kr-frost-min mt-7 rounded-2xl p-4" data-testid="interview-answer-box">
         <textarea
           ref={inputRef}
           data-testid="interview-answer-input"
@@ -304,20 +334,20 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
           onChange={(e) => { setAnswer(e.target.value); answerRef.current = e.target.value; }}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
           placeholder={recorder.recording ? "Listening… tap Stop when done — your answer sends itself" : "Tap the mic and speak, or type your answer…"}
-          className="w-full bg-transparent text-base focus:outline-none resize-none placeholder:text-black/30"
+          className="w-full resize-none bg-transparent text-base placeholder:text-foreground/30 focus:outline-none"
         />
-        <div className="flex items-center justify-between mt-2 pt-3 border-t border-border">
+        <div className="mt-2 flex items-center justify-between gap-3 border-t border-white/50 pt-3">
           <button
             data-testid="interview-mic-button"
             onClick={recorder.recording ? recorder.stop : recorder.start}
             disabled={starting || thinking || recorder.transcribing}
-            className={`flex items-center gap-2 px-4 py-2.5 border border-border text-xs font-medium transition-all disabled:opacity-50 ${recorder.recording ? "bg-brand-600 text-white animate-pulse" : "bg-white hover:bg-accent"}`}>
+            className={`flex h-11 items-center gap-2 rounded-pill px-4 text-xs font-medium disabled:opacity-50 ${recorder.recording ? "kr-pressed text-[hsl(var(--kr-gold))]" : "kr-pop"}`}>
             {recorder.transcribing ? <CircleNotch size={16} className="animate-spin" />
               : recorder.recording ? <Stop size={16} weight="fill" /> : <Microphone size={16} weight="bold" />}
             {recorder.transcribing ? "Sending…" : recorder.recording ? "Stop — sends answer" : "Speak"}
           </button>
           <button onClick={() => send()} disabled={!answer.trim() || thinking || starting} data-testid="interview-send-button"
-            className="flex items-center gap-2 bg-primary text-primary-foreground px-6 py-2.5 border border-border text-xs font-medium transition-all disabled:opacity-40">
+            className="kr-pop flex h-11 items-center gap-2 rounded-pill bg-kr-ink px-6 text-xs font-medium text-white disabled:opacity-40">
             {thinking ? <CircleNotch size={16} className="animate-spin" /> : <PaperPlaneRight size={16} weight="bold" />}
             {thinking ? "Thinking…" : "Answer"}
           </button>
@@ -331,20 +361,24 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
             disabled={index <= 1 || thinking || starting}
             data-testid="interview-back"
             title="Go back to the previous question"
-            className="flex items-center gap-1 px-3 py-1.5 border border-border bg-white text-[11px] font-medium hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+            className="kr-pop flex h-9 items-center gap-1 rounded-pill px-3.5 text-[11px] font-medium disabled:cursor-not-allowed disabled:opacity-30">
             <CaretLeft size={12} weight="bold" /> Back
           </button>
-          <div className="flex gap-1.5">
+          {/* Progress as depth: the track is pressed in, answered questions
+              are filled, the live one is gold. */}
+          <div className="kr-pressed hidden items-center gap-1 rounded-pill p-1 sm:flex">
             {Array.from({ length: max }).map((_, i) => (
-              <div key={`qdot-${i}`} className={`w-8 h-1.5 border border-border transition-colors ${i + 1 < index ? "bg-primary" : i + 1 === index ? "bg-brand-600" : "bg-white"}`} />
+              <div key={`qdot-${i}`}
+                className={`h-1.5 w-6 rounded-pill ${i + 1 < index ? "bg-foreground/45" : i + 1 === index ? "bg-[hsl(var(--kr-gold))]" : "bg-foreground/12"}`} />
             ))}
           </div>
         </div>
         <button onClick={() => { stopAudio(); onSkip(session, langRef.current); }} data-testid="interview-skip"
-          className="text-xs font-medium text-muted-foreground hover:text-brand-ink underline underline-offset-4 transition-colors">
+          className="kr-pop flex h-9 items-center rounded-pill px-4 text-xs font-medium text-muted-foreground">
           Skip — build from what you have
         </button>
       </div>
+     </div>
     </div>
   );
 }

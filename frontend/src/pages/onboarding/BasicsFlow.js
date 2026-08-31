@@ -3,6 +3,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ArrowRight, ArrowLeft, Eye, EyeSlash, CircleNotch } from "@phosphor-icons/react";
 import api from "../../lib/api";
 
+// KM-19 — rebuilt on the Karma material. The step used to be a black
+// underline under a huge heading with a square indigo button beside it; the
+// question now sits in a .kr-well pane, the field is a .kr-pressed trough
+// (typing into something recessed is the one gesture this material makes
+// obvious), and every button is .kr-pop.
 const SIZES = ["1-10", "11-50", "51-200", "201-500", "500+"];
 const first = (name) => (name || "").trim().split(/\s+/)[0] || "";
 
@@ -87,18 +92,21 @@ export function BasicsFlow({ form, setForm, onDone }) {
   const setVal = (v) => { setForm((f) => ({ ...f, [step.key]: v })); if (error) setError(""); };
 
   return (
-    <div className="w-full max-w-2xl mx-auto" data-testid="signup-basics">
+    <div className="kr-well mx-auto w-full max-w-2xl" data-testid="signup-basics">
+      <div className="kr-well__pane rounded-[1.75rem] p-6 sm:p-9">
       <AnimatePresence mode="wait">
         <motion.div key={step.key} variants={variants} initial="enter" animate="center" exit="exit"
           transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}>
-          <p className="label-mono text-brand-600 mb-3 flex items-center gap-3">
-            <span className="tabular-nums text-muted-foreground">{String(idx + 1).padStart(2, "0")}</span>
+          <p className="mb-3 flex items-center gap-2.5 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+            <span className="kr-pressed grid h-6 min-w-[1.75rem] place-items-center rounded-pill px-2 text-[11px] tabular-nums">
+              {String(idx + 1).padStart(2, "0")}
+            </span>
             {step.eyebrow}
           </p>
-          <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl leading-[1.02] mb-2">
+          <h1 className="mb-2 font-display text-3xl leading-[1.04] sm:text-4xl lg:text-5xl">
             {step.q(form)}
           </h1>
-          <p className="text-sm text-muted-foreground mb-8">{step.sub(form)}</p>
+          <p className="mb-7 text-sm text-muted-foreground">{step.sub(form)}</p>
 
           {step.type === "chips" ? (
             <div className="flex flex-wrap gap-3" data-testid="signup-team-size-chips">
@@ -107,7 +115,10 @@ export function BasicsFlow({ form, setForm, onDone }) {
                   transition={{ delay: 0.1 + i * 0.06 }}
                   data-testid={`team-size-${s}`}
                   onClick={() => { setVal(s); advance(s); }}
-                  className={`px-6 py-4 border border-border font-heading font-black uppercase tracking-tight text-lg transition-all hover:-translate-y-0.5 ${value === s ? "bg-primary text-primary-foreground" : "bg-white"}`}>
+                  /* No transition utility here: .kr-pop and .kr-pressed swap
+                     outset for inset shadows, which do not interpolate, so a
+                     declared transition would stall the swap. */
+                  className={`flex h-12 items-center rounded-pill px-6 text-base font-semibold ${value === s ? "kr-pressed" : "kr-pop"}`}>
                   {s}
                 </motion.button>
               ))}
@@ -122,11 +133,12 @@ export function BasicsFlow({ form, setForm, onDone }) {
                 value={value}
                 onChange={(e) => setVal(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); advance(); } }}
-                className="w-full bg-transparent border-b-2 border-border py-3 pr-12 font-heading text-2xl sm:text-3xl font-bold tracking-tight placeholder:text-black/20 placeholder:font-normal focus:outline-none focus:border-brand-600 transition-colors"
+                className="kr-pressed w-full rounded-2xl bg-transparent px-5 py-4 pr-14 text-xl font-semibold tracking-tight placeholder:font-normal placeholder:text-foreground/25 focus:outline-none focus:ring-2 focus:ring-[hsl(var(--kr-gold))] sm:text-2xl"
               />
               {step.type === "password" && (
                 <button type="button" onClick={() => setShowPw(!showPw)} data-testid="signup-toggle-password"
-                  className="absolute right-0 top-1/2 -translate-y-1/2 p-2 text-muted-foreground hover:text-brand-ink">
+                  aria-label={showPw ? "Hide password" : "Show password"}
+                  className="kr-pop absolute right-2.5 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full text-muted-foreground">
                   {showPw ? <EyeSlash size={22} weight="bold" /> : <Eye size={22} weight="bold" />}
                 </button>
               )}
@@ -134,16 +146,18 @@ export function BasicsFlow({ form, setForm, onDone }) {
           )}
 
           {error && <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} data-testid="signup-basics-error"
-            className="mt-3 text-sm text-danger-600 font-semibold">{error}</motion.p>}
+            className="mt-3 text-sm font-semibold text-danger-600">{error}</motion.p>}
 
           {step.type !== "chips" && (
             <div className="mt-8 flex items-center gap-4">
               <button onClick={() => advance()} disabled={checking} data-testid="signup-basics-next"
-                className="flex items-center gap-2 bg-primary text-primary-foreground font-medium text-sm px-8 py-3.5 border border-border hover:-translate-y-0.5 transition-all disabled:opacity-50">
+                className="kr-pop flex h-12 items-center gap-2 rounded-pill bg-kr-ink px-8 text-sm font-medium text-white disabled:opacity-50">
                 {checking ? <CircleNotch size={16} className="animate-spin" /> : null}
                 {step.optional && !value.trim() ? "Skip" : "Continue"} <ArrowRight size={16} weight="bold" />
               </button>
-              <span className="hidden sm:block text-xs text-muted-foreground font-mono">press <kbd className="border border-border px-1.5 py-0.5">Enter ↵</kbd></span>
+              <span className="hidden text-xs text-muted-foreground sm:block">
+                press <kbd className="kr-pressed rounded-md px-1.5 py-0.5 text-[11px]">Enter ↵</kbd>
+              </span>
             </div>
           )}
         </motion.div>
@@ -151,10 +165,11 @@ export function BasicsFlow({ form, setForm, onDone }) {
 
       {idx > 0 && (
         <button onClick={back} data-testid="signup-basics-back"
-          className="mt-10 flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-brand-ink transition-colors">
+          className="kr-pop mt-8 flex h-9 items-center gap-1.5 rounded-pill px-4 text-xs font-medium text-muted-foreground">
           <ArrowLeft size={14} weight="bold" /> Back
         </button>
       )}
+      </div>
     </div>
   );
 }

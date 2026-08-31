@@ -19,6 +19,10 @@ import {
   IconChip, ArrowButton, BigNumeral, PillNav, DarkBand,
   DotProgress, MiniBars, CircleDots,
 } from "../components/karma";
+// KM-19 — the onboarding build animation. It lives three phases deep in
+// /signup, behind a real registration, so this gallery is the only place it
+// can be looked at without creating a tenant to see it.
+import { DexForge } from "./onboarding/DexForge";
 
 const SCREENS = [
   { path: "/inbox", label: "Desk · now" },
@@ -262,6 +266,15 @@ function KarmaGallery() {
   return (
     <section className="mb-10" data-testid="karma-gallery">
       <h2 className="text-h2 mb-3">Karma kit</h2>
+
+      {/* KM-19 · DexForge — onboarding's build animation, on the same ground
+          the app uses, so a change to .kr-pop or .kr-pressed shows up here. */}
+      <div className="app-canvas mb-6 rounded-cardlg p-6" style={{ background: "hsl(var(--nm-bg))" }}>
+        <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+          DexForge · /signup build
+        </p>
+        <DexForge />
+      </div>
 
       {/* light zone */}
       <div className="app-canvas rounded-cardlg p-6" style={{ background: "hsl(var(--nm-bg))" }}>

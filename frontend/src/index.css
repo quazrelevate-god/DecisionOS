@@ -883,6 +883,13 @@
         --kr-ink:          240 4% 5%;    /* #0C0C0D — band, active pill, arrow buttons */
         --kr-ink-raised:   240 4% 9%;    /* one step up inside the band */
         --kr-accent:       19 100% 50%;  /* vivid orange — alerts, deltas, markers ONLY */
+        /* KM-19 — the gold that was already everywhere and named nowhere: the
+           --sky-lift stop of all seven palettes, and the third ribbon in
+           components/mobile/DexWave. Onboarding needed it too, which made
+           three copies of one colour the moment to give it a name. Warm and
+           mid-lightness ON PURPOSE — it is a light, not a fill, and it is
+           never a text colour on the pale canvas (2.1:1 there). */
+        --kr-gold:         44 88% 60%;
         --kr-accent-soft:  35 100% 62%;  /* the bloom's amber */
         /* The control boundary. 40 5% 52% on the L93 greige measures ≈3.2:1 —
            re-verify at the KR-7 gate; this is the token that carries WCAG
@@ -1380,6 +1387,8 @@ html[data-page="team"] {
 /* html[data-page="calendar"]        { --sky-art: url("/sky/calendar.webp"); } */
 /* html[data-page="contacts"]        { --sky-art: url("/sky/contacts.webp"); } */
 /* html[data-page="brain"]           { --sky-art: url("/sky/brain.webp"); } */
+/* html[data-page="signup"]          { --sky-art: url("/sky/signup.webp"); } */
+/* html[data-page="login"]           { --sky-art: url("/sky/login.webp"); } */
 
 html[data-page="my-work"] .app-sky {
     --sky-core: hsl(212 52% 79% / .62);

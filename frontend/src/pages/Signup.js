@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
+import { useSkyFade } from "../hooks/useSkyFade";
 import { Wordmark } from "../components/Wordmark";
 import { BasicsFlow } from "./onboarding/BasicsFlow";
 import { WebsiteIntel } from "./onboarding/WebsiteIntel";
@@ -15,11 +16,29 @@ const PHASES = [
   { key: "build", label: "Your OS" },
 ];
 
-// The founder onboarding experience: conversational basics → website
-// intelligence → adaptive voice interview → personalized OS build & reveal.
+// KM-19 · the founder onboarding, rebuilt on the Karma material.
+//
+// WHAT THIS REPLACED. The whole flow was the last stretch of the retired
+// brutalist system: a flat `bg-brand-paper` page, `border-b border-border`
+// rules, square `bg-primary` buttons in the indigo the brand dropped, and
+// hard-edged progress ticks. It was the first screen a founder ever saw and
+// the only one that looked nothing like the product behind it.
+//
+// It now stands on the same ground as the app: .app-sky paints the weather,
+// .app-sky__art gives it the KM-17 artwork slot (drop /sky/signup.webp and
+// uncomment its line in index.css and this screen gets a picture like any
+// room), and every surface is .kr-well / .kr-pop / .kr-pressed.
+//
+// useSkyFade is called here for the same reason Layout calls it: it stamps
+// <html data-page> from the first path segment, which is what the sky
+// palettes and the artwork table key on. Signup is outside Layout, so
+// without this the page would inherit whatever room the founder came from.
 export default function Signup() {
   const { register } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  useSkyFade(location.pathname);
+
   const [phase, setPhase] = useState("basics");
   const [form, setForm] = useState({ company_name: "", name: "", email: "", password: "", phone: "", team_size: "" });
   const [world, setWorld] = useState(null); // { industry, business_model, description, website_summary, products }
@@ -45,28 +64,58 @@ export default function Signup() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-brand-paper text-brand-ink">
-      {/* Top bar */}
-      <header className="flex items-center justify-between px-6 lg:px-12 py-5 border-b border-border">
-        <Link to="/" className="flex items-center gap-2.5" data-testid="signup-logo">
-          <Wordmark size={18} />
-        </Link>
-        <div className="flex items-center gap-6" data-testid="signup-phase-bar">
-          {PHASES.map((p, i) => (
-            <div key={p.key} className="flex items-center gap-2">
-              <div className={`w-6 h-1.5 border border-border transition-colors duration-500 ${i < phaseIdx ? "bg-primary" : i === phaseIdx ? "bg-brand-600" : "bg-white"}`} />
-              <span className={`hidden md:inline text-[11px] font-medium transition-colors ${i === phaseIdx ? "text-brand-ink" : "text-muted-foreground/60"}`}>{p.label}</span>
-            </div>
-          ))}
+    <div className="app-sky min-h-screen flex flex-col bg-nm text-foreground">
+      <div className="app-sky__art" aria-hidden="true" />
+
+      {/* Top bar — floating glass rather than a ruled band. */}
+      <header className="px-4 pt-4 lg:px-8 lg:pt-6">
+        <div className="kr-frost mx-auto flex w-full max-w-5xl items-center justify-between gap-4 rounded-pill px-4 py-2.5 lg:px-6">
+          <Link to="/" className="flex shrink-0 items-center gap-2.5" data-testid="signup-logo">
+            <Wordmark size={18} />
+          </Link>
+
+          {/* The phase rail. Sunken track, raised pill on the live phase —
+              the same "selected means pushed in" grammar the app's segmented
+              controls use, so progress reads as position rather than colour.
+              Labels are lg-only: at 375px four words plus the wordmark plus
+              Sign in cannot share a row without truncating something. */}
+          <div className="kr-pressed flex items-center gap-1 rounded-pill p-1" data-testid="signup-phase-bar">
+            {PHASES.map((p, i) => {
+              const done = i < phaseIdx;
+              const live = i === phaseIdx;
+              return (
+                <div
+                  key={p.key}
+                  aria-current={live ? "step" : undefined}
+                  title={p.label}
+                  className={`flex h-7 items-center gap-2 rounded-pill px-2 lg:px-3 ${live ? "kr-pop" : ""}`}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                      live ? "bg-[hsl(var(--kr-gold))]" : done ? "bg-foreground/45" : "bg-foreground/15"
+                    }`}
+                  />
+                  <span className={`hidden text-[11px] lg:inline ${live ? "font-semibold text-foreground" : "text-foreground/50"}`}>
+                    {p.label}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          <Link
+            to="/login"
+            data-testid="signup-signin-link"
+            className="kr-pop flex h-9 shrink-0 items-center rounded-pill px-4 text-xs font-medium"
+          >
+            Sign in
+          </Link>
         </div>
-        <Link to="/login" data-testid="signup-signin-link"
-          className="text-xs font-medium text-muted-foreground hover:text-brand-ink transition-colors">
-          Sign in
-        </Link>
       </header>
 
       {/* Stage */}
-      <main className="flex-1 flex items-center px-6 lg:px-12 py-10">
+      <main className="flex flex-1 items-center px-4 py-8 lg:px-8 lg:py-12">
         <AnimatePresence mode="wait">
           <motion.div key={phase} className="w-full"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}>
@@ -90,9 +139,10 @@ export default function Signup() {
         </AnimatePresence>
       </main>
 
-      <footer className="px-6 lg:px-12 py-4 border-t border-border flex items-center justify-between">
-        <p className="text-[11px] text-muted-foreground font-mono">No credit card · 2 minutes · built around how you actually run</p>
-        <p className="text-[11px] text-muted-foreground font-mono hidden sm:block">The operational brain for founder-led SMEs</p>
+      <footer className="px-4 pb-5 lg:px-8">
+        <p className="mx-auto max-w-5xl text-center text-[11px] text-muted-foreground">
+          No credit card · 2 minutes · built around how you actually run
+        </p>
       </footer>
     </div>
   );

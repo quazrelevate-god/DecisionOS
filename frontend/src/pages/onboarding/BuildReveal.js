@@ -5,7 +5,7 @@ import {
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import api, { formatApiError } from "../../lib/api";
-import { DexMascot } from "./DexMascot";
+import { DexForge } from "./DexForge";
 import { useAnswerRecorder } from "./voice";
 
 // What Dex is "doing" while the real AI build runs (30-60s). Loops until done.
@@ -28,13 +28,13 @@ const PreviewBlock = ({ label, items, tint }) => {
   if (strs.length === 0) return null;
   return (
     <div>
-      <p className="label-mono text-muted-foreground mb-2">{label}</p>
+      <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
       <div className="flex flex-wrap gap-1.5">
         {strs.slice(0, 10).map((s, i) => (
           <motion.span
             key={`${label}-${s}-${i}`}
             initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
-            className={`px-3 py-1.5 border border-border text-xs font-mono ${tint}`}>{s}</motion.span>
+            className={`rounded-pill px-3 py-1.5 text-xs ${tint}`}>{s}</motion.span>
         ))}
       </div>
     </div>
@@ -168,39 +168,45 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
   const taskTitles = (bp?.operational_tasks || []).map((t) => t.title).filter(Boolean);
 
   return (
-    <div className="w-full max-w-2xl mx-auto" data-testid="signup-build">
+    <div className="kr-well mx-auto w-full max-w-2xl" data-testid="signup-build">
+     <div className="kr-well__pane rounded-[1.75rem] p-6 sm:p-9">
       <AnimatePresence mode="wait">
         {/* ------------------------------------------------------ BUILDING */}
         {stage === "building" && (
           <motion.div key="building" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
             className="text-center">
-            <p className="label-mono text-brand-600 mb-2 flex items-center justify-center gap-2">
-              <Sparkle size={14} weight="fill" /> {refining ? "Dex is rewiring your OS" : "Meet Dex — your build engineer"}
+            <p className="mb-2 flex items-center justify-center gap-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+              <Sparkle size={14} weight="fill" className="text-[hsl(var(--kr-gold))]" /> {refining ? "Dex is rewiring your OS" : "Meet Dex — your build engineer"}
             </p>
-            <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl leading-[1.02] mb-6">
+            <h1 className="mb-7 font-display text-3xl leading-[1.04] sm:text-4xl lg:text-5xl">
               {refining ? "Applying your addition…" : `Dex is building ${payload.company_name}'s OS.`}
             </h1>
 
-            <DexMascot />
+            <DexForge label={`Dex is assembling ${payload.company_name}'s workspace`} />
 
             {!error && (
               <>
-                <div className="mt-8 max-w-md mx-auto">
-                  <div className="h-4 border border-border bg-white overflow-hidden" data-testid="build-progress-bar">
-                    <motion.div className="h-full bg-brand-600" animate={{ width: `${pct}%` }} transition={{ duration: 0.4, ease: "easeOut" }} />
+                <div className="mx-auto mt-8 max-w-md">
+                  {/* The track is pressed into the sheet and the fill is the
+                      gold light — the same pair the forge above uses. */}
+                  <div className="kr-pressed h-3 overflow-hidden rounded-pill p-[3px]" data-testid="build-progress-bar">
+                    <motion.div
+                      className="h-full rounded-pill"
+                      style={{ background: "linear-gradient(90deg, hsl(var(--kr-gold) / .85), hsl(var(--kr-gold)))" }}
+                      animate={{ width: `${pct}%` }} transition={{ duration: 0.4, ease: "easeOut" }} />
                   </div>
-                  <div className="flex items-center justify-between mt-2">
+                  <div className="mt-2.5 flex items-center justify-between gap-3">
                     <AnimatePresence mode="wait">
                       <motion.p key={line} data-testid="build-wait-line"
                         initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
-                        className="text-xs text-muted-foreground font-mono text-left">
+                        className="text-left text-xs text-muted-foreground">
                         {WAIT_LINES[line]}
                       </motion.p>
                     </AnimatePresence>
-                    <p className="text-xs font-mono font-bold shrink-0 ml-3">{Math.round(pct)}%</p>
+                    <p className="shrink-0 text-xs font-semibold tabular-nums">{Math.round(pct)}%</p>
                   </div>
                 </div>
-                <p className="mt-6 text-xs text-muted-foreground font-mono">
+                <p className="mt-6 text-xs text-muted-foreground">
                   Built from your answers — not a template. Dex takes up to a minute.
                 </p>
               </>
@@ -210,7 +216,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
               <div className="mt-8">
                 <p data-testid="build-error" className="text-sm text-danger-600 font-semibold mb-3">{error}</p>
                 <button onClick={generate} data-testid="build-retry"
-                  className="bg-primary text-primary-foreground text-sm font-medium px-6 py-3 border border-border transition-all">
+                  className="kr-pop mx-auto flex h-11 items-center rounded-pill bg-kr-ink px-6 text-sm font-medium text-white">
                   Try again
                 </button>
               </div>
@@ -222,8 +228,8 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
         {stage === "preview" && bp && (
           <motion.div key="preview" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }}
             data-testid="signup-build-preview">
-            <p className="label-mono text-brand-600 mb-3">Draft ready · review before you enter</p>
-            <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl leading-[1.02] mb-4">
+            <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Draft ready · review before you enter</p>
+            <h1 className="mb-4 font-display text-3xl leading-[1.04] sm:text-4xl lg:text-5xl">
               Here&apos;s how {payload.company_name} will run on DecisionOS.
             </h1>
             {welcome && <p data-testid="build-welcome-line" className="text-base leading-relaxed mb-6 max-w-xl">{welcome}</p>}
@@ -231,33 +237,33 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6" data-testid="build-counts">
               {counts.map((c, i) => (
                 <motion.div key={c.label} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 + i * 0.08 }}
-                  className="border border-border bg-white shadow-sm p-4 text-center">
-                  <p className="font-heading text-3xl font-black">{c.n}</p>
-                  <p className="label-mono text-muted-foreground mt-1">{c.label}</p>
+                  className="kr-pop rounded-2xl p-4 text-center">
+                  <p className="text-3xl font-semibold tabular-nums">{c.n}</p>
+                  <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">{c.label}</p>
                 </motion.div>
               ))}
             </div>
 
             <div className="space-y-5 mb-8">
-              <PreviewBlock label="Departments" items={bp.departments || []} tint="bg-white" />
-              <PreviewBlock label="Workflows — named after how you actually work" items={workflowNames} tint="bg-caution-50/40" />
-              <PreviewBlock label="Recurring tasks Dex will keep on rails" items={taskTitles.slice(0, 8)} tint="bg-brand-paper" />
+              <PreviewBlock label="Departments" items={bp.departments || []} tint="kr-pop" />
+              <PreviewBlock label="Workflows — named after how you actually work" items={workflowNames} tint="kr-pop bg-[hsl(var(--kr-gold)/.22)]" />
+              <PreviewBlock label="Recurring tasks Dex will keep on rails" items={taskTitles.slice(0, 8)} tint="kr-pressed" />
             </div>
 
             {/* Refine panel — voice or type */}
-            <div className="border border-border bg-white shadow-sm p-4 mb-6" data-testid="build-refine-panel">
-              <div className="flex items-center justify-between mb-3">
-                <p className="label-mono text-brand-600 flex items-center gap-2">
+            <div className="kr-frost-min mb-6 rounded-2xl p-4" data-testid="build-refine-panel">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
                   <PencilSimple size={14} weight="bold" /> Missing something? Tell Dex.
                 </p>
                 {!showRefine && (
                   <button onClick={() => setShowRefine(true)} data-testid="build-refine-open"
-                    className="text-[11px] font-medium text-brand-ink underline underline-offset-4 hover:text-brand-600">
+                    className="kr-pop flex h-9 shrink-0 items-center rounded-pill px-3.5 text-[11px] font-medium">
                     Add a workflow
                   </button>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground mb-3">
+              <p className="mb-3 text-xs text-muted-foreground">
                 Speak or type any workflow, approval, or team detail Dex missed — he&apos;ll rewire the OS.
               </p>
               {showRefine && (
@@ -271,14 +277,14 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
                     placeholder={recorder.recording
                       ? "Listening… tap Stop when done"
                       : "e.g. Every Monday I review pending orders with production; anything over ₹50k needs my approval."}
-                    className="w-full bg-transparent text-sm focus:outline-none resize-none placeholder:text-black/30 border-b border-border pb-2"
+                    className="w-full resize-none border-b border-white/50 bg-transparent pb-2 text-sm placeholder:text-foreground/30 focus:outline-none"
                   />
-                  <div className="flex items-center justify-between mt-3">
+                  <div className="mt-3 flex items-center justify-between gap-3">
                     <button
                       data-testid="build-refine-mic"
                       onClick={recorder.recording ? recorder.stop : recorder.start}
                       disabled={refining || recorder.transcribing}
-                      className={`flex items-center gap-2 px-3 py-2 border border-border text-xs font-medium transition-all disabled:opacity-50 ${recorder.recording ? "bg-brand-600 text-white animate-pulse" : "bg-white hover:bg-accent"}`}>
+                      className={`flex h-11 items-center gap-2 rounded-pill px-4 text-xs font-medium disabled:opacity-50 ${recorder.recording ? "kr-pressed text-[hsl(var(--kr-gold))]" : "kr-pop"}`}>
                       {recorder.transcribing ? <CircleNotch size={14} className="animate-spin" />
                         : recorder.recording ? <Stop size={14} weight="fill" /> : <Microphone size={14} weight="bold" />}
                       {recorder.transcribing ? "Transcribing…" : recorder.recording ? "Stop" : "Speak"}
@@ -287,7 +293,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
                       data-testid="build-refine-submit"
                       onClick={submitRefinement}
                       disabled={!refineText.trim() || refining}
-                      className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 border border-border text-xs font-medium transition-all disabled:opacity-40">
+                      className="kr-pop flex h-11 items-center gap-2 rounded-pill bg-kr-ink px-5 text-xs font-medium text-white disabled:opacity-40">
                       {refining ? <CircleNotch size={14} className="animate-spin" /> : <PaperPlaneRight size={14} weight="bold" />}
                       {refining ? "Rewiring…" : "Apply to my OS"}
                     </button>
@@ -300,15 +306,15 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
                 (e.g. reserved TLD like .test) actually catch the eye
                 instead of vanishing into a small red line. */}
             {error && (
-              <div className="mb-4 border-2 border-danger-600 bg-danger-600/10 p-4 shadow-sm" data-testid="build-error-banner">
-                <p className="text-sm font-bold text-brand-600  mb-1">Couldn't create your workspace</p>
+              <div className="mb-4 rounded-2xl border border-danger-600/40 bg-danger-600/10 p-4" data-testid="build-error-banner">
+                <p className="mb-1 text-sm font-bold text-danger-600">Couldn&apos;t create your workspace</p>
                 <p className="text-sm text-danger-600 font-semibold" data-testid="build-error">{error}</p>
               </div>
             )}
 
             <div className="flex items-center gap-3">
               <button onClick={confirmAndRegister} disabled={refining} data-testid="build-confirm-button"
-                className="flex items-center gap-2 bg-brand-600 text-white font-medium px-8 py-4 border border-border hover:-translate-y-0.5 transition-all disabled:opacity-50">
+                className="kr-pop flex h-14 items-center gap-2 rounded-pill bg-kr-ink px-8 font-medium text-white disabled:opacity-50">
                 Looks good — Enter DecisionOS <ArrowRight size={18} weight="bold" />
               </button>
             </div>
@@ -319,51 +325,52 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
         {stage === "registering" && (
           <motion.div key="registering" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
             className="text-center" data-testid="signup-registering">
-            <p className="label-mono text-brand-600 mb-2 flex items-center justify-center gap-2">
-              <Sparkle size={14} weight="fill" /> Locking it in
+            <p className="mb-2 flex items-center justify-center gap-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+              <Sparkle size={14} weight="fill" className="text-[hsl(var(--kr-gold))]" /> Locking it in
             </p>
-            <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl leading-[1.02] mb-6">
+            <h1 className="mb-7 font-display text-3xl leading-[1.04] sm:text-4xl lg:text-5xl">
               Creating your workspace…
             </h1>
-            <DexMascot />
+            <DexForge label="Creating your workspace" />
           </motion.div>
         )}
 
         {/* --------------------------------------------------------- REVEAL */}
         {stage === "reveal" && bp && (
           <motion.div key="reveal" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }}>
-            <p className="label-mono text-brand-600 mb-3">Ready</p>
-            <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl leading-[1.02] mb-4">
+            <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Ready</p>
+            <h1 className="mb-4 font-display text-3xl leading-[1.04] sm:text-4xl lg:text-5xl">
               {payload.company_name} now runs on DecisionOS.
             </h1>
             {welcome && <p data-testid="build-welcome-line" className="text-base leading-relaxed mb-8 max-w-xl">{welcome}</p>}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6" data-testid="build-counts">
               {counts.map((c, i) => (
                 <motion.div key={c.label} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 + i * 0.1 }}
-                  className="border border-border bg-white shadow-sm p-4 text-center">
-                  <p className="font-heading text-3xl font-black">{c.n}</p>
-                  <p className="label-mono text-muted-foreground mt-1">{c.label}</p>
+                  className="kr-pop rounded-2xl p-4 text-center">
+                  <p className="text-3xl font-semibold tabular-nums">{c.n}</p>
+                  <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">{c.label}</p>
                 </motion.div>
               ))}
             </div>
             {workflowNames.length > 0 && (
               <div className="mb-8">
-                <p className="label-mono text-muted-foreground mb-2">Your workflows — named after how you actually work</p>
+                <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Your workflows — named after how you actually work</p>
                 <div className="flex flex-wrap gap-1.5">
                   {workflowNames.slice(0, 6).map((n, i) => (
                     <motion.span key={n} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.5 + i * 0.08 }}
-                      className="px-3 py-1.5 border border-border bg-caution-50/40 text-xs font-mono">{n}</motion.span>
+                      className="kr-pop rounded-pill bg-[hsl(var(--kr-gold)/.22)] px-3 py-1.5 text-xs">{n}</motion.span>
                   ))}
                 </div>
               </div>
             )}
             <button onClick={onEnter} data-testid="signup-enter-button"
-              className="flex items-center gap-2 bg-brand-600 text-white font-medium px-10 py-4 border border-border hover:-translate-y-0.5 transition-all">
+              className="kr-pop flex h-14 items-center gap-2 rounded-pill bg-kr-ink px-10 font-medium text-white">
               Enter DecisionOS <ArrowRight size={18} weight="bold" />
             </button>
           </motion.div>
         )}
       </AnimatePresence>
+     </div>
     </div>
   );
 }

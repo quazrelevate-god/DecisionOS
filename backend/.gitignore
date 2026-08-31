@@ -1,0 +1,5 @@
+
+# Coverage data (T10-11.7)
+.coverage
+.coverage.*
+htmlcov/

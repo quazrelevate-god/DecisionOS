@@ -468,3 +468,45 @@ def test_signup_guard_enforces_burst_429(with_test_db):
     cap = sg._SIGNUP_BURST_LIMIT[0]
     assert statuses[:cap] == ["ok"] * cap, f"the first {cap} signup hits from an IP pass"
     assert 429 in statuses[cap:], f"the burst ceiling refuses with 429: {statuses}"
+
+
+# ===========================================================================
+# T10-04.2 (all languages) -- the Q1 opener is localized across every supported
+# language: industry-aware opener names the industry back, generic opener when
+# unknown, and the "why" caption is in the interview language. Covers all 11.
+# ===========================================================================
+def test_q1_opener_localized_across_all_languages(with_test_db):
+    langs = list(sg.OPENER_WHY.keys())   # the 11 supported interview languages
+
+    async def scenario(db):
+        restore = _patch(db)
+        out = {}
+        try:
+            for lang in langs:
+                known = await sg.interview_start(sg.InterviewStartInput(
+                    company_name="Weave Co", founder_name="Ravi Kumar", team_size="11-50",
+                    industry="Textile & Apparel", business_model="B2B", language_code=lang), None)
+                unknown = await sg.interview_start(sg.InterviewStartInput(
+                    company_name="Weave Co", founder_name="Ravi Kumar", team_size="11-50",
+                    industry="", language_code=lang), None)
+                out[lang] = (known["question"], known["why"], unknown["question"])
+        finally:
+            restore()
+        return out
+
+    out = with_test_db(scenario)
+    assert set(out.keys()) == set(langs) and len(langs) == 11, "all 11 supported languages exercised"
+    for lang in langs:
+        q_known, why, q_unknown = out[lang]
+        expected_known = sg.OPENERS_WITH_INDUSTRY[lang].format(
+            name=" Ravi", company="Weave Co", industry="Textile & Apparel")
+        expected_unknown = sg.OPENERS[lang].format(name=" Ravi", company="Weave Co", industry="")
+        assert q_known == expected_known, f"[{lang}] industry-aware opener is the localized template"
+        assert why == sg.OPENER_WHY[lang], f"[{lang}] the 'why' caption is in the interview language"
+        assert q_unknown == expected_unknown, f"[{lang}] generic opener (no industry) is the localized template"
+        # non-English languages must actually differ from English (real localization, not a fallback)
+        if lang != "en-IN":
+            assert why != sg.OPENER_WHY["en-IN"], f"[{lang}] 'why' is not the English fallback"
+            assert q_known != sg.OPENERS_WITH_INDUSTRY["en-IN"].format(
+                name=" Ravi", company="Weave Co", industry="Textile & Apparel"), \
+                f"[{lang}] opener is not the English fallback"

@@ -130,6 +130,42 @@ OPENERS = {
     "te-IN": "నమస్తే{name} — {company} గురించి చెప్పండి — మీరు ఏమి చేస్తారు, మీ రోజువారీ కార్యకలాపాలు ఎలా జరుగుతాయి?",
 }
 
+# When website-intel already established the industry, skip re-asking "what do
+# you do" and open straight on the operational question, naming the industry
+# back to the founder so turn 1 already sounds tailored. "{industry}" comes from
+# the INDUSTRIES enum (English only) — non-English templates code-switch to an
+# English industry name mid-sentence (common in Indian product UX, deliberate).
+OPENERS_WITH_INDUSTRY = {
+    "en-IN": "Hi{name} — I can see {company} is in {industry}. Walk me through how your day-to-day operations actually run.",
+    "hi-IN": "नमस्ते{name} — मुझे पता है {company}, {industry} क्षेत्र में है। बताइए, आपका रोज़ का कामकाज असल में कैसे चलता है?",
+    "bn-IN": "নমস্কার{name} — আমি জানি {company} {industry} ক্ষেত্রে কাজ করে। বলুন, আপনার দৈনন্দিন কাজকর্ম আসলে কীভাবে চলে?",
+    "gu-IN": "નમસ્તે{name} — મને ખબર છે {company}, {industry} ક્ષેત્રમાં છે. કહો, તમારું રોજિંદું કામકાજ ખરેખર કેવી રીતે ચાલે છે?",
+    "kn-IN": "ನಮಸ್ಕಾರ{name} — {company}, {industry} ಕ್ಷೇತ್ರದಲ್ಲಿದೆ ಎಂದು ನನಗೆ ತಿಳಿದಿದೆ. ನಿಮ್ಮ ದೈನಂದಿನ ಕೆಲಸ ನಿಜವಾಗಿ ಹೇಗೆ ನಡೆಯುತ್ತದೆ ಎಂದು ಹೇಳಿ?",
+    "ml-IN": "നമസ്കാരം{name} — {company}, {industry} മേഖലയിലാണെന്ന് എനിക്കറിയാം. നിങ്ങളുടെ ദൈനംദിന പ്രവർത്തനങ്ങൾ യഥാർത്ഥത്തിൽ എങ്ങനെയാണ് നടക്കുന്നതെന്ന് പറയൂ?",
+    "mr-IN": "नमस्कार{name} — मला माहीत आहे {company} हे {industry} क्षेत्रात आहे. सांगा, तुमचं रोजचं कामकाज खरंतर कसं चालतं?",
+    "od-IN": "ନମସ୍କାର{name} — ମୁଁ ଜାଣେ {company}, {industry} କ୍ଷେତ୍ରରେ ଅଛି। କୁହନ୍ତୁ, ଆପଣଙ୍କ ଦୈନନ୍ଦିନ କାର୍ଯ୍ୟ ପ୍ରକୃତରେ କିପରି ଚାଲେ?",
+    "pa-IN": "ਸਤ ਸ੍ਰੀ ਅਕਾਲ{name} — ਮੈਨੂੰ ਪਤਾ ਹੈ {company}, {industry} ਖੇਤਰ ਵਿੱਚ ਹੈ। ਦੱਸੋ, ਤੁਹਾਡਾ ਰੋਜ਼ਾਨਾ ਕੰਮਕਾਜ ਅਸਲ ਵਿੱਚ ਕਿਵੇਂ ਚੱਲਦਾ ਹੈ?",
+    "ta-IN": "வணக்கம்{name} — {company}, {industry} துறையில் இருப்பது எனக்குத் தெரியும். உங்கள் அன்றாட வேலைகள் உண்மையில் எப்படி நடக்கின்றன என்று சொல்லுங்கள்?",
+    "te-IN": "నమస్తే{name} — {company}, {industry} రంగంలో ఉందని నాకు తెలుసు. మీ రోజువారీ కార్యకలాపాలు నిజంగా ఎలా జరుగుతాయో చెప్పండి?",
+}
+
+# The opener's "why" caption, localized (previously hardcoded to English
+# regardless of interview language — fixed here since it's shown on the same
+# screen as the now-localized question).
+OPENER_WHY = {
+    "en-IN": "Your own words become your OS",
+    "hi-IN": "आपके शब्द ही आपका OS बनेंगे",
+    "bn-IN": "আপনার কথাই হবে আপনার OS",
+    "gu-IN": "તમારા શબ્દો જ તમારું OS બનશે",
+    "kn-IN": "ನಿಮ್ಮ ಮಾತುಗಳೇ ನಿಮ್ಮ OS ಆಗುತ್ತವೆ",
+    "ml-IN": "നിങ്ങളുടെ വാക്കുകൾ തന്നെ നിങ്ങളുടെ OS ആകും",
+    "mr-IN": "तुमचे शब्दच तुमचं OS बनतील",
+    "od-IN": "ଆପଣଙ୍କ କଥା ହିଁ ଆପଣଙ୍କ OS ହେବ",
+    "pa-IN": "ਤੁਹਾਡੇ ਸ਼ਬਦ ਹੀ ਤੁਹਾਡਾ OS ਬਣਨਗੇ",
+    "ta-IN": "உங்கள் வார்த்தைகளே உங்கள் OS ஆகும்",
+    "te-IN": "మీ మాటలే మీ OS గా మారతాయి",
+}
+
 
 def _norm_lang(code: str) -> str:
     """Coerce whatever STT/frontend sends to a supported Sarvam code, defaulting to en-IN."""
@@ -341,17 +377,23 @@ async def interview_start(inp: InterviewStartInput, request: Request):
         "status": "active",
         "created_at": now_iso(),
     }
-    # Question 1 is always the standard opener, in the founder's chosen
-    # language — no LLM call, so the interview starts instantly.
+    # Question 1 is a fixed opener in the founder's chosen language — no LLM
+    # call, so the interview starts instantly. If website-intel already
+    # established the industry, use the industry-aware opener (which names the
+    # industry back and skips re-asking "what do you do"); otherwise fall back
+    # to the generic opener.
     founder_first = (session["founder_name"].split() or [""])[0]
-    question = OPENERS.get(lang, OPENERS["en-IN"]).format(
+    industry = session.get("industry") or ""
+    templates = OPENERS_WITH_INDUSTRY if industry else OPENERS
+    question = templates.get(lang, templates["en-IN"]).format(
         name=f" {founder_first}" if founder_first else "",
         company=session["company_name"],
+        industry=industry,
     )
     session["pending_q"] = question
     await db.signup_sessions.insert_one(session)
     return {"session_id": session["id"], "question": question,
-            "why": "Your own words become your OS",
+            "why": OPENER_WHY.get(lang, OPENER_WHY["en-IN"]),
             "index": 1, "max": MAX_QUESTIONS, "language_code": lang}
 
 

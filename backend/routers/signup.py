@@ -13,6 +13,8 @@ import os
 import re
 
 import httpx
+from typing import Optional
+
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from core import model_for
 from prompts import render
@@ -20,12 +22,18 @@ from emergentintegrations.llm.chat import UserMessage
 
 from core import (
     db, claude_chat, _extract_json, new_id, now_iso, logger,
-    normalize_os_blueprint, get_ai_key,
+    get_ai_key,
 )
 # FIX-004-A (RBAC-03): rate-limit + SSRF guard for unauth AI endpoints.
 from services.rate_limit import check_rate_limit, client_ip
 from services.ssrf_guard import is_url_safe_for_fetch
 from services.captcha import verify_captcha
+# Epic 10 S4: interview + blueprint generation extracted to a callable/evaluable
+# unit (services/ai/onboarding.py) -- single source of truth for both this
+# endpoint and the golden-set eval harness (evals/cases/onboarding.py).
+from services.ai.onboarding import (
+    MIN_QUESTIONS, MAX_QUESTIONS, next_interview_question, generate_blueprint,
+)
 
 router = APIRouter(prefix="/api/signup")
 
@@ -87,11 +95,8 @@ async def _guard_signup_endpoint(request: Request, kind: str) -> str:
         )
     return ip
 
-# Interview length is DYNAMIC. Dex may finish as early as MIN_QUESTIONS if the
-# founder has already painted a clear operational picture, and stretches up to
-# MAX_QUESTIONS if the picture is still fuzzy. Progress UI shows "up to N".
-MIN_QUESTIONS = 2
-MAX_QUESTIONS = 6
+# Interview length (MIN_QUESTIONS / MAX_QUESTIONS) is DYNAMIC and now lives with
+# the generation logic in services/ai/onboarding.py (imported above).
 TTS_SPEAKER = os.environ.get("SARVAM_TTS_SPEAKER", "shubh").strip() or "shubh"
 
 # Languages Sarvam TTS (bulbul:v3) can speak. Keep in sync with the frontend chip.
@@ -301,58 +306,15 @@ async def website_intel(inp: WebsiteIntelInput, request: Request):
 
 
 
-def _profile_block(s: dict) -> str:
-    prods = ", ".join(p.get("name", "") for p in (s.get("products") or []) if p.get("name"))
-    return (
-        f"Company: {s.get('company_name')}\n"
-        f"Founder: {s.get('founder_name') or 'unknown'}\n"
-        f"Team size: {s.get('team_size') or 'unknown'}\n"
-        f"Industry: {s.get('industry') or 'unknown'}\n"
-        f"Business model: {s.get('business_model') or 'unknown'}\n"
-        f"What we learned from their website: {s.get('website_summary') or 'no website provided'}\n"
-        f"Products/services: {prods or 'unknown'}\n"
-        f"Founder's own description: {s.get('description') or 'none'}"
-    )
-
-
-def _qa_block(qa: list) -> str:
-    if not qa:
-        return "No questions asked yet."
-    return "\n".join(f"Q{i + 1}: {x['q']}\nA{i + 1}: {x['a']}" for i, x in enumerate(qa))
-
-
-INTERVIEW_SYSTEM = render("onboarding.interview", min_questions=MIN_QUESTIONS, max_questions=MAX_QUESTIONS)
-
-
-def _team_size_hint(size_str: str) -> str:
-    """Turn '11-50' / '50+' / '5' etc. into an explicit interviewer directive."""
-    s = (size_str or "").strip().lower()
-    # Extract the largest number in the string to make a sensible band.
-    nums = [int(n) for n in re.findall(r"\d+", s)]
-    if not nums:
-        return ""
-    top = max(nums)
-    if top <= 10:
-        band = "1-10 (FOUNDER-LED — no departments yet; the founder personally does most operational work)"
-    elif top <= 50:
-        band = "11-50 (early structure — one or two informal leads, founder still signs off on most things)"
-    elif top <= 200:
-        band = "50-200 (departments and managers exist, formal approval limits, cross-team handoffs)"
-    else:
-        band = "200+ (full department structure, layered approvals, review cadences)"
-    return f"TEAM SIZE BAND: {band}. Every question and the resulting OS design MUST fit this reality."
-
-
-def _lang_directive(code: str) -> str:
-    """Instruct Claude to write the question + why in the founder's language."""
+# NB: _profile_block / _qa_block / _team_size_hint / INTERVIEW_SYSTEM /
+# _lang_directive moved to services/ai/onboarding.py (single source of truth for
+# the endpoints + the golden-set evals). `_lang_name(lang)` below adapts the
+# _norm_lang'd code into the language NAME those functions take.
+def _lang_name(code: str) -> Optional[str]:
     code = _norm_lang(code)
     if code == "en-IN":
-        return ""
-    name = SUPPORTED_TTS_LANGS.get(code, "the founder's language")
-    return (
-        f"\n\nIMPORTANT: The founder is speaking {name}. Write BOTH the \"question\" and \"why\" fields "
-        f"in natural, conversational {name} (native script, not transliteration). Keep it warm and simple."
-    )
+        return None
+    return SUPPORTED_TTS_LANGS.get(code, "the founder's language")
 
 
 @router.post("/interview/start")
@@ -435,22 +397,8 @@ async def interview_answer(inp: InterviewAnswerInput, request: Request):
         await db.signup_sessions.update_one({"id": s["id"]}, {"$set": {"qa": qa, "pending_q": None, "language_code": lang, "status": "done"}})
         return {"done": True, "index": len(qa), "max": MAX_QUESTIONS, "language_code": lang}
 
-    size_hint = _team_size_hint(s.get("team_size") or "")
-    remaining = MAX_QUESTIONS - len(qa)
-    prompt = (
-        f"{_profile_block(s)}\n\n"
-        f"{size_hint}\n\n"
-        f"Conversation so far:\n{_qa_block(qa)}\n\n"
-        f"You have already collected {len(qa)} answer(s). You may ask up to {remaining} more question(s) "
-        f"(hard cap {MAX_QUESTIONS} total). Minimum {MIN_QUESTIONS} answers before you're allowed to end.\n"
-        "Walk through the operational-coverage checklist. If ANY item is still fuzzy, ask the single most valuable "
-        "next question that closes the biggest gap — built on what they just said, matched to their team-size band "
-        "and industry. If the picture is genuinely clear enough to design their OS, set enough=true."
-    )
-    system = INTERVIEW_SYSTEM + _lang_directive(lang)
     try:
-        chat = claude_chat(task="onboarding.interview", session_id=f"interview-{s['id']}-{len(qa)}", system_message=system).with_model(*model_for("onboarding.interview"))
-        data = _extract_json(await chat.send_message(UserMessage(text=prompt))) or {}
+        data = await next_interview_question(profile=s, qa=qa, lang_name=_lang_name(lang))
     except Exception as e:
         logger.error(f"interview answer failed: {e}")
         data = {"enough": len(qa) >= MIN_QUESTIONS}
@@ -463,9 +411,6 @@ async def interview_answer(inp: InterviewAnswerInput, request: Request):
             "index": len(qa) + 1, "max": MAX_QUESTIONS, "language_code": lang}
 
 
-BLUEPRINT_SYSTEM = render("onboarding.blueprint")  # prompt in prompts/onboarding.py
-
-
 @router.post("/interview/blueprint")
 async def interview_blueprint(inp: InterviewSessionInput, request: Request):
     # FIX-004-A (RBAC-03): blueprint gen = expensive LLM call — gate it.
@@ -474,36 +419,23 @@ async def interview_blueprint(inp: InterviewSessionInput, request: Request):
     if not s:
         raise HTTPException(status_code=404, detail="Interview session not found")
     lang = _norm_lang(inp.language_code or s.get("language_code") or "en-IN")
-    welcome_note = ""
-    if lang != "en-IN":
-        lang_name = SUPPORTED_TTS_LANGS.get(lang, "the founder's language")
-        welcome_note = (
-            f"\n\nIMPORTANT: Write ONLY the \"welcome_line\" field in natural, conversational "
-            f"{lang_name} (native script). Keep all other fields (departments, workflow names, "
-            f"task titles, categories, approval names) in English."
-        )
-    size_hint = _team_size_hint(s.get("team_size") or "")
-    refinement = (s.get("refinement") or "").strip()
-    refine_block = f"\n\nFounder's follow-up refinement (they added this after seeing the first draft — reflect it faithfully):\n{refinement}" if refinement else ""
-    prompt = (
-        f"{_profile_block(s)}\n\n{size_hint}\n\n"
-        f"Interview transcript:\n{_qa_block(s.get('qa') or [])}{refine_block}\n\n"
-        "Design this company's operating system now — sized to their team band, worded in their industry."
-    )
     try:
-        chat = claude_chat(task="onboarding.blueprint", session_id=f"bp-{s['id']}-{len(refinement)}", system_message=BLUEPRINT_SYSTEM + welcome_note).with_model(*model_for("onboarding.blueprint"))
-        data = _extract_json(await chat.send_message(UserMessage(text=prompt))) or {}
+        result = await generate_blueprint(
+            profile=s, transcript=s.get("qa") or [],
+            refinement=(s.get("refinement") or ""),
+            welcome_lang_name=(SUPPORTED_TTS_LANGS.get(lang, "the founder's language")
+                               if lang != "en-IN" else None))
     except Exception as e:
         logger.error(f"interview blueprint failed: {e}")
         raise HTTPException(status_code=503, detail="Couldn't generate your operating system. Please try again.")
-    bp = normalize_os_blueprint(data)
-    products = [
-        {"name": (p.get("name") or "").strip(), "description": (p.get("description") or "").strip()}
-        for p in (data.get("products") or []) if (p.get("name") or "").strip()
-    ][:5] or [{"name": (p.get("name") or "").strip(), "description": (p.get("description") or "").strip()}
-              for p in (s.get("products") or []) if (p.get("name") or "").strip()][:5]
+    # Fall back to the session's own products only if the model returned none.
+    if not result.get("products"):
+        result["products"] = [
+            {"name": (p.get("name") or "").strip(), "description": (p.get("description") or "").strip()}
+            for p in (s.get("products") or []) if (p.get("name") or "").strip()
+        ][:5]
     await db.signup_sessions.update_one({"id": s["id"]}, {"$set": {"status": "blueprint_ready"}})
-    return {**bp, "products": products, "welcome_line": (data.get("welcome_line") or "").strip()}
+    return result
 
 
 

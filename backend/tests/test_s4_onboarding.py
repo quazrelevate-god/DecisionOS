@@ -34,15 +34,19 @@ class _FakeChat:
 
 def _patch(testdb, fake_chat=None):
     """Point the signup module at the isolated db + no-op the public guard.
-    Optionally swap claude_chat for a fake (for the LLM-on-path scenarios)."""
-    saved = (sg.db, sg._guard_signup_endpoint, sg.claude_chat)
+    Optionally swap claude_chat for a fake (for the LLM-on-path scenarios). The
+    interview/blueprint LLM call now lives in services.ai.onboarding, so the fake
+    is patched there too."""
+    import services.ai.onboarding as ob
+    saved = (sg.db, sg._guard_signup_endpoint, sg.claude_chat, ob.claude_chat)
     sg.db = testdb
     sg._guard_signup_endpoint = _noop_guard
     if fake_chat is not None:
         sg.claude_chat = lambda *a, **k: fake_chat
+        ob.claude_chat = lambda *a, **k: fake_chat
 
     def restore():
-        sg.db, sg._guard_signup_endpoint, sg.claude_chat = saved
+        sg.db, sg._guard_signup_endpoint, sg.claude_chat, ob.claude_chat = saved
     return restore
 
 

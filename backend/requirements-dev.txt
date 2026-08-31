@@ -5,3 +5,7 @@
 ruff==0.16.4              # linter (config in pyproject.toml [tool.ruff])
 black==26.5.1             # formatter (config in pyproject.toml [tool.black])
 import-linter==2.13       # layering contracts (config in .importlinter)
+pytest-cov==5.0.0         # coverage (Epic 10 T10-11.7; config in .coveragerc).
+                          # NB: run single-process (-o addopts="") -- pytest-cov
+                          # does NOT compose with the suite's -n2 --dist loadscope.
+coverage==7.16.0          # (pulled by pytest-cov; pinned for reproducibility)

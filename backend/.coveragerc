@@ -1,0 +1,37 @@
+# Coverage config (Epic 10 T10-11.7) -- floors on the high-risk modules.
+#
+# IMPORTANT: coverage does NOT compose with the suite's default xdist
+# (-n2 --dist loadscope) NOR with collecting many shim-heavy files together in
+# one process. Measure a module against ITS OWN focused tests, single-process:
+#
+#   .venv/Scripts/python -m pytest tests/test_s1_operating_score_unit.py \
+#       tests/test_s1_operating_score_view_unit.py \
+#       --cov=services.operating_score --cov-report=term-missing -o addopts=""
+#
+# Baselines (2026-09-01) + floors (regressions below these fail the check):
+#   services.operating_score  52%  floor 50%   (the two test_s1_operating_score_*.py
+#                                                files; ->62% adding test_s7_finance_formula
+#                                                + test_s6_scale + test_s11_infra)
+#   core.permissions          TBD              (needs a per-area coverage suite)
+#   services.tenancy          TBD
+#   services.ingestion        TBD
+#   routers.ledger            TBD
+# The TBD modules are exercised only indirectly across many shim-isolated files;
+# a per-area coverage suite that groups non-conflicting tests is the follow-up.
+
+[run]
+branch = False
+source =
+    services/operating_score.py
+    core/permissions.py
+    services/tenancy.py
+    services/ingestion.py
+    routers/ledger.py
+
+[report]
+show_missing = True
+skip_empty = True
+exclude_lines =
+    pragma: no cover
+    raise NotImplementedError
+    if TYPE_CHECKING:

@@ -157,9 +157,13 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
     return () => clearInterval(t);
   }, [stage, error]);
 
+  // NB: the blueprint no longer returns "workflows" — WE-02 (2026-08-16) retired
+  // the workflow_templates collection; operating_model.pipelines is the single
+  // source of truth for pipelines, and it's generated at register time (not at
+  // preview). So a "Workflows" stat here is always 0 — drop it and show the
+  // three categories the blueprint actually produces.
   const counts = bp ? [
     { n: (bp.departments || []).length, label: "Departments" },
-    { n: (bp.workflows || []).length, label: "Workflows" },
     { n: (bp.operational_tasks || []).length, label: "Recurring tasks" },
     { n: (bp.approval_rules || []).length, label: "Approval rules" },
   ] : [];

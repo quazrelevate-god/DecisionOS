@@ -81,6 +81,56 @@ NICHES: Dict[str, Dict[str, Any]] = {
         "tasks": ["Transfer stock to the 3 outlets", "Weekly fast-moving SKU stock-out review",
                   "Process online returns and exchanges"],
     },
+    "electronics": {
+        "industry": "Manufacturing",
+        "roles": ["procurement", "production", "inventory", "sales", "quality"],
+        "contacts": [("OEM Buyers Pvt Ltd", "customer"), ("Chip Distributors", "vendor"),
+                     ("PCB Fab House", "vendor")],
+        "sales": [180000, 95000],
+        "purchases": [120000, 60000],     # component BOM, high-value
+        "tasks": ["BOM cost roll-up per build", "Component inventory reorder point check",
+                  "Finished-goods asset stock count"],
+    },
+    "pharma": {
+        "industry": "Pharmaceuticals",
+        "roles": ["sales", "warehouse", "compliance", "finance"],
+        "contacts": [("City Chemists", "customer"), ("Hospital Supply Chain", "customer"),
+                     ("API Manufacturer", "vendor")],
+        "sales": [236000, 118000],        # GST-inclusive gross (18%) -- handled as-is, no GST math
+        "purchases": [88500],
+        "tasks": ["Batch + expiry check before dispatch", "Schedule-H compliance filing",
+                  "Cold-storage stock reconciliation"],
+    },
+    "consulting": {
+        "industry": "Professional Services",
+        "roles": ["delivery", "accounts"],
+        "contacts": [("Retainer Client A", "customer"), ("Retainer Client B", "customer"),
+                     ("Project Client C", "customer")],
+        "sales": [50000, 50000, 75000],   # recurring retainers + a project fee; NO inventory
+        "purchases": [],                   # services business -- no goods purchased
+        "tasks": ["Monthly retainer invoice run", "Timesheet review before billing",
+                  "Renew expiring retainer agreements"],
+    },
+    "construction": {
+        "industry": "Construction",
+        "roles": ["projects", "procurement", "site", "finance"],
+        "contacts": [("Township Developer", "customer"), ("Steel Supplier", "vendor"),
+                     ("Cement Depot", "vendor")],
+        "sales": [1000000, 750000],        # large staged/milestone contracts
+        "purchases": [300000, 150000],
+        "tasks": ["Raise milestone completion invoice", "Reconcile staged client payment",
+                  "Site material requisition approval"],
+    },
+    "agriculture": {
+        "industry": "Agriculture",
+        "roles": ["farming", "sales", "finance"],
+        "contacts": [("Mandi Trader", "customer"), ("Food Processor", "customer"),
+                     ("Seed & Fertilizer Co", "vendor")],
+        "sales": [220000, 40000],          # seasonal, lumpy
+        "purchases": [90000, 30000],
+        "tasks": ["Harvest-season dispatch planning", "Seasonal input procurement",
+                  "Commodity price tracking"],
+    },
 }
 
 

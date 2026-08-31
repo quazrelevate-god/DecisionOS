@@ -213,6 +213,32 @@ register(EvalCase(
     note="Retail/omni-channel: purchase->central store->outlets+online, stock-outs + online returns are the weekly watch.",
 ))
 
+# --- Custom 'Other' free-text industry (T10-05.11) --------------------------
+register(EvalCase(
+    task="onboarding.blueprint", name="niche_custom_other",
+    fn=generate_blueprint,
+    kwargs={
+        "profile": {"company_name": "AeroCraft", "founder_name": "Nikhil", "team_size": "11-50",
+                    "industry": "Artisanal Drone Assembly",   # NOT one of the 26 enum industries
+                    "business_model": "B2B",
+                    "description": "hand-assembled custom survey drones for agri + mapping clients"},
+        "transcript": [
+            {"q": "Walk me through a build.",
+             "a": "A client specs a drone, we source frames, motors and flight controllers, assemble and calibrate in-house, run a test flight, then ship with a warranty."},
+            {"q": "Where does it slip?",
+             "a": "Component lead times from imports, and failed calibration on the test flight sending units back to the bench."},
+        ],
+    },
+    golden="""{"departments":[{"key":"sourcing","label":"Component Sourcing"},{"key":"assembly","label":"Assembly & Calibration"},{"key":"qa","label":"Test Flight & QA"},{"key":"sales","label":"Client Sales"}],
+      "operational_tasks":[{"title":"Track component lead times on imports","category":"Review"},{"title":"Pre-ship test flight + calibration sign-off","category":"Review"},{"title":"Log failed-calibration returns to the bench","category":"Documentation"}],
+      "approval_rules":[{"name":"Import purchase order","description":"Owner approves component import orders before they are placed."}],
+      "products":[{"name":"Survey drone","description":"Hand-assembled custom drones for agri and mapping"}],
+      "welcome_line":"Your OS runs sourcing, assembly, calibration and test-flight sign-off so a failed unit never ships to a client."}""",
+    checks=_BLUEPRINT_CHECKS(["drone", "calibrat", "assembl", "component", "test flight", "sourcing"], min_hits=3),
+    note="Custom/free-text industry (not in the 26 enum): the model must still design a coherent, grounded OS -- "
+         "sourcing/assembly/QA -- not fall back to a generic template. Sensible defaults, no crash.",
+))
+
 
 # ---------------------------------------------------------------------------
 # T10-04.15 -- refine loop: a post-draft founder correction is incorporated.

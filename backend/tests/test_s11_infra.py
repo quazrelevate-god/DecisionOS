@@ -48,13 +48,16 @@ def test_factory_builds_every_niche(with_test_db):
         return out
 
     out = with_test_db(scenario)
-    assert set(out) == set(NICHES) and len(out) == 5, "all 5 niches build"
+    assert set(out) == set(NICHES) and len(out) == len(NICHES), "every niche builds"
     for niche, c in out.items():
+        has_purchases = bool(NICHES[niche]["purchases"])   # services niches (e.g. consulting) have none
         assert c["industry"] == NICHES[niche]["industry"], f"[{niche}] industry set"
         assert c["users"] >= 3 and c["memberships"] == c["users"], f"[{niche}] owner + members all active"
         assert c["contacts"] >= 2, f"[{niche}] contacts seeded"
-        assert c["sales"] >= 1 and c["purchases"] >= 1, f"[{niche}] both invoice types seeded"
-        assert c["pay_in"] >= 1 and c["pay_out"] >= 1, f"[{niche}] in AND out payments seeded"
+        assert c["sales"] >= 1 and c["pay_in"] >= 1, f"[{niche}] sales invoices + collected payments seeded"
+        # purchase bills + supplier (out) payments only where the niche buys goods
+        assert (c["purchases"] >= 1) == has_purchases, f"[{niche}] purchase bills match the niche definition"
+        assert (c["pay_out"] >= 1) == has_purchases, f"[{niche}] out-payments match the niche definition"
         assert c["tasks"] >= 2, f"[{niche}] tasks seeded"
 
 

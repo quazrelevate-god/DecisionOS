@@ -1238,9 +1238,21 @@ html[data-dex="1"].dark .text-muted-foreground { color: hsl(var(--muted-foregrou
    it — so "finance" covers /finance, /finance?tab=x and /finance/anything.
 
    Optional, per room:
-     --sky-art-lg      a different picture at >= 1024px  (falls back to --sky-art)
-     --sky-art-pos     background-position, default `center`
-     --sky-art-pos-lg  the same at >= 1024px             (falls back to --sky-art-pos)
+     --sky-art-lg          a different picture at >= 1024px (falls back to --sky-art)
+     --sky-art-pos         background-position, default `center`
+     --sky-art-pos-lg      the same at >= 1024px            (falls back to --sky-art-pos)
+     --sky-art-opacity     0..1, default 1 — composites the picture over the light
+                           canvas. This is the CONTRAST knob: these pictures carry
+                           dark cores, and page-header text sits on the bare sky.
+     --sky-art-opacity-lg  the same at >= 1024px       (falls back to --sky-art-opacity)
+
+   ON POSITION vs OPACITY. A landscape picture on a PORTRAIT phone is scaled by
+   height, so there is horizontal slack and no vertical slack at all — panning
+   sideways is the whole toolkit, and vertical position is inert (measured: Y
+   changes nothing on a phone). On DESKTOP the aspect nearly matches, leaving
+   only ~138px of slack at 1280 (10.8% of the viewport), so panning cannot move
+   a dark core out from under the header and opacity is the only lever left.
+   That is why several rooms below pan on the phone and fade on the desktop.
 
    WHY ARTWORK GETS A LAYER OF ITS OWN, instead of another background on
    ::before: ::before carries kr-drift, a 90s transform. On a gradient that
@@ -1269,12 +1281,21 @@ html[data-dex="1"].dark .text-muted-foreground { color: hsl(var(--muted-foregrou
     background-size: cover;
     background-image: var(--sky-art, none);
     background-position: var(--sky-art-pos, center);
-    transition: opacity 480ms cubic-bezier(.4, 0, .2, 1);
+    opacity: var(--sky-art-opacity, 1);
+    /* NO `transition` HERE, and the absence is load-bearing — the fourth time
+       this branch has been bitten by a stalled transition on this engine (see
+       the .app-sky note above, and .kr-pop <-> .kr-pressed in MyWork).
+       With `transition: opacity 480ms` declared, --sky-art-opacity computed
+       correctly as .4 on both <html> and this element while the USED value
+       stayed pinned at 1 through 3.2s of waiting; setting transition:none at
+       runtime resolved it to 0.4 in the same frame. Measured both ways. So
+       artwork, like the sky it replaces, snaps. */
 }
 @media (min-width: 1024px) {
     .app-sky__art {
         background-image: var(--sky-art-lg, var(--sky-art, none));
         background-position: var(--sky-art-pos-lg, var(--sky-art-pos, center));
+        opacity: var(--sky-art-opacity-lg, var(--sky-art-opacity, 1));
     }
 }
 /* The Dex room owns the whole sky — artwork stands down with the gradient. */
@@ -1309,11 +1330,51 @@ html[data-page="inbox"] {
     --sky-art-pos-lg: center;
 }
 
-/* html[data-page="my-work"]         { --sky-art: url("/sky/my-work.webp"); } */
-/* html[data-page="operating-score"] { --sky-art: url("/sky/operating-score.webp"); } */
+html[data-page="my-work"] {
+    --sky-art: url("/sky/my-work.webp");
+    /* At centre "Your day, simplified" reads 3.86 on the phone. Panning to 74%
+       clears it (5.02) — and was the first thing tried, and was wrong: at 74%
+       the crop has run onto the pale right edge and the picture is 12.2 mean
+       chroma of a possible 51.9. Fading it at CENTRE clears the same text at
+       .6 while keeping 30.2, two and a half times as much of the artwork.
+       Same trap KM-16 names on /inbox: a pan that scores well by removing the
+       thing it was asked to keep. Desktop clears at .75, so .6 covers both. */
+    --sky-art-opacity: .6;
+}
+/* The file is named for the UI label, "Ops"; the route is /operating-score. */
+html[data-page="operating-score"] {
+    --sky-art: url("/sky/ops.webp");
+    /* The one room no pan can fix: this picture's dark core sits under the
+       score hero at EVERY horizontal position (best 4.01 at 0%, and only
+       because the artwork has left the screen — chroma 3.8 of a possible 85).
+       So it keeps the founder's centred framing and fades instead. At .4 the
+       hero clears with the picture still clearly present.
+       ONE FAILURE SURVIVES AND IT IS NOT THE ARTWORK'S: the green "Needs work"
+       label is rgb(64 119 64) at 14px, whose ceiling on this canvas is 4.42
+       against a 4.5 requirement — it fails on the plain gradient too. Fixing
+       it means changing that green, not this background. */
+    --sky-art-opacity: .4;
+}
 /* html[data-page="finance"]         { --sky-art: url("/sky/finance.webp"); } */
-/* html[data-page="crm"]             { --sky-art: url("/sky/crm.webp"); } */
-/* html[data-page="team"]            { --sky-art: url("/sky/team.webp"); } */
+html[data-page="crm"] {
+    --sky-art: url("/sky/crm.webp");
+    /* The best-behaved of the four: clears at full strength, centred, on the
+       phone (6.31) — no pan, no fade. Desktop is the opposite: "Your
+       relationships —" reads 2.01 centred and no pan fixes it, but nudging to
+       0% (which barely changes what is on screen, the slack being 138px) lets
+       it clear at .5 rather than the .3 that centring would demand. */
+    --sky-art-pos-lg: 0%;
+    --sky-art-opacity-lg: .5;
+}
+html[data-page="team"] {
+    --sky-art: url("/sky/team.webp");
+    /* "Employees · access · reports" reads 2.81 centred on the phone. Pan to
+       74% and fade at centre score the same amount of visible artwork here
+       (22.7 vs 21.7 of a possible 57.1), so this follows /my-work and keeps
+       the composition centred rather than cropping to an edge.
+       Phone clears at .4, desktop at .5; .4 covers both. */
+    --sky-art-opacity: .4;
+}
 /* html[data-page="settings"]        { --sky-art: url("/sky/settings.webp"); } */
 /* html[data-page="journal"]         { --sky-art: url("/sky/journal.webp"); } */
 /* html[data-page="calendar"]        { --sky-art: url("/sky/calendar.webp"); } */

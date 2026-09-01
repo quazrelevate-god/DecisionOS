@@ -53,6 +53,11 @@ from bootstrap.lifecycle import lifespan, _bootstrap  # noqa: E402,F401
 
 app = FastAPI(title="DecisionOS", lifespan=lifespan)
 
+# S5-03 observability: opt-in Sentry error tracking + structured JSON logs +
+# request-id correlation. No-op unless SENTRY_DSN / LOG_FORMAT are configured.
+from core.observability import init_observability  # noqa: E402
+init_observability(app)
+
 
 # ---------------------------------------------------------------------------
 # Models

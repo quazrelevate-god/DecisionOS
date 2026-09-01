@@ -3,7 +3,8 @@
   "sha": "0bb1ed5667e45a85ba13a441986d70cb934fb1bcbfb17a833b4d3ec303aa6f27",
   "middleware": [
     "CSRFMiddleware",
-    "CORSMiddleware"
+    "CORSMiddleware",
+    "BaseHTTPMiddleware"
   ],
   "routes": [
     "DELETE /api/admin/announcements/{aid}",

@@ -1,0 +1,87 @@
+# INSTALL: copy this file to .github/workflows/deploy.yml to activate.
+# (kept here because the CI token that pushes this repo lacks the GitHub
+#  "workflow" scope needed to add files under .github/workflows/.)
+#
+name: deploy
+
+# S5-06 -- CD: build + migrate + deploy, GATED on the unit test suite passing.
+# No more manual deploys. This runs only on the deploy branch and can be paused
+# by removing the RAILWAY_TOKEN secret (the deploy job then no-ops with a notice).
+#
+# Wiring (one-time, on the platform's secret store -- see docs/runbooks/SECRETS.md):
+#   RAILWAY_TOKEN   -> a Railway project deploy token (or swap the deploy step for
+#                      your platform: render-deploy, flyctl deploy, etc.)
+#   MONGO_URL       -> used by the pre-deploy migration/verification step
+#
+# Staged rollout (S5-09) is enforced by GitHub Environments: the `staging` env
+# deploys automatically; the `production` env requires a manual approval (a
+# required reviewer) configured in repo Settings -> Environments.
+
+on:
+  push:
+    branches: [Backend_optimization]
+  workflow_dispatch: {}     # allow a manual, explicit deploy
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    name: test gate (must pass before any deploy)
+    uses: ./.github/workflows/tests.yml
+    secrets: inherit
+
+  migrate:
+    name: migrate (verify schema against target DB)
+    needs: gate
+    runs-on: ubuntu-latest
+    if: ${{ secrets.MONGO_URL != '' }}
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      MONGO_URL: ${{ secrets.MONGO_URL }}
+      DB_NAME: ${{ secrets.DB_NAME }}
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      EMERGENT_LLM_KEY: ${{ secrets.EMERGENT_LLM_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install --extra-index-url "https://d33sy5i8bnduwe.cloudfront.net/simple/" -r requirements.txt
+      - name: Apply + verify idempotent schema migration
+        run: python scripts/migrate.py
+
+  deploy-staging:
+    name: deploy -> staging
+    needs: migrate
+    runs-on: ubuntu-latest
+    environment: staging
+    if: ${{ secrets.RAILWAY_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to staging
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          npm i -g @railway/cli
+          railway up --service backend --environment staging --detach
+
+  deploy-production:
+    name: deploy -> production (manual approval)
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    environment: production      # required reviewer gate (S5-09 staged rollout)
+    if: ${{ secrets.RAILWAY_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to production
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          npm i -g @railway/cli
+          railway up --service backend --environment production --detach

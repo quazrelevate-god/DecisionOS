@@ -149,3 +149,6 @@ yarl==1.24.2
 zipp==4.1.0
 zopfli==0.4.3
 qdrant-client==1.19.0
+
+# S5-03 observability (optional error tracking; activated only when SENTRY_DSN is set)
+sentry-sdk[fastapi]>=2.0

@@ -10,8 +10,8 @@
 """
 from pathlib import Path
 
-from evals.base import register, EvalCase, one_of, predicate
-from services.ingestion import ai_classify_purchase, ai_extract_document, DOC_MIME
+from evals.base import register, EvalCase, one_of, predicate, is_type, nonempty_str
+from services.ingestion import ai_classify_purchase, ai_extract_document, ai_map_spreadsheet, DOC_MIME
 
 # backend/evals/cases/ -> backend -> repo root -> testdata/
 _TESTDATA = Path(__file__).resolve().parents[3] / "testdata"
@@ -99,6 +99,31 @@ register(EvalCase(
 
 # --- documents.doc_extract: LIVE vision OCR on real invoice photos ----------
 # golden=None -> live-only (skipped in the free replay run + CI eval set).
+register(EvalCase(
+    task="documents.csv_map", name="ledger_export_mapping",
+    fn=ai_map_spreadsheet,
+    kwargs={
+        "headers": ["Sr", "Party Name", "Bill No", "Bill Dt", "Amt (Rs)", "GSTIN"],
+        "rows": [
+            ["1", "Sharma Textiles", "INV-101", "01-04-2025", "45,000", "27ABCDE1234F1Z5"],
+            ["2", "Kumar Traders", "INV-102", "03-04-2025", "1,20,000", "29ZZZZZ9999Z1Z1"],
+        ],
+        "session_id": "eval-csv", "currency": "INR", "company": "Weave Co",
+    },
+    golden="""{"summary": "Two sales invoices mapped from a ledger export", "entity": "invoices",
+      "invoices": [
+        {"number": "INV-101", "contact_name": "Sharma Textiles", "date": "2025-04-01", "amount": 45000, "currency": "INR", "type": "sales_invoice"},
+        {"number": "INV-102", "contact_name": "Kumar Traders", "date": "2025-04-03", "amount": 120000, "currency": "INR", "type": "sales_invoice"}
+      ]}""",
+    checks=[
+        is_type("entity", str),
+        predicate("records is a dict of lists",
+                  lambda r: isinstance(r["records"], dict) and all(isinstance(v, list) for v in r["records"].values())),
+        predicate("rows mapped to invoice records", lambda r: len(r["records"].get("invoices", [])) >= 1),
+    ],
+    note="Messy-header spreadsheet -> AI column mapping into per-row invoice records.",
+))
+
 register(EvalCase(
     task="documents.doc_extract", name="handwritten_gst_invoice",
     fn=ai_extract_document,

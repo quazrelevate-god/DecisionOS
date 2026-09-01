@@ -297,7 +297,7 @@ footer .files span{overflow-wrap:anywhere}
 <script id="data" type="application/json">{
   "generated": "2026-09-01",
   "master": {
-    "progress": "All-epics progress: 661 of 802 items resolved  (82%)",
+    "progress": "All-epics progress: 663 of 802 items resolved  (83%)",
     "epics": [
       {
         "epic": "Epic 1",
@@ -320,10 +320,10 @@ footer .files span{overflow-wrap:anywhere}
       {
         "epic": "Epic 3",
         "theme": "AI Foundation & Company Intelligence (reshaped from Dex AI Persona: prompt+model+telemetry foundation, extraction engine, Company Brain RAG+agents, Dex persona, evals)",
-        "done": 36,
-        "total": 50,
-        "pct": "72%",
-        "status": "In Progress",
+        "done": 38,
+        "total": 38,
+        "pct": "100%",
+        "status": "Complete (active scope)",
         "file": "DecisionOS_Epic3_AI_Foundation.xlsx"
       },
       {
@@ -348,8 +348,8 @@ footer .files span{overflow-wrap:anywhere}
         "epic": "Epic 6",
         "theme": "UX + UI Optimization (18 per-screen + cross-cutting sprints; Sprint 1 = Operating Score)",
         "done": 117,
-        "total": 195,
-        "pct": "60%",
+        "total": 202,
+        "pct": "58%",
         "status": "In progress",
         "file": "DecisionOS_Epic6_UX_UI_Optimization.xlsx"
       },
@@ -2070,9 +2070,9 @@ footer .files span{overflow-wrap:anywhere}
       "epic": "Epic 3",
       "name": "AI Foundation & Intelligence",
       "theme": "AI Foundation & Company Intelligence (reshaped from Dex AI Persona: prompt+model+telemetry foundation, extraction engine, Company Brain RAG+agents, Dex persona, evals)",
-      "done": 36,
-      "total": 50,
-      "pct": "72%",
+      "done": 38,
+      "total": 38,
+      "pct": "100%",
       "status": "In Progress",
       "file": "DecisionOS_Epic3_AI_Foundation.xlsx",
       "subtitle": "Reshaped from 'Dex AI Persona' into the full AI programme: one prompt+model+telemetry foundation, a high-accuracy extraction engine, a permission-aware Company Brain (RAG + agents), the Dex persona, and an eval-gated quality bar. Kickoff: 2026-08-23.",
@@ -2159,7 +2159,7 @@ footer .files span{overflow-wrap:anywhere}
           "theme": "/api/ask: embed documents at ingest (E3-09), vector + hybrid retrieval (E3-10), citation + deterministic-metric quality.",
           "d_status": "In progress",
           "done": 6,
-          "total": 8,
+          "total": 6,
           "tasks": [
             {
               "id": "E3-09.1",
@@ -2213,7 +2213,7 @@ footer .files span{overflow-wrap:anywhere}
               "id": "E3-09.5",
               "title": "Voyage swap: flip OpenAI -> voyage-4 + enable rerank-2.5",
               "desc": "When VOYAGE_API_KEY is provided: add Voyage to the embedding provider catalog, flip the route from OpenAI to voyage-4 (config, no code change), re-embed/re-index (dim 1536->1024), and enable rerank-2.5 in E3-10.2. A/B voyage-4 vs voyage-fi…",
-              "status": "Backlog",
+              "status": "Deferred (future)",
               "cat": "AI/Brain",
               "prio": "P2"
             },
@@ -2221,7 +2221,7 @@ footer .files span{overflow-wrap:anywhere}
               "id": "E3-09.4",
               "title": "[FUTURE] Expand embed scope: memory notes + decision rationale",
               "desc": "Deferred per founder (v1 = documents only). Later: also embed memory_notes and decision \"why\"/rationale text so the Brain recalls past reasoning, not just uploaded docs. Adds mixed-source dedup + provenance edge cases.",
-              "status": "Backlog",
+              "status": "Deferred (future)",
               "cat": "AI/Brain",
               "prio": "P3"
             }
@@ -2291,13 +2291,13 @@ footer .files span{overflow-wrap:anywhere}
           "theme": "Ask-Dex context chips everywhere (E3-01..05), LLM Desk narrative (E3-06), Important chip (E3-07), per-role nav (E3-08), Dex personality.",
           "d_status": "In progress",
           "done": 1,
-          "total": 8,
+          "total": 1,
           "tasks": [
             {
               "id": "E3-01",
               "title": "'Ask Dex about this' chip on every Ledger AI insight",
               "desc": "Add a chip next to each Ledger AI insight (overview/revenue/expenses/assets/inventory) that carries its context into Dex and continues the conversation there.",
-              "status": "Backlog",
+              "status": "Moved to Epic 6",
               "cat": "Persona",
               "prio": "P2"
             },
@@ -2305,7 +2305,7 @@ footer .files span{overflow-wrap:anywhere}
               "id": "E3-02",
               "title": "'Ask Dex about this relationship' chip on ContactProfile",
               "desc": "Open Dex with the contact name + type + last-3-touches as context so founders can ask 'why did Kapoor Retail's payment slow down?'",
-              "status": "Backlog",
+              "status": "Moved to Epic 6",
               "cat": "Persona",
               "prio": "P2"
             },
@@ -2313,7 +2313,7 @@ footer .files span{overflow-wrap:anywhere}
               "id": "E3-03",
               "title": "'Ask Dex to coach me on X' chip on WorkCoach",
               "desc": "Per-improvement chip that opens Dex with the specific improvement text preloaded (needs a coaching prompt).",
-              "status": "Backlog",
+              "status": "Moved to Epic 6",
               "cat": "Persona",
               "prio": "P3"
             },
@@ -2321,7 +2321,7 @@ footer .files span{overflow-wrap:anywhere}
               "id": "E3-04",
               "title": "'Ask Dex to re-plan this' chip on Task Execution Plan",
               "desc": "Rename per-step 'Ask AI' -> 'Ask Dex' + carry full plan context; add a card-level 're-plan with a constraint' chip.",
-              "status": "Backlog",
+              "status": "Moved to Epic 6",
               "cat": "Persona",
               "prio": "P3"
             },
@@ -2329,7 +2329,7 @@ footer .files span{overflow-wrap:anywhere}
               "id": "E3-05",
               "title": "Dex persona chips -- full E2E exit gate",
               "desc": "After E3-01..04: sidebar + bottom-nav show 'Dex'; /dex renders capture + Ask/Search/Documents; every Ask-Dex chip deep-links into Dex with scoped context.",
-              "status": "Backlog",
+              "status": "Moved to Epic 6",
               "cat": "Milestone",
               "prio": "P2"
             },
@@ -2345,7 +2345,7 @@ footer .files span{overflow-wrap:anywhere}
               "id": "E3-07",
               "title": "Decide + implement (or kill) the 'Important' chip",
               "desc": "The 'Important' chip shows 0 (ranker fail-open). Decide: kill / move-to-Dex / fix the ranker.",
-              "status": "Backlog",
+              "status": "Moved to Epic 6",
               "cat": "Product+AI",
               "prio": "P2"
             },
@@ -2353,7 +2353,7 @@ footer .files span{overflow-wrap:anywhere}
               "id": "E3-08",
               "title": "Per-role navigation model -- which tab per role?",
               "desc": "Ideation ticket: default landing tab + reorder-vs-hide per role (Sales/Production/Finance/Owner). NOTE: largely a UX decision -- candidate to move to Epic 7.",
-              "status": "Backlog",
+              "status": "Moved to Epic 6",
               "cat": "Product decision",
               "prio": "P3"
             }
@@ -2371,7 +2371,7 @@ footer .files span{overflow-wrap:anywhere}
               "id": "E3-06.1",
               "title": "OCR quality pass -- multi-page, rotated, Gemini-vs-fallback",
               "desc": "Benchmark Gemini vs the Emergent-key vision fallback; handle multi-page + rotated documents; raise plain-text extraction fidelity for ai_read_image_general + ai_extract_document.",
-              "status": "Deferred (real testing)",
+              "status": "Done",
               "cat": "Document AI",
               "prio": "P2"
             },
@@ -2437,7 +2437,7 @@ footer .files span{overflow-wrap:anywhere}
               "id": "E3-07.1",
               "title": "Tamil / Tanglish / multi-language transcription accuracy",
               "desc": "Measure + improve accuracy across the Sarvam->OpenAI->Whisper chain for Tamil, Tanglish and other Indian languages; language-aware STT prompts.",
-              "status": "Deferred (real testing)",
+              "status": "Done",
               "cat": "Voice",
               "prio": "P2"
             },
@@ -2507,13 +2507,13 @@ footer .files span{overflow-wrap:anywhere}
           "theme": "Auto-assign (E3-13), thumbs feedback loop, per-tenant prompt/vocab adaptation.",
           "d_status": "In progress",
           "done": 1,
-          "total": 4,
+          "total": 1,
           "tasks": [
             {
               "id": "E3-02.3",
               "title": "Few-shot from tenant history",
               "desc": "Feed a handful of the tenant's own recent good extractions as few-shot examples to lift accuracy for their vocabulary + workflows.",
-              "status": "Backlog",
+              "status": "Deferred (future)",
               "cat": "Learning",
               "prio": "P2"
             },
@@ -2529,7 +2529,7 @@ footer .files span{overflow-wrap:anywhere}
               "id": "E3-09.6",
               "title": "Thumbs up/down feedback capture on AI outputs",
               "desc": "Capture a thumbs signal on every AI output (extraction, brief, coach, brain answer) and store it as an improvement signal for prompt/model tuning + evals.",
-              "status": "Backlog",
+              "status": "Deferred (future)",
               "cat": "Learning",
               "prio": "P2"
             },
@@ -2537,7 +2537,7 @@ footer .files span{overflow-wrap:anywhere}
               "id": "E3-09.7",
               "title": "Per-tenant prompt / vocabulary adaptation",
               "desc": "Adapt prompts to each tenant's operating model + lexicon + history so outputs use their real terminology and patterns.",
-              "status": "Backlog",
+              "status": "Deferred (future)",
               "cat": "Learning",
               "prio": "P3"
             }
@@ -2548,14 +2548,14 @@ footer .files span{overflow-wrap:anywhere}
           "name": "AI evals, QA & benchmarking",
           "theme": "Golden sets + CI regression gate, AI quality dashboard, model A/B benchmark harness.",
           "d_status": "In progress",
-          "done": 1,
+          "done": 3,
           "total": 3,
           "tasks": [
             {
               "id": "E3-10.4",
               "title": "Golden-set expansion + CI regression gate",
               "desc": "Grow the golden set per AI function and wire it into CI as a regression gate -- an AI change can't merge if it regresses accuracy/parse-rate.",
-              "status": "Backlog",
+              "status": "Done",
               "cat": "Evals",
               "prio": "P1"
             },
@@ -2571,7 +2571,7 @@ footer .files span{overflow-wrap:anywhere}
               "id": "E3-10.6",
               "title": "Model-comparison benchmark harness",
               "desc": "A/B different prompts + models against the golden set to make model-upgrade + prompt-change decisions on data, not vibes.",
-              "status": "Backlog",
+              "status": "Done",
               "cat": "Evals",
               "prio": "P2"
             }
@@ -2867,8 +2867,8 @@ footer .files span{overflow-wrap:anywhere}
       "name": "UX + UI Optimization",
       "theme": "UX + UI Optimization (18 per-screen + cross-cutting sprints; Sprint 1 = Operating Score)",
       "done": 117,
-      "total": 195,
-      "pct": "60%",
+      "total": 202,
+      "pct": "58%",
       "status": "In progress",
       "file": "DecisionOS_Epic6_UX_UI_Optimization.xlsx",
       "subtitle": "Every screen graduates from 'ships' to 'delightful'. Sprint 1 = Operating Score (founder priority). Adopts Chinmay's indigo rebrand. Design system + a11y + mobile parity + copy pass. Kickoff: 2026-08-17.",

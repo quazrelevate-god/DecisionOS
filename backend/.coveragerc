@@ -1,36 +1,44 @@
-# Coverage config (Epic 10 T10-11.7) -- floors on the high-risk modules.
+# Coverage config (Epic 10 T10-11.7). Report is scoped to the high-risk modules.
 #
-# IMPORTANT: coverage does NOT compose with the suite's default xdist
-# (-n2 --dist loadscope) NOR with collecting many shim-heavy files together in
-# one process. Measure a module against ITS OWN focused tests, single-process:
+# Run coverage SINGLE-PROCESS (never with the suite's -n2 --dist loadscope):
+#     python scripts/coverage_highrisk.py
+# or a single module directly (pytest-cov works for NON-core modules):
+#     python -m pytest tests/test_s1_operating_score_unit.py \
+#         tests/test_s1_operating_score_view_unit.py \
+#         --cov=services.operating_score --cov-report=term-missing -o addopts=""
 #
-#   .venv/Scripts/python -m pytest tests/test_s1_operating_score_unit.py \
-#       tests/test_s1_operating_score_view_unit.py \
-#       --cov=services.operating_score --cov-report=term-missing -o addopts=""
+# Baseline + floor (2026-09-01), enforced by scripts/coverage_highrisk.py:
+#   services.operating_score  52%  floor 50%   (test_s1_operating_score_*.py)
 #
-# Baselines (2026-09-01) + floors (regressions below these fail the check):
-#   services.operating_score  52%  floor 50%   (the two test_s1_operating_score_*.py
-#                                                files; ->62% adding test_s7_finance_formula
-#                                                + test_s6_scale + test_s11_infra)
-#   core.permissions          TBD              (needs a per-area coverage suite)
-#   services.tenancy          TBD
-#   services.ingestion        TBD
-#   routers.ledger            TBD
-# The TBD modules are exercised only indirectly across many shim-isolated files;
-# a per-area coverage suite that groups non-conflicting tests is the follow-up.
+# KNOWN TOOLCHAIN LIMITS (why the other 4 high-risk modules aren't floored yet):
+#   * core.permissions -- pytest-cov re-imports the `core` package, whose
+#     __init__ imports bcrypt (a PyO3/Rust extension). PyO3 refuses a second
+#     init per interpreter: "PyO3 modules ... may only be initialized once per
+#     interpreter process." So any --cov on a `core.*` submodule crashes
+#     collection. (coverage-run CLI dodges the crash but then can't attribute
+#     the early core import.)
+#   * services.tenancy / services.ingestion / routers.ledger -- no isolated
+#     db-tier test exercises these directly; they're covered through the
+#     INTEGRATION tier (live server: test_iteration55_ledger, test_s2_functional).
+#     Measuring them needs `coverage run` against the running server, not the
+#     offline unit suite.
 
 [run]
 branch = False
-source =
-    services/operating_score.py
-    core/permissions.py
-    services/tenancy.py
-    services/ingestion.py
-    routers/ledger.py
+omit =
+    */tests/*
+    */.venv/*
+    */__pycache__/*
 
 [report]
 show_missing = True
 skip_empty = True
+include =
+    */core/permissions.py
+    */services/tenancy.py
+    */services/ingestion.py
+    */routers/ledger.py
+    */services/operating_score.py
 exclude_lines =
     pragma: no cover
     raise NotImplementedError

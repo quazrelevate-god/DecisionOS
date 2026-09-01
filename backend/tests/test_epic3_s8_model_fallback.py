@@ -12,12 +12,15 @@ from config import MODELS, fallback_models, DEFAULT_LLM_MODEL
 
 # --- fallback_models (pure) -------------------------------------------------
 def test_claude_falls_back_to_gemini():
+    # BUG-16: the text fallback now points at the live vision model gemini-flash-3
+    # (gemini-2.5-flash was deprecated / 404).
     chain = fallback_models(MODELS["claude-sonnet"])
-    assert MODELS["gemini-flash"] in chain
+    assert MODELS["gemini-flash-3"] in chain
 
 
 def test_vision_has_no_cross_model_fallback():
-    assert fallback_models(MODELS["gemini-flash"]) == []
+    assert fallback_models(MODELS["gemini-flash-3"]) == []
+    assert fallback_models(MODELS["gemini-flash"]) == []   # deprecated entry, also no fallback
 
 
 def test_unknown_model_no_fallback():
@@ -74,6 +77,6 @@ def test_degrades_to_fallback_model_when_primary_fails(monkeypatch):
     resp = asyncio.run(chat.send_message(UserMessage(text="hi")))
 
     assert resp == '{"ok": true}'                         # fallback served the response
-    assert "gemini-2.5-flash" in calls["models"]          # it tried the fallback model
+    assert "gemini-3.6-flash" in calls["models"]          # it tried the fallback model (BUG-16)
     assert chat.last_call["degraded"] is True             # marked degraded
-    assert chat.last_call["model"] == "gemini-2.5-flash"
+    assert chat.last_call["model"] == "gemini-3.6-flash"

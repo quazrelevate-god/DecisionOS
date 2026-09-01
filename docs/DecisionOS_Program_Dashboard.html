@@ -297,7 +297,7 @@ footer .files span{overflow-wrap:anywhere}
 <script id="data" type="application/json">{
   "generated": "2026-09-01",
   "master": {
-    "progress": "All-epics progress: 649 of 802 items resolved  (81%)",
+    "progress": "All-epics progress: 660 of 802 items resolved  (82%)",
     "epics": [
       {
         "epic": "Epic 1",
@@ -383,9 +383,9 @@ footer .files span{overflow-wrap:anywhere}
       {
         "epic": "Epic 10",
         "theme": "Testing (comprehensive scenario coverage: unit + functional + role-matrix + onboarding + multi-niche + team-scale + formula-edge + isolation + AI/extraction + concurrency + regression-health + E2E; 13 sprints)",
-        "done": 131,
+        "done": 142,
         "total": 154,
-        "pct": "85%",
+        "pct": "92%",
         "status": "In progress",
         "file": "DecisionOS_Epic10_Testing.xlsx"
       }
@@ -6547,9 +6547,9 @@ footer .files span{overflow-wrap:anywhere}
       "epic": "Epic 10",
       "name": "Testing",
       "theme": "Testing (comprehensive scenario coverage: unit + functional + role-matrix + onboarding + multi-niche + team-scale + formula-edge + isolation + AI/extraction + concurrency + regression-health + E2E; 13 sprints)",
-      "done": 131,
+      "done": 142,
       "total": 154,
-      "pct": "85%",
+      "pct": "92%",
       "status": "In progress",
       "file": "DecisionOS_Epic10_Testing.xlsx",
       "subtitle": "Comprehensive test-scenario coverage: unit + functional + role-matrix + onboarding + multi-niche + team-scale + formula-edge + isolation + AI/extraction + concurrency + regression-health + E2E. Kickoff 2026-08-29.",
@@ -7438,15 +7438,15 @@ footer .files span{overflow-wrap:anywhere}
           "id": "Sprint 9",
           "name": "AI / extraction scenarios",
           "theme": "Invoice OCR (clean/blurry/foreign), CSV mapping, voice->task (Tanglish/noise), capture triage, Dex RAG citations, Brain RBAC intent gate, prompt-injection, AI fail-open.",
-          "d_status": "Backlog",
-          "done": 0,
+          "d_status": "In progress",
+          "done": 11,
           "total": 12,
           "tasks": [
             {
               "id": "T10-09.1",
               "title": "Invoice OCR clean extract",
               "desc": "Feed a clean invoice image/PDF -> correct amount/vendor/number/date/type. Assert calibrated confidence high -> routes to auto/confirm not attention.",
-              "status": "Backlog",
+              "status": "Done",
               "cat": "AI/Extraction",
               "prio": "P2"
             },
@@ -7454,7 +7454,7 @@ footer .files span{overflow-wrap:anywhere}
               "id": "T10-09.2",
               "title": "Invoice OCR blurry/low-confidence",
               "desc": "Blurry/partial doc -> low confidence -> needs_review true -> attention queue. Assert it never silently auto-files.",
-              "status": "Backlog",
+              "status": "Done",
               "cat": "AI/Extraction",
               "prio": "P2"
             },
@@ -7462,7 +7462,7 @@ footer .files span{overflow-wrap:anywhere}
               "id": "T10-09.3",
               "title": "Invoice foreign / missing fields",
               "desc": "Non-English or missing-number/date invoice -> graceful extraction, no crash, unknowns flagged, human-review routed.",
-              "status": "Backlog",
+              "status": "Done",
               "cat": "AI/Extraction",
               "prio": "P2"
             },
@@ -7470,7 +7470,7 @@ footer .files span{overflow-wrap:anywhere}
               "id": "T10-09.4",
               "title": "CSV/Excel multi-sheet mapping",
               "desc": "ai_map_spreadsheet on a messy multi-sheet workbook -> correct column->field mapping, per-row records, review before commit.",
-              "status": "Backlog",
+              "status": "Done",
               "cat": "AI/Extraction",
               "prio": "P2"
             },
@@ -7478,7 +7478,7 @@ footer .files span{overflow-wrap:anywhere}
               "id": "T10-09.5",
               "title": "Voice->task Tanglish/codemix",
               "desc": "Sarvam codemix (Tanglish) audio -> transcription -> decision + tasks. The India-primary voice path (see Sarvam ref).",
-              "status": "Backlog",
+              "status": "Done",
               "cat": "AI/Extraction",
               "prio": "P2"
             },
@@ -7486,7 +7486,7 @@ footer .files span{overflow-wrap:anywhere}
               "id": "T10-09.6",
               "title": "Voice noisy / accented resilience",
               "desc": "Noisy or heavily-accented audio -> transcription + extraction degrade gracefully, STT-fail -> 503, no partial garbage decision.",
-              "status": "Backlog",
+              "status": "Done",
               "cat": "AI/Extraction",
               "prio": "P3"
             },
@@ -7494,7 +7494,7 @@ footer .files span{overflow-wrap:anywhere}
               "id": "T10-09.7",
               "title": "Capture triage precision",
               "desc": "ai_capture_triage classifies + routes; fewer false 'unrelated'; classification not in CAPTURE_CLASSES -> 'other'; confidence default 0.7 on bad.",
-              "status": "Backlog",
+              "status": "Done",
               "cat": "AI/Extraction",
               "prio": "P2"
             },
@@ -7510,7 +7510,7 @@ footer .files span{overflow-wrap:anywhere}
               "id": "T10-09.9",
               "title": "Brain RBAC intent gate",
               "desc": "non-finance 'what are our sales?' -> PERMISSION_DENIED (stricter of LLM-classified vs regex intent). Finance columns stripped even if rows retrieved.",
-              "status": "Backlog",
+              "status": "Done",
               "cat": "AI/Extraction",
               "prio": "P0"
             },
@@ -7518,7 +7518,7 @@ footer .files span{overflow-wrap:anywhere}
               "id": "T10-09.10",
               "title": "Prompt-injection / jailbreak defense",
               "desc": "Malicious instructions inside a WhatsApp/voice message (wrapped as untrusted) must not execute; assert the injection-defense guard holds.",
-              "status": "Backlog",
+              "status": "Done",
               "cat": "AI/Extraction",
               "prio": "P1"
             },
@@ -7526,7 +7526,7 @@ footer .files span{overflow-wrap:anywhere}
               "id": "T10-09.11",
               "title": "AI fail-open contract",
               "desc": "Every LLM call: on error/timeout falls back to template/typed values and NEVER breaks the request. Kill the LLM mid-call, assert 200 with fallback.",
-              "status": "Backlog",
+              "status": "Done",
               "cat": "AI/Extraction",
               "prio": "P1"
             },
@@ -7534,7 +7534,7 @@ footer .files span{overflow-wrap:anywhere}
               "id": "T10-09.12",
               "title": "Confidence -> routing correctness",
               "desc": "Calibrated confidence drives auto/confirm/attention. Assert the full mapping: parse-fail/no-records/low-conf all land in the right queue.",
-              "status": "Backlog",
+              "status": "Done",
               "cat": "AI/Extraction",
               "prio": "P2"
             }

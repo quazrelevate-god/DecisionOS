@@ -94,11 +94,14 @@ def refusal_message(user: dict, intent: str) -> str:
 _INTENT_PATTERNS = [
     ("policy",       r"\b(policy|policies|sop|standard operating|filing|filings|contract|nda|compliance rule|regulation|handbook)\b"),
     ("personal",     r"\b(my (?:task|leave|activity|inbox|approval)|assigned to me|my todo|my work|my own)\b"),
-    ("hr",           r"\b(hire|hiring|recruit|resign|resignation|onboard|attendance|salary|payroll|appraisal|holiday|maternity|paternity|employee\b|staff|headcount|team member|manager|leaves? (of|for) )\b"),
-    ("finance",      r"\b(invoice|gst|tds|payment|receivable|payable|expense|cash|bank|refund|revenue|profit|loss|billing|ledger|reconcil|tax|budget|paid|unpaid|overdue.*invoice)\b"),
-    ("sales",        r"\b(sale|sales|lead|pipeline|deal|discount|quote|quotation|conversion|customer.*revenue|top customer|top client)\b"),
-    ("procurement",  r"\b(vendor|supplier|purchase order|po\b|rfq|procurement|reorder|dealer)\b"),
-    ("operations",   r"\b(production|inventory|stock|warehouse|delivery|dispatch|logistics|shipment|quality|defect|workflow)\b"),
+    # BUG-17: countable nouns carry an optional plural (`s?`) so a non-finance user
+    # asking "list all invoices" / "show me payments" is still caught by the
+    # DETERMINISTIC gate, not left to the LLM-planner belt-and-suspenders.
+    ("hr",           r"\b(hire|hiring|recruit|resign|resignation|onboard|attendance|salary|payroll|appraisals?|holidays?|maternity|paternity|employees?\b|staff|headcount|team members?|managers?|leaves? (of|for) )\b"),
+    ("finance",      r"\b(invoices?|gst|tds|payments?|receivables?|payables?|expenses?|cash|bank|refunds?|revenue|profit|loss(?:es)?|billing|ledger|reconcil|tax(?:es)?|budgets?|paid|unpaid|overdue.*invoices?)\b"),
+    ("sales",        r"\b(sales?|leads?|pipeline|deals?|discounts?|quote|quotation|conversion|customer.*revenue|top customers?|top clients?)\b"),
+    ("procurement",  r"\b(vendors?|suppliers?|purchase orders?|po\b|rfq|procurement|reorder|dealers?)\b"),
+    ("operations",   r"\b(production|inventory|stock|warehouse|delivery|dispatch|logistics|shipments?|quality|defects?|workflows?)\b"),
     ("org_analytics",r"\b(how (?:is|are).* (?:business|company|going)|kpi|dashboard|company (?:health|metric)|top-level)\b"),
 ]
 

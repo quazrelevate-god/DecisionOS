@@ -207,10 +207,15 @@ CLAUDE_KEY = os.environ.get('ANTHROPIC_API_KEY', '').strip() or EMERGENT_LLM_KEY
 # telemetry (E3-01.3) and eval/benchmark harness (E3-01.4 / E3-10.3) can A/B it.
 MODELS = {
     "claude-sonnet": ("anthropic", "claude-sonnet-4-6"),  # default text / reasoning model
-    "gemini-flash":  ("gemini", "gemini-2.5-flash"),      # default vision / OCR model
+    # BUG-16: gemini-2.5-flash is now 404 "no longer available to new users" (Google
+    # deprecated it) -> took ALL document/invoice OCR down (user-key 404 -> Emergent
+    # fallback 45s timeout). Kept as dead history so old telemetry rows stay
+    # attributable; no route points here anymore.
+    "gemini-flash":  ("gemini", "gemini-2.5-flash"),      # DEPRECATED (404) -- do not route
+    "gemini-flash-3": ("gemini", "gemini-3.6-flash"),     # default vision / OCR model (BUG-16)
 }
 DEFAULT_LLM_MODEL = "claude-sonnet"
-DEFAULT_VISION_MODEL = "gemini-flash"
+DEFAULT_VISION_MODEL = "gemini-flash-3"
 
 # Back-compat: the historical default tuples, now DERIVED from the catalog so
 # there is still one source of truth. Existing `from core import LLM_MODEL` and
@@ -244,9 +249,9 @@ MODEL_ROUTES = {
     "ledger.expense_cat": "claude-sonnet", "ledger.analysis": "claude-sonnet",
     "ledger.ask": "claude-sonnet", "documents.csv_map": "claude-sonnet",
     "documents.purchase_class": "claude-sonnet",
-    # vision / OCR (Gemini)
-    "documents.doc_extract": "gemini-flash", "vision.read_image": "gemini-flash",
-    "ledger.ocr": "gemini-flash",
+    # vision / OCR (Gemini) -- BUG-16: repointed off deprecated gemini-2.5-flash
+    "documents.doc_extract": "gemini-flash-3", "vision.read_image": "gemini-flash-3",
+    "ledger.ocr": "gemini-flash-3",
 }
 
 
@@ -283,8 +288,9 @@ def model_for(task, kind="llm"):
 # Emergent-routable models belong here. gemini-flash is already used for vision, so
 # it's the proven text fallback; vision has no cross-model fallback (key-fallback covers it).
 MODEL_FALLBACKS = {
-    "claude-sonnet": ["gemini-flash"],
-    "gemini-flash": [],
+    "claude-sonnet": ["gemini-flash-3"],
+    "gemini-flash-3": [],
+    "gemini-flash": [],  # deprecated (BUG-16), no fallback
 }
 
 

@@ -37,18 +37,21 @@ class KrPop extends StatelessWidget {
       decoration: BoxDecoration(
         color: color ?? AppColors.surface,
         borderRadius: borderRadius,
-        boxShadow: [
-          // Dark drop from bottom-right — sells the raise.
+        boxShadow: const [
+          // Dark drop from bottom-right — bumped to give buttons real depth
+          // against the tinted cool blooms. Was 7%/blur6, now 18%/blur10.
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.07),
-            offset: const Offset(3, 3),
-            blurRadius: 6,
+            color: Color(0x2E000000), // black @ 18%
+            offset: Offset(5, 6),
+            blurRadius: 10,
+            spreadRadius: -1,
           ),
           // White highlight from top-left — the light source.
           BoxShadow(
-            color: Colors.white.withValues(alpha: 0.9),
-            offset: const Offset(-3, -3),
-            blurRadius: 6,
+            color: Color(0xFFFFFFFF), // white @ 100%
+            offset: Offset(-4, -4),
+            blurRadius: 10,
+            spreadRadius: -1,
           ),
         ],
       ),
@@ -90,19 +93,19 @@ class KrPressed extends StatelessWidget {
       decoration: BoxDecoration(
         color: color ?? AppColors.surfaceMuted,
         borderRadius: borderRadius,
-        boxShadow: [
+        boxShadow: const [
           // Dark inset from top-left — pit interior shadow.
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.10),
-            offset: const Offset(2, 2),
-            blurRadius: 5,
+            color: Color(0x40000000), // black @ 25%
+            offset: Offset(3, 3),
+            blurRadius: 6,
             spreadRadius: -1,
             blurStyle: BlurStyle.inner,
           ),
           // White inset from bottom-right — reverses the pair to lift the well.
           BoxShadow(
-            color: Colors.white.withValues(alpha: 0.85),
-            offset: const Offset(-3, -3),
+            color: Color(0xFFFFFFFF), // white @ 100%
+            offset: Offset(-3, -3),
             blurRadius: 6,
             blurStyle: BlurStyle.inner,
           ),

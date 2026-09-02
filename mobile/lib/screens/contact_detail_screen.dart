@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../data/repositories.dart';
 import '../models/models.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_bloom.dart';
 import '../widgets/app_header.dart';
 import '../widgets/common.dart';
 import '../widgets/neumorphic.dart';
@@ -76,6 +77,7 @@ class _ContactDetailScreenState extends State<ContactDetailScreen> {
       color: AppColors.background,
       child: Stack(
         children: [
+          const Positioned.fill(child: AppBloom(tint: BloomTint.steel)),
           Column(
             children: [
               const AppHeader.minimal(),

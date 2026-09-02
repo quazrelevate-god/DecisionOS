@@ -3,6 +3,7 @@ import '../data/auth_repository.dart';
 import '../data/repositories.dart';
 import '../models/models.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_bloom.dart';
 import '../widgets/app_header.dart';
 import '../widgets/neumorphic.dart';
 import '../widgets/states.dart';
@@ -108,7 +109,10 @@ class _WorkScreenState extends State<WorkScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Stack(
+      children: [
+        const Positioned.fill(child: AppBloom(tint: BloomTint.steelBlue)),
+        Column(
       children: [
         const AppHeader(),
         Expanded(
@@ -202,6 +206,8 @@ class _WorkScreenState extends State<WorkScreen> {
               );
             },
           ),
+        ),
+      ],
         ),
       ],
     );
@@ -406,24 +412,32 @@ class _JoinedSegment extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 36,
-      child: Row(
-        children: [
-          _SegmentHalf(
-            label: 'My Tasks',
-            selected: selected && mine,
-            onTap: onMine,
-            left: true,
-          ),
-          Container(width: 1, height: 20, color: AppColors.textPrimary.withValues(alpha: 0.15)),
-          _SegmentHalf(
-            label: 'All Tasks',
-            selected: selected && !mine,
-            onTap: onAll,
-            left: false,
-          ),
-        ],
+    // Raised outer track (KrPop = pushed OUT). The active half sits
+    // INSIDE it as a KrPressed pit — reads as "pushed in". Inactive half
+    // is transparent so the raised track shows through. Colors are
+    // swapped: track = cool-grey muted, active pit = white surface, so
+    // the selected pill looks like a lit slot cut into the darker bar.
+    return KrPop(
+      borderRadius: BorderRadius.circular(AppRadius.pill),
+      padding: const EdgeInsets.all(4),
+      color: AppColors.surfaceMuted,
+      child: SizedBox(
+        height: 32,
+        child: Row(
+          children: [
+            _SegmentHalf(
+              label: 'My Tasks',
+              selected: selected && mine,
+              onTap: onMine,
+            ),
+            const SizedBox(width: 4),
+            _SegmentHalf(
+              label: 'All Tasks',
+              selected: selected && !mine,
+              onTap: onAll,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -433,22 +447,15 @@ class _SegmentHalf extends StatelessWidget {
   final String label;
   final bool selected;
   final VoidCallback onTap;
-  final bool left;
   const _SegmentHalf({
     required this.label,
     required this.selected,
     required this.onTap,
-    required this.left,
   });
 
   @override
   Widget build(BuildContext context) {
-    final radius = BorderRadius.only(
-      topLeft: Radius.circular(left ? AppRadius.pill : 0),
-      bottomLeft: Radius.circular(left ? AppRadius.pill : 0),
-      topRight: Radius.circular(left ? 0 : AppRadius.pill),
-      bottomRight: Radius.circular(left ? 0 : AppRadius.pill),
-    );
+    final radius = BorderRadius.circular(AppRadius.pill);
     final child = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14),
       child: Center(
@@ -464,9 +471,25 @@ class _SegmentHalf extends StatelessWidget {
         ),
       ),
     );
-    return selected
-        ? KrPressed(borderRadius: radius, onTap: onTap, child: child)
-        : KrPop(borderRadius: radius, onTap: onTap, child: child);
+    // Active = KrPressed (sunken pit inside the raised track — reads as
+    // "pushed in"). Inactive = flat InkWell so the raised track shows.
+    if (selected) {
+      return KrPressed(
+        borderRadius: radius,
+        onTap: onTap,
+        color: AppColors.surface,
+        child: child,
+      );
+    }
+    return Material(
+      color: Colors.transparent,
+      borderRadius: radius,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: radius,
+        child: child,
+      ),
+    );
   }
 }
 

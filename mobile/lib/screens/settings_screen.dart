@@ -4,6 +4,7 @@ import '../data/auth_repository.dart';
 import '../data/repositories.dart';
 import '../models/models.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_bloom.dart';
 import '../widgets/app_header.dart';
 import '../widgets/neumorphic.dart';
 import '../widgets/overlay_dock.dart';
@@ -41,7 +42,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       color: AppColors.background,
       child: Stack(
         children: [
-          const Positioned.fill(child: _SettingsBloomBackground()),
+          const Positioned.fill(child: AppBloom(tint: BloomTint.coolGrey)),
           Column(
             children: [
               const AppHeader.minimal(),

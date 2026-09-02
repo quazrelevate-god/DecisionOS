@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'data/repositories.dart';
+import 'models/models.dart';
 import 'screens/desk_screen.dart';
 import 'screens/work_screen.dart';
 import 'screens/money_screen.dart';
@@ -29,6 +31,10 @@ class _AppShellState extends State<AppShell> {
   void initState() {
     super.initState();
     appShellTab.addListener(_onExternalTab);
+    // Seed the unread-notification badge so the bell in every screen's
+    // AppHeader shows a real count on first paint. Any failure is
+    // silent — the ValueNotifier stays at 0 and no badge renders.
+    NotificationsRepository().list().catchError((_) => <AppNotification>[]);
   }
 
   @override

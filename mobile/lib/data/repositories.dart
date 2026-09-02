@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import '../models/models.dart';
 import 'api_client.dart';
 
@@ -564,8 +565,21 @@ class MoneyRepository {
   Future<List<Revenue>> revenue() async {
     final r = await _api.dio.get('/revenue');
     _ensureOk(r);
-    final list = (r.data as List?) ?? const [];
-    return list.whereType<Map<String, dynamic>>().map(Revenue.fromJson).toList();
+    // Backend returns a MAP: {currency, totals, invoices, payments,
+    // unmatched_payments, open_invoices}. The mobile Revenue tab renders
+    // the invoice list, so unwrap that. Fall back to a raw list if a
+    // future backend version starts returning one directly.
+    final data = r.data;
+    List raw = const [];
+    if (data is List) {
+      raw = data;
+    } else if (data is Map && data['invoices'] is List) {
+      raw = data['invoices'] as List;
+    }
+    return raw
+        .whereType<Map<String, dynamic>>()
+        .map(Revenue.fromJson)
+        .toList();
   }
 
   Future<List<Expense>> expenses() async {
@@ -784,14 +798,43 @@ class LeaveRepository {
 class NotificationsRepository {
   final _api = ApiClient();
 
+  /// Backend returns `{notifications: [...], unread: N}`. This value is
+  /// pushed to `unreadCount` so the header bell badge across every screen
+  /// can react without re-fetching itself.
+  static final ValueNotifier<int> unreadCount = ValueNotifier<int>(0);
+
   Future<List<AppNotification>> list() async {
     final r = await _api.dio.get('/notifications');
     _ensureOk(r);
-    final list = (r.data as List?) ?? const [];
-    return list
+    final data = r.data;
+    List raw = const [];
+    int unread = 0;
+    if (data is List) {
+      raw = data;
+    } else if (data is Map) {
+      if (data['notifications'] is List) raw = data['notifications'] as List;
+      if (data['unread'] is num) unread = (data['unread'] as num).toInt();
+    }
+    // Update the shared badge value; if the backend didn't send `unread`,
+    // fall back to counting !read entries client-side.
+    if (unread == 0 && raw.isNotEmpty) {
+      unread = raw
+          .whereType<Map<String, dynamic>>()
+          .where((n) => n['read'] != true)
+          .length;
+    }
+    unreadCount.value = unread;
+    return raw
         .whereType<Map<String, dynamic>>()
         .map(AppNotification.fromJson)
         .toList();
+  }
+
+  /// POST /notifications/{id}/read — marks a single notification as read.
+  Future<void> markRead(String id) async {
+    final r = await _api.dio.post('/notifications/$id/read');
+    _ensureOk(r);
+    if (unreadCount.value > 0) unreadCount.value -= 1;
   }
 }
 

@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../data/repositories.dart';
 import '../models/models.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_bloom.dart';
 import '../widgets/app_header.dart';
 import '../widgets/neumorphic.dart';
 import '../widgets/overlay_dock.dart';
@@ -45,6 +46,7 @@ class _CrmScreenState extends State<CrmScreen> {
       color: AppColors.background,
       child: Stack(
         children: [
+          const Positioned.fill(child: AppBloom(tint: BloomTint.steel)),
           Column(
             children: [
               const AppHeader.minimal(),
@@ -230,29 +232,38 @@ class _SearchBar extends StatelessWidget {
   const _SearchBar({required this.onChanged});
   @override
   Widget build(BuildContext context) {
-    return KrPressed(
+    // Same pattern as the segments: raised outer track (KrPop) holding a
+    // sunken input well (KrPressed) — the search field reads as "pushed
+    // in" against the raised chip bar.
+    return KrPop(
       borderRadius: BorderRadius.circular(AppRadius.pill),
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      child: Row(
-        children: [
-          const Icon(Icons.search_rounded,
-              size: 18, color: AppColors.textSecondary),
-          const SizedBox(width: 8),
-          Expanded(
-            child: TextField(
-              onChanged: onChanged,
-              style: AppText.body(),
-              decoration: InputDecoration(
-                isDense: true,
-                hintText: 'Search name, company, phone, email…',
-                hintStyle:
-                    AppText.body().copyWith(color: AppColors.textTertiary),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 12),
+      padding: const EdgeInsets.all(4),
+      color: AppColors.surfaceMuted,
+      child: KrPressed(
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        color: AppColors.surface,
+        child: Row(
+          children: [
+            const Icon(Icons.search_rounded,
+                size: 18, color: AppColors.textSecondary),
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextField(
+                onChanged: onChanged,
+                style: AppText.body(),
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: 'Search name, company, phone, email…',
+                  hintStyle:
+                      AppText.body().copyWith(color: AppColors.textTertiary),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -309,9 +320,12 @@ class _ScopeSegment extends StatelessWidget {
   const _ScopeSegment({required this.buyers, required this.onChanged});
   @override
   Widget build(BuildContext context) {
-    return KrPressed(
+    // Raised outer track = cool-grey muted; active pit = white surface
+    // so the selected half looks like a lit slot cut into the darker bar.
+    return KrPop(
       borderRadius: BorderRadius.circular(AppRadius.pill),
       padding: const EdgeInsets.all(4),
+      color: AppColors.surfaceMuted,
       child: Row(
         children: [
           Expanded(child: _seg('Buyers', buyers, () => onChanged(true))),
@@ -323,10 +337,11 @@ class _ScopeSegment extends StatelessWidget {
 
   Widget _seg(String label, bool active, VoidCallback onTap) {
     if (active) {
-      return KrPop(
+      return KrPressed(
         borderRadius: BorderRadius.circular(AppRadius.pill),
         padding: const EdgeInsets.symmetric(vertical: 10),
         onTap: onTap,
+        color: AppColors.surface,
         child: Center(
           child: Text(label, style: AppText.bodyStrong()),
         ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../app_shell.dart';
+import '../widgets/app_bloom.dart';
 import '../data/repositories.dart';
 import '../models/models.dart';
 import '../theme/app_theme.dart';
@@ -53,7 +54,7 @@ class _OpsScreenState extends State<OpsScreen> {
       color: AppColors.background,
       child: Stack(
         children: [
-          const Positioned.fill(child: _OpsBloomBackground()),
+          const Positioned.fill(child: AppBloom(tint: BloomTint.moss)),
           Column(
             children: [
               const AppHeader.minimal(),

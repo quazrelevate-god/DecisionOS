@@ -5,6 +5,7 @@ import '../models/models.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_header.dart';
 import '../widgets/common.dart';
+import '../widgets/neumorphic.dart';
 import '../widgets/states.dart';
 
 class PeopleScreen extends StatefulWidget {
@@ -96,13 +97,14 @@ class _SearchBar extends StatelessWidget {
   const _SearchBar({required this.onChanged});
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return KrPop(
+      borderRadius: BorderRadius.circular(AppRadius.pill),
+      padding: const EdgeInsets.all(4),
+      color: AppColors.surfaceMuted,
+      child: KrPressed(
+      borderRadius: BorderRadius.circular(AppRadius.pill),
       padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-        border: Border.all(color: AppColors.chipBorder),
-      ),
+      color: AppColors.surface,
       child: Row(
         children: [
           const Icon(Icons.search_rounded, size: 18, color: AppColors.textSecondary),
@@ -121,6 +123,7 @@ class _SearchBar extends StatelessWidget {
             ),
           ),
         ],
+      ),
       ),
     );
   }

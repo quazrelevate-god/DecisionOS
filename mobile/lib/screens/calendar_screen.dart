@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../data/repositories.dart';
 import '../models/models.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_bloom.dart';
 import '../widgets/app_header.dart';
 import '../widgets/neumorphic.dart';
 import '../widgets/overlay_dock.dart';
@@ -43,7 +44,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       color: AppColors.background,
       child: Stack(
         children: [
-          const Positioned.fill(child: _CalBloomBackground()),
+          const Positioned.fill(child: AppBloom(tint: BloomTint.amber)),
           Column(
             children: [
               const AppHeader.minimal(),

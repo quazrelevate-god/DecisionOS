@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../data/repositories.dart';
 import '../models/models.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_bloom.dart';
 import '../widgets/app_header.dart';
 import '../widgets/neumorphic.dart';
 import '../widgets/overlay_dock.dart';
@@ -57,7 +58,7 @@ class _JournalScreenState extends State<JournalScreen> {
       color: AppColors.background,
       child: Stack(
         children: [
-          const Positioned.fill(child: _JournalBloomBackground()),
+          const Positioned.fill(child: AppBloom(tint: BloomTint.amber)),
           Column(
             children: [
               const AppHeader.minimal(),
@@ -194,31 +195,37 @@ class _SearchRow extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: KrPressed(
+          child: KrPop(
             borderRadius: BorderRadius.circular(AppRadius.pill),
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: Row(
-              children: [
-                const Icon(Icons.search_rounded,
-                    size: 18, color: AppColors.textSecondary),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextField(
-                    controller: controller,
-                    onSubmitted: (_) => onSubmit(),
-                    style: AppText.body(),
-                    decoration: InputDecoration(
-                      isDense: true,
-                      hintText: 'Search decisions & notes…',
-                      hintStyle: AppText.body()
-                          .copyWith(color: AppColors.textTertiary),
-                      border: InputBorder.none,
-                      contentPadding:
-                          const EdgeInsets.symmetric(vertical: 12),
+            padding: const EdgeInsets.all(4),
+            color: AppColors.surfaceMuted,
+            child: KrPressed(
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              color: AppColors.surface,
+              child: Row(
+                children: [
+                  const Icon(Icons.search_rounded,
+                      size: 18, color: AppColors.textSecondary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: controller,
+                      onSubmitted: (_) => onSubmit(),
+                      style: AppText.body(),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        hintText: 'Search decisions & notes…',
+                        hintStyle: AppText.body()
+                            .copyWith(color: AppColors.textTertiary),
+                        border: InputBorder.none,
+                        contentPadding:
+                            const EdgeInsets.symmetric(vertical: 12),
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

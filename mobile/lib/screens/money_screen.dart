@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../data/repositories.dart';
 import '../models/models.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_bloom.dart';
 import '../widgets/app_header.dart';
 import '../widgets/neumorphic.dart';
 import '../widgets/sparkline.dart';
@@ -105,7 +106,10 @@ class _MoneyScreenState extends State<MoneyScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Stack(
+      children: [
+        const Positioned.fill(child: AppBloom(tint: BloomTint.smoke)),
+        Column(
       children: [
         const AppHeader(),
         Expanded(
@@ -145,6 +149,8 @@ class _MoneyScreenState extends State<MoneyScreen> {
               ],
             ),
           ),
+        ),
+      ],
         ),
       ],
     );
@@ -192,25 +198,29 @@ class _TabRail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // All 6 pills fit within the screen width via `Expanded` (equal-width
-    // segments). Each pill wears the KrPop / KrPressed neumorphic material,
-    // stacked icon-over-label so the row stays compact.
+    // Same pattern as the Work / CRM segments and the search bars: one
+    // raised outer track (KrPop = cool-grey muted) holding all 6 tabs.
+    // Active tab = sunken KrPressed white pit inside the track (reads as
+    // "pushed in"). Inactive tabs = flat InkWell so the track shows through.
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-      child: Row(
-        children: [
-          for (int i = 0; i < _tabs.length; i++) ...[
-            Expanded(
-              child: _TabPill(
-                label: _tabs[i].$2,
-                icon: _tabs[i].$3,
-                active: _tabs[i].$1 == active,
-                onTap: () => onSelect(_tabs[i].$1),
+      child: KrPop(
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        padding: const EdgeInsets.all(4),
+        color: AppColors.surfaceMuted,
+        child: Row(
+          children: [
+            for (int i = 0; i < _tabs.length; i++)
+              Expanded(
+                child: _TabPill(
+                  label: _tabs[i].$2,
+                  icon: _tabs[i].$3,
+                  active: _tabs[i].$1 == active,
+                  onTap: () => onSelect(_tabs[i].$1),
+                ),
               ),
-            ),
-            if (i != _tabs.length - 1) const SizedBox(width: 5),
           ],
-        ],
+        ),
       ),
     );
   }
@@ -229,6 +239,7 @@ class _TabPill extends StatelessWidget {
   });
   @override
   Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(AppRadius.pill);
     final child = Padding(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -246,17 +257,23 @@ class _TabPill extends StatelessWidget {
         ),
       ]),
     );
-    return active
-        ? KrPressed(
-            borderRadius: BorderRadius.circular(AppRadius.md),
-            onTap: onTap,
-            child: child,
-          )
-        : KrPop(
-            borderRadius: BorderRadius.circular(AppRadius.md),
-            onTap: onTap,
-            child: child,
-          );
+    if (active) {
+      return KrPressed(
+        borderRadius: radius,
+        onTap: onTap,
+        color: AppColors.surface,
+        child: child,
+      );
+    }
+    return Material(
+      color: Colors.transparent,
+      borderRadius: radius,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: radius,
+        child: child,
+      ),
+    );
   }
 }
 

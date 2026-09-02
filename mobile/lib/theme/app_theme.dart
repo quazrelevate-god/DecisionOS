@@ -8,7 +8,10 @@ class AppColors {
   static const background = Color(0xFFFBF3EA); // warm cream
   static const backgroundTop = Color(0xFFFDF6EF);
   static const surface = Color(0xFFFFFFFF);
-  static const surfaceMuted = Color(0xFFF3EBE1);
+  // Neutral pale grey — sits sensibly on BOTH the warm cream Desk ground
+  // AND the cool steel/violet/moss/coolGrey blooms on every other screen.
+  // Warm cream `#F3EBE1` looked stale on the cool-tinted rooms.
+  static const surfaceMuted = Color(0xFFECEDF1);
   static const surfaceDark = Color(0xFF0F0F10); // decision desk, team execution
   static const surfaceDarkAlt = Color(0xFF1A1A1B);
 

@@ -1408,6 +1408,59 @@ html[data-page="team"] {
    The phone gets the same idea on the other axis: there the pane is nearly
    full-width and the only free space is below it, so the glow lies along the
    bottom and fades upward. */
+/* KM-22 · portrait SQUEEZES the picture instead of cropping it.
+   `cover` preserves aspect, which means on a portrait viewport it scales the
+   artwork by HEIGHT and throws the sides away — at 375x812 a 1654x951 picture
+   is scaled 1.06x and loses 61% of its width. The founder watched that happen
+   while resizing: the picture never changes, the edges just leave.
+
+   `100% 100%` is a non-uniform scale — the whole frame is always on screen and
+   the picture squeezes horizontally to fit. That is normally the wrong trade
+   (it distorts), but these are out-of-focus colour fields with no geometry, no
+   type and no horizon to give the distortion away, so there is nothing to read
+   as "stretched". Composition survives; a crop does not.
+
+   ORIENTATION, NOT WIDTH. The complaint is about aspect, not about phones — a
+   tall narrow desktop window crops exactly the same way — so the trigger is
+   the thing that actually changed.
+
+   NOTE FOR THE NEXT PERSON: background-position stops doing anything here.
+   With no overflow there is no slack to pan, so --sky-art-pos is inert in
+   portrait, and KM-16's 60% pan on /inbox no longer carries the greeting's
+   contrast. That was re-measured after this change, not assumed. */
+@media (orientation: portrait) {
+    .app-sky__art {
+        background-size: 100% 100%;
+    }
+    /* The signup glow is a blob in its own margin box, not a full-bleed
+       background. It is already a deliberate crop of the picture, so
+       squeezing it would distort a shape rather than preserve one. */
+    .app-sky__art--aside {
+        background-size: cover;
+    }
+
+    /* Portrait shows the WHOLE frame, which means every dark core the crop
+       used to throw away is now somewhere on screen — and on four of the five
+       rooms it landed under text. Measured at 375x812, worst case per room,
+       with the value that clears AA in brackets:
+
+         inbox   2.59:1 on the wordmark  (needs <= .75)
+         crm     2.24:1 on the wordmark  (needs <= .70)
+         ops     4.14:1 on the caption   (needs <= .31)
+         team    4.05:1 on the caption   (needs <= .30)
+         my-work 4.66:1                  already clear at .6
+
+       These are portrait-only overrides: landscape still crops, so the
+       landscape numbers are the ones KM-18 already signed off and nothing
+       here touches them. Each value sits a step below its threshold rather
+       than on it, because the artwork is the founder's and the next one
+       dropped into the same slot will not have the same dark cores. */
+    html[data-page="inbox"]           { --sky-art-opacity: .72; }
+    html[data-page="crm"]             { --sky-art-opacity: .66; }
+    html[data-page="operating-score"] { --sky-art-opacity: .28; }
+    html[data-page="team"]            { --sky-art-opacity: .28; }
+}
+
 .app-sky__art--aside {
     --sky-art: url("/sky/inbox.webp");
     /* PHONE: above the pane, held to the right. The first cut put it BELOW,

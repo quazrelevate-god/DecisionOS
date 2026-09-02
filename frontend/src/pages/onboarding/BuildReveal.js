@@ -168,6 +168,12 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
     { n: (bp.approval_rules || []).length, label: "Approval rules" },
   ] : [];
 
+  // Kept reading `bp.workflows` deliberately, and it is expected to be empty:
+  // the BUG-15 note above records that the blueprint stopped returning
+  // workflows when WE-02 retired workflow_templates. Both render sites below
+  // no-op on an empty list (PreviewBlock returns null; the reveal block is
+  // length-gated), so this stays as the one place that lights up again if the
+  // field ever comes back, rather than being deleted and re-derived later.
   const workflowNames = (bp?.workflows || []).map((w) => w.name).filter(Boolean);
   const taskTitles = (bp?.operational_tasks || []).map((t) => t.title).filter(Boolean);
 
@@ -238,7 +244,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
             </h1>
             {welcome && <p data-testid="build-welcome-line" className="text-base leading-relaxed mb-6 max-w-xl">{welcome}</p>}
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6" data-testid="build-counts">
+            <div className="mb-6 grid grid-cols-3 gap-3" data-testid="build-counts">
               {counts.map((c, i) => (
                 <motion.div key={c.label} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 + i * 0.08 }}
                   className="kr-pop rounded-2xl p-4 text-center">
@@ -347,7 +353,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
               {payload.company_name} now runs on DecisionOS.
             </h1>
             {welcome && <p data-testid="build-welcome-line" className="text-base leading-relaxed mb-8 max-w-xl">{welcome}</p>}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6" data-testid="build-counts">
+            <div className="mb-6 grid grid-cols-3 gap-3" data-testid="build-counts">
               {counts.map((c, i) => (
                 <motion.div key={c.label} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 + i * 0.1 }}
                   className="kr-pop rounded-2xl p-4 text-center">

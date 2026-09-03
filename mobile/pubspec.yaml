@@ -18,6 +18,11 @@ dependencies:
   # State + routing
   provider: ^6.1.2
   go_router: ^14.6.2
+  # Attachments — task file-uploads + Money screen ingest hero.
+  image_picker: ^1.1.2
+  file_picker: ^8.1.6
+  # Persist the Settings screen's Language + Appearance choices.
+  shared_preferences: ^2.3.3
 
 dev_dependencies:
   flutter_test:

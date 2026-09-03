@@ -76,6 +76,27 @@ class TasksRepository {
     _ensureOk(r);
   }
 
+  /// POST /tasks/{id}/updates — full frontend shape. `action` is
+  /// `note` (default), `handoff`, or `escalate`. Handoff/escalate carry
+  /// either `to_id` (a user) or `to_role` (a team key).
+  Future<void> postUpdate(
+    String id, {
+    required String text,
+    String action = 'note',
+    String? toId,
+    String? toRole,
+    String? stepId,
+  }) async {
+    final r = await _api.dio.post('/tasks/$id/updates', data: {
+      'text': text,
+      'action': action,
+      if (toId != null && toId.isNotEmpty) 'to_id': toId,
+      if (toRole != null && toRole.isNotEmpty) 'to_role': toRole,
+      if (stepId != null && stepId.isNotEmpty) 'step_id': stepId,
+    });
+    _ensureOk(r);
+  }
+
   /// Reorders the list by AI priority score. Returns the same shape as list().
   Future<List<Task>> prioritize() async {
     final r = await _api.dio.post('/tasks/prioritize');
@@ -199,6 +220,45 @@ class PeopleRepository {
     final r = await _api.dio.post('/users/$id/uninvite');
     _ensureOk(r);
   }
+
+  /// PATCH /users/{id} — edit a member (name, phone, role,
+  /// reporting_manager_id, permissions map).
+  Future<void> update(String id, Map<String, dynamic> body) async {
+    final r = await _api.dio.patch('/users/$id', data: body);
+    _ensureOk(r);
+  }
+
+  /// GET /users/{id} — single-member fetch (Person shape).
+  Future<Person> get(String id) async {
+    final r = await _api.dio.get('/users/$id');
+    _ensureOk(r);
+    return Person.fromJson(r.data as Map<String, dynamic>);
+  }
+}
+
+/// One at-risk task returned by GET /leaves/{id}/impact.
+class LeaveImpactTask {
+  final String id;
+  final String title;
+  final DateTime? dueAt;
+  final String? assigneeName;
+  final String? reason;
+  const LeaveImpactTask({
+    required this.id,
+    required this.title,
+    this.dueAt,
+    this.assigneeName,
+    this.reason,
+  });
+  factory LeaveImpactTask.fromJson(Map<String, dynamic> j) => LeaveImpactTask(
+        id: (j['id'] ?? j['task_id'] ?? '').toString(),
+        title: (j['title'] ?? '').toString(),
+        dueAt: j['due_at'] is String
+            ? DateTime.tryParse(j['due_at'] as String)
+            : null,
+        assigneeName: j['assignee_name'] as String?,
+        reason: j['reason'] as String?,
+      );
 }
 
 /// The CRM data layer — pulls `/contacts`, enriches with open-complaint
@@ -288,6 +348,13 @@ class SettingsRepository {
 
   Future<void> regenerateOperatingModel() async {
     final r = await _api.dio.post('/tenant/operating-model/regenerate');
+    _ensureOk(r);
+  }
+
+  /// PATCH /tenant/leave-approvers — {approvers: {roleKey: userId}}.
+  Future<void> patchLeaveApprovers(Map<String, String?> approvers) async {
+    final r = await _api.dio
+        .patch('/tenant/leave-approvers', data: {'approvers': approvers});
     _ensureOk(r);
   }
 
@@ -603,6 +670,36 @@ class MoneyRepository {
     return list.whereType<Map<String, dynamic>>().map(InventoryItem.fromJson).toList();
   }
 
+  /// POST /ledger/ask — natural-language ledger Q&A. Returns the plain
+  /// text answer. Errors surface as the empty string so the caller renders
+  /// a soft "no answer" hint rather than crashing the AI card.
+  Future<String> ask(String question, {String scope = 'all'}) async {
+    try {
+      final r = await _api.dio.post('/ledger/ask', data: {
+        'question': question,
+        'scope': scope,
+      });
+      _ensureOk(r);
+      final data = r.data;
+      if (data is String) return data;
+      if (data is Map) {
+        for (final k in ['answer', 'reply', 'text', 'response']) {
+          final v = data[k];
+          if (v is String && v.isNotEmpty) return v;
+        }
+      }
+      return '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  /// POST /ledger/ai/{scope}/refresh — recompute the AI ledger panel.
+  Future<void> refreshAi(String scope) async {
+    final r = await _api.dio.post('/ledger/ai/$scope/refresh');
+    _ensureOk(r);
+  }
+
   Future<int> pendingCaptureCount() async {
     try {
       final r = await _api.dio.get('/captures/pending-count');
@@ -780,6 +877,25 @@ class LeaveRepository {
       'reason': reason,
     });
     _ensureOk(r);
+  }
+
+  /// GET /leaves/{id}/impact — the AI-suggested cover panel on approved leaves.
+  Future<List<LeaveImpactTask>> impact(String leaveId) async {
+    final r = await _api.dio.get('/leaves/$leaveId/impact');
+    _ensureOk(r);
+    final data = r.data;
+    List raw = const [];
+    if (data is List) {
+      raw = data;
+    } else if (data is Map) {
+      if (data['tasks'] is List) raw = data['tasks'] as List;
+      else if (data['at_risk'] is List) raw = data['at_risk'] as List;
+      else if (data['items'] is List) raw = data['items'] as List;
+    }
+    return raw
+        .whereType<Map<String, dynamic>>()
+        .map(LeaveImpactTask.fromJson)
+        .toList();
   }
 
   /// POST /leaves/absence — same-day emergency notification.

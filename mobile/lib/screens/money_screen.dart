@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../data/repositories.dart';
 import '../models/models.dart';
 import '../theme/app_theme.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
 import '../widgets/app_bloom.dart';
 import '../widgets/app_header.dart';
 import '../widgets/neumorphic.dart';
@@ -308,13 +310,34 @@ class _CaptureHero extends StatelessWidget {
 
   Future<void> _onTileTap(BuildContext context, int i) async {
     switch (i) {
-      case 0: // Upload bill /receipt
-      case 1: // Scan receipt
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text(
-                  'File uploads need the file_picker package — add it to pubspec.yaml to enable /ingest/document from mobile.')),
-        );
+      case 0: // Upload bill / receipt (PDF or image)
+        try {
+          final r = await FilePicker.platform.pickFiles(
+            withData: true,
+            allowMultiple: false,
+            type: FileType.custom,
+            allowedExtensions: const ['pdf', 'png', 'jpg', 'jpeg', 'webp'],
+          );
+          if (r == null || r.files.isEmpty) return;
+          final f = r.files.single;
+          if (f.bytes == null) return;
+          await _ingestDoc(context, f.bytes!, f.name);
+        } catch (_) {
+          _err(context, 'Could not pick a file.');
+        }
+        break;
+      case 1: // Scan receipt via camera
+        try {
+          final x = await ImagePicker().pickImage(
+            source: ImageSource.camera,
+            imageQuality: 82,
+          );
+          if (x == null) return;
+          final bytes = await x.readAsBytes();
+          await _ingestDoc(context, bytes, x.name);
+        } catch (_) {
+          _err(context, 'Could not open camera.');
+        }
         break;
       case 2: // Add expense — real form
         final saved = await showModalBottomSheet<bool>(
@@ -329,14 +352,67 @@ class _CaptureHero extends StatelessWidget {
         );
         if (saved == true) onRefresh();
         break;
-      case 3: // CSV/Excel export
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text(
-                  'CSV import needs the file_picker package — add it to pubspec.yaml to enable /ingest/csv.')),
-        );
+      case 3: // CSV/Excel import
+        try {
+          final r = await FilePicker.platform.pickFiles(
+            withData: true,
+            allowMultiple: false,
+            type: FileType.custom,
+            allowedExtensions: const ['csv', 'xlsx', 'xls'],
+          );
+          if (r == null || r.files.isEmpty) return;
+          final f = r.files.single;
+          if (f.bytes == null) return;
+          await _ingestCsv(context, f.bytes!, f.name);
+        } catch (_) {
+          _err(context, 'Could not pick the spreadsheet.');
+        }
         break;
     }
+  }
+
+  Future<void> _ingestDoc(
+      BuildContext context, List<int> bytes, String filename) async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Uploading $filename…')),
+    );
+    try {
+      await MoneyRepository()
+          .ingestDocument(bytes: bytes, filename: filename);
+      onRefresh();
+      onTabChange('inbox');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Uploaded — review in Inbox')),
+        );
+      }
+    } catch (_) {
+      _err(context, 'Upload failed.');
+    }
+  }
+
+  Future<void> _ingestCsv(
+      BuildContext context, List<int> bytes, String filename) async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Importing $filename…')),
+    );
+    try {
+      await MoneyRepository().ingestCsv(bytes: bytes, filename: filename);
+      onRefresh();
+      onTabChange('inbox');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('CSV imported — review in Inbox')),
+        );
+      }
+    } catch (_) {
+      _err(context, 'Import failed.');
+    }
+  }
+
+  void _err(BuildContext context, String msg) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override
@@ -935,29 +1011,39 @@ class _RevenueBody extends StatelessWidget {
         }
         if (snap.hasError) return const ErrorState(message: 'Could not load revenue.');
         final items = snap.data ?? const <Revenue>[];
-        if (items.isEmpty) {
-          return const EmptyState(
-            icon: Icons.attach_money_rounded,
-            title: 'No revenue yet',
-            subtitle: 'Invoices you send will show up here.',
-          );
-        }
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            for (final r in items)
-              Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                child: _MoneyRowCard(
-                  title: r.title,
-                  meta: r.date == null
-                      ? null
-                      : 'Due ${r.date!.day}/${r.date!.month}',
-                  status: r.status,
-                  amount: r.amount,
-                  income: r.status.toLowerCase() != 'overdue',
+            _AddPill(
+              label: 'Add income',
+              onTap: () => _openAdd(context, 'income'),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            if (items.isEmpty)
+              const EmptyState(
+                icon: Icons.attach_money_rounded,
+                title: 'No revenue yet',
+                subtitle: 'Invoices you send will show up here.',
+              )
+            else
+              for (final r in items)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                  child: _MoneyRowCard(
+                    title: r.title,
+                    meta: r.date == null
+                        ? null
+                        : 'Due ${r.date!.day}/${r.date!.month}',
+                    status: r.status,
+                    amount: r.amount,
+                    income: r.status.toLowerCase() != 'overdue',
+                    onDelete: () => _confirmDelete(
+                      context,
+                      title: r.title,
+                      run: () => MoneyRepository().deleteInvoice(r.id),
+                    ),
+                  ),
                 ),
-              ),
           ],
         );
       },
@@ -1002,6 +1088,11 @@ class _ExpensesBody extends StatelessWidget {
                     meta: e.category,
                     amount: e.amount,
                     income: false,
+                    onDelete: () => _confirmDelete(
+                      context,
+                      title: e.title,
+                      run: () => MoneyRepository().deleteExpense(e.id),
+                    ),
                   ),
                 ),
           ],
@@ -1025,6 +1116,11 @@ class _AssetsBody extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            _AddPill(
+              label: 'Add asset',
+              onTap: () => _openAdd(context, 'asset'),
+            ),
+            const SizedBox(height: AppSpacing.md),
             const _AiInsightPlaceholder(scope: 'assets'),
             const SizedBox(height: AppSpacing.md),
             if (items.isEmpty)
@@ -1042,6 +1138,11 @@ class _AssetsBody extends StatelessWidget {
                     meta: a.category,
                     amount: a.amount,
                     income: false,
+                    onDelete: () => _confirmDelete(
+                      context,
+                      title: a.title,
+                      run: () => MoneyRepository().deleteAsset(a.id),
+                    ),
                   ),
                 ),
           ],
@@ -1065,6 +1166,11 @@ class _InventoryBody extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            _AddPill(
+              label: 'Add item',
+              onTap: () => _openAdd(context, 'inventory'),
+            ),
+            const SizedBox(height: AppSpacing.md),
             const _AiInsightPlaceholder(scope: 'inventory'),
             const SizedBox(height: AppSpacing.md),
             if (items.isEmpty)
@@ -1074,14 +1180,19 @@ class _InventoryBody extends StatelessWidget {
                 subtitle: 'Stock items will appear here.',
               )
             else
-              for (final i in items)
+              for (final it in items)
                 Padding(
                   padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                   child: _MoneyRowCard(
-                    title: i.title,
-                    meta: 'Qty ${i.quantity.toStringAsFixed(0)}',
-                    amount: (i.unitCost ?? 0) * i.quantity,
+                    title: it.title,
+                    meta: 'Qty ${it.quantity.toStringAsFixed(0)}',
+                    amount: (it.unitCost ?? 0) * it.quantity,
                     income: true,
+                    onDelete: () => _confirmDelete(
+                      context,
+                      title: it.title,
+                      run: () => MoneyRepository().deleteInventory(it.id),
+                    ),
                   ),
                 ),
           ],
@@ -1111,12 +1222,14 @@ class _MoneyRowCard extends StatelessWidget {
   final String? status;
   final double amount;
   final bool income;
+  final VoidCallback? onDelete;
   const _MoneyRowCard({
     required this.title,
     this.meta,
     this.status,
     required this.amount,
     required this.income,
+    this.onDelete,
   });
   @override
   Widget build(BuildContext context) {
@@ -1175,9 +1288,309 @@ class _MoneyRowCard extends StatelessWidget {
                 color: income ? const Color(0xFF16A34A) : AppColors.brand,
                 fontFeatures: const [FontFeature.tabularFigures()],
               )),
+          if (onDelete != null) ...[
+            const SizedBox(width: 4),
+            InkWell(
+              onTap: onDelete,
+              borderRadius: BorderRadius.circular(999),
+              child: const Padding(
+                padding: EdgeInsets.all(6),
+                child: Icon(Icons.delete_outline_rounded,
+                    size: 18, color: AppColors.textSecondary),
+              ),
+            ),
+          ],
         ],
       ),
     );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared money-list helpers.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _AddPill extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+  const _AddPill({required this.label, required this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Material(
+        color: AppColors.textPrimary,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md, vertical: 10),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.add_rounded, size: 16, color: Colors.white),
+              const SizedBox(width: 6),
+              Text(label,
+                  style: AppText.bodyStrong()
+                      .copyWith(color: Colors.white, fontSize: 13)),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+Future<void> _openAdd(BuildContext context, String kind) async {
+  final saved = await showModalBottomSheet<bool>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => _AddMoneySheet(kind: kind),
+  );
+  if (saved == true) {
+    // Bubble a soft "please refresh" signal — the Money screen's own
+    // FutureBuilders don't auto-refetch, but rebuilds happen when the user
+    // switches tabs. Snack keeps the user informed.
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Added — pull the tab to refresh.')),
+      );
+    }
+  }
+}
+
+Future<void> _confirmDelete(
+  BuildContext context, {
+  required String title,
+  required Future<void> Function() run,
+}) async {
+  final go = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Delete?'),
+      content: Text('"$title" will be permanently removed.'),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel')),
+        TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Delete')),
+      ],
+    ),
+  );
+  if (go != true) return;
+  try {
+    await run();
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Deleted — pull the tab to refresh.')),
+      );
+    }
+  } catch (_) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not delete.')),
+      );
+    }
+  }
+}
+
+/// One sheet for Add Income / Asset / Inventory. Small text form → the
+/// existing `MoneyRepository.addRevenue|addAsset|addInventory` (which hit
+/// the frontend's `/*/with-file` endpoint with no file leg).
+class _AddMoneySheet extends StatefulWidget {
+  final String kind; // 'income' | 'asset' | 'inventory'
+  const _AddMoneySheet({required this.kind});
+  @override
+  State<_AddMoneySheet> createState() => _AddMoneySheetState();
+}
+
+class _AddMoneySheetState extends State<_AddMoneySheet> {
+  final _title = TextEditingController();
+  final _party = TextEditingController();
+  final _amount = TextEditingController();
+  final _category = TextEditingController();
+  final _qty = TextEditingController();
+  bool _saving = false;
+
+  String get _heading => switch (widget.kind) {
+        'income' => 'Add income',
+        'asset' => 'Add asset',
+        _ => 'Add inventory item',
+      };
+
+  Future<void> _submit() async {
+    if (_title.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Title is required.')),
+      );
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      final amount = double.tryParse(_amount.text.trim());
+      switch (widget.kind) {
+        case 'income':
+          await MoneyRepository().addRevenue({
+            'title': _title.text.trim(),
+            if (_party.text.trim().isNotEmpty)
+              'customer_name': _party.text.trim(),
+            if (amount != null) 'amount': amount,
+          });
+          break;
+        case 'asset':
+          await MoneyRepository().addAsset({
+            'name': _title.text.trim(),
+            if (_party.text.trim().isNotEmpty) 'vendor': _party.text.trim(),
+            if (amount != null) 'amount': amount,
+            if (_category.text.trim().isNotEmpty)
+              'category': _category.text.trim(),
+          });
+          break;
+        default:
+          await MoneyRepository().addInventory({
+            'item': _title.text.trim(),
+            if (_party.text.trim().isNotEmpty) 'vendor': _party.text.trim(),
+            if (double.tryParse(_qty.text.trim()) != null)
+              'quantity': double.parse(_qty.text.trim()),
+            if (amount != null) 'unit_cost': amount,
+          });
+      }
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not save.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Widget _field(String label, TextEditingController c,
+      {String? hint, TextInputType? keyboard}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6, top: 4),
+          child: Text(label,
+              style: AppText.small()
+                  .copyWith(fontWeight: FontWeight.w600, fontSize: 12)),
+        ),
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.surfaceMuted,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: TextField(
+            controller: c,
+            keyboardType: keyboard,
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle:
+                  AppText.body().copyWith(color: AppColors.textTertiary),
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mq = MediaQuery.of(context);
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.xxl,
+        AppSpacing.lg,
+        AppSpacing.lg + mq.viewInsets.bottom,
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: mq.size.height * 0.82),
+        child: Material(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.xl),
+          elevation: 24,
+          shadowColor: Colors.black.withValues(alpha: 0.35),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  Text(_heading, style: AppText.h3()),
+                  const Spacer(),
+                  InkWell(
+                    onTap: () => Navigator.of(context).pop(),
+                    borderRadius: BorderRadius.circular(999),
+                    child: const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(Icons.close_rounded, size: 20),
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: AppSpacing.md),
+                _field('Title', _title, hint: 'What is this?'),
+                _field(
+                  widget.kind == 'income' ? 'Customer' : 'Vendor',
+                  _party,
+                  hint: widget.kind == 'income'
+                      ? 'Customer name'
+                      : 'Vendor name',
+                ),
+                if (widget.kind == 'inventory')
+                  _field('Quantity', _qty,
+                      hint: '0',
+                      keyboard: const TextInputType.numberWithOptions()),
+                _field(
+                  widget.kind == 'inventory' ? 'Unit cost' : 'Amount',
+                  _amount,
+                  hint: '0',
+                  keyboard: const TextInputType.numberWithOptions(decimal: true),
+                ),
+                if (widget.kind == 'asset')
+                  _field('Category', _category, hint: 'Category (optional)'),
+                const SizedBox(height: AppSpacing.lg),
+                Material(
+                  color: AppColors.textPrimary,
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                  child: InkWell(
+                    onTap: _saving ? null : _submit,
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                    child: Container(
+                      alignment: Alignment.center,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      child: Text(_saving ? 'Saving…' : 'Save',
+                          style: AppText.bodyStrong()
+                              .copyWith(color: Colors.white)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _title.dispose();
+    _party.dispose();
+    _amount.dispose();
+    _category.dispose();
+    _qty.dispose();
+    super.dispose();
   }
 }
 
@@ -1230,11 +1643,36 @@ class _AskAiPanel extends StatefulWidget {
 
 class _AskAiPanelState extends State<_AskAiPanel> {
   final _ctrl = TextEditingController();
+  String? _answer;
+  bool _asking = false;
+
   @override
   void dispose() {
     _ctrl.dispose();
     super.dispose();
   }
+
+  Future<void> _submit() async {
+    final q = _ctrl.text.trim();
+    if (q.isEmpty || _asking) return;
+    setState(() {
+      _asking = true;
+      _answer = null;
+    });
+    try {
+      final answer = await MoneyRepository().ask(q);
+      if (mounted) {
+        setState(() {
+          _answer = answer.isEmpty
+              ? "I couldn't find an answer — try rephrasing."
+              : answer;
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _asking = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return KrPop(
@@ -1271,6 +1709,7 @@ class _AskAiPanelState extends State<_AskAiPanel> {
               Expanded(
                 child: TextField(
                   controller: _ctrl,
+                  onSubmitted: (_) => _submit(),
                   style: AppText.body().copyWith(fontSize: 13),
                   decoration: InputDecoration(
                     hintText: 'e.g. Which vendor did I spend the most on?',
@@ -1287,12 +1726,7 @@ class _AskAiPanelState extends State<_AskAiPanel> {
                 shape: const CircleBorder(),
                 child: InkWell(
                   customBorder: const CircleBorder(),
-                  onTap: () {
-                    if (_ctrl.text.trim().isEmpty) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Ask Dex — coming soon')),
-                    );
-                  },
+                  onTap: _submit,
                   child: Container(
                     width: 36, height: 36,
                     decoration: const BoxDecoration(
@@ -1300,13 +1734,59 @@ class _AskAiPanelState extends State<_AskAiPanel> {
                       shape: BoxShape.circle,
                     ),
                     alignment: Alignment.center,
-                    child: const Icon(Icons.send_rounded,
-                        size: 15, color: Colors.white),
+                    child: _asking
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.send_rounded,
+                            size: 15, color: Colors.white),
                   ),
                 ),
               ),
             ]),
           ),
+          if (_answer != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            Container(
+              padding: const EdgeInsets.fromLTRB(12, 10, 4, 12),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceMuted,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 4, right: 4),
+                      child: Text(_answer!,
+                          style: AppText.body()
+                              .copyWith(fontSize: 13, height: 1.5)),
+                    ),
+                  ),
+                  // Dismiss the answer so the panel collapses back to the
+                  // input-only state. Doesn't clear the input text — user
+                  // can edit and re-submit.
+                  Material(
+                    color: Colors.transparent,
+                    shape: const CircleBorder(),
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: () => setState(() => _answer = null),
+                      child: const Padding(
+                        padding: EdgeInsets.all(6),
+                        child: Icon(Icons.close_rounded,
+                            size: 16, color: AppColors.textSecondary),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );

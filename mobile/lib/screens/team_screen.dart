@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../data/auth_repository.dart';
 import '../data/repositories.dart';
 import '../models/models.dart';
@@ -355,11 +356,7 @@ class _MemberCard extends StatelessWidget {
       borderRadius: radius,
       child: InkWell(
         borderRadius: radius,
-        onTap: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Open ${p.name} — coming soon')),
-          );
-        },
+        onTap: () => context.push('/member/${p.id}', extra: p),
         child: Container(
           decoration: BoxDecoration(
             color: AppColors.surface,

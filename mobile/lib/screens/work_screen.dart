@@ -1,4 +1,6 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../data/auth_repository.dart';
 import '../data/repositories.dart';
 import '../models/models.dart';
@@ -144,10 +146,17 @@ class _WorkScreenState extends State<WorkScreen> {
                   onToggleAi: _toggleAi,
                   onTab: _setTab,
                   onView: (v) => setState(() => _view = v),
-                  onNewTask: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('New task — coming soon')),
+                  onNewTask: () async {
+                    // Floating sheet: transparent scaffold under it so the
+                    // sheet itself can carry its own margin + rounded card
+                    // silhouette instead of being flush with the screen edge.
+                    final saved = await showModalBottomSheet<bool>(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (_) => const _NewTaskSheet(),
                     );
+                    if (saved == true) _refetchAll();
                   },
                   // In workflows view the filter circle lists the tenant's
                   // pipelines; selecting one switches which pipeline the
@@ -927,49 +936,68 @@ class _ExpandedBody extends StatelessWidget {
             _ActionsRow(
               onComplete: () => _complete(context),
               onCancel: () => _cancel(context),
+              taskId: task.id,
+              onAttached: onChanged,
             ),
           ],
 
-          // Activity footer.
+          // Activity footer — the whole strip is now tappable and opens a
+          // floating sheet with Note / Handoff / Escalate options.
           const SizedBox(height: AppSpacing.md),
-          Container(
-            padding: const EdgeInsets.only(top: 12),
-            decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: AppColors.hairline)),
+          InkWell(
+            onTap: () => _openUpdateSheet(context),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            child: Container(
+              padding: const EdgeInsets.only(top: 12),
+              decoration: BoxDecoration(
+                border: Border(top: BorderSide(color: AppColors.hairline)),
+              ),
+              child: Row(children: [
+                Container(
+                  width: 22, height: 22,
+                  decoration: const BoxDecoration(
+                    color: AppColors.surfaceMuted,
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: const Icon(Icons.close_rounded,
+                      size: 12, color: AppColors.textSecondary),
+                ),
+                const SizedBox(width: 8),
+                Text('No activity yet',
+                    style: AppText.small()
+                        .copyWith(color: AppColors.textSecondary)),
+                const Spacer(),
+                Container(
+                  width: 22, height: 22,
+                  decoration: BoxDecoration(
+                    color: AppColors.brandBg,
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: const Icon(Icons.add_rounded,
+                      size: 14, color: AppColors.brand),
+                ),
+                const SizedBox(width: 8),
+                Text('Log update or hand off',
+                    style: AppText.small()
+                        .copyWith(color: AppColors.textSecondary)),
+              ]),
             ),
-            child: Row(children: [
-              Container(
-                width: 22, height: 22,
-                decoration: const BoxDecoration(
-                  color: AppColors.surfaceMuted,
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: const Icon(Icons.close_rounded,
-                    size: 12, color: AppColors.textSecondary),
-              ),
-              const SizedBox(width: 8),
-              Text('No activity yet',
-                  style: AppText.small().copyWith(color: AppColors.textSecondary)),
-              const Spacer(),
-              Container(
-                width: 22, height: 22,
-                decoration: BoxDecoration(
-                  color: AppColors.brandBg,
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: const Icon(Icons.add_rounded,
-                    size: 14, color: AppColors.brand),
-              ),
-              const SizedBox(width: 8),
-              Text('Log update or hand off',
-                  style: AppText.small().copyWith(color: AppColors.textSecondary)),
-            ]),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _openUpdateSheet(BuildContext context) async {
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _LogUpdateSheet(taskId: task.id),
+    );
+    if (saved == true) onChanged();
   }
 }
 
@@ -1172,7 +1200,14 @@ class _PlanBuilders extends StatelessWidget {
 class _ActionsRow extends StatelessWidget {
   final VoidCallback onComplete;
   final VoidCallback onCancel;
-  const _ActionsRow({required this.onComplete, required this.onCancel});
+  final String taskId;
+  final VoidCallback onAttached;
+  const _ActionsRow({
+    required this.onComplete,
+    required this.onCancel,
+    required this.taskId,
+    required this.onAttached,
+  });
   @override
   Widget build(BuildContext context) {
     return Row(children: [
@@ -1221,24 +1256,112 @@ class _ActionsRow extends StatelessWidget {
         ]),
       ),
       const SizedBox(width: 8),
-      _AttachCircle(icon: Icons.photo_camera_outlined),
+      _AttachCircle(
+        icon: Icons.photo_camera_outlined,
+        onTap: () => _attachCamera(context),
+      ),
       const SizedBox(width: 8),
-      _AttachCircle(icon: Icons.file_upload_outlined),
+      _AttachCircle(
+        icon: Icons.file_upload_outlined,
+        onTap: () => _attachFile(context),
+      ),
       const SizedBox(width: 8),
-      _AttachCircle(icon: Icons.mic_none_rounded),
+      _AttachCircle(
+        icon: Icons.mic_none_rounded,
+        onTap: () => _attachAudio(context),
+      ),
     ]);
+  }
+
+  Future<void> _attachCamera(BuildContext context) async {
+    try {
+      final x = await ImagePicker().pickImage(
+        source: ImageSource.camera,
+        imageQuality: 82,
+      );
+      if (x == null) return;
+      final bytes = await x.readAsBytes();
+      await _upload(context, bytes, x.name);
+    } catch (_) {
+      _err(context, 'Could not open camera.');
+    }
+  }
+
+  Future<void> _attachFile(BuildContext context) async {
+    try {
+      final r = await FilePicker.platform.pickFiles(
+        withData: true,
+        allowMultiple: false,
+      );
+      if (r == null || r.files.isEmpty) return;
+      final f = r.files.single;
+      if (f.bytes == null) {
+        _err(context, 'Could not read the file.');
+        return;
+      }
+      await _upload(context, f.bytes!, f.name);
+    } catch (_) {
+      _err(context, 'Could not pick a file.');
+    }
+  }
+
+  Future<void> _attachAudio(BuildContext context) async {
+    try {
+      final r = await FilePicker.platform.pickFiles(
+        type: FileType.audio,
+        withData: true,
+        allowMultiple: false,
+      );
+      if (r == null || r.files.isEmpty) return;
+      final f = r.files.single;
+      if (f.bytes == null) {
+        _err(context, 'Could not read the audio file.');
+        return;
+      }
+      await _upload(context, f.bytes!, f.name);
+    } catch (_) {
+      _err(context, 'Could not pick audio.');
+    }
+  }
+
+  Future<void> _upload(
+      BuildContext context, List<int> bytes, String filename) async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Uploading $filename…')),
+    );
+    try {
+      await TasksRepository().attach(
+        taskId,
+        bytes: bytes,
+        filename: filename,
+      );
+      onAttached();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Attached $filename')),
+        );
+      }
+    } catch (_) {
+      _err(context, 'Upload failed — try again.');
+    }
+  }
+
+  void _err(BuildContext context, String msg) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 }
 
 class _AttachCircle extends StatelessWidget {
   final IconData icon;
-  const _AttachCircle({required this.icon});
+  final VoidCallback onTap;
+  const _AttachCircle({required this.icon, required this.onTap});
   @override
   Widget build(BuildContext context) {
     return KrPop(
       borderRadius: BorderRadius.circular(999),
       padding: EdgeInsets.zero,
-      onTap: () {},
+      onTap: onTap,
       child: SizedBox(
         width: 44, height: 44,
         child: Center(child: Icon(icon,
@@ -1387,3 +1510,751 @@ class _WorkSkeleton extends StatelessWidget {
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// New Task bottom sheet — mobile port of NewTaskDialog in Tasks.js.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const _kOpCategories = <String>[
+  'Presentation', 'Meeting', 'Documentation', 'Proposal', 'Planning', 'Review',
+  'Administration', 'Compliance', 'Marketing', 'HR Activity', 'Travel', 'Event',
+  'IT Support', 'Other',
+];
+const _kTaskCategories = <String>[
+  'operational', 'sales', 'purchase', 'production', 'finance', 'hr',
+];
+
+class _NewTaskSheet extends StatefulWidget {
+  const _NewTaskSheet();
+  @override
+  State<_NewTaskSheet> createState() => _NewTaskSheetState();
+}
+
+class _NewTaskSheetState extends State<_NewTaskSheet> {
+  final _title = TextEditingController();
+  final _description = TextEditingController();
+  final _expectedOutput = TextEditingController();
+
+  String _taskType = 'operational';
+  String _opCategory = 'Presentation';
+  String? _assigneeId;
+  String? _supportId;
+  String? _assigneeRole;
+  String _priority = 'medium';
+  DateTime? _due;
+  TimeOfDay? _dueTime;
+  bool _approvalRequired = false;
+  String? _approverId;
+  bool _evidenceRequired = false;
+
+  bool _saving = false;
+  late Future<List<Person>> _usersFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _usersFuture = PeopleRepository().list();
+  }
+
+  @override
+  void dispose() {
+    _title.dispose();
+    _description.dispose();
+    _expectedOutput.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _due ?? now,
+      firstDate: now.subtract(const Duration(days: 30)),
+      lastDate: now.add(const Duration(days: 365 * 2)),
+    );
+    if (picked != null) setState(() => _due = picked);
+  }
+
+  Future<void> _pickTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _dueTime ?? TimeOfDay.now(),
+    );
+    if (picked != null) setState(() => _dueTime = picked);
+  }
+
+  Future<void> _submit() async {
+    if (_title.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Task title is required')),
+      );
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      String? isoDate;
+      String? isoTime;
+      if (_due != null) {
+        String pad(int n) => n.toString().padLeft(2, '0');
+        isoDate = '${_due!.year}-${pad(_due!.month)}-${pad(_due!.day)}';
+      }
+      if (_dueTime != null) {
+        String pad(int n) => n.toString().padLeft(2, '0');
+        isoTime = '${pad(_dueTime!.hour)}:${pad(_dueTime!.minute)}';
+      }
+      final isOp = _taskType == 'operational';
+      final body = {
+        'title': _title.text.trim(),
+        'description': _description.text.trim(),
+        'task_type': _taskType,
+        'op_category': isOp ? _opCategory : null,
+        'assignee_id': _assigneeId,
+        'assignee_role': _assigneeId == null ? _assigneeRole : null,
+        'support_id': _supportId,
+        'priority': _priority,
+        'due_date': isoDate,
+        'due_time': isoTime,
+        'expected_output': _expectedOutput.text.trim().isEmpty
+            ? null
+            : _expectedOutput.text.trim(),
+        'approval_required': _approvalRequired,
+        'approver_id': _approvalRequired ? _approverId : null,
+        'evidence_required': _evidenceRequired,
+      };
+      await TasksRepository().create(body);
+      if (mounted) {
+        Navigator.of(context).pop(true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Task created')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not create task.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Widget _label(String s) => Padding(
+        padding: const EdgeInsets.only(bottom: 6, top: 4),
+        child: Text(s,
+            style: AppText.small()
+                .copyWith(fontWeight: FontWeight.w600, fontSize: 12)),
+      );
+
+  /// Flat form-field surface — no neumorphism inside the dense sheet so
+  /// the form reads as a normal scrollable input list rather than a wall
+  /// of stacked pits.
+  Widget _pit({required Widget child, EdgeInsets? padding}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surfaceMuted,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      padding: padding ??
+          const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      child: child,
+    );
+  }
+
+  Widget _textField(TextEditingController c, String hint, {int maxLines = 1}) {
+    return _pit(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: TextField(
+        controller: c,
+        maxLines: maxLines,
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle:
+              AppText.body().copyWith(color: AppColors.textTertiary),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+        ),
+      ),
+    );
+  }
+
+  Widget _dropdown<T>({
+    required T? value,
+    required List<DropdownMenuItem<T>> items,
+    required ValueChanged<T?> onChanged,
+    String? hint,
+  }) {
+    return _pit(
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<T>(
+          value: value,
+          isExpanded: true,
+          hint: hint == null
+              ? null
+              : Text(hint,
+                  style: AppText.body().copyWith(color: AppColors.textTertiary)),
+          onChanged: onChanged,
+          items: items,
+        ),
+      ),
+    );
+  }
+
+  Widget _checkbox({
+    required String label,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return InkWell(
+      onTap: () => onChanged(!value),
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(children: [
+          Icon(
+              value
+                  ? Icons.check_box_rounded
+                  : Icons.check_box_outline_blank_rounded,
+              size: 22,
+              color: value
+                  ? AppColors.textPrimary
+                  : AppColors.textSecondary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(label,
+                style: AppText.bodyStrong().copyWith(fontSize: 13)),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mq = MediaQuery.of(context);
+    final roles = AuthRepository.I.roles;
+    // Floating sheet: 16 px margin all around + a rounded card silhouette.
+    // Height capped at 82 % of the viewport so it never touches the top
+    // or the floating dock, and content inside scrolls with the keyboard.
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.xxl,
+        AppSpacing.lg,
+        AppSpacing.lg + mq.viewInsets.bottom,
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: mq.size.height * 0.82),
+        child: Material(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.xl),
+          elevation: 24,
+          shadowColor: Colors.black.withValues(alpha: 0.35),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+        child: FutureBuilder<List<Person>>(
+          future: _usersFuture,
+          builder: (context, snap) {
+            final users = snap.data ?? const <Person>[];
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(children: [
+                  Text('New Task', style: AppText.h3()),
+                  const Spacer(),
+                  InkWell(
+                    onTap: () => Navigator.of(context).pop(),
+                    borderRadius: BorderRadius.circular(999),
+                    child: const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(Icons.close_rounded, size: 20),
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: 4),
+                Text(
+                  'Capture any company task — operational or department work.',
+                  style: AppText.small()
+                      .copyWith(color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: AppSpacing.md),
+
+                _textField(_title, 'Task title'),
+                const SizedBox(height: 10),
+                _textField(_description, 'Description', maxLines: 3),
+
+                _label('Task type'),
+                _dropdown<String>(
+                  value: _taskType,
+                  onChanged: (v) => setState(() {
+                    _taskType = v ?? 'operational';
+                  }),
+                  items: [
+                    for (final t in _kTaskCategories)
+                      DropdownMenuItem(
+                          value: t,
+                          child: Text(t[0].toUpperCase() + t.substring(1))),
+                  ],
+                ),
+
+                if (_taskType == 'operational') ...[
+                  _label('Operational category'),
+                  _dropdown<String>(
+                    value: _opCategory,
+                    onChanged: (v) => setState(() => _opCategory = v ?? 'Other'),
+                    items: [
+                      for (final c in _kOpCategories)
+                        DropdownMenuItem(value: c, child: Text(c)),
+                    ],
+                  ),
+                ],
+
+                _label('Assigned employee'),
+                _dropdown<String>(
+                  value: _assigneeId,
+                  hint: '— Pick a person —',
+                  onChanged: (v) => setState(() => _assigneeId = v),
+                  items: [
+                    const DropdownMenuItem(
+                        value: null, child: Text('— Pick a person —')),
+                    for (final u in users)
+                      DropdownMenuItem(
+                          value: u.id,
+                          child: Text(
+                              '${u.name}${u.role != null ? " · ${u.role}" : ""}')),
+                  ],
+                ),
+
+                _label('Supporting employee (optional)'),
+                _dropdown<String>(
+                  value: _supportId,
+                  hint: '— None —',
+                  onChanged: (v) => setState(() => _supportId = v),
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('— None —')),
+                    for (final u in users)
+                      DropdownMenuItem(value: u.id, child: Text(u.name)),
+                  ],
+                ),
+
+                if (_assigneeId == null) ...[
+                  _label('…or assign by team/role'),
+                  _dropdown<String>(
+                    value: _assigneeRole,
+                    hint: 'Any / unassigned',
+                    onChanged: (v) => setState(() => _assigneeRole = v),
+                    items: [
+                      const DropdownMenuItem(
+                          value: null, child: Text('Any / unassigned')),
+                      for (final r in roles)
+                        DropdownMenuItem(value: r.key, child: Text(r.label)),
+                    ],
+                  ),
+                ],
+
+                _label('Priority'),
+                _dropdown<String>(
+                  value: _priority,
+                  onChanged: (v) => setState(() => _priority = v ?? 'medium'),
+                  items: const [
+                    DropdownMenuItem(value: 'low', child: Text('Low')),
+                    DropdownMenuItem(value: 'medium', child: Text('Medium')),
+                    DropdownMenuItem(value: 'high', child: Text('High')),
+                  ],
+                ),
+
+                Row(children: [
+                  Expanded(child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _label('Due date'),
+                      InkWell(
+                        onTap: _pickDate,
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                        child: _pit(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 14),
+                          child: Text(
+                            _due == null
+                                ? 'Pick date'
+                                : '${_due!.year}-${_due!.month.toString().padLeft(2, '0')}-${_due!.day.toString().padLeft(2, '0')}',
+                            style: AppText.body().copyWith(
+                                color: _due == null
+                                    ? AppColors.textTertiary
+                                    : AppColors.textPrimary),
+                          ),
+                        ),
+                      ),
+                    ],
+                  )),
+                  const SizedBox(width: 8),
+                  Expanded(child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _label('Due time'),
+                      InkWell(
+                        onTap: _pickTime,
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                        child: _pit(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 14),
+                          child: Text(
+                            _dueTime == null
+                                ? 'Pick time'
+                                : _dueTime!.format(context),
+                            style: AppText.body().copyWith(
+                                color: _dueTime == null
+                                    ? AppColors.textTertiary
+                                    : AppColors.textPrimary),
+                          ),
+                        ),
+                      ),
+                    ],
+                  )),
+                ]),
+
+                _label('Expected output'),
+                _textField(_expectedOutput,
+                    'Expected output (e.g. Final deck in PDF)'),
+
+                const SizedBox(height: 8),
+                _checkbox(
+                    label: 'Approval required',
+                    value: _approvalRequired,
+                    onChanged: (v) => setState(() {
+                          _approvalRequired = v;
+                          if (!v) _approverId = null;
+                        })),
+                if (_approvalRequired) ...[
+                  _label('Approver'),
+                  _dropdown<String>(
+                    value: _approverId,
+                    hint: '— Anyone with approval access —',
+                    onChanged: (v) => setState(() => _approverId = v),
+                    items: [
+                      const DropdownMenuItem(
+                          value: null,
+                          child: Text('— Anyone with approval access —')),
+                      for (final u in users)
+                        DropdownMenuItem(value: u.id, child: Text(u.name)),
+                    ],
+                  ),
+                ],
+                _checkbox(
+                    label: 'Require proof of work before completion',
+                    value: _evidenceRequired,
+                    onChanged: (v) => setState(() => _evidenceRequired = v)),
+
+                const SizedBox(height: AppSpacing.lg),
+                Material(
+                  color: AppColors.textPrimary,
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                  child: InkWell(
+                    onTap: _saving ? null : _submit,
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                    child: Container(
+                      alignment: Alignment.center,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      child: Text(_saving ? 'Creating…' : 'Create task',
+                          style: AppText.bodyStrong()
+                              .copyWith(color: Colors.white)),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+      ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Log update / hand off / escalate — floating sheet on the activity footer.
+// Ports the frontend `POST /tasks/{id}/updates {text, action, to_id|to_role}`.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _LogUpdateSheet extends StatefulWidget {
+  final String taskId;
+  const _LogUpdateSheet({required this.taskId});
+  @override
+  State<_LogUpdateSheet> createState() => _LogUpdateSheetState();
+}
+
+class _LogUpdateSheetState extends State<_LogUpdateSheet> {
+  String _action = 'note'; // note | handoff | escalate
+  final _text = TextEditingController();
+  String? _toId;
+  String? _toRole;
+  bool _saving = false;
+  late Future<List<Person>> _usersFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _usersFuture = PeopleRepository().list();
+  }
+
+  @override
+  void dispose() {
+    _text.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_text.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Add a note first.')),
+      );
+      return;
+    }
+    if (_action != 'note' && _toId == null && (_toRole ?? '').isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(
+          _action == 'handoff'
+              ? 'Pick who to hand off to.'
+              : 'Pick who to escalate to.',
+        )),
+      );
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      await TasksRepository().postUpdate(
+        widget.taskId,
+        text: _text.text.trim(),
+        action: _action,
+        toId: _toId,
+        toRole: _toRole,
+      );
+      if (mounted) {
+        Navigator.of(context).pop(true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(
+            _action == 'handoff'
+                ? 'Handed off'
+                : _action == 'escalate'
+                    ? 'Escalated'
+                    : 'Update posted',
+          )),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not post update.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Widget _actionSeg(String label, String value) {
+    final active = _action == value;
+    final child = Center(
+      child: Text(label,
+          style: (active ? AppText.bodyStrong() : AppText.body())
+              .copyWith(fontSize: 12)),
+    );
+    if (active) {
+      return KrPressed(
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        color: AppColors.surface,
+        onTap: () => setState(() => _action = value),
+        child: child,
+      );
+    }
+    return InkWell(
+      onTap: () => setState(() => _action = value),
+      borderRadius: BorderRadius.circular(AppRadius.pill),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: child,
+      ),
+    );
+  }
+
+  Widget _label(String s) => Padding(
+        padding: const EdgeInsets.only(bottom: 6, top: 4),
+        child: Text(s,
+            style: AppText.small()
+                .copyWith(fontWeight: FontWeight.w600, fontSize: 12)),
+      );
+
+  Widget _flatBox({required Widget child, EdgeInsets? padding}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surfaceMuted,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      padding: padding ??
+          const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      child: child,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mq = MediaQuery.of(context);
+    final roles = AuthRepository.I.roles;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.xxl,
+        AppSpacing.lg,
+        AppSpacing.lg + mq.viewInsets.bottom,
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: mq.size.height * 0.75),
+        child: Material(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.xl),
+          elevation: 24,
+          shadowColor: Colors.black.withValues(alpha: 0.35),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: FutureBuilder<List<Person>>(
+              future: _usersFuture,
+              builder: (context, snap) {
+                final users = snap.data ?? const <Person>[];
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      Text('Log update', style: AppText.h3()),
+                      const Spacer(),
+                      InkWell(
+                        onTap: () => Navigator.of(context).pop(),
+                        borderRadius: BorderRadius.circular(999),
+                        child: const Padding(
+                          padding: EdgeInsets.all(4),
+                          child: Icon(Icons.close_rounded, size: 20),
+                        ),
+                      ),
+                    ]),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Post a note, hand this off to a teammate, or escalate to a leader.',
+                      style: AppText.small()
+                          .copyWith(color: AppColors.textSecondary),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    KrPop(
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                      padding: const EdgeInsets.all(4),
+                      color: AppColors.surfaceMuted,
+                      child: Row(children: [
+                        Expanded(child: _actionSeg('Note', 'note')),
+                        Expanded(child: _actionSeg('Hand off', 'handoff')),
+                        Expanded(child: _actionSeg('Escalate', 'escalate')),
+                      ]),
+                    ),
+                    _label('Note'),
+                    _flatBox(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: TextField(
+                        controller: _text,
+                        minLines: 3,
+                        maxLines: 6,
+                        decoration: InputDecoration(
+                          hintText: _action == 'note'
+                              ? 'What changed?'
+                              : _action == 'handoff'
+                                  ? 'Why are you handing this off?'
+                                  : 'Why does this need to escalate?',
+                          hintStyle: AppText.body()
+                              .copyWith(color: AppColors.textTertiary),
+                          border: InputBorder.none,
+                          contentPadding:
+                              const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                    if (_action != 'note') ...[
+                      _label('To (person)'),
+                      _flatBox(
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _toId,
+                            isExpanded: true,
+                            hint: Text('— Pick a person —',
+                                style: AppText.body().copyWith(
+                                    color: AppColors.textTertiary)),
+                            onChanged: (v) => setState(() => _toId = v),
+                            items: [
+                              const DropdownMenuItem(
+                                  value: null,
+                                  child: Text('— Pick a person —')),
+                              for (final u in users)
+                                DropdownMenuItem(
+                                    value: u.id, child: Text(u.name)),
+                            ],
+                          ),
+                        ),
+                      ),
+                      if (_toId == null) ...[
+                        _label('…or to a team/role'),
+                        _flatBox(
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: _toRole,
+                              isExpanded: true,
+                              hint: Text('— Any / unassigned —',
+                                  style: AppText.body().copyWith(
+                                      color: AppColors.textTertiary)),
+                              onChanged: (v) => setState(() => _toRole = v),
+                              items: [
+                                const DropdownMenuItem(
+                                    value: null,
+                                    child: Text('— Any / unassigned —')),
+                                for (final r in roles)
+                                  DropdownMenuItem(
+                                      value: r.key, child: Text(r.label)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                    const SizedBox(height: AppSpacing.lg),
+                    Material(
+                      color: AppColors.textPrimary,
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                      child: InkWell(
+                        onTap: _saving ? null : _submit,
+                        borderRadius: BorderRadius.circular(AppRadius.pill),
+                        child: Container(
+                          alignment: Alignment.center,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          child: Text(
+                            _saving
+                                ? 'Posting…'
+                                : (_action == 'handoff'
+                                    ? 'Hand off'
+                                    : _action == 'escalate'
+                                        ? 'Escalate'
+                                        : 'Post note'),
+                            style: AppText.bodyStrong()
+                                .copyWith(color: Colors.white),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+

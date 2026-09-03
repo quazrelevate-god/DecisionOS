@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../data/app_settings.dart';
 import '../data/auth_repository.dart';
 import '../data/repositories.dart';
 import '../models/models.dart';
@@ -1754,21 +1755,33 @@ class _LanguagePanel extends StatelessWidget {
   const _LanguagePanel();
   @override
   Widget build(BuildContext context) {
-    return KrPressed(
-      borderRadius: BorderRadius.circular(AppRadius.md),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      color: AppColors.surfaceMuted,
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: 'en',
-          isExpanded: true,
-          style: AppText.body(),
-          onChanged: (_) {},
-          items: const [
-            DropdownMenuItem(value: 'en', child: Text('English')),
-            DropdownMenuItem(value: 'hi', child: Text('हिन्दी (Hindi)')),
-            DropdownMenuItem(value: 'ta', child: Text('தமிழ் (Tamil)')),
-          ],
+    return AnimatedBuilder(
+      animation: AppSettings.I,
+      builder: (context, _) => KrPressed(
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        color: AppColors.surfaceMuted,
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
+            value: AppSettings.I.language,
+            isExpanded: true,
+            style: AppText.body(),
+            onChanged: (v) {
+              if (v != null) {
+                AppSettings.I.setLanguage(v);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                      content: Text(
+                          'Saved — translations arrive once the i18n bundle is added.')),
+                );
+              }
+            },
+            items: const [
+              DropdownMenuItem(value: 'en', child: Text('English')),
+              DropdownMenuItem(value: 'hi', child: Text('हिन्दी (Hindi)')),
+              DropdownMenuItem(value: 'ta', child: Text('தமிழ் (Tamil)')),
+            ],
+          ),
         ),
       ),
     );
@@ -1779,28 +1792,44 @@ class _AppearancePanel extends StatelessWidget {
   const _AppearancePanel();
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: KrPop(
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        onTap: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text('Dark theme — coming soon')),
-          );
-        },
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.dark_mode_outlined,
-                size: 16, color: AppColors.textPrimary),
-            const SizedBox(width: 6),
-            Text('Switch to dark',
-                style: AppText.bodyStrong().copyWith(fontSize: 13)),
-          ],
-        ),
-      ),
+    return AnimatedBuilder(
+      animation: AppSettings.I,
+      builder: (context, _) {
+        final isDark = AppSettings.I.themeMode == ThemeMode.dark;
+        return Align(
+          alignment: Alignment.centerLeft,
+          child: KrPop(
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            onTap: () {
+              AppSettings.I.setThemeMode(
+                isDark ? ThemeMode.light : ThemeMode.dark,
+              );
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                    content: Text(isDark
+                        ? 'Light theme saved.'
+                        : 'Dark theme saved — full dark palette lands next.')),
+              );
+            },
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                    isDark
+                        ? Icons.light_mode_outlined
+                        : Icons.dark_mode_outlined,
+                    size: 16,
+                    color: AppColors.textPrimary),
+                const SizedBox(width: 6),
+                Text(isDark ? 'Switch to light' : 'Switch to dark',
+                    style: AppText.bodyStrong().copyWith(fontSize: 13)),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../data/auth_repository.dart';
 import '../data/repositories.dart';
 import '../models/models.dart';
 import '../theme/app_theme.dart';
@@ -89,20 +90,142 @@ class _LeaveBodyState extends State<LeaveBody> {
   }
 }
 
-class _SettingsPanel extends StatelessWidget {
+class _SettingsPanel extends StatefulWidget {
   const _SettingsPanel();
   @override
+  State<_SettingsPanel> createState() => _SettingsPanelState();
+}
+
+class _SettingsPanelState extends State<_SettingsPanel> {
+  late Future<List<Person>> _usersFuture;
+  final Map<String, String?> _approvers = {}; // roleKey → userId
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _usersFuture = PeopleRepository().list();
+  }
+
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    try {
+      await SettingsRepository().patchLeaveApprovers(_approvers);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Leave approvers saved')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not save approvers.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // Approver configuration lives here on the web (ApproverConfig). Full
-    // wire-up needs `/users` + `/tenant/settings` reads/writes — placeholder
-    // for now so the tab is represented and reachable.
-    return Padding(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      child: EmptyState(
-        icon: Icons.settings_outlined,
-        title: 'Approver configuration',
-        subtitle: 'Choose who approves each leave type. Full settings will land in a follow-up.',
-      ),
+    final roles =
+        AuthRepository.I.roles.where((r) => r.key != 'owner').toList();
+    return FutureBuilder<List<Person>>(
+      future: _usersFuture,
+      builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return const Padding(
+            padding: EdgeInsets.all(AppSpacing.lg),
+            child: LoadingCard(height: 160),
+          );
+        }
+        final users = snap.data ?? const <Person>[];
+        return SingleChildScrollView(
+          physics: const ClampingScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.xxxl),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                const Icon(Icons.settings_outlined,
+                    size: 18, color: AppColors.textPrimary),
+                const SizedBox(width: 8),
+                Text('Leave Approvers by Department',
+                    style: AppText.bodyStrong().copyWith(fontSize: 15)),
+              ]),
+              const SizedBox(height: 6),
+              Text(
+                'Choose who approves leave for each role. If an employee has a Reporting Manager set (in People → Employees), that manager takes priority. Otherwise this mapping is used, then the Owner.',
+                style: AppText.small()
+                    .copyWith(color: AppColors.textSecondary, fontSize: 12),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              if (roles.isEmpty)
+                Text('No roles configured yet.',
+                    style: AppText.small()
+                        .copyWith(color: AppColors.textSecondary))
+              else
+                for (final r in roles) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6, top: 4),
+                    child: Text(r.label,
+                        style: AppText.small().copyWith(
+                            fontWeight: FontWeight.w600, fontSize: 12)),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceMuted,
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String?>(
+                        value: _approvers[r.key],
+                        isExpanded: true,
+                        hint: Text('Owner (default)',
+                            style: AppText.body()
+                                .copyWith(color: AppColors.textTertiary)),
+                        onChanged: (v) =>
+                            setState(() => _approvers[r.key] = v),
+                        items: [
+                          const DropdownMenuItem<String?>(
+                              value: null, child: Text('Owner (default)')),
+                          for (final u in users)
+                            DropdownMenuItem<String?>(
+                                value: u.id,
+                                child: Text(
+                                    '${u.name} · ${u.role ?? "member"}')),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                ],
+              const SizedBox(height: AppSpacing.md),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Material(
+                  color: AppColors.textPrimary,
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                  child: InkWell(
+                    onTap: _saving ? null : _save,
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.lg, vertical: 12),
+                      child: Text(_saving ? 'Saving…' : 'Save Approvers',
+                          style: AppText.bodyStrong()
+                              .copyWith(color: Colors.white)),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -451,7 +574,187 @@ class _LeaveCard extends StatelessWidget {
               ),
             ]),
           ],
+          if (lv.status == 'approved') ...[
+            const SizedBox(height: AppSpacing.md),
+            Material(
+              color: AppColors.textPrimary,
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+              child: InkWell(
+                onTap: () => showModalBottomSheet<void>(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (_) => _AiImpactSheet(leaveId: lv.id),
+                ),
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 10),
+                  alignment: Alignment.center,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.auto_awesome_rounded,
+                          size: 14, color: Colors.white),
+                      const SizedBox(width: 6),
+                      Text('AI Impact Analysis',
+                          style: AppText.bodyStrong()
+                              .copyWith(fontSize: 13, color: Colors.white)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
+      ),
+    );
+  }
+}
+
+class _AiImpactSheet extends StatefulWidget {
+  final String leaveId;
+  const _AiImpactSheet({required this.leaveId});
+  @override
+  State<_AiImpactSheet> createState() => _AiImpactSheetState();
+}
+
+class _AiImpactSheetState extends State<_AiImpactSheet> {
+  late Future<List<LeaveImpactTask>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = LeaveRepository().impact(widget.leaveId);
+  }
+
+  Future<void> _push(String taskId, int days) async {
+    try {
+      final now = DateTime.now().add(Duration(days: days));
+      String pad(int n) => n.toString().padLeft(2, '0');
+      final iso = '${now.year}-${pad(now.month)}-${pad(now.day)}';
+      await TasksRepository().patch(taskId, {'due_at': iso});
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Pushed by $days days')),
+        );
+        setState(() {
+          _future = LeaveRepository().impact(widget.leaveId);
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not push due date.')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mq = MediaQuery.of(context);
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.xxl,
+        AppSpacing.lg,
+        AppSpacing.lg + mq.viewInsets.bottom,
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: mq.size.height * 0.80),
+        child: Material(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.xl),
+          elevation: 24,
+          shadowColor: Colors.black.withValues(alpha: 0.35),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: FutureBuilder<List<LeaveImpactTask>>(
+              future: _future,
+              builder: (context, snap) {
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      Text('AI Impact', style: AppText.h3()),
+                      const Spacer(),
+                      InkWell(
+                        onTap: () => Navigator.of(context).pop(),
+                        borderRadius: BorderRadius.circular(999),
+                        child: const Padding(
+                          padding: EdgeInsets.all(4),
+                          child: Icon(Icons.close_rounded, size: 20),
+                        ),
+                      ),
+                    ]),
+                    const SizedBox(height: 6),
+                    Text(
+                      snap.connectionState != ConnectionState.done
+                          ? 'Analyzing workload & suggesting cover…'
+                          : ((snap.data ?? const []).isEmpty
+                              ? 'No tasks at risk. This person has no active tasks due during their absence. You\'re all set.'
+                              : 'Tasks due while they\'re out. Push each one by a few days.'),
+                      style: AppText.small()
+                          .copyWith(color: AppColors.textSecondary),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    if (snap.connectionState != ConnectionState.done)
+                      const LoadingCard(height: 60)
+                    else
+                      for (final t in (snap.data ?? const <LeaveImpactTask>[]))
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceMuted,
+                            borderRadius: BorderRadius.circular(AppRadius.md),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(t.title,
+                                  style: AppText.bodyStrong()
+                                      .copyWith(fontSize: 13)),
+                              if (t.dueAt != null) ...[
+                                const SizedBox(height: 4),
+                                Text('due ${t.dueAt!.day}/${t.dueAt!.month}',
+                                    style: AppText.small().copyWith(
+                                        color: AppColors.textSecondary,
+                                        fontSize: 11)),
+                              ],
+                              if ((t.assigneeName ?? '').isNotEmpty)
+                                Text(t.assigneeName!,
+                                    style: AppText.small().copyWith(
+                                        color: AppColors.textSecondary,
+                                        fontSize: 11)),
+                              const SizedBox(height: 8),
+                              Row(children: [
+                                for (final d in [3, 7])
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 6),
+                                    child: KrPop(
+                                      borderRadius:
+                                          BorderRadius.circular(AppRadius.pill),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 6),
+                                      onTap: () => _push(t.id, d),
+                                      child: Text('+$d days',
+                                          style: AppText.smallStrong()
+                                              .copyWith(fontSize: 11)),
+                                    ),
+                                  ),
+                              ]),
+                            ],
+                          ),
+                        ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
       ),
     );
   }

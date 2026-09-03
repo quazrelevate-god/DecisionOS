@@ -11,6 +11,7 @@ import 'screens/calendar_screen.dart';
 import 'screens/contact_detail_screen.dart';
 import 'screens/crm_screen.dart';
 import 'screens/journal_screen.dart';
+import 'screens/member_detail_screen.dart';
 import 'screens/decision_detail_screen.dart';
 import 'screens/dex_screen.dart';
 import 'screens/money_screen.dart';
@@ -61,6 +62,14 @@ final GoRouter appRouter = GoRouter(
       },
     ),
     GoRoute(path: '/team', builder: (_, __) => const TeamScreen()),
+    GoRoute(
+      path: '/member/:id',
+      builder: (context, state) {
+        final p = state.extra as Person?;
+        if (p == null) return const _Missing(title: 'Member not found');
+        return MemberDetailScreen(seed: p);
+      },
+    ),
     GoRoute(path: '/journal', builder: (_, __) => const JournalScreen()),
     GoRoute(path: '/people', builder: (_, __) => const PeopleScreen()),
     GoRoute(

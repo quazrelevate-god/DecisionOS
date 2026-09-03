@@ -192,6 +192,7 @@ class OperatingScore {
   final Map<String, int> categories;
   final OpsStats stats;
   final OpsMySnapshot mySnapshot;
+  final List<OpsTeamMember> team;
 
   OperatingScore({
     required this.overall,
@@ -199,6 +200,7 @@ class OperatingScore {
     required this.categories,
     required this.stats,
     required this.mySnapshot,
+    this.team = const [],
   });
 
   factory OperatingScore.fromJson(Map<String, dynamic> j) {
@@ -209,6 +211,7 @@ class OperatingScore {
       final v = e.value;
       if (v is num) cats[e.key.toString()] = v.toInt();
     }
+    final rawTeam = (j['users'] as List?) ?? (j['team'] as List?) ?? const [];
     return OperatingScore(
       overall: (company['overall'] as num?)?.toInt(),
       enough: company['enough_data'] != false,
@@ -219,8 +222,47 @@ class OperatingScore {
           (j['mySnapshot'] as Map?)?.cast<String, dynamic>() ??
               (j['my_snapshot'] as Map?)?.cast<String, dynamic>() ??
               const {}),
+      team: rawTeam
+          .whereType<Map<String, dynamic>>()
+          .map(OpsTeamMember.fromJson)
+          .toList(),
     );
   }
+}
+
+/// One row in the Ops Team Execution leaderboard. Ports the shape the
+/// frontend Leaderboard consumes.
+class OpsTeamMember {
+  final String id;
+  final String name;
+  final String? role;
+  final int? score;
+  final int done;
+  final int open;
+  final int overdue;
+  final DateTime? lastActivity;
+  const OpsTeamMember({
+    required this.id,
+    required this.name,
+    this.role,
+    this.score,
+    this.done = 0,
+    this.open = 0,
+    this.overdue = 0,
+    this.lastActivity,
+  });
+  factory OpsTeamMember.fromJson(Map<String, dynamic> j) => OpsTeamMember(
+        id: (j['id'] ?? j['user_id'] ?? '').toString(),
+        name: (j['name'] ?? j['full_name'] ?? '').toString(),
+        role: j['role'] as String?,
+        score: (j['score'] as num?)?.toInt(),
+        done: (j['done'] as num?)?.toInt() ?? 0,
+        open: (j['open'] as num?)?.toInt() ?? 0,
+        overdue: (j['overdue'] as num?)?.toInt() ?? 0,
+        lastActivity: j['last_activity'] is String
+            ? DateTime.tryParse(j['last_activity'] as String)
+            : null,
+      );
 }
 
 /// Today's operations — company-wide task counts served by /operating-score.

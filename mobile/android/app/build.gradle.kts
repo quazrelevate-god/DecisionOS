@@ -6,7 +6,10 @@ plugins {
 
 android {
     namespace = "com.decisionos.decisionos_mobile"
-    compileSdk = flutter.compileSdkVersion
+    // file_picker → flutter_plugin_android_lifecycle now requires
+    // compileSdk 36. Overriding the Flutter default (34) here so the AAR
+    // metadata check passes. Runtime target stays on the Flutter default.
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

@@ -84,7 +84,7 @@ class _OpsScreenState extends State<OpsScreen> {
                         const SizedBox(height: AppSpacing.md),
                         const _CalculationNote(),
                         const SizedBox(height: AppSpacing.md),
-                        const _TeamExecution(),
+                        _TeamExecution(ops: ops),
                       ],
                     ),
                   );
@@ -625,18 +625,106 @@ class _CalculationNote extends StatelessWidget {
   }
 }
 
-class _TeamExecution extends StatelessWidget {
-  const _TeamExecution();
+enum _OpsSort { score, activity, name }
+
+class _TeamExecution extends StatefulWidget {
+  final OperatingScore? ops;
+  const _TeamExecution({required this.ops});
+  @override
+  State<_TeamExecution> createState() => _TeamExecutionState();
+}
+
+class _TeamExecutionState extends State<_TeamExecution> {
+  _OpsSort _sort = _OpsSort.score;
+  String _query = '';
+
+  static String _sortLabel(_OpsSort s) {
+    switch (s) {
+      case _OpsSort.score:
+        return 'Score';
+      case _OpsSort.activity:
+        return 'Activity';
+      case _OpsSort.name:
+        return 'Name';
+    }
+  }
+
+  List<_Member> _rows() {
+    final team = widget.ops?.team ?? const <OpsTeamMember>[];
+    var rows = team.map((m) {
+      final parts = <String>[];
+      if ((m.role ?? '').isNotEmpty) parts.add(m.role!);
+      parts.add('${m.done} done');
+      parts.add('${m.open} open');
+      if (m.overdue > 0) parts.add('${m.overdue} overdue');
+      return _Member(
+        id: m.id,
+        rank: 0,
+        name: m.name,
+        role: parts.join(' • '),
+        score: m.score ?? 0,
+        lastActivity: m.lastActivity,
+      );
+    }).toList();
+
+    if (_query.isNotEmpty) {
+      final q = _query.toLowerCase();
+      rows = rows.where((r) =>
+          r.name.toLowerCase().contains(q) ||
+          r.role.toLowerCase().contains(q)).toList();
+    }
+
+    switch (_sort) {
+      case _OpsSort.score:
+        rows.sort((a, b) => b.score.compareTo(a.score));
+        break;
+      case _OpsSort.name:
+        rows.sort((a, b) => a.name.compareTo(b.name));
+        break;
+      case _OpsSort.activity:
+        rows.sort((a, b) =>
+            (b.lastActivity ?? DateTime(1970))
+                .compareTo(a.lastActivity ?? DateTime(1970)));
+        break;
+    }
+    for (int i = 0; i < rows.length; i++) {
+      rows[i] = rows[i].copyWith(rank: i + 1);
+    }
+    return rows;
+  }
+
+  Future<void> _pickSort() async {
+    final picked = await showModalBottomSheet<_OpsSort>(
+      context: context,
+      backgroundColor: AppColors.surfaceDark,
+      shape: const RoundedRectangleBorder(
+        borderRadius:
+            BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
+      ),
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final s in _OpsSort.values)
+              ListTile(
+                title: Text(_sortLabel(s),
+                    style: const TextStyle(color: AppColors.textOnDark)),
+                trailing: s == _sort
+                    ? const Icon(Icons.check_rounded,
+                        color: AppColors.textOnDark)
+                    : null,
+                onTap: () => Navigator.of(context).pop(s),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked != null) setState(() => _sort = picked);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final members = <_Member>[
-      _Member(rank: 1, name: 'TEST Limited', role: 'sales • 1 done · 2 open · 1 overdue', score: 13),
-      _Member(rank: 2, name: 'Sunita Rao', role: 'finance • 0 done · 1 open · 5 overdue', score: 0),
-      _Member(rank: 3, name: 'sal', role: 'finance • 0 done · 8 open · 3 overdue', score: 0),
-      _Member(rank: 4, name: 'Amit Verma', role: 'operations • 0 done · 1 open · 7 overdue', score: 0),
-      _Member(rank: 5, name: 'Rajesh Sharma', role: 'owner • 0 done · 23 open · 5 overdue', score: 0),
-      _Member(rank: 6, name: 'TEST_member', role: 'production • 1 done · 1 open · 3 overdue', score: 0),
-    ];
+    final members = _rows();
 
     return SoftCard(
       color: AppColors.surfaceDark,
@@ -666,38 +754,72 @@ class _TeamExecution extends StatelessWidget {
               Text('Sort',
                   style: AppText.small().copyWith(color: AppColors.textOnDarkMuted, fontSize: 12)),
               const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceDarkAlt,
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+              InkWell(
+                onTap: _pickSort,
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceDarkAlt,
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                    border:
+                        Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Text(_sortLabel(_sort),
+                        style: AppText.smallStrong().copyWith(
+                            color: AppColors.textOnDark, fontSize: 12)),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.expand_more_rounded,
+                        size: 14, color: AppColors.textOnDark),
+                  ]),
                 ),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Text('Score',
-                      style: AppText.smallStrong().copyWith(color: AppColors.textOnDark, fontSize: 12)),
-                  const SizedBox(width: 4),
-                  const Icon(Icons.expand_more_rounded, size: 14, color: AppColors.textOnDark),
-                ]),
               ),
             ],
           ),
           const SizedBox(height: AppSpacing.md),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 14),
             decoration: BoxDecoration(
               color: AppColors.surfaceDarkAlt,
               borderRadius: BorderRadius.circular(AppRadius.pill),
             ),
             child: Row(children: [
-              const Icon(Icons.search_rounded, size: 18, color: AppColors.textOnDarkMuted),
+              const Icon(Icons.search_rounded,
+                  size: 18, color: AppColors.textOnDarkMuted),
               const SizedBox(width: 8),
-              Text('Search team, member, department...',
-                  style: AppText.small().copyWith(color: AppColors.textOnDarkMuted, fontSize: 12)),
+              Expanded(
+                child: TextField(
+                  onChanged: (v) => setState(() => _query = v),
+                  style: AppText.small().copyWith(
+                      color: AppColors.textOnDark, fontSize: 13),
+                  decoration: InputDecoration(
+                    hintText: 'Search team, member, department…',
+                    hintStyle: AppText.small().copyWith(
+                        color: AppColors.textOnDarkMuted, fontSize: 12),
+                    isDense: true,
+                    border: InputBorder.none,
+                    contentPadding:
+                        const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
             ]),
           ),
           const SizedBox(height: AppSpacing.md),
-          // 2-column members grid — matches reference image
+          if (members.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text(
+                _query.isEmpty
+                    ? 'No team activity to rank yet.'
+                    : 'No matches — try a different name or role.',
+                style: AppText.small()
+                    .copyWith(color: AppColors.textOnDarkMuted, fontSize: 13),
+              ),
+            )
+          else
           Column(
             children: [
               for (int r = 0; r < members.length; r += 2)
@@ -725,11 +847,28 @@ class _TeamExecution extends StatelessWidget {
 }
 
 class _Member {
+  final String id;
   final int rank;
   final String name;
   final String role;
   final int score;
-  _Member({required this.rank, required this.name, required this.role, required this.score});
+  final DateTime? lastActivity;
+  _Member({
+    required this.id,
+    required this.rank,
+    required this.name,
+    required this.role,
+    required this.score,
+    this.lastActivity,
+  });
+  _Member copyWith({int? rank}) => _Member(
+        id: id,
+        rank: rank ?? this.rank,
+        name: name,
+        role: role,
+        score: score,
+        lastActivity: lastActivity,
+      );
 }
 
 class _MemberCard extends StatelessWidget {
@@ -738,7 +877,15 @@ class _MemberCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final radius = BorderRadius.circular(AppRadius.md);
+    return InkWell(
+      onTap: () {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Open ${m.name} — self-view coming soon')),
+        );
+      },
+      borderRadius: radius,
+      child: Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.surfaceDarkAlt,
@@ -773,6 +920,7 @@ class _MemberCard extends StatelessWidget {
               style: AppText.h3().copyWith(color: AppColors.textOnDark, fontWeight: FontWeight.w800)),
         ],
       ),
+    ),
     );
   }
 }

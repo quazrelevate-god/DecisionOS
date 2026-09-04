@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../app_shell.dart';
 import '../widgets/app_bloom.dart';
 import '../data/repositories.dart';
@@ -879,10 +880,20 @@ class _MemberCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final radius = BorderRadius.circular(AppRadius.md);
     return InkWell(
-      onTap: () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Open ${m.name} — self-view coming soon')),
-        );
+      // Fetch the full Person then push /person/:id — the detail
+      // route needs a Person as `extra` (falls back to /people list
+      // without it, which would drop the user out of context).
+      onTap: () async {
+        final messenger = ScaffoldMessenger.of(context);
+        final router = GoRouter.of(context);
+        try {
+          final p = await PeopleRepository().get(m.id);
+          router.push('/person/${p.id}', extra: p);
+        } catch (_) {
+          messenger.showSnackBar(
+            const SnackBar(content: Text('Could not open member profile.')),
+          );
+        }
       },
       borderRadius: radius,
       child: Container(

@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import '../widgets/app_bloom.dart';
 import '../widgets/app_header.dart';
+import '../widgets/segment.dart';
 import '../widgets/neumorphic.dart';
 import '../widgets/sparkline.dart';
 import '../widgets/states.dart';
@@ -36,7 +37,16 @@ class MoneyScreen extends StatefulWidget {
 }
 
 class _MoneyScreenState extends State<MoneyScreen> {
+  // Canonical tab order — mirrors _TabRail._tabs. Used to compute slide
+  // direction when the user swaps tabs.
+  static const _tabOrder = ['overview', 'revenue', 'expenses',
+                             'assets', 'inventory', 'inbox'];
+
   String _tab = 'overview';
+  // +1 = new tab comes in from the right (moving forward through the rail)
+  // -1 = new tab comes in from the left (moving back). AnimatedSwitcher
+  // reads this via a closure in transitionBuilder.
+  int _slideDir = 1;
 
   // Cached futures — one per tab, populated lazily on first visit so tab
   // switching is a pure `setState`, not a network round-trip.
@@ -56,7 +66,10 @@ class _MoneyScreenState extends State<MoneyScreen> {
 
   void _setTab(String t) {
     if (t == _tab) return;
+    final oldIdx = _tabOrder.indexOf(_tab);
+    final newIdx = _tabOrder.indexOf(t);
     setState(() {
+      _slideDir = newIdx > oldIdx ? 1 : -1;
       _tab = t;
     });
     // Lazy-fetch the tab's data on first visit.
@@ -139,13 +152,18 @@ class _MoneyScreenState extends State<MoneyScreen> {
                 const SizedBox(height: AppSpacing.lg),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                  child: _TabBody(
-                    tab: _tab,
-                    summaryFuture: _summaryFuture,
-                    revenueFuture: _revenueFuture,
-                    expensesFuture: _expensesFuture,
-                    assetsFuture: _assetsFuture,
-                    inventoryFuture: _inventoryFuture,
+                  child: SlidingSwitcher(
+                    tabKey: _tab,
+                    direction: _slideDir,
+                    child: _TabBody(
+                      tab: _tab,
+                      summaryFuture: _summaryFuture,
+                      revenueFuture: _revenueFuture,
+                      expensesFuture: _expensesFuture,
+                      assetsFuture: _assetsFuture,
+                      inventoryFuture: _inventoryFuture,
+                      onTabChange: _setTab,
+                    ),
                   ),
                 ),
               ],
@@ -200,29 +218,41 @@ class _TabRail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Same pattern as the Work / CRM segments and the search bars: one
-    // raised outer track (KrPop = cool-grey muted) holding all 6 tabs.
-    // Active tab = sunken KrPressed white pit inside the track (reads as
-    // "pushed in"). Inactive tabs = flat InkWell so the track shows through.
+    final activeIndex = _tabs.indexWhere((t) => t.$1 == active);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-      child: KrPop(
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-        padding: const EdgeInsets.all(4),
-        color: AppColors.surfaceMuted,
-        child: Row(
-          children: [
-            for (int i = 0; i < _tabs.length; i++)
-              Expanded(
-                child: _TabPill(
-                  label: _tabs[i].$2,
-                  icon: _tabs[i].$3,
-                  active: _tabs[i].$1 == active,
-                  onTap: () => onSelect(_tabs[i].$1),
+      child: SlidingSegment(
+        active: activeIndex < 0 ? 0 : activeIndex,
+        count: _tabs.length,
+        onSelect: (i) => onSelect(_tabs[i].$1),
+        height: 48,
+        builder: (context, i, isActive) {
+          final t = _tabs[i];
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(t.$3, size: 14, color: AppColors.textPrimary),
+                const SizedBox(height: 2),
+                AnimatedDefaultTextStyle(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  style: AppText.small().copyWith(
+                    fontSize: 10,
+                    fontWeight:
+                        isActive ? FontWeight.w700 : FontWeight.w500,
+                    color: AppColors.textPrimary
+                        .withValues(alpha: isActive ? 1 : 0.7),
+                  ),
+                  child: Text(t.$2,
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
                 ),
-              ),
-          ],
-        ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -535,6 +565,7 @@ class _TabBody extends StatelessWidget {
   final Future<List<Expense>>? expensesFuture;
   final Future<List<Asset>>? assetsFuture;
   final Future<List<InventoryItem>>? inventoryFuture;
+  final ValueChanged<String> onTabChange;
   const _TabBody({
     required this.tab,
     required this.summaryFuture,
@@ -542,13 +573,15 @@ class _TabBody extends StatelessWidget {
     required this.expensesFuture,
     required this.assetsFuture,
     required this.inventoryFuture,
+    required this.onTabChange,
   });
 
   @override
   Widget build(BuildContext context) {
     switch (tab) {
       case 'overview':
-        return _OverviewBody(summaryFuture: summaryFuture);
+        return _OverviewBody(
+            summaryFuture: summaryFuture, onTabChange: onTabChange);
       case 'revenue':
         return _RevenueBody(future: revenueFuture!);
       case 'expenses':
@@ -579,7 +612,8 @@ String _rupee(double v) {
 
 class _OverviewBody extends StatelessWidget {
   final Future<LedgerSummary> summaryFuture;
-  const _OverviewBody({required this.summaryFuture});
+  final ValueChanged<String> onTabChange;
+  const _OverviewBody({required this.summaryFuture, required this.onTabChange});
 
   @override
   Widget build(BuildContext context) {
@@ -608,14 +642,17 @@ class _OverviewBody extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _NetProfitHero(net: net, monthly: monthly, trendPct: trendPct),
+            _NetProfitHero(
+              net: net, monthly: monthly, trendPct: trendPct,
+              onTap: () => onTabChange('revenue'),
+            ),
             const SizedBox(height: AppSpacing.md),
-            _KpiGrid(s: s),
+            _KpiGrid(s: s, onTabChange: onTabChange),
             const SizedBox(height: AppSpacing.md),
-            _ViewAllButton(),
+            _ViewAllButton(onTap: () => onTabChange('revenue')),
             if (s.overdueReceivables.isNotEmpty) ...[
               const SizedBox(height: AppSpacing.md),
-              _CashFlowPanel(s: s),
+              _CashFlowPanel(s: s, onViewAll: () => onTabChange('revenue')),
             ],
             const SizedBox(height: AppSpacing.md),
             const _AskAiPanel(),
@@ -632,13 +669,14 @@ class _NetProfitHero extends StatelessWidget {
   final double net;
   final List<double> monthly;
   final double trendPct;
-  const _NetProfitHero({required this.net, required this.monthly, required this.trendPct});
+  final VoidCallback? onTap;
+  const _NetProfitHero({
+    required this.net, required this.monthly, required this.trendPct,
+    this.onTap,
+  });
   @override
   Widget build(BuildContext context) {
     final up = trendPct >= 0;
-    // Fallback tiny series so the graph still reads as a shape when the
-    // backend hasn't populated by_month yet. Not a chart — a decorative cue
-    // that reflects the trend direction we already show as %.
     final series = monthly.length >= 2
         ? monthly
         : [1.0, 1.2, 0.9, 1.4, 1.1, 1.6];
@@ -646,6 +684,7 @@ class _NetProfitHero extends StatelessWidget {
     return KrPop(
       borderRadius: BorderRadius.circular(AppRadius.lg),
       padding: const EdgeInsets.all(AppSpacing.lg),
+      onTap: onTap,
       child: Stack(children: [
         // Green sparkline runs behind the number.
         Positioned(
@@ -704,10 +743,10 @@ class _NetProfitHero extends StatelessWidget {
 
 class _KpiGrid extends StatelessWidget {
   final LedgerSummary s;
-  const _KpiGrid({required this.s});
+  final ValueChanged<String> onTabChange;
+  const _KpiGrid({required this.s, required this.onTabChange});
   @override
   Widget build(BuildContext context) {
-    // Trend for revenue: last month vs previous.
     double? trend;
     if (s.monthlyNet.length >= 2) {
       final curr = s.monthlyNet.last;
@@ -724,6 +763,7 @@ class _KpiGrid extends StatelessWidget {
             bg: const Color(0xFFD3F5DF),
             fg: const Color(0xFF16A34A),
             trend: trend,
+            onTap: () => onTabChange('revenue'),
           ),
         ),
         const SizedBox(width: 10),
@@ -734,6 +774,7 @@ class _KpiGrid extends StatelessWidget {
             icon: Icons.chat_bubble_outline_rounded,
             bg: const Color(0xFFDCE7F8),
             fg: const Color(0xFF2563EB),
+            onTap: () => onTabChange('revenue'),
           ),
         ),
       ]),
@@ -746,6 +787,7 @@ class _KpiGrid extends StatelessWidget {
             icon: Icons.trending_up_rounded,
             bg: const Color(0xFFFDE1E5),
             fg: const Color(0xFFE11D48),
+            onTap: () => onTabChange('expenses'),
           ),
         ),
         const SizedBox(width: 10),
@@ -760,6 +802,7 @@ class _KpiGrid extends StatelessWidget {
                 ? '${s.overdueCount} overdue invoice${s.overdueCount == 1 ? '' : 's'}'
                 : 'No overdue',
             urgent: (s.overdueAmount ?? 0) > 0,
+            onTap: () => onTabChange('revenue'),
           ),
         ),
       ]),
@@ -776,6 +819,7 @@ class _KpiCard extends StatelessWidget {
   final bool urgent;
   final double? trend;
   final String? note;
+  final VoidCallback? onTap;
   const _KpiCard({
     required this.label,
     required this.value,
@@ -785,6 +829,7 @@ class _KpiCard extends StatelessWidget {
     this.urgent = false,
     this.trend,
     this.note,
+    this.onTap,
   });
   @override
   Widget build(BuildContext context) {
@@ -792,6 +837,7 @@ class _KpiCard extends StatelessWidget {
     return KrPop(
       borderRadius: BorderRadius.circular(AppRadius.md),
       padding: const EdgeInsets.all(AppSpacing.md),
+      onTap: onTap,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -853,12 +899,14 @@ class _KpiCard extends StatelessWidget {
 }
 
 class _ViewAllButton extends StatelessWidget {
+  final VoidCallback onTap;
+  const _ViewAllButton({required this.onTap});
   @override
   Widget build(BuildContext context) {
     return KrPop(
       borderRadius: BorderRadius.circular(AppRadius.md),
       padding: const EdgeInsets.symmetric(vertical: 14),
-      onTap: () {},
+      onTap: onTap,
       child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
         Text('View all financials',
             style: AppText.smallStrong().copyWith(fontSize: 13)),
@@ -871,7 +919,8 @@ class _ViewAllButton extends StatelessWidget {
 
 class _CashFlowPanel extends StatelessWidget {
   final LedgerSummary s;
-  const _CashFlowPanel({required this.s});
+  final VoidCallback onViewAll;
+  const _CashFlowPanel({required this.s, required this.onViewAll});
   @override
   Widget build(BuildContext context) {
     final double total = s.overdueAmount ??
@@ -905,21 +954,29 @@ class _CashFlowPanel extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white,
+              Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+                child: InkWell(
+                  onTap: onViewAll,
                   borderRadius: BorderRadius.circular(AppRadius.pill),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.06),
-                      offset: const Offset(0, 1),
-                      blurRadius: 2,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.06),
+                          offset: const Offset(0, 1),
+                          blurRadius: 2,
+                        ),
+                      ],
                     ),
-                  ],
+                    child: Text('View all',
+                        style: AppText.smallStrong().copyWith(fontSize: 11)),
+                  ),
                 ),
-                child: Text('View all',
-                    style: AppText.smallStrong().copyWith(fontSize: 11)),
               ),
             ],
           ),
@@ -927,13 +984,22 @@ class _CashFlowPanel extends StatelessWidget {
           for (final r in s.overdueReceivables.take(3))
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
-              child: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.white,
+              // Row is tappable — routes to Revenue tab. Model has no
+              // contact_id yet, so we can't push straight to /contact/:id;
+              // this is the closest existing surface.
+              child: Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                child: InkWell(
+                  onTap: onViewAll,
                   borderRadius: BorderRadius.circular(AppRadius.md),
-                ),
-                child: Row(children: [
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                    ),
+                    child: Row(children: [
                   Container(
                     width: 30, height: 30,
                     decoration: BoxDecoration(
@@ -971,22 +1037,33 @@ class _CashFlowPanel extends StatelessWidget {
                   const Icon(Icons.chevron_right_rounded,
                       size: 14, color: AppColors.textTertiary),
                 ]),
+                  ),
+                ),
               ),
             ),
-          // Footer link — "View all N+ action items →" in accent orange.
           if (s.overdueReceivables.length > 3 ||
               s.overdueReceivables.isNotEmpty) ...[
             const SizedBox(height: 6),
-            Row(children: [
-              Text(
-                'View all ${s.overdueReceivables.length}+ action items',
-                style: AppText.smallStrong().copyWith(
-                    fontSize: 12, color: AppColors.brand),
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: onViewAll,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(children: [
+                    Text(
+                      'View all ${s.overdueReceivables.length}+ action items',
+                      style: AppText.smallStrong().copyWith(
+                          fontSize: 12, color: AppColors.brand),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.arrow_forward_rounded,
+                        size: 12, color: AppColors.brand),
+                  ]),
+                ),
               ),
-              const SizedBox(width: 4),
-              const Icon(Icons.arrow_forward_rounded,
-                  size: 12, color: AppColors.brand),
-            ]),
+            ),
           ],
         ],
       ),

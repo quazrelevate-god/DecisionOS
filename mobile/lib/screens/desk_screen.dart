@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../data/repositories.dart';
 import '../models/models.dart';
 import '../theme/app_theme.dart';
@@ -106,8 +107,11 @@ class _DeskLayoutState extends State<_DeskLayout> {
   //   min  — notch + section header + 1 headline card
   //   mid  — notch + section header + 3 stacked cards
   //   max  — full-viewport; +N pill jumps here; content scrolls if needed
-  static const double _sheetMin = 0.34;
-  static const double _sheetMid = 0.68;
+  // Sheet sits higher on rest so the first "Needs your decision" card
+  // clears its own action pill before you drag — old 0.34 left the card's
+  // Review chip cropped off the bottom.
+  static const double _sheetMin = 0.44;
+  static const double _sheetMid = 0.72;
   static const double _sheetMax = 1.0;
   final DraggableScrollableController _sheetCtrl = DraggableScrollableController();
   double _sheetPos = _sheetMin;
@@ -264,16 +268,20 @@ class _LightZone extends StatelessWidget {
   const _LightZone({required this.data});
   @override
   Widget build(BuildContext context) {
+    // Extra breathing room at the bottom pushes the Dex insight card up
+    // off the sheet's rim — it was sitting flush with the dark band, so
+    // the compositions felt cramped. `xl` bottom + `lg` KPI-to-insight
+    // gives the block real air.
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-          AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, AppSpacing.lg),
+          AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, AppSpacing.xxxl),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _GreetingRow(summary: data.summary, ops: data.ops),
           const SizedBox(height: AppSpacing.lg),
           _KpiGrid(data: data),
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: AppSpacing.lg),
           _InsightWell(data: data),
         ],
       ),
@@ -503,10 +511,12 @@ class _InsightWell extends StatelessWidget {
           const SizedBox(height: AppSpacing.sm),
           Text(headline, style: AppText.h3().copyWith(fontSize: 18, height: 1.3)),
           const SizedBox(height: 28),
+          // "Chase it" routes to Money — the overdue cash number Dex is
+          // reading lives on the Revenue tab; that's the follow-up screen.
           Row(children: [
-            _PopPill(label: 'Chase it'),
+            _PopPill(label: 'Chase it', onTap: () => context.go('/money')),
             const Spacer(),
-            _PopCircle(),
+            _PopCircle(onTap: () => context.go('/dex')),
           ]),
         ],
       ),
@@ -523,42 +533,61 @@ class _InsightWell extends StatelessWidget {
 
 class _PopPill extends StatelessWidget {
   final String label;
-  const _PopPill({required this.label});
+  final VoidCallback? onTap;
+  const _PopPill({required this.label, this.onTap});
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 44,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(AppRadius.pill),
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(AppRadius.pill),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.06), offset: const Offset(2, 2), blurRadius: 5),
-          BoxShadow(color: Colors.white.withValues(alpha: 0.9), offset: const Offset(-2, -2), blurRadius: 5),
-        ],
+        child: Container(
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withValues(alpha: 0.06), offset: const Offset(2, 2), blurRadius: 5),
+              BoxShadow(color: Colors.white.withValues(alpha: 0.9), offset: const Offset(-2, -2), blurRadius: 5),
+            ],
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Text(label, style: AppText.smallStrong().copyWith(fontSize: 12)),
+            const SizedBox(width: 6),
+            const Icon(Icons.arrow_forward_rounded, size: 14),
+          ]),
+        ),
       ),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Text(label, style: AppText.smallStrong().copyWith(fontSize: 12)),
-        const SizedBox(width: 6),
-        const Icon(Icons.arrow_forward_rounded, size: 14),
-      ]),
     );
   }
 }
 
 class _PopCircle extends StatelessWidget {
+  final VoidCallback? onTap;
+  const _PopCircle({this.onTap});
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 44, height: 44,
-      decoration: BoxDecoration(
-        color: AppColors.surface, shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.06), offset: const Offset(2, 2), blurRadius: 5),
-          BoxShadow(color: Colors.white.withValues(alpha: 0.9), offset: const Offset(-2, -2), blurRadius: 5),
-        ],
+    return Material(
+      color: Colors.transparent,
+      shape: const CircleBorder(),
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: Container(
+          width: 44, height: 44,
+          decoration: BoxDecoration(
+            color: AppColors.surface, shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(color: Colors.black.withValues(alpha: 0.06), offset: const Offset(2, 2), blurRadius: 5),
+              BoxShadow(color: Colors.white.withValues(alpha: 0.9), offset: const Offset(-2, -2), blurRadius: 5),
+            ],
+          ),
+          child: const Icon(Icons.psychology_alt_rounded, size: 19),
+        ),
       ),
-      child: const Icon(Icons.psychology_alt_rounded, size: 19),
     );
   }
 }
@@ -1010,7 +1039,14 @@ class _BentoBox extends StatelessWidget {
   Widget build(BuildContext context) {
     final verb = _ctaLabels[card.cta] ?? 'Open';
     final icon = _ctaIcons[card.cta] ?? Icons.balance_rounded;
-    return Container(
+    // Whole card is tappable — pushes the decision detail route with the
+    // model as `extra` (same shape /decision/:id already expects from Work).
+    // Was unwired: user could see 33 decisions on the desk but couldn't
+    // open one without hunting through Work.
+    return InkWell(
+      onTap: () => context.push('/decision/${card.id}', extra: card),
+      borderRadius: BorderRadius.circular(AppRadius.lg),
+      child: Container(
       padding: EdgeInsets.all(compact ? 12 : AppSpacing.lg),
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -1090,6 +1126,7 @@ class _BentoBox extends StatelessWidget {
             Align(alignment: Alignment.centerRight, child: _ActionPill(verb: verb, compact: true)),
           ],
         ],
+      ),
       ),
     );
   }

@@ -97,14 +97,15 @@ class _SearchBar extends StatelessWidget {
   const _SearchBar({required this.onChanged});
   @override
   Widget build(BuildContext context) {
-    return KrPop(
-      borderRadius: BorderRadius.circular(AppRadius.pill),
-      padding: const EdgeInsets.all(4),
-      color: AppColors.surfaceMuted,
-      child: KrPressed(
-      borderRadius: BorderRadius.circular(AppRadius.pill),
+    // Flat search field — no neumorphic depth. A single soft hairline
+    // border on a white pill.
+    return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14),
-      color: AppColors.surface,
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        border: Border.all(color: AppColors.hairline),
+      ),
       child: Row(
         children: [
           const Icon(Icons.search_rounded, size: 18, color: AppColors.textSecondary),
@@ -123,7 +124,6 @@ class _SearchBar extends StatelessWidget {
             ),
           ),
         ],
-      ),
       ),
     );
   }

@@ -205,36 +205,34 @@ class _SearchAndAdd extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: KrPop(
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-            padding: const EdgeInsets.all(4),
-            color: AppColors.surfaceMuted,
-            child: KrPressed(
-              borderRadius: BorderRadius.circular(AppRadius.pill),
-              padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(
               color: AppColors.surface,
-              child: Row(
-                children: [
-                  const Icon(Icons.search_rounded,
-                      size: 18, color: AppColors.textSecondary),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      onChanged: onQuery,
-                      style: AppText.body(),
-                      decoration: InputDecoration(
-                        isDense: true,
-                        hintText: 'Search',
-                        hintStyle: AppText.body()
-                            .copyWith(color: AppColors.textTertiary),
-                        border: InputBorder.none,
-                        contentPadding:
-                            const EdgeInsets.symmetric(vertical: 12),
-                      ),
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+              border: Border.all(color: AppColors.hairline),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.search_rounded,
+                    size: 18, color: AppColors.textSecondary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    onChanged: onQuery,
+                    style: AppText.body(),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      hintText: 'Search',
+                      hintStyle: AppText.body()
+                          .copyWith(color: AppColors.textTertiary),
+                      border: InputBorder.none,
+                      contentPadding:
+                          const EdgeInsets.symmetric(vertical: 12),
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),

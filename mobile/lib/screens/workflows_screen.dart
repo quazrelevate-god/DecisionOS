@@ -1,27 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../data/auth_repository.dart';
 import '../data/repositories.dart';
 import '../models/models.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_bloom.dart';
+import '../widgets/app_header.dart';
 import '../widgets/neumorphic.dart';
 import '../widgets/states.dart';
 
-/// Standalone workflows page (routable at `/workflows` as a fallback). The
-/// Work screen embeds [WorkflowsBody] instead of this whole screen so
-/// switching to Workflows is a pure tab, not a navigation push.
+/// Standalone workflows page — reached from the More sheet. Wraps
+/// [WorkflowsBody] with the same steel-blue bloom + AppHeader that the
+/// Work screen wears, so navigating between them feels continuous.
 class WorkflowsScreen extends StatelessWidget {
   const WorkflowsScreen({super.key});
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _Header(onBack: () => context.pop()),
-            const Expanded(child: WorkflowsBody()),
-          ],
-        ),
+      body: Stack(
+        children: [
+          const Positioned.fill(child: AppBloom(tint: BloomTint.steelBlue)),
+          Column(
+            children: [
+              const AppHeader(),
+              const Expanded(child: WorkflowsBody()),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -134,7 +140,28 @@ class _WorkflowsBodyState extends State<WorkflowsBody> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SizedBox(height: AppSpacing.sm),
+          // Title + pipeline filter — matches the Work screen chrome so
+          // the two feel like siblings.
+          Row(
+            children: [
+              Expanded(
+                child: Text('Workflows',
+                    style: AppText.display().copyWith(fontSize: 30, height: 1.05)),
+              ),
+              _PipelineFilterCircle(
+                active: _activeKey,
+                onSelect: (k) {
+                  if (k == _activeKey) return;
+                  setState(() {
+                    _activeKey = k;
+                    _openStages.clear();
+                  });
+                  _reload();
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.lg),
           _NewWorkflowButton(
             pipelineKey: _activeKey,
             onCreated: _reload,
@@ -591,10 +618,19 @@ class _StageTaskPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Open task: ${task.title}')),
-        );
+      // Fetch the full Task then push /task/:id — the detail route
+      // expects a Task as `extra`, not just an id.
+      onTap: () async {
+        final messenger = ScaffoldMessenger.of(context);
+        final router = GoRouter.of(context);
+        try {
+          final t = await TasksRepository().get(task.id);
+          router.push('/task/${t.id}', extra: t);
+        } catch (_) {
+          messenger.showSnackBar(
+            const SnackBar(content: Text('Could not open task.')),
+          );
+        }
       },
       borderRadius: BorderRadius.circular(6),
       child: Container(
@@ -763,6 +799,90 @@ class _NewWorkflowSheetState extends State<_NewWorkflowSheet> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Round 36×36 filter button — opens a bottom-sheet picker with every
+/// pipeline the tenant has configured, so the user can switch which
+/// pipeline this Workflows screen renders.
+class _PipelineFilterCircle extends StatelessWidget {
+  final String active;
+  final ValueChanged<String> onSelect;
+  const _PipelineFilterCircle({required this.active, required this.onSelect});
+
+  Future<void> _open(BuildContext context) async {
+    final pipes = AuthRepository.I.pipelines;
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: 8),
+            Center(
+              child: Container(
+                width: 44, height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.hairlineStrong,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+              child: Text('Pipeline',
+                  style: AppText.label().copyWith(fontSize: 11)),
+            ),
+            for (final p in pipes)
+              InkWell(
+                onTap: () => Navigator.of(ctx).pop(p.key),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 20, vertical: 12),
+                  child: Row(children: [
+                    Icon(
+                      p.key == active
+                          ? Icons.check_circle_rounded
+                          : Icons.radio_button_unchecked_rounded,
+                      size: 18,
+                      color: p.key == active
+                          ? AppColors.brand
+                          : AppColors.textTertiary,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(p.label,
+                          style: AppText.body().copyWith(
+                              fontWeight: p.key == active
+                                  ? FontWeight.w600
+                                  : FontWeight.w400)),
+                    ),
+                  ]),
+                ),
+              ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+    if (picked != null) onSelect(picked);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return KrPop(
+      borderRadius: BorderRadius.circular(999),
+      padding: const EdgeInsets.all(10),
+      onTap: () => _open(context),
+      child: const Icon(Icons.tune_rounded,
+          size: 16, color: AppColors.textPrimary),
     );
   }
 }

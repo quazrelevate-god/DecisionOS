@@ -7,16 +7,16 @@ import '../models/models.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_bloom.dart';
 import '../widgets/app_header.dart';
+import '../widgets/segment.dart';
 import '../widgets/neumorphic.dart';
 import '../widgets/states.dart';
-import 'leave_screen.dart' show LeaveBody;
-import 'workflows_screen.dart' show WorkflowsBody;
 
-/// The Work screen — ported from frontend/src/pages/MyWork.js (mobile layout,
-/// KM-2 arrangement). Three-row header:
+/// The Work screen — tasks only. Workflows and Leave moved to their own
+/// destinations (reached from the More sheet); this screen no longer
+/// dispatches between three views.
 ///
-///   Row 1 — H1 "My Work"  ·  [Workflows]  [Leave]     (destinations)
-///   Row 2 — [My Tasks | All Tasks] [+]     [AI]  [Filter]   (acts on the list)
+///   Row 1 — H1 "My Work"
+///   Row 2 — [My Tasks | All Tasks] [+]     [AI]  [Filter]
 ///   Row 3 — active tab caption:  "All · 12"
 ///
 /// Cards use tier-sized neumorphic pop tiles (kr-pop): high = larger title,
@@ -35,8 +35,9 @@ class _WorkScreenState extends State<WorkScreen> {
   bool _mine = true;
   bool _aiPriority = false;
   String _tab = 'all';       // 'all' | category key | 'completed'
-  String _view = 'mywork';   // 'mywork' | 'workflows' | 'leave'
-  String _wfPipeline = 'production'; // active workflow pipeline key (from filter)
+  // Slide direction for the tab body transition: +1 = new content
+  // enters from the right (mine → all), -1 = from the left.
+  int _slideDir = 1;
 
   // Cached futures — each of the three list variants is fetched at most once
   // per session (until manual refresh). Switching between My Tasks and All
@@ -67,12 +68,12 @@ class _WorkScreenState extends State<WorkScreen> {
   }
 
   void _setScope(bool mine) {
-    // Pure tab shift — no network, no future replacement, just flip local
-    // state so the FutureBuilder reads a different (cached) future.
-    if (_mine == mine && _view == 'mywork' && !_aiPriority) return;
+    if (_mine == mine && !_aiPriority) return;
     setState(() {
+      // My Tasks (index 0) → All Tasks (index 1): new content comes
+      // from the right (+1); reverse the other way.
+      _slideDir = mine ? -1 : 1;
       _mine = mine;
-      _view = 'mywork';
       _aiPriority = false;
     });
   }
@@ -80,7 +81,6 @@ class _WorkScreenState extends State<WorkScreen> {
   void _toggleAi() {
     setState(() {
       _aiPriority = !_aiPriority;
-      _view = 'mywork';
     });
     // Lazy-fetch prioritized list on first turn-on; the getter handles it.
     if (_aiPriority) {
@@ -129,13 +129,9 @@ class _WorkScreenState extends State<WorkScreen> {
                   if ((t.taskType ?? '').isNotEmpty && !t.isTerminal) t.taskType!,
               }.toList()..sort();
 
-              // Header renders always — same header whether the active tab is
-              // My Tasks / All Tasks (task list body), Workflows or Leave
-              // (embedded body). No new screen — pure tab shift.
               final header = Padding(
                 padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, 0),
                 child: _MobileHeader(
-                  view: _view,
                   mine: _mine,
                   aiPriority: _aiPriority,
                   tab: _tab,
@@ -145,11 +141,7 @@ class _WorkScreenState extends State<WorkScreen> {
                   onScope: _setScope,
                   onToggleAi: _toggleAi,
                   onTab: _setTab,
-                  onView: (v) => setState(() => _view = v),
                   onNewTask: () async {
-                    // Floating sheet: transparent scaffold under it so the
-                    // sheet itself can carry its own margin + rounded card
-                    // silhouette instead of being flush with the screen edge.
                     final saved = await showModalBottomSheet<bool>(
                       context: context,
                       isScrollControlled: true,
@@ -158,22 +150,11 @@ class _WorkScreenState extends State<WorkScreen> {
                     );
                     if (saved == true) _refetchAll();
                   },
-                  // In workflows view the filter circle lists the tenant's
-                  // pipelines; selecting one switches which pipeline the
-                  // workflows body renders.
-                  wfPipelines: AuthRepository.I.pipelines,
-                  activeWfPipeline: _wfPipeline,
-                  onWfPipeline: (k) => setState(() => _wfPipeline = k),
                 ),
               );
 
-              // Body dispatches on _view. Same header sits above every body.
               Widget body;
-              if (_view == 'workflows') {
-                body = WorkflowsBody(pipelineKey: _wfPipeline);
-              } else if (_view == 'leave') {
-                body = const LeaveBody();
-              } else if (snap.connectionState != ConnectionState.done) {
+              if (snap.connectionState != ConnectionState.done) {
                 body = const _WorkSkeleton();
               } else {
                 final visible = _applyFilter(all);
@@ -210,7 +191,16 @@ class _WorkScreenState extends State<WorkScreen> {
                 children: [
                   header,
                   const SizedBox(height: AppSpacing.md),
-                  Expanded(child: body),
+                  Expanded(
+                    child: SlidingSwitcher(
+                      // Key on the scope so switching My ↔ All slides the
+                      // list; category-tab changes don't re-key so they
+                      // just refilter without motion.
+                      tabKey: _aiPriority ? 'ai' : (_mine ? 'mine' : 'all'),
+                      direction: _slideDir,
+                      child: body,
+                    ),
+                  ),
                 ],
               );
             },
@@ -228,7 +218,6 @@ class _WorkScreenState extends State<WorkScreen> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _MobileHeader extends StatelessWidget {
-  final String view;
   final bool mine;
   final bool aiPriority;
   final String tab;
@@ -238,15 +227,9 @@ class _MobileHeader extends StatelessWidget {
   final ValueChanged<bool> onScope;
   final VoidCallback onToggleAi;
   final ValueChanged<String> onTab;
-  final ValueChanged<String> onView;
   final VoidCallback onNewTask;
-  // Workflows-view: which pipelines exist + active pipeline + select handler.
-  final List<Pipeline> wfPipelines;
-  final String activeWfPipeline;
-  final ValueChanged<String> onWfPipeline;
 
   const _MobileHeader({
-    required this.view,
     required this.mine,
     required this.aiPriority,
     required this.tab,
@@ -256,11 +239,7 @@ class _MobileHeader extends StatelessWidget {
     required this.onScope,
     required this.onToggleAi,
     required this.onTab,
-    required this.onView,
     required this.onNewTask,
-    required this.wfPipelines,
-    required this.activeWfPipeline,
-    required this.onWfPipeline,
   });
 
   String _labelFor(String key) {
@@ -274,63 +253,20 @@ class _MobileHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final inSegment = view == 'mywork';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Row 1 — title + destination pills.
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Expanded(
-              child: Text('My Work',
-                  style: AppText.display().copyWith(fontSize: 30, height: 1.05)),
-            ),
-            const SizedBox(width: 6),
-            KrPressed(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              color: view == 'workflows' ? AppColors.textPrimary : AppColors.surfaceMuted,
-              onTap: () => onView('workflows'),
-              child: Text('Workflows',
-                  style: AppText.small().copyWith(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: view == 'workflows' ? Colors.white : AppColors.brandDeep,
-                  )),
-            ),
-            const SizedBox(width: 6),
-            view == 'leave'
-                ? KrPressed(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    onTap: () => onView('leave'),
-                    child: Text('Leave',
-                        style: AppText.small().copyWith(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
-                        )),
-                  )
-                : KrPop(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    onTap: () => onView('leave'),
-                    child: Text('Leave',
-                        style: AppText.small().copyWith(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary.withValues(alpha: 0.75),
-                        )),
-                  ),
-          ],
-        ),
+        // Row 1 — title only. Workflows / Leave moved to the More sheet.
+        Text('My Work',
+            style: AppText.display().copyWith(fontSize: 30, height: 1.05)),
         const SizedBox(height: 12),
 
         // Row 2 — lens group + right-hand circles.
         Row(
           children: [
-            // Joined My Tasks | All Tasks segment.
             _JoinedSegment(
               mine: mine,
-              selected: inSegment && !aiPriority,
+              selected: !aiPriority,
               onMine: () => onScope(true),
               onAll: () => onScope(false),
             ),
@@ -342,64 +278,42 @@ class _MobileHeader extends StatelessWidget {
               tooltip: 'New task',
             ),
             const Spacer(),
-            if (inSegment) ...[
-              _Circle(
-                icon: Icons.auto_awesome_rounded,
-                pressed: aiPriority,
-                onTap: onToggleAi,
-                tooltip: aiPriority ? 'AI priority on' : 'AI priority',
-              ),
-              const SizedBox(width: 6),
-            ],
-            // Context-aware filter: in workflows view the dropdown lists the
-            // tenant's pipelines (Distribution / Production / Procurement /
-            // Order Fulfillment / Raw Material Procurement / Production
-            // Planning / …). In mywork view it lists task categories. Frontend
-            // parity — MyWork.js branches on `mobileView` in the sliders menu.
-            if (view == 'workflows')
-              _FilterCircle(
-                tab: activeWfPipeline,
-                tabs: wfPipelines.map((p) => p.key).toList(),
-                labelFor: (k) => wfPipelines
-                    .firstWhere((p) => p.key == k,
-                        orElse: () => Pipeline(key: k, label: _labelFor(k)))
-                    .label,
-                countFor: (_) => 0, // pipeline dropdown has no per-key count
-                showCount: false,
-                onSelect: onWfPipeline,
-              )
-            else
-              _FilterCircle(
-                tab: tab,
-                tabs: [
-                  'all',
-                  ...categoryKeys,
-                  if (countFor('completed', allTasks) > 0) 'completed',
-                ],
-                labelFor: _labelFor,
-                countFor: (k) => countFor(k, allTasks),
-                onSelect: onTab,
-              ),
+            _Circle(
+              icon: Icons.auto_awesome_rounded,
+              pressed: aiPriority,
+              onTap: onToggleAi,
+              tooltip: aiPriority ? 'AI priority on' : 'AI priority',
+            ),
+            const SizedBox(width: 6),
+            _FilterCircle(
+              tab: tab,
+              tabs: [
+                'all',
+                ...categoryKeys,
+                if (countFor('completed', allTasks) > 0) 'completed',
+              ],
+              labelFor: _labelFor,
+              countFor: (k) => countFor(k, allTasks),
+              onSelect: onTab,
+            ),
           ],
         ),
 
         // Row 3 — sub-caption.
-        if (inSegment) ...[
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Text(_labelFor(tab),
-                  style: AppText.small().copyWith(
-                      color: AppColors.textSecondary, fontSize: 12)),
-              const SizedBox(width: 4),
-              Text('· ${countFor(tab, allTasks)}',
-                  style: AppText.small().copyWith(
-                      color: AppColors.textSecondary,
-                      fontSize: 12,
-                      fontFeatures: const [FontFeature.tabularFigures()])),
-            ],
-          ),
-        ],
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Text(_labelFor(tab),
+                style: AppText.small().copyWith(
+                    color: AppColors.textSecondary, fontSize: 12)),
+            const SizedBox(width: 4),
+            Text('· ${countFor(tab, allTasks)}',
+                style: AppText.small().copyWith(
+                    color: AppColors.textSecondary,
+                    fontSize: 12,
+                    fontFeatures: const [FontFeature.tabularFigures()])),
+          ],
+        ),
       ],
     );
   }
@@ -421,86 +335,19 @@ class _JoinedSegment extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Raised outer track (KrPop = pushed OUT). The active half sits
-    // INSIDE it as a KrPressed pit — reads as "pushed in". Inactive half
-    // is transparent so the raised track shows through. Colors are
-    // swapped: track = cool-grey muted, active pit = white surface, so
-    // the selected pill looks like a lit slot cut into the darker bar.
-    return KrPop(
-      borderRadius: BorderRadius.circular(AppRadius.pill),
-      padding: const EdgeInsets.all(4),
-      color: AppColors.surfaceMuted,
-      child: SizedBox(
-        height: 32,
-        child: Row(
-          children: [
-            _SegmentHalf(
-              label: 'My Tasks',
-              selected: selected && mine,
-              onTap: onMine,
-            ),
-            const SizedBox(width: 4),
-            _SegmentHalf(
-              label: 'All Tasks',
-              selected: selected && !mine,
-              onTap: onAll,
-            ),
-          ],
-        ),
-      ),
+    // Sliding-pill segment — the raised cool-grey track holds a white pit
+    // that glides between "My Tasks" and "All Tasks" over 220 ms.
+    return SlidingSegment(
+      active: selected ? (mine ? 0 : 1) : 0,
+      count: 2,
+      onSelect: (i) => i == 0 ? onMine() : onAll(),
+      labels: const ['My Tasks', 'All Tasks'],
+      height: 32,
     );
   }
 }
 
-class _SegmentHalf extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-  const _SegmentHalf({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final radius = BorderRadius.circular(AppRadius.pill);
-    final child = Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      child: Center(
-        child: Text(
-          label,
-          style: AppText.small().copyWith(
-            fontSize: 12,
-            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-            color: selected
-                ? AppColors.textPrimary
-                : AppColors.textPrimary.withValues(alpha: 0.7),
-          ),
-        ),
-      ),
-    );
-    // Active = KrPressed (sunken pit inside the raised track — reads as
-    // "pushed in"). Inactive = flat InkWell so the raised track shows.
-    if (selected) {
-      return KrPressed(
-        borderRadius: radius,
-        onTap: onTap,
-        color: AppColors.surface,
-        child: child,
-      );
-    }
-    return Material(
-      color: Colors.transparent,
-      borderRadius: radius,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: radius,
-        child: child,
-      ),
-    );
-  }
-}
+// _SegmentHalf removed — SlidingSegment now handles the geometry.
 
 /// Round 36×36 icon button. `pressed=true` uses the sunken material.
 class _Circle extends StatelessWidget {

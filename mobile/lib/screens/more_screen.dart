@@ -9,10 +9,10 @@ import '../widgets/neumorphic.dart';
 /// not a full-screen page; the app has 3 screens (Desk/Work/Money) and More
 /// opens as a modal sheet the user dismisses by tapping outside or the nav.
 ///
-/// Bento layout (matches frontend AllAppsPanel.jsx):
+/// Bento layout:
 ///   [ CRM       ] [ Team    ]
-///   [ Ops       ] [ Journal ]
-///   [ Calendar  ] [ Coach   ]
+///   [ Ops       ] [ Leave   ]
+///   [ Workflows ] [ Coach   ]
 ///   [   Settings (full width row)   ]
 ///   [   Sign out (destructive outlined pill)   ]
 
@@ -137,16 +137,16 @@ const _tiles = <_BentoTile>[
     route: '/ops',
   ),
   _BentoTile(
-    label: 'Journal',
-    icon: Icons.menu_book_rounded,
-    route: '/journal',
+    label: 'Leave',
+    icon: Icons.beach_access_outlined,
+    route: '/leave',
   ),
   // Row 3
   _BentoTile(
-    label: 'Calendar',
-    blurb: 'Everything with a date',
-    icon: Icons.calendar_month_outlined,
-    route: '/calendar',
+    label: 'Workflows',
+    blurb: 'Pipelines & stage tracking',
+    icon: Icons.account_tree_outlined,
+    route: '/workflows',
   ),
   _BentoTile(
     label: 'Work\nCoach',

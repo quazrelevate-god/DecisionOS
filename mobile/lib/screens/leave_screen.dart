@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import '../data/auth_repository.dart';
 import '../data/repositories.dart';
 import '../models/models.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_bloom.dart';
+import '../widgets/app_header.dart';
 import '../widgets/neumorphic.dart';
+import '../widgets/segment.dart';
 import '../widgets/states.dart';
 
 /// Leave & Absence — ported from frontend/src/pages/Leave.js. Two tabs
@@ -18,13 +20,16 @@ class LeaveScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _Header(onBack: () => context.pop()),
-            const Expanded(child: LeaveBody()),
-          ],
-        ),
+      body: Stack(
+        children: [
+          const Positioned.fill(child: AppBloom(tint: BloomTint.steelBlue)),
+          Column(
+            children: [
+              const AppHeader(),
+              const Expanded(child: LeaveBody()),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -41,7 +46,11 @@ class LeaveBody extends StatefulWidget {
 }
 
 class _LeaveBodyState extends State<LeaveBody> {
-  String _tab = 'mine'; // 'mine' | 'approvals' | 'settings'
+  static const _tabOrder = ['mine', 'approvals', 'settings'];
+  String _tab = 'mine';
+  int _slideDir = 1; // +1 rightward, -1 leftward, in _tabOrder
+  // Status filter shared by both mine + approvals lists.
+  String _statusFilter = 'all'; // all | pending | approved | rejected | cancelled
   late Future<List<LeaveRequest>> _mineFuture;
   Future<List<LeaveRequest>>? _apprFuture;
 
@@ -53,7 +62,12 @@ class _LeaveBodyState extends State<LeaveBody> {
 
   void _setTab(String t) {
     if (t == _tab) return;
-    setState(() => _tab = t);
+    final oldIdx = _tabOrder.indexOf(_tab);
+    final newIdx = _tabOrder.indexOf(t);
+    setState(() {
+      _slideDir = newIdx > oldIdx ? 1 : -1;
+      _tab = t;
+    });
     if (t == 'approvals') {
       _apprFuture ??= LeaveRepository().list('approvals');
     }
@@ -70,7 +84,22 @@ class _LeaveBodyState extends State<LeaveBody> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        const SizedBox(height: AppSpacing.sm),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text('Leave',
+                    style: AppText.display().copyWith(fontSize: 30, height: 1.05)),
+              ),
+              _LeaveFilterCircle(
+                active: _statusFilter,
+                onSelect: (s) => setState(() => _statusFilter = s),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
         _Actions(onRefresh: _refresh),
         const SizedBox(height: AppSpacing.lg),
         Padding(
@@ -79,11 +108,15 @@ class _LeaveBodyState extends State<LeaveBody> {
         ),
         const SizedBox(height: AppSpacing.lg),
         Expanded(
-          child: _tab == 'mine'
-              ? _LeaveList(future: _mineFuture, canAct: false, onRefresh: _refresh, emptyText: 'No leave requests yet — tap Request Leave.')
-              : _tab == 'approvals'
-                  ? _LeaveList(future: _apprFuture!, canAct: true, onRefresh: _refresh, emptyText: 'Nothing to approve — you’re all clear.')
-                  : const _SettingsPanel(),
+          child: SlidingSwitcher(
+            tabKey: _tab,
+            direction: _slideDir,
+            child: _tab == 'mine'
+                ? _LeaveList(future: _mineFuture, canAct: false, onRefresh: _refresh, emptyText: 'No leave requests yet — tap Request Leave.', statusFilter: _statusFilter)
+                : _tab == 'approvals'
+                    ? _LeaveList(future: _apprFuture!, canAct: true, onRefresh: _refresh, emptyText: 'Nothing to approve — you’re all clear.', statusFilter: _statusFilter)
+                    : const _SettingsPanel(),
+          ),
         ),
       ],
     );
@@ -343,19 +376,16 @@ class _TabTrack extends StatelessWidget {
   final String tab;
   final ValueChanged<String> onSelect;
   const _TabTrack({required this.tab, required this.onSelect});
+  static const _keys = ['mine', 'approvals', 'settings'];
   @override
   Widget build(BuildContext context) {
-    // Pressed track holding raised selected pills — the frontend's .kr-pressed
-    // > .kr-pop pattern. Three tabs, matching Leave.js: My Leave / Approvals
-    // / Settings.
-    return KrPressed(
-      borderRadius: BorderRadius.circular(AppRadius.pill),
-      padding: const EdgeInsets.all(4),
-      child: Row(mainAxisSize: MainAxisSize.max, children: [
-        Expanded(child: _TabPill(label: 'My Leave',  selected: tab == 'mine',      onTap: () => onSelect('mine'))),
-        Expanded(child: _TabPill(label: 'Approvals', selected: tab == 'approvals', onTap: () => onSelect('approvals'))),
-        Expanded(child: _TabPill(label: 'Settings',  selected: tab == 'settings',  onTap: () => onSelect('settings'))),
-      ]),
+    final active = _keys.indexOf(tab).clamp(0, _keys.length - 1);
+    return SlidingSegment(
+      active: active,
+      count: 3,
+      onSelect: (i) => onSelect(_keys[i]),
+      labels: const ['My Leave', 'Approvals', 'Settings'],
+      height: 40,
     );
   }
 }
@@ -399,11 +429,13 @@ class _LeaveList extends StatelessWidget {
   final bool canAct;
   final VoidCallback onRefresh;
   final String emptyText;
+  final String statusFilter; // 'all' or a specific status key
   const _LeaveList({
     required this.future,
     required this.canAct,
     required this.onRefresh,
     required this.emptyText,
+    this.statusFilter = 'all',
   });
 
   @override
@@ -426,7 +458,10 @@ class _LeaveList extends StatelessWidget {
             ),
           );
         }
-        final items = snap.data ?? const <LeaveRequest>[];
+        var items = snap.data ?? const <LeaveRequest>[];
+        if (statusFilter != 'all') {
+          items = items.where((l) => l.status == statusFilter).toList();
+        }
         if (items.isEmpty) {
           return Padding(
             padding: const EdgeInsets.all(AppSpacing.lg),
@@ -1207,6 +1242,98 @@ class _ReportAbsenceSheetState extends State<_ReportAbsenceSheet> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Round 36×36 filter button — opens a bottom-sheet status picker so
+/// the user can narrow both the Mine and Approvals lists to a specific
+/// leave status (or all).
+class _LeaveFilterCircle extends StatelessWidget {
+  final String active;
+  final ValueChanged<String> onSelect;
+  const _LeaveFilterCircle({required this.active, required this.onSelect});
+
+  static const _options = <(String, String)>[
+    ('all', 'All statuses'),
+    ('pending', 'Pending'),
+    ('approved', 'Approved'),
+    ('rejected', 'Rejected'),
+    ('info_requested', 'Info requested'),
+    ('cancelled', 'Cancelled'),
+  ];
+
+  Future<void> _open(BuildContext context) async {
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: 8),
+            Center(
+              child: Container(
+                width: 44, height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.hairlineStrong,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+              child: Text('Status',
+                  style: AppText.label().copyWith(fontSize: 11)),
+            ),
+            for (final o in _options)
+              InkWell(
+                onTap: () => Navigator.of(ctx).pop(o.$1),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 20, vertical: 12),
+                  child: Row(children: [
+                    Icon(
+                      o.$1 == active
+                          ? Icons.check_circle_rounded
+                          : Icons.radio_button_unchecked_rounded,
+                      size: 18,
+                      color: o.$1 == active
+                          ? AppColors.brand
+                          : AppColors.textTertiary,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(o.$2,
+                          style: AppText.body().copyWith(
+                              fontWeight: o.$1 == active
+                                  ? FontWeight.w600
+                                  : FontWeight.w400)),
+                    ),
+                  ]),
+                ),
+              ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+    if (picked != null) onSelect(picked);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return KrPop(
+      borderRadius: BorderRadius.circular(999),
+      padding: const EdgeInsets.all(10),
+      onTap: () => _open(context),
+      child: const Icon(Icons.tune_rounded,
+          size: 16, color: AppColors.textPrimary),
     );
   }
 }

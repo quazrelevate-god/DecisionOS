@@ -5,6 +5,7 @@ import '../models/models.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_bloom.dart';
 import '../widgets/app_header.dart';
+import '../widgets/segment.dart';
 import '../widgets/neumorphic.dart';
 import '../widgets/overlay_dock.dart';
 import '../widgets/states.dart';
@@ -28,6 +29,9 @@ class _CrmScreenState extends State<CrmScreen> {
   bool _showBuyers = true;
   String _statusFilter = 'all';
   _SortMode _sort = _SortMode.name;
+  // Direction for the sliding tab body: +1 when Buyers → Suppliers,
+  // -1 the other way. Buyers is slot 0, Suppliers slot 1.
+  int _slideDir = 1;
 
   @override
   void initState() {
@@ -74,31 +78,38 @@ class _CrmScreenState extends State<CrmScreen> {
                       const SizedBox(height: AppSpacing.md),
                       _ScopeSegment(
                         buyers: _showBuyers,
-                        onChanged: (b) => setState(() => _showBuyers = b),
+                        onChanged: (b) => setState(() {
+                          if (_showBuyers != b) _slideDir = b ? -1 : 1;
+                          _showBuyers = b;
+                        }),
                       ),
                       const SizedBox(height: AppSpacing.md),
-                      FutureBuilder<List<Contact>>(
-                        future: _future,
-                        builder: (context, snap) {
-                          if (snap.connectionState != ConnectionState.done) {
-                            return _skeleton();
-                          }
-                          if (snap.hasError) {
-                            return ErrorState(
-                              message: 'Could not load contacts.',
-                              onRetry: _reload,
-                            );
-                          }
-                          final list = _filterAndSort(snap.data ?? const []);
-                          if (list.isEmpty) {
-                            return const EmptyState(
-                              icon: Icons.person_search_outlined,
-                              title: 'No records match your filters.',
-                              subtitle: 'Try clearing the search or switching the scope.',
-                            );
-                          }
-                          return _ContactGrid(items: list);
-                        },
+                      SlidingSwitcher(
+                        tabKey: _showBuyers,
+                        direction: _slideDir,
+                        child: FutureBuilder<List<Contact>>(
+                          future: _future,
+                          builder: (context, snap) {
+                            if (snap.connectionState != ConnectionState.done) {
+                              return _skeleton();
+                            }
+                            if (snap.hasError) {
+                              return ErrorState(
+                                message: 'Could not load contacts.',
+                                onRetry: _reload,
+                              );
+                            }
+                            final list = _filterAndSort(snap.data ?? const []);
+                            if (list.isEmpty) {
+                              return const EmptyState(
+                                icon: Icons.person_search_outlined,
+                                title: 'No records match your filters.',
+                                subtitle: 'Try clearing the search or switching the scope.',
+                              );
+                            }
+                            return _ContactGrid(items: list);
+                          },
+                        ),
                       ),
                     ],
                   ),
@@ -232,18 +243,16 @@ class _SearchBar extends StatelessWidget {
   const _SearchBar({required this.onChanged});
   @override
   Widget build(BuildContext context) {
-    // Same pattern as the segments: raised outer track (KrPop) holding a
-    // sunken input well (KrPressed) — the search field reads as "pushed
-    // in" against the raised chip bar.
-    return KrPop(
-      borderRadius: BorderRadius.circular(AppRadius.pill),
-      padding: const EdgeInsets.all(4),
-      color: AppColors.surfaceMuted,
-      child: KrPressed(
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-        padding: const EdgeInsets.symmetric(horizontal: 14),
+    // Flat search field — no neumorphic depth. A single soft hairline
+    // border on a white pill, so it reads as an input, not a button.
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
         color: AppColors.surface,
-        child: Row(
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        border: Border.all(color: AppColors.hairline),
+      ),
+      child: Row(
           children: [
             const Icon(Icons.search_rounded,
                 size: 18, color: AppColors.textSecondary),
@@ -264,7 +273,6 @@ class _SearchBar extends StatelessWidget {
             ),
           ],
         ),
-      ),
     );
   }
 }
@@ -320,21 +328,16 @@ class _ScopeSegment extends StatelessWidget {
   const _ScopeSegment({required this.buyers, required this.onChanged});
   @override
   Widget build(BuildContext context) {
-    // Raised outer track = cool-grey muted; active pit = white surface
-    // so the selected half looks like a lit slot cut into the darker bar.
-    return KrPop(
-      borderRadius: BorderRadius.circular(AppRadius.pill),
-      padding: const EdgeInsets.all(4),
-      color: AppColors.surfaceMuted,
-      child: Row(
-        children: [
-          Expanded(child: _seg('Buyers', buyers, () => onChanged(true))),
-          Expanded(child: _seg('Suppliers', !buyers, () => onChanged(false))),
-        ],
-      ),
+    return SlidingSegment(
+      active: buyers ? 0 : 1,
+      count: 2,
+      onSelect: (i) => onChanged(i == 0),
+      labels: const ['Buyers', 'Suppliers'],
+      height: 44,
     );
   }
 
+  // ignore: unused_element
   Widget _seg(String label, bool active, VoidCallback onTap) {
     if (active) {
       return KrPressed(

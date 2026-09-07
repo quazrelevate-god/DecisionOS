@@ -379,7 +379,11 @@ function CrmContactDialog({ trigger, initial, onSaved, users, defaultType }) {
 // Backdrop pattern (not document.mousedown) avoids a race with React
 // 18 Strict Mode's dev-only double-invocation of effect setup, which
 // was closing the menu on the same click that opened it.
-function AddContactMenu({ canManage, canImport, csvBusy, onImport, customerLabel, vendorLabel }) {
+/* KM-27 — `compact` renders the trigger as a plain black circle with no label.
+   The founder's ask: drop the "+ Add contact" pill, put a black plus at the
+   right end of the SEARCH row, and let that row rise toward the title. The menu
+   itself is unchanged — only the button that opens it. */
+function AddContactMenu({ canManage, canImport, csvBusy, onImport, customerLabel, vendorLabel, compact = false }) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -404,10 +408,18 @@ function AddContactMenu({ canManage, canImport, csvBusy, onImport, customerLabel
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="kr-lift relative z-40 flex items-center gap-2 rounded-pill bg-kr-ink px-4 py-2.5 text-sm font-semibold text-white transition-all"
+        aria-label={compact ? "Add contact" : undefined}
+        className={compact
+          ? "relative z-40 grid h-11 w-11 shrink-0 place-items-center rounded-full bg-kr-ink text-white"
+          : "kr-lift relative z-40 flex items-center gap-2 rounded-pill bg-kr-ink px-4 py-2.5 text-sm font-semibold text-white transition-all"}
       >
-        <Plus size={16} weight="bold" /> Add contact
-        <span className={`text-white/70 transition-transform ${open ? "rotate-180" : ""}`}>▾</span>
+        <Plus size={compact ? 18 : 16} weight="bold" />
+        {!compact && (
+          <>
+            {" Add contact"}
+            <span className={`text-white/70 transition-transform ${open ? "rotate-180" : ""}`}>▾</span>
+          </>
+        )}
       </button>
       {open && (
         <>
@@ -647,7 +659,15 @@ export default function CRM() {
 
   return (
     <div>
-      <StickyHeader className="mb-5 flex flex-col gap-4 lg:mb-7 lg:flex-row lg:items-end lg:justify-between">
+      {/* KM-27 — the search row and the Buyers|Suppliers segment move INSIDE
+          the header. They were scrolling away with the list, which is exactly
+          backwards: they are the controls that act ON the list, so they should
+          be the last things to leave. Now the whole block pins and only the
+          cards move.
+          `gap-2.5`/`mb-2` rather than `gap-4`/`mb-5`: with three rows stacked,
+          the old spacing pushed the first card most of a thumb further down for
+          nothing. */}
+      <StickyHeader className="mb-2 flex flex-col gap-2.5 lg:mb-7 lg:flex-row lg:items-end lg:justify-between">
         <div>
           {/* KR-14.14 — eyebrow is hidden on mobile per the reference. */}
           <p className="hidden text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground lg:block">{t("crm.eyebrow", { customers: L.customer_plural.toLowerCase(), suppliers: L.vendor_plural.toLowerCase() })}</p>
@@ -659,8 +679,10 @@ export default function CRM() {
             HRM-minimalism -- one primary action, secondary paths tucked.
             Hidden input for CSV lives once at the page root and is
             triggered from the menu item. */}
+        {/* Desktop keeps the labelled pill. On mobile the same menu is opened
+            by the black plus at the end of the search row below. */}
         {(canManage || canImport) && (
-          <div className="flex items-center gap-2">
+          <div className="hidden items-center gap-2 lg:flex">
             {canImport && (
               <input
                 ref={csvInputRef}
@@ -697,84 +719,99 @@ export default function CRM() {
             />
           </div>
         )}
+        {/* KR-14.14 · MOBILE — full-width search + sliders filter circle
+            (opens a dropdown with the status/sort selects). Followed by a
+            segmented [Buyers | Suppliers] pill. Hidden from lg up where the
+            desktop layout below takes over. */}
+        <div className="mb-4 flex items-center gap-2 lg:hidden">
+          <div className="relative flex-1">
+            <MagnifyingGlass size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+            <input
+              data-testid="crm-search-mobile"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder={t("crm.search_ph")}
+              className="h-11 w-full rounded-pill border border-nm-edge/40 bg-white/70 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-kr-ink/20"
+            />
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button type="button" data-testid="crm-mobile-filter"
+                aria-label={t("crm.filter", "Filter")}
+                className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white text-foreground shadow-[0_1px_2px_rgba(0,0,0,0.06)]">
+                <SlidersHorizontal size={18} weight="regular" aria-hidden="true" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" sideOffset={8} className="min-w-[13rem]">
+              <DropdownMenuLabel>{t("crm.all_statuses")}</DropdownMenuLabel>
+              <DropdownMenuItem onSelect={() => setStatus("")}
+                className={`justify-between ${status === "" ? "font-medium" : ""}`}>
+                <span>{t("crm.all_statuses")}</span>
+              </DropdownMenuItem>
+              {STATUSES.map((s) => (
+                <DropdownMenuItem key={s} onSelect={() => setStatus(s)}
+                  className={`justify-between capitalize ${status === s ? "font-medium" : ""}`}>
+                  <span>{s}</span>
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Sort</DropdownMenuLabel>
+              {SORT_OPTIONS.map((o) => (
+                <DropdownMenuItem key={o.key} onSelect={() => setSort(o.key)}
+                  className={`justify-between ${sort === o.key ? "font-medium" : ""}`}>
+                  <span>{o.label}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* KM-27 — the black plus that replaced the "+ Add contact" pill.
+              It rides at the end of the search row so the row can sit directly
+              under the title instead of below a CTA of its own. */}
+          {(canManage || canImport) && (
+            <AddContactMenu
+              compact
+              canManage={canManage}
+              canImport={canImport}
+              csvBusy={csvBusy}
+              onImport={() => csvInputRef.current?.click()}
+              customerLabel={L.customer_singular}
+              vendorLabel={L.vendor_singular}
+            />
+          )}
+        </div>
+
+        {/* KR-14.14 · MOBILE — Buyers | Suppliers as a single segmented pill,
+            the active half filled ink. Hidden from lg up. */}
+        {/* KM-5 — Buyers | Suppliers as a neumorphic segmented bar. Was a
+            welded pair of hairline pills with a solid ink fill on the active
+            one; every other page-level "pick one of these two" control in the
+            app is now a .kr-pressed track with a raised .kr-pop segment, and
+            this was the last one still painting selection as a fill.
+            No transition utility — the segments swap between an outset and an
+            inset shadow pair, which do not interpolate. */}
+        <div className="kr-pressed mb-4 flex items-center gap-1 rounded-pill p-1 lg:hidden"
+             role="group" aria-label="Contact type" data-testid="crm-scope-mobile">
+          {SCOPES.map((s) => {
+            const active = scope === s.key;
+            return (
+              <button
+                key={s.key}
+                type="button"
+                onClick={() => setScope(s.key)}
+                aria-pressed={active}
+                data-testid={`crm-scope-mobile-${s.key}`}
+                className={`flex h-10 flex-1 items-center justify-center gap-2 rounded-pill text-sm ${
+                  active ? "kr-pop font-semibold text-foreground" : "text-foreground/60"
+                }`}
+              >
+                {s.label}
+              </button>
+            );
+          })}
+        </div>
       </StickyHeader>
 
-      {/* KR-14.14 · MOBILE — full-width search + sliders filter circle
-          (opens a dropdown with the status/sort selects). Followed by a
-          segmented [Buyers | Suppliers] pill. Hidden from lg up where the
-          desktop layout below takes over. */}
-      <div className="mb-4 flex items-center gap-2 lg:hidden">
-        <div className="relative flex-1">
-          <MagnifyingGlass size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-          <input
-            data-testid="crm-search-mobile"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder={t("crm.search_ph")}
-            className="h-11 w-full rounded-pill border border-nm-edge/40 bg-white/70 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-kr-ink/20"
-          />
-        </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button type="button" data-testid="crm-mobile-filter"
-              aria-label={t("crm.filter", "Filter")}
-              className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white text-foreground shadow-[0_1px_2px_rgba(0,0,0,0.06)]">
-              <SlidersHorizontal size={18} weight="regular" aria-hidden="true" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" sideOffset={8} className="min-w-[13rem]">
-            <DropdownMenuLabel>{t("crm.all_statuses")}</DropdownMenuLabel>
-            <DropdownMenuItem onSelect={() => setStatus("")}
-              className={`justify-between ${status === "" ? "font-medium" : ""}`}>
-              <span>{t("crm.all_statuses")}</span>
-            </DropdownMenuItem>
-            {STATUSES.map((s) => (
-              <DropdownMenuItem key={s} onSelect={() => setStatus(s)}
-                className={`justify-between capitalize ${status === s ? "font-medium" : ""}`}>
-                <span>{s}</span>
-              </DropdownMenuItem>
-            ))}
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel>Sort</DropdownMenuLabel>
-            {SORT_OPTIONS.map((o) => (
-              <DropdownMenuItem key={o.key} onSelect={() => setSort(o.key)}
-                className={`justify-between ${sort === o.key ? "font-medium" : ""}`}>
-                <span>{o.label}</span>
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
-      {/* KR-14.14 · MOBILE — Buyers | Suppliers as a single segmented pill,
-          the active half filled ink. Hidden from lg up. */}
-      {/* KM-5 — Buyers | Suppliers as a neumorphic segmented bar. Was a
-          welded pair of hairline pills with a solid ink fill on the active
-          one; every other page-level "pick one of these two" control in the
-          app is now a .kr-pressed track with a raised .kr-pop segment, and
-          this was the last one still painting selection as a fill.
-          No transition utility — the segments swap between an outset and an
-          inset shadow pair, which do not interpolate. */}
-      <div className="kr-pressed mb-4 flex items-center gap-1 rounded-pill p-1 lg:hidden"
-           role="group" aria-label="Contact type" data-testid="crm-scope-mobile">
-        {SCOPES.map((s) => {
-          const active = scope === s.key;
-          return (
-            <button
-              key={s.key}
-              type="button"
-              onClick={() => setScope(s.key)}
-              aria-pressed={active}
-              data-testid={`crm-scope-mobile-${s.key}`}
-              className={`flex h-10 flex-1 items-center justify-center gap-2 rounded-pill text-sm ${
-                active ? "kr-pop font-semibold text-foreground" : "text-foreground/60"
-              }`}
-            >
-              {s.label}
-            </button>
-          );
-        })}
-      </div>
 
       {/* U7-07 (2026-08-17): HRM-style segmented tabs -- Buyers | Suppliers.
           KR-14.14 — DESKTOP ONLY (hidden below lg); the mobile scope pill

@@ -213,7 +213,16 @@ export default function Layout({ children }) {
      space to the page title, which is what the founder asked for. */
   const [headerSlot, setHeaderSlot] = useState(null);
   const isMobileShell = useIsMobile();
+  /* KM-27 — /inbox opts OUT of the collapse, on the founder's call. The Desk
+     has no page title to promote: its heading IS the greeting, which belongs to
+     the hero rather than to a chrome row, so folding the wordmark away left an
+     empty strip and promoted nothing into it. Every other room has a title and
+     a control row worth keeping on screen. */
+  const collapsingShell = !location.pathname.startsWith("/inbox");
   const [brandGone, setBrandGone] = useState(false);
+  // Declared AFTER brandGone: reading it above its useState is a temporal dead
+  // zone, which is exactly how the first cut of this white-screened.
+  const brandFolded = brandGone && collapsingShell;
 
   // MPWA-12f: an empty state whose primary action is "tell Dex to start one" has
   // to be able to open the sheet, and the sheet's state lives here. A window
@@ -544,11 +553,11 @@ export default function Layout({ children }) {
         <div className="lg:hidden shrink-0">
           <header
             data-testid="mobile-brand-row"
-            aria-hidden={brandGone}
+            aria-hidden={brandFolded}
             className={cn(
               "flex items-center justify-between gap-2 overflow-hidden px-gutter-safe bg-transparent",
               "transition-[max-height,opacity,padding-top] duration-300 ease-out motion-reduce:transition-none",
-              brandGone
+              brandFolded
                 ? "pointer-events-none max-h-0 pt-0 opacity-0"
                 : "min-h-14 max-h-24 pt-safe opacity-100"
             )}
@@ -558,11 +567,15 @@ export default function Layout({ children }) {
               <Bellicon mobile />
             </div>
           </header>
-          {/* A page's header lands here. Zero-height on routes with none. */}
+          {/* A page's header lands here. Zero-height on routes with none.
+              KM-27 — the title landed hard against the top edge once the brand
+              row folded away. `pt-3` on top of the safe inset gives it the
+              breathing room the wordmark had, so the promotion reads as the
+              title taking that place rather than being shoved into it. */}
           <div
             ref={setHeaderSlot}
             data-testid="page-header-slot"
-            className={cn("px-gutter-safe", brandGone && "pt-safe")}
+            className={cn("px-gutter-safe", brandFolded && "pt-safe pt-3")}
           />
         </div>
 
@@ -583,6 +596,7 @@ export default function Layout({ children }) {
         <main
           ref={mainRef}
           onScroll={(e) => {
+            if (!collapsingShell) return;
             const y = e.currentTarget.scrollTop;
             setBrandGone((was) => (was ? y > 2 : y > 4));
           }}

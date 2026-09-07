@@ -2175,7 +2175,7 @@ export default function MyWork() {
   return (
     <div>
       {/* ─── MOBILE HEADER (below lg) ───────────────────────────────────── */}
-      <StickyHeader className="mb-5 flex flex-col gap-3 lg:hidden" data-testid="mywork-mobile-header">
+      <StickyHeader className="mb-2 flex flex-col gap-2.5 lg:hidden" data-testid="mywork-mobile-header">
         {/* Row 1 — title left, the two DESTINATIONS right.
             Workflows and Leave are the only two controls in this header that
             are not lenses on the task list — they replace the list with a

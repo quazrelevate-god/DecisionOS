@@ -9,16 +9,17 @@
 // two-tone split survives: "Decision" at full ink, "OS" dropped back, so the
 // product name still reads as one word with a suffix rather than two words.
 //
-// The sparkle is the same glyph the AI Priority control wears in My Work,
-// and reusing it is the point: one mark for "there is a model behind this",
-// wherever it appears. Translucent ink, sitting off the wordmark's top-right
-// like a superscript — present, not announcing itself.
+// KM-23 — the superscript sparkle is GONE, on the founder's call. At the 9-12px
+// it actually shipped at, dropped to 45% ink and hung off the S, it did not read
+// as a sparkle: it read as a stray plus sign glued to the wordmark. A mark that
+// needs explaining at the size it ships is not earning its place. The glyph still
+// means "there is a model behind this" everywhere it has room to be legible —
+// the AI Priority control in My Work, the Dex FAB — just not at 9px.
 //
 // The PNG Wordmark component survives untouched for Landing/Login (the
 // marketing surfaces keep the registered lockup); only the app shell wears
 // this one.
 import * as React from "react";
-import { Sparkle } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 
 export function KarmaLogo({ size = "md", className }) {
@@ -26,23 +27,11 @@ export function KarmaLogo({ size = "md", className }) {
     size === "sm" ? "text-[16px]"
     : size === "lg" ? "text-[22px]"
     : "text-[19px]";
-  const star =
-    size === "sm" ? 9
-    : size === "lg" ? 12
-    : 10;
   return (
     <span className={cn("inline-flex select-none items-start", className)} data-testid="karma-logo">
       <span className={cn("font-semibold leading-none tracking-tight text-foreground", word)}>
         Decision<span className="opacity-55">OS</span>
       </span>
-      {/* -ml-px so it hangs off the S rather than adding a word-space, and
-          -mt-px to sit it on the cap line instead of the baseline. */}
-      <Sparkle
-        size={star}
-        weight="fill"
-        aria-hidden="true"
-        className="-ml-px -mt-px shrink-0 text-kr-ink/45"
-      />
     </span>
   );
 }

@@ -1,69 +1,164 @@
-// KM-11 · DexWave — the voice visual that lives INSIDE the bottom bar.
-//
-// The founder's reference is three overlapping ribbons on a hairline: a
-// translucent white one, a dark grey one and a gold one, each a long lens
-// shape that swells at its middle and tapers to nothing at both ends, laid
-// over each other at different offsets so their overlaps read as a third and
-// fourth tone. Not an orb, not a bar chart — a ribbon.
-//
-// HOW IT REACTS. `levels` is the live amplitude array from useDexCapture. Each
-// ribbon reads a different slice of it, so the three do not move as one block:
-// the white one tracks the middle of the spectrum, grey the low end, gold the
-// high end. With no signal they settle to a low idle swell rather than a flat
-// line, because a dead line reads as "broken" and a breathing one reads as
-// "listening".
-//
-// WHY SVG PATHS AND NOT DIVS. A lens that tapers to a point at both ends is a
-// curve, and the overlap tones only work if the shapes are genuinely
-// translucent and genuinely overlapping. Three <path>s with fill-opacity do
-// that in one repaint; the same thing in DOM would be a stack of clipped,
-// transformed boxes fighting each other's anti-aliasing.
 import * as React from "react";
 
-const W = 240;   // viewBox units; the SVG scales to the bar
+// KM-23 · DexWave — the voice surface, rebuilt.
+//
+// WHAT THIS REPLACED. Three "lens" blobs whose `d` was recomputed on render and
+// eased between with `transition: d 90ms`. Two things made it read as amateur.
+// It was not a wave: a lens that swells in the middle and tapers at both ends is
+// a leaf, and three leaves at different offsets is a logo, not motion. And it
+// moved on React's clock — a state write per audio frame, each one a re-render,
+// each one a 90ms CSS ease chasing the last, so the shape arrived late and in
+// steps. You could see it ticking.
+//
+// WHAT IT IS NOW. Real waves on a real clock. Each layer is a travelling sum of
+// sines sampled across the width, redrawn every animation frame by writing `d`
+// straight to the path node — no React state, no re-render, no CSS transition
+// racing the next frame. Layers run at different frequencies, speeds and
+// directions, so where they cross they produce interference the eye reads as
+// depth rather than as three copies of one line.
+//
+// WHY A SUM OF SINES AND NOT ONE. A single sine is a test pattern — perfectly
+// periodic, and the eye locks onto the repeat within a second. Adding a second
+// and third component at incommensurate frequencies (1, 2.3, 0.55 here) gives a
+// period long enough that it never visibly repeats, which is the whole
+// difference between "animated" and "alive".
+//
+// THE EDGE ENVELOPE. Every layer is multiplied by sin(pi * x)^0.8, so amplitude
+// is zero at both ends and full in the middle. Without it the waves get sliced
+// off flat against the viewBox and the whole thing reads as a crop of something
+// bigger; with it they resolve into the surface at both ends.
+//
+// FOUR STATES, one amplitude envelope each:
+//   idle       a slow, shallow swell — present, not asking for anything
+//   listening  amplitude tracks the mic (0..1), fast and tight
+//   thinking   a rhythmic pulse, breathing in and out on a fixed cycle
+//   speaking   two incommensurate envelopes multiplied, so the motion has the
+//              uneven cadence of speech instead of a metronome
+const W = 240;
 const H = 44;
 const CY = H / 2;
+const SEGMENTS = 64;
+
+// Each layer: its own frequency, travel speed (sign = direction), a share of the
+// amplitude, a vertical offset, and its gradient. Gold sits on top and is the
+// narrowest and fastest, so it reads as the highlight riding the others.
+const LAYERS = [
+  { freq: 1.00, speed: -0.55, amp: 1.00, lift: 0.6, fill: "url(#dxGrey)", op: 0.55 },
+  { freq: 1.45, speed: 0.80, amp: 0.82, lift: -0.4, fill: "url(#dxWhite)", op: 0.72 },
+  { freq: 2.10, speed: 1.25, amp: 0.58, lift: 0.0, fill: "url(#dxGold)", op: 0.85 },
+];
+
+const STATE_TUNE = {
+  idle: { base: 0.10, gain: 0.00, rate: 0.55 },
+  listening: { base: 0.14, gain: 0.86, rate: 1.85 },
+  thinking: { base: 0.30, gain: 0.00, rate: 1.10 },
+  speaking: { base: 0.34, gain: 0.30, rate: 1.45 },
+};
+
+/** Amplitude envelope in 0..1 for a state at time t (seconds) and mic level. */
+function envelope(state, t, level) {
+  const k = STATE_TUNE[state] || STATE_TUNE.idle;
+  if (state === "thinking") {
+    // A clean breath: one slow cycle, never reaching zero so the surface
+    // never looks switched off mid-thought.
+    return k.base * (0.55 + 0.45 * Math.sin(t * 2.2));
+  }
+  if (state === "speaking") {
+    // Two envelopes at incommensurate rates, multiplied. Speech is not a
+    // metronome, and a single sine here is instantly recognisable as one.
+    const a = 0.62 + 0.38 * Math.sin(t * 3.1);
+    const b = 0.72 + 0.28 * Math.sin(t * 1.7 + 1.1);
+    return k.base * a * b + k.gain * level * 0.5;
+  }
+  if (state === "listening") return k.base + k.gain * level;
+  return k.base * (0.75 + 0.25 * Math.sin(t * 1.3));
+}
+
+/** One layer's path: a closed ribbon around the centre line. */
+function ribbonPath(layer, t, amp) {
+  const half = (CY - 3) * amp * layer.amp;
+  const top = [];
+  const bottom = [];
+  for (let i = 0; i <= SEGMENTS; i++) {
+    const p = i / SEGMENTS;
+    const x = p * W;
+    // Zero at both ends, full in the middle — see THE EDGE ENVELOPE above.
+    const edge = Math.pow(Math.sin(Math.PI * p), 0.8);
+    const phase = p * Math.PI * 2 * layer.freq + t * layer.speed * Math.PI;
+    const y =
+      Math.sin(phase) +
+      0.42 * Math.sin(phase * 2.3 + t * 0.7) +
+      0.22 * Math.sin(phase * 0.55 - t * 0.5);
+    const h = (y / 1.64) * half * edge;
+    const mid = CY + layer.lift * amp * 4;
+    top.push(`${x.toFixed(2)} ${(mid - Math.abs(h) - 0.4).toFixed(2)}`);
+    bottom.push(`${x.toFixed(2)} ${(mid + Math.abs(h) + 0.4).toFixed(2)}`);
+  }
+  bottom.reverse();
+  return `M ${top.join(" L ")} L ${bottom.join(" L ")} Z`;
+}
 
 /**
- * A symmetric lens from x0 to x1, swelling to `amp` at `peak` (0..1 across its
- * own span). Drawn as two mirrored cubics so the top and bottom halves meet at
- * a point rather than a seam.
+ * @param {"idle"|"listening"|"thinking"|"speaking"} [state]
+ * @param {number}   [level]   live mic amplitude 0..1 (listening)
+ * @param {number[]} [levels]  legacy: an array of bar levels; averaged to `level`
+ * @param {boolean}  [live]    legacy: true === listening
  */
-function ribbon(x0, x1, amp, peak = 0.5) {
-  const span = x1 - x0;
-  const px = x0 + span * peak;
-  const c1 = x0 + span * peak * 0.55;
-  const c2 = px - span * 0.08;
-  const c3 = px + span * 0.08;
-  const c4 = x1 - span * (1 - peak) * 0.55;
-  return [
-    `M ${x0} ${CY}`,
-    `C ${c1} ${CY - amp} ${c2} ${CY - amp} ${px} ${CY - amp}`,
-    `C ${c3} ${CY - amp} ${c4} ${CY} ${x1} ${CY}`,
-    `C ${c4} ${CY + amp} ${c3} ${CY + amp} ${px} ${CY + amp}`,
-    `C ${c2} ${CY + amp} ${c1} ${CY} ${x0} ${CY}`,
-    "Z",
-  ].join(" ");
-}
+export function DexWave({ state, level, levels, live = false, className }) {
+  const pathRefs = React.useRef([]);
+  const lineRef = React.useRef(null);
 
-/** Mean of a slice of the level array, 0..1. */
-function band(levels, from, to) {
-  if (!levels || !levels.length) return 0;
-  const a = Math.floor(levels.length * from);
-  const b = Math.max(a + 1, Math.floor(levels.length * to));
-  let sum = 0;
-  for (let i = a; i < b && i < levels.length; i++) sum += levels[i] || 0;
-  return sum / (b - a);
-}
+  // Legacy call sites (the dock, the onboarding interview) pass `levels`+`live`.
+  const derived =
+    typeof level === "number"
+      ? level
+      : Array.isArray(levels) && levels.length
+        ? levels.reduce((a, b) => a + (b || 0), 0) / levels.length
+        : 0;
+  const resolved = state || (live ? "listening" : "idle");
 
-export function DexWave({ levels = [], live = false, className }) {
-  // Idle keeps a small swell so the surface is alive before you speak.
-  const IDLE = 0.16;
-  const amp = (v) => 3 + Math.min(1, live ? IDLE + v * 1.5 : IDLE) * (CY - 5);
+  // Refs, not state: the loop reads the newest value every frame without the
+  // component re-rendering, which is the entire point of the rewrite.
+  const stateRef = React.useRef(resolved);
+  const levelRef = React.useRef(0);
+  stateRef.current = resolved;
 
-  const grey = amp(band(levels, 0, 0.34));
-  const white = amp(band(levels, 0.33, 0.67));
-  const gold = amp(band(levels, 0.66, 1));
+  React.useEffect(() => {
+    const reduced =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+    let raf = 0;
+    const t0 = performance.now();
+    // The mic is jumpy at frame rate. Smoothing toward the target rather than
+    // snapping is what separates a level meter from a wave.
+    const smooth = { v: 0 };
+
+    const frame = (now) => {
+      const t = (now - t0) / 1000;
+      const target = Math.max(0, Math.min(1, levelRef.current));
+      smooth.v += (target - smooth.v) * 0.18;
+      const amp = envelope(stateRef.current, t * (STATE_TUNE[stateRef.current] || STATE_TUNE.idle).rate, smooth.v);
+      for (let i = 0; i < LAYERS.length; i++) {
+        const node = pathRefs.current[i];
+        if (node) node.setAttribute("d", ribbonPath(LAYERS[i], t * (STATE_TUNE[stateRef.current] || STATE_TUNE.idle).rate, amp));
+      }
+      if (lineRef.current) lineRef.current.setAttribute("opacity", String(0.28 + amp * 0.7));
+      raf = requestAnimationFrame(frame);
+    };
+
+    if (reduced) {
+      // Draw one settled frame and stop. Motion is the accessibility problem
+      // here, not the shape, so the shape stays.
+      const amp = envelope("idle", 0, 0);
+      LAYERS.forEach((l, i) => pathRefs.current[i]?.setAttribute("d", ribbonPath(l, 0, amp)));
+      return undefined;
+    }
+    raf = requestAnimationFrame(frame);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  levelRef.current = derived;
 
   return (
     <svg
@@ -71,20 +166,46 @@ export function DexWave({ levels = [], live = false, className }) {
       preserveAspectRatio="none"
       aria-hidden="true"
       className={className}
-      style={{ display: "block", width: "100%", height: "100%" }}
+      style={{ display: "block", width: "100%", height: "100%", overflow: "visible" }}
+      data-dex-state={resolved}
     >
-      {/* The hairline the ribbons sit on — it is what makes them read as a
-          waveform rather than three floating blobs. */}
-      <line x1="0" y1={CY} x2={W} y2={CY} stroke="rgba(255,255,255,.55)" strokeWidth="0.6" />
+      <defs>
+        {/* Horizontal gradients, not flat fills: a ribbon that is the same
+            colour end to end reads as a sticker. Fading the ends also hides
+            where the envelope has taken the amplitude to nothing. */}
+        <linearGradient id="dxGrey" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="rgb(190,196,205)" stopOpacity="0" />
+          <stop offset="35%" stopColor="rgb(206,212,220)" stopOpacity=".85" />
+          <stop offset="70%" stopColor="rgb(168,176,188)" stopOpacity=".7" />
+          <stop offset="100%" stopColor="rgb(190,196,205)" stopOpacity="0" />
+        </linearGradient>
+        <linearGradient id="dxWhite" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#fff" stopOpacity="0" />
+          <stop offset="45%" stopColor="#fff" stopOpacity=".95" />
+          <stop offset="100%" stopColor="#fff" stopOpacity="0" />
+        </linearGradient>
+        <linearGradient id="dxGold" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="hsl(44 88% 60%)" stopOpacity="0" />
+          <stop offset="30%" stopColor="hsl(44 92% 66%)" stopOpacity=".9" />
+          <stop offset="65%" stopColor="hsl(36 90% 58%)" stopOpacity=".8" />
+          <stop offset="100%" stopColor="hsl(44 88% 60%)" stopOpacity="0" />
+        </linearGradient>
+      </defs>
 
-      {/* Painted back to front: grey, then white, then gold. The overlaps are
-          the point, so every fill is translucent. */}
-      <path d={ribbon(28, 176, grey, 0.42)} fill="rgba(190,196,205,.42)"
-        style={{ transition: "d 90ms linear" }} />
-      <path d={ribbon(56, 214, white, 0.46)} fill="rgba(255,255,255,.62)"
-        style={{ transition: "d 90ms linear" }} />
-      <path d={ribbon(92, 236, gold, 0.52)} fill="rgba(214,168,52,.62)"
-        style={{ transition: "d 90ms linear" }} />
+      {/* The hairline the ribbons sit on — it is what makes them read as one
+          surface rather than three floating shapes. Its opacity tracks the
+          amplitude so it fades back as the waves take over. */}
+      <line ref={lineRef} x1="0" y1={CY} x2={W} y2={CY} stroke="rgba(255,255,255,.5)" strokeWidth="0.6" />
+
+      {LAYERS.map((l, i) => (
+        <path
+          key={i}
+          ref={(n) => { pathRefs.current[i] = n; }}
+          fill={l.fill}
+          fillOpacity={l.op}
+          style={{ mixBlendMode: i === 0 ? "normal" : "screen" }}
+        />
+      ))}
     </svg>
   );
 }

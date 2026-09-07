@@ -50,6 +50,19 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false } =
   const audioRef = useRef(null); // { ctx, analyser, data, raf, interval }
   const pollRef = useRef(null);
   const aliveRef = useRef(true);
+  /* KM-23 · the DISMISS token, and why aliveRef was not enough.
+     aliveRef answers "is the component still mounted". It does not answer "does
+     the user still want this card", and those came apart in the one place it
+     mattered: `step` awaits a GET before it writes state, so dismissing the
+     card while a request was in flight cleared `understanding`, the request
+     then resolved, and the resumed continuation called setUnderstanding and
+     brought the card straight back. That is the ghost card — a black sheet
+     re-opening seconds after you closed it, with no way to make it stop except
+     closing it again after every poll.
+     Every write inside a follow() is now gated on the generation that started
+     it. clearUnderstanding bumps the counter, so an in-flight poll from the
+     dismissed run finds itself stale and drops its result on the floor. */
+  const followRef = useRef(0);
 
   useEffect(() => {
     onRecordingChange?.(recording, recordSecs);
@@ -90,10 +103,13 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false } =
   /** Poll one note until it is structured, then read the decision it produced. */
   const follow = useCallback(async (noteId, seed = {}) => {
     const startedAt = Date.now();
+    const gen = ++followRef.current;
+    // Mounted AND still the run the user is looking at.
+    const live = () => aliveRef.current && followRef.current === gen;
     setUnderstanding({ noteId, status: "queued", ...seed });
 
     const step = async () => {
-      if (!aliveRef.current) return;
+      if (!live()) return;
       try {
         const note = (await api.get(`/voice-notes/${noteId}`)).data || {};
         const base = {
@@ -121,26 +137,26 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false } =
             );
             tasks = got.filter(Boolean);
           }
-          if (!aliveRef.current) return;
+          if (!live()) return;
           setUnderstanding({ ...base, decisionId: note.decision_id, decision, tasks });
           return;
         }
         if (note.status === "failed") {
-          if (aliveRef.current) setUnderstanding({ ...base, status: "failed" });
+          if (live()) setUnderstanding({ ...base, status: "failed" });
           return;
         }
         if (Date.now() - startedAt > POLL_TIMEOUT_MS) {
           // Still working. Say so plainly instead of spinning forever — it did
           // land, and the Desk is where it shows up.
-          if (aliveRef.current) setUnderstanding({ ...base, status: "slow" });
+          if (live()) setUnderstanding({ ...base, status: "slow" });
           return;
         }
-        if (aliveRef.current) {
+        if (live()) {
           setUnderstanding(base);
           pollRef.current = setTimeout(step, POLL_MS);
         }
       } catch {
-        if (aliveRef.current) setUnderstanding((u) => (u ? { ...u, status: "failed" } : u));
+        if (live()) setUnderstanding((u) => (u ? { ...u, status: "failed" } : u));
       }
     };
     pollRef.current = setTimeout(step, 400);
@@ -268,6 +284,9 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false } =
   /** Drop the understanding card and stop following the note. */
   const clearUnderstanding = useCallback(() => {
     clearTimeout(pollRef.current);
+    // Retire the generation as well as the timer: a poll already awaiting a
+    // response cannot be cancelled, only ignored when it comes back.
+    followRef.current += 1;
     setUnderstanding(null);
   }, []);
 

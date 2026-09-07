@@ -38,7 +38,7 @@ import { WelcomeOverlay } from "./WelcomeOverlay";
 import { FloatingDock } from "./mobile/FloatingDock";
 import { AllAppsPanel } from "./mobile/AllAppsPanel";
 import { DexFab } from "./mobile/DexFab";
-import { DexSheet } from "./mobile/DexSheet";
+import { DexChat } from "./mobile/DexChat";
 import { useDexCapture } from "../hooks/useDexCapture";
 import { BottomSheet } from "./mobile/BottomSheet";
 import { InstallPrompt } from "./mobile/InstallPrompt";
@@ -557,12 +557,13 @@ export default function Layout({ children }) {
       <div className="kr-vignette lg:hidden" data-on={dex.recording ? "1" : "0"}
            data-testid="dex-vignette" aria-hidden="true" />
 
-      {/* KM-11 — tapping Dex starts LISTENING; it no longer opens a sheet.
-          The bar becomes the voice surface (see FloatingDock), and the sheet
-          below is left for the one thing the bar cannot do: show what Dex
-          understood once you stop talking. */}
+      {/* KM-23 — the FAB opens the CONVERSATION again, and this time it is a
+          conversation. KM-11 had made it a bare record toggle because the old
+          sheet was only a receipt; DexChat is a transcript you can ask into,
+          type into and attach to, so there is something worth opening. Voice
+          still starts one tap in, from the mic inside it. */}
       <DexFab
-        onOpen={() => (dex.recording ? dex.stopRecording() : dex.startRecording())}
+        onOpen={() => setDexOpen(true)}
         recording={dex.recording}
         seconds={dex.recordSecs}
         onStop={() => dex.stopRecording()}
@@ -579,17 +580,16 @@ export default function Layout({ children }) {
       />
       {/* MPWA-05: third session, dismissible, above the dock (§8). */}
       <InstallPrompt />
-      {/* KM-11 — opens ONLY once Dex has something to show. The founder asked
-          for the black card that slid up on tap to go, not for the confirmation
-          step to disappear: after you stop talking you still have to see what
-          was heard before it becomes work. So the sheet is driven by
-          `understanding` rather than by the FAB. */}
-      <DexSheet
-        open={!!dex.understanding}
-        onClose={() => dex.clearUnderstanding?.()}
-        onRecordingChange={(on, secs) => setDexRecording({ on, secs })}
-        onCaptured={() => qc.invalidateQueries({ queryKey: ["captures-pending"] })}
-      />
+      {/* KM-23 — one surface, opened deliberately, closed for good.
+          The old DexSheet was mounted on `!!dex.understanding`, so it let
+          itself back in: finish a capture, dismiss the card, and the next poll
+          re-populated `understanding` and the black sheet reappeared on its
+          own. That is the ghost card the founder reported. The chat is driven
+          by an explicit `dexOpen` instead, and a finished capture becomes a
+          message inside it rather than a window of its own. (The poll that
+          caused the re-open is separately fenced — see the dismiss token in
+          useDexCapture.) */}
+      <DexChat open={dexOpen} onClose={() => setDexOpen(false)} dex={dex} />
       {/* The Language tile opens the existing switcher in a thumb-reachable
           sheet rather than duplicating the language list. */}
       <BottomSheet

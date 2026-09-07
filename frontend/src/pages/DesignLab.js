@@ -23,6 +23,10 @@ import {
 // /signup, behind a real registration, so this gallery is the only place it
 // can be looked at without creating a tenant to see it.
 import { DexForge } from "./onboarding/DexForge";
+// KM-23 — the voice surface in all four of its states. It only ever appears
+// inside the dock while the mic is live, so this is the one place the idle,
+// thinking and speaking states can be looked at without recording something.
+import { DexWave } from "../components/mobile/DexWave";
 
 const SCREENS = [
   { path: "/inbox", label: "Desk · now" },
@@ -266,6 +270,25 @@ function KarmaGallery() {
   return (
     <section className="mb-10" data-testid="karma-gallery">
       <h2 className="text-h2 mb-3">Karma kit</h2>
+
+      {/* KM-23 · DexWave — all four states side by side, on ink, which is the
+          only surface it is ever drawn on. `level` is faked with a slow sine
+          for the listening lane so it moves without a microphone. */}
+      <div className="mb-6 rounded-cardlg bg-kr-ink p-5">
+        <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-white/45">
+          DexWave · idle · listening · thinking · speaking
+        </p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {["idle", "listening", "thinking", "speaking"].map((st) => (
+            <div key={st}>
+              <p className="mb-1.5 text-[10px] uppercase tracking-[0.14em] text-white/35">{st}</p>
+              <div className="h-11 w-full overflow-hidden rounded-pill bg-white/[.04]">
+                <DexWave state={st} level={st === "listening" ? undefined : 0} levels={st === "listening" ? [0.7] : undefined} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
 
       {/* KM-19 · DexForge — onboarding's build animation, on the same ground
           the app uses, so a change to .kr-pop or .kr-pressed shows up here. */}

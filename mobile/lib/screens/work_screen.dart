@@ -81,8 +81,12 @@ class _WorkScreenState extends State<WorkScreen> {
   void _toggleAi() {
     setState(() {
       _aiPriority = !_aiPriority;
+      // Reset to 'All' when toggling AI so the priority-sorted list
+      // isn't hidden behind a category filter. Category filtering
+      // still works normally; AI just always starts from the whole
+      // set so the ranking is meaningful.
+      if (_aiPriority) _tab = 'all';
     });
-    // Lazy-fetch prioritized list on first turn-on; the getter handles it.
     if (_aiPriority) {
       _aiFuture ??= TasksRepository().prioritize();
     }
@@ -193,10 +197,13 @@ class _WorkScreenState extends State<WorkScreen> {
                   const SizedBox(height: AppSpacing.md),
                   Expanded(
                     child: SlidingSwitcher(
-                      // Key on the scope so switching My ↔ All slides the
-                      // list; category-tab changes don't re-key so they
-                      // just refilter without motion.
-                      tabKey: _aiPriority ? 'ai' : (_mine ? 'mine' : 'all'),
+                      // Key ONLY on scope (mine vs all). AI-priority
+                      // toggles keep the same tab visually — the list
+                      // just re-orders in place. Including 'ai' here was
+                      // triggering an extra slide on top of the segment
+                      // pit animation, which read as the page switching
+                      // twice.
+                      tabKey: _mine ? 'mine' : 'all',
                       direction: _slideDir,
                       child: body,
                     ),

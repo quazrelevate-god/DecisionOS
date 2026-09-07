@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import '../app_shell.dart';
 import '../screens/more_screen.dart';
 import 'bottom_nav.dart';
+import 'dex_voice_sheet.dart';
 
 /// The floating dock overlaid on detail routes pushed above AppShell
 /// (Ops, People, Calendar…). It mirrors the shell's own dock so the user
@@ -16,23 +16,39 @@ class OverlayDock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Positioned(
-      left: 0,
-      right: 0,
-      bottom: 0,
-      child: BottomNav(
-        currentIndex: currentIndex,
-        onTap: (i) {
-          if (i == 3) {
-            showMoreSheet(context);
-            return;
-          }
-          // Pop back to the shell, then switch tab.
-          appShellTab.value = i;
-          Navigator.of(context).popUntil((r) => r.isFirst);
-        },
-        onDex: () => context.push('/dex'),
-      ),
-    );
+    return Positioned.fill(child: Stack(
+      children: [
+        // Nav — hidden while the Dex overlay is up.
+        ValueListenableBuilder<bool>(
+          valueListenable: dexOverlayOpen,
+          builder: (context, open, _) {
+            if (open) return const SizedBox.shrink();
+            return Positioned(
+              left: 0, right: 0, bottom: 0,
+              child: BottomNav(
+                currentIndex: currentIndex,
+                onTap: (i) {
+                  if (i == 3) {
+                    showMoreSheet(context);
+                    return;
+                  }
+                  appShellTab.value = i;
+                  Navigator.of(context).popUntil((r) => r.isFirst);
+                },
+                onDex: toggleDexOverlay,
+              ),
+            );
+          },
+        ),
+        // Dex overlay itself.
+        ValueListenableBuilder<bool>(
+          valueListenable: dexOverlayOpen,
+          builder: (context, open, _) {
+            if (!open) return const SizedBox.shrink();
+            return const Positioned.fill(child: DexVoiceOverlay());
+          },
+        ),
+      ],
+    ));
   }
 }

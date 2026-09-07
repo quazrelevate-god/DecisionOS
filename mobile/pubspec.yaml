@@ -23,6 +23,10 @@ dependencies:
   file_picker: ^8.1.6
   # Persist the Settings screen's Language + Appearance choices.
   shared_preferences: ^2.3.3
+  # Dex voice input — on-device speech-to-text (Android SpeechRecognizer /
+  # iOS Speech framework). Requires RECORD_AUDIO on Android.
+  speech_to_text: ^7.0.0
+  permission_handler: ^11.3.1
 
 dev_dependencies:
   flutter_test:

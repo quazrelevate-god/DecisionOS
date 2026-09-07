@@ -485,7 +485,7 @@ class _InsightWell extends StatelessWidget {
       constraints: const BoxConstraints(minHeight: 172),
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: AppColors.surfaceMuted,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(AppRadius.lg),
         boxShadow: [
           BoxShadow(

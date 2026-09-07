@@ -97,11 +97,16 @@ class TasksRepository {
     _ensureOk(r);
   }
 
-  /// Reorders the list by AI priority score. Returns the same shape as list().
+  /// Reorders the list by AI priority score. Backend returns
+  /// `{tasks: [...], scored: N}` — we unwrap the `tasks` key. The
+  /// previous cast-to-List treated the whole Map as a list and threw
+  /// a TypeError, which surfaced as the Work screen's "Could not load
+  /// your tasks" error every time AI priority was tapped.
   Future<List<Task>> prioritize() async {
     final r = await _api.dio.post('/tasks/prioritize');
     _ensureOk(r);
-    final list = (r.data as List?) ?? const [];
+    final data = r.data;
+    final list = (data is Map ? data['tasks'] : data) as List? ?? const [];
     return list.whereType<Map<String, dynamic>>().map(Task.fromJson).toList();
   }
 
@@ -951,6 +956,35 @@ class NotificationsRepository {
     final r = await _api.dio.post('/notifications/$id/read');
     _ensureOk(r);
     if (unreadCount.value > 0) unreadCount.value -= 1;
+  }
+}
+
+/// Talks to the Brain `/api/ask` endpoint — the general Dex Q&A wire.
+/// Returns the plain-text answer. Falls back to a soft message if the
+/// backend didn't return one so the caller can render a bubble either
+/// way.
+class DexRepository {
+  final _api = ApiClient();
+  Future<String> ask(String question) async {
+    try {
+      final r = await _api.dio.post('/ask', data: {'question': question});
+      _ensureOk(r);
+      final data = r.data;
+      if (data is Map) {
+        // /api/ask returns a shaped response; the human answer lives on
+        // `answer`, with `message` as the fallback used for permission
+        // denials and insufficient-data types.
+        for (final k in ['answer', 'message', 'reply', 'text']) {
+          final v = data[k];
+          if (v is String && v.isNotEmpty) return v;
+        }
+        return "I couldn't find an answer.";
+      }
+      if (data is String) return data;
+      return "I couldn't find an answer.";
+    } catch (_) {
+      return "I couldn't reach the assistant just now.";
+    }
   }
 }
 

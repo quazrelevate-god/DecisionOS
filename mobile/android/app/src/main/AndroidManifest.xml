@@ -7,6 +7,15 @@
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
 
+    <!-- Dex voice input — SpeechRecognizer needs mic + a Google service intent. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService"/>
+        </intent>
+    </queries>
+
     <application
         android:label="decisionos_mobile"
         android:name="${applicationName}"

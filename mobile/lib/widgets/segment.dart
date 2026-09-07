@@ -1,6 +1,4 @@
-import 'package:flutter/material.dart';
-import '../theme/app_theme.dart';
-import 'neumorphic.dart' show KrPop;
+import 'package:flutter/material.dart';import '../theme/app_theme.dart';
 
 /// Sliding cross-fade between tab bodies — same feel Money uses when its
 /// 6-tab rail switches. Wrap the current tab's body in this and pass a
@@ -97,11 +95,12 @@ class SlidingSegment extends StatelessWidget {
     this.height = 40,
     this.borderRadius =
         const BorderRadius.all(Radius.circular(AppRadius.pill)),
-    // Track = soft cool grey (surfaceMuted); pit = bright white. The
-    // contrast between the two is what makes the active slot pop; the
-    // inset shadow only adds a hint of depth on top of that.
-    this.trackColor = AppColors.surfaceMuted,
-    this.pitColor = AppColors.surface,
+    // Translucent track (~55 % opacity off-white) so the underlying
+    // bloom shows through, plus a deep inset shadow pair for the
+    // concave feel. The white pit is fully opaque so it still reads
+    // bright against the tinted ground.
+    this.trackColor = const Color(0x8CEEF0F3),
+    this.pitColor = const Color(0xFFFFFFFF),
   }) : assert(count > 0);
 
   Widget _slot(BuildContext context, int i, bool isActive) {
@@ -135,13 +134,42 @@ class SlidingSegment extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, c) {
         final needsIntrinsic = !c.maxWidth.isFinite;
-        Widget core = KrPop(
-          borderRadius: borderRadius,
-          color: trackColor,
+        // Concave (pressed-in) track — same colour as the pit, depth
+        // comes entirely from an inset shadow pair. Matches the
+        // reference where all surfaces read white and the outer track
+        // looks like it was pressed into the page.
+        Widget core = Container(
           padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: trackColor,
+            borderRadius: borderRadius,
+            // Deep inset pair — the numbers here are dialed to actually
+            // read on a small pill. Flutter's BlurStyle.inner is subtle
+            // by nature, so we push both offset and opacity harder than
+            // a canvas mock would suggest.
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x59000000), // ~35 % black top-left inset
+                offset: Offset(3, 3),
+                blurRadius: 7,
+                spreadRadius: -1,
+                blurStyle: BlurStyle.inner,
+              ),
+              BoxShadow(
+                color: Color(0xFFFFFFFF), // full-white bottom-right inset
+                offset: Offset(-3, -3),
+                blurRadius: 7,
+                blurStyle: BlurStyle.inner,
+              ),
+            ],
+          ),
           child: SizedBox(
           height: height,
           child: Stack(
+            // Let the pit's drop shadow render past the Stack's own
+            // bounds — otherwise the ambient lift is clipped away and
+            // the pit reads flat against the track.
+            clipBehavior: Clip.none,
             children: [
               // Sizer row — Stack sizes to this. Expanded slots split the
               // width equally so the fraction math for the pit lines up.
@@ -166,21 +194,23 @@ class SlidingSegment extends StatelessWidget {
                       heightFactor: 1,
                       child: Container(
                         decoration: BoxDecoration(
-                          // Bright white pit with a soft raised drop —
-                          // matches the reference: the pit reads as a
-                          // white pill lifted slightly out of the grey
-                          // track, not sunken.
                           color: const Color(0xFFFFFFFF),
                           borderRadius: borderRadius,
+                          // Crisp 1-px keyline so the pit's edge stays
+                          // sharp against the translucent track.
+                          border: Border.all(
+                            color: const Color(0x1A000000), // ~10 % black
+                            width: 1,
+                          ),
                           boxShadow: const [
                             BoxShadow(
-                              color: Color(0x1F000000), // ~12 % black
-                              offset: Offset(0, 2),
-                              blurRadius: 6,
+                              color: Color(0x2E000000), // ~18 % black
+                              offset: Offset(0, 3),
+                              blurRadius: 8,
                               spreadRadius: 0,
                             ),
                             BoxShadow(
-                              color: Color(0x0A000000), // ~4 % black
+                              color: Color(0x14000000), // ~8 % black
                               offset: Offset(0, 1),
                               blurRadius: 2,
                             ),

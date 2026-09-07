@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'data/repositories.dart';
 import 'models/models.dart';
 import 'screens/desk_screen.dart';
@@ -8,6 +7,7 @@ import 'screens/money_screen.dart';
 import 'screens/more_screen.dart';
 import 'theme/app_theme.dart';
 import 'widgets/bottom_nav.dart';
+import 'widgets/dex_voice_sheet.dart';
 
 /// The bottom-nav shell — three real tabs (Desk / Work / Money) plus a Dex
 /// FAB. The fourth dock slot "More" is NOT a tab — it opens a floating
@@ -94,14 +94,31 @@ class _AppShellState extends State<AppShell> {
               );
             }),
           ),
-          // Floating dock + Dex FAB overlaid at the bottom.
-          Positioned(
-            left: 0, right: 0, bottom: 0,
-            child: BottomNav(
-              currentIndex: _index,
-              onTap: _onNavTap,
-              onDex: () => context.push('/dex'),
-            ),
+          // Floating dock + Dex FAB overlaid at the bottom — hidden
+          // while the Dex overlay is active so the wave sits exactly
+          // where the nav used to.
+          ValueListenableBuilder<bool>(
+            valueListenable: dexOverlayOpen,
+            builder: (context, open, _) {
+              if (open) return const SizedBox.shrink();
+              return Positioned(
+                left: 0, right: 0, bottom: 0,
+                child: BottomNav(
+                  currentIndex: _index,
+                  onTap: _onNavTap,
+                  onDex: toggleDexOverlay,
+                ),
+              );
+            },
+          ),
+          // Dex overlay — blurred backdrop + floating conversation +
+          // wave bar. Sits above everything, including the nav slot.
+          ValueListenableBuilder<bool>(
+            valueListenable: dexOverlayOpen,
+            builder: (context, open, _) {
+              if (!open) return const SizedBox.shrink();
+              return const Positioned.fill(child: DexVoiceOverlay());
+            },
           ),
         ],
       ),

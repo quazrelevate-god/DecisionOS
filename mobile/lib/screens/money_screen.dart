@@ -1679,6 +1679,7 @@ class _AiInsightPlaceholder extends StatelessWidget {
     return KrPressed(
       borderRadius: BorderRadius.circular(AppRadius.md),
       padding: const EdgeInsets.all(AppSpacing.md),
+      color: AppColors.surface,
       child: Row(children: [
         Container(
           width: 32, height: 32,

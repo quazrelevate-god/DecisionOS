@@ -8,6 +8,7 @@ import { LockKey } from "@phosphor-icons/react";
 import Layout from "./components/Layout";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
+import DecisionReview from "./pages/DecisionReview";
 // E2-73 (2026-08-15): legacy Inbox.js retired. Sprint 2 shipped the
 // new Decision Desk at /inbox; the old Inbox page had no users left.
 // /inbox-legacy now redirects to /inbox so any lingering bookmarks work.
@@ -126,6 +127,8 @@ function App() {
                 now redirects so any lingering bookmark still resolves. */}
             <Route path="/inbox" element={<Protected perm="inbox"><Desk /></Protected>} />
             <Route path="/inbox-legacy" element={<Navigate to="/inbox" replace />} />
+            {/* KM-28 — the decision review is a page, not a pop-up. */}
+            <Route path="/decisions/:id" element={<Protected><DecisionReview /></Protected>} />
             <Route path="/workflows" element={<Navigate to="/my-work?view=workflows" replace />} />
             {/* Epic 2 Sprint A — E2-01: /contacts is retired, redirects to /crm.
                 /contacts/:id (ContactProfile 360°) still works so any deep-links

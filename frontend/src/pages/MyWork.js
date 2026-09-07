@@ -1192,9 +1192,14 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
           />
           <div className="flex-1 min-w-0">
             <div className="flex items-start gap-2 flex-wrap">
-              <p className={`min-w-[180px] flex-1 font-heading font-bold leading-snug ${
-                tier === "high" ? "text-lg xl:text-xl" : tier === "low" ? "text-sm" : "text-base"
-              }`}>
+              {/* KM-28 — one size, normal weight, on the founder's call. The
+                  title used to be set by priority (lg / base / sm, all bold),
+                  which turned the LIST into a chart: three type sizes and three
+                  box heights competing down the column, so scanning it meant
+                  reading shape before words. Priority is still on the card — it
+                  is the chip right beside this line — and a chip is a better
+                  place for it than the size of everything else. */}
+              <p className="min-w-[180px] flex-1 text-base font-normal leading-snug">
                 {t.title}
               </p>
               {/* KR-11.2 — the priority chip goes monochrome. The tile's
@@ -1844,8 +1849,15 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
    reason `expanded` had to be lifted out of TaskCard. */
 const TIER_OF = (t) => (t?.priority === "high" || t?.priority === "low") ? t.priority : "medium";
 
+/* KM-28 — every tile is the same span and the same floor now. The bento gave
+   `high` a double-width box and three different minimum heights, so a list of
+   tasks read as a mosaic whose tile size encoded urgency. The founder asked for
+   one height and one type size: priority is carried by the chip on the card,
+   which is where a status belongs. `high` keeps its dense-flow placement order,
+   so urgent work still surfaces first — it just stops being a different shape
+   when it gets there. */
 const TIER_SPAN = {
-  high:   "col-span-6 lg:col-span-4",
+  high:   "col-span-6 sm:col-span-3 lg:col-span-2",
   medium: "col-span-6 sm:col-span-3 lg:col-span-2",
   low:    "col-span-6 sm:col-span-3 lg:col-span-2",
 };
@@ -1861,7 +1873,7 @@ const TIER_SPAN = {
    needs it.
    Ratios stay rectangular, the original ask: at 1280 a high tile is
    799 × 128 and a medium 391 × 128. */
-const TIER_MINH = { high: "min-h-[128px]", medium: "min-h-[112px]", low: "min-h-[100px]" };
+const TIER_MINH = { high: "min-h-[112px]", medium: "min-h-[112px]", low: "min-h-[112px]" };
 
 function TaskBento({ list, openId, setOpenId, cardProps }) {
   return (

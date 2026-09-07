@@ -97,14 +97,16 @@ export default function OperatingScore() {
 
 // ─── page furniture ──────────────────────────────────────────────────────────
 
-/** The Karma page opening: eyebrow over a display heading, no card. */
+/* KM-28 — the eyebrow is dropped on the founder's call. "How well the business
+   is running" restated the title in a sentence, above a page whose entire
+   content is that answer; it cost a line of the pinned header and told nobody
+   anything. The prop is still accepted so the other call site need not change,
+   and simply not rendered. mb-3 rather than mb-7: with the eyebrow gone the
+   score should sit UNDER the title, not a paragraph away from it. */
 function PageTitle({ eyebrow, title, testid }) {
   return (
-    <StickyHeader className="mb-7" data-testid={testid}>
-      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-        {eyebrow}
-      </p>
-      <h1 className="mt-1.5 font-display text-3xl sm:text-4xl">{title}</h1>
+    <StickyHeader className="mb-3" data-testid={testid}>
+      <h1 className="font-display text-3xl sm:text-4xl">{title}</h1>
     </StickyHeader>
   );
 }
@@ -228,7 +230,11 @@ function OwnerView({ data }) {
               (no card), and a "Key scores" card carrying the four
               categories as mini-gauges in a single row. Both are mobile-only
               (`lg:hidden`); from lg the existing 5/7 hero grid takes over. */}
-          <div className="mb-6 flex items-end justify-between gap-4 lg:hidden" data-testid="operating-mobile-hero">
+          {/* KM-28 — pulled up under the title and centred on the gauge.
+              `items-center` rather than `items-end`: the gauge is a 150px arc
+              whose visual mass sits high, so baseline-aligning it to the
+              numeral pushed the dial below the block it belongs to. */}
+          <div className="mb-4 flex items-center justify-between gap-4 lg:hidden" data-testid="operating-mobile-hero">
             <div className="min-w-0">
               <div className="flex items-baseline gap-2">
                 <BigNumeral text={overall != null ? String(overall) : "—"} size="xl" countUp={overall != null} testid="operating-mobile-score" />
@@ -255,12 +261,11 @@ function OwnerView({ data }) {
               strip of mini-gauges. Tapping a mini-gauge drills into the
               same modal the desktop CategoryCard opens. */}
           <div className="nm-tile mb-6 p-4 lg:hidden" data-testid="operating-mobile-keyscores">
-            <div className="mb-3 flex items-baseline justify-between">
-              <p className="text-sm font-semibold">Key scores</p>
-              <Link to="#" onClick={(e) => e.preventDefault()} className="flex items-center gap-1 text-xs font-semibold text-foreground/70">
-                View all <CaretRight size={11} weight="bold" aria-hidden="true" />
-              </Link>
-            </div>
+            {/* KM-28 — "View all" went nowhere: `to="#"` with the navigation
+                preventDefault-ed. A link that cannot be followed is worse than
+                no link, and the four categories it would have shown are the row
+                directly underneath it. */}
+            <p className="mb-3 text-sm font-semibold">Key scores</p>
             <div className="grid grid-cols-4 gap-2">
               {CATS.map((c) => {
                 const v = company.categories[c.key];
@@ -273,9 +278,13 @@ function OwnerView({ data }) {
                   <button key={c.key} type="button" onClick={() => has && setDrillCat(c.key)} disabled={!has}
                     data-testid={`operating-mobile-cat-${c.key}`}
                     className="flex flex-col items-center gap-2 rounded-tile p-1 text-center disabled:opacity-55">
-                    <span className="flex h-5 items-center gap-1 text-[10px] font-medium text-muted-foreground">
-                      <c.icon size={10} weight="regular" aria-hidden="true" className="shrink-0" />
-                      <span className="truncate">{c.label}</span>
+                    {/* KM-28 — the label was a fixed 10px truncated to a
+                        column ~70px wide, so most of the four read as
+                        ellipses. It now wraps and scales with the column,
+                        centred over the numeral group below it. */}
+                    <span className="flex min-h-[2.2rem] w-full flex-col items-center justify-center gap-0.5 text-[clamp(9px,2.7vw,11px)] font-medium leading-tight text-muted-foreground">
+                      <c.icon size={11} weight="regular" aria-hidden="true" className="shrink-0" />
+                      <span className="w-full text-center">{c.label}</span>
                     </span>
                     <div className="flex items-baseline gap-0.5">
                       <span className={`font-display text-2xl leading-none ${isFailing(v) ? "text-kr-accent" : ""}`}>{has ? v : "—"}</span>
@@ -1077,31 +1086,46 @@ function FormulaExplainer({ weights = DEFAULT_WEIGHTS, setWeights }) {
 
   return (
     <div className="mt-8">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
-        aria-expanded={open}
-        aria-controls="operating-formula-panel"
-        data-testid="operating-formula-toggle"
-      >
-        <Info size={12} weight="bold" aria-hidden="true" />
-        How is this calculated?
-        {open ? <CaretUp size={11} weight="bold" aria-hidden="true" /> : <CaretDown size={11} weight="bold" aria-hidden="true" />}
-      </button>
+      {/* KM-28 — this was a 12px muted text run with a caret, sitting loose on
+          the page. It is a disclosure that opens a whole formula panel, and
+          nothing about it said "button": the founder's note was that it could
+          not be identified as one at all.
+          It is now the app's own control material — a raised .kr-pop pill that
+          goes .kr-pressed while open, which is the same "selected means pushed
+          in" grammar every segmented control here uses, and centred so it reads
+          as a divider between the scores above and the detail below.
+          NO transition utility: .kr-pop and .kr-pressed swap an outset shadow
+          list for an inset one and those do not interpolate. */}
+      <div className="flex justify-center">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className={`flex h-11 items-center gap-2 rounded-pill px-5 text-sm font-medium ${open ? "kr-pressed text-foreground" : "kr-pop text-foreground/75"}`}
+          aria-expanded={open}
+          aria-controls="operating-formula-panel"
+          data-testid="operating-formula-toggle"
+        >
+          <Info size={15} weight="bold" aria-hidden="true" />
+          How is this calculated?
+          {open ? <CaretUp size={12} weight="bold" aria-hidden="true" /> : <CaretDown size={12} weight="bold" aria-hidden="true" />}
+        </button>
+      </div>
 
       {open && (
-        <div id="operating-formula-panel" className="nm-tile mt-3 space-y-5 p-5" data-testid="operating-formula-panel">
+        /* KM-28 — the panel was .nm-tile over .nm-inset, the retired
+           neo-brutalist pair. It is .kr-bento with a .kr-well pane inside,
+           which is what every other disclosure in the app is made of. */
+        <div id="operating-formula-panel" className="kr-bento mt-3 space-y-5 p-5" data-testid="operating-formula-panel">
           <p className="text-xs leading-relaxed text-muted-foreground">
             Overall is a weighted average across the four categories. Categories
             with no data yet are skipped and the remaining weights renormalize.
           </p>
 
           {setWeights && (
-            <div className="nm-inset p-4">
+            <div className="kr-pressed rounded-2xl p-4">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <p className="text-xs font-semibold">Customize weights for your business</p>
-                <span className={`text-xs font-mono tabular-nums ${total === 100 ? "text-muted-foreground" : "text-kr-accent"}`}>
+                <span className={`text-xs tabular-nums ${total === 100 ? "text-muted-foreground" : "text-kr-accent"}`}>
                   total: {total}%
                 </span>
               </div>
@@ -1111,7 +1135,7 @@ function FormulaExplainer({ weights = DEFAULT_WEIGHTS, setWeights }) {
                     key={k}
                     type="button"
                     onClick={() => applyPreset(k)}
-                    className="nm-btn px-3 py-1.5 text-xs font-semibold"
+                    className="kr-pop flex h-9 items-center rounded-pill px-4 text-xs font-medium"
                   >
                     {p.label}
                   </button>
@@ -1131,7 +1155,7 @@ function FormulaExplainer({ weights = DEFAULT_WEIGHTS, setWeights }) {
                       className="flex-1 accent-kr-ink"
                       aria-label={`${c.label} weight`}
                     />
-                    <span className="w-12 text-right font-mono text-xs tabular-nums">{weights[c.key]}%</span>
+                    <span className="w-12 text-right text-xs font-medium tabular-nums">{weights[c.key]}%</span>
                   </div>
                 ))}
               </div>
@@ -1143,15 +1167,21 @@ function FormulaExplainer({ weights = DEFAULT_WEIGHTS, setWeights }) {
             </div>
           )}
 
+          {/* KM-28 — each row was a `border-l-2 border-nm-edge` bar, the one
+              brutalist tell left in this panel, with the weight chip jammed
+              against the label. Each is a sunken row now, the weight pushed to
+              the right edge so it lines up down the column, and the formula in
+              a raised chip so it reads as the machine's words rather than more
+              prose. */}
           {CATS.map((c) => (
-            <div key={c.key} className="border-l-2 border-nm-edge/60 pl-4">
-              <div className="mb-1 flex items-center gap-2">
-                <c.icon size={14} weight="regular" aria-hidden="true" className="text-muted-foreground" />
-                <span className="text-sm font-semibold">{c.label}</span>
-                <span className="text-xs text-muted-foreground">weight {weights[c.key]}%</span>
+            <div key={c.key} className="kr-pressed rounded-2xl p-3.5">
+              <div className="mb-1.5 flex items-center gap-2">
+                <c.icon size={14} weight="regular" aria-hidden="true" className="shrink-0 text-muted-foreground" />
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold">{c.label}</span>
+                <span className="shrink-0 text-xs tabular-nums text-muted-foreground">weight {weights[c.key]}%</span>
               </div>
-              <p className="mb-1 text-xs text-muted-foreground">{c.plain}</p>
-              <p className="font-mono text-xs">{c.formula}</p>
+              <p className="mb-2 text-xs leading-relaxed text-muted-foreground">{c.plain}</p>
+              <p className="kr-pop inline-block rounded-pill px-3 py-1 text-[11px] tabular-nums">{c.formula}</p>
             </div>
           ))}
         </div>

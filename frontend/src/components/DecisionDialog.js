@@ -122,7 +122,18 @@ function Section({ label, right, open, onToggle, children, testid }) {
   );
 }
 
-export function DecisionDialog({ decisionId, open, onClose }) {
+/* KM-28 · `variant="page"` — the Review target is a ROUTE now, not a popup.
+   The founder's complaint was twofold: it could not hold its content at phone
+   width, and a stray tap anywhere outside dismissed a review you were part-way
+   through. Both are properties of it being a modal.
+   It is mounted at /decisions/:id and rendered full-bleed, so it has its own
+   URL, the system back gesture, and the whole screen. It is still a Radix
+   Dialog underneath because the body is 250 lines of DialogHeader/DialogTitle/
+   Close that would have to be rewritten to leave the context for no behavioural
+   gain — what changes is that the surface fills the viewport and refuses to
+   close on an outside tap or a stray Escape. */
+export function DecisionDialog({ decisionId, open, onClose, variant = "modal" }) {
+  const asPage = variant === "page";
   const qc = useQueryClient();
   const [note, setNote] = useState("");
   const [sending, setSending] = useState(false);
@@ -176,7 +187,21 @@ export function DecisionDialog({ decisionId, open, onClose }) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="kr-bento max-w-lg rounded-cardlg border-0 p-0 [&>button.absolute]:hidden" data-testid="decision-dialog">
+      <DialogContent
+        className={asPage
+          /* The base DialogContent is `fixed left-1/2 top-1/2 w-full max-w-lg
+             translate-x-[-50%] translate-y-[-50%]` with its own padding, so
+             overriding max-width alone still left it inset — measured 356x771
+             in a 375x812 viewport. `inset-0` with all four offsets zeroed and
+             both translates cleared is what actually fills the screen. */
+          ? "kr-bento fixed inset-0 left-0 right-0 top-0 bottom-0 h-[100dvh] w-screen max-w-none translate-x-0 translate-y-0 gap-0 overflow-y-auto rounded-none border-0 p-0 [&>button.absolute]:hidden"
+          : "kr-bento max-w-lg rounded-cardlg border-0 p-0 [&>button.absolute]:hidden"}
+        onPointerDownOutside={asPage ? (e) => e.preventDefault() : undefined}
+        onInteractOutside={asPage ? (e) => e.preventDefault() : undefined}
+        onEscapeKeyDown={asPage ? (e) => e.preventDefault() : undefined}
+        data-variant={variant}
+        data-testid="decision-dialog"
+      >
         {isError ? (
           <div className="p-6" data-testid="decision-access-restricted">
             <DialogHeader>

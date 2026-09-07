@@ -29,7 +29,6 @@ import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import api from "../lib/api";
 import { toast } from "sonner";
-import { DecisionDialog } from "../components/DecisionDialog";
 import { useAuth } from "../context/AuthContext";
 import { inrCompact } from "../lib/format";
 import { selfScore, scoreBand } from "../lib/karmaScore";
@@ -157,7 +156,6 @@ export default function Desk() {
   const { user, tenant } = useAuth();
   const m = useDeskMetrics();
 
-  const [openDecision, setOpenDecision] = useState(null);
   const [busyId, setBusyId] = useState(null);
   // KR-8.5: cards the founder has already acted on this session. They dim in
   // place rather than vanishing — losing your place in a grid is worse than
@@ -180,7 +178,9 @@ export default function Desk() {
   // E2-66: deep-link from a decision-focused nudge notification.
   const [searchParams] = useSearchParams();
   const focusDecisionId = searchParams.get("decision");
-  useEffect(() => { if (focusDecisionId) setOpenDecision(focusDecisionId); }, [focusDecisionId]);
+  // KM-28 — ?decision=<id> now redirects to the page rather than raising the
+  // modal behind the Desk, so a notification and a tap land in the same place.
+  useEffect(() => { if (focusDecisionId) navigate(`/decisions/${focusDecisionId}`, { replace: true }); }, [focusDecisionId, navigate]);
 
   // The board fetch — all four chips in parallel, cache-shared, 30s fresh.
   const boardQs = useQueries({
@@ -201,7 +201,11 @@ export default function Desk() {
 
   const onCardAction = async (card) => {
     const cta = effectiveCta(card);
-    if (cta === "review" && card.target_kind === "decision") { setOpenDecision(card.target_id); markDone(card.id); return; }
+    /* KM-28 — Review navigates. It used to raise a modal that could not hold
+       its content at phone width and threw the review away on any outside tap;
+       /decisions/:id is the same body with a URL, the back gesture and the
+       whole screen. */
+    if (cta === "review" && card.target_kind === "decision") { markDone(card.id); navigate(`/decisions/${card.target_id}`); return; }
     if (cta === "respond") { navigate(`/my-work?task=${card.target_id}`); return; }
     if (cta === "chase" || cta === "nudge") {
       setBusyId(card.id);
@@ -606,14 +610,9 @@ export default function Desk() {
         />
       </DarkBand>
 
-      {/* Decision review modal — mechanics untouched. */}
-      {openDecision && (
-        <DecisionDialog
-          decisionId={openDecision}
-          open={!!openDecision}
-          onClose={() => { setOpenDecision(null); refresh(); }}
-        />
-      )}
+      {/* KM-28 — the decision modal used to live here. Review is /decisions/:id
+          now, so the dialog, its state and its import are all gone rather than
+          left behind unwritten. */}
     </div>
   );
 }

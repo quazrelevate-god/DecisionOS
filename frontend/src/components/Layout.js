@@ -40,6 +40,7 @@ import { AllAppsPanel } from "./mobile/AllAppsPanel";
 import { DexFab } from "./mobile/DexFab";
 import { DexChat } from "./mobile/DexChat";
 import { HeaderSlotContext } from "./mobile/HeaderSlot";
+import { useDexConversation } from "../hooks/useDexConversation";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { cn } from "../lib/utils";
 import { useDexCapture } from "../hooks/useDexCapture";
@@ -234,6 +235,10 @@ export default function Layout({ children }) {
     onRecordingChange: (on, secs) => setDexRecording({ on, secs }),
     onCaptured: () => qc.invalidateQueries({ queryKey: ["captures-pending"] }),
   });
+  /* KM-26 — one conversation, three surfaces: the dock hosts the input, the
+     FAB submits it, the transcript shows it. None of them can own the state, so
+     it lives in the hook and Layout hands it to all three. */
+  const chat = useDexConversation({ dex, open: dexOpen });
   const [langOpen, setLangOpen] = useState(false);
   // KR-5: the global search moved into a ⌘K dialog; same /brain?q= handoff.
   const [globalQuery, setGlobalQuery] = useState("");
@@ -605,8 +610,13 @@ export default function Layout({ children }) {
            (The capture signal now has no mobile home: it wants a badge on the
            Money slot, which DockItem does not support yet.) */
         moreBadge={bellCount}
-        dexActive={dex.recording}
+        dexActive={dexOpen}
         dexLevels={dex.levels}
+        dexMode={chat.mode}
+        dexWaveState={dex.recording ? "listening" : chat.busy ? "thinking" : "idle"}
+        dexDraft={chat.draft}
+        onDexDraft={chat.setDraft}
+        onDexSubmit={chat.submit}
       />
       {/* KM-11 — the vignette. Rendered always so it can transition rather
           than pop in, and gated by a data attribute. Sits below the dock's
@@ -620,10 +630,11 @@ export default function Layout({ children }) {
           type into and attach to, so there is something worth opening. Voice
           still starts one tap in, from the mic inside it. */}
       <DexFab
-        onOpen={() => setDexOpen(true)}
+        onOpen={() => (dexOpen ? chat.submit() : setDexOpen(true))}
         recording={dex.recording}
         seconds={dex.recordSecs}
         onStop={() => dex.stopRecording()}
+        intent={dexOpen ? chat.fabIntent : "sparkle"}
       />
       <AllAppsPanel
         open={allAppsOpen}
@@ -646,7 +657,7 @@ export default function Layout({ children }) {
           message inside it rather than a window of its own. (The poll that
           caused the re-open is separately fenced — see the dismiss token in
           useDexCapture.) */}
-      <DexChat open={dexOpen} onClose={() => setDexOpen(false)} dex={dex} />
+      <DexChat open={dexOpen} onClose={() => setDexOpen(false)} dex={dex} chat={chat} />
       {/* The Language tile opens the existing switcher in a thumb-reachable
           sheet rather than duplicating the language list. */}
       <BottomSheet

@@ -8,7 +8,7 @@
 // mark. The name is carried by aria-label="Dex" so it is announced and learned
 // without spending a visible label on it.
 import * as React from "react";
-import { Sparkle, Stop } from "@phosphor-icons/react";
+import { Sparkle, Stop, Microphone, PaperPlaneRight, Keyboard } from "@phosphor-icons/react";
 import { useAuth } from "@/context/AuthContext";
 import { hasPerm } from "@/lib/perms";
 import { cn } from "@/lib/utils";
@@ -19,7 +19,19 @@ import { cn } from "@/lib/utils";
  * @param {number}   [seconds]
  * @param {Function} [onStop]      tap again to stop (§5.6)
  */
-export function DexFab({ onOpen, recording = false, seconds = 0, onStop }) {
+/* KM-26 — the FAB now carries the MODE, not just "is Dex on".
+   The founder's ask: the Dex icon becomes the microphone while the bar draws
+   the wave, and becomes SEND the moment that bar is a text field — flipping
+   back when you switch modes, so the glyph always names the next action rather
+   than the feature.
+     closed         sparkle  — "this is Dex"
+     open + voice   mic      — "speak"
+     open + typing  send     — or a keyboard glyph while the field is still
+                               empty, so it never promises to send nothing
+     recording      stop     — with the running seconds
+   `intent` is computed once in useDexConversation, so the bar, the FAB and the
+   transcript can never disagree about which mode they are in. */
+export function DexFab({ onOpen, recording = false, seconds = 0, onStop, intent = "sparkle" }) {
   const { user } = useAuth();
   // Same check DexCaptureBar makes — hidden entirely, not disabled (§8).
   const canCapture = user?.role === "owner" || hasPerm(user, "voice_capture");
@@ -29,7 +41,13 @@ export function DexFab({ onOpen, recording = false, seconds = 0, onStop }) {
     <button
       type="button"
       data-testid="dex-fab"
-      aria-label={recording ? `Stop recording, ${seconds} seconds` : "Dex"}
+      aria-label={
+        recording ? `Stop recording, ${seconds} seconds`
+        : intent === "send" ? "Send to Dex"
+        : intent === "keyboard" ? "Type to Dex"
+        : intent === "mic" ? "Speak to Dex"
+        : "Dex"
+      }
       onClick={recording ? onStop : onOpen}
       className={cn(
         // 12px gap from the pill, same baseline, safe-area aware.
@@ -45,13 +63,19 @@ export function DexFab({ onOpen, recording = false, seconds = 0, onStop }) {
           : "bg-kr-ink text-white hover:opacity-95"
       )}
     >
-      {recording ? (
+      {recording || intent === "stop" ? (
         <span className="flex flex-col items-center leading-none">
           <Stop size={22} weight="fill" aria-hidden="true" />
           <span className="mt-0.5 text-[length:var(--text-label)] font-bold tabular-nums">
             {seconds}s
           </span>
         </span>
+      ) : intent === "send" ? (
+        <PaperPlaneRight size={26} weight="fill" aria-hidden="true" />
+      ) : intent === "keyboard" ? (
+        <Keyboard size={26} weight="bold" aria-hidden="true" />
+      ) : intent === "mic" ? (
+        <Microphone size={27} weight="fill" aria-hidden="true" />
       ) : (
         /* KM-5 — the AI sparkle, not a microphone. The sheet behind this
            button is no longer a recorder with extras: it is Dex, and voice is

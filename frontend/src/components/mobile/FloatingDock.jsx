@@ -94,7 +94,11 @@ function DockItem({ to, label, icon: Icon, testid, active, onClick }) {
  * @param {boolean}  moreOpen
  * @param {number}   [moreBadge] count of items needing him behind More (caps at 9)
  */
-export function FloatingDock({ user, onMore, moreOpen = false, moreBadge = 0, dexActive = false, dexLevels = [] }) {
+export function FloatingDock({
+  user, onMore, moreOpen = false, moreBadge = 0,
+  dexActive = false, dexLevels = [], dexMode = "voice", dexWaveState = "idle",
+  dexDraft = "", onDexDraft, onDexSubmit,
+}) {
   const { t } = useTranslation();
   const location = useLocation();
   const slots = React.useMemo(() => dockSlots(user, t), [user, t]);
@@ -145,17 +149,31 @@ export function FloatingDock({ user, onMore, moreOpen = false, moreBadge = 0, de
           "max-[359px]:h-[3.25rem]"
         )}
       >
-        {/* KM-11 — WHILE DEX IS LISTENING THE BAR IS THE VISUAL.
-            The founder's call: no separate black card sliding up. The bar
-            already sits where your thumb is and already has the right
-            material, so it hosts the voice UI directly — the four
-            destinations step aside for the ribbon wave and come back the
-            moment listening stops. py-2 is the "adequate spacing above and
-            below" so the ribbons never touch the pill's edge. */}
+        {/* KM-26 — WHILE DEX IS OPEN THIS BAR *IS* DEX.
+            The four destinations step aside and the bar becomes the voice
+            surface or the text field, by mode. KM-23 drew a SECOND rounded bar
+            above this one to do the same job; the founder's correction was
+            that the app already has a bar in exactly the right place with
+            exactly the right material, so it should do the work rather than be
+            duplicated. py-2 is the "adequate spacing above and below" so the
+            ribbons never touch the pill's edge. */}
         {dexActive ? (
-          <div className="min-w-0 flex-1 px-2 py-2" data-testid="dock-dex-wave">
-            <DexWave levels={dexLevels} live />
-          </div>
+          dexMode === "type" ? (
+            <input
+              autoFocus
+              data-testid="dock-dex-input"
+              value={dexDraft}
+              onChange={(e) => onDexDraft?.(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onDexSubmit?.(); } }}
+              placeholder={t("dex.typePlaceholder", "Ask Dex, or state a decision…")}
+              aria-label="Message Dex"
+              className="min-w-0 flex-1 bg-transparent px-3 text-sm text-white placeholder:text-white/40 focus:outline-none"
+            />
+          ) : (
+            <div className="min-w-0 flex-1 px-2 py-2" data-testid="dock-dex-wave">
+              <DexWave state={dexWaveState} levels={dexLevels} />
+            </div>
+          )
         ) : (
           slots.map((s) => (
             <DockItem key={s.to} {...s} active={isActive(s.to)} />

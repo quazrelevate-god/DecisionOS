@@ -1,11 +1,8 @@
 import * as React from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  Plus, X, Microphone, Stop, PaperPlaneRight, Paperclip, Camera,
-  Keyboard, CircleNotch, Sparkle,
+  Plus, X, Paperclip, Camera, Keyboard, CircleNotch, Sparkle,
 } from "@phosphor-icons/react";
-import api from "@/lib/api";
-import { DexWave } from "./DexWave";
 import { cn } from "@/lib/utils";
 
 // KM-23 · DexChat — Dex as a conversation, over the page you were on.
@@ -22,22 +19,22 @@ import { cn } from "@/lib/utils";
 // glass, each arriving with a short spring so a reply reads as landing rather
 // than appearing.
 //
-// VOICE FIRST, EVERYTHING ELSE BEHIND THE PLUS. The composer is a microphone,
-// because that is what Dex is for. The three things you might want instead —
-// type it, attach a document, take a photo — are one tap away behind a single
-// plus, which stays a 40px circle at the composer's left edge and never sits
-// over the transcript. Opening it lifts the actions vertically ABOVE the
-// composer, so the thing you are reading is never what gets covered.
+// KM-26 — NO COMPOSER HERE ANY MORE. The first cut drew its own rounded bar
+// with a plus, a wave and a mic inside it, floating just above the app's
+// existing dock. The founder's correction: the app already has a bar in
+// exactly that place with exactly that material, and it should BECOME Dex —
+// the four destinations step aside, the bar draws the wave or turns into a
+// text field, and the FAB beside it switches between microphone and send.
+// Drawing a second bar over the first was solving a problem that did not exist.
+//
+// So this component is now only the transcript and the plus. The plus sits
+// clear of both the dock and the newest line — bottom-left, on the dock's
+// baseline — and its three actions (type, attach, photo) lift upward from it.
 //
 // WIRING, all of it already on the backend:
-//   POST /ask                -> question + answer, with a context id so
-//                               follow-ups stay in the same thread
-//   POST /voice-notes        -> audio; the hook then polls the note and hands
-//                               back the structured "understanding"
-//   POST /voice-notes/text   -> the same pipeline for typed capture
-//   POST /files              -> attachments and photos
-const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
-
+// The conversation itself (log, ask, attach, mode) lives in
+// hooks/useDexConversation so the bar, the FAB and this transcript all read the
+// same state — see the note there.
 const SPRING = { type: "spring", stiffness: 420, damping: 34, mass: 0.7 };
 
 /* Dex answers in light markdown — "**33 overdue tasks**" comes back from /ask
@@ -117,93 +114,24 @@ function Bubble({ m, index }) {
  * @param {Function} onClose
  * @param {object}   dex     the shared useDexCapture instance from Layout
  */
-export function DexChat({ open, onClose, dex }) {
-  const [log, setLog] = React.useState([]);
-  const [ctxId, setCtxId] = React.useState(null);
-  const [busy, setBusy] = React.useState(false);
+export function DexChat({ open, onClose, dex, chat }) {
+  const { log, busy, mode, setMode, ask, attach } = chat;
   const [plusOpen, setPlusOpen] = React.useState(false);
-  const [typing, setTyping] = React.useState(false);
-  const [draft, setDraft] = React.useState("");
   const endRef = React.useRef(null);
-  const inputRef = React.useRef(null);
   const photoRef = React.useRef(null);
-  const seenRef = React.useRef(null);
-
-  const push = React.useCallback((m) => setLog((l) => [...l, { id: uid(), ...m }]), []);
 
   React.useEffect(() => {
     if (log.length) endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [log, busy]);
 
-  React.useEffect(() => {
-    if (typing) setTimeout(() => inputRef.current?.focus(), 220);
-  }, [typing]);
-
-  // A finished capture becomes a Dex turn instead of its own card. Keyed on
-  // noteId so a poll that updates the same note in place does not stack up.
-  React.useEffect(() => {
-    const u = dex?.understanding;
-    if (!u || u.status !== "done") return;
-    if (seenRef.current === u.noteId) return;
-    seenRef.current = u.noteId;
-    const title = u.decision?.title || u.summary || u.transcript;
-    push({
-      role: "dex",
-      text: title
-        ? `Got it — ${title}${u.tasks?.length ? `\n${u.tasks.length} task${u.tasks.length > 1 ? "s" : ""} created.` : ""}`
-        : "Captured.",
-    });
-    dex.clearUnderstanding?.();
-  }, [dex, dex?.understanding, push]);
-
-  const ask = React.useCallback(async (question) => {
-    const text = String(question || "").trim();
-    if (!text || busy) return;
-    push({ role: "user", text });
-    setDraft("");
-    setBusy(true);
-    try {
-      const { data } = await api.post("/ask", { question: text, context_id: ctxId });
-      if (data.query_context_id) setCtxId(data.query_context_id);
-      push({
-        role: "dex",
-        text: data.answer || "I don't have an answer for that yet.",
-        followups: data.suggested_questions,
-        missing: data.missing_information,
-      });
-    } catch (e) {
-      push({ role: "dex", text: e.response?.data?.detail || "I couldn't reach the brain just now." });
-    } finally {
-      setBusy(false);
-    }
-  }, [busy, ctxId, push]);
-
-  const attach = async (e, label) => {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-    push({ role: "user", text: `${label}: ${file.name}` });
-    setBusy(true);
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      await api.post("/files", fd, { headers: { "Content-Type": "multipart/form-data" } });
-      push({ role: "dex", text: "Filed. I'll pull what matters out of it." });
-    } catch (err) {
-      push({ role: "dex", text: err.response?.data?.detail || "That upload didn't go through." });
-    } finally {
-      setBusy(false);
-    }
-  };
-
+  /* The three ways in that are not the microphone. "Type" flips the DOCK into
+     a text field rather than opening a field here — same bar, different mode. */
   const ACTIONS = [
-    { key: "type", icon: Keyboard, label: "Type", onClick: () => { setTyping(true); setPlusOpen(false); } },
+    { key: "type", icon: Keyboard, label: "Type", onClick: () => { setMode(mode === "type" ? "voice" : "type"); setPlusOpen(false); } },
     { key: "file", icon: Paperclip, label: "Attach", onClick: () => { dex?.fileRef?.current?.click(); setPlusOpen(false); } },
     { key: "photo", icon: Camera, label: "Photo", onClick: () => { photoRef.current?.click(); setPlusOpen(false); } },
   ];
 
-  const recording = !!dex?.recording;
-  const waveState = recording ? "listening" : busy ? "thinking" : "idle";
 
   return (
     <AnimatePresence>
@@ -214,9 +142,12 @@ export function DexChat({ open, onClose, dex }) {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
-          /* z above FloatingDock (10000) — the dock must not float over the
-             conversation the way it once floated over the welcome overlay. */
-          className="lg:hidden fixed inset-0 z-[10002] flex flex-col bg-black/25 backdrop-blur-xl"
+          /* z BELOW the dock (10000) and the FAB, deliberately. The founder's
+             words were "behind that app bar we should dim the background" —
+             the bar and the button are the composer now, so dimming over them
+             would grey out the very controls the screen is for. Above the page
+             it is dimming, below the controls it serves. */
+          className="lg:hidden fixed inset-0 z-[9990] flex flex-col bg-black/25 backdrop-blur-xl"
         >
           {/* Tapping the dimmed page behind closes — the standard way out of a
               sheet, kept because the X is at the top and thumbs are at the
@@ -259,10 +190,16 @@ export function DexChat({ open, onClose, dex }) {
               <div ref={endRef} />
             </div>
 
-            {/* Composer */}
-            <div className="relative px-4 pb-safe-4">
-              {/* The plus actions lift ABOVE the bar so they never cover the
-                  transcript's newest line. */}
+            {/* KM-26 · the plus, and only the plus.
+                It sits on the DOCK's baseline at the left edge, so it is clear
+                of the bar (which is now the composer) and clear of the newest
+                line of the transcript above it. Its actions lift upward, never
+                over what you are reading.
+                The bottom padding clears the DOCK, which is 64px tall sitting
+                on its own safe-area offset — measured, because `pb-safe-4` put
+                the plus straight on top of the bar (plus 768-812 against a dock
+                at 732-796) and half of it off the bottom of the screen. */}
+            <div className="relative px-4 pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]">
               <AnimatePresence>
                 {plusOpen && (
                   <motion.div
@@ -294,67 +231,22 @@ export function DexChat({ open, onClose, dex }) {
                 )}
               </AnimatePresence>
 
-              <div className="kr-frost flex items-center gap-2 rounded-pill p-1.5">
-                <button
-                  type="button"
-                  data-testid="dex-plus"
-                  aria-label={plusOpen ? "Hide options" : "More ways to talk to Dex"}
-                  aria-expanded={plusOpen}
-                  onClick={() => setPlusOpen((v) => !v)}
-                  className="kr-pop grid h-10 w-10 shrink-0 place-items-center rounded-full"
-                >
-                  <motion.span animate={{ rotate: plusOpen ? 45 : 0 }} transition={SPRING} className="grid place-items-center">
-                    <Plus size={18} weight="bold" />
-                  </motion.span>
-                </button>
-
-                {typing ? (
-                  <input
-                    ref={inputRef}
-                    data-testid="dex-input"
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); ask(draft); } }}
-                    placeholder="Ask Dex, or state a decision…"
-                    className="min-w-0 flex-1 bg-transparent px-2 text-sm placeholder:text-foreground/35 focus:outline-none"
-                  />
-                ) : (
-                  /* The wave IS the affordance while not typing: it says the
-                     surface is listening-capable without spending a label. */
-                  <div className="h-9 min-w-0 flex-1 overflow-hidden rounded-pill bg-kr-ink/90">
-                    <DexWave state={waveState} levels={dex?.levels} />
-                  </div>
-                )}
-
-                {typing && draft.trim() ? (
-                  <button
-                    type="button"
-                    data-testid="dex-send"
-                    aria-label="Send"
-                    onClick={() => ask(draft)}
-                    disabled={busy}
-                    className="kr-pop grid h-11 w-11 shrink-0 place-items-center rounded-full bg-kr-ink text-white disabled:opacity-50"
-                  >
-                    <PaperPlaneRight size={17} weight="bold" />
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    data-testid="dex-mic"
-                    aria-label={recording ? "Stop recording" : "Hold to speak"}
-                    onClick={() => (recording ? dex?.stopRecording?.() : dex?.startRecording?.())}
-                    className={cn(
-                      "grid h-11 w-11 shrink-0 place-items-center rounded-full",
-                      recording ? "bg-danger-600 text-white" : "kr-pop bg-kr-ink text-white"
-                    )}
-                  >
-                    {recording ? <Stop size={17} weight="fill" /> : <Microphone size={18} weight="bold" />}
-                  </button>
-                )}
-              </div>
+              <button
+                type="button"
+                data-testid="dex-plus"
+                aria-label={plusOpen ? "Hide options" : "More ways to talk to Dex"}
+                aria-expanded={plusOpen}
+                onClick={() => setPlusOpen((v) => !v)}
+                className="kr-frost grid h-11 w-11 place-items-center rounded-full"
+              >
+                <motion.span animate={{ rotate: plusOpen ? 45 : 0 }} transition={SPRING} className="grid place-items-center">
+                  <Plus size={19} weight="bold" />
+                </motion.span>
+              </button>
             </div>
           </div>
 
+          
           {/* Photo goes through the same /files endpoint as an attachment; only
               the picker differs (`capture` asks the OS for the camera). */}
           <input
@@ -363,7 +255,7 @@ export function DexChat({ open, onClose, dex }) {
             accept="image/*"
             capture="environment"
             className="hidden"
-            onChange={(e) => attach(e, "Photo")}
+            onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; attach(f, "Photo"); }}
           />
         </motion.div>
       )}

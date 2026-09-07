@@ -39,6 +39,9 @@ import { FloatingDock } from "./mobile/FloatingDock";
 import { AllAppsPanel } from "./mobile/AllAppsPanel";
 import { DexFab } from "./mobile/DexFab";
 import { DexChat } from "./mobile/DexChat";
+import { HeaderSlotContext } from "./mobile/HeaderSlot";
+import { useIsMobile } from "../hooks/useIsMobile";
+import { cn } from "../lib/utils";
 import { useDexCapture } from "../hooks/useDexCapture";
 import { BottomSheet } from "./mobile/BottomSheet";
 import { InstallPrompt } from "./mobile/InstallPrompt";
@@ -201,6 +204,15 @@ export default function Layout({ children }) {
   // MPWA-03 mobile navigation state.
   const [allAppsOpen, setAllAppsOpen] = useState(false);
   const [dexOpen, setDexOpen] = useState(false);
+  /* KM-25 — the mobile shell stops being a document that scrolls and becomes a
+     frame: a top region that does not move, and a scroller under it. The slot
+     is state rather than a ref because a page's header portals into it and has
+     to re-render once the element exists.
+     `brandGone` collapses the wordmark + bell on first movement and hands the
+     space to the page title, which is what the founder asked for. */
+  const [headerSlot, setHeaderSlot] = useState(null);
+  const isMobileShell = useIsMobile();
+  const [brandGone, setBrandGone] = useState(false);
 
   // MPWA-12f: an empty state whose primary action is "tell Dex to start one" has
   // to be able to open the sheet, and the sheet's state lives here. A window
@@ -349,11 +361,16 @@ export default function Layout({ children }) {
   // mid-tone to cast onto: cards sit at the SAME value and are separated by
   // shadow + hairline, not by fill. bg-background stays untouched for
   // surfaces that opt out (sheets, popovers).
+  /* KM-25 — the slot is published to the whole tree so a page's own header can
+     portal into the frame's top region without Layout knowing which page it is.
+     Handed down only on mobile: the slot div is `lg:hidden`, so portaling into
+     it above lg would render every page header into a display:none box.
+     NM-18: `app-sky` is UNCONDITIONAL. The sky it owns is invisible at opacity
+     0 off the Dex route, and keeping it mounted is what lets it fade in and out
+     with the theme instead of snapping — see .app-sky::before. */
   return (
-    /* NM-18: `app-sky` is UNCONDITIONAL. The sky it owns is invisible at
-       opacity 0 off the Dex route, and keeping it mounted is what lets it fade
-       in and out with the theme instead of snapping — see .app-sky::before. */
-    <div className="app-sky min-h-screen flex flex-col bg-nm text-foreground">
+    <HeaderSlotContext.Provider value={isMobileShell ? headerSlot : null}>
+    <div className="app-sky flex h-[100dvh] flex-col overflow-hidden bg-nm text-foreground lg:h-auto lg:min-h-screen lg:overflow-visible">
       {/* The page-artwork layer. Empty and invisible until a room sets
           --sky-art (see "PAGE ARTWORK" in index.css); position:fixed keeps it
           out of this flex column. It is a real element rather than a third
@@ -498,7 +515,13 @@ export default function Layout({ children }) {
           so the app reads as one phone-width surface on any display; at lg the
           rail is gone (KR-5), so the column centres inside a 1400px cap — the
           reference is a centred composition, not an edge-to-edge one. */}
-      <div className="flex flex-col min-w-0 app-shell lg:max-w-[1400px] lg:w-full lg:mx-auto lg:flex-1">
+      {/* KM-25 — `min-h-0 flex-1` is what actually makes the frame work. Without
+          it this wrapper sits at `flex: 0 1 auto` with `min-height: auto`, grows
+          to its content (measured 3970px inside an 812px root) and hands <main>
+          an unbounded height, so main never becomes a scrollport and the page
+          scrolls the document exactly as before. The clip only exists if the
+          height constraint reaches all the way down. */}
+      <div className="flex min-h-0 flex-1 flex-col min-w-0 app-shell lg:max-w-[1400px] lg:w-full lg:mx-auto">
         {/* Mobile top app bar — MPWA-03.
             Two controls, not four; min-h + top inset so nothing sits under the
             status bar in iOS standalone. Untouched by KR-5 beyond what the
@@ -509,12 +532,34 @@ export default function Layout({ children }) {
             the left edge, and steps up to `size="lg"` for a stronger app
             identity in the phone header. Grid collapses to two columns
             (logo left, actions right) — the empty centre span is gone. */}
-        <header className="lg:hidden min-h-14 flex items-center justify-between gap-2 px-gutter-safe pt-safe bg-transparent">
-          <KarmaLogo size="lg" />
-          <div className="flex items-center gap-touch-gap">
-            <Bellicon mobile />
-          </div>
-        </header>
+        {/* KM-25 · the top region. It sits OUTSIDE <main>, which is the whole
+            point: nothing can scroll through it, so nothing has to be painted
+            over. The brand row collapses on first movement and gives its space
+            to the page title, which portals into the slot beneath it. */}
+        <div className="lg:hidden shrink-0">
+          <header
+            data-testid="mobile-brand-row"
+            aria-hidden={brandGone}
+            className={cn(
+              "flex items-center justify-between gap-2 overflow-hidden px-gutter-safe bg-transparent",
+              "transition-[max-height,opacity,padding-top] duration-300 ease-out motion-reduce:transition-none",
+              brandGone
+                ? "pointer-events-none max-h-0 pt-0 opacity-0"
+                : "min-h-14 max-h-24 pt-safe opacity-100"
+            )}
+          >
+            <KarmaLogo size="lg" />
+            <div className="flex items-center gap-touch-gap">
+              <Bellicon mobile />
+            </div>
+          </header>
+          {/* A page's header lands here. Zero-height on routes with none. */}
+          <div
+            ref={setHeaderSlot}
+            data-testid="page-header-slot"
+            className={cn("px-gutter-safe", brandGone && "pt-safe")}
+          />
+        </div>
 
         {/* MPWA-02: pb-dock clears the floating dock plus the home indicator,
             so the last row is never trapped. */}
@@ -525,7 +570,19 @@ export default function Layout({ children }) {
             main's scrollport — which never scrolls, because the DOCUMENT does
             — so sticky quietly did nothing app-wide. `clip` crops the same
             pixels without creating a scroll container, so sticky works. */}
-        <main ref={mainRef} className="flex-1 pb-dock lg:pb-8 overflow-x-clip app-canvas">
+        {/* KM-25 — below lg this is the SCROLLER, and its top edge is the clip
+            the founder asked for: a row scrolled past it is gone, not hidden
+            behind a bar. Desktop keeps exactly what KR-8.4 settled on
+            (`overflow-x: clip` alone, so <main> is not a scroll container and
+            `position: sticky` inside pages still tracks the document). */}
+        <main
+          ref={mainRef}
+          onScroll={(e) => {
+            const y = e.currentTarget.scrollTop;
+            setBrandGone((was) => (was ? y > 2 : y > 4));
+          }}
+          className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-dock app-canvas lg:overflow-x-clip lg:overflow-y-visible lg:pb-8"
+        >
           <AnnouncementBanner />
           <div className="p-4 lg:p-8 px-gutter-safe">{children}</div>
         </main>
@@ -603,5 +660,6 @@ export default function Layout({ children }) {
         </div>
       </BottomSheet>
     </div>
+    </HeaderSlotContext.Provider>
   );
 }

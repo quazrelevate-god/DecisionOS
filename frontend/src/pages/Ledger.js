@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "../lib/api";
 import { lex } from "../lib/lexicon";
 import { useAuth } from "../context/AuthContext";
-import { PageHeader, Chip, EmptyState } from "../components/common";
+import { PageHeader, Chip, EmptyState, StickyHeader } from "../components/common";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
 import {
@@ -1484,7 +1484,7 @@ export default function Ledger() {
 
   return (
     <div>
-      <header className="mb-5 flex flex-col gap-4 lg:mb-7 lg:flex-row lg:items-end lg:justify-between">
+      <StickyHeader className="mb-5 flex flex-col gap-4 lg:mb-7 lg:flex-row lg:items-end lg:justify-between">
         <div>
           {/* KR-14.15 — MOBILE: title + "Money in one place" subtitle,
               matching the reference. DESKTOP keeps the uppercase eyebrow. */}
@@ -1548,7 +1548,7 @@ export default function Ledger() {
           </div>
           <div className="hidden lg:block">{addBtn}</div>
         </div>
-      </header>
+      </StickyHeader>
 
       {/* Epic 2 Sprint 4 (E2-25): hero capture bar above every tab. */}
       <CaptureHero

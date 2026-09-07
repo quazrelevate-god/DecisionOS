@@ -201,17 +201,17 @@ function MemberDialog({ trigger, initial, roleOptions, onSaved, onInvite, member
 // Epic 2 Sprint A — E2-01: /team route wraps TeamPanel with a page header.
 // The old People > Employees tab is retired; owner + team_manage users
 // reach the same table via the Ops-adjacent /team page.
-import { PageHeader } from "../components/common";
+import { PageHeader, StickyHeader } from "../components/common";
 
 export default function TeamPage() {
   // MPWA-10: rebuilt below lg (§8); desktop tree untouched.
 
   return (
     <div>
-      <header className="mb-7">
+      <StickyHeader className="mb-7">
         <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Employees · access · reporting lines</p>
         <h1 className="mt-1.5 font-display text-3xl sm:text-4xl">Team</h1>
-      </header>
+      </StickyHeader>
       <TeamPanel />
     </div>
   );

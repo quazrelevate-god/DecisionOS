@@ -1408,6 +1408,50 @@ html[data-page="team"] {
    The phone gets the same idea on the other axis: there the pane is nearly
    full-width and the only free space is below it, so the glow lies along the
    bottom and fades upward. */
+/* KM-24 · .kr-stick — the page title pins, the list scrolls under it.
+   THE COMPLAINT. Scrolling any list scrolled the whole screen: the wordmark,
+   the bell, the page title and its controls all left together, so three taps
+   into a long list you no longer knew which room you were in or how to filter
+   it. The brand row leaving is correct — it is chrome, and it already scrolls
+   away on its own. The title row leaving is not: it carries the page's
+   identity and every control that acts on the list underneath it.
+
+   So the title row and everything grouped with it — segmented control, filter
+   and menu circles, counts — become one sticky block, and the content scrolls
+   beneath. `top: 0` is enough because the brand row above is not sticky: it
+   scrolls off, and this lands where it was.
+
+   WHY THE BACKGROUND ONLY APPEARS ONCE STUCK. Frosting it permanently put a
+   blurred slab over the sky at rest, at the top of a page that had nothing
+   scrolled under it yet — heavy, and lying about depth. A sentinel above the
+   header tells us when it has actually pinned, and only then does the glass
+   and its hairline fade in. That is the whole iOS trick and it is one
+   IntersectionObserver, not a scroll handler firing every frame.
+
+   FULL BLEED. Negative inline margin cancels the page gutter so the frost
+   reaches both edges, then the padding is put back inside — otherwise the
+   list scrolls up through two uncovered strips at the sides. */
+@media (max-width: 1023.98px) {
+    .kr-stick {
+        position: sticky;
+        top: 0;
+        z-index: 30;
+        margin-inline: calc(var(--page-pad, 1rem) * -1);
+        padding-inline: var(--page-pad, 1rem);
+        padding-top: 0.5rem;
+        padding-bottom: 0.5rem;
+        transition: background-color 220ms ease, box-shadow 220ms ease;
+    }
+    .kr-stick[data-stuck="true"] {
+        background: linear-gradient(180deg, hsl(0 0% 100% / .84), hsl(0 0% 100% / .66));
+        -webkit-backdrop-filter: blur(18px) saturate(1.4);
+        backdrop-filter: blur(18px) saturate(1.4);
+        box-shadow:
+            0 1px 0 hsl(216 28% 18% / .07),
+            0 10px 20px -16px hsl(216 28% 18% / .55);
+    }
+}
+
 /* KM-22 · portrait SQUEEZES the picture instead of cropping it.
    `cover` preserves aspect, which means on a portrait viewport it scales the
    artwork by HEIGHT and throws the sides away — at 375x812 a 1654x951 picture

@@ -24,7 +24,7 @@ import { useAuth } from "../context/AuthContext";
 import { useTranslation } from "react-i18next";
 import { hasPerm } from "../lib/perms";
 import { lex } from "../lib/lexicon";
-import { PageHeader, Chip, EmptyState, SkeletonGrid } from "../components/common";
+import { PageHeader, Chip, EmptyState, SkeletonGrid, StickyHeader } from "../components/common";
 import { typeLabel } from "../lib/format";
 import api from "../lib/api";
 import { toast } from "sonner";
@@ -647,7 +647,7 @@ export default function CRM() {
 
   return (
     <div>
-      <header className="mb-5 flex flex-col gap-4 lg:mb-7 lg:flex-row lg:items-end lg:justify-between">
+      <StickyHeader className="mb-5 flex flex-col gap-4 lg:mb-7 lg:flex-row lg:items-end lg:justify-between">
         <div>
           {/* KR-14.14 — eyebrow is hidden on mobile per the reference. */}
           <p className="hidden text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground lg:block">{t("crm.eyebrow", { customers: L.customer_plural.toLowerCase(), suppliers: L.vendor_plural.toLowerCase() })}</p>
@@ -697,7 +697,7 @@ export default function CRM() {
             />
           </div>
         )}
-      </header>
+      </StickyHeader>
 
       {/* KR-14.14 · MOBILE — full-width search + sliders filter circle
           (opens a dropdown with the status/sort selects). Followed by a

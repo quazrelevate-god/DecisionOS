@@ -4,7 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import api from "../lib/api";
 import { timeAgo, fullTime } from "../lib/format";
-import { PageHeader, Chip, EmptyState, SkeletonCard } from "../components/common";
+import { PageHeader, Chip, EmptyState, SkeletonCard, StickyHeader } from "../components/common";
 import { useAuth } from "../context/AuthContext";
 import { userPerms } from "../lib/perms";
 import { opModel } from "../lib/operatingModel";
@@ -2175,7 +2175,7 @@ export default function MyWork() {
   return (
     <div>
       {/* ─── MOBILE HEADER (below lg) ───────────────────────────────────── */}
-      <header className="mb-5 flex flex-col gap-3 lg:hidden" data-testid="mywork-mobile-header">
+      <StickyHeader className="mb-5 flex flex-col gap-3 lg:hidden" data-testid="mywork-mobile-header">
         {/* Row 1 — title left, the two DESTINATIONS right.
             Workflows and Leave are the only two controls in this header that
             are not lenses on the task list — they replace the list with a
@@ -2323,7 +2323,7 @@ export default function MyWork() {
             <span className="ml-1 tabular-nums opacity-70">· {countFor(tab)}</span>
           </p>
         )}
-      </header>
+      </StickyHeader>
 
       {/* ─── DESKTOP HEADER (lg and up) ─────────────────────────────────── */}
       <header className="mb-7 hidden gap-4 lg:flex lg:flex-row lg:items-end lg:justify-between">

@@ -1,4 +1,23 @@
+import * as React from "react";
 import { cn } from "../lib/utils";
+
+/* KM-24 — has this element pinned to the top yet?
+   A 1px sentinel is placed directly ABOVE the sticky block; the moment it
+   leaves the viewport, the block is stuck. An IntersectionObserver fires twice
+   per pin instead of a scroll handler running on every frame of every scroll,
+   which matters on the pages this is used on — they are the long lists. */
+function useStuck() {
+  const sentinelRef = React.useRef(null);
+  const [stuck, setStuck] = React.useState(false);
+  React.useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return undefined;
+    const io = new IntersectionObserver(([e]) => setStuck(!e.isIntersecting), { threshold: 1 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  return [sentinelRef, stuck];
+}
 
 /**
  * KM-1 (2026-08-27) — this component accepted `eyebrow` and `title` and rendered
@@ -22,10 +41,45 @@ import { cn } from "../lib/utils";
  * @param {string} [title]    the page's h1
  * @param {node}   [children] trailing controls; wraps below the title on mobile
  */
-export function PageHeader({ eyebrow, title, children, testid }) {
+/**
+ * KM-24 · StickyHeader — the pinning wrapper for the SIX hand-rolled headers.
+ *
+ * PageHeader below covers the pages that adopted it (Journal, Calendar, Leave,
+ * Notifications, People, Captures, WorkCoach). The pages the founder actually
+ * named — My Work, Finance, CRM, Team, Ops — each hand-rolled their own header
+ * years before PageHeader existed, so they need the same behaviour without
+ * being rewritten to adopt it. This gives them the sentinel and the
+ * `data-stuck` flag while leaving their markup exactly as it is.
+ */
+export function StickyHeader({ className, children, ...rest }) {
+  const [sentinelRef, stuck] = useStuck();
+  return (
+    <>
+      <div ref={sentinelRef} aria-hidden="true" className="h-px w-full lg:hidden" />
+      <header className={cn("kr-stick", className)} data-stuck={stuck ? "true" : undefined} {...rest}>
+        {children}
+      </header>
+    </>
+  );
+}
+
+/**
+ * KM-24 — the header PINS on mobile. `stick={false}` opts a page out (Settings
+ * and Notifications are short enough that a pinned bar is only ever in the
+ * way). Desktop is untouched: .kr-stick is inside a max-width:1023.98px query,
+ * so above lg this is the same static header it has always been.
+ */
+export function PageHeader({ eyebrow, title, children, testid, stick = true }) {
+  const [sentinelRef, stuck] = useStuck();
   if (!eyebrow && !title && !children) return null;
   return (
-    <header className="mb-6 lg:mb-7" data-testid={testid}>
+    <>
+      {stick && <div ref={sentinelRef} aria-hidden="true" className="h-px w-full lg:hidden" />}
+    <header
+      className={cn("mb-6 lg:mb-7", stick && "kr-stick")}
+      data-stuck={stick && stuck ? "true" : undefined}
+      data-testid={testid}
+    >
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between lg:gap-4">
         {(eyebrow || title) && (
           <div className="min-w-0">
@@ -44,6 +98,7 @@ export function PageHeader({ eyebrow, title, children, testid }) {
         )}
       </div>
     </header>
+    </>
   );
 }
 

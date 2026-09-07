@@ -35,6 +35,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { selfScore, scoreBand, scoreActions } from "../lib/karmaScore";
+import { StickyHeader } from "../components/common";
 import {
   ArcGauge, StatTile, ScoreMeter, DarkBand, InsightWell, IconChip, BigNumeral,
 } from "../components/karma";
@@ -99,12 +100,12 @@ export default function OperatingScore() {
 /** The Karma page opening: eyebrow over a display heading, no card. */
 function PageTitle({ eyebrow, title, testid }) {
   return (
-    <header className="mb-7" data-testid={testid}>
+    <StickyHeader className="mb-7" data-testid={testid}>
       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
         {eyebrow}
       </p>
       <h1 className="mt-1.5 font-display text-3xl sm:text-4xl">{title}</h1>
-    </header>
+    </StickyHeader>
   );
 }
 

@@ -1,0 +1,28 @@
+# DEPLOY-1 — what never enters the frontend image.
+#
+# .env is first and the reason is not size: REACT_APP_* values are INLINED into
+# the bundle at build time, so a local .env copied into the build context would
+# silently override the build arg Railway supplies and ship the developer's
+# localhost backend URL to production. The image must take its config only from
+# the build argument.
+.env
+.env.*
+
+# Reinstalled from the lockfile inside the image; copying the host's tree in is
+# both huge and wrong (native modules built for the host platform).
+node_modules
+build
+
+# Local noise
+.git
+.gitignore
+.DS_Store
+npm-debug.log*
+.audit-artifacts
+.audit-desktop-baseline
+audit-baseline.txt
+.screenshots
+
+# Verification scripts and their fixtures — they run in CI and locally, never
+# in the served image.
+scripts

@@ -58,9 +58,12 @@ export function DexFab({ onOpen, recording = false, seconds = 0, onStop, intent 
         "grid place-items-center rounded-pill shadow-brutal-lg transition-colors",
         "h-16 w-16 max-[359px]:h-[3.75rem] max-[359px]:w-[3.75rem]",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        /* KM-32 — the FAB carries the same warm-white glow as the bar it sits
+           beside: a lit rim and a soft halo, so the pair reads as one object
+           rather than a black circle parked next to a lit pill. */
         recording
           ? "bg-danger-600 text-white recording-pulse"
-          : "bg-kr-ink text-white hover:opacity-95"
+          : "bg-kr-ink text-white hover:opacity-95 ring-1 ring-[hsl(40_30%_92%/.30)] shadow-[0_8px_28px_rgba(0,0,0,.40),0_0_22px_-4px_hsl(40_35%_92%/.45),inset_0_1px_0_hsl(40_40%_96%/.20)]"
       )}
     >
       {recording || intent === "stop" ? (

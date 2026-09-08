@@ -67,12 +67,19 @@ function DockItem({ to, label, icon: Icon, testid, active, onClick }) {
   );
   // .dock-item carries the >= 56x56 sizing (§8) — see index.css for why it is
   // a class rather than Tailwind min-w/min-h utilities.
+  /* KM-32 — the live slot is PRESSED IN, not merely brighter. Colour and fill
+     weight alone made the selection easy to miss on a translucent bar over a
+     moving bloom; a held depression is the grammar every other selected control
+     in the app uses and it survives whatever is behind the glass. Hand-rolled
+     rather than .kr-pressed because that recipe is tuned for the light page —
+     on ink its white inset lip lands the wrong way round.
+     NO transition on the shadow: an outset/inset pair does not interpolate. */
   const cls = cn(
-    "dock-item flex flex-col items-center justify-center gap-0.5 rounded-xl px-1.5 transition-colors",
+    "dock-item flex flex-col items-center justify-center gap-0.5 rounded-2xl px-1.5",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-    // On ink: active = full white, inactive = white at 55%. Colour alone is
-    // never the only cue — fill weight + label carry it too (§3.5 held).
-    active ? "text-white" : "text-white/55 hover:text-white/80"
+    active
+      ? "text-white bg-white/[.07] shadow-[inset_2px_2px_6px_rgb(0_0_0/.55),inset_-1px_-1px_4px_rgb(255_255_255/.10)]"
+      : "text-white/55 transition-colors hover:text-white/80"
   );
   if (onClick) {
     return (
@@ -143,10 +150,16 @@ export function FloatingDock({
           // frosted-ink material: a translucent ink fill layered with a heavy
           // backdrop-blur so the bloom softly shows through. A hairline top
           // border and inner highlight sell it as glass rather than paint.
-          "flex h-16 w-full items-center justify-around gap-1 rounded-pill px-3",
+          /* KM-32 — taller (h-16 -> h-[4.5rem]) so the sheet's cards clear the
+             FAB instead of sliding under it, and a WARM-WHITE rim: a lit 1px
+             edge plus a soft outer halo in the same warm white. That is the
+             glow the founder liked in the reference — theirs was blue, and blue
+             is not in this palette. */
+          "flex h-[4.5rem] w-full items-center justify-around gap-1 rounded-pill px-3",
           "bg-kr-ink/55 backdrop-blur-2xl backdrop-saturate-150",
-          "border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.08)]",
-          "max-[359px]:h-[3.25rem]"
+          "border border-[hsl(40_30%_92%/.28)]",
+          "shadow-[0_8px_32px_rgba(0,0,0,0.35),inset_0_1px_0_hsl(40_40%_96%/.22),0_0_20px_-4px_hsl(40_35%_92%/.30)]",
+          "max-[359px]:h-16"
         )}
       >
         {/* KM-26 — WHILE DEX IS OPEN THIS BAR *IS* DEX.

@@ -37,17 +37,22 @@ import { CheckCircle, Spinner, CaretRight, CaretDown } from "@phosphor-icons/rea
 import { cn } from "@/lib/utils";
 
 /** Tier → grid span + type scale. Never narrower than the text can carry. */
+/* KM-32 — the phone type comes DOWN a step. At text-lg a two-clause directive
+   filled the card edge to edge and pushed the context line and the action into
+   the sheet's floor; the founder asked for the text to be sized to fit inside
+   the card and inside the band. The desktop sizes are unchanged — this is
+   purely the mobile step, where the card is 343px wide rather than 800. */
 const TIER = {
   a: {
     span: "col-span-2 sm:col-span-4 xl:col-span-6",
     minH: "min-h-[150px] lg:min-h-[178px] xl:min-h-[196px]",
-    title: "text-lg xl:text-xl font-semibold leading-snug",
+    title: "text-[15px] lg:text-lg xl:text-xl font-semibold leading-snug",
     clamp: "line-clamp-3",
   },
   b: {
     span: "col-span-2 sm:col-span-2 xl:col-span-3",
     minH: "min-h-[150px] lg:min-h-[178px] xl:min-h-[196px]",
-    title: "text-base font-semibold leading-snug",
+    title: "text-[14px] lg:text-base font-semibold leading-snug",
     clamp: "line-clamp-3",
   },
   c: {
@@ -171,8 +176,17 @@ function DecisionBox({ card, tier, tint, verb, icon: Icon, busy, done, onAction 
           disabled={busy || done}
           data-testid={`desk-card-action-${card.id}`}
           aria-label={done ? `${card.title} — actioned` : `${verb}: ${card.title}`}
+          /* KM-32 — the action takes the section's OWN colour at full strength.
+             The card behind it is a tint now (--kr-glass-a1 .26), so a
+             .kr-pressed trough on top of it had nothing to press into and read
+             as a hole. Reusing --kr-glass-from means Review is amber on the
+             decision band, red on Fire, blue on Today — each button lit in the
+             colour of the thing it acts on, which is the "glassmorphic full
+             colour fill" the reference shows. */
           className={cn(
-            "kr-pressed flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-pill px-4",
+            "flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-pill px-4",
+            "bg-[hsl(var(--kr-glass-from)/.85)] ring-1 ring-inset ring-white/25 backdrop-blur-md",
+            "shadow-[0_2px_10px_-2px_hsl(var(--kr-glass-to)/.65),inset_0_1px_0_rgb(255_255_255/.28)]",
             "text-xs font-semibold text-white",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70",
             (busy || done) && "opacity-60"

@@ -530,7 +530,11 @@
 }
 /* Scroll containers must clear the floating dock (§8 MPWA-03: 96px) plus the
    home indicator, or the last row is trapped underneath it. */
-.pb-dock { padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px)); }
+/* KM-32 — 6rem -> 7.5rem. The dock grew to 4.5rem and sits on a 1rem safe
+   offset, and the FAB is 4rem beside it, so 6rem left the last card sliding
+   under the bar — the founder's "shouldn't be interfering with the fab behind".
+   7.5rem clears the taller bar with a real gap rather than a hairline. */
+.pb-dock { padding-bottom: calc(7.5rem + env(safe-area-inset-bottom, 0px)); }
 
 @layer base {
     * {
@@ -1807,7 +1811,11 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
         margin-inline: calc(var(--page-pad, 1rem) * -1);
         padding-inline: var(--page-pad, 1rem);
         background: hsl(var(--kr-ink));
-        border-radius: 44px 44px 0 0;   /* KR-8.2: matched to the reference */
+        /* KM-32 — the LEFT corner drops to 14px. At a matched 44px both
+           shoulders curved away hard enough that the sheet read as a pill with
+           a bite taken out of it rather than a folder tab; the reference has
+           one soft shoulder and one nearly square. Right stays 44. */
+        border-radius: 14px 44px 0 0;
 
         /* KR-14.1 — THE NOTCH IS A DRAWN PATH, NOT AN ELLIPSE.
            Every version until now cut the dip with a radial-gradient, which
@@ -1915,9 +1923,17 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
     .kr-glass {
         --kr-glass-from: 36 18% 48%;
         --kr-glass-to:   225 12% 38%;
+        /* KM-32 — the two fill strengths are variables now. The founder's note
+           on the Desk was that the section cards read as SOLID colour rather
+           than as a tint of the ink behind them: "only subtle reference of the
+           colour should be delivered". Rather than fork the recipe, the desk
+           variants below dial these down and every other glass surface in the
+           app (Finance, Ops, workflow cards) keeps the fill it was tuned at. */
+        --kr-glass-a1: .60;
+        --kr-glass-a2: .42;
         background: linear-gradient(145deg,
-            hsl(var(--kr-glass-from) / .60),
-            hsl(var(--kr-glass-to) / .42));
+            hsl(var(--kr-glass-from) / var(--kr-glass-a1)),
+            hsl(var(--kr-glass-to) / var(--kr-glass-a2)));
         -webkit-backdrop-filter: blur(20px) saturate(1.35);
         backdrop-filter: blur(20px) saturate(1.35);
         border: 1px solid rgb(255 255 255 / .16);
@@ -2090,6 +2106,15 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
        you, red = on fire, blue = due today, olive = flagged. Ordered by
        urgency, and only the first two run hot — if all four shouted, none
        would. */
+    /* KM-32 — the Desk's four sections. Same hues, a third of the fill: at
+       .60/.42 each card was a block of colour sitting ON the ink; at .26/.14 it
+       is the ink with a colour in it, which is what the reference shows and
+       what "subtle bark glowish" describes. The blur and the white hairline do
+       the rest of the work of saying "glass". */
+    .kr-desk--needs,
+    .kr-desk--fire,
+    .kr-desk--today,
+    .kr-desk--flag  { --kr-glass-a1: .26; --kr-glass-a2: .14; }
     .kr-desk--needs { --kr-glass-from: 33 92% 56%;  --kr-glass-to: 16 82% 36%; }
     .kr-desk--fire  { --kr-glass-from: 6 78% 52%;   --kr-glass-to: 348 55% 26%; }
     .kr-desk--today { --kr-glass-from: 210 55% 50%; --kr-glass-to: 228 42% 27%; }

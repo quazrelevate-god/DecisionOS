@@ -1445,10 +1445,13 @@ html[data-page="workflows"] {
         background-size: 100% 100%;
     }
     /* The signup glow is a blob in its own margin box, not a full-bleed
-       background. It is already a deliberate crop of the picture, so
-       squeezing it would distort a shape rather than preserve one. */
+       background, so the portrait squeeze above must not reach it — stretching
+       to 100% 100% would distort a shape rather than preserve one.
+       KM-40 — and it holds `contain` here too, not the `cover` it used to
+       restore: the signup picture is shown whole at every orientation, which
+       is the promise the rule above makes. */
     .app-sky__art--aside {
-        background-size: cover;
+        background-size: contain;
     }
 
     /* KM-39 — THE PORTRAIT FADES ARE GONE, because the pictures they were
@@ -1475,7 +1478,48 @@ html[data-page="workflows"] {
 }
 
 .app-sky__art--aside {
-    --sky-art: url("/sky/inbox.webp");
+    /* ── THE SIGNUP GLOW'S PICTURE ─────────────────────────────────────────
+       TO CHANGE IT: replace frontend/public/sky/signup.webp. That is the
+       whole procedure — no CSS edit, no rebuild step, no restart. public/ is
+       copied verbatim into the build, so a refresh shows the new one.
+
+       KM-40 — it has its OWN file now. It used to point at /sky/inbox.webp,
+       which meant the signup page could not be changed without changing the
+       Desk's sky, and changing the Desk's sky silently changed signup. One
+       picture serving two rooms is a coupling nobody asked for; signup.webp
+       starts life as a copy of inbox.webp, so nothing moved on the way in.
+
+       IF A NEW PICTURE LANDS WRONG, these are the two knobs, in order:
+         --sky-art-pos      phone   (default centre)
+         --sky-art-pos-lg   desktop (below)
+       At 1280 the box is 794x1066 and `cover` scales an 800x1200 picture by
+       0.992 — so the width fits EXACTLY and there is no horizontal slack to
+       pan into. `--sky-art-pos-lg` is therefore inert at that size and the
+       glow's placement comes from the picture's own composition; a picture
+       whose bright mass sits far left will read dim here. Crop it right in
+       the file rather than fighting it with position.
+       (The 37% below is kept for narrower boxes, where slack does exist.)
+
+       KM-40 — FIT IS `contain`, SO YOUR IMAGE IS SHOWN UNMODIFIED. Every other
+       artwork layer in the app uses `cover`, which fills the box by cropping
+       whatever does not fit. This one does not crop and does not stretch: the
+       whole picture is drawn at its true aspect ratio, and any leftover space
+       inside the box stays transparent. That is free here — the layer is
+       already masked to a soft fade over a light page, so an unfilled edge is
+       invisible rather than a letterbox bar.
+
+       WHAT RATIO TO AUTHOR FOR. The box is not a fixed shape; it is derived
+       from the viewport, so no single ratio fills it everywhere:
+           desktop   width 0.62vw, height 1.24vh  ->  ratio = 0.5 x (vw/vh)
+           phone     width 0.86vw, height 0.60vh  ->  ratio = 1.43 x (vw/vh)
+       In practice that is ~0.74-0.80 on laptops and ~0.89 on a 16:9 monitor.
+       Author at 4:5 (ratio 0.80) — 1200x1500 is the sweet spot — and it sits
+       mid-range, so the unfilled sliver is small at both ends and lands under
+       the mask's fade either way. Any ratio still WORKS; this one just wastes
+       the least. */
+    --sky-art: url("/sky/signup.webp");
+    /* contain, not cover: show all of it, crop none of it. */
+    background-size: contain;
     /* PHONE: above the pane, held to the right. The first cut put it BELOW,
        which looked fine and measured badly — the footer line sat on the glow
        at 2.09:1 against a 4.5 requirement. Above the pane the only free band

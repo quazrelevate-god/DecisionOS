@@ -1862,9 +1862,15 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
            `svh` rather than `vh` because mobile browsers shrink the viewport as
            the URL bar retracts and `vh` would leave the sheet overhanging.
 
-           TRANSLUCENT, so the progressive blur has something to show through:
-           the ink drops to .82 and a backdrop blur sits behind it, which is why
-           the page below reads as frosted rather than hidden. */
+           KM-35 — OPAQUE AND FULL BLACK. KM-33 made this translucent ink at .82
+           over a 22px backdrop blur, so the hero showed through the sheet as a
+           frost. The founder's call is the opposite: pure #000, nothing showing
+           through, no blur behind it. Which is the stronger surface — a sheet
+           you can half-see the page through is a scrim, and a scrim reads as
+           temporary; a solid floor reads as a place. It also costs nothing to
+           paint, where the blur was re-sampling the page every scroll frame.
+           #000 rather than --kr-ink (#0C0C0D) because "full black" is the ask
+           and the difference is visible against the cards sitting on it. */
         position: fixed;
         left: 0;
         right: 0;
@@ -1886,9 +1892,7 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
         overflow-y: auto;
         overflow-x: hidden;
         overscroll-behavior: contain;
-        background: hsl(var(--kr-ink) / .82);
-        -webkit-backdrop-filter: blur(22px) saturate(1.2);
-        backdrop-filter: blur(22px) saturate(1.2);
+        background: #000;
         transition: max-height 320ms cubic-bezier(.22, 1, .36, 1);
 
         /* KM-33 · THE CONTOUR, TRACED OFF THE FOUNDER'S REFERENCE.
@@ -2013,33 +2017,16 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
             margin-inline: calc(var(--page-pad, 1rem) * -1);
             padding-inline: var(--page-pad, 1rem);
             background: hsl(var(--kr-ink));
-            -webkit-backdrop-filter: none;
-            backdrop-filter: none;
         }
     }
 
-    /* KM-33 · the progressive blur above the sheet.
-       A fixed strip sitting just above the sheet's top edge, blurring what is
-       behind it through a gradient mask — clear at the top, fully blurred where
-       it meets the ink. That is what makes the sheet read as sitting ON the
-       page rather than pasted over it, and it is the "progressive blur to the
-       background of the black card" the founder asked for. Pointer-events none
-       so it never eats a tap meant for the hero. */
-    .kr-band-haze {
-        position: fixed;
-        left: 0;
-        right: 0;
-        z-index: 19;
-        height: 88px;
-        pointer-events: none;
-        -webkit-backdrop-filter: blur(14px);
-        backdrop-filter: blur(14px);
-        -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 78%);
-        mask-image: linear-gradient(to bottom, transparent 0%, #000 78%);
-    }
-    @media (min-width: 1024px) {
-        .kr-band-haze { display: none; }
-    }
+    /* KM-35 — .kr-band-haze IS GONE, and the gap where it was is the note.
+       KM-33 put a fixed, gradient-masked backdrop-filter strip above the sheet
+       so the page appeared to blur as it slid under it. With the sheet opaque
+       black there is nothing for it to blend INTO: the strip would blur the
+       hero into a hard, unblurred edge, which reads as a smudge rather than
+       depth. Removed rather than retuned — the sheet's own edge is the
+       transition now. */
 
     /* KM-34 · .kr-netbar — the Finance net-profit bars, traced off
        "finance page reference.png" rather than approximated.
@@ -2093,6 +2080,10 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
            app (Finance, Ops, workflow cards) keeps the fill it was tuned at. */
         --kr-glass-a1: .60;
         --kr-glass-a2: .42;
+        /* KM-35 — what colour a button lit in THIS surface's own hue has to
+           print its label in. White by default; a variant whose hue is light
+           enough to fail it says so (see .kr-desk--needs). */
+        --kr-glass-btn-fg: 0 0% 100%;
         background: linear-gradient(145deg,
             hsl(var(--kr-glass-from) / var(--kr-glass-a1)),
             hsl(var(--kr-glass-to) / var(--kr-glass-a2)));
@@ -2322,16 +2313,48 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
        you, red = on fire, blue = due today, olive = flagged. Ordered by
        urgency, and only the first two run hot — if all four shouted, none
        would. */
-    /* KM-32 — the Desk's four sections. Same hues, a third of the fill: at
-       .60/.42 each card was a block of colour sitting ON the ink; at .26/.14 it
-       is the ink with a colour in it, which is what the reference shows and
-       what "subtle bark glowish" describes. The blur and the white hairline do
-       the rest of the work of saying "glass". */
+    /* The Desk's four sections. Same hues, a fraction of the fill: at .60/.42
+       each card was a block of colour sitting ON the ink; dialling the alphas
+       down makes it the ink with a colour in it, which is what the reference
+       shows and what "subtle bark glowish" describes.
+
+       KM-35 — 90% TRANSPARENT, the founder's number, so the strong end of the
+       gradient is .10 and the pale end keeps the same ratio to it (.26/.14
+       scaled by 0.385). The reason this works rather than erasing the cards is
+       the sheet underneath: KM-35 also made it opaque #000, so a 10% wash of
+       saturated colour has a black ground to sit on and still separates. The
+       white hairline at .16 is now doing most of the work of drawing the card,
+       which is the same bargain .kr-frost-min strikes in the light zone.
+       (These four are the only glass variants that go this low — every other
+       .kr-glass surface keeps the .60/.42 it was tuned at.) */
     .kr-desk--needs,
     .kr-desk--fire,
     .kr-desk--today,
-    .kr-desk--flag  { --kr-glass-a1: .26; --kr-glass-a2: .14; }
-    .kr-desk--needs { --kr-glass-from: 33 92% 56%;  --kr-glass-to: 16 82% 36%; }
+    .kr-desk--flag  {
+        --kr-glass-a1: .10;
+        --kr-glass-a2: .05;
+        /* KM-35 — and no backdrop blur, because there is provably nothing to
+           blur. These four only ever sit inside .kr-dark-band, whose fill is a
+           flat opaque colour on both breakpoints (#000 on the phone now, ink on
+           desktop) — blurring a uniform field returns the same uniform field,
+           and `saturate` on black is black. Four full-size backdrop filters per
+           viewport were being composited every scroll frame to produce an
+           image identical to not running them. Same finding as /finance, for a
+           different reason: there it was a pre-blurred picture, here it is a
+           solid. Other .kr-glass surfaces sit over real content and keep it. */
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+    /* KM-35 — the one section whose action button prints INK, not white.
+       The buttons take their section's own hue at .85 (see DecisionBento), and
+       three of those four hues are dark enough to carry white type — fire 5.48,
+       today 5.26, flag 4.78. Amber is not: white on hsl(33 92% 56%) measures
+       2.94 against a 4.5 requirement, while ink on the same amber measures
+       6.66. So the label follows the hue rather than the convention. This was
+       not introduced by the transparency pass — it has been true since the
+       buttons took the section colour — but it is measurable now. */
+    .kr-desk--needs { --kr-glass-from: 33 92% 56%;  --kr-glass-to: 16 82% 36%;
+                      --kr-glass-btn-fg: var(--kr-ink); }
     .kr-desk--fire  { --kr-glass-from: 6 78% 52%;   --kr-glass-to: 348 55% 26%; }
     .kr-desk--today { --kr-glass-from: 210 55% 50%; --kr-glass-to: 228 42% 27%; }
     .kr-desk--flag  { --kr-glass-from: 92 34% 42%;  --kr-glass-to: 155 30% 22%; }

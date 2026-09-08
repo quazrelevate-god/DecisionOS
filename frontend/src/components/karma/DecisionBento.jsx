@@ -185,9 +185,16 @@ function DecisionBox({ card, tier, tint, verb, icon: Icon, busy, done, onAction 
              colour fill" the reference shows. */
           className={cn(
             "flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-pill px-4",
-            "bg-[hsl(var(--kr-glass-from)/.85)] ring-1 ring-inset ring-white/25 backdrop-blur-md",
+            /* KM-35 — `backdrop-blur-md` dropped: this button only ever sits
+               on a desk card, which sits on .kr-dark-band, which is a flat
+               opaque fill (#000 on the phone, ink on desktop). Blurring a
+               uniform field returns the same field. */
+            "bg-[hsl(var(--kr-glass-from)/.85)] ring-1 ring-inset ring-white/25",
             "shadow-[0_2px_10px_-2px_hsl(var(--kr-glass-to)/.65),inset_0_1px_0_rgb(255_255_255/.28)]",
-            "text-xs font-semibold text-white",
+            /* KM-35 — the label follows the section's hue instead of always
+               being white; only amber needs ink, and it needs it badly (2.94
+               vs 6.66). See --kr-glass-btn-fg in index.css. */
+            "text-xs font-semibold text-[hsl(var(--kr-glass-btn-fg))]",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70",
             (busy || done) && "opacity-60"
           )}

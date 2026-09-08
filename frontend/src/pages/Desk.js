@@ -157,30 +157,26 @@ export default function Desk() {
 
   /* KM-33 — the sheet's height is MEASURED, not assumed. It is capped at 46svh
      (80svh expanded) but hugs its content below that, so a short desk sits at
-     349px against a 373px ceiling. Pinning the haze and the scroll spacer to
-     the ceiling therefore left a 24px seam between the haze and the sheet's
-     top edge, and reserved scroll the page never needed. A ResizeObserver
-     tracks the real box through the expand transition as well as after it. */
+     349px against a 373px ceiling; reserving the ceiling as scroll left the
+     page with room it never needed. A ResizeObserver tracks the real box.
+
+     KM-35 — one value now, not two. The second (the live height) existed for
+     the progressive-blur strip, which rode the sheet's top edge through the
+     expand; the strip is gone with the sheet turning opaque, so only the
+     RESTING height survives. Resting, not live, on purpose: letting the spacer
+     follow the expand would grow the page's scroll by 300px the moment you tap
+     "+40 more", shifting the hero underneath the very sheet you just opened.
+     It reads the attribute off the element rather than closing over the
+     expanded state, so the callback never goes stale. */
   const bandRef = useRef(null);
-  const [bandH, setBandH] = useState(0);   // live — the haze rides the top edge
-  const [restH, setRestH] = useState(0);   // collapsed only — the scroll spacer
+  const [restH, setRestH] = useState(0);
   useEffect(() => {
     const el = bandRef.current;
     if (!el || typeof ResizeObserver === "undefined") return;
     /* border-box, not contentRect: the sheet's padding is part of the height
        the page has to clear. */
-    /* border-box, not contentRect: the sheet's padding is part of the height
-       the page has to clear. Two values, because they answer different
-       questions — the haze must ride the live top edge through the expand, but
-       the SPACER must not: letting it follow would grow the page's scroll
-       height by 300px the moment you tap "+40 more", shifting the hero
-       underneath the very sheet you just opened. The spacer owes the resting
-       height, so it reads the attribute off the element rather than closing
-       over the expanded state. */
     const measure = () => {
-      const h = Math.round(el.getBoundingClientRect().height);
-      setBandH(h);
-      if (el.dataset.expanded !== "true") setRestH(h);
+      if (el.dataset.expanded !== "true") setRestH(Math.round(el.getBoundingClientRect().height));
     };
     const ro = new ResizeObserver(measure);
     ro.observe(el);
@@ -616,13 +612,6 @@ export default function Desk() {
         style={{ height: `max(0px, calc(${restH}px - 7.5rem - env(safe-area-inset-bottom, 0px)))` }}
       />
 
-      {/* KM-33 — the haze strip between the page and the sheet. A sibling
-          rather than a child: a backdrop-filter inside the sheet would blur the
-          sheet's own children, not the page behind it. Its bottom is pinned to
-          the sheet's top by the same measurement the sheet uses, so the two
-          always meet however the sheet is sized. */}
-      <div className="kr-band-haze lg:hidden" aria-hidden="true"
-           style={{ bottom: bandH ? `${bandH}px` : "46svh" }} />
       <DarkBand
         testid="desk-band"
         bandRef={bandRef}

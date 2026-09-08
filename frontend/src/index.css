@@ -1895,71 +1895,52 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
         background: #000;
         transition: max-height 320ms cubic-bezier(.22, 1, .36, 1);
 
-        /* KM-33 · THE CONTOUR, TRACED OFF THE FOUNDER'S REFERENCE.
-           The old shape was a centred DIP: the top edge fell and climbed back,
-           leaving a symmetric bite. The reference is a STEP — the edge runs
-           level across the left two-thirds, drops through a short S, and then
-           stays down to a rounded corner. That is a folder tab, and it only
-           reads as one because it never comes back up.
+        /* KM-37 — THE CENTRED DIP IS BACK, restored verbatim from 851f55e
+           (KR-14.1/14.5, the last commit before KM-33 replaced it).
 
-           Measured off requirements.png rather than guessed — and measured a
-           second time, because the first pass read the depths as PIXELS when
-           the reference draws the sheet 544px wide. Every number below is
-           therefore a fraction of the sheet's WIDTH, which is what transfers
-           to a 375px phone; taking 22px literally made the step half again as
-           deep as the reference. (The check that settles it: the composition
-           panel's frame measures 544px across too, so the shape study and the
-           mock are drawn at one scale.)
+           KM-33 read the founder's requirements.png as a STEP — level across
+           the left two-thirds, down through a short S, then a rounded corner —
+           and traced it carefully. The trace was accurate and the shape was
+           still wrong: founder, seeing it built, "the output of the black sheet
+           designed now was not correct so revert back the old one, the one with
+           center cut made in the center". A step reads as a folder tab only
+           from one side; the dip reads as one from both, and that symmetry is
+           what made the silhouette legible on a full-bleed sheet.
 
-           First dark pixel per column across the 544x443 shape panel, as
-           depth below the high edge:
-             0%      57    the top-left corner arc  -> r = 57  = 10.5% of width
-             12-56%   0    the high edge
-             62%      6
-             66%     15    the fall
-             70%     21
-             72-92%  22    the low edge             -> 22     =  4.0% of width
-             94%     24
-             96%     28    the top-right corner arc -> r = 45  =  8.3% of width
-             98%     37
-           At 375 wide that is: level to x=210, an S down 15px ending at x=270,
-           level to x=344, then a 31px arc off the right corner.
+           The shape, from KR-14.1: the top edge runs level, drops through an
+           S-curve at x=48, holds FLAT for 124px, and climbs back through a
+           mirrored S at x=172. Three segments, drawn as a path rather than cut
+           with a radial-gradient — an ellipse has no flat floor and no straight
+           shoulders, so it reads as a bubble bitten out of the edge, which is
+           what the founder rejected before it ("it's some oval cut, it's not
+           nice"). Proportions came off their snippet, scaled by the one element
+           whose real size was known: the old grab bar, 36px in the app and
+           about an eighth of the snippet's width, putting the dip at ~220px
+           across and ~18px deep.
 
-           The whole top silhouette is now the mask's job, including the right
-           corner — border-radius cannot round an edge that has been cut away,
-           so the arc is drawn into the path. The left corner stays with
-           border-radius, where it is cheap and exact.
+           It stays a CUT rather than a painted notch because what shows through
+           is the page behind it; a notch "coloured like the background" would
+           be a flat patch sitting on a gradient.
 
-           KM-36 · preserveAspectRatio="none" IS LOAD-BEARING, and leaving it
-           off was a real bug rather than a nicety. An SVG used as a mask image
-           obeys its own preserveAspectRatio, which defaults to `xMidYMid meet`
-           — UNIFORM scale, then centred. So in the 1400x56 box `mask-size:
-           100% 56px` asks for, the scale resolved to min(1400/375, 56/56) = 1
-           and the silhouette drew at its natural 375px, centred at x 528-903,
-           with the whole width either side of it left uncut. On the desktop
-           band that read as a folder tab stranded in the middle of the sheet
-           with a hard black block beside it (founder, against a screenshot:
-           "it ended in between and a sharp block of black square was made").
-
-           The same trap fires on any phone WIDER than 375pt — a 430pt device
-           centred the tab and lost both corners — so this was never only a
-           desktop problem, it was only ever correct at exactly 375.
-
-           `none` lets the silhouette stretch to whatever it is given, which is
-           what `mask-size: 100% 56px` meant all along: the step stays at 56-72%
-           of the width at every size, the drop stays 15px, and the corner arc
-           relaxes into an ellipse that still lands on the real right edge. */
-        border-radius: 39px 0 0 0;   /* 10.5% of 375 — the traced left arc */
+           AND IT IS IMMUNE TO THE KM-36 TRAP BY CONSTRUCTION. That bug was an
+           SVG mask whose `mask-size` asked for a box wider than its viewBox:
+           preserveAspectRatio defaulted to `xMidYMid meet`, so it scaled
+           uniformly and centred instead of stretching, stranding the cut in the
+           middle of a wide sheet. Here `mask-size` is 220px 18px — exactly the
+           viewBox — so the transform is the identity at every viewport and the
+           dip stays 220px whether the sheet is a 375px phone or a 1400px desk.
+           Which is also why this version never had the bug. */
+        border-radius: 14px 44px 0 0;
         -webkit-mask-image:
-            url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="375" height="56" viewBox="0 0 375 56" preserveAspectRatio="none"><path d="M210 0 C240 0 240 15 270 15 L344 15 A31 31 0 0 1 375 46 L375 0 Z" fill="black"/></svg>'),
+            url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="220" height="18" viewBox="0 0 220 18"><path d="M0 0H220C196 0 196 18 172 18H48C24 18 24 0 0 0Z" fill="black"/></svg>'),
             linear-gradient(#000, #000);
         mask-image:
-            url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="375" height="56" viewBox="0 0 375 56" preserveAspectRatio="none"><path d="M210 0 C240 0 240 15 270 15 L344 15 A31 31 0 0 1 375 46 L375 0 Z" fill="black"/></svg>'),
+            url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="220" height="18" viewBox="0 0 220 18"><path d="M0 0H220C196 0 196 18 172 18H48C24 18 24 0 0 0Z" fill="black"/></svg>'),
             linear-gradient(#000, #000);
-        -webkit-mask-size: 100% 56px, auto;
-                mask-size: 100% 56px, auto;
-        -webkit-mask-position: top left, top left;
-                mask-position: top left, top left;
+        -webkit-mask-size: 220px 18px, auto;
+                mask-size: 220px 18px, auto;
+        -webkit-mask-position: top center, top left;
+                mask-position: top center, top left;
         -webkit-mask-repeat: no-repeat, no-repeat;
         mask-repeat: no-repeat, no-repeat;
         -webkit-mask-composite: xor;

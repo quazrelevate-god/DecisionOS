@@ -28,7 +28,7 @@
 // is a wall. The founder: "for each section it's showing the entire list of
 // bento boxes — I just want only one row shown, and the ability to expand."
 // So each section collapses to EXACTLY one full grid row and keeps a
-// "+N more" toggle. "One row" is computed, not guessed: the tiers below have
+// "More" toggle. "One row" is computed, not guessed: the tiers below have
 // known column spans per breakpoint, so the collapsed slice is the longest
 // prefix whose spans still fit the row — which is why the count changes with
 // width instead of leaving a ragged half-row.
@@ -256,16 +256,30 @@ export function DecisionBento({ sections, verbFor, iconFor, onCard, busyId, done
 
               {/* The expander only exists when there is something behind the
                   fold — a permanent "show less" on a one-card section would
-                  be a control that does nothing. */}
+                  be a control that does nothing.
+
+                  KM-37 — IT SAYS "MORE", NOT "+40 MORE", AND IT IS BARE TEXT.
+                  The count was already printed two elements to the left, in
+                  the chip beside the heading, so "Needs your decision · 41 ·
+                  +40 more" stated the same fact twice in one row and invited
+                  the reader to work out why the numbers differed by one (they
+                  differ because one card is on screen). Founder: "the count
+                  number was there for example 41 but same count number +40 is
+                  there in the more option so remove it". The pill border went
+                  with it — bordered, it competed with the section heading for
+                  weight; as text with a caret it reads as what it is, a
+                  disclosure. The focus ring stays, because a keyboard user
+                  still needs to see where they are. */}
               {!s.loading && hidden > 0 && (
                 <button
                   type="button"
                   onClick={() => toggle(s.key)}
                   aria-expanded={expanded}
+                  aria-label={expanded ? `Show fewer ${s.label} cards` : `Show all ${s.count ?? 0} ${s.label} cards`}
                   data-testid={`desk-expand-${s.key}`}
-                  className="ml-auto flex h-8 items-center gap-1.5 rounded-pill border border-white/20 px-3 text-xs font-semibold transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+                  className="ml-auto flex h-8 items-center gap-1.5 rounded-pill text-xs font-semibold text-white/70 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
                 >
-                  {expanded ? "Show less" : `+${hidden} more`}
+                  {expanded ? "Less" : "More"}
                   <CaretDown
                     size={11}
                     weight="bold"
@@ -277,7 +291,7 @@ export function DecisionBento({ sections, verbFor, iconFor, onCard, busyId, done
             </div>
 
             {/* Collapsed, the panel is exactly one card tall — the founder's
-                "fixed to accommodate one single card". Expanded (via +N more)
+                "fixed to accommodate one single card". Expanded (via More)
                 it becomes a capped, freely-scrolling column. Both caps are
                 lg:-reset so desktop keeps its full grid. */}
             <div className={cn(

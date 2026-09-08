@@ -46,11 +46,13 @@ import {
   Plus, ArrowRight, Trash, ClockCounterClockwise, WarningCircle, DotsSixVertical, Check,
   SlidersHorizontal,  // KR-14.6 · mobile pipeline filter
   CaretDown,  // KR-14.21 · mobile stage collapse
+  ListBullets,  // KM-31 · the standalone page's pipeline picker
 } from "@phosphor-icons/react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter,
 } from "../components/ui/dialog";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "../components/ui/dropdown-menu";
+import { StickyHeader } from "../components/common";
 
 function _initials(name) {
   if (!name) return "?";
@@ -97,7 +99,9 @@ function NewWorkflowDialog({ type, typeLabel, custLabel, vendLabel, onCreated })
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <button data-testid="new-workflow-button"
-          className="kr-lift flex items-center gap-2 rounded-pill bg-kr-ink px-4 py-2.5 text-sm font-medium text-white transition-all">
+          /* KM-31 — neumorphic, not a black slab. It is this page's own
+             primary action and the app paints those in depth. */
+          className="kr-pop flex h-11 shrink-0 items-center gap-2 rounded-pill px-4 text-sm font-medium">
           <Plus size={16} weight="bold" aria-hidden="true" /> {t("workflows.new")}
         </button>
       </DialogTrigger>
@@ -176,6 +180,56 @@ function OverrideReasonDialog({ open, onOpenChange, wfTitle, blockedReason, targ
   );
 }
 
+/* KM-31 · the standalone page header.
+   The founder's layout: the title pinned like every other room, and ONE row
+   under it holding the pipeline picker (the options icon, whose menu lists
+   Distribution, Production, Procurement, Order fulfilment…) and the primary
+   action beside it. The old page put the pipeline pills on their own wrapping
+   row and the New-workflow button somewhere else again, which is two rows and
+   two visual weights for what is really one control strip.
+   The action is .kr-pop, not a filled slab: it is the page's own control, and
+   the app paints those in depth rather than in fill. */
+function StandaloneHeader({ show, title, pipelines, activeKey, counts, onPick, newDialog }) {
+  if (!show) return null;
+  const active = pipelines.find((p) => p.key === activeKey);
+  return (
+    <StickyHeader className="mb-3 flex flex-col gap-2.5 lg:hidden" data-testid="workflows-mobile-header">
+      <h1 className="font-display text-3xl">{title}</h1>
+      <div className="flex items-center gap-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button type="button" data-testid="workflows-pipeline-menu"
+              aria-label="Choose pipeline"
+              className="kr-pop flex h-11 min-w-0 flex-1 items-center gap-2 rounded-pill px-4 text-sm font-medium">
+              <ListBullets size={16} weight="bold" aria-hidden="true" className="shrink-0" />
+              <span className="min-w-0 flex-1 truncate text-left">{active?.label || "Pipeline"}</span>
+              <CaretDown size={12} weight="bold" aria-hidden="true" className="shrink-0 opacity-60" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" sideOffset={8} className="min-w-[14rem]">
+            {pipelines.map((pip) => (
+              <DropdownMenuItem key={pip.key} onSelect={() => onPick(pip.key)}
+                data-testid={`workflows-pipeline-${pip.key}`}
+                className={`flex items-center justify-between gap-3 ${activeKey === pip.key ? "font-medium" : ""}`}>
+                <span>{pip.label}</span>
+                <span className="tabular-nums text-xs text-muted-foreground">
+                  {counts.filter((w) => w.type === pip.key).length}
+                </span>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <div className="shrink-0" data-testid="workflows-new-slot">{newDialog}</div>
+      </div>
+    </StickyHeader>
+  );
+}
+
+/* KM-31 — Workflows is its own PAGE now, reached from the More menu rather
+   than from a pill inside My Work. `embedded` survives for the desktop tree,
+   which still renders it inside /my-work; what changed is the standalone
+   branch, which now looks like every other room: a pinned title, and one row
+   under it carrying the pipeline picker and the primary action. */
 export default function Workflows({ embedded = false }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
@@ -306,7 +360,20 @@ export default function Workflows({ embedded = false }) {
 
   return (
     <div data-testid="workflows-page">
-      <header className={embedded ? "mb-5 flex flex-wrap items-center justify-between gap-3" : "mb-7 flex flex-wrap items-end justify-between gap-4"}>
+      <StandaloneHeader
+        show={!embedded}
+        title={t("workflows.title")}
+        pipelines={pipelines}
+        activeKey={activeKey}
+        counts={data || []}
+        onPick={(k) => setTab(k)}
+        newDialog={
+          <NewWorkflowDialog
+            type={activeKey} typeLabel={tabLabel} custLabel={L.customer_singular} vendLabel={L.vendor_singular}
+            onCreated={refresh} />
+        }
+      />
+      <header className={embedded ? "mb-5 flex flex-wrap items-center justify-between gap-3" : "hidden lg:mb-7 lg:flex lg:flex-wrap lg:items-end justify-between gap-4"}>
         {!embedded && (
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{t("workflows.eyebrow")}</p>
@@ -389,7 +456,12 @@ export default function Workflows({ embedded = false }) {
           full-width section, cards flow beneath in one column. Drag-to-move
           still works within a section. From lg the original horizontal
           kanban with fixed 300px columns returns unchanged. */}
-      <div className="kr-glass-well p-4 lg:overflow-x-auto" data-testid="workflow-board">
+      {/* KM-31 — the well is DESKTOP-ONLY now. It is what drew the square
+          outline the founder saw around the stage cards: on desktop the columns
+          are transparent and need a ground to sit in, but on mobile each stage
+          is now its own glass card, so the well was a box drawn around boxes.
+          The stages stack straight onto the sky instead. */}
+      <div className="flex flex-col gap-3 lg:kr-glass-well lg:gap-0 lg:p-4 lg:overflow-x-auto" data-testid="workflow-board">
         <div className="flex flex-col gap-4 lg:min-w-max lg:flex-row lg:items-stretch">
           {stages.map((stg) => {
             const cards = (data || []).filter((w) => w.stage === stg.key);
@@ -425,7 +497,11 @@ export default function Workflows({ embedded = false }) {
                    KR-14.21 — mobile paints the stage as an nm-tile card so
                    the collapsed rows read as stacked cards; desktop keeps
                    the transparent column look. */
-                className={`flex w-full flex-col rounded-tile transition-all nm-tile p-2 lg:nm-none lg:bg-transparent lg:p-0 lg:w-[300px] lg:shrink-0 ${
+                /* KM-31 — the mobile stage was .nm-tile: a solid white slab
+                   sitting on the sky like a sticker. It is .kr-frost now — the
+                   same light glass the Desk's "today's read" wears — so the
+                   bloom reads through it. Desktop keeps the transparent column. */
+                className={`flex w-full flex-col rounded-tile transition-all kr-frost p-2 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:w-[300px] lg:shrink-0 ${
                   isTarget ? "bg-kr-accent/10 ring-2 ring-kr-accent/60"
                   : dropOk ? "ring-1 ring-dashed ring-foreground/30"
                   : dragId && !isSource ? "opacity-40"
@@ -457,10 +533,18 @@ export default function Workflows({ embedded = false }) {
                     HORIZONTAL scroller (`-mx-2 overflow-x-auto flex-row`).
                     Desktop keeps the original vertical stack. */}
                 <div className={`min-h-[140px] flex-1 gap-3 p-1.5 lg:min-h-[320px] lg:flex lg:flex-col ${
-                  isOpen ? "-mx-2 flex flex-row overflow-x-auto px-2" : "hidden lg:flex"
+                  /* KM-31 — a COLUMN on mobile, not a horizontal scroller.
+                     With the card now full-width, a row scroller would show one
+                     card and hide the rest behind a swipe nobody is told about;
+                     stacking them keeps every card in the stage visible. The
+                     row layout survives from lg up, where it is a real board. */
+                  isOpen ? "flex flex-col lg:-mx-2 lg:flex-row lg:overflow-x-auto lg:px-2" : "hidden lg:flex"
                 }`}>
+                  {/* KM-31 — the dashed square is gone. On a glass stage it drew a
+                      second box inside the first, which is the border the founder
+                      was seeing around the cards; the line alone says it. */}
                   {cards.length === 0 && (
-                    <div className="grid flex-1 place-items-center rounded-control border border-dashed border-foreground/15 p-4">
+                    <div className="grid flex-1 place-items-center rounded-control p-4">
                       <p className="text-center text-xs text-muted-foreground">
                         {isTarget ? "Drop to move here" : dropOk ? "Drop here to advance" : "Nothing at this stage"}
                       </p>
@@ -487,7 +571,15 @@ export default function Workflows({ embedded = false }) {
                           setDragId(w.id);
                         }}
                         onDragEnd={() => { setDragId(null); setOverStage(null); }}
-                        className={`kr-bento group cursor-grab p-3 active:cursor-grabbing w-64 h-[260px] shrink-0 flex flex-col overflow-hidden text-left lg:h-auto lg:w-auto lg:shrink lg:overflow-visible lg:p-3.5 ${
+                        /* KM-31 — the card was a fixed w-64 in a horizontal
+                           scroller, so inside a 343px stage it sat flush left
+                           with a band of empty stage showing down its right
+                           side: the "not centred in the outer card" the founder
+                           reported. On mobile it fills the stage instead and
+                           the height floors rather than fixes, so a short card
+                           is short. The scroller keeps its fixed 256px track
+                           from lg up, where several columns are side by side. */
+                        className={`kr-bento group cursor-grab p-3 active:cursor-grabbing w-full min-h-[220px] lg:w-64 lg:h-[260px] lg:shrink-0 flex flex-col overflow-hidden text-left lg:h-auto lg:w-auto lg:shrink lg:overflow-visible lg:p-3.5 ${
                           dragging ? "opacity-40" : ""
                         } ${busyId === w.id ? "opacity-60" : ""} ${
                           w.id === focusWf ? "ring-2 ring-kr-ink ring-offset-2" : ""
@@ -545,7 +637,13 @@ export default function Workflows({ embedded = false }) {
                           <button onClick={() => advance(w)} data-testid={`advance-workflow-${w.id}`}
                             disabled={busyId === w.id}
                             title={`Move to ${labelOf(nextKey)}`}
-                            className="nm-btn mt-3 flex w-full items-center justify-center gap-1.5 py-2 text-xs font-medium disabled:opacity-50">
+                            /* KM-31 — .nm-btn was the retired flat outline. The
+                               advance button is the one thing on the card that
+                               DOES something, so it wears the app's raised
+                               control material. No transition utility: .kr-pop
+                               swaps an outset shadow list for an inset one on
+                               press and those do not interpolate. */
+                            className="kr-pop mt-3 flex h-10 w-full items-center justify-center gap-1.5 rounded-pill text-xs font-medium disabled:opacity-50">
                             {t("workflows.advance")} to {labelOf(nextKey)}
                             <ArrowRight size={12} weight="bold" aria-hidden="true" className="kr-arrow transition-transform duration-200" />
                           </button>

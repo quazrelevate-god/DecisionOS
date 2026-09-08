@@ -4,11 +4,11 @@ import { useSearchParams } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { hasPerm } from "../lib/perms";
-import { PageHeader, Chip, EmptyState } from "../components/common";
+import { PageHeader, StickyHeader, Chip, EmptyState } from "../components/common";
 import { timeAgo } from "../lib/format";
 import { toast } from "sonner";
 import {
-  AirplaneTakeoff, Plus, WarningOctagon, CheckCircle, XCircle, ChatCircleText, Gear, Clock,
+  AirplaneTakeoff, Plus, WarningOctagon, CheckCircle, XCircle, ChatCircleText, Gear, GearSix, Clock,
   Sparkle, ArrowsClockwise, CalendarPlus, Eye, CircleNotch,
 } from "@phosphor-icons/react";
 import {
@@ -61,7 +61,7 @@ function RequestLeaveDialog({ onDone }) {
         <button
           data-testid="request-leave-button"
           title="Plan time off in advance -- needs approval"
-          className="kr-lift flex items-center gap-2 rounded-pill bg-kr-ink px-4 py-2.5 text-sm font-medium text-white transition-all"
+          className="kr-pop flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium"
         >
           <Plus size={16} weight="bold" /> Request Leave
         </button>
@@ -123,7 +123,7 @@ function AbsenceDialog({ onDone }) {
         <button
           data-testid="report-absence-button"
           title="Same-day unplanned absence -- no approval needed"
-          className="kr-lift flex items-center gap-2 rounded-pill bg-kr-ink px-4 py-2.5 text-sm font-medium text-white transition-all"
+          className="kr-pop flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium"
         >
           <WarningOctagon size={16} weight="bold" /> Report Absence Today
         </button>
@@ -403,7 +403,8 @@ function ApproverConfig({ roleOptions, members }) {
         {roleOptions.filter((r) => r.key !== "owner").map((r) => (
           <div key={r.key} className="flex items-center gap-3">
             <span className="w-32 shrink-0 text-sm font-semibold">{r.label}</span>
-            <select data-testid={`leave-approver-${r.key}`} className={inp}
+            <select data-testid={`leave-approver-${r.key}`}
+                className="kr-pressed h-11 w-full rounded-pill bg-transparent px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--kr-gold))]"
               value={map[r.key] || ""} onChange={(e) => setMap({ ...map, [r.key]: e.target.value })}>
               <option value="">Owner (default)</option>
               {nonOwner.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}
@@ -412,7 +413,7 @@ function ApproverConfig({ roleOptions, members }) {
           </div>
         ))}
       </div>
-      <button onClick={save} data-testid="save-leave-approvers" className="kr-lift mt-4 rounded-pill bg-kr-ink px-5 py-2.5 text-sm font-medium text-white transition-all">Save Approvers</button>
+        <button onClick={save} data-testid="save-leave-approvers" className="kr-pop mt-4 flex h-11 items-center rounded-pill px-5 text-sm font-medium">Save approvers</button>
     </div>
   );
 }
@@ -436,14 +437,18 @@ export default function Leave({ embedded = false }) {
   const approvals = apprQ.data || [];
   const pendingApprovals = approvals.filter((l) => l.status === "pending" || l.status === "info_requested");
 
+  /* KM-31 — Settings is NOT a tab. My Leave and Approvals are two views of the
+     same list; Settings is a configuration screen that happens to live on this
+     page, and putting it in the same track said all three were peers. It is a
+     gear beside the track now, which is the shape every app uses for exactly
+     this and needs no label to be understood. */
   const TABS = [
     { key: "mine", label: "My Leave", n: mine.length },
     ...(canApprove ? [{ key: "approvals", label: "Approvals", n: pendingApprovals.length }] : []),
-    ...(canManage ? [{ key: "settings", label: "Settings" }] : []),
   ];
 
   const actions = (
-    <div className="flex items-center gap-3 flex-wrap">
+    <div className="flex items-center gap-2">
       <AbsenceDialog onDone={refresh} />
       <RequestLeaveDialog onDone={refresh} />
     </div>
@@ -454,7 +459,19 @@ export default function Leave({ embedded = false }) {
       {embedded ? (
         <div className="flex justify-end mb-4">{actions}</div>
       ) : (
-        <PageHeader eyebrow="Time off & availability" title="Leave & Absence">{actions}</PageHeader>
+        <>
+          {/* KM-31 · the standalone page, laid out like every other room: the
+              title pinned, and one row under it carrying both actions. They
+              used to be black slabs floating to the right of the heading; they
+              are the page's own controls, so they wear its raised material. */}
+          <StickyHeader className="mb-3 flex flex-col gap-2.5 lg:hidden" data-testid="leave-mobile-header">
+            <h1 className="font-display text-3xl">Leaves</h1>
+            <div className="flex items-center gap-2">{actions}</div>
+          </StickyHeader>
+          <div className="hidden lg:block">
+            <PageHeader eyebrow="Time off & availability" title="Leave & Absence">{actions}</PageHeader>
+          </div>
+        </>
       )}
 
       {/* KM-3 — the TRACK is .kr-pressed, not .nm-inset. nm-inset is a flat
@@ -465,7 +482,8 @@ export default function Leave({ embedded = false }) {
           selected control has. The raised .kr-pop tab then sits IN a genuine
           depression instead of on a painted panel, which is the whole point of
           a segmented track. */}
-      <div className="kr-pressed mb-6 flex w-fit items-center gap-1 rounded-pill p-1" data-testid="leave-tabs">
+      <div className="mb-6 flex items-center gap-2">
+      <div className="kr-pressed flex w-fit items-center gap-1 rounded-pill p-1" data-testid="leave-tabs">
         {TABS.map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)} data-testid={`leave-tab-${t.key}`}
             className={`flex h-9 items-center gap-2 rounded-pill px-4 text-sm font-medium transition-all ${tab === t.key ? "kr-pop text-foreground" : "text-foreground/60 hover:text-foreground/85"}`}>
@@ -473,6 +491,23 @@ export default function Leave({ embedded = false }) {
             {t.n > 0 && <span className="flex h-5 min-w-5 items-center justify-center rounded-pill px-1 font-mono text-[10px] tabular-nums opacity-60">{t.n}</span>}
           </button>
         ))}
+      </div>
+        {/* KM-31 — the gear. Separated from the track by a gap because it is a
+            different kind of thing: the track picks WHICH list, this opens the
+            configuration behind them. .kr-pressed while open, matching the
+            "selected means pushed in" grammar the rest of the app uses. */}
+        {canManage && (
+          <button
+            type="button"
+            onClick={() => setTab((cur) => (cur === "settings" ? "mine" : "settings"))}
+            aria-pressed={tab === "settings"}
+            aria-label="Leave settings"
+            data-testid="leave-settings-toggle"
+            className={`grid h-11 w-11 shrink-0 place-items-center rounded-full ${tab === "settings" ? "kr-pressed" : "kr-pop"}`}
+          >
+            <GearSix size={18} weight="bold" aria-hidden="true" />
+          </button>
+        )}
       </div>
 
       {tab === "mine" && (

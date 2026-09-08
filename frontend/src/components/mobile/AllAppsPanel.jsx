@@ -31,7 +31,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
-  CalendarBlank, AddressBook, UsersThree, Sparkle, BookOpen, Gauge,
+  CalendarBlank, AddressBook, UsersThree, Sparkle, BookOpen, Gauge, FlowArrow, AirplaneTakeoff,
   Bell, GearSix, Translate, MoonStars, Sun, SignOut, X,
   MagnifyingGlass, ArrowRight,
 } from "@phosphor-icons/react";
@@ -81,15 +81,21 @@ function buildTiles({ user, t, counts }) {
       blurb: "How the business is running",
     },
     { key: "journal", to: "/journal", label: t("nav.journal", "Journal"), icon: BookOpen, size: "small", ownerOnly: true },
+    /* KM-31 — Calendar and Work Coach give up their places to Workflows and
+       Leave, on the founder's call. Both of those were pills inside My Work,
+       which is the wrong home for them: they are destinations, not lenses on
+       the task list, and burying a whole pipeline board behind a pill in
+       another page is why it was hard to find. Their routes still exist and
+       still work; they are simply not on this panel any more. */
     {
-      key: "calendar",
-      to: "/calendar",
-      label: t("nav.calendar", "Calendar"),
-      icon: CalendarBlank,
+      key: "workflows",
+      to: "/workflows",
+      label: t("nav.workflows", "Workflows"),
+      icon: FlowArrow,
       size: "wide",
-      blurb: "Everything with a date",
+      blurb: "Pipelines, stage by stage",
     },
-    { key: "coach", to: "/coach", label: t("nav.coach", "Work Coach"), icon: Sparkle, size: "small" },
+    { key: "leave", to: "/leave", label: t("nav.leave", "Leave"), icon: AirplaneTakeoff, size: "small" },
     // §5.7 listed "Send Daily Digest" as a Small tile, and §8 asked for it to sit
     // nowhere near Sign out. E2-63 (2026-08-15) then deleted
     // POST /brief/send-digest outright — "the Desk itself is the brief now, so

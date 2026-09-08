@@ -9,6 +9,8 @@ import Layout from "./components/Layout";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import DecisionReview from "./pages/DecisionReview";
+import Workflows from "./pages/Workflows";
+import Leave from "./pages/Leave";
 // E2-73 (2026-08-15): legacy Inbox.js retired. Sprint 2 shipped the
 // new Decision Desk at /inbox; the old Inbox page had no users left.
 // /inbox-legacy now redirects to /inbox so any lingering bookmarks work.
@@ -118,7 +120,8 @@ function App() {
             <Route path="/brief" element={<Navigate to="/inbox?scope=morning" replace />} />
             <Route path="/journal" element={<Protected ownerOnly><Journal /></Protected>} />
             <Route path="/my-work" element={<Protected><MyWork /></Protected>} />
-            <Route path="/leave" element={<Navigate to="/my-work?view=leave" replace />} />
+            {/* KM-31 — a real page, reached from the More menu. */}
+            <Route path="/leave" element={<Protected><Leave /></Protected>} />
             <Route path="/settings" element={<Protected><Settings /></Protected>} />
             <Route path="/review" element={<Navigate to="/ingest" replace />} />
             <Route path="/notifications" element={<Protected><Notifications /></Protected>} />
@@ -129,7 +132,9 @@ function App() {
             <Route path="/inbox-legacy" element={<Navigate to="/inbox" replace />} />
             {/* KM-28 — the decision review is a page, not a pop-up. */}
             <Route path="/decisions/:id" element={<Protected><DecisionReview /></Protected>} />
-            <Route path="/workflows" element={<Navigate to="/my-work?view=workflows" replace />} />
+            {/* KM-31 — a real page, not a redirect into My Work. It is reached
+                from the More menu now, so it needs somewhere of its own to be. */}
+            <Route path="/workflows" element={<Protected perm="workflows"><Workflows /></Protected>} />
             {/* Epic 2 Sprint A — E2-01: /contacts is retired, redirects to /crm.
                 /contacts/:id (ContactProfile 360°) still works so any deep-links
                 or Brain-cited sources continue to resolve. */}

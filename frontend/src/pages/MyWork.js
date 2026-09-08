@@ -2247,26 +2247,14 @@ export default function MyWork() {
             fix that keeps every control reachable. */}
         <div className="flex items-center gap-1.5">
           <h1 className="min-w-0 flex-1 font-display text-3xl leading-none">{t("mywork.title")}</h1>
-          {/* Workflows — never changes depth, on the founder's standing call:
-              held .kr-pressed in BOTH states so colour alone carries selection,
-              brown at rest and ink when you are in it. Everything around it
-              moves between raised and sunken, which is what lets a
-              permanently-sunken button read as a place rather than a toggle.
-              Identical rule to the desktop row. */}
-          {canSeeWorkflows && (
-            <button type="button" onClick={() => setView("workflows")}
-              aria-pressed={mobileView === "workflows"} data-testid="work-mobile-workflows"
-              className={`${MPILL} shrink-0 kr-pressed ${
-                mobileView === "workflows" ? "font-semibold text-foreground" : "text-kr-brown"
-              }`}>
-              {t("mywork.view_workflows")}
-            </button>
-          )}
-          <button type="button" onClick={() => setView("leave")}
-            aria-pressed={mobileView === "leave"} data-testid="work-mobile-leave"
-            className={`${MPILL} shrink-0 ${mobileView === "leave" ? MPILL_ON : MPILL_OFF}`}>
-            {t("mywork.view_leave")}
-          </button>
+          {/* KM-31 — the Workflows and Leave pills are gone from this row.
+              They were destinations wearing the costume of lenses: tapping
+              either replaced the whole task list with a different product,
+              from a control sitting beside "My Tasks / All Tasks" as though it
+              were a third way of looking at the same thing. Both are pages now,
+              reached from the More menu, so this row holds only things that act
+              on THIS list. The `view` state and its embedded branches are
+              untouched — desktop still uses them. */}
         </div>
 
         {/* Row 2 — everything that ACTS ON THE LIST, and nothing else:

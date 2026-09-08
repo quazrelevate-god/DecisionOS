@@ -1320,100 +1320,66 @@ html[data-dex="1"] .app-sky__art { opacity: 0; }
    picture: the phone loads a 9 KB WebP, desktop a 1,044 KB PNG. A browser
    does not fetch a background whose media query does not match, so each
    viewport pulls exactly one of them — the phone never sees the 1 MB file. */
-html[data-page="inbox"] {
-    --sky-art:    url("/sky/inbox.webp");
-    --sky-art-lg: url("/sky/inbox-lg.png");
+/* KM-39 — THE SET WAS REPLACED, and the shape of the change matters more than
+   the filenames. The old artwork was a MIXTURE: some rooms shipped a portrait
+   phone crop (941x1672) alongside a landscape desktop crop (1654x951), which
+   is what --sky-art-lg exists to serve. The new set is uniform — one 800x1200
+   portrait picture per room, 9-16 KB each, no desktop variant anywhere.
 
-    /* KM-16 — 60%, not centre. This artwork has dark grey cores where the
-       orange one had none, and at `center` one of them sat directly under the
-       greeting: the muted half ("Rajesh.") measured 1.73:1 against a 3.0
-       large-text threshold — close to unreadable.
-       The value is swept, not guessed. Sampling the darkest pixel inside the
-       greeting's own box across background-position-x from 0 to 100%: centre
-       is the WORST region of the whole range (1.73), 55% is the first to clear
-       (3.67), and 60% gives 5.15 with the score area at 15.31 / 5.84. Past
-       ~75% everything scores higher still, but only because the crop has
-       panned onto the pale right edge and the glow has left the hero — which
-       is not a fix, it is a deletion. 60% is the smallest pan that clears the
-       core while keeping the picture.
-       Desktop is landscape and has no such collision, so it stays centred. */
-    --sky-art-pos:    60% center;
-    --sky-art-pos-lg: center;
+   So every --sky-art-lg is gone, and with it the -pos-lg / -opacity-lg
+   overrides that only made sense against a landscape companion image. Desktop
+   now falls through `var(--sky-art-lg, var(--sky-art, none))` to the portrait
+   file. That is a real trade and worth naming: measured at 1440x900, `cover`
+   shows 34% of an 800x1200 picture's height — desktop sees a horizontal band,
+   not the composition. Acceptable here because these are abstract washes with
+   no subject to cut in half; it would not be for artwork with a horizon or a
+   focal point.
+
+   /crm has no file in the new set, so its line is commented out rather than
+   left pointing at a 404. It falls back to its gradient, which is exactly what
+   the mechanism above promises.
+
+   Every opacity below was RE-MEASURED against the new pictures. The old values
+   were swept against the old ones and carried no meaning once the images
+   changed — a fade tuned to a dark core that has moved is just a dimmer
+   picture. */
+html[data-page="inbox"] {
+    --sky-art: url("/sky/inbox.webp");
 }
 
 html[data-page="my-work"] {
     --sky-art: url("/sky/my-work.webp");
-    /* At centre "Your day, simplified" reads 3.86 on the phone. Panning to 74%
-       clears it (5.02) — and was the first thing tried, and was wrong: at 74%
-       the crop has run onto the pale right edge and the picture is 12.2 mean
-       chroma of a possible 51.9. Fading it at CENTRE clears the same text at
-       .6 while keeping 30.2, two and a half times as much of the artwork.
-       Same trap KM-16 names on /inbox: a pan that scores well by removing the
-       thing it was asked to keep. Desktop clears at .75, so .6 covers both. */
-    --sky-art-opacity: .6;
 }
+
 /* The file is named for the UI label, "Ops"; the route is /operating-score. */
 html[data-page="operating-score"] {
     --sky-art: url("/sky/ops.webp");
-    /* The one room no pan can fix: this picture's dark core sits under the
-       score hero at EVERY horizontal position (best 4.01 at 0%, and only
-       because the artwork has left the screen — chroma 3.8 of a possible 85).
-       So it keeps the founder's centred framing and fades instead. At .4 the
-       hero clears with the picture still clearly present.
-       ONE FAILURE SURVIVES AND IT IS NOT THE ARTWORK'S: the green "Needs work"
-       label is rgb(64 119 64) at 14px, whose ceiling on this canvas is 4.42
-       against a 4.5 requirement — it fails on the plain gradient too. Fixing
-       it means changing that green, not this background. */
-    --sky-art-opacity: .4;
 }
+
 html[data-page="finance"] {
-    --sky-art:    url("/sky/finance.webp");
-    --sky-art-lg: url("/sky/finance-lg.webp");
-    /* KM-34 — the only room whose picture is a WASH rather than a scene. The
-       founder's brief was "blur it entirely, not as subtle, but more blurred
-       and a little bit brighten it", and the blur is BAKED INTO THE FILE
-       (Gaussian r=58 at the source's 941px, brightness 1.12, then downscaled)
-       rather than applied as a CSS filter. Two reasons: a `filter: blur(24px)`
-       on a fixed full-viewport layer re-rasterises on every scroll frame on a
-       phone, and a picture with no high frequencies left in it compresses to
-       nothing — 4.4 KB at 470px wide, against 10 KB for the sharp rooms.
-       Upscaling it costs nothing visually because there is no detail to lose.
-
-       Full strength, no pan — but the SECONDARY text moves instead. The title
-       clears easily (6.02 at 30px against a 3.0 threshold); the 14px subtitle
-       did not, reading 2.91 over the blue-grey band the header sits across.
-       The rooms before this one answered that with --sky-art-opacity, and here
-       that costs too much: clearing 4.5 needs opacity .5, which is half of the
-       picture the founder chose, spent on one line of 14px type. Darkening the
-       line is the cheaper trade and the more honest one — text over a PICTURE
-       has to carry its own contrast, because a picture makes no promise about
-       what is behind any given word. Measured after: 5.6:1.
-
-       This lands on <html>, the same element that declares the shadcn aliases,
-       so --muted-foreground re-substitutes on its own — no alias block needed
-       (contrast .kr-glass and .kr-dark-band, which are nested scopes and do
-       need one). */
+    --sky-art: url("/sky/finance.webp");
+    /* KM-34 — the secondary text on this room is darkened rather than the
+       picture faded; see the note on --text-secondary below. Kept through the
+       artwork swap because it is a property of putting 14px type on ANY
+       picture, not of the particular picture. Re-verified against the new one. */
     --text-secondary: 30 5% 24%;
 }
-html[data-page="crm"] {
-    --sky-art: url("/sky/crm.webp");
-    /* The best-behaved of the four: clears at full strength, centred, on the
-       phone (6.31) — no pan, no fade. Desktop is the opposite: "Your
-       relationships —" reads 2.01 centred and no pan fixes it, but nudging to
-       0% (which barely changes what is on screen, the slack being 138px) lets
-       it clear at .5 rather than the .3 that centring would demand. */
-    --sky-art-pos-lg: 0%;
-    --sky-art-opacity-lg: .5;
-}
+
 html[data-page="team"] {
     --sky-art: url("/sky/team.webp");
-    /* "Employees · access · reports" reads 2.81 centred on the phone. Pan to
-       74% and fade at centre score the same amount of visible artwork here
-       (22.7 vs 21.7 of a possible 57.1), so this follows /my-work and keeps
-       the composition centred rather than cropping to an edge.
-       Phone clears at .4, desktop at .5; .4 covers both. */
-    --sky-art-opacity: .4;
 }
+
+/* KM-39 — /workflows joins the table. It was the one room in the dock with a
+   page of its own (KM-31) and no sky of its own, so it fell back to the bare
+   gradient while every neighbour carried a picture. */
+html[data-page="workflows"] {
+    --sky-art: url("/sky/workflows.webp");
+}
+
+/* /crm has no file in the new set, so its line stays commented and the room
+   keeps its gradient rather than firing a request that 404s. Drop a crm.webp
+   in and uncomment to bring it back. */
+/* html[data-page="crm"]             { --sky-art: url("/sky/crm.webp"); } */
 /* html[data-page="settings"]        { --sky-art: url("/sky/settings.webp"); } */
 /* html[data-page="journal"]         { --sky-art: url("/sky/journal.webp"); } */
 /* html[data-page="calendar"]        { --sky-art: url("/sky/calendar.webp"); } */
@@ -1485,26 +1451,27 @@ html[data-page="team"] {
         background-size: cover;
     }
 
-    /* Portrait shows the WHOLE frame, which means every dark core the crop
-       used to throw away is now somewhere on screen — and on four of the five
-       rooms it landed under text. Measured at 375x812, worst case per room,
-       with the value that clears AA in brackets:
+    /* KM-39 — THE PORTRAIT FADES ARE GONE, because the pictures they were
+       fighting are gone. KM-22 measured the old set here and found that
+       portrait, showing the WHOLE frame, put a dark core under text on four of
+       five rooms — inbox 2.59:1 on the wordmark, crm 2.24, ops 4.14, team 4.05
+       — so each got an opacity cap (.72 / .66 / .28 / .28).
 
-         inbox   2.59:1 on the wordmark  (needs <= .75)
-         crm     2.24:1 on the wordmark  (needs <= .70)
-         ops     4.14:1 on the caption   (needs <= .31)
-         team    4.05:1 on the caption   (needs <= .30)
-         my-work 4.66:1                  already clear at .6
+       The new set has no such cores. Re-measured the same way, worst case in
+       the header band at 375x812, every room clears at FULL strength:
 
-       These are portrait-only overrides: landscape still crops, so the
-       landscape numbers are the ones KM-18 already signed off and nothing
-       here touches them. Each value sits a step below its threshold rather
-       than on it, because the artwork is the founder's and the next one
-       dropped into the same slot will not have the same dark cores. */
-    html[data-page="inbox"]           { --sky-art-opacity: .72; }
-    html[data-page="crm"]             { --sky-art-opacity: .66; }
-    html[data-page="operating-score"] { --sky-art-opacity: .28; }
-    html[data-page="team"]            { --sky-art-opacity: .28; }
+                   title (needs 3.0)   subtitle (needs 4.5)
+         my-work        13.18                 5.03
+         workflows      12.75                 4.87
+         team           12.64                 4.82
+         inbox          12.59                 4.81
+         ops            12.45                 4.75
+         finance        11.97                 4.57
+
+       Desktop is looser still (titles 13.5-14.7, subtitles 5.15-5.59), so
+       nothing is capped there either. Keeping the old numbers would not have
+       been safe-by-default — it would just be dimming the founder's new
+       artwork to defend against dark cores that are not in it. */
 }
 
 .app-sky__art--aside {

@@ -978,7 +978,7 @@ function BulkActionBar({ selectedIds, tasks = [], busy, onClear, onComplete, ope
  * rule: bigger for high, smaller after, but "don't reduce too much" — so the
  * floor is 14px, not 12.
  */
-function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAssignee = false, highlight = false, selected = false, onToggleSelect, open, onToggleOpen, tier }) {
+function TaskCard({ hidePrio = false, hideStatus = false, t, onChange, members = [], roleOptions = [], scores, showAssignee = false, highlight = false, selected = false, onToggleSelect, open, onToggleOpen, tier }) {
   const { user } = useAuth();
   const [uploading, setUploading] = useState(false);
   const [recording, setRecording] = useState(false);
@@ -1207,10 +1207,36 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
                   the same signal twice, and the louder of the two. It stays
                   as a word because size is a relative cue and a lone card in
                   a filtered view has nothing to be relative to. */}
-              <span data-testid={`priority-chip-${t.id}`}
-                className="shrink-0 rounded-pill border-[0.5px] border-kr-ink/55 px-2 py-0.5 text-[11px] font-medium capitalize text-foreground/70">
-                {t.priority || "medium"}
-              </span>
+              {/* KM-29 — dropped when the list is already filtered to it.
+                  Under "Medium" every card says Medium: a column of the same
+                  word telling you nothing you did not just ask for, and it is
+                  exactly the space the founder wanted back. */}
+              {!hidePrio && (
+                <span data-testid={`priority-chip-${t.id}`}
+                  className="shrink-0 rounded-pill border-[0.5px] border-kr-ink/55 px-2 py-0.5 text-[11px] font-medium capitalize text-foreground/70">
+                  {t.priority || "medium"}
+                </span>
+              )}
+              {/* KM-29 — the status pill JOINS this row instead of opening a
+                  second one under it. Priority, progress and lateness are three
+                  statements of the same kind about one task; splitting them
+                  across two rows made every card a line taller for no reading
+                  benefit, which is the height the founder asked to reclaim. */}
+              {!hideStatus && (
+                <span data-testid={`status-chip-${t.id}`}
+                  className={`shrink-0 rounded-pill px-2 py-0.5 text-[11px] font-medium ${
+                    terminal ? "bg-kr-ink text-white"
+                    : awaitingApproval ? "border-[0.5px] border-kr-ink text-foreground"
+                    : "bg-nm-sunken text-muted-foreground"
+                  } ${expanded ? "hidden lg:inline-block" : ""}`}>
+                  {STATUS_LABEL[t.status] || t.status}
+                </span>
+              )}
+              {t.source === "escalation" && (
+                <span className="shrink-0 rounded-pill bg-kr-accent px-2 py-0.5 text-[11px] font-medium text-white">
+                  Escalation
+                </span>
+              )}
               {/* KM-7 — Overdue rides WITH the priority chip, not on the meta
                   line below it. They are the same kind of statement about the
                   task — how urgent, how late — and splitting them across two
@@ -1223,13 +1249,6 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
               )}
             </div>
             <div className="flex items-center flex-wrap gap-2 mt-1.5 text-xs">
-              {/* Status pill -- muted when normal, red when overdue/rejected */}
-              <span data-testid={`status-chip-${t.id}`}
-                className={`px-2 py-0.5 font-medium border ${
-                  terminal ? "bg-kr-ink text-white border-transparent"
-                  : awaitingApproval ? "border-[0.5px] border-kr-ink text-foreground"
-                  : "bg-nm-sunken text-muted-foreground border-nm-edge/40"
-                } ${expanded ? "hidden lg:inline-block" : ""}`}>{STATUS_LABEL[t.status] || t.status}</span>
               {t.due_date && !overdue && (
                 <span className="text-muted-foreground">
                   due {new Date(t.due_date).toLocaleString(undefined, { day: "numeric", month: "short" })}
@@ -1261,7 +1280,6 @@ function TaskCard({ t, onChange, members = [], roleOptions = [], scores, showAss
                   <Paperclip size={11} weight="bold" /> {t.attachment_count}
                 </span>
               )}
-              {t.source === "escalation" && <span className="rounded-pill bg-kr-accent px-1.5 py-0.5 text-[10px] font-medium text-white">Escalation</span>}
               {t.source === "handoff" && <span className="rounded-pill border-[0.5px] border-kr-ink/55 px-1.5 py-0.5 text-[10px] font-medium">Handoff</span>}
             </div>
           </div>
@@ -2025,6 +2043,19 @@ export default function MyWork() {
   const [scope, setScope] = useState(loadedPrefs.scope || "mine");
   const [tab, setTab] = useState(loadedPrefs.tab || "all");
   const [aiPriority, setAiPriority] = useState(Boolean(loadedPrefs.aiPriority));
+  /* KM-29 — the two lenses that ride with the AI-priority bars. They sit in
+     component state rather than the URL because they are a reading posture,
+     not a destination: you flick between them while scanning and you do not
+     want twenty history entries for it. */
+  const [prioFilter, setPrioFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  /* Dismissing the bars clears both, so the list can never stay filtered by a
+     control that is no longer on screen. An effect rather than a patch to each
+     toggle, because the toggle exists twice — once on mobile, once on desktop —
+     and a rule enforced in one of two places is not a rule. */
+  useEffect(() => {
+    if (!aiPriority) { setPrioFilter("all"); setStatusFilter("all"); }
+  }, [aiPriority]);
 
   // Persist on any change. Guard on prefsKey so pre-login / test envs stay
   // no-op.
@@ -2130,6 +2161,8 @@ export default function MyWork() {
     list = all.filter((t) => !isTerminal(t) && t.task_type === tab);
   }
   if (aiPriority && tab !== "completed") {
+    if (prioFilter !== "all") list = list.filter((t) => (t.priority || "medium") === prioFilter);
+    if (statusFilter !== "all") list = list.filter((t) => t.status === statusFilter);
     list = [...list].sort((a, b) => (scoreMap[b.id]?.priority_score || 0) - (scoreMap[a.id]?.priority_score || 0));
   }
 
@@ -2276,52 +2309,15 @@ export default function MyWork() {
               </button>
             )}
 
-            {/* KR-14.7 — the sliders filter carries the sub-filters for the
-                active view: task categories in the segment views, pipelines
-                inside Workflows. Leave has no sub-filter, so it renders a
-                passive spacer that keeps the row's right edge steady.
-                KM-2 — now .kr-pop rather than a bare white circle: it sits
-                shoulder to shoulder with the AI circle, and two adjacent
-                circles in two different materials read as a mistake. */}
-            {mobileView === "leave" ? (
-              <span className="h-9 w-9 shrink-0" aria-hidden="true" />
-            ) : (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button type="button" data-testid="work-mobile-filter"
-                    aria-label={t("mywork.filter", "Filter")}
-                    className={`${MCIRCLE} kr-pop`}>
-                    <SlidersHorizontal size={16} weight="regular" aria-hidden="true" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" sideOffset={8} className="min-w-[12rem]">
-                  {mobileView === "workflows"
-                    ? om.pipelines.map((pip) => {
-                        const cur = params.get("wf_type") || om.pipelines[0]?.key;
-                        return (
-                          <DropdownMenuItem key={pip.key} onSelect={() => {
-                            const next = new URLSearchParams(params);
-                            next.set("view", "workflows");
-                            next.set("wf_type", pip.key);
-                            setParams(next);
-                          }}
-                            data-testid={`work-mobile-filter-wf-${pip.key}`}
-                            className={`flex items-center justify-between gap-3 ${cur === pip.key ? "font-medium" : ""}`}>
-                            <span>{pip.label}</span>
-                          </DropdownMenuItem>
-                        );
-                      })
-                    : mobileFilterTabs.map((tb) => (
-                        <DropdownMenuItem key={tb.key} onSelect={() => setTab(tb.key)}
-                          data-testid={`work-mobile-filter-${tb.key}`}
-                          className={`flex items-center justify-between gap-3 ${tab === tb.key ? "font-medium" : ""}`}>
-                          <span>{tb.label}</span>
-                          <span className="tabular-nums text-xs text-muted-foreground">{countFor(tb.key)}</span>
-                        </DropdownMenuItem>
-                      ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
+            {/* KM-29 — the sliders circle is GONE, on the founder's call. It
+                opened a dropdown of task categories; that job now belongs to
+                the two segmented bars the AI-priority circle reveals, and two
+                filter affordances a thumb apart — one of them hidden inside a
+                menu — was the confusion. The categories stay reachable from the
+                desktop header, which has the width for a chip strip.
+                Leave keeps a spacer so the row's right edge does not jump as
+                you move between views. */}
+            {mobileView === "leave" && <span className="h-9 w-9 shrink-0" aria-hidden="true" />}
           </div>
         </div>
 
@@ -2329,7 +2325,44 @@ export default function MyWork() {
             both left this row in KM-2 (into the lens group and the circle
             pair respectively), so what remains is the one thing that names
             what the list below is currently showing. */}
-        {inSegmentView && (
+        {/* KM-29 · the two lenses, revealed by the AI-priority circle.
+            Same track, same segments, same grammar as every other segmented
+            control here — .kr-pressed rail, .kr-pop on the live one — so they
+            read as one instrument with two rows rather than two widgets that
+            happen to sit together. They scroll horizontally rather than wrap:
+            five status segments do not fit 343px, and a control row that
+            reflows to two lines as you tap through it is worse than one that
+            slides.
+            NO transition utility, for the reason stated at the top of this
+            header: these swap outset shadows for inset ones. */}
+        {inSegmentView && aiPriority && (
+          <div className="flex flex-col gap-1.5" data-testid="work-mobile-lenses">
+            <div className="kr-pressed flex items-center gap-1 overflow-x-auto rounded-pill p-1 [scrollbar-width:none]"
+                 role="group" aria-label="Filter by priority" data-testid="work-mobile-prio-lens">
+              {[["all", "All"], ["high", "High"], ["medium", "Medium"], ["low", "Low"]].map(([k, label]) => (
+                <button key={k} type="button" onClick={() => setPrioFilter(k)}
+                  aria-pressed={prioFilter === k} data-testid={`work-prio-${k}`}
+                  className={`flex h-8 shrink-0 items-center rounded-pill px-3.5 text-[12px] ${
+                    prioFilter === k ? "kr-pop font-semibold text-foreground" : "text-foreground/60"}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="kr-pressed flex items-center gap-1 overflow-x-auto rounded-pill p-1 [scrollbar-width:none]"
+                 role="group" aria-label="Filter by progress" data-testid="work-mobile-status-lens">
+              {[{ key: "all", label: "All" }, ...M_STATUS_PILLS].map((sp) => (
+                <button key={sp.key} type="button" onClick={() => setStatusFilter(sp.key)}
+                  aria-pressed={statusFilter === sp.key} data-testid={`work-status-${sp.key}`}
+                  className={`flex h-8 shrink-0 items-center rounded-pill px-3.5 text-[12px] ${
+                    statusFilter === sp.key ? "kr-pop font-semibold text-foreground" : "text-foreground/60"}`}>
+                  {sp.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {inSegmentView && !aiPriority && (
           <p className="text-xs text-muted-foreground" data-testid="work-mobile-active-tab">
             {activeTabLabel}
             <span className="ml-1 tabular-nums opacity-70">· {countFor(tab)}</span>
@@ -2539,6 +2572,9 @@ export default function MyWork() {
               showAssignee,
               highlight: t.id === focusTaskId,
               scores: aiPriority && tab !== "completed" ? scoreMap[t.id] : undefined,
+              // KM-29 — tell the card which chips the active lens already says.
+              hidePrio: aiPriority && prioFilter !== "all",
+              hideStatus: aiPriority && statusFilter !== "all",
               selected: selected.has(t.id),
               onToggleSelect: () => toggleSelected(t.id),
             });

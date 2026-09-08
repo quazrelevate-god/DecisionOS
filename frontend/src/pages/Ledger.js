@@ -36,6 +36,25 @@ import {
 // and twelve hues on a page about cash made spend read as a subway map.
 // Colour now comes from lib/chartTheme (which reads the tokens) and from
 // DonutBreak's single-hue opacity ramp, where the ORDER is the encoding.
+/* KM-34 — THE DELTA COLOURS, DARKENED FOR GLASS.
+   The mobile Finance cards moved from opaque tiles onto translucent glass over
+   a picture, and a translucent card cannot promise a background — so the text
+   on it has to carry the contrast itself. Measured against the darkest sky a
+   card scrolls over: the old pair read 2.43 (kr-accent) and 2.27
+   (hsl(140 45% 35%)) against a 4.5 requirement.
+
+   --kr-accent is not the fix and cannot be: at hsl(19 100% 50%) its relative
+   luminance is 0.272, so its ceiling against PURE WHITE is 3.26 — it fails on
+   the app's cream canvas too, and its own token comment says what it is for
+   ("alerts, deltas, markers ONLY"). A marker is a shape you notice, not a
+   string you read. These two are for reading.
+
+   Hue is the reference's (its green core samples rgb(8,131,57) = hsl(144 88%
+   27%)) and the app's danger scale; only the lightness moved, far enough to
+   clear. Verified after the change, not just computed. */
+const UP_TEXT   = "text-[hsl(144_78%_18%)]";
+const DOWN_TEXT = "text-[hsl(var(--danger-900))]";
+
 const inp = "w-full nm-field px-3 py-2 text-sm";
 const label = "text-xs text-muted-foreground";
 
@@ -1008,23 +1027,32 @@ function MobileOverview({ summary, f }) {
 
   return (
     <div className="space-y-4 lg:hidden" data-testid="ledger-overview-mobile">
-      {/* Net profit hero */}
+      {/* KM-34 · Net profit hero, to the reference's layout: the label and a
+          period pill on one row, the figure and its delta beneath, and the
+          chart sitting on the card's floor at the right.
+          The period pill is a LABEL, not a control. The reference draws it
+          with a caret, but /ledger/summary returns one window and nothing
+          behind it takes a range — a caret that opens nothing is a worse lie
+          than no caret. It says what you are looking at and stops there. */}
       <Link to="/finance?tab=revenue" data-testid="ledger-mobile-netprofit"
-        className="nm-tile relative flex items-start overflow-hidden p-5">
-        <div className="min-w-0 flex-1">
+        className="kr-frost relative block overflow-hidden p-5">
+        <div className="flex items-start justify-between gap-3">
           <p className="text-sm font-medium">Net profit</p>
-          <p className="mt-2 font-display text-3xl font-semibold leading-none">{f(net)}</p>
-          <p className={`mt-3 flex items-center gap-1 text-xs font-medium ${netTrend >= 0 ? "text-[hsl(140_45%_35%)]" : "text-kr-accent"}`}>
-            <span aria-hidden="true">{netTrend >= 0 ? "↑" : "↓"}</span>
-            {Math.abs(netTrend).toFixed(1)}%
-            <span className="text-muted-foreground font-normal">this month</span>
-          </p>
+          <span className="kr-frost-min shrink-0 rounded-pill px-3 py-1 text-[11px] font-medium text-muted-foreground">
+            This month
+          </span>
         </div>
-        <span aria-hidden="true"
-          className="ml-2 grid h-9 w-9 shrink-0 place-items-center rounded-full bg-kr-ink text-white">
-          <ArrowRight size={14} weight="bold" />
-        </span>
-        <MobileSparkline points={netPoints} className="pointer-events-none absolute inset-y-4 right-16 w-32 opacity-70 sm:w-40" />
+        <div className="mt-2 flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-display text-3xl font-semibold leading-none">{f(net)}</p>
+              <p className={`mt-3 flex items-center gap-1 text-xs font-medium ${netTrend >= 0 ? UP_TEXT : DOWN_TEXT}`}>
+              <span aria-hidden="true">{netTrend >= 0 ? "↑" : "↓"}</span>
+              {Math.abs(netTrend).toFixed(1)}%
+              <span className="text-muted-foreground font-normal">vs last month</span>
+            </p>
+          </div>
+          <NetProfitBars points={netPoints} className="shrink-0" />
+        </div>
       </Link>
 
       {/* 2×2 KPI grid */}
@@ -1033,23 +1061,26 @@ function MobileOverview({ summary, f }) {
           trend={pct(months.at?.(-1)?.amount || 0, months.at?.(-2)?.amount || 0)} to="/finance?tab=revenue" testid="mkpi-revenue" />
         <MobileKpiCard icon={Receipt} tint="blue" label="Received" value={f(tt.revenue_received || 0)}
           trend={null} to="/finance?tab=revenue" testid="mkpi-received" />
-        <MobileKpiCard icon={TrendUp} tint="rose" label="Total spend" value={f(tt.total_spend || 0)}
+        {/* KM-34 — "Expenses" and "Outstanding", the reference's words. The
+            old labels described the query ("Total spend", "Overdue amount");
+            these describe the money, and they match the tabs they link to. */}
+        <MobileKpiCard icon={TrendUp} tint="rose" label="Expenses" value={f(tt.total_spend || 0)}
           trend={null} to="/finance?tab=expenses" testid="mkpi-spend" />
-        <MobileKpiCard icon={WarningCircle} tint="warn" label="Overdue amount" value={f(overdueAmount)}
+        <MobileKpiCard icon={WarningCircle} tint="warn" label="Outstanding" value={f(overdueAmount)}
           note={overdueCount > 0 ? `${overdueCount} overdue invoice${overdueCount === 1 ? "" : "s"}` : "No overdue"}
           urgent={overdueAmount > 0} to="/finance?tab=revenue&filter=overdue" testid="mkpi-overdue" />
       </div>
 
       {/* View all financials */}
       <Link to="/finance?tab=revenue" data-testid="ledger-mobile-viewall"
-        className="nm-tile flex items-center justify-center gap-2 p-4 text-sm font-medium">
+        className="kr-frost flex items-center justify-center gap-2 p-4 text-sm font-medium">
         View all financials
         <ArrowRight size={13} weight="bold" aria-hidden="true" />
       </Link>
 
       {/* Cash flow needs attention */}
       {overdueList.length > 0 && (
-        <div className="rounded-cardlg border-l-[3px] border-kr-accent bg-kr-accent/10 p-4"
+        <div className="kr-frost border-l-[3px] border-l-kr-accent p-4"
           data-testid="ledger-mobile-cashflow">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-2 min-w-0">
@@ -1062,13 +1093,13 @@ function MobileOverview({ summary, f }) {
               </div>
             </div>
             <Link to="/finance?tab=revenue&filter=overdue"
-              className="shrink-0 rounded-pill bg-white px-3 py-1.5 text-xs font-semibold shadow-[0_1px_2px_rgba(0,0,0,0.06)]">
+              className="kr-frost-min shrink-0 rounded-pill px-3 py-1.5 text-xs font-semibold">
               View all
             </Link>
           </div>
           <ul className="mt-3 space-y-2">
             {overdueList.map((r, i) => (
-              <li key={i} className="flex items-center gap-3 rounded-tile bg-white p-3">
+              <li key={i} className="kr-frost-min flex items-center gap-3 p-3">
                 <span aria-hidden="true"
                   className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-orange-100 text-orange-700">
                   <Buildings size={14} weight="regular" />
@@ -1077,13 +1108,13 @@ function MobileOverview({ summary, f }) {
                   <p className="truncate text-sm font-medium">{r.name}</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">{r.note}</p>
                 </div>
-                <span className="shrink-0 text-sm font-semibold text-kr-accent tabular-nums">{f(r.amount)}</span>
+                <span className={`shrink-0 text-sm font-semibold tabular-nums ${DOWN_TEXT}`}>{f(r.amount)}</span>
                 <CaretRight size={11} weight="bold" aria-hidden="true" className="text-muted-foreground" />
               </li>
             ))}
           </ul>
           <Link to="/finance?tab=revenue&filter=overdue"
-            className="mt-3 flex items-center gap-1 text-xs font-semibold text-kr-accent">
+            className={`mt-3 flex items-center gap-1 text-xs font-semibold ${DOWN_TEXT}`}>
             View all {overdueList.length}+ action items <ArrowRight size={11} weight="bold" aria-hidden="true" />
           </Link>
         </div>
@@ -1109,7 +1140,7 @@ function MobileKpiCard({ icon: Icon, tint, label, value, trend, note, urgent, to
   };
   return (
     <Link to={to} data-testid={testid}
-      className="nm-tile flex flex-col gap-1 p-4">
+      className="kr-frost flex flex-col gap-1 p-4">
       <div className="flex items-start justify-between gap-2">
         <span className={`grid h-9 w-9 place-items-center rounded-full ${tintMap[tint] || "bg-nm-sunken"}`}>
           <Icon size={16} weight="regular" aria-hidden="true" />
@@ -1117,38 +1148,55 @@ function MobileKpiCard({ icon: Icon, tint, label, value, trend, note, urgent, to
         <CaretRight size={13} weight="bold" aria-hidden="true" className="mt-1 text-muted-foreground" />
       </div>
       <p className="mt-1 text-xs text-muted-foreground">{label}</p>
-      <p className={`font-mono text-lg font-semibold tabular-nums ${urgent ? "text-kr-accent" : ""}`}>{value}</p>
+      <p className={`font-mono text-lg font-semibold tabular-nums ${urgent ? DOWN_TEXT : ""}`}>{value}</p>
       {trend != null && Number.isFinite(trend) && trend !== 0 && (
-        <p className={`text-[11px] font-medium ${trend >= 0 ? "text-[hsl(140_45%_35%)]" : "text-kr-accent"}`}>
+        <p className={`text-[11px] font-medium ${trend >= 0 ? UP_TEXT : DOWN_TEXT}`}>
           <span aria-hidden="true">{trend >= 0 ? "↑" : "↓"}</span> {Math.abs(trend).toFixed(1)}%
           <span className="ml-1 text-muted-foreground font-normal">this month</span>
         </p>
       )}
       {trend == null && note && (
-        <p className={`text-[11px] font-medium ${urgent ? "text-kr-accent" : "text-muted-foreground"}`}>{note}</p>
+        <p className={`text-[11px] font-medium ${urgent ? DOWN_TEXT : "text-muted-foreground"}`}>{note}</p>
       )}
     </Link>
   );
 }
 
 /**
- * KR-14.16 — a small area-under-curve sparkline used inside the net profit
- * hero card. Pure inline SVG so it never fetches, and rescales to any width.
+ * KM-34 · NetProfitBars — the net-profit chart, traced off the founder's
+ * "finance page reference.png" instead of eyeballed.
+ *
+ * WHAT REPLACED WHAT. This was MobileSparkline, an area-under-curve line in
+ * inline SVG. The reference draws a column chart, and the measurements are
+ * specific enough to be worth writing down (reference is 867px wide for a
+ * 375px phone, so every figure below is the reference's divided by 2.31):
+ *
+ *   bar width   19px -> 8         pitch 23.8px -> 10, i.e. a 2px gutter
+ *   chart box   233 x 117        -> 101 x 50
+ *   cap         semicircular — widths run 4,9,11,14,15,16 down a 19px bar,
+ *               which fits a radius of exactly half the width, so `rounded-t-full`
+ *   floor       flush, no bottom radius, all bars on one baseline
+ *
+ * The fill is one gradient shared by every bar rather than a fade per bar —
+ * see .kr-netbar in index.css for the measurement that settles it and for why
+ * this green is not the success token.
  */
-function MobileSparkline({ points, className }) {
-  if (!points || points.length < 2) return null;
-  const W = 120, H = 48;
-  const min = Math.min(...points), max = Math.max(...points);
-  const rng = max - min || 1;
-  const step = W / (points.length - 1);
-  const y = (v) => H - ((v - min) / rng) * (H - 4) - 2;
-  const path = points.map((v, i) => `${i === 0 ? "M" : "L"}${(i * step).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
-  const area = `${path} L${W},${H} L0,${H} Z`;
+function NetProfitBars({ points, className }) {
+  const vals = (points || []).slice(-12).map((v) => Math.max(0, Number(v) || 0));
+  if (vals.length < 2) return null;
+  const max = Math.max(...vals) || 1;
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className={className} aria-hidden="true">
-      <path d={area} fill="hsl(140 55% 55% / 0.18)" />
-      <path d={path} fill="none" stroke="hsl(140 55% 40%)" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
+    <div className={`kr-netbars flex h-[50px] items-end gap-[2px] ${className || ""}`} aria-hidden="true">
+      {vals.map((v, i) => (
+        <span
+          key={i}
+          className="kr-netbar w-2 shrink-0 rounded-t-full"
+          /* a floor of 8%, so a month at zero still draws a tick rather than
+             leaving a hole in the row — the chart is a rhythm, not a table. */
+          style={{ height: `${Math.max(8, (v / max) * 100)}%` }}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -1165,7 +1213,7 @@ function AskFinanceMobile() {
     navigate(`/brain?q=${encodeURIComponent(q.trim())}`);
   };
   return (
-    <div className="nm-tile p-4" data-testid="ledger-mobile-askai">
+    <div className="kr-frost p-4" data-testid="ledger-mobile-askai">
       <div className="mb-3 flex items-center gap-2">
         <span aria-hidden="true" className="grid h-7 w-7 place-items-center rounded-full bg-violet-100 text-violet-700">
           <Sparkle size={13} weight="fill" />
@@ -1179,7 +1227,7 @@ function AskFinanceMobile() {
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") send(); }}
           placeholder="e.g. Which vendor did I spend the most on?"
-          className="h-10 flex-1 rounded-pill border border-nm-edge/40 bg-white px-4 text-sm focus:outline-none focus:ring-2 focus:ring-kr-ink/15"
+          className="kr-frost-min h-10 flex-1 rounded-pill px-4 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-kr-ink/15"
           data-testid="ledger-mobile-askai-input"
         />
         <button type="button" onClick={send} data-testid="ledger-mobile-askai-send"
@@ -1329,13 +1377,38 @@ function CaptureHero({ pendingCount, onIngested, onOpenInbox }) {
       {/* KR-14.15 · MOBILE — capture actions as a four-column icon grid
           inside one card, matching the reference. Each column: colored
           circular icon on the left, two-line label on the right. */}
-      <div className="nm-tile mb-5 grid grid-cols-4 gap-2 p-3 lg:hidden" data-testid="finance-capture-hero-mobile">
+      {/* KM-34 — the reference gives this card a name and a way out: a title
+          block ("Simplify your finances" + what the four buttons are for) and
+          a dark circular arrow to the Inbox, with the icon grid underneath.
+          Without the heading the four circles read as a toolbar someone
+          forgot to label; with it, the card explains itself, which is the
+          whole brief for this pass. */}
+      <div className="kr-frost mb-5 p-4 lg:hidden" data-testid="finance-capture-hero-mobile">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[15px] font-semibold leading-tight">Simplify your finances</p>
+            <p className="mt-1 text-xs leading-snug text-muted-foreground">
+              Upload bills, track expenses and get real-time insights.
+            </p>
+          </div>
+          <button type="button" onClick={onOpenInbox} data-testid="finance-hero-inbox-m"
+            aria-label={pendingCount > 0 ? `Open Inbox, ${pendingCount} waiting` : "Open Inbox"}
+            className="relative grid h-9 w-9 shrink-0 place-items-center rounded-full bg-kr-ink text-white">
+            <ArrowRight size={14} weight="bold" aria-hidden="true" />
+            {pendingCount > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-kr-accent px-1 text-[9px] font-bold text-white">
+                {pendingCount}
+              </span>
+            )}
+          </button>
+        </div>
+        <div className="mt-4 grid grid-cols-4 gap-2">
         <label data-testid="finance-hero-doc-m" title="Upload a bill or receipt (PDF or photo)"
           className={`flex flex-col items-center gap-1.5 rounded-tile p-1 text-center cursor-pointer ${uploading ? "opacity-60 pointer-events-none" : ""}`}>
-          <span className="grid h-9 w-9 place-items-center rounded-full bg-orange-100 text-orange-600">
+          <span className="grid h-9 w-9 place-items-center rounded-full bg-blue-100 text-blue-700">
             <FilePdf size={16} weight="bold" aria-hidden="true" />
           </span>
-          <span className="text-[10px] leading-tight font-medium">Upload bill<br /><span className="text-muted-foreground font-normal">/receipt</span></span>
+          <span className="text-[10px] leading-tight font-medium">Upload bill<br /><span className="whitespace-nowrap text-[9px] text-muted-foreground font-normal">PDF, Image</span></span>
           <input type="file" hidden accept="image/*,application/pdf" onChange={(e) => upload("/ingest/document", e.target.files)} />
         </label>
         <label data-testid="finance-hero-photo-m" title="Scan a receipt"
@@ -1343,7 +1416,7 @@ function CaptureHero({ pendingCount, onIngested, onOpenInbox }) {
           <span className="grid h-9 w-9 place-items-center rounded-full bg-green-100 text-green-700">
             <Camera size={16} weight="bold" aria-hidden="true" />
           </span>
-          <span className="text-[10px] leading-tight font-medium">Scan<br /><span className="text-muted-foreground font-normal">receipt</span></span>
+          <span className="text-[10px] leading-tight font-medium">Scan<br /><span className="whitespace-nowrap text-[9px] text-muted-foreground font-normal">receipt</span></span>
           <input type="file" hidden accept="image/*" capture="environment" onChange={(e) => upload("/ingest/document", e.target.files)} />
         </label>
         <button type="button" data-testid="finance-hero-add-m" title="Add expense"
@@ -1352,16 +1425,17 @@ function CaptureHero({ pendingCount, onIngested, onOpenInbox }) {
           <span className="grid h-9 w-9 place-items-center rounded-full bg-violet-100 text-violet-600">
             <Plus size={16} weight="bold" aria-hidden="true" />
           </span>
-          <span className="text-[10px] leading-tight font-medium">Add<br /><span className="text-muted-foreground font-normal">expense</span></span>
+          <span className="text-[10px] leading-tight font-medium">Add<br /><span className="whitespace-nowrap text-[9px] text-muted-foreground font-normal">expense</span></span>
         </button>
         <label data-testid="finance-hero-csv-m" title="Bulk CSV or Excel import"
           className={`flex flex-col items-center gap-1.5 rounded-tile p-1 text-center cursor-pointer ${uploading ? "opacity-60 pointer-events-none" : ""}`}>
-          <span className="grid h-9 w-9 place-items-center rounded-full bg-blue-100 text-blue-700">
+          <span className="grid h-9 w-9 place-items-center rounded-full bg-green-100 text-green-700">
             <UploadSimple size={16} weight="bold" aria-hidden="true" />
           </span>
-          <span className="text-[10px] leading-tight font-medium">CSV /Excel<br /><span className="text-muted-foreground font-normal">Export</span></span>
+          <span className="text-[10px] leading-tight font-medium">Export<br /><span className="whitespace-nowrap text-[9px] text-muted-foreground font-normal">CSV, Excel</span></span>
           <input type="file" hidden accept=".csv,.xlsx,.xls" onChange={(e) => upload("/ingest/csv", e.target.files)} />
         </label>
+        </div>
       </div>
 
       {/* DESKTOP capture bar — unchanged. */}
@@ -1507,10 +1581,17 @@ export default function Ledger() {
               stopping short of it, which is the thing that reads as "there is
               more this way". Snap keeps it landing on whole pills. Same
               grammar as the /calendar filter rail.
-              Selection is depth (.kr-pressed / .kr-pop), not a solid ink fill,
-              matching the rest of the app's page controls — and with no
-              transition utility, since those two shadow lists are not
-              interpolable. */}
+              KM-34 — SELECTION IS INK HERE, not depth, and this room is the
+              exception on purpose: the founder's Finance reference draws the
+              active tab as a filled black pill against light glass ones, and
+              on a page whose every surface is now translucent a pressed
+              neomorphic shadow has nothing to press INTO — the well needs an
+              opaque ground to read against and the glass does not give it one.
+              Measured: .kr-pressed over the finance sky is a smudge. The
+              elsewhere-in-the-app depth convention still holds on the opaque
+              pages. (No transition utility either way — .kr-pop and
+              .kr-pressed swap outset for inset shadow lists, which do not
+              interpolate.) */}
           <div className="-mx-4 flex snap-x snap-mandatory gap-1.5 overflow-x-auto px-4 pb-1 lg:hidden"
                style={{ scrollbarWidth: "none" }}
                role="tablist" aria-label={t("nav.finance", "Finance")} data-testid="ledger-tabs-mobile">
@@ -1520,7 +1601,7 @@ export default function Ledger() {
                 <button key={tb.key} onClick={() => setTab(tb.key)} data-testid={`ledger-tab-mobile-${tb.key}`}
                   aria-pressed={active}
                   className={`flex h-9 shrink-0 snap-start items-center gap-1.5 whitespace-nowrap rounded-pill px-3.5 text-xs ${
-                    active ? "kr-pressed font-semibold text-foreground" : "kr-pop text-foreground/70"
+                    active ? "bg-kr-ink font-semibold text-white" : "kr-frost text-foreground/75"
                   }`}>
                   <tb.icon size={14} weight="regular" aria-hidden="true" />
                   {t(tb.tkey)}

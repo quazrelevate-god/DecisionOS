@@ -1366,7 +1366,35 @@ html[data-page="operating-score"] {
        it means changing that green, not this background. */
     --sky-art-opacity: .4;
 }
-/* html[data-page="finance"]         { --sky-art: url("/sky/finance.webp"); } */
+html[data-page="finance"] {
+    --sky-art:    url("/sky/finance.webp");
+    --sky-art-lg: url("/sky/finance-lg.webp");
+    /* KM-34 — the only room whose picture is a WASH rather than a scene. The
+       founder's brief was "blur it entirely, not as subtle, but more blurred
+       and a little bit brighten it", and the blur is BAKED INTO THE FILE
+       (Gaussian r=58 at the source's 941px, brightness 1.12, then downscaled)
+       rather than applied as a CSS filter. Two reasons: a `filter: blur(24px)`
+       on a fixed full-viewport layer re-rasterises on every scroll frame on a
+       phone, and a picture with no high frequencies left in it compresses to
+       nothing — 4.4 KB at 470px wide, against 10 KB for the sharp rooms.
+       Upscaling it costs nothing visually because there is no detail to lose.
+
+       Full strength, no pan — but the SECONDARY text moves instead. The title
+       clears easily (6.02 at 30px against a 3.0 threshold); the 14px subtitle
+       did not, reading 2.91 over the blue-grey band the header sits across.
+       The rooms before this one answered that with --sky-art-opacity, and here
+       that costs too much: clearing 4.5 needs opacity .5, which is half of the
+       picture the founder chose, spent on one line of 14px type. Darkening the
+       line is the cheaper trade and the more honest one — text over a PICTURE
+       has to carry its own contrast, because a picture makes no promise about
+       what is behind any given word. Measured after: 5.6:1.
+
+       This lands on <html>, the same element that declares the shadcn aliases,
+       so --muted-foreground re-substitutes on its own — no alias block needed
+       (contrast .kr-glass and .kr-dark-band, which are nested scopes and do
+       need one). */
+    --text-secondary: 30 5% 24%;
+}
 html[data-page="crm"] {
     --sky-art: url("/sky/crm.webp");
     /* The best-behaved of the four: clears at full strength, centred, on the
@@ -2013,6 +2041,39 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
         .kr-band-haze { display: none; }
     }
 
+    /* KM-34 · .kr-netbar — the Finance net-profit bars, traced off
+       "finance page reference.png" rather than approximated.
+
+       WHAT MAKES THIS CHART LOOK THE WAY IT DOES is not the bars, it is that
+       they all sample ONE gradient. Sampling the reference proves it: at the
+       same distance above the baseline two bars of very different heights read
+       the same alpha (0.53 at 33px, 0.76 at 53px, 1.0 at ~90px), while the top
+       of a SHORT bar is nowhere near full strength — 0.37, not 1.0. Give each
+       bar its own top-to-bottom fade and every bar starts saturated and the
+       chart flattens into stripes; anchor one gradient to the shared baseline
+       and the whole thing reads as a single wash the bars cut windows into.
+
+       `background-size: 100% var(--kr-netbar-h)` with `background-position:
+       bottom` is exactly that: the gradient is always the CHART's height and
+       always sits on the chart's floor, so a bar simply shows the slice its
+       own height reaches. No canvas, no SVG, no library.
+
+       The colour is traced too — hsl(161 17% 49%), a muted sea green, solved
+       from the bar/card pairs at eleven heights. Deliberately NOT the success
+       token: the reference prints this chart under a FALLING net profit with a
+       red delta beside it, so the green is texture, not a verdict. */
+    .kr-netbars { --kr-netbar: 161 17% 49%; --kr-netbar-h: 50px; }
+    .kr-netbar {
+        background-image: linear-gradient(to top,
+            hsl(var(--kr-netbar) / .16)  0%,
+            hsl(var(--kr-netbar) / .55) 30%,
+            hsl(var(--kr-netbar) / .90) 63%,
+            hsl(var(--kr-netbar) / 1)   80%);
+        background-size: 100% var(--kr-netbar-h);
+        background-position: bottom;
+        background-repeat: no-repeat;
+    }
+
     /* Frosted glass. The blur is the expensive part — budget ≤3 per
        viewport; the tints are local variables so a variant is one line. */
     /* KR-8.2 — each glass variant carries its OWN two-tone gradient wash
@@ -2180,6 +2241,27 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
         border: 1px solid hsl(0 0% 100% / .55);
         border-radius: var(--radius-tile);
         color: hsl(var(--text-primary));
+
+        /* KM-34 · THE ALIAS TRAP, FOURTH TIME — and this one had been left
+           half-done. .kr-frost set `color` and stopped, so anything reaching
+           for --muted-foreground kept resolving against :root's neutral-600,
+           a value tuned for the app's OPAQUE cream canvas. Under a translucent
+           card the backdrop is whatever the room's sky happens to be, and on
+           /finance's picture the darkest patch a card can sit over composites
+           to L=0.449 — where 13px muted body copy measured 3.52:1 against a
+           4.5 requirement. .kr-glass solved exactly this for the ink zone
+           (see its note above); the light-glass recipe needs the same block.
+
+           Secondary goes to 24% lightness here rather than neutral-600's 33%,
+           which clears the same worst case at 5.12:1. Darker on glass is not
+           a compromise — a translucent surface cannot promise a background, so
+           the text on it has to carry more of the contrast itself.
+           Re-declared, not just re-based: a custom property substitutes its
+           var() refs where it is DECLARED, so --muted-foreground must be
+           written again HERE or it keeps :root's frozen value. */
+        --text-secondary:   30 5% 24%;
+        --text-tertiary:    30 5% 34%;
+        --muted-foreground: var(--text-secondary);
     }
 
     /* KM-8 · .kr-frost-min — the same light glass as .kr-frost, one step
@@ -2195,8 +2277,41 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
         border: 1px solid hsl(0 0% 100% / .60);
         border-radius: var(--radius-tile);
         color: hsl(var(--text-primary));
+        /* Same re-scope as .kr-frost — this one is often used STANDALONE on
+           the sky (a period pill, an input) rather than nested in a frost
+           parent, so it cannot rely on inheriting the block above. */
+        --text-secondary:   30 5% 24%;
+        --text-tertiary:    30 5% 34%;
+        --muted-foreground: var(--text-secondary);
     }
     .kr-frost-min:hover { background: hsl(0 0% 100% / .46); }
+
+    /* KM-34 · /finance TAKES THE BLUR OFF ITS GLASS, and keeps everything else.
+       The revamp put ELEVEN backdrop-filtered surfaces in one viewport — six
+       tab pills, four cards and a list — against the "budget ≤3 per viewport"
+       the recipe above states. Counted, not estimated. Backdrop blur is the
+       most expensive thing on this page by a distance: each one re-samples and
+       re-blurs everything behind it, every frame it is on screen.
+
+       And here it buys nothing, which is what makes dropping it a fix rather
+       than a retreat. /finance's sky is the one picture in the app already
+       blurred at BUILD time (Gaussian r=58 — see the artwork table), so a 20px
+       backdrop blur is being asked to soften a wash with no high frequencies
+       left in it. Screenshots with and against are indistinguishable. What
+       actually draws the glass here is the white gradient fill and the
+       hairline, and both stay; the count drops from 11 to 1, the dock. Any
+       room whose sky has real detail keeps its blur.
+
+       (For the record, because it nearly went in the other direction: the
+       blank cash-flow card that prompted the count was NOT a paint bug. The
+       preview pane reports document.hidden and stops compositing content
+       scrolled into view for the first time, so the capture was stale while
+       the DOM was correct all along.) */
+    html[data-page="finance"] .kr-frost,
+    html[data-page="finance"] .kr-frost-min {
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
 
     .kr-glass--blue  { --kr-glass-from: 214 45% 58%; --kr-glass-to: 28 55% 50%; }
     .kr-glass--olive { --kr-glass-from: 85 34% 42%;  --kr-glass-to: 75 32% 22%; }

@@ -207,9 +207,13 @@ function DecisionBox({ card, tier, tint, verb, icon: Icon, busy, done, onAction 
 /**
  * @param {Array} sections [{key,label,tint,icon,count,cards,loading,empty}]
  */
-export function DecisionBento({ sections, verbFor, iconFor, onCard, busyId, doneIds, className, testid }) {
+export function DecisionBento({ sections, verbFor, iconFor, onCard, busyId, doneIds, className, testid, onExpandedChange }) {
   const bp = useBreakpoint();
   const [open, setOpen] = React.useState(() => new Set());
+  /* KM-33 — the SHEET needs to know. It is a fixed bottom sheet now, and it
+     grows to fit an expanded section rather than pushing the page; the only
+     thing that knows a section is expanded is this component. */
+  React.useEffect(() => { onExpandedChange?.(open.size > 0); }, [open, onExpandedChange]);
   const toggle = (key) =>
     setOpen((prev) => {
       const next = new Set(prev);

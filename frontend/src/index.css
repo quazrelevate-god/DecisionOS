@@ -1622,7 +1622,17 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
     to   { opacity: 1; transform: none; }
 }
 .kr-page-in {
-    animation: kr-page-in 320ms cubic-bezier(.22, 1, .36, 1) both;
+    /* KM-33 — `backwards`, NOT `both`, and the difference is load-bearing.
+       `both` holds the final keyframe forever, and a filled transform — even
+       `transform: none`, which resolves to the identity matrix — makes the
+       element a containing block for every `position: fixed` DESCENDANT. This
+       class lands on <main>, so the fixed bottom sheet was being laid out
+       against main's padding box instead of the viewport: measured 365px wide
+       at y=100 rather than 375 pinned to the bottom. The end state here IS the
+       element's natural state (opacity 1, no transform), so nothing needs
+       holding — `backwards` only pre-applies the `from` frame and lets the
+       element go back to being untransformed the moment it arrives. */
+    animation: kr-page-in 320ms cubic-bezier(.22, 1, .36, 1) backwards;
 }
 
 /* KR-13.1 — THE DEX BOUNDARY OWNS ITS OWN MOTION, and nothing else plays
@@ -1811,50 +1821,94 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
         margin-inline: calc(var(--page-pad, 1rem) * -1);
         padding-inline: var(--page-pad, 1rem);
         background: hsl(var(--kr-ink));
-        /* KM-32 — the LEFT corner drops to 14px. At a matched 44px both
-           shoulders curved away hard enough that the sheet read as a pill with
-           a bite taken out of it rather than a folder tab; the reference has
-           one soft shoulder and one nearly square. Right stays 44. */
-        border-radius: 14px 44px 0 0;
+        overflow-y: auto;
+        /* KM-33 · A FIXED BOTTOM SHEET ON THE PHONE.
+           It was in the scroll flow, so scrolling carried it up off the screen
+           — the founder's "it is scrolling up, and it is quite literally a bug".
+           A sheet that holds the decisions you have to act on should not be
+           something you can scroll away from. Below lg it is pinned to the
+           bottom of the viewport and the page scrolls UNDER it.
 
-        /* KR-14.1 — THE NOTCH IS A DRAWN PATH, NOT AN ELLIPSE.
-           Every version until now cut the dip with a radial-gradient, which
-           can only ever produce an oval bite — the founder's words: "it's
-           some oval cut, it's not nice." An ellipse has no flat bottom and
-           no straight shoulders, so it curves continuously from the first
-           pixel and reads as a bubble taken out of the edge.
+           Collapsed it is tall enough for one card; expanding a section grows
+           it to 80svh, capped so the hero above is never entirely covered.
+           `svh` rather than `vh` because mobile browsers shrink the viewport as
+           the URL bar retracts and `vh` would leave the sheet overhanging.
 
-           The reference shape is different in kind: the card's top edge runs
-           level, drops through an S-curve, holds FLAT across the middle, and
-           climbs back through a mirrored S. Three distinct segments. That is
-           a path, so it is drawn as one — an inline SVG used as a mask
-           layer, composited out of a full-cover layer exactly as before.
+           TRANSLUCENT, so the progressive blur has something to show through:
+           the ink drops to .82 and a backdrop blur sits behind it, which is why
+           the page below reads as frosted rather than hidden. */
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 20;
+        /* The full-bleed negative margin is what let an in-flow section reach
+           past main's gutter. Fixed at left:0/right:0 the sheet is ALREADY
+           edge to edge, so the margin only pushed it 16px past both edges —
+           measured 407px wide at x=-16 in a 375px viewport, i.e. horizontal
+           overflow. The gutter comes back as padding, in the same expression
+           main uses, so the sheet's contents line up with the page's. */
+        margin-inline: 0;
+        padding-inline: max(1rem, env(safe-area-inset-left, 0px));
+        max-height: 46svh;
+        /* The sheet is capped, so its own list is what scrolls once the cap is
+           reached — this is the founder's "only the internal section should
+           scroll" applied to the sheet itself. `contain` stops that scroll
+           chaining into the page behind once the list bottoms out. */
+        overflow-y: auto;
+        overflow-x: hidden;
+        overscroll-behavior: contain;
+        background: hsl(var(--kr-ink) / .82);
+        -webkit-backdrop-filter: blur(22px) saturate(1.2);
+        backdrop-filter: blur(22px) saturate(1.2);
+        transition: max-height 320ms cubic-bezier(.22, 1, .36, 1);
 
-           Proportions taken off the founder's snippet, scaled by the one
-           element in it whose real size is known: the grab bar is 36px in
-           the app and ~12.8% of the snippet's width, which puts the whole
-           dip at ~220px across and ~18px deep, with a ~124px flat floor and
-           48px shoulders.
+        /* KM-33 · THE CONTOUR, TRACED OFF THE FOUNDER'S REFERENCE.
+           The old shape was a centred DIP: the top edge fell and climbed back,
+           leaving a symmetric bite. The reference is a STEP — the edge runs
+           level across the left two-thirds, drops through a short S, and then
+           stays down to a rounded corner. That is a folder tab, and it only
+           reads as one because it never comes back up.
 
-           It stays a CUT rather than a painted shape because what shows
-           through is the page's bloom — a notch "coloured like the
-           background" would be a flat patch sitting on a gradient. */
-        /* KR-14.5 — THE NOTCH IS BACK. Founder: "the folder-like design in
-           the decision desk is missing — I want it back." The dip on the top
-           edge is what gives the card its tab-folder silhouette; without it
-           the band read as a plain rounded box. The grab-handle bar stays
-           removed (KR-14.4) — the folder shape carries the affordance on its
-           own. */
+           Measured off requirements.png rather than guessed — and measured a
+           second time, because the first pass read the depths as PIXELS when
+           the reference draws the sheet 544px wide. Every number below is
+           therefore a fraction of the sheet's WIDTH, which is what transfers
+           to a 375px phone; taking 22px literally made the step half again as
+           deep as the reference. (The check that settles it: the composition
+           panel's frame measures 544px across too, so the shape study and the
+           mock are drawn at one scale.)
+
+           First dark pixel per column across the 544x443 shape panel, as
+           depth below the high edge:
+             0%      57    the top-left corner arc  -> r = 57  = 10.5% of width
+             12-56%   0    the high edge
+             62%      6
+             66%     15    the fall
+             70%     21
+             72-92%  22    the low edge             -> 22     =  4.0% of width
+             94%     24
+             96%     28    the top-right corner arc -> r = 45  =  8.3% of width
+             98%     37
+           At 375 wide that is: level to x=210, an S down 15px ending at x=270,
+           level to x=344, then a 31px arc off the right corner.
+
+           The whole top silhouette is now the mask's job, including the right
+           corner — border-radius cannot round an edge that has been cut away,
+           so the arc is drawn into the path. The left corner stays with
+           border-radius, where it is cheap and exact. viewBox is 375-wide so
+           the curve is exact at phone width and only stretches on a tablet. */
+        border-radius: 39px 0 0 0;   /* 10.5% of 375 — the traced left arc */
         -webkit-mask-image:
-            url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="220" height="18" viewBox="0 0 220 18"><path d="M0 0H220C196 0 196 18 172 18H48C24 18 24 0 0 0Z" fill="black"/></svg>'),
+            url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="375" height="56" viewBox="0 0 375 56"><path d="M210 0 C240 0 240 15 270 15 L344 15 A31 31 0 0 1 375 46 L375 0 Z" fill="black"/></svg>'),
             linear-gradient(#000, #000);
         mask-image:
-            url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="220" height="18" viewBox="0 0 220 18"><path d="M0 0H220C196 0 196 18 172 18H48C24 18 24 0 0 0Z" fill="black"/></svg>'),
+            url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="375" height="56" viewBox="0 0 375 56"><path d="M210 0 C240 0 240 15 270 15 L344 15 A31 31 0 0 1 375 46 L375 0 Z" fill="black"/></svg>'),
             linear-gradient(#000, #000);
-        -webkit-mask-size: 220px 18px, auto;
-                mask-size: 220px 18px, auto;
-        -webkit-mask-position: top center, top left;
-                mask-position: top center, top left;
+        -webkit-mask-size: 100% 56px, auto;
+                mask-size: 100% 56px, auto;
+        -webkit-mask-position: top left, top left;
+                mask-position: top left, top left;
         -webkit-mask-repeat: no-repeat, no-repeat;
         mask-repeat: no-repeat, no-repeat;
         -webkit-mask-composite: xor;
@@ -1910,6 +1964,53 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
         --badge-neutral-bg:   240 4% 14%;   --badge-neutral-fg:   40 8% 70%;          --badge-neutral-bd:   240 4% 22%;
 
         color: hsl(var(--text-primary));
+    }
+
+    /* KM-33 — expanded: grow to 80svh, and let the sheet scroll its own
+       content once it hits that ceiling rather than growing past the screen. */
+    .kr-dark-band[data-expanded="true"] {
+        max-height: 80svh;
+    }
+
+    /* KM-33 — DESKTOP IS UNTOUCHED. Above lg the band goes back to being a
+       section in the page: no fixed position, no height ceiling, no blur, and
+       the full-opacity ink it has always had. The mask contour stays, since the
+       folder silhouette is the shape on every screen. */
+    @media (min-width: 1024px) {
+        .kr-dark-band {
+            position: static;
+            max-height: none;
+            overflow: visible;
+            overscroll-behavior: auto;
+            margin-inline: calc(var(--page-pad, 1rem) * -1);
+            padding-inline: var(--page-pad, 1rem);
+            background: hsl(var(--kr-ink));
+            -webkit-backdrop-filter: none;
+            backdrop-filter: none;
+        }
+    }
+
+    /* KM-33 · the progressive blur above the sheet.
+       A fixed strip sitting just above the sheet's top edge, blurring what is
+       behind it through a gradient mask — clear at the top, fully blurred where
+       it meets the ink. That is what makes the sheet read as sitting ON the
+       page rather than pasted over it, and it is the "progressive blur to the
+       background of the black card" the founder asked for. Pointer-events none
+       so it never eats a tap meant for the hero. */
+    .kr-band-haze {
+        position: fixed;
+        left: 0;
+        right: 0;
+        z-index: 19;
+        height: 88px;
+        pointer-events: none;
+        -webkit-backdrop-filter: blur(14px);
+        backdrop-filter: blur(14px);
+        -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 78%);
+        mask-image: linear-gradient(to bottom, transparent 0%, #000 78%);
+    }
+    @media (min-width: 1024px) {
+        .kr-band-haze { display: none; }
     }
 
     /* Frosted glass. The blur is the expensive part — budget ≤3 per

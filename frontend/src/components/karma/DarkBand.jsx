@@ -19,11 +19,21 @@ import { useReveal } from "../../hooks/useReveal";
  * content, as one sheet, over whatever is pinned behind it. Page scroll moves
  * the whole section — that is the sheet metaphor the centre tab promises.
  */
-export function DarkBand({ children, reveal = true, className, testid }) {
+export function DarkBand({ children, reveal = true, className, testid, expanded = false, bandRef }) {
   const ref = useReveal();
   return (
     <section
-      className={cn("kr-dark-band relative", className)}
+      /* KM-33 — the page needs the sheet's REAL height (it hugs a short list
+         rather than filling its ceiling), so the caller can measure it. */
+      ref={bandRef}
+      data-expanded={expanded ? "true" : undefined}
+      /* KM-33 — `lg:relative`, not `relative`. Below lg the band is a fixed
+         bottom sheet (index.css); a bare `relative` utility sits in Tailwind's
+         utilities layer and beat the components-layer `position: fixed`, so
+         the sheet stayed in the scroll flow and scrolled away — the exact bug
+         being fixed. Fixed positioning establishes the same containing block
+         for absolute children, so nothing inside loses its anchor. */
+      className={cn("kr-dark-band lg:relative", className)}
       data-testid={testid}
       style={{
         // ArrowButton inversion: ink circles would vanish on the ink.

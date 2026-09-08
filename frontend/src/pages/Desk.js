@@ -152,6 +152,41 @@ function ScopePills({ scope, setScope, variant = "pill" }) {
 
 export default function Desk() {
   const navigate = useNavigate();
+  // KM-33 — drives the sheet's height and the haze strip that sits above it.
+  const [bandExpanded, setBandExpanded] = useState(false);
+
+  /* KM-33 — the sheet's height is MEASURED, not assumed. It is capped at 46svh
+     (80svh expanded) but hugs its content below that, so a short desk sits at
+     349px against a 373px ceiling. Pinning the haze and the scroll spacer to
+     the ceiling therefore left a 24px seam between the haze and the sheet's
+     top edge, and reserved scroll the page never needed. A ResizeObserver
+     tracks the real box through the expand transition as well as after it. */
+  const bandRef = useRef(null);
+  const [bandH, setBandH] = useState(0);   // live — the haze rides the top edge
+  const [restH, setRestH] = useState(0);   // collapsed only — the scroll spacer
+  useEffect(() => {
+    const el = bandRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    /* border-box, not contentRect: the sheet's padding is part of the height
+       the page has to clear. */
+    /* border-box, not contentRect: the sheet's padding is part of the height
+       the page has to clear. Two values, because they answer different
+       questions — the haze must ride the live top edge through the expand, but
+       the SPACER must not: letting it follow would grow the page's scroll
+       height by 300px the moment you tap "+40 more", shifting the hero
+       underneath the very sheet you just opened. The spacer owes the resting
+       height, so it reads the attribute off the element rather than closing
+       over the expanded state. */
+    const measure = () => {
+      const h = Math.round(el.getBoundingClientRect().height);
+      setBandH(h);
+      if (el.dataset.expanded !== "true") setRestH(h);
+    };
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    measure();
+    return () => ro.disconnect();
+  }, []);
   const qc = useQueryClient();
   const { user, tenant } = useAuth();
   const m = useDeskMetrics();
@@ -566,8 +601,32 @@ export default function Desk() {
       </div>
 
       {/* ── THE DARK BAND ──────────────────────────────────────────────── */}
+      {/* KM-33 — the sheet is out of flow now, so the hero needs its height
+          back as space or the last of it sits permanently behind the sheet.
+          Matches the collapsed ceiling; expanding the sheet covers more of the
+          hero on purpose, which is what a bottom sheet is for. */}
+      {/* main already carries `pb-dock` (7.5rem + safe area), so the spacer
+          only owes the REMAINDER of the sheet's collapsed height — adding a
+          flat 46svh on top of it left ~120px of dead scroll under the last
+          card, the "bottom spacing is a little large" the founder called out
+          on My Work. Together they come to exactly the sheet's ceiling. */}
+      <div
+        className="shrink-0 lg:hidden"
+        aria-hidden="true"
+        style={{ height: `max(0px, calc(${restH}px - 7.5rem - env(safe-area-inset-bottom, 0px)))` }}
+      />
+
+      {/* KM-33 — the haze strip between the page and the sheet. A sibling
+          rather than a child: a backdrop-filter inside the sheet would blur the
+          sheet's own children, not the page behind it. Its bottom is pinned to
+          the sheet's top by the same measurement the sheet uses, so the two
+          always meet however the sheet is sized. */}
+      <div className="kr-band-haze lg:hidden" aria-hidden="true"
+           style={{ bottom: bandH ? `${bandH}px` : "46svh" }} />
       <DarkBand
         testid="desk-band"
+        bandRef={bandRef}
+        expanded={bandExpanded}
         /* KM-1 — mobile carried DOUBLE desktop's bottom padding (pb-28 = 112px
            against lg:pb-14 = 56px) on top of main's own pb-dock (96px): ~200px
            of nothing at the foot of the page. pb-20 still leaves 80 - 16 + 96 =
@@ -578,7 +637,14 @@ export default function Desk() {
            by the bar. Pulling the band up (mt-4/pt-4) and dropping the mobile
            card floor to 150px puts the whole card above 732. Desktop keeps its
            own margins and the 178/196px floors. */
-        className="relative z-10 mt-4 pt-4 pb-20 lg:mt-10 lg:pt-10 lg:pb-14 -mb-4 lg:-mb-8"
+        /* KM-33 — every flow utility here is now `lg:`-only. Out of flow the
+           margins do nothing, and worse, `relative` and `z-10` sit in
+           Tailwind's utilities layer and beat the components-layer
+           `position: fixed; z-index: 20`, which is what kept the sheet in the
+           scroll. Mobile keeps only the padding: pt-4 under the stepped top
+           edge, and a bottom pad that clears the floating dock (64px tall,
+           16px off the bottom) so the last card can scroll clear of it. */
+        className="pt-4 pb-[calc(6rem+env(safe-area-inset-bottom,0px))] lg:relative lg:z-10 lg:mt-10 lg:pt-10 lg:pb-14 lg:-mb-8"
       >
         {/* KR-8.5 — the desk takes the WHOLE sheet. The spend line chart is
             gone from here (it lives on /finance, where a money chart belongs);
@@ -596,6 +662,7 @@ export default function Desk() {
 
         <DecisionBento
           testid="desk-bento"
+          onExpandedChange={setBandExpanded}
           sections={SECTIONS.map((sec, i) => ({
             ...sec,
             count: counters[sec.key] ?? 0,

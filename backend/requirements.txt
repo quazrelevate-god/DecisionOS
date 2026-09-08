@@ -59,7 +59,22 @@ jq==1.11.0
 jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
 librt==0.12.0
-litellm @ https://customer-assets.emergentagent.com/internal-asset/library/litellm-1.80.0-py3-none-any.whl#sha256=adf398c513273de9341f61822296c6b2145f7f2dc4a69daf3ac04829f5bde3f8
+# DEPLOY-2 — litellm is NOT pinned here, and the blank is deliberate.
+# It used to carry a direct URL to the vendor wheel with a #sha256= fragment.
+# emergentintegrations==0.2.0 (line 24) declares a direct-URL dependency on the
+# very same wheel WITHOUT that fragment, and pip compares direct references as
+# strings — so one package had two "different" direct URLs and every clean
+# resolve died with ResolutionImpossible:
+#     The user requested litellm 1.80.0 (from ...whl#sha256=adf398...)
+#     emergentintegrations 0.2.0 depends on litellm 1.80.0 (from ...whl)
+# Identical wheel, identical version, refused anyway.
+# It never surfaced in a local .venv because those are built incrementally —
+# litellm was already installed by the time emergentintegrations went in, so
+# pip never had to reconcile the two references in one pass. A container builds
+# from empty in a single pass, which is why the first Railway build failed.
+# emergentintegrations pins the exact same wheel (==1.80.0, hash included in
+# its own metadata), so dropping the duplicate changes nothing that gets
+# installed — verified against the working .venv: litellm 1.80.0 either way.
 lxml==6.1.1
 Markdown==3.10.2
 markdown-it-py==4.2.0

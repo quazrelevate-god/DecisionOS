@@ -36,7 +36,15 @@ ENV CI=false \
     GENERATE_SOURCEMAP=false
 
 # Lockfile first, so a source-only change reuses the dependency layer.
-COPY package.json package-lock.json ./
+#
+# .npmrc COMES WITH THEM, and leaving it out failed the first Railway build.
+# It carries `legacy-peer-deps=true`, which this dependency tree genuinely
+# needs: react-day-picker@8.10.1 peer-requires date-fns@^2||^3 while the
+# project is on date-fns@4, and npm 7+ refuses to resolve that by default.
+# Copying it in the later `COPY . .` is too late — npm ci has already run and
+# already failed with ERESOLVE. Locally it always worked because the file was
+# simply sitting in the directory.
+COPY package.json package-lock.json .npmrc ./
 RUN npm ci --no-audit --no-fund
 
 COPY . .

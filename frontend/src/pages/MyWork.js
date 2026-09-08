@@ -1987,6 +1987,10 @@ function TaskPriorityColumns({ list, openId, setOpenId, cardProps }) {
                   key={t.id}
                   t={t}
                   tier={col.key}
+                  /* KM-30 — the column IS the priority: the band bar names it
+                     on mobile and the column heading names it on desktop, so a
+                     chip repeating it on every card is the third time. */
+                  hidePrio
                   open={isOpen}
                   onToggleOpen={() => setOpenId(isOpen ? null : t.id)}
                   {...cardProps(t)}
@@ -2043,18 +2047,24 @@ export default function MyWork() {
   const [scope, setScope] = useState(loadedPrefs.scope || "mine");
   const [tab, setTab] = useState(loadedPrefs.tab || "all");
   const [aiPriority, setAiPriority] = useState(Boolean(loadedPrefs.aiPriority));
-  /* KM-29 — the two lenses that ride with the AI-priority bars. They sit in
-     component state rather than the URL because they are a reading posture,
-     not a destination: you flick between them while scanning and you do not
-     want twenty history entries for it. */
-  const [prioFilter, setPrioFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
-  /* Dismissing the bars clears both, so the list can never stay filtered by a
-     control that is no longer on screen. An effect rather than a patch to each
-     toggle, because the toggle exists twice — once on mobile, once on desktop —
-     and a rule enforced in one of two places is not a rule. */
+  /* KM-30 — ONE progress lens, and no priority lens at all.
+     KM-29 added a High/Medium/Low bar; the founder pointed out the priority
+     band bar inside TaskPriorityColumns already does exactly that, so mine was
+     a second control for a job that was taken. Gone.
+     "All" is gone from this one too: the four states ARE the filter, and a
+     fifth segment meaning "no filter" is a control whose only job is to undo
+     the other four. Tapping the live segment clears it instead, which is the
+     same gesture with nothing extra on screen. "" means unfiltered.
+     It lives in component state rather than the URL because it is a reading
+     posture, not a destination — you flick through it while scanning and you
+     do not want twenty history entries for it. */
+  const [statusFilter, setStatusFilter] = useState("");
+  // Dismissing the bar clears it, so the list can never stay filtered by a
+  // control that is no longer on screen. An effect rather than a patch to each
+  // toggle, because the toggle exists twice — mobile and desktop — and a rule
+  // enforced in one of two places is not a rule.
   useEffect(() => {
-    if (!aiPriority) { setPrioFilter("all"); setStatusFilter("all"); }
+    if (!aiPriority) setStatusFilter("");
   }, [aiPriority]);
 
   // Persist on any change. Guard on prefsKey so pre-login / test envs stay
@@ -2161,8 +2171,7 @@ export default function MyWork() {
     list = all.filter((t) => !isTerminal(t) && t.task_type === tab);
   }
   if (aiPriority && tab !== "completed") {
-    if (prioFilter !== "all") list = list.filter((t) => (t.priority || "medium") === prioFilter);
-    if (statusFilter !== "all") list = list.filter((t) => t.status === statusFilter);
+    if (statusFilter) list = list.filter((t) => t.status === statusFilter);
     list = [...list].sort((a, b) => (scoreMap[b.id]?.priority_score || 0) - (scoreMap[a.id]?.priority_score || 0));
   }
 
@@ -2336,29 +2345,17 @@ export default function MyWork() {
             NO transition utility, for the reason stated at the top of this
             header: these swap outset shadows for inset ones. */}
         {inSegmentView && aiPriority && (
-          <div className="flex flex-col gap-1.5" data-testid="work-mobile-lenses">
-            <div className="kr-pressed flex items-center gap-1 overflow-x-auto rounded-pill p-1 [scrollbar-width:none]"
-                 role="group" aria-label="Filter by priority" data-testid="work-mobile-prio-lens">
-              {[["all", "All"], ["high", "High"], ["medium", "Medium"], ["low", "Low"]].map(([k, label]) => (
-                <button key={k} type="button" onClick={() => setPrioFilter(k)}
-                  aria-pressed={prioFilter === k} data-testid={`work-prio-${k}`}
-                  className={`flex h-8 shrink-0 items-center rounded-pill px-3.5 text-[12px] ${
-                    prioFilter === k ? "kr-pop font-semibold text-foreground" : "text-foreground/60"}`}>
-                  {label}
-                </button>
-              ))}
-            </div>
-            <div className="kr-pressed flex items-center gap-1 overflow-x-auto rounded-pill p-1 [scrollbar-width:none]"
-                 role="group" aria-label="Filter by progress" data-testid="work-mobile-status-lens">
-              {[{ key: "all", label: "All" }, ...M_STATUS_PILLS].map((sp) => (
-                <button key={sp.key} type="button" onClick={() => setStatusFilter(sp.key)}
-                  aria-pressed={statusFilter === sp.key} data-testid={`work-status-${sp.key}`}
-                  className={`flex h-8 shrink-0 items-center rounded-pill px-3.5 text-[12px] ${
-                    statusFilter === sp.key ? "kr-pop font-semibold text-foreground" : "text-foreground/60"}`}>
-                  {sp.label}
-                </button>
-              ))}
-            </div>
+          <div className="kr-pressed flex items-center gap-1 overflow-x-auto rounded-pill p-1 [scrollbar-width:none]"
+               role="group" aria-label="Filter by progress" data-testid="work-mobile-status-lens">
+            {M_STATUS_PILLS.map((sp) => (
+              <button key={sp.key} type="button"
+                onClick={() => setStatusFilter((cur) => (cur === sp.key ? "" : sp.key))}
+                aria-pressed={statusFilter === sp.key} data-testid={`work-status-${sp.key}`}
+                className={`flex h-8 shrink-0 items-center rounded-pill px-3.5 text-[12px] ${
+                  statusFilter === sp.key ? "kr-pop font-semibold text-foreground" : "text-foreground/60"}`}>
+                {sp.label}
+              </button>
+            ))}
           </div>
         )}
 
@@ -2572,9 +2569,10 @@ export default function MyWork() {
               showAssignee,
               highlight: t.id === focusTaskId,
               scores: aiPriority && tab !== "completed" ? scoreMap[t.id] : undefined,
-              // KM-29 — tell the card which chips the active lens already says.
-              hidePrio: aiPriority && prioFilter !== "all",
-              hideStatus: aiPriority && statusFilter !== "all",
+              // KM-30 — the card drops the status chip when the lens already
+              // says it. Priority is handled inside TaskPriorityColumns, whose
+              // band/column names it on every card it renders.
+              hideStatus: Boolean(statusFilter),
               selected: selected.has(t.id),
               onToggleSelect: () => toggleSelected(t.id),
             });

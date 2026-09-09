@@ -113,6 +113,23 @@ export default function Layout({ children }) {
     if (n.perms) return n.perms.some((p) => hasPerm(user, p));
     return !n.perm || hasPerm(user, n.perm);
   }), [user]);
+  /* KM-46 — the dip is as wide as the nav actually is. A fixed centre width
+     would drift the moment a translation makes "Decision Desk" longer or
+     shorter, and the S-curves would then start somewhere other than the end of
+     the pills. Padded a little either side so the curve leaves the last pill
+     rather than clipping it. */
+  const navRef = useRef(null);
+  const [navW, setNavW] = useState(0);
+  useEffect(() => {
+    const el = navRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const measure = () => setNavW(Math.round(el.getBoundingClientRect().width) + 56);
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    measure();
+    return () => ro.disconnect();
+  }, []);
+
   const navigate = useNavigate();
   const location = useLocation();
   const { isDark, toggle: toggleTheme } = useTheme();
@@ -307,7 +324,7 @@ export default function Layout({ children }) {
             aria-label={count > 0 ? `Notifications, ${count} need you` : "Notifications"}
             className={mobile
               ? "relative flex items-center justify-center border border-border hover:bg-accent transition-colors w-12 h-12"
-              : "relative h-10 w-10 rounded-full border border-kr-outline grid place-items-center text-foreground/80 transition-colors hover:bg-white/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline"}>
+              : "relative h-10 w-10 rounded-full border border-kr-ink/25 bg-white/45 grid place-items-center text-foreground/85 transition-colors hover:bg-white/80 hover:border-kr-ink/45 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline"}>
             <Bell size={mobile ? 22 : 18} weight="regular" />
             {count > 0 && (
               <span data-testid="notif-count" className={mobile
@@ -410,7 +427,15 @@ export default function Layout({ children }) {
           floating directly on the bloom, scrolling away with the page. The
           frosted sticky strip (KR-5) is deleted, not softened: any fill at
           all reads as a bar. */}
-      <header className="hidden lg:grid h-[76px] shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-4 px-6 bg-transparent">
+      {/* KM-46 — the shelf lives on the HEADER, not the nav: it runs edge to
+          edge and only dips behind the pills, so the logo and the account block
+          sit on the same surface as the navigation. --navplate-w is the dip's
+          width, measured from the real nav below rather than assumed — the pill
+          labels are translated, so it has to fit whatever language is loaded. */}
+      <header
+        className="kr-navplate hidden lg:grid h-[76px] shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-4 px-6 bg-transparent"
+        style={navW ? { "--navplate-w": `${navW}px` } : undefined}
+      >
         <div className="flex items-center justify-self-start">
           <KarmaLogo />
         </div>
@@ -418,6 +443,7 @@ export default function Layout({ children }) {
         <PillNav
           testid="header-pill-nav"
           plate
+          navRef={navRef}
           items={navMain.map((n) => ({
             to: n.to,
             end: n.to === "/",
@@ -436,7 +462,7 @@ export default function Layout({ children }) {
             aria-label={t("header.search_ph", "Find anything…")}
             title={`${t("header.search_ph", "Find anything…")} (⌘K)`}
             onClick={() => setSearchOpen(true)}
-            className="h-10 w-10 rounded-full border border-kr-outline grid place-items-center text-foreground/80 transition-colors hover:bg-white/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline"
+            className="h-10 w-10 rounded-full border border-kr-ink/25 bg-white/45 grid place-items-center text-foreground/85 transition-colors hover:bg-white/80 hover:border-kr-ink/45 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline"
           >
             <MagnifyingGlass size={18} weight="regular" />
           </button>

@@ -33,10 +33,12 @@ import { cn } from "@/lib/utils";
  * The white wash on hover is a preview of that, which is what makes hover feel
  * like it is pointing at the selection rather than a separate effect.
  */
-export function PillNav({ items = [], size = "md", className, testid, plate = false }) {
+export function PillNav({ items = [], size = "md", className, testid, plate = false, navRef }) {
   const pad = size === "sm" ? "h-9 px-3.5 text-sm" : "h-10 px-4 text-sm";
   return (
-    <nav className={cn("flex items-center gap-2", plate && "kr-navplate", className)} data-testid={testid}>
+    /* KM-46 — the plate class moved to the HEADER; this only reports its own
+       width up so the dip can be cut to fit. */
+    <nav ref={navRef} className={cn("flex items-center gap-2", className)} data-testid={testid}>
       {items.map((it) => (
         <NavLink
           key={it.to}
@@ -84,7 +86,7 @@ export function PillNav({ items = [], size = "md", className, testid, plate = fa
                    these are destinations, and a destination that flinches
                    when you approach it reads as a button, not a place. */
                 : plate
-                  ? "border-[0.5px] border-kr-ink/35 text-foreground/75 hover:border-kr-ink/70 hover:bg-white/35 hover:text-foreground"
+                  ? "border-[0.5px] border-kr-ink/35 bg-white/20 text-foreground/75 hover:border-kr-ink/70 hover:bg-white/45 hover:text-foreground"
                   : "kr-glow border-[0.5px] border-kr-ink/45 text-foreground/55"
             )
           }

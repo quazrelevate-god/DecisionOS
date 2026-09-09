@@ -1477,31 +1477,52 @@ html[data-page="workflows"] {
        artwork to defend against dark cores that are not in it. */
 }
 
-/* KM-44 · .kr-navplate — the header nav sits ON something.
-   Founder, with a reference: a semi-transparent semi-octagon behind the seven
-   destinations, black at 25%.
+/* KM-46 · .kr-navplate — the header's shelf, cut to the founder's own curve.
+   They supplied it as decisionos-curve.html; the geometry below is lifted from
+   that file's <path id="panel"> and nothing else was taken from it — no glow,
+   no colour, no stroke.
 
-   KM-45 — THE SHAPE IS THE OTHER WAY UP. The first cut read the reference
-   backwards and built a trapezoid narrow at the top, widening downward. It is
-   the inverse: FULL WIDTH along the top, the sides drawing inward as they
-   fall, so the plate reads as something hanging from the top edge of the page
-   rather than a plinth standing on the bottom of the header. Founder: "that's
-   literally quite opposite of what I said."
+       viewBox 0 0 2172 126
+       M485.5 2  C582.4 2 561.6 107 658.5 107  H1507
+                 C1603.9 107 1583.1 2 1680 2   L1680 0  H485.5 Z
 
-   ALIGNED TO THE HEADER, NOT FLOATED AROUND THE NAV. The header is 76px and
-   the pills are 40px centred in it, so the plate's top inset is exactly the
-   18px that puts its edge flush with the top of the page. It then falls 12px
-   past the pills. Height is therefore a known 70px, which is what lets the
-   corner geometry below be written in real pixels instead of guesses.
+   WHAT MAKES THIS CURVE ITS OWN. The two control points on each S CROSS —
+   582.4 sits to the RIGHT of 561.6. A conventional ogee keeps them in order and
+   eases evenly; crossing them holds the line flat for longer and then drops it
+   harder, which is the snap in the founder's drawing. Reproducing the endpoints
+   with tidy control points would have produced a different, softer curve that
+   looked approximately right and was not theirs, so the numbers are transcribed
+   rather than redrawn.
 
-   THE CORNERS ARE ROUNDED, and clip-path has no radius — so the fillet is
-   built from points. Each bottom join is replaced by a three-point arc,
-   computed rather than eyeballed: the slant runs (0,0)->(34,70), so the
-   interior angle there is 115.9 degrees, and a 14px radius meets the two edges
-   8.76px back from the vertex along each. That gives tangent points at
-   (30.2, 62.1) and (42.8, 70) with the arc's midpoint at (35.6, 67.4).
-   Mirrored on the right with calc(100% - x). Eight points, one soft shape, and
-   it holds at any width because only the x offsets are anchored to 100%. */
+   READ OFF THE PATH, as proportions of the source box:
+       S-curve run   658.5 - 485.5 = 173   of 2172 wide
+       dip depth     107 - 2       = 105   of 126 tall
+       shelf at the edges  y = 2           — it fades to nothing, so there is
+                                             no band layer at all: the shelf
+                                             EXISTS only where it bulges
+       flat middle   1507 - 658.5  = 848.5, centred (its midpoint 1082.75
+                                             against the box centre 1086)
+
+   HOW A CURVE THAT MUST NOT STRETCH LIVES IN A BOX THAT DOES. Stretching one
+   full-width SVG across the header is the trap KM-36 documents — the S would
+   scale its curvature with the viewport and steepen on a laptop. So the mask is
+   three layers: the two caps hold a fixed size derived from the plate's HEIGHT
+   (cap width = height x 173/126, which keeps the founder's aspect exactly), and
+   only the middle rectangle stretches. Nothing curved is ever scaled.
+
+   THE POSITIONING IS NOT AN OFFSET, which is the part that bites. A percentage
+   in mask-position puts x% of the IMAGE at x% of the BOX, so for a fixed-width
+   layer it resolves to p x (box - image), not p x box. Aligning the left cap's
+   inner edge to the dip's left edge is therefore:
+       0.5(C - cap) + offset = 0.5C - 0.5mid - cap
+       offset = -(mid + cap) / 2
+   and its mirror on the right. Written out because "nudge it until it lines up"
+   is how this silently breaks at the next viewport width.
+
+   --navplate-w is measured off the real nav in Layout rather than assumed: the
+   pill labels are translated, so the dip has to be as wide as whatever language
+   is loaded. The founder's own flat is 39% of the box, which would leave the
+   pills overhanging it below about 1500px. */
 .kr-navplate {
     position: relative;
     z-index: 0;          /* its own stacking context, so the -1 plate stays in */
@@ -1509,22 +1530,38 @@ html[data-page="workflows"] {
 .kr-navplate::before {
     content: "";
     position: absolute;
-    top: -1.125rem;      /* 18px — flush with the top of the 76px header */
-    bottom: -0.75rem;    /* 12px below the pills */
-    left: -1.5rem;
-    right: -1.5rem;
+    inset: 0;
     z-index: -1;
     background: hsl(0 0% 0% / .25);
-    clip-path: polygon(
-        0 0,
-        100% 0,
-        calc(100% - 30.2px) 62.1px,
-        calc(100% - 35.6px) 67.4px,
-        calc(100% - 42.8px) 70px,
-        42.8px 70px,
-        35.6px 67.4px,
-        30.2px 62.1px
-    );
+
+    --kr-plate-h: 76px;                                       /* the header */
+    --kr-plate-cap: calc(var(--kr-plate-h) * 173 / 126);      /* their aspect */
+    --kr-plate-mid: var(--navplate-w, 640px);
+
+    -webkit-mask-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="173" height="126" viewBox="0 0 173 126" preserveAspectRatio="none"><path d="M0 0H173V107C76.1 107 96.9 2 0 2Z" fill="black"/></svg>'), linear-gradient(#000, #000), url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="173" height="126" viewBox="0 0 173 126" preserveAspectRatio="none"><path d="M0 0H173V2C76.1 2 96.9 107 0 107Z" fill="black"/></svg>');
+            mask-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="173" height="126" viewBox="0 0 173 126" preserveAspectRatio="none"><path d="M0 0H173V107C76.1 107 96.9 2 0 2Z" fill="black"/></svg>'), linear-gradient(#000, #000), url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="173" height="126" viewBox="0 0 173 126" preserveAspectRatio="none"><path d="M0 0H173V2C76.1 2 96.9 107 0 107Z" fill="black"/></svg>');
+    /* 84.92% = 107/126 — the dip's floor, straight off the path */
+    -webkit-mask-size:
+        var(--kr-plate-cap) 100%,
+        var(--kr-plate-mid) 84.92%,
+        var(--kr-plate-cap) 100%;
+            mask-size:
+        var(--kr-plate-cap) 100%,
+        var(--kr-plate-mid) 84.92%,
+        var(--kr-plate-cap) 100%;
+    -webkit-mask-position:
+        calc(50% - (var(--kr-plate-mid) + var(--kr-plate-cap)) / 2) top,
+        center top,
+        calc(50% + (var(--kr-plate-mid) + var(--kr-plate-cap)) / 2) top;
+            mask-position:
+        calc(50% - (var(--kr-plate-mid) + var(--kr-plate-cap)) / 2) top,
+        center top,
+        calc(50% + (var(--kr-plate-mid) + var(--kr-plate-cap)) / 2) top;
+    -webkit-mask-repeat: no-repeat, no-repeat, no-repeat;
+            mask-repeat: no-repeat, no-repeat, no-repeat;
+    /* union, not the `exclude` the dark band uses — these three are one shape */
+    -webkit-mask-composite: source-over;
+            mask-composite: add;
 }
 
 .app-sky__art--aside {

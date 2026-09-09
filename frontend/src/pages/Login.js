@@ -3,8 +3,8 @@ import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../hooks/useTheme";
 import api, { formatApiError } from "../lib/api";
-import { Wordmark } from "../components/Wordmark";
-import { Microphone, DeviceMobile, Sun, MoonStars } from "@phosphor-icons/react";
+import { KarmaLogo } from "../components/karma/Logo";
+import { DeviceMobile, Sun, MoonStars } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
 const DEMO = [
@@ -17,7 +17,11 @@ const DEMO = [
 // MPWA-11 (§8): "56px fields and buttons" on mobile. min-h-touch-lg is 56px
 // below lg and unset above it, so desktop keeps its py-3 geometry. text-base
 // also stops iOS Safari zooming the viewport on focus.
-const inputCls = "w-full nm-tile px-4 py-3 text-base lg:text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring/30 transition-shadow min-h-touch-lg lg:min-h-0";
+/* KM-59 — the signup page's grammar, not the old neumorphic tile: a sunken
+   trough for anything you type into, a raised pill for anything you press.
+   `.signup-stage`/.login-stage restyle both against the photograph, so the two
+   auth screens are now one design rather than two that happen to adjoin. */
+const inputCls = "kr-pressed w-full rounded-pill bg-transparent px-4 py-3 text-base lg:text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 min-h-touch-lg lg:min-h-0";
 const labelCls = "label-mono text-muted-foreground";
 
 // Masks a phone to show only the last 4 digits, e.g. +91 98765 43210 -> +91 ••••• •3210
@@ -79,7 +83,7 @@ const OtpBoxes = ({ value, onChange, disabled }) => {
           onChange={handleChange(i)}
           onKeyDown={handleKeyDown(i)}
           onFocus={(e) => e.target.select()}
-          className="w-full aspect-square min-w-0 nm-tile text-center text-xl font-medium focus:outline-none focus:shadow-sm focus:border-brand-600 transition-all disabled:opacity-50"
+          className="kr-pressed aspect-square w-full min-w-0 rounded-cardlg bg-transparent text-center text-xl font-medium focus:outline-none focus:ring-2 focus:ring-ring/30 disabled:opacity-50"
         />
       ))}
     </div>
@@ -176,50 +180,85 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen grid lg:grid-cols-2 bg-brand-paper text-brand-ink">
+    /* KM-59 — the login page becomes the signup page's twin.
+       Founder: "rearrange the login page UI items and change the theme and
+       design to match the signup page, and use the signup-lg image as
+       background but copy it as a separate dedicated image."
+
+       WHAT WENT. A split screen: a solid indigo half carrying a headline and a
+       PNG lockup, against a white half holding the form. It was the last
+       surface still wearing the retired blue, and it disagreed with the page
+       one click away — you registered on a photograph and signed in on a slab.
+
+       `relative isolate` is load-bearing, exactly as on signup: the art layer
+       is position:fixed at z-index:-1, and a negative-z child only paints above
+       its parent's background if that parent is a stacking context. Without it
+       the picture escapes to the root context, lands behind the body fill, and
+       the page renders white. */
+    <div className="login-stage relative isolate flex min-h-screen flex-col bg-white text-foreground">
+      {/* The artwork. It reuses .app-sky__art--aside wholesale — that layer
+          carries two pictures, two fits, the phone radial mask and the desktop
+          full-bleed, all measured against the DOM in KM-41/KM-42 — and only
+          the two image URLs are re-pointed, in index.css under .login-stage.
+          Duplicating the geometry would have meant maintaining that arithmetic
+          twice. */}
+      <div className="app-sky__art app-sky__art--aside" aria-hidden="true" />
+
       <button
         onClick={toggleTheme}
         data-testid="login-theme-toggle"
         title={isDark ? "Switch to light mode" : "Switch to dark mode"}
         aria-label="Toggle dark mode"
-        className="fixed top-4 right-4 z-50 w-10 h-10 flex items-center justify-center nm-tile text-brand-ink hover:bg-accent transition-colors"
+        className="kr-pop fixed right-4 top-4 z-50 grid h-10 w-10 place-items-center rounded-full"
       >
         {isDark ? <Sun size={18} weight="bold" /> : <MoonStars size={18} weight="bold" />}
       </button>
-      {/* Left brand panel */}
-      <div className="hidden lg:flex flex-col justify-between bg-primary text-primary-foreground p-12 border-r border-border">
-        {/* The hero panel is dark in both themes, so `dark:` never fires here
-            and the plate has to be explicit. */}
-        <Wordmark size={24} plate />
-        <div>
-          <p className="label-mono text-brand-600 mb-4">The operational brain for founder-led SMEs</p>
-          <h1 className="font-display text-5xl xl:text-6xl leading-[0.95]">
-            Speak the decision.<br /><span className="text-brand-600">We run</span> the company.
-          </h1>
-          <p className="mt-6 text-white/70 text-sm max-w-md leading-relaxed">
-            Tailored to your industry — DecisionOS turns spoken directives into structured tasks, workflows and a shared operational brain.
-          </p>
+
+      {/* Header — signup's exact header: on a phone the wordmark alone,
+          centred; on desktop a floating glass pill with the way out on the
+          right. KarmaLogo replaces the PNG Wordmark, which is the founder's
+          "replace the old DecisionOS logo with our current one": the app shell
+          has worn the text mark since KR-14 and this was the last screen still
+          showing the old lockup. */}
+      <header className="px-4 pt-4 lg:px-8 lg:pt-6">
+        <div className="mx-auto flex w-full max-w-5xl items-center justify-center gap-4 rounded-pill px-4 py-2.5 lg:kr-frost lg:justify-between lg:px-6">
+          <Link to="/" className="flex shrink-0 items-center gap-2.5" data-testid="login-logo">
+            <KarmaLogo size="md" />
+          </Link>
+          <Link
+            to="/signup"
+            data-testid="login-register-link"
+            className="kr-pop hidden h-9 shrink-0 items-center rounded-pill px-4 text-xs font-medium lg:flex"
+          >
+            Create a workspace
+          </Link>
         </div>
-        <div className="flex items-center gap-2 text-white/50 text-xs"><Microphone size={16} weight="bold" /> Voice-first · AI-structured · Multi-tenant</div>
-      </div>
+      </header>
 
-      {/* Right form */}
-      <div className="flex items-center justify-center p-6 lg:p-12">
-        <div className="w-full max-w-md">
-          <div className="lg:hidden mb-8">
-            <Wordmark size={20} />
-          </div>
-
+      {/* Stage — one glass card, centred, the same pane the signup questions
+          sit in. The old page's left-hand headline is gone rather than
+          relocated: the picture is the atmosphere now, and a marketing
+          paragraph on the screen you reach by choosing "Sign in" is answering
+          a question nobody asked there. */}
+      <main className="flex flex-1 items-center justify-center px-4 py-8 lg:px-8 lg:py-12">
+        <div className="kr-well w-full max-w-md" data-testid="login-card">
+          <div className="kr-well__pane rounded-[1.75rem] p-6 sm:p-8">
           <h2 className="font-display text-3xl mb-1">Sign in</h2>
           <p className="text-sm text-muted-foreground mb-6">Access your company brain.</p>
 
-          <div className="flex border border-border mb-5" data-testid="login-tabs">
+          {/* A sunken track with a raised pill on the live tab — the same
+              "selected means pushed in" grammar as signup's phase rail, and
+              the app's segmented controls. No transition-colors on these: the
+              .kr-pop/.kr-pressed pair swaps an outset shadow list for an inset
+              one and those do not interpolate, so a transition makes the
+              selection snap through a broken frame instead of moving. */}
+          <div className="kr-pressed mb-5 flex gap-1 rounded-pill p-1" data-testid="login-tabs">
             <button onClick={() => { setLoginTab("password"); setError(""); }} data-testid="login-tab-password"
-              className={`flex-1 px-3 py-2 text-xs font-medium border-r border-border transition-colors ${loginTab === "password" ? "bg-primary text-primary-foreground" : "bg-white hover:bg-accent"}`}>
+              className={`flex-1 rounded-pill px-3 py-2 text-xs font-medium ${loginTab === "password" ? "kr-pop" : "text-foreground/60 hover:text-foreground"}`}>
               Email &amp; Password
             </button>
             <button onClick={() => { setLoginTab("otp"); setError(""); }} data-testid="login-tab-otp"
-              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors ${loginTab === "otp" ? "bg-primary text-primary-foreground" : "bg-white hover:bg-accent"}`}>
+              className={`flex-1 flex items-center justify-center gap-1.5 rounded-pill px-3 py-2 text-xs font-medium ${loginTab === "otp" ? "kr-pop" : "text-foreground/60 hover:text-foreground"}`}>
               <DeviceMobile size={14} weight="bold" /> Mobile OTP
             </button>
           </div>
@@ -229,14 +268,14 @@ export default function Login() {
               <input data-testid="login-email-input" type="email" className={inputCls} placeholder="Email" value={form.email} onChange={set("email")} required />
               <input data-testid="login-password-input" type="password" className={inputCls} placeholder="Password" value={form.password} onChange={set("password")} required />
               {error && <p data-testid="auth-error" className="text-sm text-danger-600 font-semibold">{error}</p>}
-              <button type="submit" disabled={busy} data-testid="auth-submit-button" className="w-full bg-brand-600 text-white font-medium py-3 border border-border transition-all disabled:opacity-50">{busy ? "…" : "Sign in"}</button>
+              <button type="submit" disabled={busy} data-testid="auth-submit-button" className="kr-lift flex h-12 w-full items-center justify-center rounded-pill bg-kr-ink text-sm font-medium text-white disabled:opacity-50">{busy ? "…" : "Sign in"}</button>
             </form>
           )}
 
           {loginTab === "otp" && (
             <form onSubmit={otpSent ? submitOtp : requestOtp} className="space-y-4" data-testid="otp-form">
               {invite && (
-                <div className="border border-border bg-caution-50/40 p-3" data-testid="invite-welcome">
+                <div className="kr-pressed rounded-cardlg p-3" data-testid="invite-welcome">
                   <p className="font-medium uppercase tracking-tight text-sm">Welcome, {invite.name}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">You've been invited to <strong>{invite.company}</strong>. Enter the code we sent to {invite.phone_masked} to sign in — no password needed.</p>
                 </div>
@@ -248,19 +287,19 @@ export default function Login() {
                     <input data-testid="otp-phone-input" type="tel" className={`${inputCls} mt-1`} placeholder="Registered mobile number" value={otpPhone} onChange={(e) => setOtpPhone(e.target.value)} required />
                   </div>
                   {error && <p data-testid="auth-error" className="text-sm text-danger-600 font-semibold">{error}</p>}
-                  <button type="submit" disabled={busy} data-testid="otp-submit-button" className="w-full bg-brand-600 text-white font-medium py-3 border border-border transition-all disabled:opacity-50">
+                  <button type="submit" disabled={busy} data-testid="otp-submit-button" className="kr-lift flex h-12 w-full items-center justify-center rounded-pill bg-kr-ink text-sm font-medium text-white disabled:opacity-50">
                     {busy ? "Sending…" : "Send OTP"}
                   </button>
                 </>
               ) : (
                 <>
-                  <div className="flex items-center justify-between nm-tile px-3 py-2.5" data-testid="otp-phone-confirm">
+                  <div className="kr-pressed flex items-center justify-between rounded-pill px-3 py-2.5" data-testid="otp-phone-confirm">
                     <div className="flex items-center gap-2 min-w-0">
-                      <DeviceMobile size={16} weight="bold" className="text-brand-600 shrink-0" />
+                      <DeviceMobile size={16} weight="bold" className="shrink-0 text-foreground/70" />
                       <span className="text-sm font-mono truncate">Code sent to <strong>{invite?.phone_masked || maskPhone(otpPhone)}</strong></span>
                     </div>
                     <button type="button" onClick={() => { setOtpSent(false); setOtpCode(""); setError(""); setResendIn(0); }} data-testid="otp-change-number"
-                      className="text-xs font-semibold uppercase text-brand-blue hover:underline whitespace-nowrap ml-2 shrink-0">Change</button>
+                      className="text-xs font-semibold uppercase text-foreground/70 underline-offset-2 hover:text-foreground hover:underline whitespace-nowrap ml-2 shrink-0">Change</button>
                   </div>
                   <div>
                     <label className={labelCls}>Enter 6-digit code</label>
@@ -269,14 +308,14 @@ export default function Login() {
                     </div>
                   </div>
                   {error && <p data-testid="auth-error" className="text-sm text-danger-600 font-semibold">{error}</p>}
-                  <button type="submit" disabled={busy || otpCode.length !== 6} data-testid="otp-submit-button" className="w-full bg-brand-600 text-white font-medium py-3 border border-border transition-all disabled:opacity-50">
+                  <button type="submit" disabled={busy || otpCode.length !== 6} data-testid="otp-submit-button" className="kr-lift flex h-12 w-full items-center justify-center rounded-pill bg-kr-ink text-sm font-medium text-white disabled:opacity-50">
                     {busy ? "Verifying…" : "Verify & sign in"}
                   </button>
                   <div className="text-center text-sm" data-testid="otp-resend-row">
                     {resendIn > 0 ? (
                       <span className="text-muted-foreground">Resend code in <span className="font-semibold tabular-nums">{resendIn}s</span></span>
                     ) : (
-                      <button type="button" onClick={requestOtp} disabled={busy} data-testid="otp-resend" className="text-brand-blue font-semibold hover:underline">Didn't get it? Resend OTP</button>
+                      <button type="button" onClick={requestOtp} disabled={busy} data-testid="otp-resend" className="font-semibold text-foreground/80 underline-offset-2 hover:text-foreground hover:underline">Didn't get it? Resend OTP</button>
                     )}
                   </div>
                 </>
@@ -284,18 +323,28 @@ export default function Login() {
             </form>
           )}
 
-          <Link to="/signup" data-testid="toggle-auth-mode" className="mt-4 inline-block text-sm text-brand-blue font-semibold hover:underline">Need a workspace? Register →</Link>
-          <div className="mt-8 border-t border-border pt-6">
+          <Link to="/signup" data-testid="toggle-auth-mode" className="mt-4 inline-block text-sm font-semibold text-foreground/80 underline-offset-2 hover:text-foreground hover:underline">Need a workspace? Register →</Link>
+          <div className="mt-8 border-t border-white/45 pt-6">
             <p className="label-mono text-muted-foreground mb-3">Try the Sharma demo</p>
             {/* MPWA-11 (§8): demo-role buttons WRAP rather than clip. */}
             <div className="flex flex-wrap gap-touch-gap">
               {DEMO.map((d) => (
-                <button key={d.email} onClick={() => demoLogin(d.email)} data-testid={`demo-login-${d.role.toLowerCase()}`} className="flex-1 min-w-[7rem] min-h-touch lg:min-h-0 border border-border px-3 py-2 text-sm lg:text-xs font-semibold tracking-wider lg:uppercase hover:bg-accent transition-colors">{d.role}</button>
+                <button key={d.email} onClick={() => demoLogin(d.email)} data-testid={`demo-login-${d.role.toLowerCase()}`} className="kr-pop min-h-touch lg:min-h-0 flex-1 min-w-[7rem] rounded-pill px-3 py-2 text-sm lg:text-xs font-semibold tracking-wider lg:uppercase">{d.role}</button>
               ))}
             </div>
           </div>
+          </div>
         </div>
-      </div>
+      </main>
+
+      {/* The same glass chip signup uses, and for the same measured reason:
+          11px muted type printed straight onto a photograph failed contrast
+          there, and a ground fixes it without changing the colour. */}
+      <footer className="flex justify-center px-4 pb-5 lg:px-8">
+        <p className="kr-frost w-fit max-w-full rounded-pill px-4 py-1.5 text-center text-[11px] text-muted-foreground">
+          Voice-first · AI-structured · Multi-tenant
+        </p>
+      </footer>
     </div>
   );
 }

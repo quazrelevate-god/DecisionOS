@@ -58,16 +58,22 @@ RUN npm run build
 # ---- Stage 2: serve it ----
 FROM node:20-alpine AS runtime
 
-# `serve` pinned, and installed globally rather than carried in package.json:
-# it is a deployment concern, not an app dependency, and nothing in the build
-# or the test suite should be able to import it.
-RUN npm install -g serve@14.2.4
+# DEPLOY-3 — express + a proxy replace `serve`. The app now answers /api on
+# its own origin and forwards it to the backend, because Safari drops the
+# backend's cookie when the two are separate sites — see server.js for the
+# full diagnosis. Still installed globally rather than added to package.json:
+# these are deployment concerns, not app dependencies, and nothing in the
+# build or the test suite should be able to import them. NODE_PATH is what
+# lets server.js resolve them from outside its own directory.
+RUN npm install -g express@4.21.2 http-proxy-middleware@2.0.7
+ENV NODE_PATH=/usr/local/lib/node_modules
 
 # Non-root, same posture as the backend image.
 RUN addgroup -S app && adduser -S -G app app
 
 WORKDIR /app
 COPY --from=builder --chown=app:app /app/build ./build
+COPY --chown=app:app server.js ./server.js
 
 USER app
 
@@ -75,4 +81,4 @@ USER app
 # deliberate — $PORT has to be expanded at runtime, and exec keeps the server
 # as PID 1 so SIGTERM reaches it on a redeploy instead of being swallowed.
 ENV PORT=3000
-CMD ["sh", "-c", "exec serve -s build -l tcp://0.0.0.0:${PORT} --no-clipboard"]
+CMD ["node", "server.js"]

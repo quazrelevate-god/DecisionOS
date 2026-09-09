@@ -7,7 +7,7 @@
 <meta name="description" content="The AI operating system that remembers every decision, organises every task, and executes the way your business actually runs.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=Caveat:wght@500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Urbanist:wght@600&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=Caveat:wght@500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/landing/css/styles.css?v=44">
 </head>
 <body>
@@ -17,7 +17,7 @@
 <!-- ============ NAV ============ -->
 <header class="site-header" id="site-header">
   <div class="header-pill">
-    <a href="#top" class="logo"><img src="/landing/assets/img/logo.png" alt="DecisionOS"></a>
+    <a href="#top" class="logo" aria-label="DecisionOS"><span class="wordmark">Decision<span>OS</span></span></a>
     <nav class="main-nav" aria-label="Primary">
       <a href="#problem">The Problem</a>
       <a href="#whats-inside">Who It&rsquo;s For</a>
@@ -60,7 +60,7 @@
       <div class="reveal" style="--d:.16s">
         <a href="/signup" class="btn btn-primary btn-lg">Start free <span aria-hidden="true">→</span></a>
       </div>
-      <img class="hero-logo reveal" style="--d:.26s" src="/landing/assets/img/logo.png" alt="DecisionOS">
+      <p class="hero-logo reveal" style="--d:.26s" aria-label="DecisionOS"><span class="wordmark">Decision<span>OS</span></span></p>
     </div>
   </div>
   <a href="#problem" class="scroll-cue" aria-label="Scroll to next section"><span></span></a>
@@ -793,7 +793,7 @@
 <!-- ============ FOOTER ============ -->
 <footer class="site-footer">
   <div class="wrap footer-inner">
-    <a href="#top" class="logo"><img src="/landing/assets/img/logo.png" alt="DecisionOS"></a>
+    <a href="#top" class="logo" aria-label="DecisionOS"><span class="wordmark">Decision<span>OS</span></span></a>
     <nav class="footer-nav" aria-label="Footer">
       <a href="#problem">The Problem</a>
       <a href="#whats-inside">Who It&rsquo;s For</a>
@@ -807,29 +807,37 @@
 </footer>
 
 <script>
-/* KM-55 — two jobs, deliberately inline and ahead of main.js so they run on
-   the first paint rather than after 80KB of animation code.
+/* KM-56 — the signed-in check SWAPS THE BUTTON, it does not redirect.
 
-   1. Clear the bounce guard App.js sets when it hands "/" back to the server.
-      Reaching this line proves the hand-off worked, so the next one may try.
+   KM-55 bounced authenticated visitors straight to their desk, on the reasoning
+   that React's old "/" did the same. That was wrong the moment "/" stopped
+   being the app: the founder could not open their own marketing page without
+   signing out first, and reported it as "doesn't load anything, just redirects
+   to /inbox". A public page has to stay readable by everyone, including the
+   people who already bought.
 
-   2. Someone already signed in should not be reading the sales page. React's
-      old "/" sent them to their desk and this keeps that, which the static
-      page would otherwise have silently dropped. Same origin, so the HttpOnly
-      session cookie rides along — which is exactly why this had to be one
-      service and could not have been a separate marketing site.
+   So the session is still detected, but all it does is relabel the two nav
+   links: "Log in" and "Start free" become "Go to your desk". Same information,
+   no hijacked navigation.
 
-   It redirects to /app rather than deciding between /inbox and /my-work here:
-   that choice runs through hasPerm and userPerms, which fall back to per-role
-   defaults, and a hand-copy of that logic in vanilla JS would drift.
+   Same origin, so the HttpOnly session cookie rides along. /app is where the
+   app itself decides between /inbox and /my-work, because that runs through
+   hasPerm and userPerms and their per-role fallbacks — logic that would drift
+   the moment it were hand-copied into this file.
 
-   There is no way to skip the request for a first-time visitor — the session
-   cookie is HttpOnly, so document.cookie cannot see it. A logged-out visit
-   costs one 401. */
+   The bounce guard is still cleared: App.js sets it when it hands "/" back to
+   the server, and arriving here proves the hand-off worked. */
 try { sessionStorage.removeItem("dos-landing-bounce"); } catch (e) {}
 fetch("/api/auth/me", { credentials: "include" })
   .then(function (r) { return r.ok ? r.json() : null; })
-  .then(function (d) { if (d && d.user) window.location.replace("/app"); })
+  .then(function (d) {
+    if (!d || !d.user) return;
+    document.querySelectorAll("a.nav-login").forEach(function (a) { a.remove(); });
+    document.querySelectorAll('a[href="/signup"].nav-cta, .mobile-nav a[href="/signup"]').forEach(function (a) {
+      a.setAttribute("href", "/app");
+      a.textContent = "Go to your desk";
+    });
+  })
   .catch(function () { /* offline, or the API is down: it is a static page, show it */ });
 </script>
 <script src="/landing/js/main.js?v=44"></script>

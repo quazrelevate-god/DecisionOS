@@ -71,7 +71,14 @@ function Bubble({ m, index }) {
                it read as unfinished: the pair only works as a pair, and a
                translucent bubble opposite an opaque one looks like one of them
                failed to load rather than like two speakers. */
-            ? "rounded-br-lg bg-white text-foreground shadow-[0_2px_10px_-4px_hsl(230_30%_18%/.35)]"
+            /* bg-[#fff]/text-kr-ink, not bg-white/text-foreground, for the
+               reason the Dex nav pill needed the same: index.css carries a
+               legacy `.dark .bg-white { background-color: hsl(var(--card)) }`,
+               and this sheet opens over /brain, which runs dark. "Solid white"
+               asked for through `bg-white` would have quietly become a dark
+               card there — the exact complaint, in a second place. The literal
+               colours are immune to it and identical everywhere else. */
+            ? "rounded-br-lg bg-[#fff] text-kr-ink shadow-[0_2px_10px_-4px_hsl(230_30%_18%/.35)]"
             : "rounded-bl-lg bg-kr-ink text-white shadow-[0_8px_24px_-12px_hsl(216_28%_18%/.6)]"
         )}
       >

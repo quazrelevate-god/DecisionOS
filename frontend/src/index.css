@@ -1534,7 +1534,7 @@ html[data-page="workflows"] {
     z-index: -1;
     background: hsl(0 0% 0% / .25);
 
-    --kr-plate-h: 76px;                                       /* the header */
+    --kr-plate-h: 88px;                                       /* the header */
     --kr-plate-cap: calc(var(--kr-plate-h) * 173 / 126);      /* their aspect */
     --kr-plate-mid: var(--navplate-w, 640px);
 

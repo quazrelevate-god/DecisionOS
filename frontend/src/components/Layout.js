@@ -123,7 +123,10 @@ export default function Layout({ children }) {
   useEffect(() => {
     const el = navRef.current;
     if (!el || typeof ResizeObserver === "undefined") return;
-    const measure = () => setNavW(Math.round(el.getBoundingClientRect().width) + 56);
+    /* +48 = 24px of flat each side of the pills. The vertical gap works out at
+       17.4px, and a curved container wants a little more room across than down
+       — 24 reads as the same margin that 17.4 does once the S starts turning. */
+    const measure = () => setNavW(Math.round(el.getBoundingClientRect().width) + 48);
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     measure();
@@ -432,8 +435,23 @@ export default function Layout({ children }) {
           sit on the same surface as the navigation. --navplate-w is the dip's
           width, measured from the real nav below rather than assumed — the pill
           labels are translated, so it has to fit whatever language is loaded. */}
+      {/* KM-47 — THE PILLS SIT IN THE DIP, NOT IN THE HEADER, and that is what
+          the padding-bottom is for. Measured before: 18px of plate above the
+          pills and 6.5px below them, because the row was centred in the 76px
+          header while the dip's floor is at 84.92% of it. Centring content in a
+          box whose bottom has been curved away is centring it in the wrong box.
+
+          88px, not 76: making the gaps merely EQUAL at the old height gives
+          12.25px top and bottom, which puts the pills almost against the page
+          edge. The founder's own curve file is 126 units tall for a ~44px pill —
+          proportionally far airier than 76 was. 88 lands between: 17.4px around
+          the pills and a 13px floor left under the dip.
+
+          pb-[13px] is derived, not nudged: with items-center the row's top is
+          (88 - P - 40) / 2, and setting that equal to the gap below the pills
+          (74.73 - 40 - top) solves to P = 13.26. */}
       <header
-        className="kr-navplate hidden lg:grid h-[76px] shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-4 px-6 bg-transparent"
+        className="kr-navplate hidden lg:grid h-[88px] shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-4 px-6 pb-[13px] bg-transparent"
         style={navW ? { "--navplate-w": `${navW}px` } : undefined}
       >
         <div className="flex items-center justify-self-start">

@@ -1,7 +1,7 @@
 import * as React from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  Plus, X, Paperclip, Camera, Keyboard, CircleNotch, Sparkle,
+  Plus, X, Paperclip, Camera, Keyboard, Microphone, CircleNotch, Sparkle,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 
@@ -65,7 +65,13 @@ function Bubble({ m, index }) {
         className={cn(
           "max-w-[85%] rounded-3xl px-4 py-3 text-sm leading-relaxed",
           mine
-            ? "kr-frost-min rounded-br-lg text-foreground"
+            /* KM-51 — SOLID white, not the translucent frost. Founder: "the
+               chat colour for the AI side is black and the human user side is
+               transparent white, I want it in solid white." They are right that
+               it read as unfinished: the pair only works as a pair, and a
+               translucent bubble opposite an opaque one looks like one of them
+               failed to load rather than like two speakers. */
+            ? "rounded-br-lg bg-white text-foreground shadow-[0_2px_10px_-4px_hsl(230_30%_18%/.35)]"
             : "rounded-bl-lg bg-kr-ink text-white shadow-[0_8px_24px_-12px_hsl(216_28%_18%/.6)]"
         )}
       >
@@ -127,7 +133,14 @@ export function DexChat({ open, onClose, dex, chat }) {
   /* The three ways in that are not the microphone. "Type" flips the DOCK into
      a text field rather than opening a field here — same bar, different mode. */
   const ACTIONS = [
-    { key: "type", icon: Keyboard, label: "Type", onClick: () => { setMode(mode === "type" ? "voice" : "type"); setPlusOpen(false); } },
+    /* KM-51 — THE ICON FOLLOWS WHAT THE BUTTON WILL DO, not what mode you are
+       in. It was always a keyboard, so in type mode it offered "Type" while
+       actually switching back to voice — the founder could not tell it was the
+       mic toggle until they pressed it. Now it shows a microphone and says
+       Speak while typing, and a keyboard and says Type while not. */
+    mode === "type"
+      ? { key: "type", icon: Microphone, label: "Speak", onClick: () => { setMode("voice"); setPlusOpen(false); } }
+      : { key: "type", icon: Keyboard, label: "Type", onClick: () => { setMode("type"); setPlusOpen(false); } },
     { key: "file", icon: Paperclip, label: "Attach", onClick: () => { dex?.fileRef?.current?.click(); setPlusOpen(false); } },
     { key: "photo", icon: Camera, label: "Photo", onClick: () => { photoRef.current?.click(); setPlusOpen(false); } },
   ];

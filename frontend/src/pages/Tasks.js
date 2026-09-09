@@ -127,7 +127,49 @@ export function NewTaskDialog({ onCreated, roleOptions, members, defaultType, tr
           the fields sit in is the same material as every card behind it. The
           default close X is hidden and replaced below, aligned with the title
           rather than floating in the corner. */}
-      <DialogContent className="kr-bento max-h-[90vh] overflow-y-auto rounded-cardlg border-0 [&>button.absolute]:hidden">
+      {/* KM-51 — the dialog "jumps off" because it is CENTRED and its height
+          CHANGES while you use it.
+
+          Three blocks in this form are conditional: the operational-category
+          select appears with `isOp`, the assign-by-role select DISAPPEARS the
+          moment you pick a person, and the approver select appears with the
+          approval checkbox. Radix centres the panel — top:50% with a -50%
+          translate — so removing ~70px of field moves the top edge down 35px
+          and pulls everything below it up 70px. Two motions at once, on the
+          exact click that caused them. Founder: "click any options and menu,
+          it jumps off in both desktop, android and iOS." Three platforms
+          because it was never a platform bug.
+
+          Desktop: anchor the panel to the top instead. Height then grows and
+          shrinks downward only, and nothing above the change moves.
+
+          Phone: go full-bleed, which is the founder's own fallback ("if can't
+          fix then make it as a full screen page") and independently right —
+          iOS shrinks the visual viewport when a <select> picker opens, so a
+          vh-sized centred box really does slide off. Pinned to all four edges
+          it has nowhere to go, and h-full resolves against the layout
+          viewport, which the picker does not touch.
+
+          The slide offsets are zeroed to match — they were written for a
+          centred panel and would otherwise start it 48% of its own height
+          above the screen. They are zeroed by writing tailwindcss-animate's
+          VARIABLES rather than by passing `slide-in-from-top-0`: those class
+          names are not in tailwind-merge's group table, so cn() keeps both
+          and the arbitrary `-[48%]` wins on source order. Measured: the
+          override class was present and --tw-enter-translate-y was still
+          -48%. Setting the custom property has no such contest. */}
+      <DialogContent
+        className="kr-bento overflow-y-auto border-0 [&>button.absolute]:hidden
+                   left-0 top-0 h-full w-full max-w-none translate-x-0 translate-y-0
+                   [border-radius:0]
+                   [padding-top:max(1rem,env(safe-area-inset-top))]
+                   [padding-bottom:max(1rem,env(safe-area-inset-bottom))]
+                   lg:left-[50%] lg:top-[6vh] lg:h-auto lg:max-h-[88vh] lg:max-w-lg
+                   lg:-translate-x-1/2 lg:[border-radius:var(--radius-card)]
+                   lg:[padding-block:1.5rem]
+                   data-[state=open]:[--tw-enter-translate-x:0] data-[state=open]:[--tw-enter-translate-y:0]
+                   data-[state=closed]:[--tw-exit-translate-x:0] data-[state=closed]:[--tw-exit-translate-y:0]"
+      >
         <DialogHeader className="pr-11">
           <DialogPrimitiveClose
             data-testid="task-dialog-close"

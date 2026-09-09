@@ -261,15 +261,24 @@ export default function Layout({ children }) {
      that now renders the voice UI is the dock, not a sheet. Layout is the only
      common parent of the FAB (which starts it), the bar (which draws it) and
      the sheet (which still shows what Dex heard afterwards). */
+  /* KM-51 — the transcript sink. useDexCapture is created BEFORE
+     useDexConversation (it is the conversation's input), so the setter it needs
+     to hand a transcript to does not exist yet. A ref filled on the next line
+     down breaks the cycle without reordering two hooks that genuinely depend on
+     each other in that direction. */
+  const draftSinkRef = useRef(null);
   const dex = useDexCapture({
     watch: true,
     onRecordingChange: (on, secs) => setDexRecording({ on, secs }),
     onCaptured: () => qc.invalidateQueries({ queryKey: ["captures-pending"] }),
+    // Stopping a recording now yields TEXT for review, not a committed capture.
+    onTranscript: (text) => draftSinkRef.current?.(text),
   });
   /* KM-26 — one conversation, three surfaces: the dock hosts the input, the
      FAB submits it, the transcript shows it. None of them can own the state, so
      it lives in the hook and Layout hands it to all three. */
   const chat = useDexConversation({ dex, open: dexOpen });
+  draftSinkRef.current = chat.setDraft;
   const [langOpen, setLangOpen] = useState(false);
   // KR-5: the global search moved into a ⌘K dialog; same /brain?q= handoff.
   const [globalQuery, setGlobalQuery] = useState("");

@@ -91,16 +91,33 @@ export function useDexConversation({ dex, open } = {}) {
     }
   }, [push]);
 
-  /** What the FAB does right now — the single source for its icon and action. */
+  /** What the FAB does right now — the single source for its icon and action.
+      KM-51 — A DRAFT NOW OUTRANKS THE MODE. It used to read "send" only in type
+      mode, so after a voice capture the button went straight back to a mic and
+      there was nothing to press to send what you had just said. A draft is a
+      draft however it got there: recording wins (stop), then any draft (send),
+      then the mode decides. */
   const fabIntent =
     dex?.recording ? "stop"
-    : mode === "type" ? (draft.trim() ? "send" : "keyboard")
+    : draft.trim() ? "send"
+    : mode === "type" ? "keyboard"
     : "mic";
 
+  /* KM-51 — THREE PRESSES, THREE JOBS, and stop no longer sends.
+     Before: stopping a recording uploaded it, the server structured it, and an
+     answer arrived for something never confirmed. Founder: "I can't stop the
+     recording... it takes it as a query and gives the answer, but I don't want
+     it like that." So stop STOPS. The transcript comes back into the draft as a
+     preview, the button becomes a send arrow, and the second press is what
+     commits it — the same two-step typing already had. */
   const submit = useCallback(() => {
-    if (mode === "type") { ask(draft); return; }
-    if (dex?.recording) dex.stopRecording?.();
-    else dex?.startRecording?.();
+    if (dex?.recording) { dex.stopRecording?.(); return; }
+    /* Transcription is still in flight. Without this the button falls through
+       to "start recording" and you are taping over the thing you just said. */
+    if (dex?.sending) return;
+    if (draft.trim()) { ask(draft); return; }
+    if (mode === "type") return;      // empty field: nothing to send
+    dex?.startRecording?.();
   }, [ask, draft, dex, mode]);
 
   return { log, busy, mode, setMode, draft, setDraft, ask, attach, submit, fabIntent };

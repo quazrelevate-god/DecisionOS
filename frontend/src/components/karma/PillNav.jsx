@@ -71,7 +71,21 @@ export function PillNav({ items = [], size = "md", className, testid, plate = fa
                      was not. Ink at 28% over the plate gives that edge 4.70:1
                      against the fill it encloses, so the selected item is
                      findable by shape as well as by weight. */
-                  ? "bg-white text-kr-ink shadow-[0_0_0_1px_hsl(230_30%_18%/.28),0_2px_10px_-3px_hsl(230_30%_18%/.45)]"
+                  /* KM-51 — `bg-[#fff]`, not `bg-white`, and the difference is
+                     not cosmetic. A legacy compatibility shim in index.css
+                     (`@layer utilities { .dark .bg-white { background-color:
+                      hsl(var(--card)) } }`, ~line 266) blanket-rewrites EVERY
+                     bg-white in dark mode. /brain runs dark, so the selected
+                     pill's fill silently became --card, rgb(24,24,27), while
+                     text-kr-ink stayed rgb(12,12,13): measured 1.06:1, black
+                     on black. Founder: "the current page menu, which is Dex,
+                     is completely dark."
+                     The shim matches on the class NAME, so an arbitrary-value
+                     class is out of its reach and the pill is the literal
+                     white this design always meant. Identical on light pages;
+                     19.6:1 in the Dex room, where a white pill on the dark
+                     plate is exactly the "one lit thing" this variant is for. */
+                  ? "bg-[#fff] text-kr-ink shadow-[0_0_0_1px_hsl(230_30%_18%/.28),0_2px_10px_-3px_hsl(230_30%_18%/.45)]"
                   : "bg-kr-ink text-white"
                 /* KR-14 — the unselected pills step BACK, then light up on
                    hover without moving.

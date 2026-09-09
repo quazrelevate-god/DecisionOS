@@ -29,11 +29,21 @@ const POLL_MS = 1200;
 const POLL_TIMEOUT_MS = 90000;
 
 /**
- * @param {{onCaptured?:Function, onRecordingChange?:Function, watch?:boolean}} opts
+ * @param {{onCaptured?:Function, onRecordingChange?:Function, watch?:boolean,
+ *          onTranscript?:Function}} opts
  *        watch — poll the note until it is structured and expose `understanding`.
  *        Off by default so DexCaptureBar's behaviour is bit-for-bit unchanged.
+ *
+ *        onTranscript — KM-51. When given, stopping a recording TRANSCRIBES AND
+ *        STOPS THERE: the text is handed back and nothing is structured, nothing
+ *        is auto-sent. It exists because the phone's Dex had no review step —
+ *        `mr.onstop` uploaded, `follow()` structured, and an answer appeared for
+ *        something the founder had not confirmed saying. Their words: "only when
+ *        I press the stop button it should take that as a query", and then a
+ *        preview before it goes anywhere. A hook that both records AND commits
+ *        cannot offer that, so the commit half is now the caller's decision.
  */
-export function useDexCapture({ onCaptured, onRecordingChange, watch = false } = {}) {
+export function useDexCapture({ onCaptured, onRecordingChange, watch = false, onTranscript } = {}) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [recording, setRecording] = useState(false);
@@ -42,6 +52,10 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false } =
   const [levels, setLevels] = useState(() => new Array(BARS).fill(0));
   // { noteId, status, transcript, language, decision, tasks[] } | null
   const [understanding, setUnderstanding] = useState(null);
+  // Held in a ref so changing the handler never re-creates startRecording and
+  // orphans a live MediaRecorder.
+  const onTranscriptRef = useRef(onTranscript);
+  onTranscriptRef.current = onTranscript;
 
   const mediaRef = useRef(null);
   const chunksRef = useRef([]);
@@ -99,6 +113,35 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false } =
       if (mediaRef.current?.state === "recording") mediaRef.current.stop();
     };
   }, [stopMeter]);
+
+  /** KM-51 — poll one note only until its TRANSCRIPT exists, then hand it back.
+      Deliberately not `follow()`: that one waits for `status === "done"` and a
+      decision_id, i.e. for the server to have committed the thing. Here the
+      transcript is the whole point and the commit has not been authorised yet. */
+  const pollTranscript = useCallback(async (noteId) => {
+    const startedAt = Date.now();
+    const gen = ++followRef.current;
+    const live = () => aliveRef.current && followRef.current === gen;
+    const step = async () => {
+      if (!live()) return;
+      try {
+        const note = (await api.get(`/voice-notes/${noteId}`)).data || {};
+        if (note.transcript) { setSending(false); onTranscriptRef.current?.(note.transcript); return; }
+        if (note.status === "failed" || note.error) {
+          setSending(false);
+          toast.error(note.error || "Could not transcribe that");
+          return;
+        }
+      } catch { /* a dropped poll is not a failure — the next one may land */ }
+      if (Date.now() - startedAt > POLL_TIMEOUT_MS) {
+        setSending(false);
+        toast.error("Transcription timed out");
+        return;
+      }
+      pollRef.current = setTimeout(step, POLL_MS);
+    };
+    step();
+  }, []);
 
   /** Poll one note until it is structured, then read the decision it produced. */
   const follow = useCallback(async (noteId, seed = {}) => {
@@ -199,12 +242,20 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false } =
           const res = await api.post("/voice-notes", fd, {
             headers: { "Content-Type": "multipart/form-data" },
           });
+          /* KM-51 — with onTranscript the upload is a TRANSCRIPTION request and
+             nothing more. `sending` deliberately stays true through the poll,
+             because from the founder's side one wait is still running. */
+          if (onTranscriptRef.current && res.data?.id) {
+            pollTranscript(res.data.id);
+            onCaptured?.();
+            return;
+          }
           if (watch && res.data?.id) follow(res.data.id);
           else toast.success("Voice captured — Dex is structuring it");
           onCaptured?.();
+          setSending(false);
         } catch (e) {
           toast.error(e.response?.data?.detail || "Upload failed");
-        } finally {
           setSending(false);
         }
       };
@@ -254,7 +305,7 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false } =
       toast.error("Microphone not available");
       return false;
     }
-  }, [watch, follow, onCaptured, stopMeter]);
+  }, [watch, follow, onCaptured, stopMeter, pollTranscript]);
 
   const stopRecording = useCallback(() => {
     if (mediaRef.current?.state === "recording") mediaRef.current.stop();

@@ -187,7 +187,12 @@ export function FloatingDock({
             duplicated. py-2 is the "adequate spacing above and below" so the
             ribbons never touch the pill's edge. */}
         {dexActive ? (
-          dexMode === "type" ? (
+          /* KM-51 — the field also appears when there is a DRAFT, whatever the
+             mode. After a voice capture the transcript lands here as a preview:
+             the founder reads back what Dex heard, edits it if it is wrong, and
+             only then presses send. Previously voice mode could only ever draw
+             the wave, so a stopped recording had nowhere to be shown. */
+          (dexMode === "type" || dexDraft) ? (
             <input
               autoFocus
               data-testid="dock-dex-input"

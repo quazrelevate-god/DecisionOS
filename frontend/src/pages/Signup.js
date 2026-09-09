@@ -2,7 +2,13 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
-import { Wordmark } from "../components/Wordmark";
+/* KM-43 — the app's wordmark, not the PNG lockup. Founder: "use the black
+   version of decision os logo in the signup page which is used inside the
+   inbox page and everywhere in mobile pwa". KarmaLogo is text — "Decision" at
+   full ink, "OS" dropped to 55% — which is what the app shell has worn since
+   KR-8.2. The PNG (Wordmark.jsx) keeps Landing and Login, the two marketing
+   surfaces that still carry the registered artwork. */
+import { KarmaLogo } from "../components/karma/Logo";
 import { BasicsFlow } from "./onboarding/BasicsFlow";
 import { WebsiteIntel } from "./onboarding/WebsiteIntel";
 import { VoiceInterview } from "./onboarding/VoiceInterview";
@@ -90,7 +96,7 @@ export default function Signup() {
       <header className="px-4 pt-4 lg:px-8 lg:pt-6">
         <div className="kr-frost mx-auto flex w-full max-w-5xl items-center justify-between gap-4 rounded-pill px-4 py-2.5 lg:px-6">
           <Link to="/" className="flex shrink-0 items-center gap-2.5" data-testid="signup-logo">
-            <Wordmark size={18} />
+            <KarmaLogo size="md" />
           </Link>
 
           {/* The phase rail. Sunken track, raised pill on the live phase —

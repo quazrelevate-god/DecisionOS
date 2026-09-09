@@ -2578,10 +2578,20 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
        preview pane reports document.hidden and stops compositing content
        scrolled into view for the first time, so the capture was stale while
        the DOM was correct all along.) */
-    html[data-page="finance"] .kr-frost,
-    html[data-page="finance"] .kr-frost-min {
+    html[data-page="finance"] .kr-frost:not(.kr-keep-blur),
+    html[data-page="finance"] .kr-frost-min:not(.kr-keep-blur) {
         -webkit-backdrop-filter: none;
-        backdrop-filter: none;
+                backdrop-filter: none;
+    }
+    /* KM-50 — AND OVERLAYS OPT OUT, because the budget argument does not apply
+       to them. The rule above exists because /finance had ELEVEN blurred
+       surfaces in one viewport; an overlay is ONE surface, on top of
+       everything, and only one is open at a time. Without this the More panel
+       lost its blur — but only when opened from /finance, which is exactly the
+       kind of bug that reads as random. Founder found it; it was mine. */
+    .kr-keep-blur {
+        -webkit-backdrop-filter: blur(20px) saturate(1.5) !important;
+                backdrop-filter: blur(20px) saturate(1.5) !important;
     }
 
     .kr-glass--blue  { --kr-glass-from: 214 45% 58%; --kr-glass-to: 28 55% 50%; }

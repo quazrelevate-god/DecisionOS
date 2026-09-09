@@ -358,7 +358,10 @@ export function AllAppsPanel({
                drawing its default ring around the whole sheet. The focus trap
                still has its anchor; it just stops painting a blue rectangle
                around a menu nobody typed into. */
-            "kr-frost rounded-cardlg focus:outline-none focus-visible:outline-none",
+            /* KM-50 — kr-keep-blur: /finance strips backdrop-filter off .kr-frost
+               to stay inside the blur budget, and this panel is not part of
+               that budget — it is one overlay, on top, one at a time. */
+            "kr-frost kr-keep-blur rounded-cardlg focus:outline-none focus-visible:outline-none",
 
             // scale 0.92 -> 1 with opacity, ~180ms ease-out; reverse on close
             // [animation-duration:...] rather than duration-[180ms]: the

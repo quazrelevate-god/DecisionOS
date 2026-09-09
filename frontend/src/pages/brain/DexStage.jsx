@@ -140,7 +140,7 @@ function Orb({ levels, recording, thinking, scale = 1 }) {
  * @param {string}   status    the line under the orb
  * @param {node}     trailing  quiet page-level actions (Documents, new thread)
  */
-export function DexStage({ capture, onAsk, thinking, compact = false, status, trailing }) {
+export function DexStage({ capture, onAsk, thinking, compact = false, status, trailing, className }) {
   const {
     text, setText, sending, recording, recordSecs, levels,
     sendText, startRecording, stopRecording, uploadFile, fileRef,
@@ -155,7 +155,7 @@ export function DexStage({ capture, onAsk, thinking, compact = false, status, tr
   };
 
   return (
-    <div className="relative" data-testid="dex-stage">
+    <div className={cn("relative", className)} data-testid="dex-stage">
       {/* The page's own atmosphere. Sits behind content, never takes a
           pointer, and is the reason /brain reads as a different surface
           rather than the same app in a different card. */}

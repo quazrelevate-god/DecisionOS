@@ -93,8 +93,17 @@ export default function Signup() {
       <div className="app-sky__art app-sky__art--aside" aria-hidden="true" />
 
       {/* Top bar — floating glass rather than a ruled band. */}
+      {/* KM-50 — ON A PHONE THIS IS JUST THE WORDMARK, CENTRED. Founder: "the
+          top navbar is not nice so remove it and show only the DecisionOS logo
+          in the center top." They are right about the cause — at 375px the
+          glass pill had to carry a wordmark, a four-step rail and a Sign in
+          button, and the rail's labels are lg-only precisely because they do
+          not fit, so the phone was showing a bar of four unlabelled dots. A
+          progress rail nobody can read is chrome, not orientation; the step
+          number and its caption inside the card already say where you are.
+          Desktop is untouched — it has the width the rail was designed for. */}
       <header className="px-4 pt-4 lg:px-8 lg:pt-6">
-        <div className="kr-frost mx-auto flex w-full max-w-5xl items-center justify-between gap-4 rounded-pill px-4 py-2.5 lg:px-6">
+        <div className="mx-auto flex w-full max-w-5xl items-center justify-center gap-4 rounded-pill px-4 py-2.5 lg:kr-frost lg:justify-between lg:px-6">
           <Link to="/" className="flex shrink-0 items-center gap-2.5" data-testid="signup-logo">
             <KarmaLogo size="md" />
           </Link>
@@ -104,7 +113,7 @@ export default function Signup() {
               controls use, so progress reads as position rather than colour.
               Labels are lg-only: at 375px four words plus the wordmark plus
               Sign in cannot share a row without truncating something. */}
-          <div className="kr-pressed flex items-center gap-1 rounded-pill p-1" data-testid="signup-phase-bar">
+          <div className="kr-pressed hidden items-center gap-1 rounded-pill p-1 lg:flex" data-testid="signup-phase-bar">
             {PHASES.map((p, i) => {
               const done = i < phaseIdx;
               const live = i === phaseIdx;
@@ -132,7 +141,7 @@ export default function Signup() {
           <Link
             to="/login"
             data-testid="signup-signin-link"
-            className="kr-pop flex h-9 shrink-0 items-center rounded-pill px-4 text-xs font-medium"
+            className="kr-pop hidden h-9 shrink-0 items-center rounded-pill px-4 text-xs font-medium lg:flex"
           >
             Sign in
           </Link>

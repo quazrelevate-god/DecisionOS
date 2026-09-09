@@ -57,6 +57,29 @@ export function InstallPrompt() {
 
   const install = async () => {
     if (isIos()) {
+      /* KM-50 — iOS CANNOT BE PROMPTED, so Add opens the SHARE SHEET instead.
+         There is no beforeinstallprompt on WebKit and no API that adds to the
+         home screen — Apple has never shipped one, deliberately. The nearest
+         real thing is navigator.share(), which opens the very sheet that holds
+         "Add to Home Screen", so the button now lands the user one tap from
+         done instead of on a page of instructions. Founder: "when I click the
+         button it should route me to add home screen functionality or at least
+         a share window should show."
+         The instruction sheet stays as the fallback: share() needs a secure
+         context and a user gesture, and it rejects if the user cancels — in
+         either case the steps are still the honest answer. */
+      try {
+        if (navigator.share) {
+          await navigator.share({
+            title: "DecisionOS",
+            text: t("install.body", "Keep DecisionOS one tap away on your home screen."),
+            url: window.location.origin,
+          });
+          return;   // they got the sheet; do not stack instructions on top
+        }
+      } catch {
+        /* cancelled or unavailable — fall through to the steps */
+      }
       setIosSheet(true);
       return;
     }
@@ -82,7 +105,11 @@ export function InstallPrompt() {
           data-testid="install-prompt"
           role="region"
           aria-label={t("install.title", "Add DecisionOS to your home screen")}
-          className="lg:hidden fixed inset-x-3 z-[10040] mx-auto flex max-w-md items-center gap-3 nm-raised px-3 py-3 shadow-brutal-lg"
+          /* KM-50 — the toast wore .nm-raised + shadow-brutal-lg, both from
+             design systems this app retired two passes ago; it was the last
+             brutalist surface still shipping. Now the same frosted pill the
+             rest of the phone UI uses. */
+          className="lg:hidden fixed inset-x-3 z-[10040] mx-auto flex max-w-md items-center gap-3 kr-frost rounded-pill py-2.5 pl-4 pr-2.5 shadow-[0_10px_30px_-12px_hsl(230_30%_18%/.45)]"
           // Sits above the dock, like UndoSnackbar, so it never covers the
           // navigation it is asking him to keep using.
           style={{ bottom: "calc(6rem + env(safe-area-inset-bottom, 0px))" }}
@@ -95,7 +122,7 @@ export function InstallPrompt() {
             type="button"
             onClick={install}
             data-testid="install-prompt-accept"
-            className="shrink-0 rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground"
+            className="kr-pop shrink-0 rounded-pill bg-kr-ink px-4 text-sm font-semibold text-white"
             style={{ minHeight: "var(--control-h-sm)" }}
           >
             {t("install.add", "Add")}
@@ -105,7 +132,7 @@ export function InstallPrompt() {
             onClick={close}
             data-testid="install-prompt-dismiss"
             aria-label={t("common.dismiss", "Dismiss")}
-            className="grid shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-accent"
+            className="grid shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-white/50"
             style={{ minHeight: "var(--control-h-sm)", minWidth: "var(--control-h-sm)" }}
           >
             <X size={20} weight="bold" />

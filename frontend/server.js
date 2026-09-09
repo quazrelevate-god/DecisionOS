@@ -81,13 +81,26 @@ if (!TARGET) {
    caches its own entry point cannot ship an update. Hashed assets under
    /static are content-addressed and safe to keep for a year. */
 const NO_STORE = new Set(["/index.html", "/service-worker.js", "/manifest.json"]);
+
+/* KM-53 — /sky is hand-placed art with PERMANENT filenames, so it cannot take
+   the year that /static gets. Webpack renames a bundle on every build, which is
+   what makes `immutable` safe there; sky/foo.webp keeps its name when the
+   picture behind it is replaced, and a year-long max-age then means installed
+   PWAs keep the old picture until 2027 without ever asking. That is exactly
+   what happened to signup-lg.webp: the bytes on the server were correct and
+   every client that had already loaded the page was entitled to ignore them.
+   `no-cache` still CACHES — it just revalidates first, so an unchanged image
+   costs a 304 and a changed one is picked up on the next load. */
+const REVALIDATE = /^\/sky\//;
 app.use(
   express.static(BUILD, {
     index: false,
     maxAge: "1y",
     setHeaders(res, filePath) {
       const rel = "/" + path.relative(BUILD, filePath).split(path.sep).join("/");
-      if (NO_STORE.has(rel)) res.setHeader("Cache-Control", "no-cache, must-revalidate");
+      if (NO_STORE.has(rel) || REVALIDATE.test(rel)) {
+        res.setHeader("Cache-Control", "no-cache, must-revalidate");
+      }
     },
   })
 );

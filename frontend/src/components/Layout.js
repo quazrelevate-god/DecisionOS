@@ -687,6 +687,12 @@ export default function Layout({ children }) {
         dexDraft={chat.draft}
         onDexDraft={chat.setDraft}
         onDexSubmit={chat.submit}
+        /* KM-53 — the gap between "stop" and the transcript coming back.
+           `dex.sending` covers the upload and the transcript poll; `!chat.draft`
+           narrows it to the window where there is genuinely nothing to show,
+           so the placeholder never sits on top of text that has already
+           arrived. */
+        dexTranscribing={!!dex.sending && !chat.draft}
       />
       {/* KM-11 — the vignette. Rendered always so it can transition rather
           than pop in, and gated by a data attribute. Sits below the dock's

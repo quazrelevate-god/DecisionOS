@@ -211,22 +211,28 @@ export function DexChat({ open, onClose, dex, chat }) {
             </div>
 
             {/* KM-26 · the plus, and only the plus.
-                It sits on the DOCK's baseline at the left edge, so it is clear
-                of the bar (which is now the composer) and clear of the newest
-                line of the transcript above it. Its actions lift upward, never
-                over what you are reading.
+                It sits on the DOCK's baseline, clear of the bar (which is now
+                the composer) and clear of the newest line of the transcript
+                above it. Its actions lift upward, never over what you are
+                reading.
                 The bottom padding clears the DOCK, which is 64px tall sitting
                 on its own safe-area offset — measured, because `pb-safe-4` put
                 the plus straight on top of the bar (plus 768-812 against a dock
-                at 732-796) and half of it off the bottom of the screen. */}
-            <div className="relative px-4 pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]">
+                at 732-796) and half of it off the bottom of the screen.
+
+                KM-53 — it moved from the left edge to the FAB's centre line, on
+                the founder's call. `items-end` puts it on the right and
+                `.app-plus-on-fab` (index.css, beside .app-fab-right) does the
+                centring; the menu follows it over so the pills still hang off
+                the button that opened them rather than across the screen. */}
+            <div className="relative flex flex-col items-end px-4 pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]">
               <AnimatePresence>
                 {plusOpen && (
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="absolute bottom-full left-4 mb-3 flex flex-col gap-2"
+                    className="absolute bottom-full right-4 mb-3 flex flex-col items-end gap-2"
                   >
                     {ACTIONS.map((a, i) => {
                       const Icon = a.icon;
@@ -257,7 +263,7 @@ export function DexChat({ open, onClose, dex, chat }) {
                 aria-label={plusOpen ? "Hide options" : "More ways to talk to Dex"}
                 aria-expanded={plusOpen}
                 onClick={() => setPlusOpen((v) => !v)}
-                className="kr-frost grid h-11 w-11 place-items-center rounded-full"
+                className="app-plus-on-fab kr-frost grid h-11 w-11 place-items-center rounded-full"
               >
                 <motion.span animate={{ rotate: plusOpen ? 45 : 0 }} transition={SPRING} className="grid place-items-center">
                   <Plus size={19} weight="bold" />

@@ -120,7 +120,7 @@ function DockItem({ to, label, icon: Icon, testid, active, onClick }) {
 export function FloatingDock({
   user, onMore, moreOpen = false, moreBadge = 0,
   dexActive = false, dexLevels = [], dexMode = "voice", dexWaveState = "idle",
-  dexDraft = "", onDexDraft, onDexSubmit,
+  dexDraft = "", onDexDraft, onDexSubmit, dexTranscribing = false,
 }) {
   const { t } = useTranslation();
   const location = useLocation();
@@ -192,16 +192,39 @@ export function FloatingDock({
              the founder reads back what Dex heard, edits it if it is wrong, and
              only then presses send. Previously voice mode could only ever draw
              the wave, so a stopped recording had nowhere to be shown. */
-          (dexMode === "type" || dexDraft) ? (
+          /* KM-53 also shows the field WHILE TRANSCRIBING. Founder: "when the
+             voice is getting transcribed, in that meantime I should see
+             thinking or transcribing text in the text field, but it's just
+             blank." It was blank because the field only appeared once a draft
+             existed, and the draft is the very thing being waited for — so the
+             one moment that needed a progress signal was the one moment with
+             nothing on screen. */
+          (dexMode === "type" || dexDraft || dexTranscribing) ? (
             <input
-              autoFocus
+              /* Not while transcribing: the field mounts on its own there, and
+                 autoFocus would throw the keyboard up over a read-only box the
+                 founder is only meant to be watching. */
+              autoFocus={dexMode === "type"}
               data-testid="dock-dex-input"
               value={dexDraft}
+              /* Read-only until the transcript lands, because it ARRIVES as a
+                 setDraft that replaces the field wholesale — anything typed in
+                 the gap would vanish without trace. */
+              readOnly={dexTranscribing}
               onChange={(e) => onDexDraft?.(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onDexSubmit?.(); } }}
-              placeholder={t("dex.typePlaceholder", "Ask Dex, or state a decision…")}
+              placeholder={dexTranscribing
+                ? t("dex.transcribing", "Transcribing…")
+                : t("dex.typePlaceholder", "Ask Dex, or state a decision…")}
               aria-label="Message Dex"
-              className="min-w-0 flex-1 bg-transparent px-3 text-sm text-white placeholder:text-white/40 focus:outline-none"
+              className={cn(
+                "min-w-0 flex-1 bg-transparent px-3 text-sm text-white focus:outline-none",
+                /* A status the founder is waiting on should not wear the same
+                   grey as a hint they are meant to type over. */
+                dexTranscribing
+                  ? "animate-pulse placeholder:text-white/75"
+                  : "placeholder:text-white/40"
+              )}
             />
           ) : (
             <div className="min-w-0 flex-1 px-2 py-2" data-testid="dock-dex-wave">

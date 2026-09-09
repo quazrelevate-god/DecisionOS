@@ -535,6 +535,33 @@
     .app-fab-right {
         right: calc(max(0px, (100vw - var(--app-shell)) / 2) + 1rem);
     }
+
+    /* KM-53 — the Dex plus moves to the right and lines up ON the FAB.
+       Founder: "place the plus icon in dex mode from left to right side, top
+       of the mic/keyboard icon, center aligned to the below mic icon."
+       It sits in flow inside a container padded 1rem, so reaching the FAB's
+       centre line means undoing that padding and adding the difference between
+       the two radii:
+
+           FAB centre from the viewport edge   shellOffset + 1rem + 2rem
+           plus centre if left alone           1rem + 1.375rem
+           margin-right that reconciles them   shellOffset + 0.625rem
+
+       Written as a margin rather than absolute positioning so the button keeps
+       its place in the column and the menu above it still measures from a real
+       box. shellOffset is the same expression .app-fab-right uses, so the two
+       stay paired at every width the shell can take — not only on a phone,
+       where it happens to collapse to zero. */
+    .app-plus-on-fab {
+        margin-right: calc(max(0px, (100vw - var(--app-shell)) / 2) + 0.625rem);
+    }
+}
+
+/* Under 360px the FAB shrinks to 3.75rem, so its centre moves 2px inward. */
+@media (max-width: 359px) {
+    .app-plus-on-fab {
+        margin-right: calc(max(0px, (100vw - var(--app-shell)) / 2) + 0.5rem);
+    }
 }
 @media (min-width: 481px) and (max-width: 1023.98px) {
     .app-shell {
@@ -1636,7 +1663,20 @@ html[data-page="workflows"] {
        desktop, author 16:9 — the box only ever reveals a portrait-ish slice of
        it, so put the interest right-of-centre and vertically centred. */
     --sky-art:    url("/sky/signup.webp");
-    --sky-art-lg: url("/sky/signup-lg.webp");
+    /* KM-53 — ?v=2 is a CACHE BUSTER, not a path.
+       The founder replaced this picture and it kept showing the old one on
+       Railway while localhost was correct. The file on the server IS the new
+       one — verified byte-for-byte, 1,085,280 bytes, identical to git. What
+       was stale was the CLIENT: server.js serves everything outside index.html
+       with `max-age=31536000`, and the filename never changed, so every
+       browser and every installed PWA that had loaded the page once was
+       entitled to keep the old bytes for a year without ever asking.
+       /static bundles do not have this problem because webpack renames them on
+       every build; hand-placed art in /sky keeps its name forever, so the name
+       has to carry the version instead. Bump this when the file is replaced.
+       server.js now also stops sending a year on /sky, which fixes the NEXT
+       swap — this query string is what fixes the one already cached. */
+    --sky-art-lg: url("/sky/signup-lg.webp?v=2");
     /* PHONE FIT — contain, not cover: show all of it, crop none of it, and
        here that is nearly free. The phone box measures ratio 0.662 and
        signup.webp is 800x1200 = 0.667, a 0.8% mismatch, so `contain` draws

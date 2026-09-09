@@ -88,22 +88,47 @@ function Home() {
       </div>
     );
   if (user) return <Navigate to={hasPerm(user, "inbox") ? "/inbox" : "/my-work"} replace />;
-  /* KM-55 — logged out, "/" belongs to the marketing site, which is STATIC and
-     served by server.js. React can still arrive here by client-side navigation
-     (the catch-all route below, the signup page's logo link), so this hands the
-     browser back to the server rather than rendering anything itself.
+  /* KM-58 — REACHING THIS LINE MEANS A SERVICE WORKER ANSWERED "/".
+     
+     Since KM-55 the root is a static page served by server.js, so React should
+     never render at "/" on a fresh load. If it does, the navigation was served
+     from the precached SPA shell by an old worker — KM-57 fixed that worker,
+     but a worker cannot fix itself on a device that is still being served by
+     the previous one. Founder, after two rounds of this: "no it's not loading,
+     it's getting late."
 
-     The old blue-theme Landing.js it used to render is deleted.
+     So React does what only React can do from inside that situation: tear the
+     worker and its caches down, then ask the server again. The reload is
+     guaranteed to reach the network because there is no longer a worker to
+     intercept it.
 
-     `sessionStorage` is a one-shot guard, and it is not paranoia: if the built
-     image ever lacks build/landing/index.html, server.js serves the SPA at "/"
-     and this line would reload the same page forever. One attempt, then fall
-     through to the login page — a wrong destination beats an infinite loop.
-     The landing page clears the flag on load, so a normal visit re-arms it. */
+     This is self-healing rather than permanent — the landing page does not
+     register a worker, and the next visit to any app route runs
+     serviceWorkerRegistration.register() again, which installs KM-57's fixed
+     one. Offline support comes back on its own.
+
+     The sessionStorage guard stays: if the built image ever lacked
+     build/landing/index.html, server.js would serve the SPA here and this
+     would reload forever. One attempt, then the login page — a wrong
+     destination beats an infinite loop. */
   try {
     if (!sessionStorage.getItem("dos-landing-bounce")) {
       sessionStorage.setItem("dos-landing-bounce", "1");
-      window.location.replace("/");
+      (async () => {
+        try {
+          if ("serviceWorker" in navigator) {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(regs.map((r) => r.unregister()));
+          }
+          if (typeof caches !== "undefined") {
+            const keys = await caches.keys();
+            await Promise.all(keys.map((k) => caches.delete(k)));
+          }
+        } catch {
+          // Storage or SW API unavailable — reload anyway; it may already be fine.
+        }
+        window.location.replace("/");
+      })();
       return null;
     }
   } catch {

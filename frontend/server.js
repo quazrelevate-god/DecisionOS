@@ -128,7 +128,12 @@ if (!HAS_LANDING) {
 } else {
   console.log("[server] serving the landing page at /");
 }
-app.get("/", (req, res) => {
+/* KM-58 — "/landing" is the same page at an explicit URL. express.static runs
+   with index:false, so the directory alone would not resolve to its index.
+   It exists as a plain answer to "is the page actually there?" that does not
+   depend on the root route or on whatever a device's service worker believes
+   about "/". */
+app.get(["/", "/landing", "/landing/"], (req, res) => {
   res.setHeader("Cache-Control", "no-cache, must-revalidate");
   res.sendFile(HAS_LANDING ? LANDING : path.join(BUILD, "index.html"));
 });

@@ -1493,32 +1493,39 @@ html[data-page="workflows"] {
          --sky-art-pos      phone   (default centre)
          --sky-art-pos-lg   desktop (below)
        At 1280 the box is 794x1066 and `cover` scales an 800x1200 picture by
-       0.992 — so the width fits EXACTLY and there is no horizontal slack to
-       pan into. `--sky-art-pos-lg` is therefore inert at that size and the
-       glow's placement comes from the picture's own composition; a picture
-       whose bright mass sits far left will read dim here. Crop it right in
-       the file rather than fighting it with position.
-       (The 37% below is kept for narrower boxes, where slack does exist.)
+       KM-41 — TWO PICTURES, TWO FITS, because the box changes shape and the
+       mask changes with it. This is the whole contract for the layer:
 
-       KM-40 — FIT IS `contain`, SO YOUR IMAGE IS SHOWN UNMODIFIED. Every other
-       artwork layer in the app uses `cover`, which fills the box by cropping
-       whatever does not fit. This one does not crop and does not stretch: the
-       whole picture is drawn at its true aspect ratio, and any leftover space
-       inside the box stays transparent. That is free here — the layer is
-       already masked to a soft fade over a light page, so an unfilled edge is
-       invisible rather than a letterbox bar.
+         phone    signup.webp     portrait   drawn `contain`  — shown whole
+         desktop  signup-lg.webp  landscape  drawn `cover`    — filled, cropped
 
-       WHAT RATIO TO AUTHOR FOR. The box is not a fixed shape; it is derived
-       from the viewport, so no single ratio fills it everywhere:
-           desktop   width 0.62vw, height 1.24vh  ->  ratio = 0.5 x (vw/vh)
+       The box is derived from the viewport rather than fixed, and both
+       derivations were verified against the DOM, not assumed:
+           desktop   width 0.62vw, height 1.24vh  ->  ratio = 0.50 x (vw/vh)
            phone     width 0.86vw, height 0.60vh  ->  ratio = 1.43 x (vw/vh)
-       In practice that is ~0.74-0.80 on laptops and ~0.89 on a 16:9 monitor.
-       Author at 4:5 (ratio 0.80) — 1200x1500 is the sweet spot — and it sits
-       mid-range, so the unfilled sliver is small at both ends and lands under
-       the mask's fade either way. Any ratio still WORKS; this one just wastes
-       the least. */
-    --sky-art: url("/sky/signup.webp");
-    /* contain, not cover: show all of it, crop none of it. */
+       Measured: 1280x860 gives a 794x1066 box (0.744 vs 0.50 x 1.488 = 0.744);
+       375x812 gives 323x487 (0.662 vs 1.43 x 0.462 = 0.662). Both exact.
+
+       WHY THE PHONE CAN BE `contain` AND DESKTOP CANNOT. Not taste — the two
+       masks differ. The phone mask is a RADIAL, so it fades on every axis and
+       an unfilled edge simply disappears into it; and the phone picture is
+       0.667 against a 0.662 box, so there is barely an edge to hide. The
+       desktop mask is a linear-gradient(90deg): it fades left-to-right ONLY
+       and has no vertical falloff, so a picture that does not reach the top
+       and bottom of the box shows two hard horizontal seams. Desktop must be
+       filled, and filling means cropping.
+
+       TO CHANGE EITHER: replace the file. For the phone, author near ratio
+       0.66 (800x1200 is the shipped one) and it is shown unmodified. For
+       desktop, author 16:9 — the box only ever reveals a portrait-ish slice of
+       it, so put the interest right-of-centre and vertically centred. */
+    --sky-art:    url("/sky/signup.webp");
+    --sky-art-lg: url("/sky/signup-lg.webp");
+    /* PHONE FIT — contain, not cover: show all of it, crop none of it, and
+       here that is nearly free. The phone box measures ratio 0.662 and
+       signup.webp is 800x1200 = 0.667, a 0.8% mismatch, so `contain` draws
+       essentially the whole picture with no visible gap. Desktop is a
+       different shape and takes `cover`; see the lg block below. */
     background-size: contain;
     /* PHONE: above the pane, held to the right. The first cut put it BELOW,
        which looked fine and measured badly — the footer line sat on the glow
@@ -1549,11 +1556,30 @@ html[data-page="workflows"] {
            976 — and fully lit by 1212. */
         -webkit-mask-image: linear-gradient(90deg, transparent 0%, transparent 42%, #000 72%);
         mask-image: linear-gradient(90deg, transparent 0%, transparent 42%, #000 72%);
-        /* 37%, not centre: inside this box `cover` scales the picture by
-           1.043, so the glow's core (image x 827) lands at viewport 1160 —
-           the middle of the strip the mask actually reveals. At centre it
-           landed at 1038 and was masked away, which is how the first attempt
-           rendered a white page. */
+        /* KM-41 — DESKTOP TAKES ITS OWN PICTURE, AND TAKES IT AS `cover`.
+           The phone rule above uses `contain` so its portrait picture is shown
+           unmodified, and that works because the phone box is almost exactly
+           the same shape. Desktop is not: the box is portrait-ish (ratio
+           0.744 at 1280x860) and signup-lg.webp is 1672x941 — 16:9 landscape.
+
+           `contain` there would draw the picture 794x447 inside a 794x1066
+           box, a thin band floating with HARD top and bottom edges, because
+           the desktop mask below fades horizontally only — it has no vertical
+           falloff to hide them with. The phone mask is a radial and does; the
+           desktop one is a linear-gradient(90deg) and does not. So the layer
+           must be filled vertically, which is what `cover` guarantees.
+
+           The crop that buys is real and worth stating: cover scales this
+           picture by 1.133 to 1894x1066, and the 794-wide box shows 42% of its
+           width. Compose accordingly — the visible slice is the middle, pulled
+           right by the position below.
+
+           37%, not centre: the original desktop artwork here was 1654x951, the
+           same 16:9 as this one, and at centre its glow landed at viewport
+           1038 and was masked away — which is how the first attempt rendered a
+           white page. 37% puts the core in the middle of the strip the mask
+           actually reveals. Kept because the new picture shares the ratio. */
+        background-size: cover;
         --sky-art-pos-lg: 37% center;
     }
 }

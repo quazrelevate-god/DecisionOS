@@ -1477,23 +1477,31 @@ html[data-page="workflows"] {
        artwork to defend against dark cores that are not in it. */
 }
 
-/* KM-44 · .kr-navplate — the header nav sits ON something now.
+/* KM-44 · .kr-navplate — the header nav sits ON something.
    Founder, with a reference: a semi-transparent semi-octagon behind the seven
    destinations, black at 25%.
 
-   THE SHAPE is clip-path, not border-radius: a chamfer is a straight cut and a
-   radius only ever gives an arc. Half an octagon = a flat top with both top
-   corners cut away and the sides opening out to full width at the bottom. The
-   bottom edge is left open because the header has no floor — the plate runs off
-   the top of the page with the rest of the chrome.
+   KM-45 — THE SHAPE IS THE OTHER WAY UP. The first cut read the reference
+   backwards and built a trapezoid narrow at the top, widening downward. It is
+   the inverse: FULL WIDTH along the top, the sides drawing inward as they
+   fall, so the plate reads as something hanging from the top edge of the page
+   rather than a plinth standing on the bottom of the header. Founder: "that's
+   literally quite opposite of what I said."
 
-   THE PLATE IS ONLY MID-TONE, AND THAT DECIDES EVERY COLOUR ON IT. 25% black
-   over this room's warm sky composites to roughly rgb(190,181,165) — luminance
-   0.47, which is not a dark surface. Measured, because the instinct is to flip
-   the nav to light-on-dark and that would be exactly wrong: white text on this
-   plate reads 2.03:1, ink on it reads 9.53:1. So the nav stays INK. What
-   changed is that the ground under it got darker, so the quiet end of the
-   scale had to come up to meet it — see PillNav's `plate` variant. */
+   ALIGNED TO THE HEADER, NOT FLOATED AROUND THE NAV. The header is 76px and
+   the pills are 40px centred in it, so the plate's top inset is exactly the
+   18px that puts its edge flush with the top of the page. It then falls 12px
+   past the pills. Height is therefore a known 70px, which is what lets the
+   corner geometry below be written in real pixels instead of guesses.
+
+   THE CORNERS ARE ROUNDED, and clip-path has no radius — so the fillet is
+   built from points. Each bottom join is replaced by a three-point arc,
+   computed rather than eyeballed: the slant runs (0,0)->(34,70), so the
+   interior angle there is 115.9 degrees, and a 14px radius meets the two edges
+   8.76px back from the vertex along each. That gives tangent points at
+   (30.2, 62.1) and (42.8, 70) with the arc's midpoint at (35.6, 67.4).
+   Mirrored on the right with calc(100% - x). Eight points, one soft shape, and
+   it holds at any width because only the x offsets are anchored to 100%. */
 .kr-navplate {
     position: relative;
     z-index: 0;          /* its own stacking context, so the -1 plate stays in */
@@ -1501,12 +1509,23 @@ html[data-page="workflows"] {
 .kr-navplate::before {
     content: "";
     position: absolute;
-    inset: -0.65rem -1.5rem;
+    top: -1.125rem;      /* 18px — flush with the top of the 76px header */
+    bottom: -0.75rem;    /* 12px below the pills */
+    left: -1.5rem;
+    right: -1.5rem;
     z-index: -1;
     background: hsl(0 0% 0% / .25);
-    clip-path: polygon(1.9rem 0, calc(100% - 1.9rem) 0, 100% 100%, 0 100%);
+    clip-path: polygon(
+        0 0,
+        100% 0,
+        calc(100% - 30.2px) 62.1px,
+        calc(100% - 35.6px) 67.4px,
+        calc(100% - 42.8px) 70px,
+        42.8px 70px,
+        35.6px 67.4px,
+        30.2px 62.1px
+    );
 }
-
 
 .app-sky__art--aside {
     /* ── THE SIGNUP GLOW'S PICTURE ─────────────────────────────────────────

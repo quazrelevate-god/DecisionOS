@@ -300,6 +300,14 @@ export default function Layout({ children }) {
     /* Ask-mode audio goes to /transcribe: text back, nothing persisted. Only
        Decide-mode audio becomes a decision. */
     channel: dexChannel === "ask" ? "dictate" : "capture",
+    /* KM-60 — the meter does NOT write state here. This hook lives in Layout,
+       so every sample re-rendered the entire shell and the page inside it ~18
+       times a second while recording. That is the main-thread pressure behind
+       "I can't stop the recording, but I can when I go quiet": a tap has to
+       wait its turn, and the busier the wave the longer the queue. The dock's
+       wave now reads dex.levelsRef on its own animation frame instead — the
+       same motion, none of the renders. */
+    meterState: false,
   });
   /* KM-26 — one conversation, three surfaces: the dock hosts the input, the
      FAB submits it, the transcript shows it. None of them can own the state, so
@@ -714,6 +722,10 @@ export default function Layout({ children }) {
         moreBadge={bellCount}
         dexActive={dexOpen}
         dexLevels={dex.levels}
+        /* KM-60 — the live meter, read on the wave's own animation frame.
+           `dexLevels` stays for the state-shaped API; this is what actually
+           drives the motion, and it costs Layout no renders. */
+        dexLevelsRef={dex.levelsRef}
         dexMode={chat.mode}
         dexWaveState={dex.recording ? "listening" : chat.busy ? "thinking" : "idle"}
         dexDraft={chat.draft}

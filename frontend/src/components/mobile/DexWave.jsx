@@ -104,7 +104,7 @@ function ribbonPath(layer, t, amp) {
  * @param {number[]} [levels]  legacy: an array of bar levels; averaged to `level`
  * @param {boolean}  [live]    legacy: true === listening
  */
-export function DexWave({ state, level, levels, live = false, className }) {
+export function DexWave({ state, level, levels, levelsRef, live = false, className }) {
   const pathRefs = React.useRef([]);
   const lineRef = React.useRef(null);
 
@@ -136,7 +136,19 @@ export function DexWave({ state, level, levels, live = false, className }) {
 
     const frame = (now) => {
       const t = (now - t0) / 1000;
-      const target = Math.max(0, Math.min(1, levelRef.current));
+      /* KM-60 — prefer the LIVE ref when the caller passes one. The `levels`
+         prop only changes when the owning component re-renders, so driving the
+         wave from it tied its smoothness to React's clock — the exact coupling
+         the note at the top of this file says was removed. A ref is read fresh
+         every frame and costs the owner nothing. */
+      let target = levelRef.current;
+      if (levelsRef && Array.isArray(levelsRef.current) && levelsRef.current.length) {
+        const arr = levelsRef.current;
+        let sum = 0;
+        for (let i = 0; i < arr.length; i++) sum += arr[i] || 0;
+        target = sum / arr.length;
+      }
+      target = Math.max(0, Math.min(1, target));
       smooth.v += (target - smooth.v) * 0.18;
       const amp = envelope(stateRef.current, t * (STATE_TUNE[stateRef.current] || STATE_TUNE.idle).rate, smooth.v);
       for (let i = 0; i < LAYERS.length; i++) {

@@ -42,6 +42,9 @@ const PICKS = [
 ];
 
 export function DexFab({ onOpen, recording = false, seconds = 0, onStop, intent = "sparkle", picker = false, onPick }) {
+  // Set when pointerdown already stopped the recording, so the click that
+  // follows it is swallowed instead of being read as "start a new one".
+  const stoppedRef = React.useRef(false);
   const { user } = useAuth();
   // Same check DexCaptureBar makes — hidden entirely, not disabled (§8).
   const canCapture = user?.role === "owner" || hasPerm(user, "voice_capture");
@@ -133,7 +136,31 @@ export function DexFab({ onOpen, recording = false, seconds = 0, onStop, intent 
         : intent === "mic" ? "Speak to Dex"
         : "Dex"
       }
-      onClick={recording ? onStop : onOpen}
+      /* KM-60 — STOP FIRES ON POINTERDOWN, not on click.
+         Founder: "I can't stop the recording, and I found that once no speech
+         is detected I can stop it." Both halves of that are explained by main-
+         thread pressure rather than by any speech detection — there is none in
+         this codebase, checked. A `click` only arrives after the browser has
+         seen pointerdown, pointerup and decided it was not a scroll or a
+         double-tap, and every one of those checks is queued behind whatever
+         the main thread is doing. While the meter was re-rendering Layout 18
+         times a second the queue was long enough to lose taps; while silent
+         the work per frame was smaller and the tap survived.
+
+         KM-60 removes that pressure at the source, but stop should not DEPEND
+         on the main thread being free. pointerdown is the earliest signal that
+         a finger has landed and it is dispatched before any of that
+         adjudication, so the recording ends the moment you touch the button.
+         Only stop is moved: starting on pointerdown would fire while scrolling
+         past, and starting a recording by accident is worse than a tap that
+         needs a full press. */
+      onPointerDown={recording ? (e) => { e.preventDefault(); stoppedRef.current = true; onStop?.(); } : undefined}
+      onClick={(e) => {
+        // The click that follows the pointerdown we already acted on.
+        if (stoppedRef.current) { stoppedRef.current = false; e.preventDefault(); return; }
+        if (recording) { onStop?.(); return; }
+        onOpen?.();
+      }}
       className={cn(
         // 12px gap from the pill, same baseline, safe-area aware.
         // MPWA-14: `app-fab-right` anchors to the centred shell's right edge so
@@ -141,6 +168,10 @@ export function DexFab({ onOpen, recording = false, seconds = 0, onStop, intent 
         // original 1rem on a phone.
         "lg:hidden fixed app-fab-right z-[10000] bottom-safe-4",
         "grid place-items-center rounded-pill shadow-brutal-lg transition-colors",
+        // No double-tap-to-zoom wait on this button — it is a control, and the
+        // delay is time the browser spends deciding whether the tap was a
+        // gesture before it will deliver the click.
+        "touch-manipulation select-none",
         "h-16 w-16 max-[359px]:h-[3.75rem] max-[359px]:w-[3.75rem]",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         /* KM-32 — the FAB carries the same warm-white glow as the bar it sits

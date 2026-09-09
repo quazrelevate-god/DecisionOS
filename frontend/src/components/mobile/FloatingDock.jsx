@@ -119,7 +119,7 @@ function DockItem({ to, label, icon: Icon, testid, active, onClick }) {
  */
 export function FloatingDock({
   user, onMore, moreOpen = false, moreBadge = 0,
-  dexActive = false, dexLevels = [], dexMode = "voice", dexWaveState = "idle",
+  dexActive = false, dexLevels = [], dexLevelsRef, dexMode = "voice", dexWaveState = "idle",
   dexDraft = "", onDexDraft, onDexSubmit, dexTranscribing = false,
 }) {
   const { t } = useTranslation();
@@ -228,7 +228,7 @@ export function FloatingDock({
             />
           ) : (
             <div className="min-w-0 flex-1 px-2 py-2" data-testid="dock-dex-wave">
-              <DexWave state={dexWaveState} levels={dexLevels} />
+              <DexWave state={dexWaveState} levels={dexLevels} levelsRef={dexLevelsRef} />
             </div>
           )
         ) : (

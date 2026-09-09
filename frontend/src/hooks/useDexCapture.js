@@ -43,7 +43,15 @@ const POLL_TIMEOUT_MS = 90000;
  *        preview before it goes anywhere. A hook that both records AND commits
  *        cannot offer that, so the commit half is now the caller's decision.
  */
-export function useDexCapture({ onCaptured, onRecordingChange, watch = false, onTranscript, channel = "capture" } = {}) {
+/* KM-60 — `meterState` decides whether the mic meter is allowed to write React
+   state at full rate.
+     true  (default)  every sample, as before. Correct for pages/brain, where
+                      the hook lives INSIDE the page component, so a write
+                      re-renders the orb and nothing above it.
+     false            ref only. Correct for Layout, where the same write
+                      re-renders the header, the dock, the chat, the FAB and
+                      the entire current page ~18 times a second. */
+export function useDexCapture({ onCaptured, onRecordingChange, watch = false, onTranscript, channel = "capture", meterState = true } = {}) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [recording, setRecording] = useState(false);
@@ -69,6 +77,19 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false, on
      await be honoured when the stream finally arrives. */
   const startingRef = useRef(false);
   const cancelStartRef = useRef(false);
+  /* KM-60 — the live meter, in a REF as well as in state.
+     The interval below samples the mic every 55ms. Writing that straight to
+     React state re-rendered Layout ~18 times a second — and Layout renders the
+     header, the dock, the chat, the FAB and the whole current page. On a phone
+     that is enough main-thread work to drop taps, which is why the founder
+     could stop the recording while silent and not while speaking: the busier
+     the wave, the more work per frame, the more likely the tap was lost.
+     The ref carries the live value at full rate for anything that reads it on
+     an animation frame; the state below is throttled to a fraction of that for
+     the legacy consumers that still need a prop. */
+  const levelsRef = useRef(new Array(BARS).fill(0));
+  const meterStateRef = useRef(meterState);
+  meterStateRef.current = meterState;
 
   const mediaRef = useRef(null);
   const chunksRef = useRef([]);
@@ -270,7 +291,8 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false, on
     // Optimistic: the UI must answer the tap, not the hardware.
     setRecording(true);
     setRecordSecs(0);
-    setLevels(new Array(BARS).fill(0));
+    levelsRef.current = new Array(BARS).fill(0);
+    setLevels(levelsRef.current);
     clearInterval(timerRef.current);
     timerRef.current = setInterval(() => setRecordSecs((s) => s + 1), 1000);
 
@@ -365,7 +387,17 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false, on
             // the bar rather than hugging the floor.
             const rms = Math.sqrt(sum / data.length);
             const level = Math.min(1, Math.pow(rms * 3.2, 0.65));
-            setLevels((prev) => [...prev.slice(1), level]);
+            /* Ref first, every tick: DexWave reads this on its own rAF loop and
+               is therefore SMOOTHER than it was, not choppier, despite fewer
+               renders. */
+            const next = levelsRef.current.slice(1);
+            next.push(level);
+            levelsRef.current = next;
+            /* The /brain orb reads the newest four samples and walks them
+               outward ring by ring, so THAT surface genuinely needs every
+               sample and gets them. Layout opts out entirely and drives its
+               wave from the ref above — same motion, no renders. */
+            if (meterStateRef.current) setLevels(next);
           }, AMP_INTERVAL_MS);
           audioRef.current = { ctx, source, analyser, data, interval };
         }
@@ -441,7 +473,7 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false, on
 
   return {
     text, setText,
-    sending, recording, recordSecs, levels,
+    sending, recording, recordSecs, levels, levelsRef,
     understanding, clearUnderstanding, reset,
     sendText, startRecording, stopRecording, uploadFile,
     fileRef,

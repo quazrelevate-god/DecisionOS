@@ -74,9 +74,16 @@ export default function Signup() {
      isolate` for exactly this reason; dropping that class in KM-20 dropped
      the stacking context with it, and the glow rendered as a white page. */
   return (
-    <div className="relative isolate flex min-h-screen flex-col bg-white text-foreground">
-      {/* The Desk's glow, held to the margin — right of the pane on a
-          desktop, below it on a phone. See "KM-21" in index.css. */}
+    /* KM-42 — `signup-stage` is the scoping hook for the desktop treatment,
+       and it earns its keep: .kr-well is used on Ledger, Operating Score and
+       InsightWell too, all of which sit on the app's pale canvas where the
+       neumorphic pane is correct. Only here does it sit on a photograph.
+       bg-white stays as the load fallback — the picture covers it once it
+       arrives, and a white flash beats a black one. */
+    <div className="signup-stage relative isolate flex min-h-screen flex-col bg-white text-foreground">
+      {/* The artwork. On a phone it is a glow held above the pane; on desktop
+          (>= 1024) it goes full-bleed and becomes the page itself. See
+          "KM-21" / "KM-42" in index.css. */}
       <div className="app-sky__art app-sky__art--aside" aria-hidden="true" />
 
       {/* Top bar — floating glass rather than a ruled band. */}
@@ -151,8 +158,16 @@ export default function Signup() {
         </AnimatePresence>
       </main>
 
-      <footer className="px-4 pb-5 lg:px-8">
-        <p className="mx-auto max-w-5xl text-center text-[11px] text-muted-foreground">
+      {/* KM-42 — the footer line gets a ground. Measured on the full-bleed
+          picture it read 1.38:1 against a 4.5 requirement: 11px muted type
+          printed straight onto a photograph, and the photograph is dark
+          exactly there. A glass chip is the fix rather than a colour change —
+          it matches the header's own floating pill, and .kr-frost carries the
+          darkened --text-secondary re-scope, so the text gets a lighter ground
+          AND darker ink from one class. `w-fit` keeps the chip the width of
+          the sentence instead of a bar across the page. */}
+      <footer className="flex justify-center px-4 pb-5 lg:px-8">
+        <p className="kr-frost w-fit max-w-full rounded-pill px-4 py-1.5 text-center text-[11px] text-muted-foreground">
           No credit card · 2 minutes · built around how you actually run
         </p>
       </footer>

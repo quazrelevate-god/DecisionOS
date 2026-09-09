@@ -1556,31 +1556,65 @@ html[data-page="workflows"] {
            976 — and fully lit by 1212. */
         -webkit-mask-image: linear-gradient(90deg, transparent 0%, transparent 42%, #000 72%);
         mask-image: linear-gradient(90deg, transparent 0%, transparent 42%, #000 72%);
-        /* KM-41 — DESKTOP TAKES ITS OWN PICTURE, AND TAKES IT AS `cover`.
-           The phone rule above uses `contain` so its portrait picture is shown
-           unmodified, and that works because the phone box is almost exactly
-           the same shape. Desktop is not: the box is portrait-ish (ratio
-           0.744 at 1280x860) and signup-lg.webp is 1672x941 — 16:9 landscape.
+        /* KM-42 — ON DESKTOP THE PICTURE IS THE PAGE, not a glow in the
+           margin. Founder: "I want the desktop image to be placed exactly on
+           the ui no white bleed ... I want the whole image should be seen".
 
-           `contain` there would draw the picture 794x447 inside a 794x1066
-           box, a thin band floating with HARD top and bottom edges, because
-           the desktop mask below fades horizontally only — it has no vertical
-           falloff to hide them with. The phone mask is a radial and does; the
-           desktop one is a linear-gradient(90deg) and does not. So the layer
-           must be filled vertically, which is what `cover` guarantees.
+           So the box stops being the right half and becomes the viewport, the
+           mask goes entirely, and the fit is `cover` — which is the "subtle
+           zooming cropping may be allowed" that was explicitly permitted, and
+           the only way to have no bleed AND no distortion at the same time.
+           At 1280x860 the 1672x941 picture scales by 0.914 to 1528x860: the
+           FULL height, 84% of the width. On a 16:9 monitor the picture's own
+           ratio and the viewport's coincide and the crop goes to nothing.
 
-           The crop that buys is real and worth stating: cover scales this
-           picture by 1.133 to 1894x1066, and the 794-wide box shows 42% of its
-           width. Compose accordingly — the visible slice is the middle, pulled
-           right by the position below.
+           inset: 0 rather than the -12% the sky layers use — that bleed exists
+           so a drifting gradient never exposes an edge, and this layer neither
+           drifts nor has an edge to expose. Zero keeps `cover` mapped to the
+           viewport exactly, so the crop is only ever the aspect difference.
 
-           37%, not centre: the original desktop artwork here was 1654x951, the
-           same 16:9 as this one, and at centre its glow landed at viewport
-           1038 and was masked away — which is how the first attempt rendered a
-           white page. 37% puts the core in the middle of the strip the mask
-           actually reveals. Kept because the new picture shares the ratio. */
+           The mask is removed rather than widened: every value in the old
+           linear-gradient was chosen to hide a box that covered half the
+           screen, and a full-bleed picture has nothing to hide. Position
+           returns to centre for the same reason — the 37% pan existed to drag
+           a glow into a narrow revealed strip that no longer exists. */
+        inset: 0;
+        -webkit-mask-image: none;
+                mask-image: none;
         background-size: cover;
-        --sky-art-pos-lg: 37% center;
+        background-position: center;
+    }
+
+    /* KM-42 — THE CARD BLENDS INTO THE PICTURE. Scoped to the signup stage,
+       because .kr-well is app-wide (Ledger, Operating Score, InsightWell) and
+       those sit on a pale canvas where the recipe is already right.
+
+       What had to go is the pane's neumorphic pair, specifically
+       `inset -7px -7px 14px hsl(0 0% 100% / .62)`. A white inner highlight is
+       invisible against an off-white ground — that is the whole trick of
+       neumorphism — but over a photograph it reads as exactly what the founder
+       called it: white bleeding in from the sides. Neumorphism needs a ground
+       it can be lighter AND darker than, and a picture is not one.
+
+       So the card becomes honest glass instead: a thinner wash, a stronger
+       blur so the photograph behind reads as depth rather than clutter, one
+       hairline to catch the edge, and a wide soft drop shadow to lift it off
+       the image. Nothing white touches the inside. */
+    .signup-stage .kr-well__pane {
+        /* .40/.28, not .34/.22. The pane's own note says the floor of this
+           wash IS the contrast floor of everything printed on it, and that
+           floor was set against a drifting gradient. A photograph goes darker
+           than any gradient does: at .34/.22 the supporting line under the
+           question measured 4.37 against a 4.5 requirement, on the cool grey
+           of the window in the picture. Six points of white clears it without
+           the card ceasing to be glass — the picture still reads through. */
+        background: linear-gradient(160deg,
+            hsl(0 0% 100% / .40),
+            hsl(0 0% 100% / .28));
+        -webkit-backdrop-filter: blur(30px) saturate(1.4);
+                backdrop-filter: blur(30px) saturate(1.4);
+        border: 1px solid hsl(0 0% 100% / .38);
+        box-shadow: 0 28px 70px -28px hsl(230 30% 18% / .50);
     }
 }
 

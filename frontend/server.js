@@ -91,7 +91,7 @@ const NO_STORE = new Set(["/index.html", "/service-worker.js", "/manifest.json"]
    every client that had already loaded the page was entitled to ignore them.
    `no-cache` still CACHES — it just revalidates first, so an unchanged image
    costs a 304 and a changed one is picked up on the next load. */
-const REVALIDATE = /^\/sky\//;
+const REVALIDATE = /^\/(sky|landing)\//;
 app.use(
   express.static(BUILD, {
     index: false,
@@ -104,6 +104,34 @@ app.use(
     },
   })
 );
+
+/* KM-55 — "/" IS THE MARKETING SITE NOW, not the app.
+   The React app's own Landing.js (the old blue-theme page) is gone; the new
+   static landing lives in the CRA public folder, so the build copies it
+   verbatim to build/landing and express.static above already serves its css,
+   js and images at /landing/*. Only the document itself is remapped, so the
+   marketing page owns the bare domain while /login, /signup, /inbox and every
+   other route still belong to the SPA below.
+
+   Its asset refs were rewritten to absolute /landing/... precisely because of
+   this split: the page is SERVED at "/" but LIVES at /landing/, and relative
+   refs would have resolved against "/" and 404'd.
+
+   Checked once at startup rather than per request. If the file is missing the
+   app must NOT quietly fall through to the SPA: App.js bounces "/" back here
+   for logged-out users, and a silent fallback would be a reload loop. Loud,
+   and serve the SPA anyway — its own one-shot guard stops the loop. */
+const LANDING = path.join(BUILD, "landing", "index.html");
+const HAS_LANDING = require("fs").existsSync(LANDING);
+if (!HAS_LANDING) {
+  console.error("[server] build/landing/index.html is MISSING — / falls back to the SPA.");
+} else {
+  console.log("[server] serving the landing page at /");
+}
+app.get("/", (req, res) => {
+  res.setHeader("Cache-Control", "no-cache, must-revalidate");
+  res.sendFile(HAS_LANDING ? LANDING : path.join(BUILD, "index.html"));
+});
 
 /* SPA fallback — the same job `serve -s` was doing. Without it every deep link
    (/inbox, /my-work, /finance) 404s on refresh, because react-router owns

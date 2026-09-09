@@ -68,6 +68,28 @@ button{ font-family:inherit; cursor:pointer; }
 .btn-sm{ height:38px; padding:0 18px; font-size:14px; }
 .btn-lg{ height:52px; padding:0 28px; font-size:16px; }
 
+/* ── KM-55 · the two classes the CTA rewiring introduced ──────────────────
+   `.btn-secondary` did not exist: the page only ever had one button, because
+   every CTA was the same "Request Early Access". Now that Free and Pro send
+   you to the same place as Plus, the middle plan has to stay the recommended
+   one, so the outer two get a quieter button rather than three identical
+   gradients competing down one row. */
+.btn-secondary{ background:var(--surface); color:var(--text); border-color:var(--neutral-300, rgba(0,0,0,.14)); }
+.btn-secondary:hover{ background:var(--surface-sunken); }
+
+/* A plan's button sits at the FOOT of its card whatever the list above it
+   does — the three feature lists are different lengths, and a button that
+   floats to a different height in each card reads as three unrelated
+   sections. */
+.pc{ display:flex; flex-direction:column; }
+.pc-cta{ margin-top:auto; align-self:stretch; justify-content:center; }
+.pc-list{ margin-bottom:22px; }
+
+/* "Log in" is a link, not a button: it is the door for people who already
+   decided, and it must not compete with the one for people who have not. */
+.nav-login{ font-weight:600; font-size:14px; color:var(--text-dim); padding:0 4px; flex-shrink:0; }
+.nav-login:hover{ color:var(--text); }
+
 /* ---------- header / nav ---------- */
 /* Floating glass pill — hidden over the hero, swipes down once you scroll past it. */
 .site-header{
@@ -130,7 +152,9 @@ button{ font-family:inherit; cursor:pointer; }
 .site-header.nav-open .mobile-nav{ display:flex; }
 
 @media (max-width:860px){
-  .main-nav, .nav-cta{ display:none; }
+  /* .header-pill, not .site-header: the mobile panel carries its own Log in
+     and lives inside the same header. */
+  .main-nav, .nav-cta, .header-pill .nav-login{ display:none; }
   .nav-toggle{ display:flex; }
   .header-pill{ height:56px; padding:0 8px 0 20px; }
 }

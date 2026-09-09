@@ -39,7 +39,6 @@ import Calendar from "./pages/Calendar";
 import OperatingScore from "./pages/OperatingScore";
 import WorkCoach from "./pages/WorkCoach";
 import Ledger from "./pages/Ledger";
-import Landing from "./pages/Landing";
 import AdminPortal from "./pages/admin/AdminPortal";
 // MPWA-04: dev-only harness for the §7 mobile components. Tree-shaken out of
 // production builds by the NODE_ENV guard on its route below.
@@ -89,7 +88,30 @@ function Home() {
       </div>
     );
   if (user) return <Navigate to={hasPerm(user, "inbox") ? "/inbox" : "/my-work"} replace />;
-  return <Landing />;
+  /* KM-55 — logged out, "/" belongs to the marketing site, which is STATIC and
+     served by server.js. React can still arrive here by client-side navigation
+     (the catch-all route below, the signup page's logo link), so this hands the
+     browser back to the server rather than rendering anything itself.
+
+     The old blue-theme Landing.js it used to render is deleted.
+
+     `sessionStorage` is a one-shot guard, and it is not paranoia: if the built
+     image ever lacks build/landing/index.html, server.js serves the SPA at "/"
+     and this line would reload the same page forever. One attempt, then fall
+     through to the login page — a wrong destination beats an infinite loop.
+     The landing page clears the flag on load, so a normal visit re-arms it. */
+  try {
+    if (!sessionStorage.getItem("dos-landing-bounce")) {
+      sessionStorage.setItem("dos-landing-bounce", "1");
+      window.location.replace("/");
+      return null;
+    }
+  } catch {
+    // Private mode with storage disabled: bounce anyway, unguarded.
+    window.location.replace("/");
+    return null;
+  }
+  return <Navigate to="/login" replace />;
 }
 
 function App() {
@@ -98,6 +120,14 @@ function App() {
       <AuthProvider>
         <BrowserRouter>
           <Routes>
+            {/* KM-55 — the one place that answers "where does a signed-in user
+                belong?". "/" used to do it, but "/" is the marketing site now.
+                The static landing bounces authenticated visitors HERE rather
+                than working it out itself: the answer depends on hasPerm and
+                userPerms, which fall back to per-role defaults, and a vanilla-JS
+                copy of that on the landing page would drift the first time a
+                role's defaults changed. */}
+            <Route path="/app" element={<Home />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/admin" element={<AdminPortal />} />

@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=Caveat:wght@500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/styles.css?v=44">
+<link rel="stylesheet" href="/landing/css/styles.css?v=44">
 </head>
 <body>
 
@@ -17,7 +17,7 @@
 <!-- ============ NAV ============ -->
 <header class="site-header" id="site-header">
   <div class="header-pill">
-    <a href="#top" class="logo"><img src="assets/img/logo.png" alt="DecisionOS"></a>
+    <a href="#top" class="logo"><img src="/landing/assets/img/logo.png" alt="DecisionOS"></a>
     <nav class="main-nav" aria-label="Primary">
       <a href="#problem">The Problem</a>
       <a href="#whats-inside">Who It&rsquo;s For</a>
@@ -26,7 +26,8 @@
       <a href="#early-access">Pricing</a>
       <a href="#faq">FAQ</a>
     </nav>
-    <a href="#early-access" class="btn btn-primary btn-sm nav-cta">Request Early Access</a>
+    <a href="/login" class="nav-login">Log in</a>
+    <a href="/signup" class="btn btn-primary btn-sm nav-cta">Start free</a>
     <button class="nav-toggle" id="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
       <span></span><span></span><span></span>
     </button>
@@ -38,7 +39,8 @@
     <a href="#roadmap">The Brain</a>
     <a href="#early-access">Pricing</a>
     <a href="#faq">FAQ</a>
-    <a href="#early-access" class="btn btn-primary btn-sm" style="margin-top:8px;">Request Early Access</a>
+    <a href="/login" class="nav-login">Log in</a>
+    <a href="/signup" class="btn btn-primary btn-sm" style="margin-top:8px;">Start free</a>
   </div>
 </header>
 
@@ -48,7 +50,7 @@
 <div class="pin-scope">
 <section class="hero" id="top">
   <div class="hero-media">
-    <img class="hero-photo" src="assets/img/hero-photo.jpg" alt="" aria-hidden="true">
+    <img class="hero-photo" src="/landing/assets/img/hero-photo.jpg" alt="" aria-hidden="true">
     <div class="hero-scrim"></div>
   </div>
   <div class="wrap hero-content">
@@ -56,9 +58,9 @@
       <p class="eyebrow reveal">The operating brain for founder-led businesses</p>
       <h1 class="hero-title reveal" style="--d:.08s">Get dangerously<br>organised.<em>Without hiring a single manager.</em></h1>
       <div class="reveal" style="--d:.16s">
-        <a href="#early-access" class="btn btn-primary btn-lg">Request Early Access <span aria-hidden="true">→</span></a>
+        <a href="/signup" class="btn btn-primary btn-lg">Start free <span aria-hidden="true">→</span></a>
       </div>
-      <img class="hero-logo reveal" style="--d:.26s" src="assets/img/logo.png" alt="DecisionOS">
+      <img class="hero-logo reveal" style="--d:.26s" src="/landing/assets/img/logo.png" alt="DecisionOS">
     </div>
   </div>
   <a href="#problem" class="scroll-cue" aria-label="Scroll to next section"><span></span></a>
@@ -410,7 +412,7 @@
 
     <div class="icp-grid">
       <article class="icp-card">
-        <img class="icp-photo" src="assets/img/icp-founder.jpg" alt="A textile business owner at his desk beside a towering stack of ledgers">
+        <img class="icp-photo" src="/landing/assets/img/icp-founder.jpg" alt="A textile business owner at his desk beside a towering stack of ledgers">
         <span class="icp-veil"></span>
         <svg class="icp-frame" viewBox="0 0 400 500" aria-hidden="true"><rect x="1.5" y="1.5" width="397" height="497" rx="20" pathLength="100"/></svg>
         <div class="icp-copy">
@@ -420,7 +422,7 @@
       </article>
 
       <article class="icp-card">
-        <img class="icp-photo" src="assets/img/icp-family.jpg" alt="A jewellery shop owner taking a call beside several ringing phones">
+        <img class="icp-photo" src="/landing/assets/img/icp-family.jpg" alt="A jewellery shop owner taking a call beside several ringing phones">
         <span class="icp-veil"></span>
         <svg class="icp-frame" viewBox="0 0 400 500" aria-hidden="true"><rect x="1.5" y="1.5" width="397" height="497" rx="20" pathLength="100"/></svg>
         <div class="icp-copy">
@@ -430,7 +432,7 @@
       </article>
 
       <article class="icp-card">
-        <img class="icp-photo" src="assets/img/icp-ops.jpg" alt="An operations lead reviewing a dispatch ledger in a warehouse">
+        <img class="icp-photo" src="/landing/assets/img/icp-ops.jpg" alt="An operations lead reviewing a dispatch ledger in a warehouse">
         <span class="icp-veil"></span>
         <svg class="icp-frame" viewBox="0 0 400 500" aria-hidden="true"><rect x="1.5" y="1.5" width="397" height="497" rx="20" pathLength="100"/></svg>
         <div class="icp-copy">
@@ -440,7 +442,7 @@
       </article>
 
       <article class="icp-card">
-        <img class="icp-photo" src="assets/img/icp-finance.jpg" alt="An accountant working calmly amid invoices suspended in the air">
+        <img class="icp-photo" src="/landing/assets/img/icp-finance.jpg" alt="An accountant working calmly amid invoices suspended in the air">
         <span class="icp-veil"></span>
         <svg class="icp-frame" viewBox="0 0 400 500" aria-hidden="true"><rect x="1.5" y="1.5" width="397" height="497" rx="20" pathLength="100"/></svg>
         <div class="icp-copy">
@@ -669,6 +671,7 @@
           <li>Tasks, owners &amp; due dates</li>
           <li>30-day memory</li>
         </ul>
+        <a href="/signup" class="btn btn-secondary pc-cta">Start free</a>
       </article>
 
       <article class="pc pc-featured">
@@ -683,6 +686,7 @@
           <li>The AI CFO &amp; inventory</li>
           <li>Unlimited Company Brain</li>
         </ul>
+        <a href="/signup" class="btn btn-primary pc-cta">Start free</a>
       </article>
 
       <article class="pc">
@@ -696,11 +700,12 @@
           <li>Business DNA &amp; recommendations</li>
           <li>Priority onboarding</li>
         </ul>
+        <a href="/signup" class="btn btn-secondary pc-cta">Start free</a>
       </article>
     </div>
 
     <div class="pricing-cta">
-      <button type="button" class="btn btn-primary btn-lg" id="open-access">Request Early Access <span aria-hidden="true">&rarr;</span></button>
+      <a href="/signup" class="btn btn-primary btn-lg">Start free <span aria-hidden="true">&rarr;</span></a>
     </div>
   </div>
 </section>
@@ -779,7 +784,7 @@
   </div>
   <div class="wrap">
     <h2>Every business decision,<br><em>remembered, organized,<br>and executed.</em></h2>
-    <a href="#early-access" class="btn btn-primary btn-lg">Request Early Access <span aria-hidden="true">→</span></a>
+    <a href="/signup" class="btn btn-primary btn-lg">Start free <span aria-hidden="true">→</span></a>
   </div>
 </section>
 
@@ -788,7 +793,7 @@
 <!-- ============ FOOTER ============ -->
 <footer class="site-footer">
   <div class="wrap footer-inner">
-    <a href="#top" class="logo"><img src="assets/img/logo.png" alt="DecisionOS"></a>
+    <a href="#top" class="logo"><img src="/landing/assets/img/logo.png" alt="DecisionOS"></a>
     <nav class="footer-nav" aria-label="Footer">
       <a href="#problem">The Problem</a>
       <a href="#whats-inside">Who It&rsquo;s For</a>
@@ -801,24 +806,32 @@
   </div>
 </footer>
 
-<script src="js/main.js?v=44"></script>
-<!-- ============ ACCESS MODAL ============ -->
-<div class="modal-root" id="access-modal" hidden>
-  <div class="modal-scrim" data-close></div>
-  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="access-title">
-    <button class="modal-x" type="button" data-close aria-label="Close">&times;</button>
-    <h3 id="access-title">Request early access</h3>
-    <p class="modal-sub">Tell us how your team runs today. We will set up your Company Brain around it.</p>
-    <form class="modal-form" id="access-form">
-      <input type="text" name="name" placeholder="Your name" required>
-      <input type="text" name="business" placeholder="Business name" required>
-      <input type="tel" name="phone" placeholder="Phone number" required>
-      <input type="tel" name="whatsapp" placeholder="WhatsApp number">
-      <input type="email" name="email" placeholder="Email address" required>
-      <button type="submit" class="btn btn-primary btn-lg">Request Early Access <span aria-hidden="true">&rarr;</span></button>
-      <p class="modal-note" id="modal-note"></p>
-    </form>
-  </div>
-</div>
+<script>
+/* KM-55 — two jobs, deliberately inline and ahead of main.js so they run on
+   the first paint rather than after 80KB of animation code.
+
+   1. Clear the bounce guard App.js sets when it hands "/" back to the server.
+      Reaching this line proves the hand-off worked, so the next one may try.
+
+   2. Someone already signed in should not be reading the sales page. React's
+      old "/" sent them to their desk and this keeps that, which the static
+      page would otherwise have silently dropped. Same origin, so the HttpOnly
+      session cookie rides along — which is exactly why this had to be one
+      service and could not have been a separate marketing site.
+
+   It redirects to /app rather than deciding between /inbox and /my-work here:
+   that choice runs through hasPerm and userPerms, which fall back to per-role
+   defaults, and a hand-copy of that logic in vanilla JS would drift.
+
+   There is no way to skip the request for a first-time visitor — the session
+   cookie is HttpOnly, so document.cookie cannot see it. A logged-out visit
+   costs one 401. */
+try { sessionStorage.removeItem("dos-landing-bounce"); } catch (e) {}
+fetch("/api/auth/me", { credentials: "include" })
+  .then(function (r) { return r.ok ? r.json() : null; })
+  .then(function (d) { if (d && d.user) window.location.replace("/app"); })
+  .catch(function () { /* offline, or the API is down: it is a static page, show it */ });
+</script>
+<script src="/landing/js/main.js?v=44"></script>
 </body>
 </html>

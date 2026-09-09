@@ -123,10 +123,12 @@ export default function Layout({ children }) {
   useEffect(() => {
     const el = navRef.current;
     if (!el || typeof ResizeObserver === "undefined") return;
-    /* +48 = 24px of flat each side of the pills. The vertical gap works out at
-       17.4px, and a curved container wants a little more room across than down
-       — 24 reads as the same margin that 17.4 does once the S starts turning. */
-    const measure = () => setNavW(Math.round(el.getBoundingClientRect().width) + 48);
+    /* KM-49 — +36, i.e. 18px of flat each side, down from 24. The vertical gap
+       around the pills is 17.4px, so this makes the shelf's padding uniform on
+       all four sides; at 24 the flat ran on past the last pill and the founder
+       read it as stretched. The curve still starts outside the group either
+       way — this only decides how much flat precedes it. */
+    const measure = () => setNavW(Math.round(el.getBoundingClientRect().width) + 36);
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     measure();
@@ -327,7 +329,7 @@ export default function Layout({ children }) {
             aria-label={count > 0 ? `Notifications, ${count} need you` : "Notifications"}
             className={mobile
               ? "relative flex items-center justify-center border border-border hover:bg-accent transition-colors w-12 h-12"
-              : "relative h-10 w-10 rounded-full border border-kr-ink/25 bg-white/45 grid place-items-center text-foreground/85 transition-colors hover:bg-white/80 hover:border-kr-ink/45 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline"}>
+              : "relative h-10 w-10 rounded-full border border-kr-ink/55 grid place-items-center text-foreground/90 transition-colors hover:bg-white/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline"}>
             <Bell size={mobile ? 22 : 18} weight="regular" />
             {count > 0 && (
               <span data-testid="notif-count" className={mobile
@@ -480,7 +482,7 @@ export default function Layout({ children }) {
             aria-label={t("header.search_ph", "Find anything…")}
             title={`${t("header.search_ph", "Find anything…")} (⌘K)`}
             onClick={() => setSearchOpen(true)}
-            className="h-10 w-10 rounded-full border border-kr-ink/25 bg-white/45 grid place-items-center text-foreground/85 transition-colors hover:bg-white/80 hover:border-kr-ink/45 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline"
+            className="h-10 w-10 rounded-full border border-kr-ink/55 grid place-items-center text-foreground/90 transition-colors hover:bg-white/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline"
           >
             <MagnifyingGlass size={18} weight="regular" />
           </button>

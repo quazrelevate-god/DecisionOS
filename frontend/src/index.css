@@ -1357,7 +1357,16 @@ html[data-dex="1"] .app-sky__art { opacity: 0; }
    changed — a fade tuned to a dark core that has moved is just a dimmer
    picture. */
 html[data-page="inbox"] {
-    --sky-art: url("/sky/inbox.webp");
+    --sky-art:    url("/sky/inbox.webp");
+    /* KM-49 — /inbox gets a desktop plate again. The founder dropped
+       inbox-lg.png back into the folder, and this is the one room where a
+       separate desktop file earns its keep: the phone picture is 800x1200
+       portrait, and `cover` on a landscape viewport shows 34% of its height
+       (see the note at the top of this table). A landscape source shows the
+       whole composition instead. The browser never fetches a background whose
+       media query does not match, so the phone still pulls only the 17 KB WebP
+       and never sees the 1 MB PNG. */
+    --sky-art-lg: url("/sky/inbox-lg.png");
 }
 
 html[data-page="my-work"] {
@@ -1545,7 +1554,14 @@ html[data-page="workflows"] {
     position: absolute;
     inset: 0;
     z-index: -1;
-    background: hsl(0 0% 0% / .25);
+    /* KM-49 — .32, up from .25. The icon buttons went back to being outlined
+       and unfilled (founder's call), so the shelf is now the only thing giving
+       them a ground to sit on, and a touch more black is what makes an
+       unfilled circle read as a control rather than an outline floating on the
+       sky. Reading "black colour transparency a little bit more" as MORE
+       BLACK — the opposite reading would wash the row out just as the fills
+       came off it, which is the wrong direction for the same sentence. */
+    background: hsl(0 0% 0% / .32);
 
     --kr-plate-h: 88px;                                       /* the header */
     --kr-plate-cap: calc(var(--kr-plate-h) * 173 / 126);      /* their aspect */

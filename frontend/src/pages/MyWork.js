@@ -2217,7 +2217,16 @@ export default function MyWork() {
   const inSegmentView = mobileView === "mine" || mobileView === "all";
   // The filter dropdown lists only tabs that have items — same rule the old
   // chip strip used. "Completed" appears when any completed task exists.
-  const mobileFilterTabs = WORK_TABS.filter((tb) => tb.key === "all" || countFor(tb.key) > 0);
+  /* KM-49 — EVERY category, not just the ones with work in them. The `> 0`
+     test is right for the desktop CHIP STRIP, where an empty chip spends a slot
+     of a fixed-width row; it is wrong for a dropdown, where the list is the
+     menu and a category vanishing because its count hit zero makes the menu a
+     different shape every time you open it. Founder: "where is the all 8
+     options in that new pill, only all and completed option is there?" — that
+     is this filter, doing exactly what it was told against a dataset where the
+     other categories were empty. The counts still show, so an empty category
+     reads as empty rather than missing. */
+  const mobileFilterTabs = WORK_TABS;
   const activeTabLabel = (WORK_TABS.find((tb) => tb.key === tab) || WORK_TABS[0]).label;
 
   return (

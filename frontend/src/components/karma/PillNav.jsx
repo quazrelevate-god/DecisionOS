@@ -86,7 +86,11 @@ export function PillNav({ items = [], size = "md", className, testid, plate = fa
                    these are destinations, and a destination that flinches
                    when you approach it reads as a button, not a place. */
                 : plate
-                  ? "border-[0.5px] border-kr-ink/35 bg-white/20 text-foreground/75 hover:border-kr-ink/70 hover:bg-white/45 hover:text-foreground"
+                  /* /85, not /75: the shelf went from 25% to 32% black on the
+                     founder's call and took the resting label from 5.76 to
+                     4.48, just under the line. Darkening the ink is the lever
+                     that costs nothing here — the fill stays where it was. */
+                  ? "border-[0.5px] border-kr-ink/40 bg-white/20 text-foreground/85 hover:border-kr-ink/70 hover:bg-white/45 hover:text-foreground"
                   : "kr-glow border-[0.5px] border-kr-ink/45 text-foreground/55"
             )
           }

@@ -59,27 +59,43 @@ export function dockSlots(user, t = (k, d) => d) {
 }
 
 function DockItem({ to, label, icon: Icon, testid, active, onClick }) {
+  /* KM-49 — THE SELECTED SLOT IS FLAT, and it is an INDICATOR rather than a
+     treatment of the whole slot. Founder: "the neumorphic styled option is not
+     nice in the bottom fab bar so make it a usual materialistic flat style menu
+     selection design."
+
+     KM-32 pressed the live slot in with a hand-rolled inset pair, on the
+     argument that depth survives a translucent bar over a moving bloom better
+     than colour does. It does — but it also made a 56px slot look dented, and
+     depth is the app's grammar for a CONTROL you push, not for where you
+     currently are. Material's answer is better here: a filled pill sitting
+     behind the icon alone, with the label plain underneath. The pill is a small
+     bright shape against dark glass, which reads at a glance without pretending
+     the bar has a surface you can press into.
+
+     It is also cheap to animate, unlike what it replaces: a flat fill
+     interpolates, so this one can carry `transition-colors` where the inset /
+     outset pair could not. */
   const content = (
     <>
-      <Icon size={22} weight={active ? "fill" : "regular"} aria-hidden="true" />
+      <span
+        aria-hidden="true"
+        className={cn(
+          "grid h-7 w-12 place-items-center rounded-full transition-colors duration-200",
+          active ? "bg-white/[.22]" : "bg-transparent"
+        )}
+      >
+        <Icon size={22} weight={active ? "fill" : "regular"} />
+      </span>
       <span className="text-[length:var(--text-label)] font-semibold leading-4">{label}</span>
     </>
   );
   // .dock-item carries the >= 56x56 sizing (§8) — see index.css for why it is
   // a class rather than Tailwind min-w/min-h utilities.
-  /* KM-32 — the live slot is PRESSED IN, not merely brighter. Colour and fill
-     weight alone made the selection easy to miss on a translucent bar over a
-     moving bloom; a held depression is the grammar every other selected control
-     in the app uses and it survives whatever is behind the glass. Hand-rolled
-     rather than .kr-pressed because that recipe is tuned for the light page —
-     on ink its white inset lip lands the wrong way round.
-     NO transition on the shadow: an outset/inset pair does not interpolate. */
   const cls = cn(
     "dock-item flex flex-col items-center justify-center gap-0.5 rounded-2xl px-1.5",
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-    active
-      ? "text-white bg-white/[.07] shadow-[inset_2px_2px_6px_rgb(0_0_0/.55),inset_-1px_-1px_4px_rgb(255_255_255/.10)]"
-      : "text-white/55 transition-colors hover:text-white/80"
+    "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+    active ? "text-white" : "text-white/55 hover:text-white/80"
   );
   if (onClick) {
     return (

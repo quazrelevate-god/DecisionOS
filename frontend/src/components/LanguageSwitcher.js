@@ -58,7 +58,7 @@ export function LanguageSwitcher({ variant = "icon" }) {
             This icon variant renders only in the desktop top bar; the mobile
             sheet uses variant="inline", untouched. */}
         <button data-testid="language-switcher" title={t("common.language")}
-          className="h-10 w-10 rounded-full border border-kr-ink/25 bg-white/45 grid place-items-center text-foreground/85 transition-colors hover:bg-white/80 hover:border-kr-ink/45 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline">
+          className="h-10 w-10 rounded-full border border-kr-ink/55 grid place-items-center text-foreground/90 transition-colors hover:bg-white/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kr-outline">
           <Globe size={18} weight="regular" />
         </button>
       </PopoverTrigger>

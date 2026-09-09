@@ -1477,6 +1477,37 @@ html[data-page="workflows"] {
        artwork to defend against dark cores that are not in it. */
 }
 
+/* KM-44 · .kr-navplate — the header nav sits ON something now.
+   Founder, with a reference: a semi-transparent semi-octagon behind the seven
+   destinations, black at 25%.
+
+   THE SHAPE is clip-path, not border-radius: a chamfer is a straight cut and a
+   radius only ever gives an arc. Half an octagon = a flat top with both top
+   corners cut away and the sides opening out to full width at the bottom. The
+   bottom edge is left open because the header has no floor — the plate runs off
+   the top of the page with the rest of the chrome.
+
+   THE PLATE IS ONLY MID-TONE, AND THAT DECIDES EVERY COLOUR ON IT. 25% black
+   over this room's warm sky composites to roughly rgb(190,181,165) — luminance
+   0.47, which is not a dark surface. Measured, because the instinct is to flip
+   the nav to light-on-dark and that would be exactly wrong: white text on this
+   plate reads 2.03:1, ink on it reads 9.53:1. So the nav stays INK. What
+   changed is that the ground under it got darker, so the quiet end of the
+   scale had to come up to meet it — see PillNav's `plate` variant. */
+.kr-navplate {
+    position: relative;
+    z-index: 0;          /* its own stacking context, so the -1 plate stays in */
+}
+.kr-navplate::before {
+    content: "";
+    position: absolute;
+    inset: -0.65rem -1.5rem;
+    z-index: -1;
+    background: hsl(0 0% 0% / .25);
+    clip-path: polygon(1.9rem 0, calc(100% - 1.9rem) 0, 100% 100%, 0 100%);
+}
+
+
 .app-sky__art--aside {
     /* ── THE SIGNUP GLOW'S PICTURE ─────────────────────────────────────────
        TO CHANGE IT: replace frontend/public/sky/signup.webp. That is the

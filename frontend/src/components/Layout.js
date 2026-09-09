@@ -417,6 +417,7 @@ export default function Layout({ children }) {
 
         <PillNav
           testid="header-pill-nav"
+          plate
           items={navMain.map((n) => ({
             to: n.to,
             end: n.to === "/",

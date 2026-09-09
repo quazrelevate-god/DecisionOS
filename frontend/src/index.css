@@ -414,6 +414,19 @@
         min-width: 0;
     }
 
+    /* KM-48 — the SECOND documented exception to the 44px floor, and the
+       reasoning is the same shape as the one above. A segmented filter track
+       puts three or four segments side by side across the full 343px row, so
+       each one is 80-110px WIDE; the floor was making each 44px tall as well,
+       which stacked the two filter bars on /my-work to 104px of a 812px screen
+       before a single task was visible. 36px keeps every segment far above the
+       24x24 that WCAG 2.5.8 asks and well inside a thumb, because the target
+       here is a wide bar rather than a small square — the floor exists to stop
+       tiny icon buttons, and these are not that. Width is untouched. */
+    .kr-seg-compact {
+        min-height: 0;
+    }
+
     /* A control that opted into a taller tier keeps it. */
     .min-h-touch-md { min-height: var(--control-h-md) !important; }
     .min-h-touch-lg { min-height: var(--control-h-lg) !important; }

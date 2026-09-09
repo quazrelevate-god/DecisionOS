@@ -1927,12 +1927,15 @@ function TaskBento({ list, openId, setOpenId, cardProps }) {
    A tile opened here still takes its column's full width, so the same
    nothing-beside-it rule holds. */
 const BANDS = [
-  { key: "high", label: "High priority" },
+  /* KM-48 — "High", not "High priority". The bar it labels is already called
+     Priority, so the word was printed twice in one control, and it was the one
+     segment wide enough to push the other two off a 343px row. */
+  { key: "high", label: "High" },
   { key: "medium", label: "Medium" },
   { key: "low", label: "Low" },
 ];
 
-function TaskPriorityColumns({ list, openId, setOpenId, cardProps }) {
+function TaskPriorityColumns({ list, openId, setOpenId, cardProps, band = "high" }) {
   const grouped = BANDS.map((b) => ({ ...b, items: list.filter((t) => TIER_OF(t) === b.key) }));
   /* KM-3 — ON A PHONE THE THREE COLUMNS BECOME THREE TABS.
      A 3-col grid linearises to three stacked sections, so turning AI priority
@@ -1942,27 +1945,13 @@ function TaskPriorityColumns({ list, openId, setOpenId, cardProps }) {
      so the grouping is visible at a glance and switching costs one tap.
      Default is High: if you asked for priority order, that is the band you
      asked to see. Desktop keeps all three columns side by side, untouched. */
-  const [band, setBand] = useState("high");
+  /* KM-48 — the band bar MOVED to the mobile header, beside the status bar.
+     It used to live here, which put one filter in the fixed header and the
+     other in the scrolling body: they could never be spaced evenly against
+     each other because one of them slid away. `band` is owned by the page now
+     and arrives as a prop; desktop shows all three columns and ignores it. */
   return (
     <>
-      <div className="kr-pressed mb-4 flex items-center gap-1 rounded-pill p-1 lg:hidden"
-           role="group" aria-label="Priority band" data-testid="mywork-priority-bands">
-        {grouped.map((b) => (
-          <button
-            key={b.key}
-            type="button"
-            onClick={() => setBand(b.key)}
-            aria-pressed={band === b.key}
-            data-testid={`priority-band-${b.key}`}
-            className={`flex h-9 flex-1 items-center justify-center gap-1.5 rounded-pill px-2 text-xs ${
-              band === b.key ? "kr-pop font-semibold text-foreground" : "text-foreground/60"
-            }`}
-          >
-            {b.label}
-            <span className="tabular-nums opacity-60">{b.items.length}</span>
-          </button>
-        ))}
-      </div>
     <div className="grid gap-4 lg:grid-cols-3" data-testid="mywork-priority-columns">
       {grouped.map((col) => (
         <section key={col.key} data-testid={`priority-col-${col.key}`}
@@ -2059,12 +2048,17 @@ export default function MyWork() {
      posture, not a destination — you flick through it while scanning and you
      do not want twenty history entries for it. */
   const [statusFilter, setStatusFilter] = useState("");
+  /* KM-48 — the priority band lens. Lifted out of TaskPriorityColumns so its
+     bar can sit in the fixed header next to the status bar; see the note
+     there. Reset with the toggle, like statusFilter, so turning AI priority
+     off and on again does not land you in a band you chose ten minutes ago. */
+  const [band, setBand] = useState("high");
   // Dismissing the bar clears it, so the list can never stay filtered by a
   // control that is no longer on screen. An effect rather than a patch to each
   // toggle, because the toggle exists twice — mobile and desktop — and a rule
   // enforced in one of two places is not a rule.
   useEffect(() => {
-    if (!aiPriority) setStatusFilter("");
+    if (!aiPriority) { setStatusFilter(""); setBand("high"); }
   }, [aiPriority]);
 
   // Persist on any change. Guard on prefsKey so pre-login / test envs stay
@@ -2229,7 +2223,10 @@ export default function MyWork() {
   return (
     <div>
       {/* ─── MOBILE HEADER (below lg) ───────────────────────────────────── */}
-      <StickyHeader className="mb-2 flex flex-col gap-2.5 lg:hidden" data-testid="mywork-mobile-header">
+      {/* KM-48 — gap-2 and mb-2: one 8px rhythm for every gap in this header,
+          where it used to be 10px between rows and then whatever the body's
+          own margin happened to be under it. */}
+      <StickyHeader className="mb-2 flex flex-col gap-2 lg:hidden" data-testid="mywork-mobile-header">
         {/* Row 1 — title left, the two DESTINATIONS right.
             Workflows and Leave are the only two controls in this header that
             are not lenses on the task list — they replace the list with a
@@ -2306,53 +2303,112 @@ export default function MyWork() {
               </button>
             )}
 
-            {/* KM-29 — the sliders circle is GONE, on the founder's call. It
-                opened a dropdown of task categories; that job now belongs to
-                the two segmented bars the AI-priority circle reveals, and two
-                filter affordances a thumb apart — one of them hidden inside a
-                menu — was the confusion. The categories stay reachable from the
-                desktop header, which has the width for a chip strip.
-                Leave keeps a spacer so the row's right edge does not jump as
+            {/* KM-48 — THE CATEGORY FILTER COMES BACK, and this time it says
+                what it is doing. KM-29 removed it as an unlabelled sliders
+                circle on the grounds that two filter affordances a thumb apart
+                were confusing, and left the categories reachable only from the
+                desktop header — which silently took the feature away from the
+                phone entirely. Founder: "the filter option in the my-work page
+                which was there in old versions was removed silently."
+
+                The confusion was never that there were two filters; it was that
+                one of them was a mystery icon. As a pill carrying the current
+                selection — "All", "Finance", "Completed" — it names itself, and
+                it also absorbs the caption row that used to sit underneath
+                doing the same job with none of the control. */}
+            {inSegmentView && mobileFilterTabs.length > 1 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button type="button" data-testid="work-mobile-category"
+                    aria-label={`Filter: ${activeTabLabel}`}
+                    className="kr-pop flex h-11 min-w-0 shrink items-center gap-1 rounded-pill pl-3.5 pr-2.5 text-[12px] font-medium">
+                    <span className="max-w-[92px] truncate">{activeTabLabel}</span>
+                    <span className="tabular-nums opacity-55">{countFor(tab)}</span>
+                    <CaretDown size={11} weight="bold" aria-hidden="true" className="opacity-60" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="max-h-[60vh] w-52 overflow-y-auto">
+                  {mobileFilterTabs.map((tb) => (
+                    <DropdownMenuItem key={tb.key} onSelect={() => setTab(tb.key)}
+                      data-testid={`work-mobile-category-${tb.key}`}
+                      className="flex items-center justify-between gap-3">
+                      <span className={tab === tb.key ? "font-semibold" : ""}>{tb.label}</span>
+                      <span className="tabular-nums text-xs opacity-55">{countFor(tb.key)}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            {/* Leave keeps a spacer so the row's right edge does not jump as
                 you move between views. */}
             {mobileView === "leave" && <span className="h-9 w-9 shrink-0" aria-hidden="true" />}
           </div>
         </div>
 
-        {/* Row 3 — the active sub-filter caption. New Task and AI priority
-            both left this row in KM-2 (into the lens group and the circle
-            pair respectively), so what remains is the one thing that names
-            what the list below is currently showing. */}
-        {/* KM-29 · the two lenses, revealed by the AI-priority circle.
-            Same track, same segments, same grammar as every other segmented
-            control here — .kr-pressed rail, .kr-pop on the live one — so they
-            read as one instrument with two rows rather than two widgets that
-            happen to sit together. They scroll horizontally rather than wrap:
-            five status segments do not fit 343px, and a control row that
-            reflows to two lines as you tap through it is worse than one that
-            slides.
-            NO transition utility, for the reason stated at the top of this
-            header: these swap outset shadows for inset ones. */}
+        {/* KM-48 · ROW 3 — THE TWO LENSES, LABELLED, AS ONE BLOCK.
+            Founder: the spacing between the status bar, the priority bar and
+            the My/All row was uneven, and neither bar said what it filtered.
+
+            The unevenness had a cause worth naming: the status bar lived in
+            this fixed header while the priority bar lived in the scrolling
+            body (inside TaskPriorityColumns), so no margin could hold them at
+            a constant distance — one of them slid. Both are here now, in one
+            column with one gap, and the page owns `band` so the body can still
+            render the chosen column.
+
+            Each gets a caption because "High / Medium / Low" and "Not Started /
+            In Progress / Waiting / Review" are not self-evidently two
+            DIFFERENT axes when stacked — without the labels they read as one
+            long filter that wrapped. */}
         {inSegmentView && aiPriority && (
-          <div className="kr-pressed flex items-center gap-1 overflow-x-auto rounded-pill p-1 [scrollbar-width:none]"
-               role="group" aria-label="Filter by progress" data-testid="work-mobile-status-lens">
-            {M_STATUS_PILLS.map((sp) => (
-              <button key={sp.key} type="button"
-                onClick={() => setStatusFilter((cur) => (cur === sp.key ? "" : sp.key))}
-                aria-pressed={statusFilter === sp.key} data-testid={`work-status-${sp.key}`}
-                className={`flex h-8 shrink-0 items-center rounded-pill px-3.5 text-[12px] ${
-                  statusFilter === sp.key ? "kr-pop font-semibold text-foreground" : "text-foreground/60"}`}>
-                {sp.label}
-              </button>
-            ))}
+          <div className="flex flex-col gap-2" data-testid="work-mobile-lenses">
+            <div>
+              <p className="mb-1 px-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-foreground/70">
+                {t("mywork.filter_priority", "Priority")}
+              </p>
+              {/* NO transition utility: the segments swap .kr-pop's outset
+                  shadows against .kr-pressed's inset ones, which do not
+                  interpolate. */}
+              <div className="kr-pressed flex items-center gap-1 rounded-pill p-1"
+                   role="group" aria-label="Filter by priority" data-testid="mywork-priority-bands">
+                {BANDS.map((b) => {
+                  const n = list.filter((tk) => TIER_OF(tk) === b.key).length;
+                  return (
+                    <button key={b.key} type="button" onClick={() => setBand(b.key)}
+                      aria-pressed={band === b.key} data-testid={`priority-band-${b.key}`}
+                      className={`kr-seg-compact flex h-9 flex-1 items-center justify-center gap-1.5 rounded-pill px-2 text-[12px] ${
+                        band === b.key ? "kr-pop font-semibold text-foreground" : "text-foreground/60"}`}>
+                      {b.label}
+                      <span className="tabular-nums opacity-55">{n}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
+              <p className="mb-1 px-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-foreground/70">
+                {t("mywork.filter_status", "Status")}
+              </p>
+              {/* Scrolls rather than wraps: four status segments do not fit
+                  343px, and a control row that reflows to two lines as you tap
+                  through it is worse than one that slides. */}
+              <div className="kr-pressed flex items-center gap-1 overflow-x-auto rounded-pill p-1 [scrollbar-width:none]"
+                   role="group" aria-label="Filter by progress" data-testid="work-mobile-status-lens">
+                {M_STATUS_PILLS.map((sp) => (
+                  <button key={sp.key} type="button"
+                    onClick={() => setStatusFilter((cur) => (cur === sp.key ? "" : sp.key))}
+                    aria-pressed={statusFilter === sp.key} data-testid={`work-status-${sp.key}`}
+                    className={`kr-seg-compact flex h-9 shrink-0 items-center rounded-pill px-3.5 text-[12px] ${
+                      statusFilter === sp.key ? "kr-pop font-semibold text-foreground" : "text-foreground/60"}`}>
+                    {sp.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
-        {inSegmentView && !aiPriority && (
-          <p className="text-xs text-muted-foreground" data-testid="work-mobile-active-tab">
-            {activeTabLabel}
-            <span className="ml-1 tabular-nums opacity-70">· {countFor(tab)}</span>
-          </p>
-        )}
       </StickyHeader>
 
       {/* ─── DESKTOP HEADER (lg and up) ─────────────────────────────────── */}
@@ -2566,7 +2622,7 @@ export default function MyWork() {
             });
             const shared = { list, openId, setOpenId, cardProps };
             return aiPriority && tab !== "completed"
-              ? <TaskPriorityColumns {...shared} />
+              ? <TaskPriorityColumns {...shared} band={band} />
               : <TaskBento {...shared} />;
           })()}
 

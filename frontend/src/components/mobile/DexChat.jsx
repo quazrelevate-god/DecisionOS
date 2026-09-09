@@ -127,7 +127,7 @@ function Bubble({ m, index }) {
  * @param {Function} onClose
  * @param {object}   dex     the shared useDexCapture instance from Layout
  */
-export function DexChat({ open, onClose, dex, chat }) {
+export function DexChat({ open, onClose, dex, chat, channel }) {
   const { log, busy, mode, setMode, ask, attach } = chat;
   const [plusOpen, setPlusOpen] = React.useState(false);
   const endRef = React.useRef(null);
@@ -182,8 +182,18 @@ export function DexChat({ open, onClose, dex, chat }) {
 
           <div className="relative flex min-h-0 flex-1 flex-col pt-safe">
             <div className="flex items-center justify-between px-4 py-3">
+              {/* KM-54 — the header states WHICH Dex. The two doors have
+                  different consequences (one answers, one creates a decision
+                  and its tasks), so the surface has to keep saying which one
+                  you are in — the choice was made on the previous screen and
+                  is otherwise invisible by the time you start typing. */}
               <span className="flex items-center gap-2 text-sm font-semibold text-white drop-shadow">
                 <Sparkle size={14} weight="fill" className="text-[hsl(var(--kr-gold))]" /> Dex
+                {channel && (
+                  <span className="rounded-pill bg-white/15 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-white/85">
+                    {channel === "decide" ? "Decide" : "Ask"}
+                  </span>
+                )}
               </span>
               <button
                 type="button"
@@ -201,8 +211,16 @@ export function DexChat({ open, onClose, dex, chat }) {
             <div className="flex min-h-0 flex-1 flex-col justify-end gap-2.5 overflow-y-auto px-4 pb-3">
               {log.length === 0 && (
                 <div className="pb-6 text-center">
-                  <p className="text-sm text-white/70 drop-shadow">Hold the mic and say it plainly.</p>
-                  <p className="mt-1 text-xs text-white/45">Or use + to type, attach a file, or take a photo.</p>
+                  <p className="text-sm text-white/70 drop-shadow">
+                    {channel === "decide"
+                      ? "Say or type the decision."
+                      : "Ask about anything in your workspace."}
+                  </p>
+                  <p className="mt-1 text-xs text-white/45">
+                    {channel === "decide"
+                      ? "Dex turns it into tasks and puts it in Needs your decision."
+                      : "Dex answers from your data. Nothing is created."}
+                  </p>
                 </div>
               )}
               {log.map((m, i) => <Bubble key={m.id} m={{ ...m, onAsk: ask }} index={i} />)}

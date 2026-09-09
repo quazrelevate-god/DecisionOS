@@ -43,7 +43,7 @@ const POLL_TIMEOUT_MS = 90000;
  *        preview before it goes anywhere. A hook that both records AND commits
  *        cannot offer that, so the commit half is now the caller's decision.
  */
-export function useDexCapture({ onCaptured, onRecordingChange, watch = false, onTranscript } = {}) {
+export function useDexCapture({ onCaptured, onRecordingChange, watch = false, onTranscript, channel = "capture" } = {}) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [recording, setRecording] = useState(false);
@@ -56,6 +56,19 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false, on
   // orphans a live MediaRecorder.
   const onTranscriptRef = useRef(onTranscript);
   onTranscriptRef.current = onTranscript;
+  /* KM-54 — "channel" decides what a finished recording MEANS, and it is read
+     at onstop rather than captured when the recorder was built, so switching
+     Ask/Decide mid-take does the right thing.
+       "capture"  -> POST /voice-notes   : structured into a decision + tasks
+       "dictate"  -> POST /transcribe    : text back, nothing persisted */
+  const channelRef = useRef(channel);
+  channelRef.current = channel;
+  /* KM-54 — the two refs that fix the "I have to press stop three times" bug.
+     `starting` is true across the getUserMedia await, so a second tap cannot
+     open a second microphone; `cancelStart` lets a stop pressed DURING that
+     await be honoured when the stream finally arrives. */
+  const startingRef = useRef(false);
+  const cancelStartRef = useRef(false);
 
   const mediaRef = useRef(null);
   const chunksRef = useRef([]);
@@ -224,9 +237,57 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false, on
     }
   }, [text, watch, follow, onCaptured]);
 
+  /* KM-54 — THE "I CAN'T STOP IT" BUG.
+     Founder: "if I press the mic icon I can't be able to stop; only after
+     pressing two or three times it's stopping, and everything has so much
+     delay."
+
+     This function is async and `setRecording(true)` used to be its LAST
+     statement — after `await getUserMedia`, after building the MediaRecorder,
+     after opening an AudioContext and wiring an AnalyserNode. On a phone that
+     await is hundreds of milliseconds and, the first time or after the app has
+     been backgrounded, seconds. For that entire window the hook reported
+     `recording: false`, so the FAB still showed a microphone. A second tap
+     therefore did not read as "stop" — it fell through the intent chain to
+     `startRecording()` again and opened a SECOND stream, whose MediaRecorder
+     overwrote `mediaRef.current`. The first one was then unreachable: its
+     stream stayed live (mic hot), its AudioContext was never closed, and
+     stopping only ever stopped the newest of them. Hence three presses, and
+     hence the whole thing getting slower the longer the session ran — iOS caps
+     concurrent AudioContexts, so after a few double-starts the meter silently
+     stopped being created at all.
+
+     Two refs fix it. `startingRef` makes a start non-re-entrant, so the second
+     tap is a no-op instead of a second microphone. `recording` now flips
+     OPTIMISTICALLY, before the await, so the button becomes a stop the instant
+     it is pressed — and `cancelStartRef` means a stop pressed while the stream
+     is still being granted is remembered and applied the moment it arrives,
+     instead of being lost. */
   const startRecording = useCallback(async () => {
+    if (startingRef.current || mediaRef.current?.state === "recording") return false;
+    startingRef.current = true;
+    cancelStartRef.current = false;
+    // Optimistic: the UI must answer the tap, not the hardware.
+    setRecording(true);
+    setRecordSecs(0);
+    setLevels(new Array(BARS).fill(0));
+    clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => setRecordSecs((s) => s + 1), 1000);
+
+    const abandon = () => {
+      startingRef.current = false;
+      setRecording(false);
+      clearInterval(timerRef.current);
+    };
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Stop was pressed while the browser was still granting the mic.
+      if (cancelStartRef.current) {
+        stream.getTracks().forEach((t) => t.stop());
+        abandon();
+        return false;
+      }
       const mr = new MediaRecorder(stream);
       chunksRef.current = [];
       mr.ondataavailable = (e) => e.data.size && chunksRef.current.push(e.data);
@@ -239,6 +300,25 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false, on
         fd.append("language", "auto");
         setSending(true);
         try {
+          /* KM-54 — DICTATION IS NOT CAPTURE.
+             In Ask mode the audio must not become a decision, and it must not
+             wait on one either: POST /transcribe writes a temp file, returns
+             the text in the same response and persists nothing. That also
+             removes the whole poll loop from the Ask path — no background
+             task to be scheduled, no 1.2s poll interval to sit through — which
+             is most of the "transcribing takes so much time" the founder felt.
+             Capture keeps /voice-notes, because there the structuring IS the
+             point. */
+          if (channelRef.current === "dictate") {
+            const { data } = await api.post("/transcribe", fd, {
+              headers: { "Content-Type": "multipart/form-data" },
+            });
+            setSending(false);
+            const said = (data?.text || "").trim();
+            if (said) onTranscriptRef.current?.(said);
+            else toast.error("I didn't catch that — try again");
+            return;
+          }
           const res = await api.post("/voice-notes", fd, {
             headers: { "Content-Type": "multipart/form-data" },
           });
@@ -296,19 +376,30 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false, on
 
       mediaRef.current = mr;
       mr.start();
-      setLevels(new Array(BARS).fill(0));
-      setRecording(true);
-      setRecordSecs(0);
-      timerRef.current = setInterval(() => setRecordSecs((s) => s + 1), 1000);
+      startingRef.current = false;
+      /* One last look: a stop can also land between the stream arriving and
+         the recorder starting. Honour it rather than leaving a take running
+         that nothing is going to end. */
+      if (cancelStartRef.current) { try { mr.stop(); } catch { /* already gone */ } }
+      // recording / secs / levels were set before the await — see the note above.
       return true;
     } catch {
+      abandon();
+      stopMeter();
       toast.error("Microphone not available");
       return false;
     }
   }, [watch, follow, onCaptured, stopMeter, pollTranscript]);
 
   const stopRecording = useCallback(() => {
-    if (mediaRef.current?.state === "recording") mediaRef.current.stop();
+    /* KM-54 — a stop pressed during the getUserMedia await is REMEMBERED,
+       not dropped. Without this the tap did nothing at all and the recording
+       started a moment later anyway, which is what made it feel unstoppable. */
+    if (startingRef.current) cancelStartRef.current = true;
+    const mr = mediaRef.current;
+    // `!== "inactive"` rather than `=== "recording"`: a paused recorder still
+    // has to be stopped, and a stop on an inactive one is what used to throw.
+    if (mr && mr.state !== "inactive") { try { mr.stop(); } catch { /* already stopped */ } }
     setRecording(false);
     clearInterval(timerRef.current);
     stopMeter();

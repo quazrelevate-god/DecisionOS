@@ -16,6 +16,8 @@ from core import (
 from services.transcription import transcribe_audio_full
 from services.ai.extraction import ai_extract
 from services.tasks import _attach_reference_ids
+# KM-54 — owners plus anyone granted the 'approvals' access.
+from services.notifications import _approver_ids
 
 
 def match_member_by_name(members: list, name: str):
@@ -292,6 +294,24 @@ async def process_voice_note(note_id: str):
         dtype = first.get("type") if first.get("type") in ("directive", "approval", "policy", "observation") else "directive"
         conf = extracted.get("confidence", 0.8)
         conf = float(conf) if isinstance(conf, (int, float)) else 0.8
+        # KM-54 — name the approver when we can.
+        # Dex decisions were written with NO approver_id at all. desk.py's
+        # needs_decision query reads (approver_id == me) OR, for owners only,
+        # (approver_id null/absent) -- so an absent field put every capture in
+        # the shared owner pool and nowhere else. A user who holds the
+        # 'approvals' permission but is not an owner therefore could not see a
+        # decision they had just captured themselves, in any queue.
+        #
+        # Routing it to the capturer when the capturer can approve fixes that
+        # and is stable: it is their decision and their queue.
+        #
+        # When they CANNOT approve this stays None on purpose, rather than
+        # picking an owner. None still matches the owner branch of that query,
+        # so the decision keeps reaching every owner exactly as it does today;
+        # naming one would quietly hide it from the others in a multi-owner
+        # tenant, which would be a regression dressed up as a fix.
+        _capturer = note["created_by"]
+        _approver_id = _capturer if _capturer in set(await _approver_ids(tenant_id)) else None
         decision = {
             "id": decision_id, "tenant_id": tenant_id, "voice_note_id": note_id,
             "title": (extracted.get("decisions") or [{}])[0].get("title") or (extracted.get("summary") or "New decision")[:80],
@@ -306,6 +326,7 @@ async def process_voice_note(note_id: str):
             "needs_review": bool(extracted.get("needs_review")),
             "review_reasons": extracted.get("review_reasons") or [],
             "status": "pending_approval",
+            "approver_id": _approver_id,
             "created_by": note["created_by"], "created_at": now_iso(),
             "source": note.get("source") or ("voice" if note.get("kind") == "audio" else "text"),
             "wa_from": note.get("wa_from"), "raised_by_name": note.get("raised_by_name"),

@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useCallback, useEffect, useState, useMemo, useRef } from "react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -266,18 +266,50 @@ export default function Layout({ children }) {
      to hand a transcript to does not exist yet. A ref filled on the next line
      down breaks the cycle without reordering two hooks that genuinely depend on
      each other in that direction. */
+  /* KM-54 — `qc` and this helper are declared BEFORE the Dex hooks on purpose.
+     Both are consts, so they sit in the temporal dead zone until their own line
+     runs, and the options object passed to useDexCapture is evaluated the
+     moment that call is reached. Referencing either from further down the file
+     therefore threw "Cannot access 'qc' before initialization" and rendered a
+     blank app — a runtime fault the production build compiles happily, which is
+     why it was caught in the browser rather than by the compiler.
+
+     A capture lands in several places, so several caches go stale at once.
+     Layout used to invalidate only captures-pending, which is why a new
+     decision took up to 30 seconds (Desk's own refetchInterval) to surface
+     instead of arriving with the acknowledgement that created it. */
+  const qc = useQueryClient();
+  const refreshAfterCapture = useCallback(() => {
+    ["captures-pending", "desk", "inbox", "tasks", "dex-inflight-count"].forEach(
+      (k) => qc.invalidateQueries({ queryKey: [k] })
+    );
+  }, [qc]);
+
   const draftSinkRef = useRef(null);
+  /* KM-54 — which door Dex was opened by: "ask" or "decide". null means the
+     picker has not been used, and the FAB shows the two doors instead of
+     opening anything. */
+  const [dexChannel, setDexChannel] = useState(null);
+  const [dexPicker, setDexPicker] = useState(false);
   const dex = useDexCapture({
     watch: true,
     onRecordingChange: (on, secs) => setDexRecording({ on, secs }),
-    onCaptured: () => qc.invalidateQueries({ queryKey: ["captures-pending"] }),
+    onCaptured: refreshAfterCapture,
     // Stopping a recording now yields TEXT for review, not a committed capture.
     onTranscript: (text) => draftSinkRef.current?.(text),
+    /* Ask-mode audio goes to /transcribe: text back, nothing persisted. Only
+       Decide-mode audio becomes a decision. */
+    channel: dexChannel === "ask" ? "dictate" : "capture",
   });
   /* KM-26 — one conversation, three surfaces: the dock hosts the input, the
      FAB submits it, the transcript shows it. None of them can own the state, so
      it lives in the hook and Layout hands it to all three. */
-  const chat = useDexConversation({ dex, open: dexOpen });
+  const chat = useDexConversation({
+    dex,
+    open: dexOpen,
+    channel: dexChannel === "decide" ? "decide" : "ask",
+    onCommitted: refreshAfterCapture,
+  });
   draftSinkRef.current = chat.setDraft;
   const [langOpen, setLangOpen] = useState(false);
   // KR-5: the global search moved into a ⌘K dialog; same /brain?q= handoff.
@@ -302,7 +334,7 @@ export default function Layout({ children }) {
   const bellCount = (notif?.notifications || []).filter(
     (n) => !n.read && NEEDS_HIM.test(n.kind || "")
   ).length;
-  const qc = useQueryClient();
+
   // KM-1 — the return value is deliberately not destructured. Its only reader
   // was `counts.myWork`, a prop AllAppsPanel never looked at; the poll itself
   // stays because it keeps /brief?period=morning warm in the cache, which is
@@ -706,11 +738,20 @@ export default function Layout({ children }) {
           type into and attach to, so there is something worth opening. Voice
           still starts one tap in, from the mic inside it. */}
       <DexFab
-        onOpen={() => (dexOpen ? chat.submit() : setDexOpen(true))}
+        /* Closed, the FAB no longer opens Dex — it asks WHICH Dex. Open, it is
+           the composer's send/mic/stop exactly as before. */
+        onOpen={() => (dexOpen ? chat.submit() : setDexPicker((v) => !v))}
         recording={dex.recording}
         seconds={dex.recordSecs}
         onStop={() => dex.stopRecording()}
         intent={dexOpen ? chat.fabIntent : "sparkle"}
+        picker={dexPicker && !dexOpen}
+        onPick={(kind) => {
+          setDexPicker(false);
+          if (!kind) return;              // tapped the scrim
+          setDexChannel(kind);
+          setDexOpen(true);
+        }}
       />
       <AllAppsPanel
         open={allAppsOpen}
@@ -733,7 +774,16 @@ export default function Layout({ children }) {
           message inside it rather than a window of its own. (The poll that
           caused the re-open is separately fenced — see the dismiss token in
           useDexCapture.) */}
-      <DexChat open={dexOpen} onClose={() => setDexOpen(false)} dex={dex} chat={chat} />
+      {/* KM-54 — closing clears the channel, so the next tap on the FAB asks
+          which Dex you want rather than silently reusing the last answer. A
+          door you chose two hours ago is not a door you chose. */}
+      <DexChat
+        open={dexOpen}
+        onClose={() => { setDexOpen(false); setDexChannel(null); }}
+        dex={dex}
+        chat={chat}
+        channel={dexChannel}
+      />
       {/* The Language tile opens the existing switcher in a thumb-reachable
           sheet rather than duplicating the language list. */}
       <BottomSheet

@@ -15,7 +15,19 @@ import api from "../lib/api";
 // so it lives here and Layout hands it to all three.
 const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
-export function useDexConversation({ dex, open } = {}) {
+/* KM-54 — `channel` is which door the founder came through, and it decides
+   what a typed line MEANS. Nothing here guesses.
+     "ask"    -> POST /ask            : read-only analytics, creates nothing
+     "decide" -> POST /voice-notes/text: structured into a decision, its tasks
+                                         and an inbox item, so it lands in
+                                         "Needs your decision" on the Desk
+   This is the gap the founder found. The chat only ever had the ask path —
+   KM-26 rebuilt Dex on this hook and retired DexSheet, which was the one
+   component that still called sendText() — so on the phone there was no way at
+   all to type a decision. Voice worked (it posts to /voice-notes) and typing
+   silently did not, which is exactly the "it's not showing up in Needs your
+   decision" report. */
+export function useDexConversation({ dex, open, channel = "ask", onCommitted } = {}) {
   const [log, setLog] = useState([]);
   const [ctxId, setCtxId] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -33,6 +45,26 @@ export function useDexConversation({ dex, open } = {}) {
   useEffect(() => {
     if (!open) { setMode("voice"); setDraft(""); }
   }, [open]);
+
+  /* KM-54 — SWITCHING DOORS STARTS A NEW TRANSCRIPT.
+     Caught in testing: capture a decision, close, reopen through Ask, and the
+     log still showed "Logged, I'm turning that into a decision" underneath a
+     header now reading ASK. Two different conversations with two different
+     consequences, stacked in one thread, each mislabelled by the other's
+     header.
+     Only a change BETWEEN doors clears it — the null the channel takes while
+     Dex is closed is ignored, so reopening the same door still brings your
+     answers back, which is what the note above is protecting. */
+  const lastChannelRef = useRef(channel);
+  useEffect(() => {
+    if (!channel) return;
+    if (lastChannelRef.current && lastChannelRef.current !== channel) {
+      setLog([]);
+      setCtxId(null);
+      setDraft("");
+    }
+    lastChannelRef.current = channel;
+  }, [channel]);
 
   // A finished capture becomes a turn in the transcript rather than its own
   // card. Keyed on noteId so a poll updating the same note in place cannot
@@ -59,6 +91,16 @@ export function useDexConversation({ dex, open } = {}) {
     setDraft("");
     setBusy(true);
     try {
+      if (channel === "decide") {
+        /* The response is only an acknowledgement: /voice-notes/text queues the
+           structuring as a background task, so the decision and its tasks are
+           built after this returns. Saying where it will appear is more useful
+           than a spinner waiting on work that is deliberately not synchronous. */
+        await api.post("/voice-notes/text", { text });
+        push({ role: "dex", text: "Logged. I'm turning that into a decision and its tasks — it'll show up under \u201cNeeds your decision\u201d." });
+        onCommitted?.();
+        return;
+      }
       // Verified shape: { type, answer, missing_information, suggested_questions }.
       const { data } = await api.post("/ask", { question: text, context_id: ctxId });
       if (data.query_context_id) setCtxId(data.query_context_id);
@@ -73,7 +115,7 @@ export function useDexConversation({ dex, open } = {}) {
     } finally {
       setBusy(false);
     }
-  }, [busy, ctxId, push]);
+  }, [busy, channel, ctxId, onCommitted, push]);
 
   const attach = useCallback(async (file, label = "File") => {
     if (!file) return;

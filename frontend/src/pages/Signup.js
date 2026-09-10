@@ -113,7 +113,17 @@ export default function Signup() {
               controls use, so progress reads as position rather than colour.
               Labels are lg-only: at 375px four words plus the wordmark plus
               Sign in cannot share a row without truncating something. */}
-          <div className="kr-pressed hidden items-center gap-1 rounded-pill p-1 lg:flex" data-testid="signup-phase-bar">
+          {/* KM-62 — THE TRACK IS GONE. Founder: "remove the rectangular bar
+              that covers the nav items, and increase the transparency of the
+              inside pill that highlights them."
+
+              .kr-pressed drew a sunken trough behind all four phases. On the
+              app's pale canvas that reads as a segmented control; on a
+              photograph it reads as a slab laid over the picture, and it was
+              sitting inside the header's own glass pill as well — a second
+              container around a container. The phases now sit directly on the
+              header, and only the live one is drawn. */}
+          <div className="hidden items-center gap-1 rounded-pill lg:flex" data-testid="signup-phase-bar">
             {PHASES.map((p, i) => {
               const done = i < phaseIdx;
               const live = i === phaseIdx;
@@ -122,7 +132,13 @@ export default function Signup() {
                   key={p.key}
                   aria-current={live ? "step" : undefined}
                   title={p.label}
-                  className={`flex h-7 items-center gap-2 rounded-pill px-2 lg:px-3 ${live ? "kr-pop" : ""}`}
+                  /* The live pill is a wash rather than .kr-pop's full white:
+                     with the trough removed it no longer has to out-read a
+                     surface behind it, only mark which of four words you are
+                     on — and the picture should still come through it. */
+                  className={`flex h-7 items-center gap-2 rounded-pill px-2 lg:px-3 ${
+                    live ? "bg-white/35 shadow-[0_1px_3px_-1px_hsl(230_30%_18%/.18)]" : ""
+                  }`}
                 >
                   <span
                     aria-hidden="true"
@@ -157,11 +173,19 @@ export default function Signup() {
               <BasicsFlow form={form} setForm={setForm} onDone={() => setPhase("website")} />
             )}
             {phase === "website" && (
-              <WebsiteIntel companyName={form.company_name.trim()} onDone={(w) => { setWorld(w); setPhase("interview"); }} />
+              <WebsiteIntel companyName={form.company_name.trim()} onBack={() => setPhase("basics")} onDone={(w) => { setWorld(w); setPhase("interview"); }} />
             )}
             {phase === "interview" && (
               <VoiceInterview
                 profile={interviewProfile}
+                /* KM-62 — Back at the interview's first question returns here
+                   rather than being inert. Not offered from the reveal screen:
+                   VoiceInterview posts /interview/start on mount, so stepping
+                   back into it would mint a NEW session and discard every
+                   answer already given. The reveal has its own way to change
+                   things — "Missing something? Tell Dex" edits the draft in
+                   place, which is the safe version of the same intent. */
+                onBack={() => setPhase("website")}
                 onComplete={(sid, lang) => { setSessionId(sid); setLanguageCode(lang || "en-IN"); setPhase("build"); }}
                 onSkip={(sid, lang) => { setSessionId(sid); setLanguageCode(lang || "en-IN"); setPhase("build"); }}
               />

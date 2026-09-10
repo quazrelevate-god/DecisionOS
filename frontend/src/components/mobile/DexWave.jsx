@@ -43,9 +43,9 @@ const SEGMENTS = 64;
 // amplitude, a vertical offset, and its gradient. Gold sits on top and is the
 // narrowest and fastest, so it reads as the highlight riding the others.
 const LAYERS = [
-  { freq: 1.00, speed: -0.55, amp: 1.00, lift: 0.6, fill: "url(#dxGrey)", op: 0.55 },
-  { freq: 1.45, speed: 0.80, amp: 0.82, lift: -0.4, fill: "url(#dxWhite)", op: 0.72 },
-  { freq: 2.10, speed: 1.25, amp: 0.58, lift: 0.0, fill: "url(#dxGold)", op: 0.85 },
+  { freq: 1.00, speed: -0.55, amp: 1.00, lift: 0.6, fill: "dxGrey", op: 0.55 },
+  { freq: 1.45, speed: 0.80, amp: 0.82, lift: -0.4, fill: "dxWhite", op: 0.72 },
+  { freq: 2.10, speed: 1.25, amp: 0.58, lift: 0.0, fill: "dxGold", op: 0.85 },
 ];
 
 const STATE_TUNE = {
@@ -104,7 +104,18 @@ function ribbonPath(layer, t, amp) {
  * @param {number[]} [levels]  legacy: an array of bar levels; averaged to `level`
  * @param {boolean}  [live]    legacy: true === listening
  */
-export function DexWave({ state, level, levels, levelsRef, live = false, className }) {
+/* KM-62 — `tone` lets the same wave sit on a LIGHT surface.
+   The ribbons were built for the dark dock: white and grey over near-black. On
+   the signup interview's glass they would be invisible, which is why that
+   surface had a solid black pill painted behind it purely to make the wave
+   legible — a black slab on a photograph, and the founder asked for it gone.
+   "ink" swaps the two neutral ribbons for ink and darkens the hairline; the
+   gold one is legible on both and does not move. Gradient ids are suffixed per
+   tone so a light and a dark wave can coexist on one page without the later
+   <defs> capturing the earlier one's fill. */
+export function DexWave({ state, level, levels, levelsRef, live = false, tone = "onDark", className }) {
+  const ink = tone === "ink";
+  const gid = (n) => (ink ? `${n}Ink` : n);
   const pathRefs = React.useRef([]);
   const lineRef = React.useRef(null);
 
@@ -189,18 +200,18 @@ export function DexWave({ state, level, levels, levelsRef, live = false, classNa
         {/* Horizontal gradients, not flat fills: a ribbon that is the same
             colour end to end reads as a sticker. Fading the ends also hides
             where the envelope has taken the amplitude to nothing. */}
-        <linearGradient id="dxGrey" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor="rgb(190,196,205)" stopOpacity="0" />
-          <stop offset="35%" stopColor="rgb(206,212,220)" stopOpacity=".85" />
-          <stop offset="70%" stopColor="rgb(168,176,188)" stopOpacity=".7" />
-          <stop offset="100%" stopColor="rgb(190,196,205)" stopOpacity="0" />
+        <linearGradient id={gid("dxGrey")} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor={ink ? "hsl(230 16% 46%)" : "rgb(190,196,205)"} stopOpacity="0" />
+          <stop offset="35%" stopColor={ink ? "hsl(230 16% 46%)" : "rgb(206,212,220)"} stopOpacity=".85" />
+          <stop offset="70%" stopColor={ink ? "hsl(230 18% 36%)" : "rgb(168,176,188)"} stopOpacity=".7" />
+          <stop offset="100%" stopColor={ink ? "hsl(230 16% 46%)" : "rgb(190,196,205)"} stopOpacity="0" />
         </linearGradient>
-        <linearGradient id="dxWhite" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor="#fff" stopOpacity="0" />
-          <stop offset="45%" stopColor="#fff" stopOpacity=".95" />
-          <stop offset="100%" stopColor="#fff" stopOpacity="0" />
+        <linearGradient id={gid("dxWhite")} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor={ink ? "hsl(230 22% 20%)" : "#fff"} stopOpacity="0" />
+          <stop offset="45%" stopColor={ink ? "hsl(230 22% 20%)" : "#fff"} stopOpacity={ink ? ".82" : ".95"} />
+          <stop offset="100%" stopColor={ink ? "hsl(230 22% 20%)" : "#fff"} stopOpacity="0" />
         </linearGradient>
-        <linearGradient id="dxGold" x1="0" y1="0" x2="1" y2="0">
+        <linearGradient id={gid("dxGold")} x1="0" y1="0" x2="1" y2="0">
           <stop offset="0%" stopColor="hsl(44 88% 60%)" stopOpacity="0" />
           <stop offset="30%" stopColor="hsl(44 92% 66%)" stopOpacity=".9" />
           <stop offset="65%" stopColor="hsl(36 90% 58%)" stopOpacity=".8" />
@@ -211,13 +222,13 @@ export function DexWave({ state, level, levels, levelsRef, live = false, classNa
       {/* The hairline the ribbons sit on — it is what makes them read as one
           surface rather than three floating shapes. Its opacity tracks the
           amplitude so it fades back as the waves take over. */}
-      <line ref={lineRef} x1="0" y1={CY} x2={W} y2={CY} stroke="rgba(255,255,255,.5)" strokeWidth="0.6" />
+      <line ref={lineRef} x1="0" y1={CY} x2={W} y2={CY} stroke={ink ? "hsl(230 15% 30% / .38)" : "rgba(255,255,255,.5)"} strokeWidth="0.6" />
 
       {LAYERS.map((l, i) => (
         <path
           key={i}
           ref={(n) => { pathRefs.current[i] = n; }}
-          fill={l.fill}
+          fill={`url(#${gid(l.fill)})`}
           fillOpacity={l.op}
           style={{ mixBlendMode: i === 0 ? "normal" : "screen" }}
         />

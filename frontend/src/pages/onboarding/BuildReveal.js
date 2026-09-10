@@ -255,7 +255,25 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
             </div>
 
             <div className="space-y-5 mb-8">
-              <PreviewBlock label="Departments" items={bp.departments || []} tint="kr-pop" />
+              {/* KM-62 — departments become SUNKEN pills like the recurring
+                  tasks below, one shade lighter. Founder: "I can't know which
+                  one is a clickable button, which one is just a card and
+                  pills."
+
+                  They were .kr-pop — the app's RAISED recipe, which everything
+                  pressable on this page uses ("Add a workflow", "Looks good",
+                  the model chips one screen back). So four unpressable labels
+                  were wearing the one visual promise this design reserves for
+                  controls. Sunken is the grammar for "this is what Dex found",
+                  which is what they are.
+
+                  The lightness carries the distinction the founder asked for:
+                  .34 white against the recurring tasks' default .20, so they
+                  read as two groups of the same KIND rather than two kinds.
+                  The explicit bg- utility is also what defeats
+                  `.signup-stage .kr-pressed:not([class*="bg-"])`, which would
+                  otherwise force both to the same .20. */}
+              <PreviewBlock label="Departments" items={bp.departments || []} tint="kr-pressed bg-white/[.34]" />
               <PreviewBlock label="Workflows — named after how you actually work" items={workflowNames} tint="kr-pop bg-[hsl(var(--kr-gold)/.22)]" />
               <PreviewBlock label="Recurring tasks Dex will keep on rails" items={taskTitles.slice(0, 8)} tint="kr-pressed" />
             </div>

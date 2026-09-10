@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowRight, Globe, MagnifyingGlass, CheckCircle, PencilSimple } from "@phosphor-icons/react";
+import { ArrowRight, ArrowLeft, Globe, MagnifyingGlass, CheckCircle } from "@phosphor-icons/react";
 import api from "../../lib/api";
 import { INDUSTRIES } from "../../lib/format";
 
@@ -20,7 +20,7 @@ const Eyebrow = ({ children }) => (
   <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">{children}</p>
 );
 
-export function WebsiteIntel({ companyName, onDone }) {
+export function WebsiteIntel({ companyName, onDone, onBack }) {
   const [stage, setStage] = useState("ask"); // ask | scanning | confirm | manual
   const [url, setUrl] = useState("");
   const [scanLine, setScanLine] = useState(0);
@@ -60,6 +60,19 @@ export function WebsiteIntel({ companyName, onDone }) {
       description: fromIntel ? (intel?.summary || "") : "",
       products: fromIntel ? (intel?.products || []) : [],
     });
+  };
+
+  /* KM-62 — Back, on every reversible stage. Founder: "add back functionality
+     by adding a button to go back and edit their response for every step."
+     From the first stage it leaves the phase entirely and returns to Basics;
+     from a result it returns to the address, so a mistyped URL can be redone
+     without starting the signup again. `scanning` is excluded on purpose —
+     there is a request in flight and nothing yet to go back to. */
+  const backTarget = stage === "ask" ? "phase" : stage === "scanning" ? null : "ask";
+  const goBack = () => {
+    if (!backTarget) return;
+    if (backTarget === "phase") onBack?.();
+    else setStage("ask");
   };
 
   return (
@@ -177,15 +190,29 @@ export function WebsiteIntel({ companyName, onDone }) {
                 </div>
               )}
             </div>
+            {/* KM-62 — "Not quite, let me fix it" is gone, and its absence is
+                the fix. Founder: "there is a button to let user configure the
+                data on their own, but the irony is it again shows the same
+                editable data fields which was already there in the previous
+                page."
+
+                They are right, and it was worse than redundant: the manual
+                stage DISCARDS the scan. finish(false) sends no summary, no
+                description and no products, so a founder who pressed "fix it"
+                to change one dropdown silently threw away everything the scan
+                had learned about them — and then handed the interview a
+                thinner profile to work from.
+
+                The two fields above are already live and already saved by
+                "That's us". The manual stage stays reachable from "No website
+                — set it manually", where it is the only path and nothing has
+                been scanned to lose. */}
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <button onClick={() => finish(true)} data-testid="signup-intel-confirm"
                 className="kr-pop flex h-12 items-center gap-2 rounded-pill bg-kr-ink px-7 text-sm font-medium text-white">
                 That&apos;s us <ArrowRight size={16} weight="bold" />
               </button>
-              <button onClick={() => setStage("manual")} data-testid="signup-intel-edit"
-                className="kr-pop flex h-12 items-center gap-1.5 rounded-pill px-6 text-sm font-medium text-muted-foreground">
-                <PencilSimple size={14} weight="bold" /> Not quite — let me fix it
-              </button>
+
             </div>
           </motion.div>
         )}
@@ -225,6 +252,13 @@ export function WebsiteIntel({ companyName, onDone }) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {backTarget && (
+        <button onClick={goBack} data-testid="signup-website-back"
+          className="kr-pop mt-8 flex h-9 items-center gap-1.5 rounded-pill px-4 text-xs font-medium text-muted-foreground">
+          <ArrowLeft size={14} weight="bold" /> Back
+        </button>
+      )}
       </div>
     </div>
   );

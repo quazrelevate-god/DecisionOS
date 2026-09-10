@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Microphone, Stop, PaperPlaneRight, CircleNotch, SpeakerHigh, SpeakerSlash, Waveform, CaretDown, CaretLeft, Check, Translate,
+  Microphone, Sparkle, Stop, PaperPlaneRight, CircleNotch, SpeakerHigh, SpeakerSlash, Waveform, CaretDown, CaretLeft, Check, Translate,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import api from "../../lib/api";
@@ -122,13 +122,54 @@ const LanguagePick = ({ onPick, onSkip }) => (
   </div>
 );
 
-export function VoiceInterview({ profile, onComplete, onSkip }) {
+/* KM-62 — the question types itself, finishing when the voice does.
+   Founder: "add a typewriting each-character animation on the response text
+   from the AI bot; the speed should be such that the audio length and the
+   printing animation end at approximately the same time."
+
+   So the pace is DERIVED, not chosen: total audio milliseconds divided by
+   character count. A long answer spoken slowly types slowly; a short one
+   snaps. The caption stops being a subtitle running on its own clock and
+   becomes the same utterance, written down as it is said.
+
+   Driven by requestAnimationFrame against a wall-clock start rather than a
+   per-character setInterval: an interval accumulates its own drift and would
+   arrive seconds late on a long question, which is the one thing this is
+   supposed to avoid. Only a change in the character COUNT commits state, so a
+   60fps loop costs one render per character, not per frame.
+
+   `durationMs` of 0 means muted or a TTS failure — there is no voice to match,
+   so it falls back to a comfortable reading cadence. */
+function useTypewriter(text, durationMs) {
+  const [shown, setShown] = useState("");
+  useEffect(() => {
+    if (!text) { setShown(""); return undefined; }
+    const total = durationMs > 0 ? durationMs : text.length * 38;
+    // Never slower than the voice: finishing a touch early reads as keeping up,
+    // finishing late reads as lagging.
+    const perChar = Math.max(8, (total * 0.94) / text.length);
+    let count = -1;
+    let raf = 0;
+    const t0 = performance.now();
+    const tick = (now) => {
+      const next = Math.min(text.length, Math.floor((now - t0) / perChar));
+      if (next !== count) { count = next; setShown(text.slice(0, next)); }
+      if (count < text.length) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [text, durationMs]);
+  return shown;
+}
+
+export function VoiceInterview({ profile, onComplete, onSkip, onBack }) {
   const [session, setSession] = useState(null);
   const [question, setQuestion] = useState("");
   const [why, setWhy] = useState("");
   const [index, setIndex] = useState(1);
   const [max, setMax] = useState(6);
   const [answer, setAnswer] = useState("");
+  const [audioMs, setAudioMs] = useState(0);
   const [thinking, setThinking] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [muted, setMuted] = useState(false);
@@ -163,7 +204,8 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
   // the audio is fetched FIRST, then caption + playback begin together (no lag).
   const presentQuestion = useCallback(async (data, langCode) => {
     stopAudio();
-    const apply = () => {
+    const apply = (ms = 0) => {
+      setAudioMs(ms);
       setQuestion(data.question); setWhy(data.why || "");
       setIndex(data.index); setMax(data.max);
       setPhase("live");
@@ -171,7 +213,18 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
     if (mutedRef.current) { apply(); return; }
     try {
       const audio = await fetchTTS(data.question, langCode || langRef.current);
-      apply();
+      /* Read the clip's true length so the typewriter can match it. The src is
+         a data: URI so metadata is usually there already; the listener covers
+         the case where it is not, and the 700ms cap means a browser that never
+         reports duration delays the caption by at most that, then falls back
+         to the reading cadence rather than hanging. */
+      const ms = await new Promise((res) => {
+        if (Number.isFinite(audio.duration) && audio.duration > 0) return res(audio.duration * 1000);
+        const settle = () => res(Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration * 1000 : 0);
+        audio.addEventListener("loadedmetadata", settle, { once: true });
+        setTimeout(() => res(0), 700);
+      });
+      apply(ms);
       if (mutedRef.current) return;
       audioRef.current = audio;
       audio.onended = () => setSpeaking(false);
@@ -234,7 +287,13 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
 
   // Step back to the previous question with the earlier answer prefilled for editing.
   const goBack = async () => {
-    if (thinking || index <= 1) return;
+    if (thinking) return;
+    /* KM-62 — at the first question there is no earlier answer to return to,
+       so Back leaves the interview and hands control to the previous PHASE.
+       It used to be inert here, which is what made the flow feel one-way:
+       the founder could revise any answer except the moment they had just
+       committed to being interviewed at all. */
+    if (index <= 1) { stopAudio(); onBack?.(); return; }
     stopAudio();
     setThinking(true);
     try {
@@ -253,6 +312,8 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
   const starting = phase === "starting";
   const orbState = recorder.recording ? "listening" : speaking ? "speaking" : (thinking || starting) ? "thinking" : "idle";
   const levels = useSynthLevels(orbState === "listening" ? "listening" : orbState === "speaking" ? "speaking" : "idle");
+  // Paced off the clip that is playing right now — see useTypewriter.
+  const typedQuestion = useTypewriter(question, audioMs);
 
   if (phase === "pick") {
     return <LanguagePick onPick={startInterview} onSkip={() => { stopAudio(); onSkip(null, langRef.current); }} />;
@@ -279,9 +340,6 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <div className="bg-kr-ink hidden h-10 w-28 shrink-0 overflow-hidden rounded-pill sm:block" aria-hidden="true">
-            <DexWave levels={levels} live={orbState !== "idle"} />
-          </div>
           <LangChip value={lang} onChange={pickLang} disabled={starting} />
           <button onClick={toggleMute} data-testid="interview-mute-toggle" title={muted ? "Unmute voice" : "Mute voice"}
             aria-label={muted ? "Unmute voice" : "Mute voice"}
@@ -313,9 +371,17 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
                   {speaking ? "Speaking · read along" : "Read or listen"}
                 </p>
               </div>
+              {/* aria-label carries the WHOLE question: a screen reader must
+                  not be fed a string that grows one character at a time. */}
               <h1 data-testid="interview-question"
+                  aria-label={question}
                   className={`font-display text-2xl leading-[1.06] sm:text-3xl lg:text-4xl ${speaking ? "text-foreground" : "text-foreground/85"}`}>
-                {question}
+                {typedQuestion || "\u00a0"}
+                {/* The cursor is only there while there is more to come, so a
+                    finished question does not sit blinking at the founder. */}
+                {typedQuestion.length < (question || "").length && (
+                  <span aria-hidden="true" className="ml-0.5 inline-block h-[0.85em] w-[2px] translate-y-[0.06em] animate-pulse bg-foreground/50 align-middle" />
+                )}
               </h1>
               {why && <p className="mt-3 text-xs text-muted-foreground">Why we ask — {why}</p>}
             </motion.div>
@@ -341,11 +407,51 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
             data-testid="interview-mic-button"
             onClick={recorder.recording ? recorder.stop : recorder.start}
             disabled={starting || thinking || recorder.transcribing}
-            className={`flex h-11 items-center gap-2 rounded-pill px-4 text-xs font-medium disabled:opacity-50 ${recorder.recording ? "kr-pressed text-[hsl(var(--kr-gold))]" : "kr-pop"}`}>
+            /* KM-62 — a REAL pressed state, not a faded one. Founder: "the
+               speak button's pressed state looks faded so it looks like it's
+               in a disabled state."
+
+               They were reading it correctly: `.signup-stage .kr-pressed`
+               fills at 20% white with a 1px inset shadow, which on this glass
+               is barely a dent — and it sat next to `disabled:opacity-50`,
+               so recording and disabled looked like the same thing. The
+               explicit inset shadow gives it the depth the app's other
+               neumorphic controls have, and the ink ground plus gold label
+               make it unmistakably ON rather than switched off. */
+            className={`flex h-11 shrink-0 items-center gap-2 rounded-pill px-4 text-xs font-medium disabled:opacity-50 ${
+              recorder.recording
+                ? "bg-kr-ink text-[hsl(var(--kr-gold))] shadow-[inset_0_2px_5px_hsl(230_30%_8%/.55),inset_0_-1px_0_hsl(0_0%_100%/.10),0_1px_0_hsl(0_0%_100%/.45)]"
+                : "kr-pop"
+            }`}>
             {recorder.transcribing ? <CircleNotch size={16} className="animate-spin" />
-              : recorder.recording ? <Stop size={16} weight="fill" /> : <Microphone size={16} weight="bold" />}
+              : recorder.recording ? <Stop size={16} weight="fill" />
+              /* Dex's mark, not a microphone: the FAB, the AI-priority control
+                 and the wordmark all use the sparkle, and this is Dex asking. */
+              : <Sparkle size={16} weight="fill" />}
             {recorder.transcribing ? "Sending…" : recorder.recording ? "Stop — sends answer" : "Speak"}
           </button>
+
+          {/* KM-62 — THE WAVE LIVES HERE NOW, between the two controls.
+              Founder: "relocate the animating element alone to the center of
+              the row between the speak button on one end and the answer button
+              on the other, stretch it to accommodate the remaining space with
+              no overlapping, and leave safe space around the two pills."
+
+              It was a 112px black pill up in the header. `flex-1 min-w-0` is
+              what makes it take exactly the space the two buttons do not — it
+              cannot overlap them because it is a sibling in the same flex row,
+              not an overlay, and the row's gap-3 is the safe space on both
+              sides. min-w-0 matters: without it a flex child refuses to shrink
+              below its content and would push the Answer button off the edge
+              on a narrow card.
+
+              The black fill is gone with it. That slab existed only to make
+              white ribbons legible; tone="ink" makes them dark instead, so the
+              wave now sits on the card's own glass — see DexWave. */}
+          <div className="mx-1 hidden h-10 min-w-0 flex-1 overflow-hidden sm:block" aria-hidden="true">
+            <DexWave levels={levels} live={orbState !== "idle"} tone="ink" />
+          </div>
+
           <button onClick={() => send()} disabled={!answer.trim() || thinking || starting} data-testid="interview-send-button"
             className="kr-pop flex h-11 items-center gap-2 rounded-pill bg-kr-ink px-6 text-xs font-medium text-white disabled:opacity-40">
             {thinking ? <CircleNotch size={16} className="animate-spin" /> : <PaperPlaneRight size={16} weight="bold" />}
@@ -358,9 +464,11 @@ export function VoiceInterview({ profile, onComplete, onSkip }) {
         <div className="flex items-center gap-3">
           <button
             onClick={goBack}
-            disabled={index <= 1 || thinking || starting}
+            /* No longer disabled at question 1 — there it steps out of the
+               interview instead of doing nothing. */
+            disabled={thinking || starting}
             data-testid="interview-back"
-            title="Go back to the previous question"
+            title={index <= 1 ? "Back to your world" : "Go back to the previous question"}
             className="kr-pop flex h-9 items-center gap-1 rounded-pill px-3.5 text-[11px] font-medium disabled:cursor-not-allowed disabled:opacity-30">
             <CaretLeft size={12} weight="bold" /> Back
           </button>

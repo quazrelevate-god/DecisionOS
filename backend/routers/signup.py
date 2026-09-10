@@ -423,6 +423,13 @@ async def interview_blueprint(inp: InterviewSessionInput, request: Request):
         result = await generate_blueprint(
             profile=s, transcript=s.get("qa") or [],
             refinement=(s.get("refinement") or ""),
+            # KM-61 — the draft to amend comes from the SESSION, not from a
+            # parameter. Adding one to this handler made FastAPI rebuild the
+            # request body as {inp, previous} and silently broke the direct
+            # /interview/blueprint call the reveal screen makes. Both halves
+            # already live on the session — refine writes `refinement` just
+            # before calling this — so nothing needs to be threaded through.
+            previous=(s.get("blueprint") or None),
             welcome_lang_name=(SUPPORTED_TTS_LANGS.get(lang, "the founder's language")
                                if lang != "en-IN" else None))
     except Exception as e:
@@ -434,7 +441,13 @@ async def interview_blueprint(inp: InterviewSessionInput, request: Request):
             {"name": (p.get("name") or "").strip(), "description": (p.get("description") or "").strip()}
             for p in (s.get("products") or []) if (p.get("name") or "").strip()
         ][:5]
-    await db.signup_sessions.update_one({"id": s["id"]}, {"$set": {"status": "blueprint_ready"}})
+    # KM-61 — KEEP THE DRAFT. A refinement is an edit to this exact object, and
+    # until now nothing remembered it, so "add a support team department" had to
+    # be answered by regenerating the company from the transcript. Storing it is
+    # what lets the refine path below say "return this, plus one change".
+    await db.signup_sessions.update_one(
+        {"id": s["id"]}, {"$set": {"status": "blueprint_ready", "blueprint": result}}
+    )
     return result
 
 
@@ -455,6 +468,7 @@ async def interview_refine(inp: InterviewRefineInput, request: Request):
     await db.signup_sessions.update_one(
         {"id": s["id"]}, {"$set": {"refinement": refinement}}
     )
+
     # Pass the same Request so the rate limiter charges once per user
     # action, not twice for the refine + inner blueprint chain.
     return await interview_blueprint(
@@ -500,33 +514,65 @@ async def signup_tts(inp: TTSInput, request: Request):
 
 @router.post("/stt")
 async def signup_stt(request: Request, file: UploadFile = File(...)):
+    """KM-61 — the signup interview now uses the SAME transcriber the app does.
+
+    THE BUG. This endpoint called Sarvam directly, once, with no fallback. When
+    Sarvam answered 400 the founder got a 503 and the interview stalled. From
+    Railway's deploy log, one evening, the same person alternating between
+    working and not:
+
+        signup STT failed: Client error '400 Bad Request'
+          for url 'https://api.sarvam.ai/speech-to-text'   -> 503
+        POST /api/signup/stt  200 OK
+        signup STT failed: Client error '400 Bad Request'  -> 503
+
+    Meanwhile services/transcription.py already held the resilient path the
+    rest of the product uses: Sarvam REST, then Sarvam batch for long clips,
+    then OpenAI, then Whisper. Dex's voice capture has gone through it all
+    along -- which is exactly why voice works inside the app and failed here.
+    Signup was the odd one out and there was never a reason for it to be.
+
+    One upstream having a bad minute now costs a retry inside the backend
+    instead of costing the founder their sentence.
+
+    The audio goes to a temp file because every STT library takes a path, and
+    it is removed in the finally: this endpoint still persists nothing.
+    """
     # FIX-004-A (RBAC-03): rate-limited + CAPTCHA-gated. STT is
-    # per-minute-billed on Sarvam so bot abuse is directly financial.
+    # per-minute-billed so bot abuse is directly financial.
     await _guard_signup_endpoint(request, "stt")
-    key = get_ai_key("sarvam")
-    if not key:
-        raise HTTPException(status_code=503, detail="Voice is not configured")
     content = await file.read()
     if not content:
         raise HTTPException(status_code=400, detail="Empty audio")
     if len(content) > 8 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="Recording too long — keep answers under 30 seconds")
-    model = os.environ.get("SARVAM_STT_MODEL", "saaras:v3").strip() or "saaras:v3"
+        raise HTTPException(status_code=400, detail="Recording too long -- keep answers under 30 seconds")
+
+    import tempfile
+    from services.transcription import transcribe_audio_full
+    ext = (file.filename or "answer.webm").rsplit(".", 1)[-1][:8] or "webm"
+    fd, tmp_path = tempfile.mkstemp(suffix=f".{ext}", prefix="signup-stt-")
+    os.close(fd)
     try:
-        async with httpx.AsyncClient(timeout=60) as client:
-            r = await client.post(
-                "https://api.sarvam.ai/speech-to-text",
-                headers={"api-subscription-key": key},
-                files={"file": (file.filename or "answer.webm", content, file.content_type or "audio/webm")},
-                data={"model": model, "mode": "translate", "language_code": "unknown"},
-            )
-        r.raise_for_status()
-        body = r.json() or {}
-        detected = body.get("language_code") or body.get("detected_language_code") or ""
-        return {
-            "text": (body.get("transcript") or "").strip(),
-            "language_code": _norm_lang(detected) if detected else "",
-        }
+        from services.uploads import awrite_bytes
+        await awrite_bytes(tmp_path, content)
+        out = await transcribe_audio_full(tmp_path, "auto")
+        text = (out.get("transcript") or "").strip()
+        detected = out.get("language_code") or ""
+        if not text:
+            # Every engine ran and none heard words. That is an answer, not an
+            # outage -- return it as one so the UI says "didn't catch that"
+            # rather than "service unavailable".
+            return {"text": "", "language_code": ""}
+        return {"text": text, "language_code": _norm_lang(detected) if detected else ""}
     except Exception as e:
-        logger.error(f"signup STT failed: {e}")
-        raise HTTPException(status_code=503, detail="Couldn't transcribe — try again or type your answer")
+        # Reached only when the entire chain is down. The type is logged as
+        # well as the message: "400 Bad Request" on its own never said which
+        # provider or why, which is what made the original failure so hard to
+        # place from the logs.
+        logger.error(f"signup STT failed after all engines: {type(e).__name__}: {e}")
+        raise HTTPException(status_code=503, detail="Couldn't transcribe -- try again or type your answer")
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except Exception:
+            pass

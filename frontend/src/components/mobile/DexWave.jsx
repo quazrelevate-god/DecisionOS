@@ -168,7 +168,11 @@ export function DexWave({ state, level, levels, levelsRef, live = false, classNa
     }
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
-  }, []);
+    // levelsRef is the only closed-over value: a stable useRef from the
+    // capture hook, or undefined for callers that drive the wave by prop. It
+    // is listed so the dependency lint stays clean, and re-listing it is
+    // harmless even if it ever changed — the loop would simply re-schedule.
+  }, [levelsRef]);
 
   levelRef.current = derived;
 

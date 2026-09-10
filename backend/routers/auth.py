@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from core import (
     db, get_current_user, hash_password, verify_password, create_token,
     set_auth_cookie, clear_auth_cookie, set_usage_tenant, new_id, now_iso,
-    login_response,
+    login_response, logger,
 )
 
 
@@ -204,12 +204,50 @@ async def register(inp: RegisterInput, request: Request, response: Response):
     # default-fallback is RECORDED on the tenant doc as `ai_setup_status`.
     # Frontend can then show "AI setup incomplete — click to regenerate."
     # The `/api/tenant/ai-setup/retry` endpoint uses the same wrappers.
-    lexicon, lex_status = await ai_setup_svc.ai_generate_lexicon_with_status(
-        inp.industry, inp.company_size, clean_roles, inp.description or "")
-    om, om_status = await ai_setup_svc.ai_generate_operating_model_with_status(
-        inp.industry, inp.company_size, clean_roles, inp.description or "")
-    fc, fc_status = await ai_setup_svc.ai_generate_finance_categories_with_status(
-        inp.industry, inp.company_size, clean_roles, inp.description or "")
+    # KM-61 — THE THREE AI CALLS RUN CONCURRENTLY, and that is a bug fix.
+    #
+    # They were sequential, so registration cost lexicon + operating model +
+    # finance categories end to end. Measured on Railway's HTTP log, one real
+    # signup from an iPhone:
+    #
+    #   POST /api/auth/register  499  totalDuration 60000
+    #     "client has closed the request before the server could send a response"
+    #   POST /api/auth/register  400  totalDuration 26     <- the retry
+    #
+    # 499 at exactly 60,000ms is the frontend's proxy giving up (server.js sets
+    # proxyTimeout: 60000). The backend never knew — it carried on, finished,
+    # and committed the tenant and the user. So the founder saw "Couldn't
+    # create your workspace", pressed again, got "Email already registered",
+    # and could then log in with credentials the UI had told them failed.
+    #
+    # These three calls share no data and none reads another's output, so
+    # nothing but habit made them serial. Gathering them makes the wall clock
+    # the SLOWEST of the three instead of their sum.
+    #
+    # return_exceptions=True on purpose: each wrapper already reports a status
+    # the tenant doc records, and one provider hiccup must not throw away a
+    # registration that is otherwise complete. A failed one degrades to its
+    # documented fallback exactly as it would have alone.
+    import asyncio as _asyncio
+    _lex_r, _om_r, _fc_r = await _asyncio.gather(
+        ai_setup_svc.ai_generate_lexicon_with_status(
+            inp.industry, inp.company_size, clean_roles, inp.description or ""),
+        ai_setup_svc.ai_generate_operating_model_with_status(
+            inp.industry, inp.company_size, clean_roles, inp.description or ""),
+        ai_setup_svc.ai_generate_finance_categories_with_status(
+            inp.industry, inp.company_size, clean_roles, inp.description or ""),
+        return_exceptions=True,
+    )
+
+    def _unpack(res, what):
+        if isinstance(res, Exception):
+            logger.error(f"register: {what} generation failed: {res}")
+            return None, "failed"
+        return res
+
+    lexicon, lex_status = _unpack(_lex_r, "lexicon")
+    om, om_status = _unpack(_om_r, "operating_model")
+    fc, fc_status = _unpack(_fc_r, "finance_categories")
     ai_setup_status = {
         "lexicon": lex_status,
         "operating_model": om_status,

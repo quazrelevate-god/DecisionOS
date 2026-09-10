@@ -63,8 +63,29 @@ if (!TARGET) {
       target: TARGET,
       changeOrigin: true,   // rewrites Host so Railway's edge routes to the backend
       xfwd: true,           // X-Forwarded-* so the backend sees the real client
-      proxyTimeout: 60000,
-      timeout: 60000,
+      /* KM-61 — 180s, not 60s, and the 60 was actively breaking signup.
+         Railway's HTTP log for a real iPhone registration:
+
+           POST /api/auth/register  499  totalDuration 60000
+             "client has closed the request before the server could send
+              a response"
+
+         499 at exactly the timeout is THIS proxy hanging up. The backend
+         never learned the client had gone: it finished and committed the
+         tenant and the user, so the founder was told "Couldn't create your
+         workspace" for a workspace that existed, and the retry answered
+         "Email already registered". It also explains why the separately
+         hosted decisionos.biz worked — that frontend talks to the backend
+         directly and never met this ceiling.
+
+         register is the one endpoint that legitimately runs long: it
+         provisions a tenant and generates a lexicon, an operating model and
+         finance categories. KM-61 makes those three concurrent, which should
+         bring it comfortably under a minute; this ceiling is the belt to that
+         fix's braces, because a slow model day must not cost a signup.
+         Everything else on /api answers in milliseconds. */
+      proxyTimeout: 180000,
+      timeout: 180000,
       /* The Origin header is deliberately NOT rewritten. The backend's CORS
          allow-list and its CSRF origin check both expect the frontend's
          origin, and forwarding it unchanged keeps those working exactly as

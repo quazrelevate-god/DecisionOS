@@ -90,7 +90,7 @@ Color _hsla(double h, double s, double l, double a) =>
 /// Verbatim per-page palettes from `index.css`. Alphas match .62/.38/.38/.22.
 final Map<BloomTint, _SkyPalette> _palettes = {
   BloomTint.amber: _SkyPalette(
-    base: AppColors.background, // warm cream
+    base: AppColors.deskCream, // warm cream — desk only
     core: _hsla(38, 97, 58, 0.62),
     deep: _hsla(22, 95, 52, 0.38),
     lift: _hsla(45, 95, 68, 0.38),
@@ -151,7 +151,7 @@ final Map<BloomTint, _SkyPalette> _palettes = {
   ),
   // Legacy aliases → nearest new palette entries.
   BloomTint.orange: _SkyPalette(
-    base: AppColors.background,
+    base: AppColors.deskCream,
     core: _hsla(38, 97, 58, 0.62),
     deep: _hsla(22, 95, 52, 0.38),
     lift: _hsla(45, 95, 68, 0.38),
@@ -179,6 +179,17 @@ final Map<BloomTint, _SkyPalette> _palettes = {
     wash: _hsla(258, 30, 77, 0.22),
   ),
 };
+
+/// A segment-track colour tuned to the given bloom tint — the palette's
+/// `base` darkened by only ~2 pts of lightness. Nearly identical to the
+/// page ground so no edge line separates the track from the page;
+/// depth comes from a single faint inset shadow, not the colour delta.
+Color trackColorFor(BloomTint tint) {
+  final p = _palettes[tint] ?? _palettes[BloomTint.amber]!;
+  final base = HSLColor.fromColor(p.base);
+  final tinted = base.withLightness((base.lightness - 0.02).clamp(0.0, 1.0));
+  return tinted.toColor();
+}
 
 class AppBloom extends StatelessWidget {
   final BloomTint tint;

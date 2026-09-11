@@ -242,17 +242,23 @@ class _BloomBackground extends StatelessWidget {
   const _BloomBackground();
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: RadialGradient(
-          center: const Alignment(0, -0.15),
-          radius: 0.95,
-          colors: [
-            AppColors.brand.withValues(alpha: 0.32),
-            AppColors.brand.withValues(alpha: 0.15),
-            AppColors.background.withValues(alpha: 0),
-          ],
-          stops: const [0.0, 0.38, 1.0],
+    // Warm cream paper first, then the orange radial bloom on top —
+    // scaffold is neutral grey app-wide, so the desk paints its own
+    // ground rather than borrowing the scaffold's.
+    return Container(
+      color: AppColors.deskCream,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: RadialGradient(
+            center: const Alignment(0, -0.15),
+            radius: 0.95,
+            colors: [
+              AppColors.brand.withValues(alpha: 0.32),
+              AppColors.brand.withValues(alpha: 0.15),
+              AppColors.deskCream.withValues(alpha: 0),
+            ],
+            stops: const [0.0, 0.38, 1.0],
+          ),
         ),
       ),
     );

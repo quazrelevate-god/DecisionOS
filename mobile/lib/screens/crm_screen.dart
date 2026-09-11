@@ -333,7 +333,8 @@ class _ScopeSegment extends StatelessWidget {
       count: 2,
       onSelect: (i) => onChanged(i == 0),
       labels: const ['Buyers', 'Suppliers'],
-      height: 44,
+      height: 48,
+      trackColor: trackColorFor(BloomTint.steel),
     );
   }
 
@@ -417,18 +418,12 @@ class _ContactCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: AppColors.surface,
             borderRadius: radius,
-            // Neumorphic pair — stronger than the shared KrPop so the raise
-            // reads clearly against the cream page.
+            // KM-51 — soft-UI single drop.
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.10),
-                offset: const Offset(5, 6),
-                blurRadius: 12,
-              ),
-              BoxShadow(
-                color: Colors.white.withValues(alpha: 0.95),
-                offset: const Offset(-4, -4),
-                blurRadius: 10,
+                color: Colors.black.withValues(alpha: 0.06),
+                offset: const Offset(0, 2),
+                blurRadius: 8,
               ),
             ],
           ),

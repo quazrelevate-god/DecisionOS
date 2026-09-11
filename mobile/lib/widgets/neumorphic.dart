@@ -1,18 +1,21 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
-/// Ported from `.kr-pop` / `.kr-pressed` in frontend/src/index.css.
+/// KM-51 · SOFT-UI, NOT NEUMORPHISM.
 ///
-/// `.kr-pop`     — raised neumorphic surface: dark shadow bottom-right +
-///                 white highlight top-left, so the material reads as sitting
-///                 ON TOP of the page.
-/// `.kr-pressed` — sunken neumorphic surface: dark shadow inset from top-left
-///                 + white highlight inset from bottom-right, so the material
-///                 reads as pressed INTO the page.
+/// The dual dark-drop + white-highlight `BoxShadow` pair the founder
+/// originally locked in for `.kr-pop` / `.kr-pressed` reads too heavy /
+/// puffy against the app's bloom skies. The rework:
 ///
-/// Both share the same cream ground and the same corner radius; only the
-/// shadow list swaps, which is the depth grammar the founder locked in for
-/// the KR redesign.
+///   [KrPop]     raised surface — a single soft rgba(0, 0, 0, 0.06)
+///               drop at Offset(0, 2), blurRadius 8. That's the only
+///               shadow. No white highlight, no border, no keyline.
+///
+///   [KrPressed] "pressed" surface — flat fill, one step darker than
+///               the page ground (`AppColors.surfaceMuted` = #EEF0F0),
+///               NO BoxShadow. The recessed feel comes from being
+///               placed inside a lighter parent, not from a fake
+///               inset shadow (Flutter has no true CSS `inset`).
 
 class KrPop extends StatelessWidget {
   final Widget child;
@@ -37,21 +40,11 @@ class KrPop extends StatelessWidget {
       decoration: BoxDecoration(
         color: color ?? AppColors.surface,
         borderRadius: borderRadius,
-        boxShadow: const [
-          // Dark drop from bottom-right — bumped to give buttons real depth
-          // against the tinted cool blooms. Was 7%/blur6, now 18%/blur10.
+        boxShadow: [
           BoxShadow(
-            color: Color(0x2E000000), // black @ 18%
-            offset: Offset(5, 6),
-            blurRadius: 10,
-            spreadRadius: -1,
-          ),
-          // White highlight from top-left — the light source.
-          BoxShadow(
-            color: Color(0xFFFFFFFF), // white @ 100%
-            offset: Offset(-4, -4),
-            blurRadius: 10,
-            spreadRadius: -1,
+            color: Colors.black.withValues(alpha: 0.06),
+            offset: const Offset(0, 2),
+            blurRadius: 8,
           ),
         ],
       ),
@@ -93,23 +86,8 @@ class KrPressed extends StatelessWidget {
       decoration: BoxDecoration(
         color: color ?? AppColors.surfaceMuted,
         borderRadius: borderRadius,
-        boxShadow: const [
-          // Dark inset from top-left — pit interior shadow.
-          BoxShadow(
-            color: Color(0x40000000), // black @ 25%
-            offset: Offset(3, 3),
-            blurRadius: 6,
-            spreadRadius: -1,
-            blurStyle: BlurStyle.inner,
-          ),
-          // White inset from bottom-right — reverses the pair to lift the well.
-          BoxShadow(
-            color: Color(0xFFFFFFFF), // white @ 100%
-            offset: Offset(-3, -3),
-            blurRadius: 6,
-            blurStyle: BlurStyle.inner,
-          ),
-        ],
+        // No BoxShadow. Flat. The recessed feel comes from the fill
+        // being one step darker than the surrounding ground.
       ),
       child: child,
     );

@@ -4,14 +4,19 @@ import 'package:google_fonts/google_fonts.dart';
 /// DecisionOS mobile design tokens. Warm cream background with black-and-orange
 /// accents. Screens use white cards; hero sections use near-black cards.
 class AppColors {
-  // Surfaces
-  static const background = Color(0xFFFBF3EA); // warm cream
-  static const backgroundTop = Color(0xFFFDF6EF);
+  // Surfaces — neutral gray ground shared by every screen that doesn't
+  // paint its own bloom base. The desk's warm cream is not the app-wide
+  // ground; it belongs to the amber bloom palette only (see app_bloom.dart
+  // where BloomTint.amber sets its own #FBF3EA base). Keeping the scaffold
+  // and surfaceMuted neutral stops the desk's warm ink from leaking into
+  // KrPressed, chips, and empty states on every other screen.
+  static const background = Color(0xFFEEF0F0); // neutral gray
+  static const backgroundTop = Color(0xFFF3F5F5);
   static const surface = Color(0xFFFFFFFF);
-  // Neutral pale grey — sits sensibly on BOTH the warm cream Desk ground
-  // AND the cool steel/violet/moss/coolGrey blooms on every other screen.
-  // Warm cream `#F3EBE1` looked stale on the cool-tinted rooms.
-  static const surfaceMuted = Color(0xFFECEDF1);
+  static const surfaceMuted = Color(0xFFEEF0F0);
+  // The desk's own warm cream, used inside the amber bloom palette so the
+  // orange bloom sky reads against paper the way the design intends.
+  static const deskCream = Color(0xFFFBF3EA);
   static const surfaceDark = Color(0xFF0F0F10); // decision desk, team execution
   static const surfaceDarkAlt = Color(0xFF1A1A1B);
 

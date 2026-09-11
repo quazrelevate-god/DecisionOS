@@ -385,7 +385,8 @@ class _TabTrack extends StatelessWidget {
       count: 3,
       onSelect: (i) => onSelect(_keys[i]),
       labels: const ['My Leave', 'Approvals', 'Settings'],
-      height: 40,
+      height: 48,
+      trackColor: trackColorFor(BloomTint.steelBlue),
     );
   }
 }
@@ -868,7 +869,10 @@ class _DecisionButton extends StatelessWidget {
         ),
       ),
     );
-    return primary ? Expanded(child: child) : child;
+    // Callsite is responsible for wrapping in Expanded when it wants the
+    // primary button to stretch — wrapping here caused a
+    // competing-ParentDataWidget error inside a Row.
+    return child;
   }
 }
 

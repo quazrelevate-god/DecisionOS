@@ -57,17 +57,11 @@ class _MoreSheet extends StatelessWidget {
                 width: 1,
               ),
               boxShadow: [
-                // Neumorphic drop — dark bottom-right + white top-left, giving
-                // the sheet the raised feel while the fill stays glassy.
+                // KM-51 — soft-UI single drop.
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.10),
-                  offset: const Offset(6, 6),
-                  blurRadius: 20,
-                ),
-                BoxShadow(
-                  color: Colors.white.withValues(alpha: 0.7),
-                  offset: const Offset(-4, -4),
-                  blurRadius: 14,
+                  color: Colors.black.withValues(alpha: 0.08),
+                  offset: const Offset(0, 4),
+                  blurRadius: 16,
                 ),
               ],
             ),

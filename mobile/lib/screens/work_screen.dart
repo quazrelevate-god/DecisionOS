@@ -349,7 +349,8 @@ class _JoinedSegment extends StatelessWidget {
       count: 2,
       onSelect: (i) => i == 0 ? onMine() : onAll(),
       labels: const ['My Tasks', 'All Tasks'],
-      height: 32,
+      height: 40,
+      trackColor: trackColorFor(BloomTint.steelBlue),
     );
   }
 }

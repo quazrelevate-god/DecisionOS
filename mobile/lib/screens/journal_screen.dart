@@ -588,14 +588,9 @@ class _NeuTile extends StatelessWidget {
         borderRadius: radius,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.10),
-            offset: const Offset(5, 6),
-            blurRadius: 12,
-          ),
-          BoxShadow(
-            color: Colors.white.withValues(alpha: 0.95),
-            offset: const Offset(-4, -4),
-            blurRadius: 10,
+            color: Colors.black.withValues(alpha: 0.06),
+            offset: const Offset(0, 2),
+            blurRadius: 8,
           ),
         ],
       ),

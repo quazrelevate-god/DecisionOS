@@ -221,36 +221,51 @@ class _TabRail extends StatelessWidget {
     final activeIndex = _tabs.indexWhere((t) => t.$1 == active);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-      child: SlidingSegment(
+      child: RaisedPillSegment(
         active: activeIndex < 0 ? 0 : activeIndex,
         count: _tabs.length,
         onSelect: (i) => onSelect(_tabs[i].$1),
-        height: 48,
-        builder: (context, i, isActive) {
+        // KM-56 — the reference HTML's three materials: recessed track,
+        // ONE raised content-sized pill, flat inactive slots. The palette
+        // is derived from the page's own smoke ground, which already sits
+        // within a shade of the reference's #e9e6e0.
+        palette: NeuPalette.from(trackColorFor(BloomTint.smoke)),
+        // Reference is 7 x 9 inside the slot and 5 all round the track.
+        // Two departures, both forced by six tabs sharing a phone's width
+        // where the reference had five and rendered no icons at all:
+        //
+        //   * horizontal comes down to 5, to buy back width.
+        //   * the extra HEIGHT is spent on the track, not the pill. The
+        //     pill is content-sized, so padding it vertically turns the
+        //     short labels (Assets, Inbox) into circles; fattening the
+        //     track instead keeps every pill a capsule. Track padding
+        //     stays narrow horizontally so height costs no width.
+        trackPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 12),
+        slotPadding: const EdgeInsets.symmetric(horizontal: 5, vertical: 10),
+        slotBuilder: (context, i, isActive) {
           final t = _tabs[i];
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(t.$3, size: 14, color: AppColors.textPrimary),
-                const SizedBox(height: 2),
-                AnimatedDefaultTextStyle(
-                  duration: const Duration(milliseconds: 220),
-                  curve: Curves.easeOutCubic,
-                  style: AppText.small().copyWith(
-                    fontSize: 10,
-                    fontWeight:
-                        isActive ? FontWeight.w700 : FontWeight.w500,
-                    color: AppColors.textPrimary
-                        .withValues(alpha: isActive ? 1 : 0.7),
-                  ),
-                  child: Text(t.$2,
-                      maxLines: 1, overflow: TextOverflow.ellipsis),
+          // Reference ink: active #1F2430, inactive #9AA0AE, applied to
+          // icon and label alike.
+          final fg = isActive
+              ? const Color(0xFF1F2430)
+              : const Color(0xFF9AA0AE);
+          return Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(t.$3, size: 10, color: fg),
+              const SizedBox(width: 2),
+              AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOutCubic,
+                style: AppText.small().copyWith(
+                  fontSize: 9,
+                  fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+                  color: fg,
+                  height: 1.25,
                 ),
-              ],
-            ),
+                child: Text(t.$2, maxLines: 1, softWrap: false),
+              ),
+            ],
           );
         },
       ),

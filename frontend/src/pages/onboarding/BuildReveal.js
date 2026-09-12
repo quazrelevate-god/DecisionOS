@@ -145,10 +145,16 @@ function CountTile({ c, index, landed, settled, still, glow }) {
     </>
   );
 
+  /* KM-66 follow-up: heavier glassmorphism, not solid white. The founder
+     asked to keep the frost feel and just increase blur + opacity, so the
+     card is 60% white (was ~38% under kr-frost-min) with a 40px backdrop
+     blur (was 30px). Enough contrast that the label reads clean, thin
+     enough that the photograph still ghosts through the pane. */
+  const CARD = "bg-white/60 backdrop-blur-3xl border border-white/55 shadow-[0_8px_28px_-10px_hsl(230_18%_15%/0.35)]";
   if (!landed) {
     // Holds the cell at exactly the tile's height. aria-hidden because the
     // number it contains is about to be announced by the real one.
-    return <div aria-hidden="true" className="kr-frost-min invisible rounded-2xl p-4 text-center">{body}</div>;
+    return <div aria-hidden="true" className={`${CARD} invisible rounded-2xl p-4 text-center`}>{body}</div>;
   }
   return (
     <motion.div
@@ -160,7 +166,7 @@ function CountTile({ c, index, landed, settled, still, glow }) {
          cannot finish after the tile has already arrived. */
       transition={still ? { duration: 0 } : { duration: CHOREO.travel, ease: [0.16, 1, 0.3, 1] }}
       style={{ willChange: settled ? "auto" : "filter, transform" }}
-      className={`kr-frost-min rounded-2xl p-4 text-center ${glow ? "kr-new-glow" : ""}`}>
+      className={`${CARD} rounded-2xl p-4 text-center ${glow ? "kr-new-glow" : ""}`}>
       {body}
     </motion.div>
   );
@@ -173,8 +179,11 @@ function PillSection({ label, items, tint, testid, startAt, stagger, still, newK
   const strs = (items || []).map(itemText).filter(Boolean).slice(0, 10);
   if (strs.length === 0) return null;
   let firstNewSeen = false;
+  /* KM-66 follow-up: Departments / Recurring tasks panels return to
+     glassmorphism, heavier than the original kr-well__pane. Same values
+     as the count tiles so the whole page reads as one material. */
   return (
-    <div className="kr-well__pane rounded-[1.75rem] p-5 sm:p-6">
+    <div className="bg-white/60 backdrop-blur-3xl border border-white/55 shadow-[0_10px_32px_-12px_hsl(230_18%_15%/0.35)] rounded-[1.75rem] p-5 sm:p-6">
       <Rise still={still} tag="p"
         initial={{ opacity: 0, filter: "blur(6px)" }}
         animate={{ opacity: 1, filter: "blur(0px)" }}
@@ -533,11 +542,14 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
             className="space-y-5 lg:space-y-7">
 
             {/* ── BAND 1 · the header ────────────────────────────────────
-                In a pane, and that is the KM-42 contrast finding rather than
-                decoration: the eyebrow is 11px muted type and the ground here
-                is a photograph that goes dark. Every muted line on this screen
-                sits on glass for the same reason. */}
-            <div className="kr-well__pane rounded-[1.75rem] p-6 sm:p-9">
+                KM-66 follow-up: the wrapping .kr-well__pane came off. The
+                heading and welcome line now print directly onto the page,
+                on their own. This is deliberate: the pane was doing double
+                duty as a frame AND as a contrast floor, and framing the
+                first thing a founder reads on their own OS made it feel
+                like an announcement inside a memo. The typography is
+                strong enough to hold the page without a card behind it. */}
+            <div className="px-2 pt-2 sm:px-4 sm:pt-4">
               <Rise still={still} tag="p"
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                 transition={{ delay: CHOREO.eyebrow, duration: 0.24 }}
@@ -589,7 +601,10 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
                       animate={{ opacity: 1, scale: 1.35, filter: "blur(0px)" }}
                       transition={{ delay: CHOREO.tilesAt + i * CHOREO.tileGap, duration: CHOREO.bloom }}
                       style={{ willChange: "filter, transform", gridArea: "1 / 1" }}
-                      className="kr-frost-min w-[9.5rem] rounded-2xl p-4 text-center">
+                      /* KM-66 follow-up: bloom matches the settled tile —
+                         same heavy-frost values so the FLIP looks like the
+                         same object moving, not two different cards. */
+                      className="bg-white/60 backdrop-blur-3xl border border-white/55 shadow-[0_8px_28px_-10px_hsl(230_18%_15%/0.35)] w-[9.5rem] rounded-2xl p-4 text-center">
                       <p className="text-3xl font-semibold tabular-nums">
                         <CountUp value={c.n} duration={CHOREO.hold * 1000}
                           delay={(CHOREO.tilesAt + i * CHOREO.tileGap + CHOREO.bloom) * 1000} />
@@ -636,8 +651,11 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
               transition={{ delay: CHOREO.CAP, duration: CHOREO.tail }}
               className="space-y-5">
 
-              {/* Refine panel — voice or type */}
-              <div className="kr-frost-min rounded-2xl p-4 sm:p-5" data-testid="build-refine-panel">
+              {/* Refine panel — voice or type. KM-66 follow-up: opaque
+                  white to match the pill sections above; the old
+                  kr-frost-min made the "Missing something? Tell Dex."
+                  eyebrow ghost against the photograph. */}
+              <div className="bg-white/95 backdrop-blur-xl border border-white/60 shadow-[0_2px_14px_-6px_hsl(230_18%_15%/0.22)] rounded-2xl p-4 sm:p-5" data-testid="build-refine-panel">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <p className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
                     <PencilSimple size={14} weight="bold" /> Missing something? Tell Dex.

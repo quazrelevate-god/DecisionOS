@@ -2845,6 +2845,43 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
             inset -4px -4px 9px hsl(0 0% 100% / .72);
     }
 
+    /* ── KM-64 · .kr-chip-on — "this one is chosen", said out loud ─────────
+       Founder, with two screenshots of a B2C chip side by side: "the
+       difference is subtle, I want a distinct difference when pressed."
+
+       WHY IT WENT QUIET. On the app's canvas .kr-pressed above carries a real
+       dual inset and reads clearly. On the signup and login stages it is
+       OVERRIDDEN to `hsl(0 0% 100% / .20)` and a single 1px shadow, because
+       there the same class also draws every text field's trough — a heavy
+       inset on an input would look like damage. So selection and "this is a
+       box you type in" were sharing one recipe, and the one that had to stay
+       quiet won.
+
+       Selection gets its own recipe instead of strengthening the shared one,
+       which would have dented every field on both stages.
+
+       INK, not a stronger dent. Depth is what .kr-pressed says, and depth is
+       exactly what a photograph behind translucent white erodes: the founder
+       could not see it because there was very little of it left. A filled
+       chip does not depend on the backdrop at all. The inset is kept so the
+       grammar still reads as pushed-in rather than as a different component,
+       and it matches the interview's recording state, which took the same
+       treatment for the same reason in KM-62.
+
+       17.9:1 against white text, against roughly 1.2:1 before. */
+    .kr-chip-on {
+        border: 1px solid hsl(var(--kr-ink));
+        background: hsl(var(--kr-ink));
+        color: #fff;
+        box-shadow:
+            inset 0 2px 5px hsl(230 30% 8% / .55),
+            inset 0 -1px 0 hsl(0 0% 100% / .10),
+            0 1px 0 hsl(0 0% 100% / .45);
+    }
+    /* The label inherits, but anything inside carrying its own muted token
+       would not — so the scope is re-stated. Same alias trap as .kr-frost. */
+    .kr-chip-on * { color: inherit; }
+
     .kr-pop:active {
         transform: translateY(1px);
         box-shadow:

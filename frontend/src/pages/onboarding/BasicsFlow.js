@@ -118,7 +118,8 @@ export function BasicsFlow({ form, setForm, onDone }) {
                   /* No transition utility here: .kr-pop and .kr-pressed swap
                      outset for inset shadows, which do not interpolate, so a
                      declared transition would stall the swap. */
-                  className={`flex h-12 items-center rounded-pill px-6 text-base font-semibold ${value === s ? "kr-pressed" : "kr-pop"}`}>
+                  aria-pressed={value === s}
+                  className={`flex h-12 items-center rounded-pill px-6 text-base font-semibold ${value === s ? "kr-chip-on" : "kr-pop"}`}>
                   {s}
                 </motion.button>
               ))}

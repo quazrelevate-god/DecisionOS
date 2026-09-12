@@ -187,8 +187,13 @@ export function WebsiteIntel({ companyName, onDone, onBack }) {
                   <label className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">You sell to</label>
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {MODELS.map((m) => (
+                      /* KM-64 — .kr-chip-on, not .kr-pressed: on this stage the
+                         pressed recipe is reduced to a 1px whisper so it can
+                         double as the input trough, which left the chosen chip
+                         all but indistinguishable. See index.css. */
                       <button key={m} data-testid={`signup-model-${m}`} onClick={() => setModel(m)}
-                        className={`flex h-9 items-center rounded-pill px-4 text-xs font-medium ${model === m ? "kr-pressed" : "kr-pop"}`}>
+                        aria-pressed={model === m}
+                        className={`flex h-9 items-center rounded-pill px-4 text-xs font-medium ${model === m ? "kr-chip-on" : "kr-pop"}`}>
                         {m}
                       </button>
                     ))}
@@ -271,7 +276,8 @@ export function WebsiteIntel({ companyName, onDone, onBack }) {
                 <div className="mt-1.5 flex flex-wrap gap-2">
                   {MODELS.map((m) => (
                     <button key={m} data-testid={`signup-manual-model-${m}`} onClick={() => setModel(m)}
-                      className={`flex h-10 items-center rounded-pill px-4 text-xs font-medium ${model === m ? "kr-pressed" : "kr-pop"}`}>
+                      aria-pressed={model === m}
+                      className={`flex h-10 items-center rounded-pill px-4 text-xs font-medium ${model === m ? "kr-chip-on" : "kr-pop"}`}>
                       {m}
                     </button>
                   ))}

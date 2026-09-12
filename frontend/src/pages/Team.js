@@ -5,8 +5,12 @@ import api, { formatApiError } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { PERMISSIONS, defaultPermsForRole, hasPerm, userPerms } from "../lib/perms";
 import { toast } from "sonner";
-import { UserPlus, PencilSimple, ShieldCheck, Check, LinkSimple, Copy, WhatsappLogo, Eye, MagnifyingGlass, User, EnvelopeSimple, Phone, X } from "@phosphor-icons/react";
+import { UserPlus, PencilSimple, ShieldCheck, Check, LinkSimple, Copy, WhatsappLogo, Eye, MagnifyingGlass, User, EnvelopeSimple, Phone, X, AirplaneTakeoff } from "@phosphor-icons/react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../components/ui/dialog";
+// ASK-6 (2026-09-12): Leave register + personal history land here.
+// LeaveCard is reused as the shared card primitive; the register uses
+// the same /leaves endpoints that pages/Leave.js consumed.
+import { LeaveCard } from "./Leave";
 
 const inp = "w-full nm-field px-3 py-2 text-sm font-mono";
 
@@ -217,6 +221,76 @@ export default function TeamPage() {
   );
 }
 
+/* ASK-6 (2026-09-12): who is out today, at the top of Team. Backed by
+   the existing GET /api/leaves/on-leave endpoint. Empty state simply
+   hides the whole strip -- an empty "Currently out" chrome on a small
+   team is worse than not mentioning it. */
+function CurrentlyOutStrip() {
+  const outQ = useQuery({
+    queryKey: ["leaves", "on-leave-today"],
+    queryFn: () => api.get("/leaves/on-leave").then((r) => r.data),
+    // Refresh every 15 minutes -- the answer changes on a slow cadence.
+    refetchInterval: 15 * 60 * 1000,
+  });
+  const people = outQ.data || [];
+  if (!people.length) return null;
+  return (
+    <section
+      className="mb-6 flex flex-wrap items-center gap-3 rounded-cardlg border border-nm-edge/40 bg-orange-50/50 px-4 py-3"
+      data-testid="team-currently-out"
+    >
+      <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        <AirplaneTakeoff size={14} weight="bold" aria-hidden="true" className="text-kr-accent" />
+        Currently out
+      </span>
+      <ul className="flex flex-wrap items-center gap-1.5 text-sm">
+        {people.map((p, i) => (
+          <li key={p.user_id || p.id || i} className="flex items-center gap-1.5">
+            <span className="font-medium">{p.user_name || p.name}</span>
+            {p.until_date && (
+              <span className="text-xs text-muted-foreground">
+                (back {new Date(p.until_date).toLocaleString(undefined, { day: "numeric", month: "short" })})
+              </span>
+            )}
+            {i < people.length - 1 && <span className="text-muted-foreground/60">·</span>}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/* ASK-6: per-member leave history. Rendered inside MemberProfileDialog.
+   Uses GET /leaves?scope=all and filters client-side by user_id, since
+   the scope=all endpoint is already gated to team_manage users and the
+   list is small. Renders the person's approved + pending leaves as a
+   compact list; empty state is a single quiet line. */
+function MemberLeaveHistory({ userId }) {
+  const q = useQuery({
+    queryKey: ["leaves", "all"],
+    queryFn: () => api.get("/leaves?scope=all").then((r) => r.data),
+  });
+  const qc = useQueryClient();
+  const refresh = () => qc.invalidateQueries({ queryKey: ["leaves"] });
+  const mine = (q.data || []).filter((l) => l.user_id === userId);
+  return (
+    <section className="border-t border-nm-edge/40 px-6 py-5" data-testid={`member-leave-history-${userId}`}>
+      <p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        <AirplaneTakeoff size={13} weight="bold" aria-hidden="true" /> Leave history
+      </p>
+      {mine.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No leave on record.</p>
+      ) : (
+        <div className="grid gap-3 md:grid-cols-2">
+          {mine.slice(0, 6).map((lv) => (
+            <LeaveCard key={lv.id} lv={lv} canAct={false} onRefresh={refresh} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function TeamPanel({ readOnly = false } = {}) {
   const { user, tenant } = useAuth();
   const qc = useQueryClient();
@@ -340,6 +414,10 @@ export function TeamPanel({ readOnly = false } = {}) {
           )}
         </div>
       </div>
+
+      {/* ASK-6: Currently out strip lands here, above the roster.
+          Absent when nobody is out today. */}
+      <CurrentlyOutStrip />
 
       {grouped.length === 0 && (
         <div className="kr-glass-well p-10 text-center" data-testid="team-empty">
@@ -607,6 +685,12 @@ function MemberProfileDialog({
             </div>
           )}
         </div>
+
+        {/* ASK-6: leave history sits above the actions footer, gated on
+            canManageTeam so ordinary members don't see coworkers' data.
+            The person themselves (isMe) always sees their own history --
+            it's their own record. */}
+        {(canManageTeam || isMe) && <MemberLeaveHistory userId={u.id} />}
 
         {/* Actions. Its own footer on the sunken ground so it reads as the
             bottom of the card rather than a fifth information block. */}

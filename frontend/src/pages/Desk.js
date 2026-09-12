@@ -25,11 +25,16 @@
 // Deep-link contract preserved: /inbox?decision=<id> forces the
 // needs_decision pill and auto-opens the DecisionDialog (E2-66/U7-02.2).
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useQueries, useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import api from "../lib/api";
 import { toast } from "sonner";
 import { useAuth } from "../context/AuthContext";
+import { hasPerm } from "../lib/perms";
+// ASK-7 (2026-09-12): Leave Approvals move here from pages/Leave.js.
+// LeaveCard is imported as a shared primitive; the queue itself is a
+// small section rendered below the Decision Bento.
+import { LeaveCard } from "./Leave";
 import { inrCompact } from "../lib/format";
 import { selfScore, scoreBand } from "../lib/karmaScore";
 import { isDemoTenant, demoDelta } from "./_operatingScoreDemo";
@@ -89,6 +94,68 @@ const CTA_ICON = { review: Scales, respond: ChatCircleText, chase: Fire, nudge: 
 const SEG = "flex h-11 items-center justify-center border-[0.5px] px-5 text-sm";
 const SEG_ON = "relative z-10 border-kr-ink font-medium text-foreground";
 const SEG_OFF = "border-kr-ink/55 text-foreground/65";
+
+/* ASK-7 (2026-09-12): the Leave Approvals queue used to live on
+   /leave -- its own page and, embedded, inside /my-work?view=leave.
+   Founder's call: every OTHER approval in the product is handled on
+   the Desk, so a leave approvals queue sitting inside a page titled
+   "My Work" was the product disagreeing with itself.
+
+   Rendered as its own section BELOW the Decision Bento (not as a
+   fifth chip inside it): the bento's four chips are backend-fed by
+   GET /api/desk?chip=<key> and its section grid is a fixed
+   composition. Adding a fifth chip would need a matching backend
+   change; leave-approvals sit on their own /leaves?scope=approvals
+   query already, so treating them as an "adjacent to" section rather
+   than an "inside" section is the safer surgical shape. Section
+   header echoes the Decision Bento's grammar. */
+function LeaveApprovals() {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  const canApprove = user?.role === "owner" || hasPerm(user, "leave_approve");
+  const [searchParams] = useSearchParams();
+  const highlightId = searchParams.get("leave");
+  const apprQ = useQuery({
+    queryKey: ["leaves", "approvals"],
+    queryFn: () => api.get("/leaves?scope=approvals").then((r) => r.data),
+    enabled: !!canApprove,
+  });
+  if (!canApprove) return null;
+  const approvals = apprQ.data || [];
+  const pending = approvals.filter((l) => l.status === "pending" || l.status === "info_requested");
+  const refresh = () => qc.invalidateQueries({ queryKey: ["leaves"] });
+  // KM-33 style header treatment: matches the "Decision desk" title.
+  return (
+    <section
+      className="mx-auto w-full max-w-6xl px-4 pb-8 pt-6 lg:pb-14 lg:pt-8"
+      data-testid="desk-leave-approvals"
+    >
+      <div className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <h2 className="text-h2">Leave approvals</h2>
+        <p className="text-sm text-muted-foreground">
+          {pending.length === 0 ? "Nothing waiting on you" : `${pending.length} waiting on you`}
+        </p>
+      </div>
+      {pending.length === 0 ? (
+        <div className="rounded-cardlg border border-nm-edge/40 bg-nm/40 p-6 text-sm text-muted-foreground">
+          Leave requests routed to you will appear here.
+        </div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {pending.map((lv) => (
+            <LeaveCard
+              key={lv.id}
+              lv={lv}
+              canAct
+              onRefresh={refresh}
+              highlight={lv.id === highlightId}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
 
 function ScopePills({ scope, setScope, variant = "pill" }) {
   if (variant === "joined") {
@@ -665,6 +732,11 @@ export default function Desk() {
           doneIds={doneIds}
         />
       </DarkBand>
+
+      {/* ASK-7: Leave Approvals land below the Decision Bento as a peer
+          section. Gated internally on `canApprove` -- non-approvers see
+          nothing at all. */}
+      <LeaveApprovals />
 
       {/* KM-28 — the decision modal used to live here. Review is /decisions/:id
           now, so the dialog, its state and its import are all gone rather than

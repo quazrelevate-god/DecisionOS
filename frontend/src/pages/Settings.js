@@ -8,6 +8,12 @@ import { PageHeader } from "../components/common";
 import { CompanyDetails } from "../components/CompanyDetails";
 import { BusinessVocabulary } from "../components/BusinessVocabulary";
 import { OperatingModelEditor } from "../components/OperatingModelEditor";
+// ASK-8 (2026-09-12): Leave Approvers by Department moves from
+// pages/Leave.js gear icon to Settings › Operations, alongside pipelines
+// and approval gates. useQuery hook + tenant/users data needed to drive
+// the config.
+import { ApproverConfig } from "./Leave";
+import { useQuery } from "@tanstack/react-query";
 import { FinanceCategoriesEditor } from "../components/FinanceCategoriesEditor";
 import { ProfileForm, ChangePasswordForm } from "../components/ProfileDialog";
 import { LanguageSwitcher } from "../components/LanguageSwitcher";
@@ -147,6 +153,27 @@ function MoneyAndApprovalsCard() {
 //     Owner ask this pass: "check which are things missing out and
 //     which things can be optimized" -- a promised control that
 //     doesn't exist is worse than not mentioning it.
+/* ASK-8 (2026-09-12): Settings-side wrapper for the leave-approver
+   configuration. The underlying ApproverConfig ships from pages/Leave
+   .js -- this wrapper's job is to source roleOptions + members and to
+   gate the whole card on team_manage. Non-managers see nothing at all;
+   people who can manage the team see the config on the Operations
+   tab. */
+function LeaveApproversCard() {
+  const { user, tenant } = useAuth();
+  const canManage = hasPerm(user, "team_manage");
+  const usersQ = useQuery({
+    queryKey: ["users"],
+    queryFn: () => api.get("/users").then((r) => r.data),
+    enabled: canManage,
+  });
+  if (!canManage) return null;
+  const roleOptions = [{ key: "owner", label: "Owner" }, ...(tenant?.roles || [])];
+  return (
+    <ApproverConfig roleOptions={roleOptions} members={usersQ.data || []} />
+  );
+}
+
 const TABS = [
   { key: "business", label: "Business", icon: Buildings,
     desc: "Company profile, products, roles, and the words your team uses." },
@@ -318,7 +345,15 @@ export default function Settings() {
         )}
 
         {tab === "operations" && (
-          <OperatingModelEditor />
+          <>
+            <OperatingModelEditor />
+            {/* ASK-8: Leave Approvers by Department, moved here from the
+                gear on the retired Leave page. Sits alongside pipelines
+                and approval gates -- the Operations tab's own
+                description already covers "approval gates". Gated on
+                team_manage: non-managers see nothing at all. */}
+            <LeaveApproversCard />
+          </>
         )}
 
         {tab === "money" && (

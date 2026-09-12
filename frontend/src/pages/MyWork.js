@@ -16,13 +16,16 @@ import { NewTaskDialog } from "./Tasks";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "../components/ui/dropdown-menu";
 import Workflows from "./Workflows";
-import Leave from "./Leave";
+// ASK-6 (2026-09-12): Leave no longer embedded here. Register lives on
+// Team, approvals live on Desk, config lives on Settings > Operations.
+// Import retired. If a follow-up ever needs the Request Leave dialog
+// on this page, it can be pulled from pages/Leave.js as a named export.
 import {
   CheckCircle, Camera, Microphone, Stop, ChatCircleText,
   Sparkle, Plus, Trash, Robot, PencilSimple, ListChecks, CaretDown, CaretUp,
   ArrowBendUpRight, WarningCircle, ChatText, ArrowRight, Kanban, ListChecks as ListIcon,
   Paperclip, UserCircle, ShieldCheck, Tag, ClockCounterClockwise,
-  ArrowClockwise, XCircle, LockKey, X, AirplaneTakeoff, MagnifyingGlassPlus, Eye,
+  ArrowClockwise, XCircle, LockKey, X, MagnifyingGlassPlus, Eye,
   File, FileArrowUp, Lightbulb, Info,
   FlowArrow,  // WE-11 stage chip
   SlidersHorizontal,  // KR-14.6 · mobile MyWork filter icon (reference)
@@ -2145,8 +2148,12 @@ export default function MyWork() {
   const focusTaskId = params.get("task");
   const rawView = params.get("view");
   // "board" is no longer a top-level view — it now lives as a sub-tab inside Workflows.
+  // ASK-6: rawView === "leave" also collapses to "mywork" (the sub-view was
+  // retired; Leave lives on /team now). Deep links to ?view=leave land the
+  // reader on their task list rather than a 404; the App.js redirect for the
+  // standalone /leave route sends them onward to /team.
   const initialView = rawView === "board" ? "workflows"
-    : (rawView === "workflows" ? "workflows" : rawView === "leave" ? "leave" : "mywork");
+    : (rawView === "workflows" ? "workflows" : "mywork");
   const [view, setView] = useState(focusTaskId ? "mywork" : initialView);
   // KR-11.2 — which tile is expanded. Lifted out of TaskCard so the grid can
   // give it the whole row; see TaskBento. Seeded from ?task= so a deep link
@@ -2344,7 +2351,8 @@ export default function MyWork() {
   const MCIRCLE = "grid h-9 w-9 shrink-0 place-items-center rounded-full text-foreground";
   const mobileView = (() => {
     if (view === "workflows") return "workflows";
-    if (view === "leave") return "leave";
+    // ASK-6: leave sub-view retired; the branch that returned "leave" here
+    // was mapping to a case that no longer renders.
     if (isOwner && scope === "all") return "all";
     return "mine";
   })();
@@ -2484,9 +2492,7 @@ export default function MyWork() {
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
-            {/* Leave keeps a spacer so the row's right edge does not jump as
-                you move between views. */}
-            {mobileView === "leave" && <span className="h-9 w-9 shrink-0" aria-hidden="true" />}
+            {/* ASK-6: leave spacer retired -- the view branch is gone. */}
           </div>
         </div>
 
@@ -2565,14 +2571,10 @@ export default function MyWork() {
               The toggle pill below is small; the page header needs to
               say what you are looking at above the fold. */}
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            {view === "workflows" ? t("mywork.view_workflows") :
-             view === "leave"     ? t("mywork.view_leave") :
-             t("mywork.eyebrow")}
+            {view === "workflows" ? t("mywork.view_workflows") : t("mywork.eyebrow")}
           </p>
           <h1 className="mt-1.5 font-display text-3xl sm:text-4xl">
-            {view === "workflows" ? t("mywork.view_workflows") :
-             view === "leave"     ? t("mywork.view_leave") :
-             t("mywork.title")}
+            {view === "workflows" ? t("mywork.view_workflows") : t("mywork.title")}
           </h1>
         </div>
         <div className="flex w-full flex-col gap-2 lg:w-auto lg:flex-row lg:items-center" data-testid="mywork-controls">
@@ -2670,11 +2672,10 @@ export default function MyWork() {
                 <FlowArrow size={16} weight="bold" aria-hidden="true" /> {t("mywork.view_workflows")}
               </button>
             )}
-            <button onClick={() => setView("leave")} data-testid="work-view-leave"
-              aria-pressed={view === "leave"}
-              className={`${SECTION_BTN} ${view === "leave" ? "kr-pressed font-semibold" : "kr-pop text-foreground/75"}`}>
-              <AirplaneTakeoff size={15} weight="regular" aria-hidden="true" /> {t("mywork.view_leave")}
-            </button>
+            {/* ASK-6 (2026-09-12): Leave sub-view removed from My Work.
+                Register lives on /team, approvals on /inbox (Decision
+                Desk), config on /settings > Operations. Import Leave
+                references retired above. */}
           </div>
         </div>
       </header>
@@ -2699,8 +2700,6 @@ export default function MyWork() {
         <div data-testid="workflows-hub">
           <Workflows embedded />
         </div>
-      ) : view === "leave" ? (
-        <Leave embedded />
       ) : (
       <div data-testid="mywork-list">
         <div>

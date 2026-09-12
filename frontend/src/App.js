@@ -11,7 +11,9 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import DecisionReview from "./pages/DecisionReview";
 import Workflows from "./pages/Workflows";
-import Leave from "./pages/Leave";
+// ASK-6 (2026-09-12): Leave default export no longer routed. The named
+// exports (LeaveCard, ApproverConfig, dialogs) are consumed directly by
+// Desk / Team / Settings; nothing renders /leave any more.
 // E2-73 (2026-08-15): legacy Inbox.js retired. Sprint 2 shipped the
 // new Decision Desk at /inbox; the old Inbox page had no users left.
 // /inbox-legacy now redirects to /inbox so any lingering bookmarks work.
@@ -184,8 +186,11 @@ function App() {
             <Route path="/brief" element={<Navigate to="/inbox?scope=morning" replace />} />
             <Route path="/journal" element={<Protected ownerOnly><Journal /></Protected>} />
             <Route path="/my-work" element={<Protected><MyWork /></Protected>} />
-            {/* KM-31 — a real page, reached from the More menu. */}
-            <Route path="/leave" element={<Protected><Leave /></Protected>} />
+            {/* ASK-6 (2026-09-12): /leave retired. Register moves to Team,
+                approvals move to the Decision Desk, per-department config
+                moves to Settings > Operations. Deep links land readers on
+                /team, which is now the home for the leave register. */}
+            <Route path="/leave" element={<Navigate to="/team" replace />} />
             <Route path="/settings" element={<Protected><Settings /></Protected>} />
             <Route path="/review" element={<Navigate to="/ingest" replace />} />
             <Route path="/notifications" element={<Protected><Notifications /></Protected>} />

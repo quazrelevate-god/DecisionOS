@@ -171,7 +171,10 @@ function AbsenceDialog({ onDone }) {
    Icons that left with this: Sparkle, ArrowsClockwise, CalendarPlus,
    Eye, CircleNotch. All were private to ImpactDialog. */
 
-function LeaveCard({ lv, canAct, onRefresh, highlight }) {
+// ASK-6/-7 (2026-09-12): named export so Desk and Team can render individual
+// leave requests without duplicating the card markup. The default export
+// (the Leave page) is scheduled for retirement once the register move lands.
+export function LeaveCard({ lv, canAct, onRefresh, highlight }) {
   const [action, setAction] = useState(null); // reject | info
   const [note, setNote] = useState("");
   // ASK-4 (2026-09-12): impactOpen state removed with the dialog itself.
@@ -251,7 +254,12 @@ function LeaveCard({ lv, canAct, onRefresh, highlight }) {
   );
 }
 
-function ApproverConfig({ roleOptions, members }) {
+// ASK-8 (2026-09-12): exported so Settings › Operations can render it.
+// The founder's decision: routing config belongs with approval gates in
+// Settings, not on a work surface. Suggested landing per ASK-8 is
+// Settings > Operations ("Pipelines, stages, task templates and approval
+// gates" already covers this shape).
+export function ApproverConfig({ roleOptions, members }) {
   const qc = useQueryClient();
   const { tenant, refreshTenant } = useAuth();
   const [map, setMap] = useState(() => ({ ...(tenant?.leave_approvers || {}) }));

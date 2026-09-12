@@ -95,7 +95,12 @@ function buildTiles({ user, t, counts }) {
       size: "wide",
       blurb: "Pipelines, stage by stage",
     },
-    { key: "leave", to: "/leave", label: t("nav.leave", "Leave"), icon: AirplaneTakeoff, size: "small" },
+    // ASK-6 (2026-09-12): the standalone Leave tile lands on /team now.
+    // Register lives on Team, approvals on the Decision Desk, per-
+    // department config on Settings > Operations. The tile itself stays
+    // because "Leave" is still the reader's mental hook for the concept
+    // -- it just navigates to the new home.
+    { key: "leave", to: "/team", label: t("nav.leave", "Leave"), icon: AirplaneTakeoff, size: "small" },
     // §5.7 listed "Send Daily Digest" as a Small tile, and §8 asked for it to sit
     // nowhere near Sign out. E2-63 (2026-08-15) then deleted
     // POST /brief/send-digest outright — "the Desk itself is the brief now, so

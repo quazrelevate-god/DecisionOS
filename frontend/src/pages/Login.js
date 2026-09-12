@@ -1,17 +1,28 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../hooks/useTheme";
 import api, { formatApiError } from "../lib/api";
 import { KarmaLogo } from "../components/karma/Logo";
-import { DeviceMobile, Sun, MoonStars } from "@phosphor-icons/react";
+import { DeviceMobile, Sun, MoonStars, ArrowRight, ArrowLeft } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
+// KM-66 — the demo takes the whole card, not a corner of it. The default
+// state is the sign-in form; a single professional invitation ("Try
+// DecisionOS on a live workspace") sits at the foot, quietly pulsing to
+// draw a first-time visitor's eye without begging for it. Clicking it swaps
+// the entire card — form, tabs, links all fade out together — and fades in
+// a role picker. Cards carry the role name and a one-line descriptor;
+// icons were removed because the descriptors already earn the row on their
+// own and the icons were making a set of four read as a menu. The choices
+// themselves still call demoLogin — this is a UI revamp, not a routing
+// change.
 const DEMO = [
-  { role: "Owner", email: "owner@sharma.com" },
-  { role: "Sales", email: "sales@sharma.com" },
-  { role: "Production", email: "production@sharma.com" },
-  { role: "Finance", email: "finance@sharma.com" },
+  { role: "Owner",      email: "owner@sharma.com",      hint: "Full workspace view" },
+  { role: "Sales",      email: "sales@sharma.com",      hint: "Customer pipeline" },
+  { role: "Production", email: "production@sharma.com", hint: "Operations floor" },
+  { role: "Finance",    email: "finance@sharma.com",    hint: "Books & cashflow" },
 ];
 
 // MPWA-11 (§8): "56px fields and buttons" on mobile. min-h-touch-lg is 56px
@@ -103,6 +114,11 @@ export default function Login() {
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // KM-66 — the demo section starts collapsed to a single invitation. It
+  // opens on the founder's own click; there is no way to hit it accidentally
+  // by tabbing through, and the four seats never appear before they are asked
+  // for. Once opened, a small back arrow returns to the compact button.
+  const [demoOpen, setDemoOpen] = useState(false);
 
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
@@ -243,6 +259,20 @@ export default function Login() {
       <main className="flex flex-1 items-center justify-center px-4 py-8 lg:px-8 lg:py-12">
         <div className="kr-well w-full max-w-md" data-testid="login-card">
           <div className="kr-well__pane rounded-[1.75rem] p-6 sm:p-8">
+          {/* KM-66 — the whole card swaps between two panes: SIGN IN and
+              LIVE DEMO. Not a section-inside-a-card, a full-card swap.
+              AnimatePresence with mode="wait" so the exit finishes before
+              the enter begins — the two panes never overlap during the
+              transition. */}
+          <AnimatePresence mode="wait" initial={false}>
+          {!demoOpen ? (
+          <motion.div
+            key="signin-pane"
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+          >
           <h2 className="font-display text-3xl mb-1">Sign in</h2>
           <p className="text-sm text-muted-foreground mb-6">Access your company brain.</p>
 
@@ -324,15 +354,95 @@ export default function Login() {
           )}
 
           <Link to="/signup" data-testid="toggle-auth-mode" className="mt-4 inline-block text-sm font-semibold text-foreground/80 underline-offset-2 hover:text-foreground hover:underline">Need a workspace? Register →</Link>
+
+          {/* The demo invitation. A white pill — no idle animation, no
+              pulse, no bounce. It just sits there. On hover it lifts
+              -3px and scales to 1.05, and that is the whole story. The
+              resting shadow gives it baseline depth. */}
           <div className="mt-8 border-t border-white/45 pt-6">
-            <p className="label-mono text-muted-foreground mb-3">Try the Sharma demo</p>
-            {/* MPWA-11 (§8): demo-role buttons WRAP rather than clip. */}
-            <div className="flex flex-wrap gap-touch-gap">
-              {DEMO.map((d) => (
-                <button key={d.email} onClick={() => demoLogin(d.email)} data-testid={`demo-login-${d.role.toLowerCase()}`} className="kr-pop min-h-touch lg:min-h-0 flex-1 min-w-[7rem] rounded-pill px-3 py-2 text-sm lg:text-xs font-semibold tracking-wider lg:uppercase">{d.role}</button>
+            <motion.button
+              type="button"
+              onClick={() => { setError(""); setDemoOpen(true); }}
+              data-testid="demo-open"
+              className="relative z-10 flex h-12 w-full items-center justify-between rounded-pill bg-white px-5 text-sm font-medium text-foreground shadow-[0_1px_2px_hsl(230_18%_15%/0.08),0_4px_10px_-6px_hsl(230_18%_15%/0.12)] disabled:opacity-50"
+              disabled={busy}
+              whileHover={{ scale: 1.05, y: -3 }}
+              whileTap={{ scale: 1.02 }}
+            >
+              <span>Try DecisionOS on a live workspace</span>
+              <ArrowRight size={16} weight="bold" className="text-foreground/70" />
+            </motion.button>
+          </div>
+          </motion.div>
+          ) : (
+          /* LIVE DEMO pane — the entire sign-in card gives way to this. Four
+             role cards in a 2×2 grid, headed by a small mono eyebrow
+             naming the workspace and a plain heading naming the action.
+             Back link returns to the sign-in pane; clicking any card
+             signs in as that role via the existing demoLogin. */
+          <motion.div
+            key="demo-pane"
+            data-testid="demo-seats"
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.24, ease: "easeOut" }}
+          >
+            <div className="mb-6 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="font-display text-3xl">Sign in as any role</h2>
+                <p className="text-sm text-muted-foreground mt-1.5">See the workspace the way that role sees it.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setError(""); setDemoOpen(false); }}
+                data-testid="demo-close"
+                className="kr-pop inline-flex shrink-0 items-center gap-1 rounded-pill px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-foreground/70 hover:text-foreground"
+                aria-label="Back to sign in"
+              >
+                <ArrowLeft size={12} weight="bold" /> Back
+              </button>
+            </div>
+
+            {/* 2×2 grid at every breakpoint — four roles read as a set,
+                not a wrapping row of chips. Icons intentionally omitted:
+                the descriptor line already earns the row on its own, and
+                four icons in a row of four boxes made the set look like
+                an app tray. min-h-touch keeps the tap target comfortable
+                on a phone. Stagger delays give the cards a laid-out feel
+                rather than a slab-drop.
+
+                Cards share the CTA's hover grammar — scale 1.05, -3px
+                lift, border transitions from transparent to black over
+                300ms. `hover:z-10` puts the hovered card above its
+                neighbours so the grow doesn't get clipped by siblings;
+                border-2 border-transparent at rest keeps the layout
+                from shifting 2px on hover. */}
+            <div className="grid grid-cols-2 gap-touch-gap" role="group" aria-label="Choose a role to sign in as">
+              {DEMO.map((d, i) => (
+                <motion.button
+                  key={d.email}
+                  type="button"
+                  onClick={() => demoLogin(d.email)}
+                  disabled={busy}
+                  data-testid={`demo-login-${d.role.toLowerCase()}`}
+                  className="relative z-0 flex min-h-touch flex-col items-start gap-1.5 rounded-cardlg border-2 border-transparent bg-white px-4 py-3.5 text-left shadow-[0_1px_2px_hsl(230_18%_15%/0.08),0_4px_10px_-6px_hsl(230_18%_15%/0.12)] transition-[border-color,box-shadow] duration-300 ease-out hover:z-10 hover:border-black hover:shadow-[0_8px_22px_-8px_hsl(230_18%_15%/0.35)] disabled:opacity-50"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.22, ease: "easeOut", delay: 0.04 + i * 0.05 }}
+                  whileHover={{ scale: 1.05, y: -3 }}
+                  whileTap={{ scale: 1.02 }}
+                >
+                  <span className="text-sm font-semibold">{d.role}</span>
+                  <span className="label-mono text-muted-foreground">{d.hint}</span>
+                </motion.button>
               ))}
             </div>
-          </div>
+
+            {error && <p data-testid="auth-error" className="mt-4 text-sm text-danger-600 font-semibold">{error}</p>}
+          </motion.div>
+          )}
+          </AnimatePresence>
           </div>
         </div>
       </main>

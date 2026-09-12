@@ -156,7 +156,16 @@ function OverrideReasonDialog({ open, onOpenChange, wfTitle, blockedReason, targ
   useEffect(() => { if (!open) setReason(""); }, [open]);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="rounded-cardlg border border-nm-edge/40" data-testid="wf-override-dialog">
+      {/* ASK-1 (2026-09-12): surface + button grammar redesigned.
+          Before, DialogContent was rounded-cardlg with an nm-edge/40
+          hairline -- the retired neumorphic material the rest of the
+          redesign moved off. Now on the same white-frost surface the
+          BuildReveal panels use: 95% white ground, backdrop-blur, soft
+          shadow. */}
+      <DialogContent
+        className="rounded-2xl border border-white/60 bg-white/95 shadow-[0_10px_32px_-12px_hsl(230_18%_15%/0.35)] backdrop-blur-xl"
+        data-testid="wf-override-dialog"
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 font-display text-xl">
             <WarningCircle size={18} weight="bold" aria-hidden="true" className="text-kr-accent" />
@@ -171,18 +180,30 @@ function OverrideReasonDialog({ open, onOpenChange, wfTitle, blockedReason, targ
         </DialogHeader>
         <div className="space-y-2">
           <label className="text-xs text-muted-foreground">Reason for override</label>
-          <textarea data-testid="wf-override-reason" className={`${FIELD} font-mono`} rows={3}
+          {/* ASK-1: font-mono removed. The user is typing prose ("Bill is
+              delayed but the customer confirmed by phone"), which read
+              as code in mono. Same FIELD styling every other textarea
+              on the page uses. */}
+          <textarea data-testid="wf-override-reason" className={FIELD} rows={3}
             placeholder="e.g. Bill is delayed but the customer confirmed by phone, moving on"
             value={reason} onChange={(e) => setReason(e.target.value)} />
         </div>
+        {/* ASK-1: Override + Cancel used to carry near-equal weight -- one
+            was a raised ink pill, the other a neumorphic tile. Founder's
+            ask: Override should read as the consequential action. Now
+            Override wears the destructive treatment (red pill, same
+            grammar Radix AlertDialogAction uses on Delete Card in ASK-2),
+            and Cancel recedes to a ghost link that stays reachable
+            without competing for the eye. */}
         <DialogFooter>
-          <button data-testid="wf-override-cancel" onClick={() => onOpenChange(false)} className="nm-btn px-4 py-2.5 text-sm font-medium">
+          <button data-testid="wf-override-cancel" onClick={() => onOpenChange(false)}
+            className="inline-flex items-center rounded-pill px-4 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
             Cancel
           </button>
           <button data-testid="wf-override-confirm"
             onClick={() => { if (reason.trim()) onConfirm(reason.trim()); }}
             disabled={!reason.trim()}
-            className="kr-lift rounded-pill bg-kr-ink px-4 py-2.5 text-sm font-medium text-white transition-all disabled:opacity-50">
+            className="kr-lift rounded-pill bg-danger-600 px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-danger-600/90 disabled:opacity-50">
             Override
           </button>
         </DialogFooter>

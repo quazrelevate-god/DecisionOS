@@ -992,6 +992,28 @@ function BulkActionBar({ selectedIds, tasks = [], busy, onClear, onComplete, ope
  */
 function TaskCard({ hidePrio = false, hideStatus = false, t, onChange, members = [], roleOptions = [], scores, showAssignee = false, highlight = false, selected = false, onToggleSelect, open, onToggleOpen, tier }) {
   const { user } = useAuth();
+  // MW-01 fix: the queryClient is used to write PATCH responses straight
+  // into the cache before onChange() invalidates. The old flow was
+  // PATCH -> onChange (invalidate) -> refetch, and the refetch raced the
+  // server's read-after-write consistency window and returned the PRE-
+  // change value, which overwrote the UI. Writing the response into the
+  // cache first means the card shows the new status immediately; the
+  // subsequent invalidate + refetch just confirms it.
+  const qc = useQueryClient();
+  const applyPatched = (patched) => {
+    if (!patched?.id) return;
+    // The tasks list query is keyed by `mine` (boolean). We update both
+    // possible cache entries because a user can flip between "my tasks"
+    // and "all tasks" without a refetch in between, and both should hold
+    // the fresh row when they land back.
+    for (const mineFlag of [true, false]) {
+      qc.setQueryData(["tasks", mineFlag], (rows) => {
+        if (!Array.isArray(rows)) return rows;
+        return rows.map((r) => (r.id === patched.id ? { ...r, ...patched } : r));
+      });
+    }
+    qc.setQueryData(["task", patched.id], (prev) => ({ ...(prev || {}), ...patched }));
+  };
   const [uploading, setUploading] = useState(false);
   const [recording, setRecording] = useState(false);
   const [lightbox, setLightbox] = useState(null);
@@ -1124,27 +1146,34 @@ function TaskCard({ hidePrio = false, hideStatus = false, t, onChange, members =
       return toast.error("This task requires proof — add a photo, voice note, or file before completing.");
     }
     try {
-      await api.patch(`/tasks/${t.id}`, { status: "done" });
+      // MW-01 fix: consume the PATCH response and write it into the
+      // cache before onChange() invalidates. Same pattern in every
+      // status/progress mutation below.
+      const { data } = await api.patch(`/tasks/${t.id}`, { status: "done" });
+      applyPatched(data);
       toast.success("Task completed — reopen from the card if needed.");
       onChange();
     } catch (e) { toast.error(e.response?.data?.detail || "Could not complete task"); }
   };
 
   const reopen = async () => {
-    await api.patch(`/tasks/${t.id}`, { status: "in_progress", progress: 0 });
+    const { data } = await api.patch(`/tasks/${t.id}`, { status: "in_progress", progress: 0 });
+    applyPatched(data);   // MW-01 fix
     toast.success("Task reopened — back in your work");
     onChange();
   };
 
   const setStatus = async (status) => {
     try {
-      await api.patch(`/tasks/${t.id}`, { status });
+      const { data } = await api.patch(`/tasks/${t.id}`, { status });
+      applyPatched(data);   // MW-01 fix
       toast.success(`Status: ${STATUS_LABEL[status] || status}`);
       onChange();
     } catch (e) { toast.error(e.response?.data?.detail || "Could not update status"); }
   };
   const setProgress = async (progress) => {
-    await api.patch(`/tasks/${t.id}`, { progress: Number(progress) });
+    const { data } = await api.patch(`/tasks/${t.id}`, { progress: Number(progress) });
+    applyPatched(data);   // MW-01 fix
     onChange();
   };
 

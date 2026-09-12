@@ -343,6 +343,33 @@ FINDINGS = [
         found="2026-09-12",
     ),
     dict(
+        id="TM-05", section="Team", screen="Member profile - ACCESS block",
+        viewport="Mobile + Desktop", persona="All", severity="Medium", status="Open",
+        area="Information disclosure",
+        tested="Signed in as each of the four roles in turn and opened ANOTHER person's "
+               "member card, to see how much of their access is readable.",
+        expected="A person's permission set is visible to those who administer access, "
+                 "not to every colleague.",
+        actual="Every role can read every other member's complete permission matrix. "
+               "Production and Finance -- who hold neither team_manage nor people -- can "
+               "open Priya Nair's card and see '6 permissions', then inside: '6 of 14 "
+               "areas', the granted chips, and the full denial list naming every area "
+               "she cannot reach. Only the Edit access BUTTON is gated to the owner; "
+               "viewing is not gated at all.",
+        evidence="owner / sales / production / finance all returned ACCESS block=True, "
+                 "areaCount=True, denialList=True on a colleague's profile; only "
+                 "editAccess differed (owner True, the rest False).",
+        cause="canManageTeam gates the edit control, but the ACCESS section and the card "
+              "count render unconditionally.",
+        fix="Gate the whole ACCESS section, not just its button. This is the same change "
+            "the founder asked for in ASK-13 and ASK-15, so treat them as one piece of "
+            "work: hide access on the roster, and show the section only to people who "
+            "hold the permission that governs it.",
+        code="pages/Team.js:411 + :441 (card count), :580-606 (ACCESS block, "
+             "granted-perms and the denial list)",
+        found="2026-09-12",
+    ),
+    dict(
         id="TM-02", section="Team", screen="Owner section grid",
         viewport="Desktop", persona="All", severity="Nit", status="Open",
         area="Visual / layout",
@@ -737,6 +764,14 @@ COVERAGE = [
      "No application errors and no failing API calls", "Stability", "PASS",
      "Only the pre-login 401 on /auth/me", ""),
 
+    ("T-223", "Team", "Member profile - ACCESS", "Desktop 1440x900",
+     "Sales / Production / Finance",
+     "A colleague's permission set is not readable by people who do not administer it",
+     "Permissions", "FAIL",
+     "All four roles can read another member's full matrix: count, granted chips "
+     "and the complete 'No access to' denial list. Only the Edit button is gated.",
+     "TM-05"),
+
     # --- personas ---
     ("T-070", "My Work", "Page load", "Desktop 1440x900", "Owner",
      "Owner sees all tasks, can create, and gets the All Tasks scope",
@@ -1035,6 +1070,69 @@ ASKS = [
         code="pages/MyWork.js:111-166 (UpdateForm + its ACTIONS), :1740-1780 (attach "
              "row), :195/:207 (current entry point)",
         dep="ASK-9", status="To do",
+    ),
+    dict(
+        id="ASK-13", section="Team", item="Stop showing access on the Team roster",
+        type="Change request", prio="High",
+        what="Take the access read-out off the Team surface. It appears in three places: "
+             "the 'N permissions' line on every card, the 'n of 14 areas' count in the "
+             "profile dialog, and the full 'No access to ...' denial list beneath it.",
+        why="Founder direction, and the audit found it is also an exposure. Verified "
+            "across all four logins: every role can open any colleague's card and read "
+            "their complete permission matrix, including everything they are denied. "
+            "Only the Edit button is gated; the display is not. See TM-05.",
+        code="pages/Team.js:411 + :441 (card), :580-606 (dialog ACCESS block)",
+        dep="TM-05", status="To do",
+    ),
+    dict(
+        id="ASK-14", section="Team", item="Redesign the Add team member dialog",
+        type="Change request", prio="Medium",
+        what="Rework the Add member form. It is one long scroll of eight controls with no "
+             "grouping, ending in a fourteen-item permission checklist, and the submit "
+             "button sits below the fold. Group it into who they are, how they sign in, "
+             "where they sit, and what they can reach.",
+        why="Founder review. Two concrete problems back it up. First, the first four "
+            "fields (Name, Email, Temp password, Mobile number) use placeholders INSTEAD "
+            "of labels, so the moment you type the field name disappears -- while Role "
+            "and Reporting Manager directly below them do have real labels, so the form "
+            "is inconsistent with itself. Second, access is chosen from a flat list of "
+            "fourteen checkboxes at the bottom of a scrolling dialog, which is the "
+            "densest part of the form and the least explained.",
+        code="pages/Team.js:118-196 (member form); placeholder-only inputs at "
+             ":120, :121, :129, :132; real labels at :137 and :143",
+        dep="", status="To do",
+    ),
+    dict(
+        id="ASK-15", section="Team", item="Gate Edit access on the People permission",
+        type="Change request", prio="High",
+        what="Show Edit access to holders of the 'people' permission (People / Contacts), "
+             "rather than to team_manage alone as it does today.",
+        why="Founder direction. Note for whoever picks this up: 'people' is currently "
+            "described in the code as opt-in because the contact list is sensitive, and "
+            "it is NOT in any role's default set -- so on today's data this would show "
+            "the control to nobody but the owner, who passes through the role check "
+            "anyway. Worth confirming whether the intent is to REPLACE the team_manage "
+            "gate with people, or to allow either.",
+        code="pages/Team.js:232 (canManageTeam), :571 (edit-access-<id>); "
+             "lib/perms.js:5 (the 'people' key) and :21-23 (why it is opt-in)",
+        dep="ASK-13", status="To do",
+    ),
+    dict(
+        id="ASK-16", section="Team", item="Org chart from reporting lines and department",
+        type="Future scope", prio="Low",
+        what="Render the team as an organisation chart -- grouped by department and wired "
+             "by reporting line -- in the style of Microsoft Teams, alongside or instead "
+             "of the current flat role groups.",
+        why="Founder idea, marked 'if needed'. The data already exists: members carry "
+            "reporting_manager_id and a role, and the profile dialog already resolves "
+            "and displays 'REPORTS TO'. It also answers TM-03, where the page promises "
+            "REPORTING LINES and the roster never shows them. Worth noting before "
+            "building: only 1 of 12 members currently has a reporting manager set, so a "
+            "chart drawn today would be one line and eleven orphans -- the chart is only "
+            "as good as the reporting data behind it, and that needs filling first.",
+        code="pages/Team.js:475 (manager already resolved); "
+             "reporting_manager_id on the user record",
+        dep="TM-03", status="Parked - needs design",
     ),
 ]
 

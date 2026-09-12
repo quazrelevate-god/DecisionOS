@@ -9,7 +9,9 @@ import { timeAgo } from "../lib/format";
 import { toast } from "sonner";
 import {
   AirplaneTakeoff, Plus, WarningOctagon, CheckCircle, XCircle, ChatCircleText, Gear, GearSix, Clock,
-  Sparkle, ArrowsClockwise, CalendarPlus, Eye, CircleNotch,
+  // ASK-4 (2026-09-12): AI Impact Analysis retired at the leave-card level.
+  // Sparkle / ArrowsClockwise / CalendarPlus / Eye / CircleNotch were the
+  // ImpactDialog's private icon vocabulary and left with it.
 } from "@phosphor-icons/react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter,
@@ -150,160 +152,29 @@ function AbsenceDialog({ onDone }) {
   );
 }
 
-const ACTION_META = {
-  reassign: { label: "Reassign", cls: "bg-kr-ink text-white", Icon: ArrowsClockwise },
-  extend: { label: "Extend due date", cls: "border-[0.5px] border-kr-ink text-foreground", Icon: CalendarPlus },
-  monitor: { label: "Monitor", cls: "bg-white", Icon: Eye },
-};
+/* ASK-4 (2026-09-12) — ImpactDialog + ACTION_META removed.
 
-function ImpactDialog({ leaveId, open, onOpenChange, onApplied }) {
-  const [loading, setLoading] = useState(false);
-  const [data, setData] = useState(null);
-  const [applied, setApplied] = useState({});
-  const [edits, setEdits] = useState({});
+   The founder's call: per-request AI Impact Analysis is not the useful
+   question. Asking "what does THIS leave request do to cover" in
+   isolation cannot answer what actually matters -- the combined effect
+   of every pending / approved absence on the team over a period. A
+   report has to be a report, not a per-card modal.
 
-  useEffect(() => {
-    if (!open) { setData(null); setApplied({}); setEdits({}); return; }
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      try {
-        const res = await api.get(`/leaves/${leaveId}/impact`);
-        if (cancelled) return;
-        setData(res.data);
-        const e = {};
-        (res.data.tasks || []).forEach((t) => {
-          e[t.id] = { assignee_id: t.assignee_id || "", due_date: t.suggested_due_date || "" };
-        });
-        setEdits(e);
-      } catch (err) {
-        if (!cancelled) toast.error(err.response?.data?.detail || "Could not analyze impact");
-      } finally { if (!cancelled) setLoading(false); }
-    })();
-    return () => { cancelled = true; };
-  }, [open, leaveId]);
+   The retired dialog fetched GET /leaves/:id/impact and let the
+   approver reassign / extend / monitor specific tasks that the
+   requester was blocking. All of it left with the button. The global
+   version lives on the tracker as ASK-5 (Low, parked -- not yet
+   ideated), so the report can come back in one place rather than
+   twelve. Backend routes were left in place -- deleting them is a
+   separate cleanup pass once ASK-5 has landed on a shape.
 
-  const applyOne = async (t) => {
-    const e = edits[t.id] || {};
-    try {
-      if (t.action === "reassign") {
-        if (!e.assignee_id) return toast.error("Pick a teammate to reassign to");
-        await api.patch(`/tasks/${t.id}`, { assignee_id: e.assignee_id });
-      } else if (t.action === "extend") {
-        if (!e.due_date) return toast.error("Pick a new due date");
-        await api.patch(`/tasks/${t.id}`, { due_date: e.due_date });
-      } else { return; }
-      setApplied((a) => ({ ...a, [t.id]: true }));
-      toast.success(t.action === "reassign" ? "Task reassigned" : "Due date extended");
-      onApplied?.();
-    } catch (err) { toast.error(err.response?.data?.detail || "Could not apply"); }
-  };
-
-  const applyAll = async () => {
-    const pending = (data?.tasks || []).filter((t) => (t.action === "reassign" || t.action === "extend") && !applied[t.id]);
-    for (const t of pending) { await applyOne(t); }
-  };
-
-  const tasks = data?.tasks || [];
-  const members = data?.available_members || [];
-  const recCount = tasks.filter((t) => t.action === "reassign" || t.action === "extend").length;
-  const allApplied = recCount > 0 && tasks.filter((t) => t.action === "reassign" || t.action === "extend").every((t) => applied[t.id]);
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="rounded-cardlg border border-nm-edge/40 max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="leave-impact-dialog">
-        <DialogHeader>
-          <DialogTitle className="font-display text-xl flex items-center gap-2">
-            <Sparkle size={18} weight="fill" aria-hidden="true" /> AI Impact Analysis
-          </DialogTitle>
-          <DialogDescription className="text-sm text-muted-foreground">
-            {data ? `What ${data.person}'s leave affects, and how to keep work on track.` : "Checking active tasks affected by this leave…"}
-          </DialogDescription>
-        </DialogHeader>
-
-        {loading && (
-          <div className="flex flex-col items-center justify-center py-12 text-muted-foreground" data-testid="impact-loading">
-            <CircleNotch size={34} weight="bold" aria-hidden="true" className="animate-spin" />
-            <p className="text-sm mt-3">Analyzing workload &amp; suggesting cover…</p>
-          </div>
-        )}
-
-        {!loading && data && (
-          <div className="space-y-3" data-testid="impact-content">
-            {data.summary && (
-              <div className="nm-inset p-3 text-sm" data-testid="impact-summary">{data.summary}</div>
-            )}
-            {tasks.length === 0 && (
-              <EmptyState title="No tasks at risk" hint="This person has no active tasks due during their absence. You're all set." />
-            )}
-            {tasks.map((t) => {
-              const m = ACTION_META[t.action] || ACTION_META.monitor;
-              const e = edits[t.id] || {};
-              const done = applied[t.id];
-              return (
-                <div key={t.id} data-testid={`impact-task-${t.id}`} className="nm-tile p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="font-semibold text-sm leading-tight">{t.title}</p>
-                      <p className="label-mono text-muted-foreground mt-1">
-                        {t.priority} · {(t.status || "").replace("_", " ")}{t.due_date ? ` · due ${t.due_date}` : ""}
-                      </p>
-                    </div>
-                    <Chip value={m.label} className={`${m.cls} shrink-0`} />
-                  </div>
-                  {t.reason && <p className="text-xs text-muted-foreground mt-2">{t.reason}</p>}
-
-                  {t.action === "reassign" && !done && (
-                    <div className="flex gap-2 mt-2.5">
-                      <select data-testid={`impact-assignee-${t.id}`} className={`${inp} text-sm`}
-                        value={e.assignee_id} onChange={(ev) => setEdits((s) => ({ ...s, [t.id]: { ...s[t.id], assignee_id: ev.target.value } }))}>
-                        <option value="">Select teammate…</option>
-                        {members.map((mm) => <option key={mm.id} value={mm.id}>{mm.name} · {mm.role}</option>)}
-                      </select>
-                      <button onClick={() => applyOne(t)} data-testid={`impact-apply-${t.id}`}
-                        className="kr-lift flex shrink-0 items-center gap-1 rounded-pill bg-kr-ink px-3.5 py-2 text-xs font-medium text-white transition-all">
-                        <ArrowsClockwise size={13} weight="bold" /> Reassign
-                      </button>
-                    </div>
-                  )}
-                  {t.action === "extend" && !done && (
-                    <div className="flex gap-2 mt-2.5">
-                      <input type="date" data-testid={`impact-date-${t.id}`} className={`${inp} text-sm`}
-                        value={e.due_date} onChange={(ev) => setEdits((s) => ({ ...s, [t.id]: { ...s[t.id], due_date: ev.target.value } }))} />
-                      <button onClick={() => applyOne(t)} data-testid={`impact-apply-${t.id}`}
-                        className="flex shrink-0 items-center gap-1 rounded-pill border border-kr-accent px-3.5 py-2 text-xs font-medium text-kr-accent transition-all hover:bg-kr-accent/10">
-                        <CalendarPlus size={13} weight="bold" /> Extend
-                      </button>
-                    </div>
-                  )}
-                  {done && (
-                    <p className="mt-2.5 flex items-center gap-1 text-xs font-semibold text-green-700" data-testid={`impact-done-${t.id}`}>
-                      <CheckCircle size={14} weight="fill" /> Applied
-                    </p>
-                  )}
-                </div>
-              );
-            })}
-
-            {recCount > 0 && (
-              <DialogFooter className="pt-1">
-                <button onClick={applyAll} disabled={allApplied} data-testid="impact-apply-all"
-                  className="kr-lift flex items-center gap-2 rounded-pill bg-kr-ink px-5 py-2.5 text-sm font-medium text-white transition-all disabled:opacity-50">
-                  <Sparkle size={15} weight="fill" /> {allApplied ? "All applied" : `Apply all recommended (${recCount})`}
-                </button>
-              </DialogFooter>
-            )}
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-}
+   Icons that left with this: Sparkle, ArrowsClockwise, CalendarPlus,
+   Eye, CircleNotch. All were private to ImpactDialog. */
 
 function LeaveCard({ lv, canAct, onRefresh, highlight }) {
   const [action, setAction] = useState(null); // reject | info
   const [note, setNote] = useState("");
-  const [impactOpen, setImpactOpen] = useState(false);
+  // ASK-4 (2026-09-12): impactOpen state removed with the dialog itself.
   const st = STATUS_META[lv.status] || STATUS_META.pending;
 
   const decide = async (kind) => {
@@ -311,7 +182,7 @@ function LeaveCard({ lv, canAct, onRefresh, highlight }) {
       await api.post(`/leaves/${lv.id}/${kind}`, { note });
       toast.success(kind === "approve" ? "Approved" : kind === "reject" ? "Rejected" : "Info requested");
       setAction(null); setNote("");
-      if (kind === "approve") setImpactOpen(true);  // auto-run AI impact analysis
+      // ASK-4: no auto-open on approve any more -- the Impact dialog is gone.
       onRefresh();
     } catch (e) { toast.error(e.response?.data?.detail || "Action failed"); }
   };
@@ -336,13 +207,12 @@ function LeaveCard({ lv, canAct, onRefresh, highlight }) {
         </div>
       )}
 
-      {canAct && lv.status === "approved" && (
-        <button onClick={() => setImpactOpen(true)} data-testid={`leave-impact-btn-${lv.id}`}
-          className="kr-lift mt-3 flex w-full items-center justify-center gap-1.5 rounded-pill bg-kr-ink py-2 text-xs font-medium text-white transition-all">
-          <Sparkle size={14} weight="fill" /> AI Impact Analysis
-        </button>
-      )}
-      {canAct && <ImpactDialog leaveId={lv.id} open={impactOpen} onOpenChange={setImpactOpen} onApplied={onRefresh} />}
+      {/* ASK-4 (2026-09-12): The per-card AI Impact Analysis button and
+          its ImpactDialog have been removed. The founder's call was
+          that "impact" is not a per-request question -- analysing one
+          leave in isolation can't answer what the combined leave does
+          to team cover. The team-level version is on the backlog as
+          ASK-5 (Low priority, parked). */}
 
       {canAct && lv.status !== "approved" && lv.status !== "rejected" && (
         <div className="mt-3">

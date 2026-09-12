@@ -614,6 +614,14 @@ export default function Workflows({ embedded = false }) {
                           <p className="min-w-0 flex-1 text-sm font-semibold leading-snug line-clamp-2 text-left">{w.title}</p>
                           {user?.role === "owner" && (
                             <button onClick={() => del(w)} data-testid={`delete-workflow-${w.id}`} title={t("workflows.delete_card")}
+                              /* MW-13 fix: label names the card it deletes.
+                                 Before, every Delete button on the board
+                                 was announced as the same phrase "Delete
+                                 card"; screen-reader users had five
+                                 identical Delete buttons with nothing to
+                                 distinguish them. w.title is already to
+                                 hand where this button renders. */
+                              aria-label={`${t("workflows.delete_card")}: ${w.title}`}
                               className="shrink-0 text-muted-foreground transition-colors hover:text-kr-accent">
                               <Trash size={14} weight="bold" aria-hidden="true" />
                             </button>
@@ -660,6 +668,12 @@ export default function Workflows({ embedded = false }) {
                           <button onClick={() => advance(w)} data-testid={`advance-workflow-${w.id}`}
                             disabled={busyId === w.id}
                             title={`Move to ${labelOf(nextKey)}`}
+                            /* MW-13 fix: label names the card being
+                               advanced. Two Advance buttons on the same
+                               board were previously announced with the
+                               same phrase ("Advance to Delivered"); the
+                               card title disambiguates them. */
+                            aria-label={`Advance to ${labelOf(nextKey)}: ${w.title}`}
                             /* KM-31 — .nm-btn was the retired flat outline. The
                                advance button is the one thing on the card that
                                DOES something, so it wears the app's raised

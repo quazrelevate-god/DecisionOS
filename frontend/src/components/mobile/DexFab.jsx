@@ -46,6 +46,24 @@ export function DexFab({ onOpen, recording = false, seconds = 0, onStop, intent 
   // follows it is swallowed instead of being read as "start a new one".
   const stoppedRef = React.useRef(false);
   const { user } = useAuth();
+  // MW-04 fix: Escape dismisses the picker. Before this, tapping the FAB
+  // opened the two-door picker but Escape did nothing -- the full-screen
+  // scrim kept blocking the page underneath, and keyboard users had to
+  // hunt for the transparent close button to get out. onPick(null) is
+  // the same tear-down the outside-tap uses, so keyboard and pointer
+  // dismissal share one code path. Listener attaches only while the
+  // picker is open, so idle FAB does not pay for it.
+  React.useEffect(() => {
+    if (!picker) return undefined;
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onPick?.(null);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [picker, onPick]);
   // Same check DexCaptureBar makes — hidden entirely, not disabled (§8).
   const canCapture = user?.role === "owner" || hasPerm(user, "voice_capture");
   if (!canCapture) return null;

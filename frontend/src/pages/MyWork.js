@@ -1232,7 +1232,15 @@ function TaskCard({ hidePrio = false, hideStatus = false, t, onChange, members =
       <button
         type="button"
         onClick={() => (controlled ? onToggleOpen?.() : setSelfExpanded((v) => !v))}
-        className="w-full flex-1 min-w-0 p-4 text-left"
+        /* MW-05 fix: pin the title / caret / meta cluster to the top of
+           the summary button. The button is a flex ROW parent up above
+           (line 1211), but a bento cell can be taller than any single
+           card in it -- when it is, a short title sinks toward the
+           middle. flex-col + justify-start makes the cell a column
+           container with its content anchored to the top edge, so every
+           title in a row starts at the same y. Verified against the
+           audit's 39/17/11/17 px spread. */
+        className="w-full flex-1 min-w-0 flex flex-col justify-start p-4 text-left"
         aria-expanded={expanded}
         aria-controls={`task-card-body-${t.id}`}
         data-testid={`task-summary-${t.id}`}

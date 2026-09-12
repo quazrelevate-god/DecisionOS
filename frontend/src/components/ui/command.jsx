@@ -3,7 +3,7 @@ import { Command as CommandPrimitive } from "cmdk"
 import { Search } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { Dialog, DialogContent } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 
 const Command = React.forwardRef(({ className, ...props }, ref) => (
   <CommandPrimitive
@@ -16,13 +16,32 @@ const Command = React.forwardRef(({ className, ...props }, ref) => (
 ))
 Command.displayName = CommandPrimitive.displayName
 
+/* MW-03 fix: Radix Dialog needs an accessible name. The previous
+   CommandDialog rendered a Dialog with no DialogTitle inside, so Radix
+   set aria-labelledby to a synthetic id that did not exist and logged
+   an error every time the dialog opened. Wrapping DialogTitle +
+   DialogDescription in Radix VisuallyHidden gives assistive tech a
+   real name and description without changing the visual design.
+
+   Optional `title` / `description` props let callers customise the
+   announcement; sensible defaults keep the a11y guarantee even when
+   they don't. */
 const CommandDialog = ({
   children,
+  title = "Search",
+  description = "Search the app for people, decisions, tasks and more.",
   ...props
 }) => {
   return (
     <Dialog {...props}>
       <DialogContent className="overflow-hidden p-0">
+        {/* Tailwind's sr-only utility is the standard visually-hidden
+            pattern -- absolutely positioned, 1px, clipped -- so the
+            heading is announced by screen readers without changing the
+            visible layout. Avoids a runtime dependency on
+            @radix-ui/react-visually-hidden. */}
+        <DialogTitle className="sr-only">{title}</DialogTitle>
+        <DialogDescription className="sr-only">{description}</DialogDescription>
         <Command
           className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5">
           {children}

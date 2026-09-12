@@ -594,6 +594,218 @@ FINDINGS = [
         found="2026-09-12",
     ),
     dict(
+        id="OP-01", section="Ops", screen="Team execution panel",
+        viewport="Mobile + Desktop", persona="Owner", severity="High", status="Open",
+        area="Truthfulness",
+        tested="Read the panel's own caption, then checked the service that produces "
+               "the numbers underneath it.",
+        expected="A page that states a time window applies it.",
+        actual="The panel says 'Last 30 days - open anyone to see their full ops'. The "
+               "service applies no date filter anywhere: tasks, decisions, invoices and "
+               "the per-employee leaderboard are all queried for the whole tenant with "
+               "no window at all. So an owner reads a colleague's score believing it "
+               "reflects the last month, when it carries every task since the workspace "
+               "opened -- somebody who was slow in August can never recover from it, "
+               "and somebody who has improved this month does not show it.",
+        evidence="services/operating_score.py contains no created_at, no timedelta, no "
+                 "days= and no since; the only match for '30' is .to_list(3000). Live "
+                 "data spans 2026-08-08 to 2026-09-09 and all of it is counted.",
+        cause="The caption was written for an intended windowed metric that was never "
+              "implemented, or was implemented and later dropped.",
+        fix="Decide which is true and make them agree. A rolling window is the more "
+            "useful of the two -- an operating score should recover when the business "
+            "recovers -- so filter each query to the last 30 days and keep the caption. "
+            "If all-time is deliberate, the caption has to say so.",
+        code="services/operating_score.py (all queries); the caption is in "
+             "pages/OperatingScore.js, team-execution section",
+        found="2026-09-13",
+    ),
+    dict(
+        id="OP-02", section="Ops", screen="'Do these first' on mobile",
+        viewport="Mobile", persona="Owner", severity="High", status="Open",
+        area="Responsive / layout",
+        tested="Measured the page's primary call to action against the fixed dark band "
+               "beneath it on a 375x812 phone.",
+        expected="The list of what to do first is readable on a phone.",
+        actual="It is 90 per cent hidden. 'Do these first' occupies y=425 to 710, and a "
+               "fixed black 'Team execution' band is pinned from y=454 to the bottom of "
+               "the screen -- 374px, 46 per cent of the viewport -- covering 256 of its "
+               "285px. Scrolling does not help: the document itself does not scroll "
+               "(scrollHeight equals clientHeight), and the element that does scroll is "
+               "the dark band, not the page. So the three actions the page exists to "
+               "recommend are permanently reduced to one visible line.",
+        evidence="Band: position fixed, z-index 20, top 454, height 374 of an 812px "
+                 "viewport. Overlap with 'Do these first' measured at 256px. Document "
+                 "scrollHeight 812 = clientHeight 812.",
+        cause="A section styled as a full-bleed dark band on desktop keeps position "
+              "fixed at mobile widths, where there is not room for both it and the "
+              "content above it.",
+        fix="On mobile the band should flow with the page rather than being pinned, so "
+            "the score, the actions and the team list scroll as one column. If it must "
+            "stay pinned, it needs to collapse to a handle the user can pull up.",
+        code="pages/OperatingScore.js (kr-dark-band team-execution section)",
+        found="2026-09-13",
+    ),
+    dict(
+        id="OP-03", section="Ops", screen="Operating score model",
+        viewport="Mobile + Desktop", persona="Owner", severity="High", status="Open",
+        area="Metric design",
+        tested="Recomputed all four legs from the raw records and compared with the API.",
+        expected="A score meant to guide the next action responds when that action is "
+                 "taken.",
+        actual="Two of the four legs are pinned at the floor and carry no information. "
+               "Execution reads 0 and Responsiveness reads 0. Responsiveness actually "
+               "computes to -296 before clamping (100 - 16 complaints x 12 - 68 overdue "
+               "x 3), so it would take closing 8 complaints AND clearing 33 overdue "
+               "tasks before the number moves off zero by a single point. The page's "
+               "own advice is 'Close 16 open complaints' -- doing all of that would "
+               "leave the score exactly where it is. The owner gets no gradient at "
+               "precisely the moment they most need one.",
+        evidence="API: overall 19, execution 0, finance 57, sales 22, responsiveness 0. "
+                 "Recomputed from 148 tasks: done 11, open 130, overdue 68, completion "
+                 "0.078; execution = clamp(7.8 - 20.9) = 0. Responsiveness = "
+                 "clamp(100-192-204) = 0.",
+        cause="Both legs subtract unbounded absolute penalties from 100 and then clamp "
+              "at zero, so any moderately messy workspace saturates.",
+        fix="Score each leg as a bounded rate rather than a penalty subtracted from a "
+            "constant, so the number always has somewhere to move. Where a leg really "
+            "is at the floor, say 'below floor' rather than printing a 0 that looks "
+            "like an empty metric. See ASK-19 for the wider redesign.",
+        code="services/operating_score.py:_score_execution and the responsiveness "
+             "expression in _company_operating_view",
+        found="2026-09-13",
+    ),
+    dict(
+        id="OP-04", section="Ops", screen="'Sales' category",
+        viewport="Mobile + Desktop", persona="Owner", severity="Medium", status="Open",
+        area="Truthfulness",
+        tested="Read what the Sales leg is computed from.",
+        expected="A category called Sales reflects selling.",
+        actual="It is the share of DECISIONS that have been approved -- "
+               "approved/total x 100 -- and contains no revenue, no orders, no pipeline "
+               "and no customer. On live data it reads 22 because 17 of 77 decisions "
+               "are approved. An owner could sell nothing all month and lift 'Sales' by "
+               "approving decisions, or have a record month and watch it fall because "
+               "approvals are backed up. The number is real and useful; the label is "
+               "the wrong one.",
+        evidence="_score_sales(decisions) = approved/total*100. API Sales = 22 with "
+                 "total_decisions 77, approved 17.",
+        cause="The leg was named for the business area it was meant to represent rather "
+              "than the quantity actually available to compute.",
+        fix="Rename it to what it measures -- Decision velocity, or Approvals -- which "
+            "is a genuinely good metric for a decision OS. If a real Sales leg is "
+            "wanted, invoices already carry the data for revenue this period against "
+            "last.",
+        code="services/operating_score.py:_score_sales",
+        found="2026-09-13",
+    ),
+    dict(
+        id="OP-05", section="Ops", screen="Operating score model",
+        viewport="Mobile + Desktop", persona="Owner", severity="Medium", status="Open",
+        area="Metric design",
+        tested="Traced where a single overdue task lands in the model.",
+        expected="Each fact is counted once.",
+        actual="One overdue task is charged twice: it raises the overdue ratio inside "
+               "Execution (x40 of the ratio) and is also subtracted directly from "
+               "Responsiveness (x3 per task). Those two legs are 35 and 20 per cent of "
+               "the overall score, so lateness quietly drives 55 per cent of it. On the "
+               "live tenant that is -20.9 on one leg and -204 on the other.",
+        evidence="_score_execution applies overdue_ratio*40; the responsiveness "
+                 "expression applies overdue*3.",
+        cause="The two legs were designed independently and both reached for the same "
+              "signal.",
+        fix="Pick one home for lateness. Execution is the natural one; Responsiveness "
+            "should be about complaints and reply time, which is what its name promises.",
+        code="services/operating_score.py:_score_execution and _company_operating_view",
+        found="2026-09-13",
+    ),
+    dict(
+        id="OP-06", section="Ops", screen="Operating score model",
+        viewport="Mobile + Desktop", persona="Owner", severity="Medium", status="Open",
+        area="Metric design",
+        tested="Checked how the penalties behave as a business grows.",
+        expected="The same performance scores the same at any size.",
+        actual="Three penalties are absolute rather than proportional: complaints x12, "
+               "overdue x3, overdue invoices x5. A five-person shop with 9 open "
+               "complaints scores 0 on Responsiveness; so does a 500-person company "
+               "with 9. As a tenant grows, the score falls for reasons that have "
+               "nothing to do with how well it is run, and the metric stops being "
+               "comparable with its own past.",
+        evidence="responsiveness = 100 - open_complaints*12 - overdue*3; "
+                 "finance = collected*100 - overdue_inv*5.",
+        cause="Fixed point-costs were chosen against an assumed small tenant.",
+        fix="Express each as a rate against the relevant denominator -- complaints per "
+            "active customer, overdue as a share of open work, overdue invoices as a "
+            "share of open invoices -- so the score means the same thing at any size.",
+        code="services/operating_score.py:_company_operating_view",
+        found="2026-09-13",
+    ),
+    dict(
+        id="OP-07", section="Ops", screen="Operating score - empty workspace",
+        viewport="Mobile + Desktop", persona="Owner", severity="Low", status="Open",
+        area="Metric design",
+        tested="Read what each leg returns when its denominator is zero.",
+        expected="A workspace with no data reads as unknown, not as a grade.",
+        actual="Completion, approval rate and collection rate each fall back to 0.7 "
+               "when there is nothing to divide by, so a brand-new tenant that has done "
+               "nothing at all scores about 70 out of 100 and is told it is doing "
+               "reasonably well. There is an enough_data flag in the payload, so the "
+               "page can already tell the difference -- the default just makes the "
+               "number look earned.",
+        evidence="completion, approved_rate and collected all default to 0.7; "
+                 "enough_data = actionable >= 3 or inv_count > 0.",
+        cause="A neutral default was chosen so an empty tenant would not look alarming.",
+        fix="Keep the neutral internal default if it helps the maths, but let the UI "
+            "show 'not enough data yet' rather than a score, using the enough_data flag "
+            "that is already computed and sent.",
+        code="services/operating_score.py (the 0.7 defaults, enough_data)",
+        found="2026-09-13",
+    ),
+    dict(
+        id="OP-08", section="Ops", screen="Category cards",
+        viewport="Desktop", persona="Owner", severity="Low", status="Open",
+        area="Information design",
+        tested="Looked at how a zero-scoring category is drawn.",
+        expected="A bad score and a missing score look different.",
+        actual="Execution and Responsiveness both render '0 / 100' above a completely "
+               "empty progress bar, which is pixel-identical to how an unmeasured "
+               "category would look. Two of the four cards on the page therefore read "
+               "as 'nothing here' when they actually mean 'this is as bad as it gets'.",
+        evidence="Desktop screenshot: Execution 0/100 and Responsiveness 0/100 with "
+                 "unfilled tracks, beside Finance 57 and Sales 22 with filled ones.",
+        cause="The bar encodes only the value, and zero has no visual form.",
+        fix="Give a floored score its own treatment -- a filled track in the warning "
+            "colour, or an explicit 'at floor' marker -- so it reads as a measured bad "
+            "result rather than an absent one.",
+        code="pages/OperatingScore.js (category card progress track)",
+        found="2026-09-13",
+    ),
+    dict(
+        id="OP-09", section="Ops", screen="'View all' links and the formula panel (mobile)",
+        viewport="Mobile", persona="Owner", severity="Medium", status="Open",
+        area="Responsive / accessibility",
+        tested="Measured every remaining mobile control on the Ops page.",
+        expected="Links are big enough to tap, unobstructed, and the whole page is "
+                 "reachable.",
+        actual="Three problems, all downstream of the page not scrolling on mobile. The "
+               "two 'View all' links measure 61x20, under the 24px minimum, and the "
+               "first of them is physically covered by the floating Dex button. The "
+               "'How is this calculated' formula panel sits at y=1153 on an 812px "
+               "screen and cannot be reached at all, so the one place that explains "
+               "where the score comes from is invisible on a phone -- which matters "
+               "more than usual here, given two of the four legs read 0.",
+        evidence="View all: 61x20 at y=751, elementFromPoint returns dex-fab; second at "
+                 "y=947, outside the viewport. operating-formula-toggle: 223x44 at "
+                 "y=1153, inViewport false, and the automated sweep could not click it.",
+        cause="The same fixed-band layout as OP-02: the document does not scroll, so "
+              "anything below the fold is unreachable rather than merely below.",
+        fix="Fixing OP-02 -- letting the page scroll as one column on mobile -- makes "
+            "the formula panel reachable on its own. The View all links still need to "
+            "grow to 24px minimum and to sit clear of the Dex button's safe area.",
+        code="pages/OperatingScore.js (View all links, operating-formula-toggle)",
+        found="2026-09-13",
+    ),
+    dict(
         id="TM-02", section="Team", screen="Owner section grid",
         viewport="Desktop", persona="All", severity="Nit", status="Open",
         area="Visual / layout",
@@ -1115,6 +1327,70 @@ COVERAGE = [
      "Two entity types share identical styling; titles repeat as bare 'sale'; a "
      "'Delivered' row sits under 'In progress'; no row is tappable", "ASK-18"),
 
+    # --- OPS ---
+    ("T-400", "Ops", "Page load", "Desktop 1440x900", "Owner",
+     "/operating-score loads with the score and all four categories",
+     "Routing", "PASS", "Overall 19/100, four category cards, next-moves, quick stats", ""),
+    ("T-401", "Ops", "Page load", "Mobile 390x844", "Owner",
+     "/operating-score loads and reflows", "Responsive", "PASS",
+     "317 visible elements, compact Key scores card", ""),
+    ("T-402", "Ops", "Page shell", "Both", "Owner",
+     "No horizontal overflow; every control named; images have alt",
+     "Responsive", "PASS", "desktop 1440=1440, mobile 390=390, 0 unnamed", ""),
+    ("T-403", "Ops", "Control sweep", "Both", "Owner",
+     "Every control pressed without crashing the app", "Stability", "PASS",
+     "47 checks passed across both viewports; 0 crashes", ""),
+    ("T-404", "Ops", "Category breakdown", "Both", "Owner",
+     "Each category opens a breakdown that states its weight", "Functional", "PASS",
+     "Execution 35%, Finance 25%, Sales 20%, Responsiveness 20% - the model is "
+     "disclosed to the user", ""),
+    ("T-405", "Ops", "Next-move actions", "Mobile 390x844", "Owner",
+     "Each recommended action links somewhere real", "Routing", "PASS",
+     "ops-action-overdue -> /my-work?filter=overdue; ops-action-complaints -> /crm", ""),
+    ("T-406", "Ops", "Score arithmetic", "n/a", "Owner",
+     "The reported legs match a recomputation from raw records", "Data quality",
+     "PASS", "Recomputed execution 0 and responsiveness 0 from 148 tasks; both "
+     "match the API exactly - the model is implemented as designed", ""),
+    ("T-407", "Ops", "Team execution panel", "Both", "Owner",
+     "The stated time window is the one applied", "Data quality", "FAIL",
+     "Caption says 'Last 30 days'; the service applies no date filter at all", "OP-01"),
+    ("T-408", "Ops", "'Do these first'", "Mobile 390x844", "Owner",
+     "The primary call to action is readable", "Responsive", "FAIL",
+     "256 of its 285px sit behind a fixed band; the document cannot scroll", "OP-02"),
+    ("T-409", "Ops", "Score responsiveness", "n/a", "Owner",
+     "Acting on the advice moves the score", "Metric design", "FAIL",
+     "Responsiveness computes to -296 before clamping; closing all 16 complaints "
+     "would leave it at 0", "OP-03"),
+    ("T-410", "Ops", "'Sales' category", "n/a", "Owner",
+     "The category measures what its label says", "Metric design", "FAIL",
+     "It is approved/total decisions; contains no revenue, orders or pipeline", "OP-04"),
+    ("T-411", "Ops", "Score model", "n/a", "Owner",
+     "Each underlying fact is counted once", "Metric design", "FAIL",
+     "Overdue tasks are charged to both Execution and Responsiveness", "OP-05"),
+    ("T-412", "Ops", "Score model", "n/a", "Owner",
+     "The score means the same at any company size", "Metric design", "FAIL",
+     "complaints x12, overdue x3, overdue invoices x5 are absolute, not rates", "OP-06"),
+    ("T-413", "Ops", "Empty workspace", "n/a", "Owner",
+     "A workspace with no data reads as unknown", "Metric design", "FAIL",
+     "Defaults of 0.7 give a brand-new tenant roughly 70/100", "OP-07"),
+    ("T-414", "Ops", "Category cards", "Desktop 1440x900", "Owner",
+     "A floored score looks different from a missing one", "Information design",
+     "FAIL", "0/100 with an empty bar is identical to unmeasured", "OP-08"),
+    ("T-415", "Ops", "'View all' + formula panel", "Mobile 390x844", "Owner",
+     "Links are tappable and the whole page is reachable", "Accessibility", "FAIL",
+     "View all is 61x20 and one is covered by dex-fab; the formula toggle sits at "
+     "y=1153 on an 812px screen and cannot be reached", "OP-09"),
+    ("T-416", "Ops", "Next-move honesty", "n/a", "Owner",
+     "Recommendations do not claim unearned outcomes", "Data quality", "PASS",
+     "scoreActions deliberately removed hardcoded '+6 pts' lift estimates because "
+     "the score has no history to fit a counterfactual against", ""),
+    ("T-417", "Ops", "Finance leg", "n/a", "Owner",
+     "Only inbound payments count as money collected", "Data quality", "PASS",
+     "payments query filters direction='in'; outbound supplier payments excluded", ""),
+    ("T-418", "Ops", "Weighting", "n/a", "Finance-less roles",
+     "Weights renormalise when a leg is unavailable", "Functional", "PASS",
+     "finance is null without the permission and the remaining weights rescale", ""),
+
     # --- personas ---
     ("T-070", "My Work", "Page load", "Desktop 1440x900", "Owner",
      "Owner sees all tasks, can create, and gets the All Tasks scope",
@@ -1550,6 +1826,46 @@ ASKS = [
             "presentation layer that needs the pass.",
         code="pages/mobile/ContactProfileMobile.jsx:199-222 (the In progress accordion)",
         dep="CR-08", status="To do",
+    ),
+    dict(
+        id="ASK-19", section="Ops", item="Rework the operating score around what an SME owner asks",
+        type="Product decision", prio="High",
+        what="The four legs answer 'how tidy is the workspace', not 'how is the "
+             "business doing'. PROPOSED SET, with the reasoning. (1) CASH, heaviest "
+             "weight: collection rate plus receivables ageing. For an India-first SME "
+             "this is the question -- am I getting paid -- and half of it already "
+             "exists as the finance leg. (2) EXECUTION, rewritten as a rate over a "
+             "window: work completed in the last 30 days against work created, plus the "
+             "median age of what is still open. The current all-time completion ratio "
+             "can only fall. (3) CUSTOMER: complaints per active customer and time to "
+             "first response -- rates, so they survive growth. (4) DECISION VELOCITY: "
+             "median time from a decision being raised to it being settled, and the "
+             "share still pending past a threshold. That is the honest name for what "
+             "the Sales leg already computes, and for a product called a decision OS it "
+             "may be the most defensible metric on the page. Add a real SALES leg only "
+             "if wanted -- invoices already carry revenue this period against last. "
+             "MECHANICS that matter as much as the choice of legs: score every leg as a "
+             "bounded rate so it always has somewhere to move (OP-03); count lateness "
+             "once (OP-05); use rates not fixed point-costs so the score means the same "
+             "at any size (OP-06); apply the rolling window the UI already claims "
+             "(OP-01); and show 'not enough data yet' instead of a defaulted 70 "
+             "(OP-07).",
+        why="Founder asked whether the KPIs are the right ones. Measured against live "
+            "data the answer is that the model is well built but measuring the wrong "
+            "things: overall 19 out of 100, with two of the four legs pinned at the "
+            "floor and giving no feedback, one leg labelled Sales that contains no "
+            "sales, and a caption promising a 30-day window that is never applied. An "
+            "owner following the page's own advice to the letter would watch the score "
+            "not move. Worth saying what is good, because it should survive any "
+            "rewrite: the weights renormalise correctly when a leg is unavailable, the "
+            "finance leg correctly counts only inbound payments, the next-move list is "
+            "derived from real figures, and somebody deliberately removed fabricated "
+            "'+6 pts' lift estimates because the score has no history to justify them. "
+            "That is the right instinct, and it is the same instinct that should now "
+            "drive giving the score a time window so it can have a history at all.",
+        code="services/operating_score.py (the whole model); "
+             "pages/OperatingScore.js (cards, captions, delta chip)",
+        dep="OP-01, OP-03, OP-04, OP-05, OP-06, OP-07", status="To do",
     ),
 ]
 

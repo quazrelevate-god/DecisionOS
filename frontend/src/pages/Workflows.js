@@ -51,6 +51,17 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter,
 } from "../components/ui/dialog";
+/* ASK-2 fix (2026-09-12): the delete-card handler used to sit behind
+   window.confirm. Some browsers and embed contexts silently return false
+   from window.confirm with no visible UI, so the click looked like a
+   silent no-op even though RBAC and the DELETE endpoint were fine. This
+   is the same class of bug FUP-49 fixed on My Work's Complete button.
+   Switching to Radix AlertDialog gives us an in-app confirm that renders
+   the same in every context. */
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter,
+  AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel,
+} from "../components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "../components/ui/dropdown-menu";
 import { StickyHeader } from "../components/common";
 
@@ -283,6 +294,10 @@ export default function Workflows({ embedded = false }) {
     setOpenStages((s) => ({ ...s, [key]: !s[key] }));
   }, []);
   const [busyId, setBusyId] = useState(null);
+  // ASK-2 fix: workflow card queued for delete-confirmation. Set from the
+  // trash-icon click; cleared by the AlertDialog's Cancel / after delete.
+  const [pendingDelete, setPendingDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const refresh = useCallback(() => {
     qc.invalidateQueries({ queryKey: ["workflows", activeKey, "with_tasks"] });
@@ -336,14 +351,22 @@ export default function Workflows({ embedded = false }) {
     }
   };
 
-  const del = async (wf) => {
-    if (!window.confirm(t("workflows.delete_confirm", { title: wf.title }))) return;
+  // ASK-2 fix: `del` no longer calls window.confirm (silently no-ops in
+  // some browser + embed contexts). It just queues the workflow for the
+  // AlertDialog; the actual delete runs from `confirmDelete` below.
+  const del = (wf) => setPendingDelete(wf);
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    setDeleting(true);
     try {
-      await api.delete(`/workflows/${wf.id}`);
+      await api.delete(`/workflows/${pendingDelete.id}`);
       toast.success(t("workflows.deleted"));
       refresh();
+      setPendingDelete(null);
     } catch (e) {
       toast.error(e.response?.data?.detail || t("workflows.delete_failed"));
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -670,6 +693,37 @@ export default function Workflows({ embedded = false }) {
         targetLabel={overrideCtx ? labelOf(overrideCtx.targetStage) : ""}
         onConfirm={confirmOverride}
       />
+
+      {/* ASK-2 fix: in-app Delete confirmation. Replaces window.confirm,
+          which silently returned false in some browser + embed contexts
+          and made the click look like a silent no-op. Radix AlertDialog
+          gives a real focus-trapped modal with keyboard dismissal. */}
+      <AlertDialog
+        open={!!pendingDelete}
+        onOpenChange={(v) => { if (!v && !deleting) setPendingDelete(null); }}
+      >
+        <AlertDialogContent data-testid="delete-workflow-confirm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this card?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDelete?.title
+                ? <><span className="font-semibold text-foreground">{pendingDelete.title}</span> will be removed from this pipeline. This can't be undone.</>
+                : "This can't be undone."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              disabled={deleting}
+              data-testid="delete-workflow-confirm-action"
+              className="bg-danger-600 text-white hover:bg-danger-600/90"
+            >
+              {deleting ? "Deleting…" : "Delete card"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

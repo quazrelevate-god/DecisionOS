@@ -144,7 +144,19 @@ function UpdateForm({ taskId, stepId, members, roleOptions, onDone, onCancel }) 
       <div className="flex gap-1">
         {ACTIONS.map((a) => (
           <button key={a.key} onClick={() => setAction(a.key)} data-testid={`update-action-${a.key}-${taskId}`}
-            className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium nm-tile transition-colors ${action === a.key ? CTRL_ON : CTRL_OFF}`}>
+            /* MW-08 fix: the previous CTRL_ON / CTRL_OFF constants were
+               deleted in 5fb96f2 (KR-11.3, "Workflows and Leave join the
+               material") when the rest of the toolbar moved to
+               .kr-pressed / .kr-pop, but this line still referenced the
+               removed identifiers, so UpdateForm threw a ReferenceError
+               at render time and the whole app unmounted. Segmented
+               controls elsewhere in this file already carry the same
+               pair (see MW-01 view toggle around L2489), so the fix is
+               to adopt that grammar here too rather than restore the
+               dead constants. No transition class -- .kr-pressed and
+               .kr-pop swap outset for inset shadows and those do not
+               interpolate; a transition would stall the swap. */
+            className={`flex-1 flex items-center justify-center gap-1 rounded-pill px-2 py-1.5 text-xs font-medium ${action === a.key ? "kr-pressed" : "kr-pop"}`}>
             <a.icon size={13} weight="bold" /> {a.label}
           </button>
         ))}

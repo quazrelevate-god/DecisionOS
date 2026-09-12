@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import { hasPerm } from "./lib/perms";
 import { LockKey } from "@phosphor-icons/react";
 import Layout from "./components/Layout";
+import ErrorBoundary from "./components/ErrorBoundary";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import DecisionReview from "./pages/DecisionReview";
@@ -144,6 +145,14 @@ function App() {
     <div className="App">
       <AuthProvider>
         <BrowserRouter>
+          {/* MW-10 fix: ErrorBoundary around the routed page area so a
+              single broken component costs one page rather than the
+              whole product (MW-08 was the canonical example -- a
+              ReferenceError in UpdateForm was unmounting the entire
+              React tree). If the boundary itself is what needs replacing
+              on route change, wrap in a keyed remount at the page level
+              in a follow-up. */}
+          <ErrorBoundary>
           <Routes>
             {/* KM-55 — the one place that answers "where does a signed-in user
                 belong?". "/" used to do it, but "/" is the marketing site now.
@@ -250,6 +259,7 @@ function App() {
             )}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          </ErrorBoundary>
         </BrowserRouter>
         <Toaster position="top-right" />
       </AuthProvider>

@@ -1978,6 +1978,14 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
     .app-sky::before, .app-sky::after { animation: none; }
     .kr-page-in { animation: none; opacity: 1; transform: none; }
     html.theme-x .app-canvas { animation: none; filter: none; }
+
+    /* KM-66 — the new-item ring still has to MARK the item; only the pulse
+       goes. A static hairline for the same five seconds says the same thing
+       without moving. */
+    .kr-new-glow::after {
+        animation: none;
+        box-shadow: 0 0 0 1px hsl(var(--kr-gold) / .55);
+    }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -2881,6 +2889,44 @@ html[data-dex="1"] .app-sky::after  { opacity: 1; }
     /* The label inherits, but anything inside carrying its own muted token
        would not — so the scope is re-stated. Same alias trap as .kr-frost. */
     .kr-chip-on * { color: inherit; }
+
+    /* ── KM-66 · .kr-new-glow — "this one is new", for five seconds ────────
+       When a refinement returns, the founder needs to find what changed in a
+       list they have already read. A gold ring, three slow cycles, gone.
+
+       DRAWN ON AN ::after, NOT ON THE ELEMENT'S OWN box-shadow. Every target
+       already has one that means something: .kr-pressed's inset is what makes
+       a pill read as content rather than a control (KM-62), and animating
+       box-shadow on the element would REPLACE it for five seconds — the pill
+       would quietly turn into a button and back. The overlay ring adds to
+       what is there instead of taking its place. `border-radius: inherit`
+       makes it fit a pill and a tile without either knowing about it.
+
+       GOLD, not --kr-accent. Accent is this product's alert grammar; nothing
+       has gone wrong here, something has been added. */
+    @keyframes kr-new-glow {
+        0%, 100% {
+            box-shadow:
+                0 0 0 1px hsl(var(--kr-gold) / .50),
+                0 0 10px 2px hsl(var(--kr-gold) / .18);
+        }
+        55% {
+            box-shadow:
+                0 0 0 1px hsl(var(--kr-gold) / .10),
+                0 0 4px 0 hsl(var(--kr-gold) / .03);
+        }
+    }
+    .kr-new-glow { position: relative; }
+    .kr-new-glow::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        pointer-events: none;
+        /* 3 x 1.6s = 4.8s, inside the 5s the class is held for, so it ends on
+           a full ring rather than being cut mid-fade. */
+        animation: kr-new-glow 1.6s ease-in-out 3;
+    }
 
     .kr-pop:active {
         transform: translateY(1px);

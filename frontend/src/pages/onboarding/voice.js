@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import api from "../../lib/api";
 import { toast } from "sonner";
 
@@ -24,6 +24,51 @@ export const langLabel = (code) =>
 export async function fetchTTS(text, languageCode = "en-IN") {
   const { data } = await api.post("/signup/tts", { text, language_code: languageCode });
   return new Audio(`data:${data.mime || "audio/wav"};base64,${data.audio_b64}`);
+}
+
+// DexWave reads a `levels` array. The interview has no analyser — this file
+// records to a MediaRecorder and posts the blob, and there is no live
+// amplitude anywhere in that path. So rather than fake a spectrum, the
+// ribbons are driven by a slow synthetic swell whose ENERGY says which state
+// we are in: a wide swell while Dex speaks, a tighter faster one while it
+// listens, near-flat when idle. It is honest about being a state indicator
+// rather than a meter.
+//
+// KM-66 — moved here from VoiceInterview.js so the draft screen can use the
+// same one, and CHANGED to write a REF instead of state.
+//
+// The original called setLevels() inside the rAF loop: a React state write
+// every frame, ~60 times a second, for as long as the recorder was open. In
+// the interview that re-rendered one card and was survivable. On the draft
+// screen it would re-render the whole assembled blueprint — three tiles, both
+// pill columns, the refine panel — at 60Hz, which is the same main-thread
+// starvation that made the mobile stop button miss taps in KM-60.
+//
+// DexWave has read `levelsRef` on its own animation frame since KM-60, so the
+// wave is if anything smoother this way: it samples the newest value every
+// frame instead of whatever the last render happened to commit, and the owner
+// re-renders not at all.
+export function useSynthLevels(state) {
+  const levelsRef = useRef(new Array(12).fill(0));
+  useEffect(() => {
+    if (state === "idle") {
+      levelsRef.current = new Array(12).fill(0);
+      return undefined;
+    }
+    const gain = state === "listening" ? 0.85 : 0.5;
+    const speed = state === "listening" ? 0.11 : 0.06;
+    let t = 0, raf = 0;
+    const tick = () => {
+      t += speed;
+      levelsRef.current = Array.from({ length: 12 }, (_, i) =>
+        Math.max(0, (Math.sin(t + i * 0.7) * 0.5 + 0.5) * gain * (0.55 + 0.45 * Math.sin(t * 0.37 + i)))
+      );
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [state]);
+  return levelsRef;
 }
 
 // Mic recorder for interview answers → transcribes via public /signup/stt (Sarvam saaras:v3).

@@ -6,7 +6,7 @@ import {
 import { toast } from "sonner";
 import api from "../../lib/api";
 import { DexWave } from "../../components/mobile/DexWave";
-import { fetchTTS, useAnswerRecorder, SPOKEN_LANGS, langLabel } from "./voice";
+import { fetchTTS, useAnswerRecorder, useSynthLevels, SPOKEN_LANGS, langLabel } from "./voice";
 
 // KM-19 — the interview now shows the SAME voice surface the app shows.
 // components/mobile/DexWave is the three-ribbon lens (white, grey, gold) that
@@ -14,33 +14,6 @@ import { fetchTTS, useAnswerRecorder, SPOKEN_LANGS, langLabel } from "./voice";
 // here meets it again on day one, which is the whole argument for reusing it
 // instead of drawing a second, different picture of "voice".
 //
-// DexWave reads a `levels` array. The interview has no analyser — voice.js
-// records to a MediaRecorder and posts the blob, and there is no live
-// amplitude anywhere in that path. So rather than fake a spectrum, the
-// ribbons are driven by a slow synthetic swell whose ENERGY says which state
-// we are in: a wide swell while Dex speaks, a tighter faster one while it
-// listens, near-flat when idle. It is honest about being a state indicator
-// rather than a meter.
-const useSynthLevels = (state) => {
-  const [levels, setLevels] = useState(() => new Array(12).fill(0));
-  useEffect(() => {
-    if (state === "idle") { setLevels(new Array(12).fill(0)); return; }
-    const gain = state === "listening" ? 0.85 : 0.5;
-    const speed = state === "listening" ? 0.11 : 0.06;
-    let t = 0, raf = 0;
-    const tick = () => {
-      t += speed;
-      setLevels(Array.from({ length: 12 }, (_, i) =>
-        Math.max(0, (Math.sin(t + i * 0.7) * 0.5 + 0.5) * gain * (0.55 + 0.45 * Math.sin(t * 0.37 + i)))
-      ));
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [state]);
-  return levels;
-};
-
 // Small chip in the header showing the assistant voice language + a picker to override mid-interview.
 const LangChip = ({ value, onChange, disabled }) => {
   const [open, setOpen] = useState(false);
@@ -311,7 +284,8 @@ export function VoiceInterview({ profile, onComplete, onSkip, onBack }) {
   // where that branch is taken.
   const starting = phase === "starting";
   const orbState = recorder.recording ? "listening" : speaking ? "speaking" : (thinking || starting) ? "thinking" : "idle";
-  const levels = useSynthLevels(orbState === "listening" ? "listening" : orbState === "speaking" ? "speaking" : "idle");
+  // KM-66 — a REF now, read by DexWave on its own frame. See voice.js.
+  const levelsRef = useSynthLevels(orbState === "listening" ? "listening" : orbState === "speaking" ? "speaking" : "idle");
   // Paced off the clip that is playing right now — see useTypewriter.
   const typedQuestion = useTypewriter(question, audioMs);
 
@@ -449,7 +423,7 @@ export function VoiceInterview({ profile, onComplete, onSkip, onBack }) {
               white ribbons legible; tone="ink" makes them dark instead, so the
               wave now sits on the card's own glass — see DexWave. */}
           <div className="mx-1 hidden h-10 min-w-0 flex-1 overflow-hidden sm:block" aria-hidden="true">
-            <DexWave levels={levels} live={orbState !== "idle"} tone="ink" />
+            <DexWave levelsRef={levelsRef} live={orbState !== "idle"} tone="ink" />
           </div>
 
           <button onClick={() => send()} disabled={!answer.trim() || thinking || starting} data-testid="interview-send-button"

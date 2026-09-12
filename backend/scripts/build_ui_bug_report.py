@@ -783,6 +783,42 @@ ASKS = [
              "pages/Settings.js:150-159 (TABS)",
         dep="ASK-6", status="Awaiting decision",
     ),
+    dict(
+        id="ASK-9", section="My Work", item="Task expanded view + 'Log update or hand off'",
+        type="Change request", prio="High",
+        what="Redesign the expanded task view, and rework the 'Log update or hand off' "
+             "control at the bottom of it -- both how it looks and the fact that it does "
+             "not work. Today it is a quiet text link in the bottom-right corner, which "
+             "is the wrong weight for the one action that records what happened on a task "
+             "and hands it to someone else. Fixing the crash (MW-08) and wiring the "
+             "mobile twin (MW-09) are prerequisites, not the whole job.",
+        why="VERIFIED on the exact control the founder pointed at. On desktop it is "
+            "add-update-<id>, labelled 'Log update or hand off' -- clicking it renders no "
+            "form, throws 'CTRL_ON is not defined' and leaves the React root empty, so "
+            "the whole app goes down. Its mobile twin log-update-m-<id> carries the same "
+            "label and has no onClick at all. Between them there is no working way to log "
+            "an update or hand a task off on either viewport.",
+        code="pages/MyWork.js:147 (crash), :195/:207 (desktop button), :1496-1505 (mobile)",
+        dep="MW-08, MW-09", status="To do",
+    ),
+    dict(
+        id="ASK-10", section="My Work", item="Multi-select bar",
+        type="Change request", prio="High",
+        what="Rework the multi-select action bar. Two of its three actions are close to "
+             "unreadable and one is too small to hit comfortably.",
+        why="MEASURED, not impression. The bar is near-black (bg-kr-ink) with white text. "
+            "'Complete' was re-themed for that dark ground (black on a white pill, 19.6:1) "
+            "and reads correctly. The other two were left on light-theme tokens: "
+            "'Reassign' uses bg-nm / nm-btn -- a light grey #E9EAEC surface -- while "
+            "inheriting the bar's white text, giving white-on-light-grey at 1.2:1; "
+            "'Clear' uses text-muted-foreground, a light-theme grey #585551, on the "
+            "near-black bar at 2.64:1. WCAG AA needs 4.5:1. 'Clear' is also only 45x16px, "
+            "under the 24px minimum hit size. Selection counting and pluralisation are "
+            "correct ('2 selected / Complete 2'), so the logic is sound - this is purely "
+            "the dark-bar treatment being applied to one button out of three.",
+        code="pages/MyWork.js:918-962 (bulk-action-bar; bulk-reassign :946, bulk-clear :955)",
+        dep="", status="To do",
+    ),
 ]
 
 # ---------------------------------------------------------------------------

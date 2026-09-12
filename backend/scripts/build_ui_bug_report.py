@@ -766,7 +766,9 @@ ASKS = [
         id="ASK-8", section="Leave / Settings",
         item="DELETE 'Leave Approvers by Department' (do not move it)",
         type="Product decision", prio="Medium",
-        what="Founder asked whether this setting is needed at all, given the approver is "
+        what="PARKED - Yogesh is taking this decision himself, later. Do not action it. "
+             "The reasoning is written up in full on the 'Notes & Decisions' sheet. "
+             "Summary of the recommendation as it stands: founder asked whether this "
              "already chosen when a team member is added. VERIFIED ANSWER: it is not. "
              "Recommendation is now to DELETE the screen and the tenant mapping behind "
              "it, not relocate it into Settings. Keep the two tiers that carry real "
@@ -785,7 +787,7 @@ ASKS = [
         code="services/leave.py:_resolve_leave_approver; pages/Team.js:144 "
              "(member-manager-select); pages/Leave.js:387-417 + :500-510 (to remove); "
              "routers/calendar.py:24 (PATCH /tenant/leave-approvers)",
-        dep="ASK-6", status="Awaiting decision",
+        dep="ASK-6", status="Deferred - founder",
     ),
     dict(
         id="ASK-9", section="My Work", item="Redesign the expanded task card (whole surface)",
@@ -870,6 +872,109 @@ ASKS = [
 ]
 
 # ---------------------------------------------------------------------------
+# 6. NOTES & DECISIONS -- the reasoning behind parked calls, written to be
+#    picked up cold weeks later
+# ---------------------------------------------------------------------------
+NOTES = [
+    ("HEAD", "Leave approvals: who approves, and is the Settings screen needed?"),
+    ("META", "Raised 2026-09-12 by Yogesh - Owner. Status: DEFERRED, Yogesh deciding. "
+             "Relates to ASK-8. Nothing is to be built from this note until that call "
+             "is made."),
+    ("", ""),
+
+    ("Q", "THE QUESTION"),
+    ("", "Leave approval is mostly done by either the owner or a manager. The approver "
+         "is already chosen when a team member is added. So does the 'Leave Approvers by "
+         "Department' settings screen need to exist at all?"),
+    ("", ""),
+
+    ("Q", "HOW APPROVAL IS DECIDED TODAY"),
+    ("", "When someone requests leave the system asks three questions IN ORDER and stops "
+         "at the first that answers. The code is services/leave.py, "
+         "_resolve_leave_approver."),
+    ("Tier 1", "Does this person have a Reporting Manager? If yes, that manager approves. "
+               "The Reporting Manager is chosen in Team when the member is added or "
+               "edited (pages/Team.js:144, the member-manager-select dropdown; stored as "
+               "reporting_manager_id)."),
+    ("Tier 2", "Otherwise: is there a department rule for their role? If yes, that person "
+               "approves. THIS IS THE SETTINGS SCREEN under discussion - the gear in the "
+               "Leave section, which opens 'Leave Approvers by Department' with one "
+               "dropdown per department and a Save button."),
+    ("Tier 3", "Otherwise the Owner approves."),
+    ("", ""),
+
+    ("Q", "WHAT THE LIVE DATA SHOWS"),
+    ("", "Measured against the dev workspace on 2026-09-12, not assumed:"),
+    ("Members", "12 team members in the workspace."),
+    ("Tier 1 used", "1 member has a Reporting Manager set (sai, finance)."),
+    ("Tier 2 used", "0. The tenant leave_approvers mapping is EMPTY - every department "
+                    "reads 'Owner (default)'."),
+    ("Tier 3 used", "11 of 12 members fall through to the Owner, Rajesh Sharma."),
+    ("So", "The Settings screen currently decides leave for NOBODY. It configures a tier "
+           "that no request reaches."),
+    ("", ""),
+
+    ("Q", "WHAT THE THREE PIECES ARE"),
+    ("", "They are three layers of one feature. Removing one without the others leaves "
+         "either a screen that cannot save or an endpoint nothing calls."),
+    ("The gear", "The small round icon beside the My Leave / Approvals tabs. It is the "
+                 "only way into the screen. pages/Leave.js:500-510."),
+    ("The panel", "'Leave Approvers by Department' - a dropdown per department plus a "
+                  "Save approvers button. pages/Leave.js:387-417."),
+    ("The endpoint", "PATCH /tenant/leave-approvers, which writes the leave_approvers "
+                     "field on the tenant record. routers/calendar.py:24."),
+    ("", ""),
+
+    ("Q", "OPTION A - DELETE TIER 2  (the current recommendation)"),
+    ("What changes", "Remove the gear, the panel and the endpoint. Approval becomes: "
+                     "reporting manager, else owner."),
+    ("Effect today", "NONE. Every one of the 12 members resolves to exactly the same "
+                     "approver before and after, because nothing uses tier 2."),
+    ("Argument for", "The approver is already chosen once, in Team, when the person is "
+                     "added. A second screen expressing the same decision in different "
+                     "words - and silently losing to the first one - mostly creates the "
+                     "chance for the two to disagree with the org chart."),
+    ("", ""),
+
+    ("Q", "OPTION B - KEEP TIER 2"),
+    ("What it buys", "One place to say 'all Sales leave goes to Priya' without making "
+                     "Priya anyone's reporting manager."),
+    ("Cost of A", "To get that same outcome after deleting, Priya would have to be set "
+                  "as the reporting manager of each Sales person individually, in Team."),
+    ("If kept", "Then the fix is not to move it into Settings but to make it visible - "
+                "today it is hidden behind an unlabelled gear inside a work surface, "
+                "which is why it has stayed empty."),
+    ("", ""),
+
+    ("Q", "THE ONE QUESTION THAT DECIDES IT"),
+    ("", "Is 'who approves your leave' always the same person as 'who you report to'?"),
+    ("Yes", "They are always the same -> Option A. Tier 2 is pure duplication."),
+    ("No", "They can differ - for example a department lead signs off leave while people "
+           "report to a project manager -> Option B, and the work is to surface the "
+           "screen properly rather than hide it."),
+    ("Read", "For an SME the answer is usually yes, which is why A is the standing "
+             "recommendation - but this is a business call, not a technical one, which "
+             "is why it is parked rather than filed as a defect."),
+    ("", ""),
+
+    ("Q", "IF OPTION A IS CHOSEN, THE WORK IS"),
+    ("1", "Delete the gear and the settings tab from pages/Leave.js (:500-510)."),
+    ("2", "Delete the LeaveApproverConfig block from pages/Leave.js (:387-417)."),
+    ("3", "Delete PATCH /tenant/leave-approvers from routers/calendar.py (:24) and the "
+          "LeaveApproverMapInput model."),
+    ("4", "Drop the tier-2 lookup from _resolve_leave_approver in services/leave.py, "
+          "leaving reporting manager then owner."),
+    ("5", "Leave the leave_approvers field on existing tenant records alone, or clear it "
+          "in the migration - it is empty in practice either way."),
+    ("6", "Make sure Team makes the consequence visible: the Reporting Manager dropdown "
+          "should say that this person also approves their leave, since after this "
+          "change that is the only place the decision is made."),
+    ("Note", "This depends on ASK-6. If Leave moves into Team first, the gear disappears "
+             "with it and steps 1 and 2 become part of that move rather than separate "
+             "work."),
+]
+
+# ---------------------------------------------------------------------------
 # 4. HOW TO USE
 # ---------------------------------------------------------------------------
 LEGEND = [
@@ -885,6 +990,10 @@ LEGEND = [
                       "as visible as the failures."),
     ("Verified Non-Issues", "Things that looked like defects and were disproved. Kept on "
                             "purpose so nobody spends the afternoon re-finding them."),
+    ("Action List", "Everything to be done in one list - the founder's change asks first, "
+                    "then every defect by severity."),
+    ("Notes & Decisions", "The reasoning behind calls that were parked rather than taken, "
+                          "written so they can be picked up cold weeks later."),
     ("", ""),
     ("Severity", ""),
     ("Critical", "Data loss, a security hole, or the section cannot be used at all."),
@@ -1004,6 +1113,34 @@ def main():
             "Not a defect" if f["status"] == "By design" else "To do",
         ])
     write_sheet(wb, "Action List", ACT_COLS, act_rows, sev_col=6, status_col=11)
+
+    # ---- Notes & Decisions: reasoning for calls that were parked ----
+    wsn = wb.create_sheet("Notes & Decisions")
+    wsn.column_dimensions["A"].width = 16
+    wsn.column_dimensions["B"].width = 116
+    for key, body in NOTES:
+        wsn.append(["" if key in ("HEAD", "META", "Q", "") else key, body])
+        r = wsn.max_row
+        a, bcell = wsn.cell(row=r, column=1), wsn.cell(row=r, column=2)
+        a.alignment = Alignment(vertical="top")
+        bcell.alignment = Alignment(vertical="top", wrap_text=True)
+        if key == "HEAD":
+            bcell.font = Font(bold=True, size=13, color=INK)
+            wsn.row_dimensions[r].height = 24
+        elif key == "META":
+            bcell.font = Font(italic=True, size=10, color="6B7280")
+            wsn.row_dimensions[r].height = 30
+        elif key == "Q":
+            bcell.font = Font(bold=True, size=11, color=INK)
+            bcell.fill = PatternFill("solid", fgColor="EFEFEF")
+            a.fill = PatternFill("solid", fgColor="EFEFEF")
+            wsn.row_dimensions[r].height = 20
+        else:
+            a.font = Font(bold=True, size=10, color=INK)
+            bcell.font = Font(size=10, color=INK)
+            if body and len(body) > 105:
+                wsn.row_dimensions[r].height = 15 * (len(body) // 105 + 1)
+    wsn.freeze_panes = "A2"
 
     ws = wb.create_sheet("How to use")
     ws.column_dimensions["A"].width = 30

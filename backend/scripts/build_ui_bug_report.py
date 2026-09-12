@@ -223,6 +223,98 @@ FINDINGS = [
         found="2026-09-12",
     ),
     dict(
+        id="MW-11", section="My Work", screen="Toolbar in the Leave / Workflows views",
+        viewport="Desktop", persona="All", severity="Medium", status="Open",
+        area="Information architecture",
+        tested="Switched into the Leave view and the Workflows view and catalogued which "
+               "toolbar controls remain on screen, then pressed one of them.",
+        expected="The toolbar shows the controls that apply to what is on screen.",
+        actual="Four task-only controls stay visible in both views - New Task, My Tasks, "
+               "All Tasks and AI Priority - none of which mean anything for leave or for "
+               "pipelines. Worse, pressing My Tasks, All Tasks or AI Priority silently "
+               "throws you back to the task list, losing the view you were in with no "
+               "warning. In the Leave view 'New Task' is also the largest, darkest button "
+               "on screen, and it creates a task, not a leave request.",
+        evidence="In both views work-scope-mine, work-scope-all and ai-priority-toggle are "
+                 "still visible; clicking All Tasks returns mywork-list. Confirmed on both "
+                 "the Leave and Workflows views at 1440x900.",
+        cause="The view toggle swaps only the body. The toolbar above it is rendered "
+              "unconditionally, and the scope / priority handlers each call setView"
+              "('mywork') as a side effect, so pressing them doubles as an exit.",
+        fix="Render the task-scope controls only while view === 'mywork'. Leave the view "
+            "toggle itself (Workflows / Leave) in place, since that is how you get back. "
+            "If a scope control must stay, it should not silently change view - that side "
+            "effect is what makes it feel broken.",
+        code="pages/MyWork.js:2429-2515 (mywork-controls / work-view-toggle); "
+             "handlers at 2442, 2448, 2463",
+        found="2026-09-12",
+    ),
+    dict(
+        id="MW-12", section="My Work", screen="Leave and Workflows entry points",
+        viewport="Mobile", persona="All", severity="Medium", status="Open",
+        area="Information architecture",
+        tested="Looked for the Leave and Workflows views from My Work on a phone.",
+        expected="The same two views are reachable from My Work on mobile as on desktop.",
+        actual="Neither toggle is reachable on mobile - both are in the DOM but hidden, so "
+               "from My Work there is no way into Leave or Workflows on a phone. They are "
+               "reachable, but from somewhere else entirely: the 'More' panel lists them "
+               "as their own destinations. So the same two features are sub-views of My "
+               "Work on desktop and separate destinations on mobile.",
+        evidence="At 390x844 work-view-leave and work-view-workflows are present in the "
+                 "DOM with 0 visible matches. The More panel lists 'Workflows' and "
+                 "'Leave' as tiles, and /leave loads as its own route.",
+        cause="The view toggle group is desktop-only, and mobile was given the More panel "
+              "instead. Both were built; neither was reconciled with the other.",
+        fix="Pick one home per feature and use it on both viewports. Given Leave already "
+            "has its own route and its own mobile tile, the cheaper and more consistent "
+            "direction is to make the standalone page the home on desktop too - see the "
+            "note on MW-11 about how little of Leave actually belongs in My Work.",
+        code="pages/MyWork.js:2476 (work-view-toggle); components/mobile/AllAppsPanel.jsx",
+        found="2026-09-12",
+    ),
+    dict(
+        id="MW-13", section="My Work", screen="Workflows view - pipeline cards",
+        viewport="Desktop", persona="All", severity="Low", status="Open",
+        area="Accessibility",
+        tested="Catalogued every control in the embedded Workflows view and compared their "
+               "accessible names.",
+        expected="Controls that do different things are distinguishable by name.",
+        actual="Five separate buttons are all named exactly 'Delete card', and two are "
+               "both named 'Advance to Delivered'. Sighted users tell them apart by which "
+               "card they sit on; a screen-reader user hears the same phrase five times "
+               "with nothing to say which shipment is about to be deleted. Deletion is "
+               "the most destructive action in the view, which is what lifts this above "
+               "cosmetic.",
+        evidence="Control inventory of workflows-hub: 'Delete card' x5, "
+                 "'Advance to Delivered' x2, across 21 controls.",
+        cause="The buttons carry a static label and rely on visual position within their "
+              "card for meaning.",
+        fix="Give each an aria-label that names its card, e.g. 'Delete card: Dispatch 100 "
+            "sales items today'. The card title is already to hand where the button is "
+            "rendered.",
+        code="pages/Workflows.js (delete-workflow-* and advance-workflow-* buttons)",
+        found="2026-09-12",
+    ),
+    dict(
+        id="MW-14", section="My Work", screen="Page heading in the Leave / Workflows views",
+        viewport="Desktop", persona="All", severity="Nit", status="Open",
+        area="Orientation",
+        tested="Read the page heading while the Leave view and the Workflows view were "
+               "open.",
+        expected="The heading names what is on screen.",
+        actual="The heading stays 'My Work' with the eyebrow 'YOUR DAY, SIMPLIFIED' even "
+               "when the body is entirely leave requests or delivery pipelines. Nothing "
+               "above the fold says which of the three views is active except the small "
+               "toggle pill.",
+        evidence="Screenshot of the Leave view at 1440x900: heading reads 'My Work' above "
+                 "a leave-request list.",
+        cause="The header is rendered once, outside the view switch.",
+        fix="Swap the heading with the view - 'Leave' or 'Workflows' - or append the view "
+            "name. Only worth doing if the views stay inside My Work at all; see MW-12.",
+        code="pages/MyWork.js (page header, above the view switch at 2527)",
+        found="2026-09-12",
+    ),
+    dict(
         id="MW-05", section="My Work", screen="Task list - bento grid",
         viewport="Desktop", persona="All", severity="Low", status="Open",
         area="Visual / alignment",
@@ -433,6 +525,46 @@ COVERAGE = [
      "Bulk reassign moves every selected task to the chosen person", "Functional", "PASS",
      "Ran on two throwaway tasks: both assignee_ids became the selected user (Priya Nair)",
      ""),
+
+    # --- sub-views: Workflows and Leave ---
+    ("T-090", "My Work", "Workflows view (embedded)", "Desktop 1440x900", "Owner",
+     "The Workflows toggle opens the pipelines hub", "Functional", "PASS",
+     "workflows-hub renders, 21 controls, 6 stage pipelines with counts", ""),
+    ("T-091", "My Work", "Workflows view (embedded)", "Desktop 1440x900", "Owner",
+     "No horizontal overflow and every control has an accessible name",
+     "Responsive", "PASS", "1440 = 1440; 0 unnamed controls", ""),
+    ("T-092", "My Work", "Workflows view (embedded)", "Desktop 1440x900", "Owner",
+     "No dead controls among the non-destructive ones", "Functional", "PASS",
+     "6 exercised, all changed state; 10 destructive catalogued not fired", ""),
+    ("T-093", "My Work", "Workflows view - card actions", "Desktop 1440x900", "Owner",
+     "Controls that do different things are distinguishable by name",
+     "Accessibility", "FAIL",
+     "'Delete card' x5 and 'Advance to Delivered' x2 share identical names", "MW-13"),
+    ("T-094", "My Work", "Leave view (embedded)", "Desktop 1440x900", "Owner",
+     "The Leave toggle opens the leave surface", "Functional", "PASS",
+     "My Leave / Approvals tabs, Request Leave, Report Absence, settings all render", ""),
+    ("T-095", "My Work", "Leave view (embedded)", "Desktop 1440x900", "Owner",
+     "No horizontal overflow and every control has an accessible name",
+     "Responsive", "PASS", "1440 = 1440; 0 unnamed controls", ""),
+    ("T-096", "My Work", "Leave view (embedded)", "Desktop 1440x900", "Owner",
+     "No dead controls among the non-destructive ones", "Functional", "PASS",
+     "10 exercised, all changed state; 1 destructive catalogued not fired", ""),
+    ("T-097", "My Work", "Toolbar in Leave / Workflows", "Desktop 1440x900", "Owner",
+     "The toolbar only offers controls that apply to the active view",
+     "Information architecture", "FAIL",
+     "New Task, My Tasks, All Tasks and AI Priority all remain; three of them eject "
+     "you back to the task list when pressed", "MW-11"),
+    ("T-098", "My Work", "Leave / Workflows entry points", "Mobile 390x844", "Owner",
+     "Both views are reachable from My Work on a phone", "Information architecture",
+     "FAIL",
+     "Neither toggle is visible on mobile; both live in the 'More' panel as separate "
+     "destinations instead", "MW-12"),
+    ("T-099", "My Work", "Page heading", "Desktop 1440x900", "Owner",
+     "The heading names the view that is on screen", "Orientation", "FAIL",
+     "Heading stays 'My Work' over a leave-request list", "MW-14"),
+    ("T-100", "Leave", "Standalone /leave route", "Mobile 390x844", "Owner",
+     "Leave is usable on mobile through its own route", "Routing", "PASS",
+     "/leave renders the user's leave records directly", ""),
 
     # --- personas ---
     ("T-070", "My Work", "Page load", "Desktop 1440x900", "Owner",

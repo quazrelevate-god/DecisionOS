@@ -12,6 +12,8 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
+from ux_login import demo_login
+
 REPO = Path(__file__).resolve().parent.parent.parent
 BASE = "http://localhost:3000"
 OUT = REPO / ".audit-artifacts" / "ux" / "my-work" / "flow"
@@ -34,10 +36,8 @@ def check(name, ok, detail=""):
 
 
 def login(page):
-    page.goto(f"{BASE}/login", wait_until="domcontentloaded")
-    page.locator('[data-testid="demo-login-owner"]').click()
-    page.wait_for_url(lambda u: "/login" not in u, timeout=25000)
-    page.wait_for_timeout(800)
+    demo_login(page, BASE, "owner")
+
 
 
 def land(page):

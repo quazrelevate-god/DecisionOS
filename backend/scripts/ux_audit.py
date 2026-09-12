@@ -22,6 +22,8 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
+from ux_login import demo_login
+
 REPO = Path(__file__).resolve().parent.parent.parent
 BASE = "http://localhost:3000"
 
@@ -245,20 +247,8 @@ ALIVE_JS = r"""
 
 
 def sign_in(page, role):
-    """Use the login screen's own demo button -- no password in logs."""
-    page.goto(f"{BASE}/login", wait_until="domcontentloaded")
-    page.wait_for_timeout(800)
-    if "/login" not in page.url:
-        return True
-    btn = page.locator(f'[data-testid="demo-login-{role}"]')
-    btn.wait_for(timeout=15000)
-    btn.click()
-    try:
-        page.wait_for_url(lambda u: "/login" not in u, timeout=25000)
-    except Exception:
-        pass
-    page.wait_for_timeout(1200)
-    return "/login" not in page.url
+    """Use the login screen's own demo seats -- no password in logs."""
+    return demo_login(page, BASE, role)
 
 
 def audit_viewport(browser, vp, route, role, outdir):

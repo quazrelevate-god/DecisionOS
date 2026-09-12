@@ -21,6 +21,8 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
+from ux_login import demo_login
+
 REPO = Path(__file__).resolve().parent.parent.parent
 BASE = "http://localhost:3000"
 API = "http://localhost:8001"
@@ -72,11 +74,7 @@ def settle(p, timeout=20000):
 
 
 def login(page, role):
-    page.goto(f"{BASE}/login", wait_until="domcontentloaded")
-    page.wait_for_timeout(500)
-    page.locator(f'[data-testid="demo-login-{role}"]:visible').first.click()
-    page.wait_for_url(lambda u: "/login" not in u, timeout=30000)
-    page.wait_for_timeout(1200)
+    demo_login(page, BASE, role)
 
 
 def work(page):
